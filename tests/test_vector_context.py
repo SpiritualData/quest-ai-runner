@@ -3032,7 +3032,7 @@ class TestVectorArmSnippetHardCap:
         cap its output regardless of line count."""
         long_unbroken_text = "word " * 2000  # ~10,000 chars, zero newlines
         out = vca._snippet(long_unbroken_text)
-        assert len(out) <= vca._SNIPPET_MAX_CHARS
+        assert len(out) <= vca.SNIPPET_MAX_CHARS
 
     def test_snippet_still_prefers_the_first_few_lines_when_present(self):
         """Regression guard: normal multi-line text is unaffected by the new cap."""
@@ -3054,7 +3054,7 @@ class TestVectorArmSnippetHardCap:
 
 class TestVectorArmCompactCardRendering:
     def test_vector_hit_card_content_is_capped_not_rendered_in_full(self):
-        """A vector hit on a card renders at most ``_VECTOR_HIT_MAX_CARD_REFS`` content items,
+        """A vector hit on a card renders at most ``VECTOR_HIT_MAX_CARD_REFS`` content items,
         never every item on the card in full (2026-10-06 probe: a quest-sized card with many
         content items rendered whole measured close to 5k tokens on its own). The card's own
         summary line is unaffected, and dropped items are simply the lower-relevance tail --
@@ -3082,10 +3082,10 @@ class TestVectorArmCompactCardRendering:
         rendered_markers = sum(
             1 for i in range(10) if f"note-marker-{i}" in ac.context_view
         )
-        assert 0 < rendered_markers <= vca._VECTOR_HIT_MAX_CARD_REFS, rendered_markers
+        assert 0 < rendered_markers <= vca.VECTOR_HIT_MAX_CARD_REFS, rendered_markers
         # ... and the structured item blocks fed to the (optional) consolidator are capped too.
         meta = ac.card_metadata[0]
-        assert len(meta["items"]) <= vca._VECTOR_HIT_MAX_CARD_REFS
+        assert len(meta["items"]) <= vca.VECTOR_HIT_MAX_CARD_REFS
         # The whole card section is nowhere near 10 full 500-char item bodies (~5000+ chars).
         card_section_len = len(ac.context_view)
         assert card_section_len < 10 * 500, card_section_len

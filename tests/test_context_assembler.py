@@ -205,7 +205,7 @@ class TestPlannerPromptGates:
 
     def test_planner_prompt_omits_model_tier_discipline_when_block_is_empty(self):
         """The block is a format SLOT precisely so a turn where it does not apply can render it
-        empty (see ``Orchestrator._model_tier_doctrine_applies``); this pins that the raw template
+        empty (see ``Orchestrator.model_tier_doctrine_applies``); this pins that the raw template
         has no OTHER copy of the doctrine baked in statically."""
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
@@ -2254,10 +2254,10 @@ class TestFileContextStoreDocsFallbackGating:
         _write_card(cards_dir, _make_card("irrelevant-card", ["database", "schema"]))
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         ac = store.assemble("zorblatt")
-        assert len(ac.sources[0]["items"]) <= FileContextStore._FALLBACK_MAX_FILES_WALKED
+        assert len(ac.sources[0]["items"]) <= FileContextStore.FALLBACK_MAX_FILES_WALKED
         shown_files = ac.context_view.count("**f")
-        assert 0 < shown_files <= FileContextStore._FALLBACK_MAX_FILES_SHOWN
+        assert 0 < shown_files <= FileContextStore.FALLBACK_MAX_FILES_SHOWN
         # Each shown file contributes at most the capped number of lines.
         for block in ac.context_view.split("**")[1:]:
             line_count = sum(1 for ln in block.splitlines() if ln.startswith("  zorblatt"))
-            assert line_count <= FileContextStore._FALLBACK_MAX_LINES_PER_FILE
+            assert line_count <= FileContextStore.FALLBACK_MAX_LINES_PER_FILE

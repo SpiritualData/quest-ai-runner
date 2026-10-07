@@ -143,14 +143,14 @@ RECEIPT = "Added the goal 'Ship v2' to quest Q1."
 # Each deep subtask's brief carries a freshly-generated ``TASK [xxxxxxxx]`` id (see
 # ``orchestrator.py``'s ``task_uuid``), unrelated to this fix, so two separate ``run()`` calls
 # never produce byte-identical verify prompts. Normalize it out before comparing.
-_TASK_ID_RE = re.compile(r"TASK \[[0-9a-f]{8}\]")
+TASK_ID_RE = re.compile(r"TASK \[[0-9a-f]{8}\]")
 
 
-def _normalize_task_id(text: str) -> str:
-    return _TASK_ID_RE.sub("TASK [xxxxxxxx]", text)
+def normalize_task_id(text: str) -> str:
+    return TASK_ID_RE.sub("TASK [xxxxxxxx]", text)
 
 
-def _run_one_deep_goal(result: DeepResult, verdict: Dict[str, Any]):
+def run_one_deep_goal(result: DeepResult, verdict: Dict[str, Any]):
     plan = {"action": "deep", "goal": "Add a goal to the quest",
             "deep_subtasks": [{"goal": "Add a goal to the quest", "brief": "add it"}],
             "rationale": "deep"}
@@ -165,7 +165,7 @@ def _run_one_deep_goal(result: DeepResult, verdict: Dict[str, Any]):
 def test_deep_goal_loop_receipt_reaches_the_verify_prompt():
     result = DeepResult(met=False, output="I added the goal as requested.",
                         observations=[RECEIPT], observations_reported=True)
-    res, provider = _run_one_deep_goal(result, {"met": True, "reason": "the receipt proves it"})
+    res, provider = run_one_deep_goal(result, {"met": True, "reason": "the receipt proves it"})
 
     assert res.kind == "deep"
     assert len(provider.verify_prompts) == 1
@@ -176,12 +176,12 @@ def test_deep_goal_loop_receipt_reaches_the_verify_prompt():
 def test_deep_goal_loop_without_observations_reported_leaves_verify_prompt_unchanged():
     reported = DeepResult(met=False, output="I added the goal as requested.",
                           observations=[RECEIPT], observations_reported=False)
-    not_reported_res, not_reported_provider = _run_one_deep_goal(
+    not_reported_res, not_reported_provider = run_one_deep_goal(
         reported, {"met": True, "reason": "done"})
 
     bare = DeepResult(met=False, output="I added the goal as requested.")
-    bare_res, bare_provider = _run_one_deep_goal(bare, {"met": True, "reason": "done"})
+    bare_res, bare_provider = run_one_deep_goal(bare, {"met": True, "reason": "done"})
 
-    assert (_normalize_task_id(not_reported_provider.verify_prompts[0])
-            == _normalize_task_id(bare_provider.verify_prompts[0]))
+    assert (normalize_task_id(not_reported_provider.verify_prompts[0])
+            == normalize_task_id(bare_provider.verify_prompts[0]))
     assert "THIS RUN'S OWN RECORD" not in not_reported_provider.verify_prompts[0]

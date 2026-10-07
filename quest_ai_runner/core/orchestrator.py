@@ -200,7 +200,7 @@ CONTINUE_AFTER_DECISION_NOTE = (
 )
 
 
-def _result_reports_something(result: Any) -> bool:
+def result_reports_something(result: Any) -> bool:
     """Whether a deep result has anything of its own to tell the person: text it produced, a
     verified outcome, or a usage-limit wait.
 
@@ -923,7 +923,7 @@ assume an answer and do not act on one. The open question is:
 # MODEL_TIER_GATE, header + body, in the same "--- HEADER ---\nbody" shape every other gate uses
 # here. Rendered via the ``{model_tier_block}`` format slot (NOT baked in statically, unlike the
 # other gates above) because whether it belongs in the prompt at all depends on the TURN, not just
-# the profile: see ``Orchestrator._model_tier_doctrine_applies``.
+# the profile: see ``Orchestrator.model_tier_doctrine_applies``.
 MODEL_TIER_BLOCK = (
     "\n--- " + MODEL_TIER_GATE.split("\n")[0] + "\n"
     + "\n".join(MODEL_TIER_GATE.split("\n")[1:]) + "\n\n"
@@ -3875,7 +3875,7 @@ def _oversee_worth_a_look(*, consecutive_reads: int, plan_repeats_prev: bool,
 NARRATION_SAID_PLANNER_MAX = 3
 
 
-def _already_said_tail(already_said: Optional[List[str]], max_lines: int = NARRATION_SAID_PLANNER_MAX) -> List[str]:
+def already_said_tail(already_said: Optional[List[str]], max_lines: int = NARRATION_SAID_PLANNER_MAX) -> List[str]:
     """The most recent suffix of ``already_said`` worth repeating back to the planner.
 
     Bounded hard rather than summarized: the lines are already one short spoken sentence each, and
@@ -4011,7 +4011,7 @@ def declined_proposals_block(prior_escalations: Optional[List[Dict[str, Any]]]) 
         return ""
 
 
-def _discovery_reminder_line(obs: Dict[str, Any]) -> str:
+def discovery_reminder_line(obs: Dict[str, Any]) -> str:
     """One-line stand-in for a discovery/capability MENU (``list_operations``,
     ``describe_operation``, ``tools``, ...) that was already shown to the planner in full earlier
     this turn. Names only the kind of menu it was (via its ``locator``), not its content: the
@@ -4025,7 +4025,7 @@ def _discovery_reminder_line(obs: Dict[str, Any]) -> str:
             f"you genuinely need to see it again.")
 
 
-def _collapse_shown_discovery(gathered: List[Dict[str, Any]], current_step: int) -> List[Dict[str, Any]]:
+def collapse_shown_discovery(gathered: List[Dict[str, Any]], current_step: int) -> List[Dict[str, Any]]:
     """Replace any discovery/capability observation (menu) with a one-line reminder once it has
     already been shown to the planner in full, so the SAME menu is never rendered in full twice in
     one turn (measured: the menu was 29.6% of all planner input tokens across a real eval run,
@@ -4047,7 +4047,7 @@ def _collapse_shown_discovery(gathered: List[Dict[str, Any]], current_step: int)
             out.append({
                 "kind": obs.get("kind", "query"),
                 "locator": obs.get("locator", ""),
-                "text": _discovery_reminder_line(obs),
+                "text": discovery_reminder_line(obs),
             })
         else:
             out.append(obs)
@@ -4066,10 +4066,10 @@ def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
     ``gathered`` is unaffected and is what the final ANSWER is still synthesized from.
 
     Before any of that, discovery/capability menus already shown on an earlier step are collapsed
-    to a one-line reminder (``_collapse_shown_discovery``) -- independent of the recency window,
+    to a one-line reminder (``collapse_shown_discovery``) -- independent of the recency window,
     since a short turn keeps almost everything "recent" and the menu would otherwise render in
     full on every single call of the turn."""
-    gathered = _collapse_shown_discovery(gathered, current_step)
+    gathered = collapse_shown_discovery(gathered, current_step)
     if not gathered:
         return "[]"
     notes = [o for o in gathered if isinstance(o, dict) and o.get("planner_only")]
@@ -4441,7 +4441,7 @@ def _run_goal_accepts_resume_session_id(deep_runner: Any) -> bool:
     return False
 
 
-def _run_goal_accepts_is_subgoal(deep_runner: Any) -> bool:
+def run_goal_accepts_is_subgoal(deep_runner: Any) -> bool:
     """Whether a DeepRunner's ``run_goal`` accepts an ``is_subgoal`` keyword (or **kwargs).
 
     Same opt-in discipline as ``_run_goal_accepts_emit``. True ONLY on a fan-out (``multi``: the
@@ -5869,9 +5869,9 @@ class Orchestrator:
         thread_block = card_thread_block if self.cfg.card_thread_enabled else ""
         planner_template = planner_prompt_for_profile(self.cfg.planner_prompt_profile)
         # MODEL TIER DISCIPLINE is only worth its tokens when some wired deep runner actually runs
-        # against the ladder it describes (see ``_model_tier_doctrine_applies``); otherwise it is
+        # against the ladder it describes (see ``model_tier_doctrine_applies``); otherwise it is
         # dead weight on every planner call (Quest's in-process chat runners never touch it).
-        model_tier_block = MODEL_TIER_BLOCK if self._model_tier_doctrine_applies() else ""
+        model_tier_block = MODEL_TIER_BLOCK if self.model_tier_doctrine_applies() else ""
         prompt = planner_template.format(
             user_message=user_message,
             transcript=plan_transcript or "(no prior messages)",
@@ -5893,7 +5893,7 @@ class Orchestrator:
         # Bounded hard (see NARRATION_SAID_PLANNER_MAX): the only job of this block is stopping the
         # NEXT line from echoing the shape of the one or two just said, not an audit trail of the
         # whole turn's narration.
-        said_tail = _already_said_tail(already_said)
+        said_tail = already_said_tail(already_said)
         preamble_parts: List[str] = []
         if brainstorm:
             preamble_parts.append(brainstorm_note)
@@ -7543,7 +7543,7 @@ class Orchestrator:
         return bool(self.cfg.deferred_deep_queued and self.deep_runners
                     and self.deep_runners.get(DEFERRED_RUNNER_KEY) is not None)
 
-    def _model_tier_doctrine_applies(self) -> bool:
+    def model_tier_doctrine_applies(self) -> bool:
         """Whether ``MODEL_TIER_GATE`` is worth a planner call's tokens THIS deployment.
 
         The gate is about picking a model tier for a DEEP run. When every deep runner this
@@ -7899,7 +7899,7 @@ class Orchestrator:
                         "preamble": _run_goal_accepts_context_preamble(runner),
                         "working_dir": _run_goal_accepts_working_dir(runner),
                         "resume": _run_goal_accepts_resume_session_id(runner),
-                        "is_subgoal": _run_goal_accepts_is_subgoal(runner),
+                        "is_subgoal": run_goal_accepts_is_subgoal(runner),
                     }
                     runner_caps[id(runner)] = cached
                 return cached
@@ -7988,7 +7988,7 @@ class Orchestrator:
                     if caps["working_dir"] and working_dir_override:
                         kwargs["working_dir"] = working_dir_override
                     # Tell an opted-in runner this is ONE of several concurrent subgoals of the
-                    # same turn (see ``_run_goal_accepts_is_subgoal`` above), so it can scope
+                    # same turn (see ``run_goal_accepts_is_subgoal`` above), so it can scope
                     # itself to just this subgoal rather than re-deriving a sibling's work from
                     # the fuller USER'S REQUEST header this call's brief also carries.
                     if caps["is_subgoal"] and multi:
@@ -8493,7 +8493,7 @@ class Orchestrator:
                 # otherwise the turn reads as though that part were handled (review, 2026-10-07).
                 not_started = [result_goals.get(id(r)) for r in deep_results
                                if r is not parked and not getattr(r, "decision_id", None)
-                               and not _result_reports_something(r)]
+                               and not result_reports_something(r)]
                 not_started = [g.strip().rstrip(".") for g in not_started if g and g.strip()]
                 tail = CONTINUE_AFTER_DECISION_NOTE
                 if not_started:
@@ -8507,7 +8507,7 @@ class Orchestrator:
                 deep_results = [r for r in deep_results
                                 if r is parked
                                 or (not getattr(r, "decision_id", None)
-                                    and _result_reports_something(r))]
+                                    and result_reports_something(r))]
                 deep_results.sort(key=lambda r: 1 if r is parked else 0)
 
         return OrchestratorResult(
@@ -10868,7 +10868,7 @@ class Orchestrator:
                             _ops["discovery"] = True  # a capability menu, not answer content
                             # The planner call for THIS step (step 0) is the one that reads it in
                             # full; every later re-plan step this turn sees only a reminder (see
-                            # ``_collapse_shown_discovery``).
+                            # ``collapse_shown_discovery``).
                             _ops["discovery_step"] = step
                             gathered.append(_ops)
                     except Exception as e:  # noqa: BLE001

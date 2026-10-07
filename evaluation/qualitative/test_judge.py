@@ -168,13 +168,13 @@ def reset_other_account_data_cache(monkeypatch):
     """The section is cached once per process; each test needs its own fetch, and none of them
     may reach the real dev account over the network. Default to an empty account (no other
     quests/collections); a test of the fetch itself overrides these with its own monkeypatch."""
-    J._OTHER_ACCOUNT_DATA["built"] = False
-    J._OTHER_ACCOUNT_DATA["section"] = ""
+    J.OTHER_ACCOUNT_DATA["built"] = False
+    J.OTHER_ACCOUNT_DATA["section"] = ""
     monkeypatch.setattr(devclient, "list_quests", lambda: [])
     monkeypatch.setattr(devclient, "list_collections", lambda: [])
     yield
-    J._OTHER_ACCOUNT_DATA["built"] = False
-    J._OTHER_ACCOUNT_DATA["section"] = ""
+    J.OTHER_ACCOUNT_DATA["built"] = False
+    J.OTHER_ACCOUNT_DATA["section"] = ""
 
 
 def test_other_account_data_excludes_world_ids_and_includes_the_rest(monkeypatch):

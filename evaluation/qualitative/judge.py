@@ -671,7 +671,7 @@ def claude_provider():
 # The dev account the eval runs against carries OTHER quests and collections that are not part of
 # the eval world. Fetched once per process (this is a long-lived harness run, not a per-case cost)
 # and cached here; cleared only by restarting the run.
-_OTHER_ACCOUNT_DATA = {"built": False, "section": ""}
+OTHER_ACCOUNT_DATA = {"built": False, "section": ""}
 
 
 def other_account_data_section(world):
@@ -681,9 +681,9 @@ def other_account_data_section(world):
     inventing a fact, number, source or entity not in the ground truth). Fetched once per run and
     cached; never raises, a lookup failure degrades to a short explanatory note instead of
     crashing the judge call."""
-    if _OTHER_ACCOUNT_DATA["built"]:
-        return _OTHER_ACCOUNT_DATA["section"]
-    _OTHER_ACCOUNT_DATA["built"] = True
+    if OTHER_ACCOUNT_DATA["built"]:
+        return OTHER_ACCOUNT_DATA["section"]
+    OTHER_ACCOUNT_DATA["built"] = True
     try:
         from devclient import list_collections, list_quests, quest_state
         world = world or {}
@@ -711,7 +711,7 @@ def other_account_data_section(world):
     except Exception as e:  # noqa: BLE001
         section = (f"\n\n(could not list the account's other data outside the eval world: "
                    f"{type(e).__name__}: {e})")
-    _OTHER_ACCOUNT_DATA["section"] = section
+    OTHER_ACCOUNT_DATA["section"] = section
     return section
 
 

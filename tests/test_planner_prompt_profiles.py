@@ -300,35 +300,35 @@ def test_deep_fan_out_guidance_stays_small():
 # MODEL TIER DISCIPLINE is omitted when it cannot apply, and narration echo-back is bounded.
 # ---------------------------------------------------------------------------
 
-_DISCOVERY_MENU_TEXT = "- add_goal(...) creates a goal\n- get_insights(...) reads insights"
+DISCOVERY_MENU_TEXT = "- add_goal(...) creates a goal\n- get_insights(...) reads insights"
 
 
-def _discovery_observation(discovery_step: int) -> Dict[str, Any]:
+def discovery_observation(discovery_step: int) -> Dict[str, Any]:
     return {
         "kind": "query",
         "locator": "list_operations",
         "discovery": True,
         "discovery_step": discovery_step,
-        "text": _DISCOVERY_MENU_TEXT,
+        "text": DISCOVERY_MENU_TEXT,
     }
 
 
 def test_discovery_menu_renders_full_only_on_the_step_right_after_it_was_read():
     provider = CapturingProvider()
     orch = build(provider)
-    gathered = [_discovery_observation(discovery_step=0)]
+    gathered = [discovery_observation(discovery_step=0)]
 
     orch._plan("what can you do here?", "", "", gathered, step=0)
-    assert _DISCOVERY_MENU_TEXT in provider.prompts[-1]
+    assert DISCOVERY_MENU_TEXT in provider.prompts[-1]
 
     orch._plan("and then?", "", "", gathered, step=1)
     later = provider.prompts[-1]
-    assert _DISCOVERY_MENU_TEXT not in later
+    assert DISCOVERY_MENU_TEXT not in later
     assert "list_operations" in later  # a reminder naming the menu, not the menu itself
     assert "already" in later.lower()
 
     orch._plan("one more", "", "", gathered, step=2)
-    assert _DISCOVERY_MENU_TEXT not in provider.prompts[-1]
+    assert DISCOVERY_MENU_TEXT not in provider.prompts[-1]
 
 
 def test_a_second_genuine_read_of_the_same_discovery_spec_renders_full_again():
@@ -337,13 +337,13 @@ def test_a_second_genuine_read_of_the_same_discovery_spec_renders_full_again():
     repeated-read observation aside), the planner call right after THAT read sees it in full too."""
     provider = CapturingProvider()
     orch = build(provider)
-    gathered = [_discovery_observation(discovery_step=0), _discovery_observation(discovery_step=2)]
+    gathered = [discovery_observation(discovery_step=0), discovery_observation(discovery_step=2)]
     orch._plan("re-read", "", "", gathered, step=2)
-    assert _DISCOVERY_MENU_TEXT in provider.prompts[-1]
+    assert DISCOVERY_MENU_TEXT in provider.prompts[-1]
 
 
-class _FixedModelTierRunner:
-    """A duck-typed deep runner: only the one attribute ``_model_tier_doctrine_applies`` reads."""
+class FixedModelTierRunner:
+    """A duck-typed deep runner: only the one attribute ``model_tier_doctrine_applies`` reads."""
 
     def __init__(self, uses_deep_model: bool):
         self.uses_deep_model = uses_deep_model
@@ -360,7 +360,7 @@ def test_model_tier_discipline_omitted_when_the_only_runner_ignores_the_ladder()
     provider = CapturingProvider()
     orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
                         registry=ModelRegistry(provider), config=OrchestratorConfig(),
-                        deep_runner=_FixedModelTierRunner(uses_deep_model=False))
+                        deep_runner=FixedModelTierRunner(uses_deep_model=False))
     orch._plan("tell me about my plan", "", "", [])
     assert "MODEL TIER DISCIPLINE" not in provider.prompts[-1]
 
@@ -371,8 +371,8 @@ def test_model_tier_discipline_present_when_any_named_runner_uses_the_ladder():
         retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider),
         config=OrchestratorConfig(),
         deep_runners={
-            "code": _FixedModelTierRunner(uses_deep_model=False),
-            "delegate": _FixedModelTierRunner(uses_deep_model=True),
+            "code": FixedModelTierRunner(uses_deep_model=False),
+            "delegate": FixedModelTierRunner(uses_deep_model=True),
         },
         deep_runner_classifier=lambda *a, **kw: "code",
     )

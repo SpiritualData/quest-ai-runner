@@ -20,7 +20,7 @@ from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 
-_OVERSEER_MARK = "OVERSEER"
+OVERSEER_MARK = "OVERSEER"
 
 
 class OverseerStubProvider(StubProvider):
@@ -31,17 +31,17 @@ class OverseerStubProvider(StubProvider):
     def __init__(self, decisions: List[Dict[str, Any]], *,
                  overseer_signals: Optional[List[Dict[str, Any]]] = None):
         super().__init__(decisions)
-        self._overseer_signals = list(overseer_signals or [])
+        self.overseer_signals = list(overseer_signals or [])
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
-        if _OVERSEER_MARK in prompt and "minimal-intervention" in prompt.lower():
-            if self._overseer_signals:
-                return self._overseer_signals.pop(0)
+        if OVERSEER_MARK in prompt and "minimal-intervention" in prompt.lower():
+            if self.overseer_signals:
+                return self.overseer_signals.pop(0)
             return {"signal": "proceed"}
         return super().plan(prompt, model=model, tool_schema=tool_schema)
 
 
-class _PreambleCapturingRunner:
+class PreambleCapturingRunner:
     """A DeepRunner that accepts context_preamble and records what it received."""
 
     def __init__(self):
@@ -71,7 +71,7 @@ def test_answer_checkpoint_escalation_forwards_gathered_facts_as_context_preambl
         "expenses.md": ("GROUNDING Launch expenses collection id: coll_launch_expenses_42. "
                          "Spend cap this quarter: $5,000. Spent so far: $5,430."),
     })
-    runner = _PreambleCapturingRunner()
+    runner = PreambleCapturingRunner()
 
     orch = Orchestrator(
         retrieval=retrieval,

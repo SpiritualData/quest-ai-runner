@@ -81,7 +81,7 @@ class JudgeCountingProvider(StubProvider):
         return super().plan(prompt, model=model, tool_schema=tool_schema)
 
 
-def _run(message, decision, *, directive=False, user_turn=True):
+def run_turn(message, decision, *, directive=False, user_turn=True):
     provider = JudgeCountingProvider([decision], directive=directive,
                                      answer_text="Here is how I would approach it.")
     runner = StubDeepRunner(met=True, output="done")
@@ -92,7 +92,7 @@ def _run(message, decision, *, directive=False, user_turn=True):
     return res, runner, provider
 
 
-def _answer(intent):
+def answer_for(intent):
     d = {"action": "answer", "model_tier": "sonnet", "rationale": "answering"}
     if intent is not None:
         d["user_intent"] = intent
@@ -102,29 +102,29 @@ def _answer(intent):
 @pytest.mark.parametrize("message", NOT_DIRECTIVES)
 @pytest.mark.parametrize("intent", ["ask", "inform", "hold_off"])
 def test_a_non_act_verdict_never_escalates_whatever_the_words(message, intent):
-    _res, runner, provider = _run(message, _answer(intent), directive=True)
+    _res, runner, provider = run_turn(message, answer_for(intent), directive=True)
     assert runner.calls == [], f"{intent!r} must not open work: {message!r}"
     assert provider.judge_calls == 0, "a verdict settles it; no extra LLM call"
 
 
 @pytest.mark.parametrize("message", DIRECTIVES)
 def test_an_act_verdict_escalates_an_answered_order(message):
-    _res, runner, provider = _run(message, _answer("act"))
+    _res, runner, provider = run_turn(message, answer_for("act"))
     assert runner.calls, f"the planner said the user ordered work: {message!r}"
     assert provider.judge_calls == 0
 
 
 def test_the_verdict_not_the_words_decides():
     # The same words go either way with the verdict: no keyword reading is left to disagree.
-    _r, runner_ask, _p = _run("fix the back button", _answer("ask"))
-    _r, runner_act, _p = _run("thanks, that is all", _answer("act"))
+    _r, runner_ask, _p = run_turn("fix the back button", answer_for("ask"))
+    _r, runner_act, _p = run_turn("thanks, that is all", answer_for("act"))
     assert runner_ask.calls == []
     assert runner_act.calls
 
 
 def test_hold_off_also_turns_off_the_planner_work_flag():
-    decision = dict(_answer("hold_off"), answer_contains_work_to_execute=True)
-    _res, runner, _p = _run("kill those runs and answer me here", decision)
+    decision = dict(answer_for("hold_off"), answer_contains_work_to_execute=True)
+    _res, runner, _p = run_turn("kill those runs and answer me here", decision)
     assert runner.calls == []
 
 
@@ -132,28 +132,28 @@ def test_a_planner_deep_is_not_gated_by_the_verdict():
     # Asking for work still gets work: the verdict only gates the nets on an ANSWER turn.
     decision = {"action": "deep", "goal": "Cancel the run", "deep_brief": "cancel it",
                 "rationale": "act on runner state", "user_intent": "hold_off"}
-    _res, runner, _p = _run("cancel that run", decision)
+    _res, runner, _p = run_turn("cancel that run", decision)
     assert runner.calls
 
 
 @pytest.mark.parametrize("directive", [True, False])
 def test_a_missing_verdict_falls_back_to_the_intent_judge(directive):
-    _res, runner, provider = _run("the export drops the last row", _answer(None),
+    _res, runner, provider = run_turn("the export drops the last row", answer_for(None),
                                   directive=directive)
     assert provider.judge_calls == 1
     assert bool(runner.calls) is directive
 
 
 def test_an_unknown_verdict_is_treated_as_missing():
-    _res, runner, provider = _run("the export drops the last row", _answer("maybe"))
+    _res, runner, provider = run_turn("the export drops the last row", answer_for("maybe"))
     assert provider.judge_calls == 1
     assert runner.calls == []
 
 
 def test_hold_off_counts_only_for_a_typed_message():
     # A queued task's brief is machine-composed: a hold_off verdict there is no verdict.
-    _res, runner, provider = _run("Fix the export.\nEarlier run: not yet released.",
-                                  _answer("hold_off"), directive=True, user_turn=False)
+    _res, runner, provider = run_turn("Fix the export.\nEarlier run: not yet released.",
+                                  answer_for("hold_off"), directive=True, user_turn=False)
     assert provider.judge_calls == 1
     assert runner.calls
 

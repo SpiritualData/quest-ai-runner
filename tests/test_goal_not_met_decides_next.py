@@ -15,7 +15,7 @@ from .conftest import StubProvider, StubRetrieval
 from .test_fast_edit_ladder import RecordingRunner, _orch
 
 
-def _run(verdicts, runner=None):
+def run_with_verdicts(verdicts, runner=None):
     runner = runner or RecordingRunner(DeepResult(met=True, output="Implemented it in commit abc123."))
     orch = _orch(StubProvider([]), [runner], verdicts)
     res = orch._run_deep(PlanDecision(action="deep", goal="g", deep_brief="b"), "g", "sonnet")
@@ -31,12 +31,12 @@ def test_schema_and_prompt_carry_the_blocker():
 
 
 def test_more_work_still_retries():
-    runner, d = _run([{"met": False, "reason": "half done", "blocker": "more_work"}, {"met": True}])
+    runner, d = run_with_verdicts([{"met": False, "reason": "half done", "blocker": "more_work"}, {"met": True}])
     assert len(runner.calls) == 2 and d.met
 
 
 def test_evidence_only_is_accepted_without_a_retry_and_names_the_gap():
-    runner, d = _run([{"met": False, "reason": "no test log", "blocker": "evidence_only",
+    runner, d = run_with_verdicts([{"met": False, "reason": "no test log", "blocker": "evidence_only",
                        "question": "a passing test run"}])
     assert len(runner.calls) == 1
     assert d.met is True and d.error is None
@@ -44,21 +44,21 @@ def test_evidence_only_is_accepted_without_a_retry_and_names_the_gap():
 
 
 def test_evidence_only_is_not_trusted_when_a_claimed_change_is_unbacked():
-    runner, d = _run([{"met": False, "reason": "claims a save", "blocker": "evidence_only",
+    runner, d = run_with_verdicts([{"met": False, "reason": "claims a save", "blocker": "evidence_only",
                        "question": "x", "claims_unexecuted": True},
                       {"met": True}])
     assert len(runner.calls) == 2
 
 
 def test_needs_person_stops_at_once_with_the_question():
-    runner, d = _run([{"met": False, "reason": "needs the account", "blocker": "needs_person",
+    runner, d = run_with_verdicts([{"met": False, "reason": "needs the account", "blocker": "needs_person",
                        "question": "Which Stripe account should I use?"}])
     assert len(runner.calls) == 1
     assert not d.met and d.needs_person == "Which Stripe account should I use?"
 
 
 def test_needs_person_without_a_question_is_just_more_work():
-    runner, d = _run([{"met": False, "reason": "r", "blocker": "needs_person", "question": ""},
+    runner, d = run_with_verdicts([{"met": False, "reason": "r", "blocker": "needs_person", "question": ""},
                       {"met": True}])
     assert len(runner.calls) == 2
 
@@ -82,7 +82,7 @@ class Client:
         self.reports.append(("failed", result))
 
 
-def _report(deep):
+def report_for(deep):
     ex = TaskExecutor(Client(), None)
     ex._post_conv = lambda *a, **k: None
     ex._report_progress = lambda *a, **k: None
@@ -92,17 +92,17 @@ def _report(deep):
 
 
 def test_needs_person_reports_needs_you_with_the_question():
-    out = _report([DeepResult(met=False, output="did most of it", needs_person="Which account?")])
+    out = report_for([DeepResult(met=False, output="did most of it", needs_person="Which account?")])
     assert out.status == "needs_you" and "Which account?" in out.result
 
 
 def test_unconfirmed_note_rides_the_done_report():
-    out = _report([DeepResult(met=True, output="Done in abc123", unconfirmed_note="the deploy")])
+    out = report_for([DeepResult(met=True, output="Done in abc123", unconfirmed_note="the deploy")])
     assert out.status == "done" and "Not independently confirmed: the deploy" in out.result
 
 
 def test_terminal_not_met_leads_with_what_is_left_and_keeps_the_marker():
-    out = _report([DeepResult(met=False, output="edited two files", error="Goal not yet met: x",
+    out = report_for([DeepResult(met=False, output="edited two files", error="Goal not yet met: x",
                               verdict_reason="the client is not updated",
                               verdict_next_action="update the client call")])
     assert out.status == "incomplete"
@@ -113,5 +113,5 @@ def test_terminal_not_met_leads_with_what_is_left_and_keeps_the_marker():
 
 
 def test_terminal_not_met_without_a_verdict_keeps_the_old_wording():
-    out = _report([DeepResult(met=False, output="edited", error="the turn budget ran out")])
+    out = report_for([DeepResult(met=False, output="edited", error="the turn budget ran out")])
     assert out.result.startswith("the turn budget ran out")

@@ -29,7 +29,7 @@ from tests.conftest import StubEscalation, StubRetrieval
 CLAIM = "I updated the goal with a deadline of 30 October."
 
 
-class _OneDeepThenVerdict:
+class OneDeepThenVerdict:
     """A ModelProvider that plans one deep goal and answers the verifier with a fixed verdict.
 
     The two calls are told apart by the tool schema the orchestrator passes, never by the prompt
@@ -37,16 +37,16 @@ class _OneDeepThenVerdict:
     """
 
     def __init__(self, verdict: Dict[str, Any]):
-        self._verdict = verdict
-        self._planned = False
+        self.verdict = verdict
+        self.planned = False
         self.verify_calls = 0
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
         if (tool_schema or {}).get("name") == "goal_verdict":
             self.verify_calls += 1
-            return dict(self._verdict)
-        if not self._planned:
-            self._planned = True
+            return dict(self.verdict)
+        if not self.planned:
+            self.planned = True
             return {"action": "deep", "goal": "move the goal to 30 October",
                     "deep_brief": "set the deadline", "rationale": "the user asked for a change"}
         return {"action": "answer", "rationale": "done"}
@@ -55,19 +55,19 @@ class _OneDeepThenVerdict:
         return "ANSWER"
 
 
-class _FixedRunner:
+class FixedRunner:
     """A deep runner that returns a prepared result and is out of moves after one attempt."""
 
     uses_deep_model = False
 
     def __init__(self, result: DeepResult):
-        self._result = result
+        self.result = result
 
     def run_goal(self, *, goal, brief, model=None, max_turns=None, **kwargs) -> DeepResult:
-        return self._result
+        return self.result
 
 
-class _Sink(StreamSink):
+class Sink(StreamSink):
     def __init__(self) -> None:
         self.events: List[Dict[str, Any]] = []
         super().__init__(self.events.append)
@@ -76,17 +76,17 @@ class _Sink(StreamSink):
         return [(e.get("text") or "") for e in self.events if e.get("type") == EVENT_RESULT]
 
 
-def _run(result: DeepResult, verdict: Dict[str, Any]):
-    provider = _OneDeepThenVerdict(verdict)
+def run_case(result: DeepResult, verdict: Dict[str, Any]):
+    provider = OneDeepThenVerdict(verdict)
     orch = Orchestrator(
         retrieval=StubRetrieval({}),
         provider=provider,
         registry=ModelRegistry(provider),
         escalation=StubEscalation(),
-        deep_runner=_FixedRunner(result),
+        deep_runner=FixedRunner(result),
         config=OrchestratorConfig(max_steps=3),
     )
-    sink = _Sink()
+    sink = Sink()
     res = orch.run("move the goal to 30 October", mode=Mode.LIVE, sink=sink)
     return res, sink
 
@@ -129,7 +129,7 @@ def test_a_met_result_or_a_real_change_is_passed_through_unchanged():
 # ---------------------------------------------------------------------------
 
 def test_a_not_met_verdict_with_no_change_never_surfaces_the_claim_on_its_own():
-    res, sink = _run(
+    res, sink = run_case(
         DeepResult(met=True, output=CLAIM, exhausted=True, changed_nothing=True),
         {"met": False, "reason": "no execution record backs the claimed update",
          "blocker": "needs_person", "question": "which goal did you mean?"})
@@ -144,7 +144,7 @@ def test_a_not_met_verdict_with_no_change_never_surfaces_the_claim_on_its_own():
 
 
 def test_a_met_verdict_still_surfaces_the_runners_own_text():
-    res, sink = _run(
+    res, sink = run_case(
         DeepResult(met=True, output=CLAIM, exhausted=True, changed_nothing=False),
         {"met": True, "reason": "the goal's deadline was changed"})
 

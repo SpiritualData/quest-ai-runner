@@ -50,7 +50,7 @@ All notable changes to this project are documented here. The format is based on
   every sibling that reported something of its own, ordering them before the single ask so the
   reply reads: what happened, then the one ask, then the short code-written continuation sentence
   (`CONTINUE_AFTER_DECISION_NOTE`). A sibling that was stopped before it ever ran leaves an empty
-  placeholder result; `_result_reports_something` keeps that out of the reply, judged on
+  placeholder result; `result_reports_something` keeps that out of the reply, judged on
   structure and emptiness only (output text, a verified outcome, a usage-limit wait), never on
   what any wording says. A single-goal turn and a fan-out where nothing parks remain unaffected.
   Tests: `tests/test_orchestrator.py`
@@ -58,6 +58,22 @@ All notable changes to this project are documented here. The format is based on
   `test_fan_out_drops_only_the_extra_asks_not_the_finished_work`).
 
 ### Changed
+- **Hygiene pass: drop the leading underscore from identifiers introduced in tonight's commits
+  (no behavior change).** A round of module-level helpers, constants and test fixture
+  classes/attributes added across the evening's work read as "private by convention" even though
+  nothing here uses that convention deliberately; renamed each to its bare form (e.g.
+  `result_reports_something`, `already_said_tail`, `collapse_shown_discovery`,
+  `discovery_reminder_line`, `run_goal_accepts_is_subgoal`, `Orchestrator.model_tier_doctrine_applies`,
+  `SNIPPET_MAX_CHARS`/`VECTOR_HIT_MAX_CARD_REFS`/`VECTOR_HIT_MAX_CARD_REF_CHARS` in
+  `vector_context_assembler.py`, `FileContextStore.FALLBACK_MAX_FILES_WALKED`/`FALLBACK_MAX_FILES_SHOWN`/
+  `FALLBACK_MAX_LINES_PER_FILE`, `evaluation/qualitative/judge.py`'s `OTHER_ACCOUNT_DATA`, and a
+  matching set of test-only helper functions/classes) and updated every reference, including
+  docstring/comment mentions and the CHANGELOG entries above that named them. Left untouched: any
+  identically-named identifier that already existed before tonight (e.g. `web_research.py`'s own
+  `_SNIPPET_MAX_CHARS`, `tests/test_overseer.py`'s `_OVERSEER_MARK`/`_overseer_signals`,
+  `tests/test_deep_gathered.py`'s `_PreambleCapturingRunner`) and idiomatic unused-parameter
+  placeholders. Pure rename; no test assertions changed.
+
 - **Round-2 token cut on the five schema-driven "planning function" calls (goal verifier, card
   updater, answer-explanation, overseer, reach judge) and nothing else in that family.** Every one
   of these goes through `provider.plan()`, which renders its `tool_schema` as the system prompt
@@ -106,7 +122,7 @@ All notable changes to this project are documented here. The format is based on
   (`CONTINUE_AFTER_DECISION_NOTE`, never derived from any result's own text) that the rest will
   continue once the person answers. A single-goal turn and a fan-out where nothing parks are both
   byte-for-byte unaffected. Also added `run_goal`'s optional `is_subgoal` keyword
-  (`_run_goal_accepts_is_subgoal`), set True only on a fan-out, so an opted-in runner (e.g.
+  (`run_goal_accepts_is_subgoal`), set True only on a fan-out, so an opted-in runner (e.g.
   quest-backend's `QuestCommandRunner`) can scope itself to just its own subgoal instead of
   re-deriving a sibling's work from the fuller "USER'S REQUEST" header every subgoal's brief also
   carries; a runner that ignores the kwarg is unaffected. Tests: `tests/test_orchestrator.py`
@@ -193,11 +209,11 @@ All notable changes to this project are documented here. The format is based on
   30-turn eval pass: a discovery/capability menu (`list_operations`, `describe_operation`,
   `tools`, ...) now renders IN FULL only on the planner call for the step right after it was
   gathered; every later re-plan call of the same turn gets a one-line reminder instead
-  (`_discovery_reminder_line`, `_collapse_shown_discovery`), tagged via a new `discovery_step` on
+  (`discovery_reminder_line`, `collapse_shown_discovery`), tagged via a new `discovery_step` on
   the observation. `MODEL TIER DISCIPLINE` is now a conditional `{model_tier_block}` slot, omitted
   when every wired deep runner declares `uses_deep_model = False` (true of Quest's in-process chat
   runners, which never touch the `QAR_MODEL_*` ladder the doctrine is about), via
-  `Orchestrator._model_tier_doctrine_applies()`; it fails open (keeps the doctrine) when no runner
+  `Orchestrator.model_tier_doctrine_applies()`; it fails open (keeps the doctrine) when no runner
   is known. The "ALREADY SAID OUT LOUD" narration echo-back is capped to its last 3 lines
   (`NARRATION_SAID_PLANNER_MAX`), since its only job is stopping an immediate echo, not holding an
   audit trail. `DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT` flips off -> on: the static

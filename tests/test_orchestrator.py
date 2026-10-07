@@ -102,18 +102,18 @@ def test_deep_fanout_runs_subtasks_in_parallel():
         "a fan-out where nothing parks must stay byte-for-byte unaffected"
 
 
-class _PerGoalDeepRunner:
+class PerGoalDeepRunner:
     """A deep runner that returns a DIFFERENT, pre-scripted ``DeepResult`` per goal name, and
     records every goal it was actually invoked for -- used to prove a sibling subtask was (or
     was not) run at all once another subtask of the same fan-out parked on a human decision."""
 
     def __init__(self, results: Dict[str, Any]):
-        self._results = results
+        self.results = results
         self.calls: List[str] = []
 
     def run_goal(self, *, goal, brief, model=None, max_turns=None):
         self.calls.append(goal)
-        return self._results[goal]
+        return self.results[goal]
 
 
 def test_fan_out_reply_carries_only_one_ask_when_two_subgoals_both_park():
@@ -130,7 +130,7 @@ def test_fan_out_reply_carries_only_one_ask_when_two_subgoals_both_park():
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
          "rationale": "split"},
     ])
-    runner = _PerGoalDeepRunner({
+    runner = PerGoalDeepRunner({
         "A": DeepResult(met=False, output="A's conflict question", decision_id="dec_a"),
         "B": DeepResult(met=False, output="B's conflict question", decision_id="dec_b"),
     })
@@ -154,7 +154,7 @@ def test_fan_out_stops_a_sibling_before_it_ever_starts_once_one_parks():
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
          "rationale": "split"},
     ])
-    runner = _PerGoalDeepRunner({
+    runner = PerGoalDeepRunner({
         "A": DeepResult(met=False, output="A's conflict question", decision_id="dec_a"),
         "B": DeepResult(met=True, output="B finished"),
     })
@@ -178,7 +178,7 @@ def test_fan_out_names_a_sibling_stopped_before_it_ran_as_not_done_yet():
             {"goal": "Email the caterer.", "brief": "b"}],
          "rationale": "split"},
     ])
-    runner = _PerGoalDeepRunner({
+    runner = PerGoalDeepRunner({
         "Add the venue goal": DeepResult(met=False, output="Venue question?", decision_id="dec_a"),
         "Email the caterer.": DeepResult(met=True, output="Emailed."),
     })
@@ -208,7 +208,7 @@ def test_fan_out_reports_what_landed_as_well_as_the_one_ask():
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
          "rationale": "split"},
     ])
-    runner = _PerGoalDeepRunner({
+    runner = PerGoalDeepRunner({
         "A": DeepResult(met=True, output="Added the goal for A."),
         "B": DeepResult(met=False, output="B needs your call first.", decision_id="dec_b"),
     })
@@ -233,7 +233,7 @@ def test_fan_out_drops_only_the_extra_asks_not_the_finished_work():
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}, {"goal": "C", "brief": "c"}],
          "rationale": "split"},
     ])
-    runner = _PerGoalDeepRunner({
+    runner = PerGoalDeepRunner({
         "A": DeepResult(met=True, output="A landed."),
         "B": DeepResult(met=False, output="B's question", decision_id="dec_b"),
         "C": DeepResult(met=False, output="C's question", decision_id="dec_c"),
@@ -262,7 +262,7 @@ def test_a_single_goal_turn_that_parks_is_unaffected():
     assert CONTINUE_AFTER_DECISION_NOTE not in res.deep_results[0].output
 
 
-class _IsSubgoalCapturingDeepRunner:
+class IsSubgoalCapturingDeepRunner:
     """A deep runner whose ``run_goal`` accepts ``is_subgoal`` and records it per call -- used to
     prove a consumer (e.g. quest-backend's QuestCommandRunner) can tell a fan-out subtask apart
     from a single-goal run without reading any model-generated text (hard rule #3)."""
@@ -282,7 +282,7 @@ def test_fan_out_tells_an_opted_in_runner_it_is_one_of_several_subtasks():
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
          "rationale": "split"},
     ])
-    runner = _IsSubgoalCapturingDeepRunner()
+    runner = IsSubgoalCapturingDeepRunner()
     _orch(provider, StubRetrieval(), deep_runner=runner).run("do A and B")
     assert {c["goal"]: c["is_subgoal"] for c in runner.calls} == {"A": True, "B": True}
 
@@ -291,7 +291,7 @@ def test_single_goal_turn_does_not_set_is_subgoal():
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
     ])
-    runner = _IsSubgoalCapturingDeepRunner()
+    runner = IsSubgoalCapturingDeepRunner()
     _orch(provider, StubRetrieval(), deep_runner=runner).run("do it")
     assert len(runner.calls) == 1
     assert runner.calls[0]["is_subgoal"] is None, \
@@ -2152,16 +2152,16 @@ def test_deferred_deep_park_is_reported_as_proposal_not_a_done_claim():
     assert provider.plan_calls == 1
 
 
-class _FixedResultDeepRunner:
+class FixedResultDeepRunner:
     """A deep runner that returns one pre-built ``DeepResult`` (any fields) for every goal."""
 
     def __init__(self, result):
-        self._result = result
+        self.result = result
         self.calls: List[str] = []
 
     def run_goal(self, *, goal, brief, model=None, max_turns=None):
         self.calls.append(goal)
-        return self._result
+        return self.result
 
 
 def test_deferred_deep_that_failed_and_changed_nothing_is_never_written_up_as_done():
@@ -2178,7 +2178,7 @@ def test_deferred_deep_that_failed_and_changed_nothing_is_never_written_up_as_do
                     "deferred_deep": {"goal": "Add the goal"}}],
         answer_text="I'll add the goal.",
     )
-    runner = _FixedResultDeepRunner(DeepResult(met=False, output=failed_text, exhausted=True,
+    runner = FixedResultDeepRunner(DeepResult(met=False, output=failed_text, exhausted=True,
                                                changed_nothing=True))
     res = _orch(provider, StubRetrieval(), deep_runner=runner).run("add the goal")
     assert res.kind == "answer"
@@ -2199,7 +2199,7 @@ def test_deferred_deep_unverified_with_no_observed_effect_is_reported_in_its_own
                     "deferred_deep": {"goal": "Change the goal"}}],
         answer_text="I'll change it.",
     )
-    runner = _FixedResultDeepRunner(DeepResult(met=False, output=text, exhausted=True,
+    runner = FixedResultDeepRunner(DeepResult(met=False, output=text, exhausted=True,
                                                observations_reported=True))
     res = _orch(provider, StubRetrieval(), deep_runner=runner).run("change the goal")
     assert res.text == text
@@ -2212,7 +2212,7 @@ def test_deferred_deep_that_landed_is_still_written_up_as_before():
         decisions=[{"action": "answer", "rationale": "answer then make the change",
                     "deferred_deep": {"goal": "Add the goal"}}],
     )
-    runner = _FixedResultDeepRunner(DeepResult(met=True, output="Added the goal.", exhausted=True))
+    runner = FixedResultDeepRunner(DeepResult(met=True, output="Added the goal.", exhausted=True))
     _orch(provider, StubRetrieval(), deep_runner=runner).run("add the goal")
     assert "ACTUAL RESULT OF THE WORK YOU JUST DID" in _all_answer_prompts(provider)
 

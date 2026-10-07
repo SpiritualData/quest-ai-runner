@@ -4161,9 +4161,9 @@ class FileContextStore(ContextAssemblerBase):
     # personal aside) can still share a few common words with some file, and the old caps could
     # inject a dozen files' worth of unrelated lines into a turn the corpus has nothing to do
     # with. Never raised back up without a real relevance signal to go with it.
-    _FALLBACK_MAX_FILES_WALKED = 10
-    _FALLBACK_MAX_FILES_SHOWN = 6
-    _FALLBACK_MAX_LINES_PER_FILE = 3
+    FALLBACK_MAX_FILES_WALKED = 10
+    FALLBACK_MAX_FILES_SHOWN = 6
+    FALLBACK_MAX_LINES_PER_FILE = 3
 
     def _fallback_file_search(self, task_kws: Set[str]) -> AssembledContext:
         """When no cards score above threshold, grep the raw file corpus for query keywords.
@@ -4172,7 +4172,7 @@ class FileContextStore(ContextAssemblerBase):
         misses novel component names, class names, or camelCase identifiers.  Returns an
         empty AssembledContext when no files are reachable or no hits are found.
 
-        Hard-capped (``_FALLBACK_MAX_*`` above) because this path has no relevance signal beyond
+        Hard-capped (``FALLBACK_MAX_*`` above) because this path has no relevance signal beyond
         "the keyword appears somewhere in the corpus" -- see ``_assemble_inner`` for the separate,
         OPTIONAL ``skip_corpus_fallback`` meta gate a consumer with its own "is this turn even
         about this corpus" signal (a reach judge, a classifier verdict) can set to skip this path
@@ -4209,12 +4209,12 @@ class FileContextStore(ContextAssemblerBase):
                         matching = [ln.rstrip() for ln in text.splitlines() if rx.search(ln)]
                         if matching:
                             rel = str(fpath.relative_to(self._repo_root))
-                            hits_by_file[rel] = matching[: self._FALLBACK_MAX_LINES_PER_FILE]
+                            hits_by_file[rel] = matching[: self.FALLBACK_MAX_LINES_PER_FILE]
                     except OSError:
                         pass
-                    if len(hits_by_file) >= self._FALLBACK_MAX_FILES_WALKED:
+                    if len(hits_by_file) >= self.FALLBACK_MAX_FILES_WALKED:
                         break
-                if len(hits_by_file) >= self._FALLBACK_MAX_FILES_WALKED:
+                if len(hits_by_file) >= self.FALLBACK_MAX_FILES_WALKED:
                     break
         except Exception:  # noqa: BLE001
             return AssembledContext()
@@ -4227,7 +4227,7 @@ class FileContextStore(ContextAssemblerBase):
         parts = [
             "No context cards matched this query. Relevant lines found by direct file search:\n"
         ]
-        for rel, lines in sorted(hits_by_file.items())[: self._FALLBACK_MAX_FILES_SHOWN]:
+        for rel, lines in sorted(hits_by_file.items())[: self.FALLBACK_MAX_FILES_SHOWN]:
             parts.append(f"**{rel}**")
             for ln in lines:
                 snippet = ln[:200].rstrip() + ("…" if len(ln) > 200 else "")

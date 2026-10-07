@@ -126,7 +126,7 @@ _SNIPPET_LINES = 3
 # quest's card measured ~5k tokens under the OLD (uncapped) ``_snippet``, almost entirely from this
 # one "text: ..." line. Capping here fixes it at the source for every caller (the context_view's
 # "text:" line AND the review prompt's candidate listing below).
-_SNIPPET_MAX_CHARS = 400
+SNIPPET_MAX_CHARS = 400
 
 # Per-hit card-content budget for a VECTOR hit, tighter than the shared ``MAX_CARD_REFS`` /
 # ``MAX_CARD_REF_CHARS`` defaults ``FileContextStore`` uses for its own card selections (see the
@@ -137,18 +137,18 @@ _SNIPPET_MAX_CHARS = 400
 # (always rendered by ``_render_hit_sections`` regardless of this budget); only the lower-relevance
 # tail of content items is cut, and every cut/unresolved item still carries its "read the source"
 # locator.
-_VECTOR_HIT_MAX_CARD_REFS = 4
-_VECTOR_HIT_MAX_CARD_REF_CHARS = 1600
+VECTOR_HIT_MAX_CARD_REFS = 4
+VECTOR_HIT_MAX_CARD_REF_CHARS = 1600
 
 
 def _snippet(text: str, lines: int = _SNIPPET_LINES) -> str:
     """Return the first ``lines`` non-empty lines of ``text``, hard-capped at
-    ``_SNIPPET_MAX_CHARS`` regardless of line count (see that constant for why: text with no
+    ``SNIPPET_MAX_CHARS`` regardless of line count (see that constant for why: text with no
     newlines used to render here with NO truncation at all)."""
     parts = [l for l in text.splitlines() if l.strip()][:lines]
     out = " | ".join(parts) if parts else text[:120]
-    if len(out) > _SNIPPET_MAX_CHARS:
-        out = out[: _SNIPPET_MAX_CHARS - 1].rstrip() + "…"
+    if len(out) > SNIPPET_MAX_CHARS:
+        out = out[: SNIPPET_MAX_CHARS - 1].rstrip() + "…"
     return out
 
 
@@ -285,8 +285,8 @@ class VectorContextAssembler(ContextAssemblerBase):
         seed_source: Optional[_SeedSource] = None,
         seed_in_background: bool = False,
         reference_resolvers: Optional[Dict[str, Any]] = None,
-        max_card_refs: int = _VECTOR_HIT_MAX_CARD_REFS,
-        max_card_ref_chars: int = _VECTOR_HIT_MAX_CARD_REF_CHARS,
+        max_card_refs: int = VECTOR_HIT_MAX_CARD_REFS,
+        max_card_ref_chars: int = VECTOR_HIT_MAX_CARD_REF_CHARS,
         _clock: Optional[Callable[[], float]] = None,
     ) -> None:
         self._store = vector_store
