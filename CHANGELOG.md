@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Qualitative-eval harness: card content is snapshotted and restored per case, not just ids.**
+  `cards_created_since`/`sweep_new_cards` only ever caught a card a case CREATED outright; the card
+  learner also APPENDS learned items onto a card that already existed, in particular each world
+  quest's own auto-maintained card (managed fields are protected, but learned content items are not
+  by design), which an id-only diff against the baseline can never see since the id was already
+  there. Found after a day of runs: the five world quest cards had each accrued 3-23 learned items,
+  some false ("Goals added: ..." for a write that never landed) and some prescriptive ("reschedule
+  this goal rather than ..."), and a later case read one of those as ground truth. `world.py` gains
+  `card_snapshot` (full card dicts, not just ids), `cards_to_restore` (pure diff: what to delete,
+  what to write back) and `restore_cards` (settle, then delete anything new and PUT back the literal
+  pre-case dict for anything changed), called in the case's own `finally` so it still runs if the
+  case raised. `reset_world_quest_cards` does the equivalent for `reset()`: `teardown(keep_quests)`
+  never deletes a quest's own card, so a learned item on one used to survive every reset; reset now
+  strips each world quest card back to managed-only content. The per-case report (`cards_restored`)
+  says how many cards were deleted/restored, a useful signal of which case taught the card learner
+  something. Tests: `evaluation/qualitative/test_card_restore.py`.
 - **A context card may record what a turn OBSERVED, never what it CLAIMED.** The end-of-turn card
   updater learned from the reply text, so an assistant's own false claims became durable facts that
   then grounded later turns (two live cards: one said a goal had been added although the turn's

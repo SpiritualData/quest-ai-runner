@@ -1044,6 +1044,132 @@ def sweep_new_cards(baseline, *, settle=True):
 
 
 # ---------------------------------------------------------------------------------------------
+# Card CONTENT restore. ``cards_created_since``/``sweep_new_cards`` above only catch a card this
+# RUN created outright: they diff against the baseline by id, so a card that already existed (one
+# from setup, an older topic card, or another run's leftover) is invisible to them no matter how
+# much a case changed it. The brain's card learner does not only create cards -- it also APPENDS
+# learned content items to cards that already exist, in particular to each world quest's own
+# auto-maintained card (id ``quest-<quest_id>``, see quest-backend's ``quest_ai_quest_cards.py``:
+# "the brain's async card updater cannot rewrite the quest-derived digest or drop the live
+# reference -- but it CAN still ADD learned notes to the card. That is deliberate.").
+#
+# Found 2026-10-xx: over a day of eval runs the five world quest cards had accrued 3 to 23 learned
+# items each, some outright false ("Goals added: ..." for a write that never landed) and some
+# prescriptive ("reschedule/rename this existing goal rather than ..."), and a LATER case then read
+# one of those as ground truth. Some pre-existing topic cards had learned world content too (one
+# even stored a case's own answer, a collection total). An id-only sweep cannot see any of this: the
+# id was already in the baseline before the case ever ran.
+#
+# The fix is to snapshot and diff FULL card dicts, not just ids, around each case: ``card_snapshot``
+# right before the case starts, ``restore_cards`` after judging (once the card writes have settled)
+# puts every card whose content differs back to its pre-case dict (PUT, the literal prior body) and
+# deletes anything that is new. A managed quest card is restored the same way as any other: the
+# digest fields (name/summary/description/keywords) are HASH-GATED on the backend (see
+# ``quest_digest_hash``), so writing back a stale digest costs nothing -- the next real quest write
+# re-derives it. This module does not try to synchronize with that hook mid-case; it only needs to
+# win the LAST word once the case is over.
+# ---------------------------------------------------------------------------------------------
+
+def card_snapshot():
+    """Every card on the account (managed cards included), keyed by id, as its full dict. About
+    150 cards on the dev account: cheap to read whole, the same way ``card_ids`` already does for
+    just the ids. Never raises; an unreadable store yields ``{}`` (the caller then restores
+    nothing, same fail-safe as ``cards_created_since`` with no baseline)."""
+    status, body = api("GET", "/api/cards", params={"include_managed": "true"})
+    cards = body.get("cards") if status == 200 and isinstance(body, dict) else []
+    return {c["id"]: c for c in cards if isinstance(c, dict) and c.get("id")}
+
+
+def cards_to_restore(before, after):
+    """Pure: given two ``card_snapshot()`` results, (new_ids, changed).
+
+    ``new_ids`` are cards in ``after`` but not ``before`` (a case made these outright; delete
+    them). ``changed`` is ``{id: before[id]}`` for every card in ``before`` whose dict in ``after``
+    differs, INCLUDING one ``after`` no longer has at all (restoring a card a case happened to
+    delete is the same operation as restoring one it merely edited -- write the prior dict back).
+    A card untouched by the case is in neither. No network, so unit-testable with fabricated dicts
+    (see ``test_card_restore.py``)."""
+    before = before or {}
+    after = after or {}
+    new_ids = sorted(set(after) - set(before))
+    changed = {cid: prior for cid, prior in before.items() if after.get(cid) != prior}
+    return new_ids, changed
+
+
+def restore_cards(before, *, settle=True):
+    """Put the account's cards back to ``before`` (a ``card_snapshot()`` taken right before a
+    case): delete anything new, write back (PUT, the literal prior dict) anything whose content
+    changed. Waits for the case's card writes to settle first, same reasoning and the same
+    settling helper as ``sweep_new_cards``. Returns a summary dict for the per-case report
+    (``deleted``, ``restored``, ``changed_ids``); a restore worth reporting even when both counts
+    are zero, since that itself says the case taught the card learner nothing. ``before=None`` (the
+    snapshot at case start could not be read) is a no-op. Never raises."""
+    if before is None:
+        return {"deleted": 0, "restored": 0, "changed_ids": []}
+    try:
+        after = settle_card_set(card_snapshot) if settle else card_snapshot()
+        new_ids, changed = cards_to_restore(before, after)
+        for cid in new_ids:
+            api("DELETE", f"/api/cards/{cid}")
+        for cid, card in changed.items():
+            api("PUT", f"/api/cards/{cid}", card)
+        return {"deleted": len(new_ids), "restored": len(changed), "changed_ids": sorted(changed)}
+    except Exception:  # noqa: BLE001 -- a restore failure must not crash the case that already ran
+        return {"deleted": 0, "restored": 0, "changed_ids": [], "error": True}
+
+
+def world_quest_card_id(qid):
+    """The deterministic id quest-backend's ``quest_ai_quest_cards.card_id_for`` writes for a
+    quest's own auto-maintained card."""
+    return f"quest-{qid}"
+
+
+def managed_only_card(card):
+    """``card`` with every ``content`` item NOT named in its own ``managed_items`` dropped.
+
+    Pure: pins exactly what ``reset_world_quest_cards`` sends back for a world quest's card. A card
+    with no ``managed_items`` (or none of its content items are in it) has nothing this module may
+    claim is "managed", so it is returned UNCHANGED rather than stripped to nothing -- this is only
+    ever called on a card that declares the contract (see ``quest_ai_quest_cards.build_quest_card``:
+    ``managed_items: [LIVE_REF_ITEM_ID]``). Returns ``card`` itself (same object) when nothing
+    would change, so a caller can test ``is`` to skip a needless write."""
+    managed_items = set(card.get("managed_items") or [])
+    content = card.get("content")
+    if not managed_items or not isinstance(content, list):
+        return card
+    kept = [item for item in content if isinstance(item, dict) and item.get("id") in managed_items]
+    if kept == content:
+        return card
+    return {**card, "content": kept}
+
+
+def reset_world_quest_cards(world=None):
+    """Strip every LEARNED content item off each world quest's own managed card, so ``reset`` is a
+    clean slate for cards too, not only for quest/collection data.
+
+    ``teardown(keep_quests=True)`` (what ``reset`` calls) never deletes a quest's card -- it is the
+    quest's OWN card, not something the eval created -- so a quest's learned items otherwise survive
+    every reset indefinitely. Scoped to just the five world quest cards (a case's own drift on the
+    rest of the account's cards is ``restore_cards``'s job, run per case, not reset's). Returns how
+    many cards had something stripped. Never raises."""
+    world = world or load()
+    changed = 0
+    for qid in (world.get("quests") or {}).values():
+        cid = world_quest_card_id(qid)
+        try:
+            status, card = api("GET", f"/api/cards/{cid}")
+            if status != 200 or not isinstance(card, dict):
+                continue
+            stripped = managed_only_card(card)
+            if stripped is not card:
+                api("PUT", f"/api/cards/{cid}", stripped)
+                changed += 1
+        except Exception:  # noqa: BLE001 -- one bad card must not abort the rest of reset()
+            continue
+    return changed
+
+
+# ---------------------------------------------------------------------------------------------
 # Decision-request cleanup: a turn that proposes a change (a quest-field write, a quest-command
 # confirm) PARKS it on an "Asks for you" decision-request instead of running it. Left open, these
 # (a) clutter the eval account's ask list across runs and (b) leak into later cases: an open card
@@ -1415,7 +1541,12 @@ def teardown(keep_quests=False, decline_asks=False):
 
 
 def reset():
-    """Return the world to its seeded state without new approvals: teardown(keep_quests) + rebuild."""
+    """Return the world to its seeded state without new approvals: teardown(keep_quests) + rebuild.
+
+    ``teardown(keep_quests=True)`` keeps each world quest's own card (it belongs to the quest, not
+    to the eval), so a learned item on one survives teardown and every prior reset indefinitely.
+    ``reset_world_quest_cards`` strips those back to managed-only content here too, so a fresh reset
+    is a clean slate for cards as well as quest/collection data."""
     state = json.loads(STATE_PATH.read_text()) if STATE_PATH.exists() else None
     if state is None or state.get("partial") or not state.get("quests"):
         raise SystemExit("reset needs a full world; run setup")
@@ -1423,6 +1554,8 @@ def reset():
         raise SystemExit("reset aborted: cleanup incomplete")
     state = json.loads(STATE_PATH.read_text())
     build_contents(state, list(QUESTS))
+    stripped = reset_world_quest_cards(state)
+    print(f"stripped learned content from {stripped} world quest card(s)")
 
 
 def show():

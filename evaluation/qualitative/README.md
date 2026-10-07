@@ -15,11 +15,18 @@ DEV ONLY. Credentials come from the dev lane env file (relative to this checkout
 
 * `devclient.py`: dev REST + SSE client.
 * `world.py`: the disposable world (5 quests, 12 collections, notes, docs, team context, 16 named
-  pivot facts), `snapshot()`/`diff()` side-effect detector, `revert()`, `reset()`, `teardown()`.
+  pivot facts), `snapshot()`/`diff()` side-effect detector, `revert()`, `reset()`, `teardown()`, and
+  the context-card cleanup: `cards_created_since`/`sweep_new_cards` (id-only, against the run's
+  baseline) plus `card_snapshot`/`cards_to_restore`/`restore_cards` (full-dict, per case, also
+  undoes a case EDITING a card that already existed) and `reset_world_quest_cards` (strips a world
+  quest's own card back to managed-only content as part of `reset()`).
 * `judge.py`: evidence builder, deterministic pre-checks, `claude -p` judge (sonnet, no API key).
 * `runner.py`: loads `datasets/*.json`, drives one fresh conversation per case, snapshots the DB
   before and after, pre-checks, judges, writes `RESULTS.md` and `/tmp/qualeval/raw/*.json`.
 * `datasets/schema.md`: the case schema. `datasets/_example.json`: two smoke cases.
+* `test_card_sweep.py`: offline tests for the id-only sweep's selection/settling.
+  `test_card_restore.py`: offline tests for the full-dict restore's selection
+  (`cards_to_restore`, `managed_only_card`).
 
 ## Workflow
 
@@ -82,7 +89,9 @@ can be exercised without approvals; it cannot serve the datasets. Use `run --exa
 
 ## How a case runs
 
-1. snapshot (quests, goals, notes, measurable outcomes, every world collection's entries, queued tasks)
+1. snapshot (quests, goals, notes, measurable outcomes, every world collection's entries, queued
+   tasks), AND a separate full-dict card snapshot (`world.card_snapshot()`: every card's content,
+   not just its id, since a case can EDIT a card that already existed instead of creating a new one)
 2. new conversation (`quest_ids` per `conversation_scope`), each message streamed with `auto_run`
 3. snapshot again, `diff` = the side effects; tasks the chat queued are listed then DELETED at once
    so the dev runner lane never executes them
@@ -93,8 +102,14 @@ can be exercised without approvals; it cannot serve the datasets. Use `run --exa
    quest-command confirm) is CANCELLED (not declined: see `cancel_own_asks.py`), or it clutters the
    account and leaks into the next case's `live_context`
 7. mutating case: `revert()` the diff; if the world will not return to its snapshot, `reset()`
-8. context cards the turn learned are deleted (they persist per user and would leak into the next
-   case); the conversation is deleted
+8. CARD RESTORE (`world.restore_cards`, always, mutating or not, in a `finally` so it still runs if
+   the case raised): wait for the turn's card writes to settle (`settle_card_set`), then delete any
+   card that did not exist before the case and write back (PUT, the literal prior dict) any card
+   whose content changed. This is NOT the same as "delete the cards this case created"
+   (`cards_created_since`/`sweep_new_cards`, still run too, by id against the whole run's baseline):
+   the card learner also ADDS learned items to a card that already existed, most often each world
+   quest's own managed card (`quest-<quest_id>`), which an id-only diff can never see since the id
+   was already there before the case ran. The conversation is deleted.
 
 Leftovers from an interrupted run (killed mid-case, or from before this cleanup existed) are swept
 separately with `runner.py cleanup-asks` (dry run by default, `--apply` to act): it keys on the
@@ -156,22 +171,43 @@ datasets on 2026-10-06:
 * A timer habit's seconds cannot be seeded (the backend derives them from session records); seeded
   habit rows are completed days. Habit history needs explicit `entry_date` or the row lands on today.
 * Learned context cards persist across conversations and some pre-date the world (old conversation
-  cards, e.g. from the earlier routing eval). They can leak facts into a case; cards created during
-  the run are removed, older ones are not. Note it in findings when a reply cites an unknown fact.
-* **The card sweep identifies a run's cards only by id, against the baseline captured at `setup()`.**
-  `cards_created_since` is a set difference against `world["cards_baseline"]`, so a card that
-  pre-dates the world is indistinguishable from one a case learned except by having been listed at
-  setup. With no baseline recorded the sweep deletes **nothing** rather than sweeping broadly: a run
-  started against a half-built state file leaves every card in place, and leaked facts then show up
-  as answers citing data no case put there. There is no per-case creation timestamp to fall back on,
-  because `GET /api/cards` is listed by id here and the baseline is never refreshed mid-run.
+  cards, e.g. from the earlier routing eval). They can leak facts into a case. Note it in findings
+  when a reply cites an unknown fact.
+* **The ID-only card sweep identifies a run's cards only by id, against the baseline captured at
+  `setup()`.** `cards_created_since` is a set difference against `world["cards_baseline"]`, so a
+  card that pre-dates the world is indistinguishable from one a case learned except by having been
+  listed at setup. With no baseline recorded the sweep deletes **nothing** rather than sweeping
+  broadly: a run started against a half-built state file leaves every NEW card in place. There is no
+  per-case creation timestamp to fall back on, because `GET /api/cards` is listed by id here and the
+  baseline is never refreshed mid-run. (The full-dict card restore below does not have this gap for
+  a card that already existed: it diffs CONTENT against the case's own before-snapshot, not ids
+  against the run's baseline.)
 * **A card write can land after the case that caused it.** The brain's card updater runs in a
-  background daemon thread and finishes after the response the case already read, so the sweep can
-  fire before the write exists. `sweep_new_cards` therefore waits for the card set to go quiet
-  (`settle_card_set`, 2s quiet / 20s cap) and runs twice: once inside the case after judging, and
-  again right before the next case starts. A write that lands later still than that is caught by the
-  next sweep, so it can reach at most one case. Parallel cases get only the single sweep after the
-  batch, by design: with several cases in flight the baseline diff cannot tell whose card is whose.
+  background daemon thread and finishes after the response the case already read, so a sweep or a
+  restore can fire before the write exists. `sweep_new_cards` and `restore_cards` both wait for the
+  card set to go quiet first (`settle_card_set`, 2s quiet / 20s cap); the id-only sweep still runs
+  twice (once inside the case after judging, and again right before the next case starts) since a
+  write landing later than that is only caught by the NEXT sweep and can therefore reach at most one
+  case; the full-dict restore runs once, in the case's own `finally`, after its own settle.
+* **A chat turn can also EDIT a card that already existed, not just create a new one** -- most
+  often each world quest's own auto-maintained card (id `quest-<quest_id>`, see quest-backend's
+  `quest_ai_quest_cards.py`): the brain's updater may not rewrite that card's managed digest fields,
+  but it CAN still append learned content items to it, by design (so what the brain learns while
+  working on a quest accrues onto that quest's own card). An id-only sweep never notices this: the
+  card's id was already in the baseline. Found 2026-10-0x: a day of eval runs left the five world
+  quest cards holding 3-23 learned items each (some false -- "Goals added: ..." for a write that
+  never landed; some prescriptive -- "reschedule/rename this existing goal rather than ..."), and a
+  LATER case read one of those as ground truth. `world.card_snapshot()` (full dicts, not just ids,
+  taken right before the case) + `world.restore_cards()` (after the case, once settled: delete
+  anything new, PUT back the literal pre-case dict for anything changed) now undo this every case.
+  `world.reset_world_quest_cards()` does the equivalent for `reset()`: `teardown(keep_quests=True)`
+  never deletes a quest's own card (it belongs to the quest, not to the eval), so a learned item on
+  one used to survive every reset indefinitely; reset now strips each world quest card back to
+  managed-only content (whatever its own `managed_items` declares) as part of rebuilding.
+* The full-dict card restore, like the id-only sweep, is skipped for a PARALLEL case (`workers > 1`
+  on the read-only lane): with several cases in flight, a diff against one case's own before-snapshot
+  cannot tell its drift from a sibling case's. Keep anything that might teach the card learner
+  something out of the parallel pool, same as for writes.
 * Parallel cases share one snapshot space; a side effect seen during a parallel run is flagged
   `side_effects_ambiguous`. Keep anything that might write out of the parallel pool.
 * Dev runs `auto_run=true` except for EXP-070, EXP-071, MS-033, MS-034 and MS-044, the cases that

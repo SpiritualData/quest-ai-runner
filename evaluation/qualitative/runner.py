@@ -209,6 +209,12 @@ def run_case(case, world, use_judge=True, parallel=False):
               "quest_key": case.get("quest_key"), "mutates": mutates(case),
               "messages": case.get("messages") or [case["message"]]}
     conv = None
+    # Snapshot CARD CONTENT (not just ids) right before the case starts, so a case that only EDITS
+    # an existing card (most often a world quest's own managed card, see world.py's card-restore
+    # section) can be undone too, not only a card the case created outright. Skipped for a parallel
+    # case for the same reason ``sweep_new_cards`` is: with several cases in flight, a diff against
+    # one case's own before-snapshot cannot tell its drift from a sibling case's.
+    cards_before = W.card_snapshot() if not parallel else None
     try:
         before = W.snapshot(world)
         conv = create_conversation(conversation_quests(case, world))
@@ -272,6 +278,13 @@ def run_case(case, world, use_judge=True, parallel=False):
     finally:
         if conv:
             delete_conversation(conv)
+        # RESTORE CARD CONTENT this case changed on an already-existing card (the id-only sweep
+        # above never sees this: the id was already in the baseline). Runs in `finally` so a case
+        # that raised mid-turn still gets its card drift undone, not just a clean one. A restore
+        # worth reporting even when nothing moved (0/0 is itself a useful "this case taught the
+        # card learner nothing" signal, see README "How a case runs").
+        if cards_before is not None:
+            record["cards_restored"] = W.restore_cards(cards_before)
     record["seconds"] = round(time.time() - started, 1)
     return record
 
@@ -317,6 +330,12 @@ def print_row(r):
     if cancelled:
         ok = sum(1 for c in cancelled if c.get("ok"))
         print(f"           cleared {ok}/{len(cancelled)} approval card(s) this case raised")
+    restored = r.get("cards_restored") or {}
+    if restored.get("deleted") or restored.get("restored"):
+        # A non-zero count here is itself a finding: this case taught the card learner something
+        # (and, pre-fix, that something would have leaked into whatever case ran next).
+        print(f"           card drift: deleted {restored.get('deleted', 0)} new, restored "
+              f"{restored.get('restored', 0)} changed {restored.get('changed_ids') or ''}")
     if judged.get("summary"):
         print(f"           {judged['summary']}")
     elif (r.get("judged") or {}).get("error"):
@@ -454,6 +473,20 @@ def write_report():
         lines += ["", "## Pivot use", "", "| pivot | cases | used | changed the answer |", "|---|---|---|---|"]
         for name, (n, used, changed) in sorted(pivot_stats.items()):
             lines.append(f"| {name} | {n} | {used} | {changed} |")
+    # Cases that drifted an EXISTING card's content (not one it merely created, which the id-only
+    # sweep already catches): a useful signal of which cases teach the card learner something, and
+    # therefore which to watch for a later case citing it before this restore existed.
+    drifted = [r for r in rows
+              if (r.get("cards_restored") or {}).get("deleted")
+              or (r.get("cards_restored") or {}).get("restored")]
+    if drifted:
+        lines += ["", "## Card drift", "",
+                  "Cases whose card restore deleted a new card or wrote back a changed one.", "",
+                  "| id | new cards deleted | cards restored | restored ids |", "|---|---|---|---|"]
+        for r in drifted:
+            cr = r["cards_restored"]
+            lines.append(f"| {r['id']} | {cr.get('deleted', 0)} | {cr.get('restored', 0)} | "
+                         f"{', '.join(cr.get('changed_ids') or [])} |")
     lines += ["", "## Per case", "",
               "| id | dataset | area | pass | score | route | effects | secs | verdict |",
               "|---|---|---|---|---|---|---|---|---|"]
