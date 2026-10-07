@@ -11141,12 +11141,15 @@ class Orchestrator:
                         pending_inputs=pending_inputs, model_hint=model_hint,
                         ctx_meta=_ctx_meta, cancel_check=cancel_check,
                         working_dir_override=working_dir_override,
-                        resume_session_id=take_resume_session())
+                        resume_session_id=take_resume_session(), self_initiated=True)
                     if _ov_res.kind == "cancelled":
                         return finish(_ov_res)
-                    _ov_res.exit_reason = "overseer_escalated_deep"
-                    self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
-                    return finish(_ov_res)
+                    if not _deep_declined_background(_ov_res):
+                        _ov_res.exit_reason = "overseer_escalated_deep"
+                        self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
+                        return finish(_ov_res)
+                    # Not started (the overseer's escalation resolved to background work the
+                    # user did not ask for): the draft answer ships.
                 elif _bsig.signal == "escalate_human":
                     # Genuine human-only fork (Fix 2): route through the SAME confirm / decision-
                     # request mechanism as a planner-originated confirm, discarding the drafted

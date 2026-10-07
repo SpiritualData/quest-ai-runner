@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The overseer leaves an honest decline alone, and its own deep escalation stays in the turn.**
+  `escalate_human` is no longer for requests nothing here can carry out when the draft already
+  says so, and its `reason` (shown to the user as the question) is written to the user. The
+  overseer's `escalate_deep` is a self-initiated escalation like the verifier's (never starts
+  background work).
 - **Only the planner's own `deferred_deep` is pinned to the background queue.** In a queued
   deployment (`deferred_deep_queued`), work that an escalation net inferred (the planner answered,
   but the user's message asked for a change) is now routed like any deep action by the runner

@@ -141,7 +141,10 @@ Choose EXACTLY ONE signal and return it via the provided tool:
     that AI acts first and only genuine forks go to a human: escalate_human must NOT fire just
     because a task is hard, unclear in a resolvable way, or merely needs more digging. When in
     doubt between escalate_deep and escalate_human, prefer escalate_deep; reserve escalate_human for
-    cases an AI plainly should not decide or execute on its own.
+    cases an AI plainly should not decide or execute on its own. A request that NOTHING here can
+    carry out (moving money, reaching a bank, a physical-world act) is not a fork either: when the
+    draft already says plainly that it cannot be done and what the person can do instead, proceed.
+    escalate_human is for a decision the person must make before the work can go on.
 
 Rules:
   - Only redirect or stop the run when the drift or waste is obvious. The one thing NOT to be timid
@@ -180,7 +183,9 @@ Rules:
     Re-proposing it once the user has ALSO said so in words ("do not create these", "stop asking")
     is the clearest redirect there is. Only treat it as new if the user themselves asked for it
     again, or the underlying request genuinely changed.
-  - Keep "reason" to one short sentence, plain and safe to show the user.
+  - Keep "reason" to one short sentence, plain and safe to show the user. For escalate_human it IS
+    shown to the user as the question they must answer, so write it TO them ("Do you want me to
+    ...?"), never about them ("The user is requesting ...").
   - Only set "hint" for a redirect, and keep it to a single short correction.
 
 --- RUN DIGEST ---

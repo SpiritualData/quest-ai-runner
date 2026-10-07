@@ -90,3 +90,12 @@ def test_need_more_context_escalation_never_starts_background_work():
     res = orch(provider, runner).run("What is the status of the tesmd bot issue?")
     assert res.kind == "answer"
     assert runner.calls == []
+
+
+def test_overseer_prompt_keeps_impossible_asks_and_its_question_user_facing():
+    """An overseer escalate_human replaced a correct decline ("I cannot move money") with its own
+    third-person reason ("The user is requesting a direct financial transaction ...") as the
+    question shown to the user (2026-10-07)."""
+    from quest_ai_runner.core.overseer import OVERSEER_PROMPT
+    assert "NOTHING here can" in OVERSEER_PROMPT
+    assert "never about them" in OVERSEER_PROMPT
