@@ -229,19 +229,38 @@ def result_landed_work(result: Any) -> bool:
 
     The run's OWN RECORDS decide: not parked on a decision (``decision_id``); its write receipts do
     not say it changed nothing (``changed_nothing``); and, when the runner records what it observed
-    (``observations_reported``), a run that was NOT verified met observed something. "Not parked"
-    alone is NOT "landed": a sibling that failed, or could not be verified and has no receipt of any
-    effect, folded into a "you already did the work" synthesis is how a failure was reported as
-    done. A verified text answer with nothing to record still counts (its answer is the work), and
-    a runner that keeps no receipts at all is judged as before. Never reads wording (hard rule #3).
-    Never raises."""
+    (``observations_reported``), a run that was NOT verified met either observed something, or is
+    the runner's own TERMINAL ASK for this turn (``exhausted``, see below). "Not parked" alone is
+    NOT "landed": a sibling that failed, or could not be verified and has no receipt of any effect,
+    folded into a "you already did the work" synthesis is how a failure was reported as done. A
+    verified text answer with nothing to record still counts (its answer is the work), and a runner
+    that keeps no receipts at all (``observations_reported`` False) is judged as before -- this is
+    deliberately narrower than "exhausted and not met" alone would be: the orchestrator's OWN goal
+    loop also sets ``exhausted`` on a result whose verification merely could not run (no receipts
+    ever reported), and that is genuinely finished work the test ``observations_reported`` False
+    case covers. Never reads wording (hard rule #3).
+
+    ``observations_reported`` and ``exhausted`` TOGETHER (round-2 regression, MS-046 L10c): a
+    receipt-tracking runner can end a turn with its own honest terminal message -- "which quest did
+    you mean?", "I could not reliably turn that into a change", a spent code-generation budget --
+    WITHOUT a ``decision_id`` (that field is only for an approval-card park; a clarifying question
+    is a different kind of ask). Such a result may still carry real, non-empty ``observations`` (a
+    reconnaissance read genuinely found data before the runner gave up on WHICH quest to write it
+    to), so the plain "observed nothing" check below does not catch it. Live trace: a tempo-run pace
+    was computed correctly, the write's quest was ambiguous, the runner asked "which quest should
+    this go on?" (met=False, exhausted=True, real observations), and folding that into the "you
+    already DID the work" synthesis produced "I have queued the creation of a tempo-run goal for
+    that day" -- nothing was queued, parked, or written anywhere. Structural, like every other
+    branch here: driven by ``observations_reported``/``exhausted``/``met``, never by scanning the
+    output text for "queued"/"asking"/etc. Never raises."""
     try:
         if getattr(result, "decision_id", None) or getattr(result, "changed_nothing", False):
             return False
-        if (getattr(result, "observations_reported", False)
-                and not (getattr(result, "observations", None) or [])
-                and not getattr(result, "met", False)):
-            return False
+        if getattr(result, "observations_reported", False) and not getattr(result, "met", False):
+            if not (getattr(result, "observations", None) or []):
+                return False
+            if getattr(result, "exhausted", False):
+                return False
         return True
     except Exception:  # noqa: BLE001
         return False
@@ -4412,6 +4431,31 @@ def _run_goal_accepts_context_preamble(deep_runner: Any) -> bool:
     return False
 
 
+def _run_goal_accepts_gathered_observations(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``gathered_observations`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_emit``. ``context_preamble`` hands a runner the
+    brain's own reads for this turn already FLATTENED to text (see ``_render_gathered``), which
+    mixes real data reads with conversation-history hits, card content, and anything else the
+    gather step touched -- fine for grounding a code generator, but unsafe for a consumer that
+    needs to tell "a real read over the person's own records" apart from everything else without
+    re-parsing prose. ``gathered_observations`` is the SAME filtered list (``_brain_content``: this
+    turn's gather, minus discovery/menu observations) BEFORE it is rendered to text -- each item
+    the plain ``{"kind", "locator", "rel_path", "text", ...}`` shape ``Observation.to_dict()``
+    produces -- so a runner that opts in can apply its OWN structural filter (kind/locator) over
+    real dicts instead of scanning a flattened string. Forwarded ONLY to runners that accept the
+    kwarg, so older ``run_goal`` signatures keep working unchanged.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "gathered_observations" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 def _run_goal_accepts_run_id(deep_runner: Any) -> bool:
     """Whether a DeepRunner's ``run_goal`` accepts a ``run_id`` keyword (or **kwargs).
 
@@ -7922,11 +7966,13 @@ class Orchestrator:
             #                 See quest_autopilot_design.md's execution-environment section: "one
             #                 quest, one folder, one env" -- the worker starts where that quest's
             #                 real work lives.
+            #   gathered    — the SAME brain content as ``preamble``, as structured dicts instead of
+            #                 flattened text (see ``_run_goal_accepts_gathered_observations``).
             runner_caps: Dict[int, Dict[str, bool]] = {}
 
             def caps_for(runner: Any) -> Dict[str, bool]:
                 if runner is None:
-                    return {"emit": False, "run_id": False, "preamble": False,
+                    return {"emit": False, "run_id": False, "preamble": False, "gathered": False,
                             "working_dir": False, "resume": False, "is_subgoal": False}
                 cached = runner_caps.get(id(runner))
                 if cached is None:
@@ -7934,6 +7980,7 @@ class Orchestrator:
                         "emit": emit is not None and _run_goal_accepts_emit(runner),
                         "run_id": _run_goal_accepts_run_id(runner),
                         "preamble": _run_goal_accepts_context_preamble(runner),
+                        "gathered": _run_goal_accepts_gathered_observations(runner),
                         "working_dir": _run_goal_accepts_working_dir(runner),
                         "resume": _run_goal_accepts_resume_session_id(runner),
                         "is_subgoal": run_goal_accepts_is_subgoal(runner),
@@ -7995,10 +8042,7 @@ class Orchestrator:
                         # reports under the same id. Without this, a consumer's dashboard would show
                         # each retry as a new, duplicate deep-run entry for one ongoing subgoal.
                         kwargs["run_id"] = task_uuid
-                    if caps["preamble"]:
-                        preamble_parts = []
-                        if rep_preamble:
-                            preamble_parts.append(rep_preamble)
+                    if caps["preamble"] or caps["gathered"]:
                         # MAIN-FLOW ACCUMULATION vs SUBGOAL FOCUS. A single main-flow deep run
                         # ACCUMULATES: it carries the brain's gathered content forward. A fanned-out
                         # subgoal (multi) does NOT inherit that whole pile -- it is handed ONLY its
@@ -8008,6 +8052,14 @@ class Orchestrator:
                         # are planner-only routing aids, not content the worker should ground on (the
                         # worker has its own tools). Pass forward only the real content the brain read.
                         _brain_content = [o for o in (gathered or []) if not _is_discovery_obs(o)]
+                        # Same list, as structured dicts (see ``_run_goal_accepts_gathered_observations``)
+                        # for a runner that wants to filter it itself instead of re-parsing text.
+                        if caps["gathered"] and _brain_content and not multi:
+                            kwargs["gathered_observations"] = _brain_content
+                    if caps["preamble"]:
+                        preamble_parts = []
+                        if rep_preamble:
+                            preamble_parts.append(rep_preamble)
                         if _brain_content and not multi:
                             preamble_parts.append(
                                 "--- RELEVANT CONTENT FOUND BY THE BRAIN ---\n"

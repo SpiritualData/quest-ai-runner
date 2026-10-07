@@ -2206,6 +2206,36 @@ def test_deferred_deep_unverified_with_no_observed_effect_is_reported_in_its_own
     assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in _all_answer_prompts(provider)
 
 
+def test_deferred_deep_exhausted_ask_with_real_observations_is_reported_verbatim():
+    """Round-2 regression (MS-046 L10c): a deferred_deep that ends in the RUNNER'S OWN terminal
+    ask (met=False, exhausted=True, no decision_id -- a clarifying question, not an approval-card
+    park) must reach the user as that ask's own wording, verbatim -- never through the "you
+    already DID the work" synthesis, even when the run genuinely observed real data before giving
+    up (``observations`` non-empty), which is exactly what let the earlier, narrower
+    ``observations_reported``-only check miss this case. Live trace: a tempo-run pace was computed
+    correctly, the goal's QUEST was ambiguous, the runner asked "which quest should this go on?",
+    and the old code folded that into the synthesis prompt, which fabricated "I have queued the
+    creation of a tempo-run goal for that day" -- nothing was queued, parked, or written."""
+    from quest_ai_runner.core.adapters import DeepResult
+    ask_text = ("Your tempo pace is 5:12/km. Which quest should this go on?\n\n"
+                "1. Run a sub-50-minute 10K\n2. Run a marathon barefoot")
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the tempo-run goal"}}],
+        answer_text="Shall I proceed with adding this goal?",
+    )
+    runner = FixedResultDeepRunner(DeepResult(
+        met=False, output=ask_text, exhausted=True, error="quest_ambiguous",
+        observations_reported=True, observations=["Computed a tempo pace of 5:12/km from logged entries."],
+    ))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "find my pace and add a tempo-run goal")
+    assert res.text == ask_text, "the reply must be the runner's own honest ask, verbatim"
+    assert "queued" not in (res.text or "").lower()
+    prompts = _all_answer_prompts(provider)
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in prompts
+
+
 def test_deferred_deep_that_landed_is_still_written_up_as_before():
     from quest_ai_runner.core.adapters import DeepResult
     provider = StubProvider(

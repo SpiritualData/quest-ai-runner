@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`run_goal(gathered_observations=...)`: this turn's gather as STRUCTURED dicts, not just
+  flattened text.** `context_preamble` hands a deep runner this turn's real gather content
+  already rendered to prose (`_render_gathered`), which mixes genuine data reads with
+  conversation-history hits, card content, and anything else the gather step touched -- fine for
+  grounding a code generator, but a consumer that needs to tell "a real read over the person's
+  own records" apart from everything else cannot do that once it is one string. A runner whose
+  `run_goal` declares `gathered_observations` (detected the same opt-in way as every other
+  per-call kwarg here: signature inspection, never a try/except) now also receives the SAME
+  filtered `_brain_content` list (discovery/menu observations excluded, main-flow only, not a
+  fanned-out subgoal's share) as plain `{"kind", "locator", "rel_path", "text", ...}` dicts
+  (`Observation.to_dict()`'s own shape), so it can apply its own structural filter over the real
+  objects. First consumer: quest-backend's pre-run write review, which needs exactly this
+  distinction (see its own CHANGELOG/playbook for the MS-001 regression this fixes). Tests:
+  `tests/test_deep_gathered.py`.
+
+### Fixed
+- **A deferred-deep run's own TERMINAL ASK, with real observations attached, was folded into the
+  "you already DID the work" synthesis and reported as done (round-2 regression, MS-046 L10c).**
+  `result_landed_work` treated "not parked on a decision_id" plus "reported non-empty
+  observations" as landed, so a runner that ended its turn with an honest clarifying question
+  ("which quest should this go on?" -- met=False, exhausted=True, no decision_id, because a
+  decision_id is only for an approval-card park) still counted as landed work whenever its
+  reconnaissance genuinely found something before it gave up (e.g. a correctly computed pace).
+  The deferred-deep reply then ran that ask through `_synthesize_after_deep`, which produced "I
+  have queued the creation of a tempo-run goal for that day" -- nothing was queued, parked, or
+  written anywhere. Fix: `result_landed_work` now also excludes a receipt-tracking result
+  (`observations_reported`) that is both `exhausted` and not `met`, alongside the existing "no
+  observations at all" case; a result whose verification simply could not run (no receipts
+  tracked at all, `observations_reported=False`) is unaffected and still folds into the synthesis
+  as before. Tests: `tests/test_orchestrator.py::test_deferred_deep_exhausted_ask_with_real_observations_is_reported_verbatim`.
+
 ### Fixed
 - **The fourth cross-quest leak: an UNSCOPED anticipation precompute could cache another quest's
   card content as an untagged, forever-visible bundle.** `scope_tags_allow` correctly treats "the
