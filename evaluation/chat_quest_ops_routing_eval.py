@@ -359,7 +359,11 @@ def open_field_decisions(quest_id, marker=None):
     for d in decisions_for_quest(quest_id):
         if d.get("status") != "open":
             continue
-        if d.get("kind") not in ("field_edit", "quest_command"):
+        # A parked change is a decision of kind "approve" whose EXECUTABLE says what it runs
+        # ("quest_command" for reviewed chat code, "field_edit" for a field proposal); older rows
+        # put that on the decision's own kind. Accept either.
+        kinds = {d.get("kind"), (d.get("executable") or {}).get("kind")}
+        if not kinds & {"field_edit", "quest_command"}:
             continue
         if marker is not None and marker.lower() not in json.dumps(d.get("executable") or {}).lower():
             continue
