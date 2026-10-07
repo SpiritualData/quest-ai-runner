@@ -737,6 +737,9 @@ def build_contents(state, quest_keys):
     else:
         print(f"  WARN team context failed {st} {str(d)[:200]}")
     out["contents_built"] = True
+    # Every seeded entry date is relative to the day the contents were built, so the ground truth
+    # must list them from THAT day, not from the run's today (see ``ground_truth``).
+    out["contents_seeded_on"] = TODAY.isoformat()
     STATE_PATH.write_text(json.dumps(out, indent=1))
 
 
@@ -1283,6 +1286,19 @@ def ground_truth(quest_keys=None):
     """Plain-text description of what was SEEDED, for the judge to verify facts against."""
     keys = quest_keys or list(QUESTS)
     lines = [f"Today is {TODAY.isoformat()}."]
+    # Entry dates were seeded relative to the day the contents were BUILT. Listing them from the
+    # run's today instead shifted every date by the days in between (a run one day after a build
+    # told the judge an entry dated 2 Oct was dated 3 Oct, and the judge failed a correct reply).
+    seeded_on = TODAY
+    try:
+        state = json.loads(STATE_PATH.read_text()) if STATE_PATH.exists() else {}
+        if state.get("contents_seeded_on"):
+            seeded_on = datetime.date.fromisoformat(state["contents_seeded_on"])
+    except Exception:  # noqa: BLE001 — fall back to today, as before
+        seeded_on = TODAY
+    if seeded_on != TODAY:
+        lines.append(f"(The data below was seeded on {seeded_on.isoformat()}; its dates are listed "
+                     "as stored.)")
     for key in keys:
         q = QUESTS[key]
         lines.append(f"\n== QUEST '{key}' ==")
@@ -1308,7 +1324,7 @@ def ground_truth(quest_keys=None):
             lines.append(f"Collection '{c['name']}' ({ckey}, {c['type']}"
                          f"{', ' + c['habit_type'] if c.get('habit_type') else ''}):")
             for days, _hour, values in c["entries"]:
-                day = (TODAY - datetime.timedelta(days=days)).isoformat()
+                day = (seeded_on - datetime.timedelta(days=days)).isoformat()
                 shown = "completed" if c["type"] == "habit" else json.dumps(values)
                 lines.append(f"  - {day}: {shown}")
     lines.append(f"\nTeam context: {TEAM_CONTEXT['content']}")
