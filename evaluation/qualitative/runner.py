@@ -398,9 +398,16 @@ def run_cases(cases, use_judge=True, workers=1):
         print_row(r)
     merge_results(records)
     done = [r for r in records if r.get("score") is not None]
+    unjudged = [r["id"] for r in records if r.get("score") is None]
     print("\n==================== SUMMARY ====================")
+    # "passed" is counted over ALL cases run (len(records)), never over just the judged ones
+    # (len(done)): an unjudged case is never a pass, and the denominator here must never shrink
+    # to make a run look like a higher pass rate than it earned.
     print(f"cases run   : {len(records)}   passed: {sum(bool(r['passed']) for r in records)}   "
-          f"errors/unjudged: {len(records) - len(done)}")
+          f"errors/unjudged: {len(unjudged)}")
+    if unjudged:
+        print(f"UNJUDGED ids: {', '.join(unjudged)}  (never counted as a pass; excluded from mean "
+              "score below, not from the cases-run denominator above)")
     if done:
         print(f"mean score  : {sum(r['score'] for r in done) / len(done):.2f}")
     print(f"raw JSON    : {RAW_DIR}   merged: {RESULTS_JSON}")

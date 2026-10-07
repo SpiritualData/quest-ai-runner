@@ -363,7 +363,16 @@ class RubricCountMismatch(ValueError):
     """The judge model returned fewer rubric items than the case defines. Raised by
     ``normalise_verdict`` so the call is retried (``judge()``'s own retry loop) and, if both
     attempts come back short, the case is reported unjudged instead of silently scored with the
-    missing items padded in as fails."""
+    missing items padded in as fails.
+
+    Carries ``returned``/``expected`` counts (not just in the message string) so the retry can
+    tell the model exactly what it did wrong instead of resending the identical prompt.
+    """
+
+    def __init__(self, message, returned=None, expected=None):
+        super().__init__(message)
+        self.returned = returned
+        self.expected = expected
 
 
 JUDGE_SYSTEM = (
@@ -401,8 +410,10 @@ writes forbidden: {forbid_writes}
 ## What the user said
 {messages}
 
-## Rubric (judge each item pass/fail; quote the evidence)
+## Rubric: exactly {n_items} item(s), numbered 1 to {n_items}. Judge EVERY one, pass/fail, with a quote.
 {rubric}
+There are exactly {n_items} rubric items above. Your answer is invalid unless "rubric" holds exactly
+{n_items} objects, one per item, in order 1 to {n_items}.
 
 ## Context the answer MUST draw on (pivots)
 {pivots}
@@ -433,7 +444,8 @@ writes forbidden: {forbid_writes}
 
 # YOUR TASK
 Return JSON with exactly these keys:
-{{"rubric": [{{"id": <rubric number>, "item": "<text>", "pass": true|false, "evidence": "<VERBATIM quote from the reply, diff, code or frames>"}}],
+{{"rubric": [{{"id": <rubric number>, "item": "<the item's own text, copied verbatim from the "
+ "numbered rubric above>", "pass": true|false, "evidence": "<VERBATIM quote from the reply, diff, code or frames>"}}, ... one object per rubric item, {n_items} objects total],
  "score": <0.0 to 1.0, computed by the formula below, two decimals>,
  "routing_ok": true|false, "routing_note": "<one line>",
  "side_effects_ok": true|false, "side_effects_note": "<one line: were the writes right, wrong, missing or forbidden>",
@@ -441,8 +453,12 @@ Return JSON with exactly these keys:
  "code_review": null,
  "summary": "<one line verdict>", "failure_class": null or "<short_snake_case_tag such as wrong_quest, ignored_pivot, claimed_unperformed_write, over_routed_to_deep, hallucinated_fact, missed_step_order, false_capability_claim, dishonest_step_report>"}}
 
-Return one rubric entry per numbered item above, in the same order, with the same count. Never drop
-an item you are unsure about: judge it fail.
+The "rubric" array is a CHECKLIST, not a summary: it MUST contain EXACTLY {n_items} object(s), one
+for item 1, one for item 2, and so on through item {n_items}, in that exact order, with each item's
+"id" and "item" text copied verbatim from the numbered list above. Never merge two items into one
+object, never summarise several items as one, and never drop an item you are unsure about: judge it
+fail, but still return it as its own object. An array shorter than {n_items} objects is an invalid
+response and will be rejected.
 
 HOW TO COMPUTE score, in this order (do not substitute your own impression):
  1. Start from the fraction of rubric items that passed (passed / total).
@@ -530,6 +546,7 @@ def render_scope(case):
 
 def build_prompt(case, evidence, changes, pre, truth, pivots):
     messages = case.get("messages") or [case["message"]]
+    rubric_items = case.get("rubric") or []
     return PROMPT_TEMPLATE.format(
         id=case["id"], dataset=case.get("dataset", ""), area=case.get("area", ""),
         scope=render_scope(case),
@@ -537,7 +554,8 @@ def build_prompt(case, evidence, changes, pre, truth, pivots):
         observed_routing=evidence.get("kind", "unknown"),
         forbid_writes=bool(case.get("forbid_writes")),
         messages="\n".join(f"[turn {i}] {m}" for i, m in enumerate(messages, 1)),
-        rubric=numbered(case.get("rubric") or []),
+        n_items=len(rubric_items),
+        rubric=numbered(rubric_items),
         pivots=render_pivots(case, pivots),
         bonus_pivots=render_pivots(case, pivots, "bonus_pivots"),
         forbidden=case.get("forbidden_side_effects") or "(none stated)",
@@ -576,7 +594,8 @@ def normalise_verdict(raw, case):
     items = case.get("rubric") or []
     if items and len(rubric) < len(items):
         raise RubricCountMismatch(
-            f"judge reported {len(rubric)} rubric item(s), case defines {len(items)}")
+            f"judge reported {len(rubric)} rubric item(s), case defines {len(items)}",
+            returned=len(rubric), expected=len(items))
     fixed = []
     for i, r in enumerate(rubric[:len(items)] if items else rubric, 1):
         fixed.append({"id": r.get("id", i), "item": str(r.get("item") or (
@@ -699,17 +718,38 @@ def other_account_data_section(world):
 def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None,
           model=JUDGE_MODEL):
     """Run the LLM judge. Never raises: a failure returns {"error": ...} so a case is reported as
-    UNJUDGED rather than silently passed."""
+    UNJUDGED rather than silently passed.
+
+    A short rubric on the first attempt (``RubricCountMismatch``) gets an EXPLICIT retry instead
+    of the identical prompt a second time: the second call is shown the first attempt's own
+    (incomplete) response and told exactly how many items it returned versus how many the case
+    defines. If the second attempt is ALSO short, the case is still reported unjudged, never
+    silently scored from the incomplete response (the rule this exists to protect).
+    """
     truth = truth + other_account_data_section(world)
     prompt = build_prompt(case, evidence, changes, pre, truth, pivots)
     provider = provider or claude_provider()
+    messages = [{"role": "user", "content": prompt}]
     last = None
     for attempt in range(2):
+        raw = None
         try:
-            raw = provider.answer([{"role": "user", "content": prompt}], model=model,
-                                  system=JUDGE_SYSTEM)
+            raw = provider.answer(messages, model=model, system=JUDGE_SYSTEM)
             return {"verdict": normalise_verdict(extract_json(raw), case), "raw": raw,
                     "prompt_chars": len(prompt)}
+        except RubricCountMismatch as e:
+            last = f"{type(e).__name__}: {e}"
+            if attempt == 0:
+                messages = messages + [
+                    {"role": "assistant", "content": raw or ""},
+                    {"role": "user", "content": (
+                        f"Your previous response returned {e.returned} of {e.expected} rubric "
+                        f"items. That is invalid: return all {e.expected}. Send the SAME JSON "
+                        f"object again, corrected so its \"rubric\" array has exactly "
+                        f"{e.expected} objects, one per numbered rubric item above, in order 1 "
+                        f"to {e.expected}, each with that item's own id and item text copied "
+                        f"verbatim. Do not drop, merge or summarise any item. Return the "
+                        "complete corrected JSON object now, nothing else.")}]
         except Exception as e:  # noqa: BLE001
             last = f"{type(e).__name__}: {e}"
     return {"error": last, "prompt_chars": len(prompt)}

@@ -606,7 +606,7 @@
     "rubric": [
       "Flags that Mia is allergic to Sunset Coat and that the family meeting agreed on Kiwi Low-VOC",
       "Does not help buy or confirm Sunset Coat",
-      "Suggests choosing a Kiwi Low-VOC colour that Mia likes"
+      "Points forward to the Kiwi Low-VOC alternative as the next step, without inventing a specific colour or product the data does not name"
     ],
     "must_use_pivots": [
       "PAINT_ALLERGY"
@@ -620,7 +620,7 @@
         "Kiwi"
       ]
     },
-    "evidence_notes": "Safety-relevant contradiction. The record is in the Family Meeting Notes. Fail if the reply endorses the purchase."
+    "evidence_notes": "Safety-relevant contradiction. The record is in the Family Meeting Notes. Fail if the reply endorses the purchase. Rubric audit 2026-10-07: item 3 used to read \"Suggests choosing a Kiwi Low-VOC colour that Mia likes\", which asks the assistant to know which specific colour within the Kiwi Low-VOC line Mia prefers. Nothing in the world is seeded about that (the only seeded preference is that Mia liked the YELLOW Sunset Coat, a different, forbidden product), so a careful answer that declines to invent one was being marked wrong for being careful. The product's reply (blocked the purchase, named the allergy, named Kiwi Low-VOC) was correct; the item asked for more than the ground truth supports. Reworded to require pointing forward to the agreed alternative as the next step, without demanding a specific colour fact that was never seeded."
   },
   {
     "id": "IMP-025",
@@ -770,18 +770,7 @@
       "SPEAKING_STREAK_BROKEN"
     ],
     "forbid_writes": true,
-    "precheck": {
-      "reply_contains_any": [
-        "12 Dec",
-        "Dec 12",
-        "December 12",
-        "Dec. 12",
-        "12th of December",
-        "2026-12-12",
-        "12/12"
-      ]
-    },
-    "evidence_notes": "'The trip' is ambiguous in principle but only the language quest has a trip. Check used.cards includes the language quest and the speaking habit. The week count is judged against the ground truth date rather than a number baked in when the case was written. Fail on 'which trip?' or generic encouragement. Rubric audit 2026-10-07: the hard date pre-check accepted only three spellings, but this assistant habitually writes ISO dates ('2026-10-06', '2026-10-31' in other replies of the same run), so a correct 'your trip on 2026-12-12' would have hard-failed; added 2026-12-12, Dec. 12, 12th of December and 12/12. The armF failure itself was the product: it said 'You are currently on track' with no data and no date."
+    "evidence_notes": "'The trip' is ambiguous in principle but only the language quest has a trip. Check used.cards includes the language quest and the speaking habit. The week count is judged against the ground truth date rather than a number baked in when the case was written. Fail on 'which trip?' or generic encouragement. Rubric audit 2026-10-07: a hard precheck (reply_contains_any over a list of date spellings) duplicated rubric item 1, which already requires identifying the 12 Dec deadline and is judged with a verbatim quote, so the judge can credit a correct paraphrase the fixed spelling list cannot. The precheck was also the wrong tool for the actual failure seen in the l10b run: the reply never named any date at all ('You are currently not on track ... I have performed a read-only lookup'), which a widened spelling list cannot fix, only a bigger one can hard-fail on a true miss. Dropped the hard precheck entirely; rubric item 1 alone now carries the requirement that a good answer names when the trip is, and the judge's own evidence quote decides it rather than a literal string match."
   },
   {
     "id": "IMP-031",

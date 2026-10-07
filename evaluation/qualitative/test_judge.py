@@ -92,6 +92,40 @@ def test_judge_succeeds_on_retry_after_one_short_rubric():
     assert len(result["verdict"]["rubric"]) == 3
 
 
+class RecordingShortRubricProvider:
+    """Like ShortRubricProvider, but keeps every call's ``messages`` so the retry's own prompt
+    can be inspected, not just its outcome."""
+
+    def __init__(self, returned_items):
+        self.calls_messages = []
+        self.returned_items = returned_items
+
+    def answer(self, messages, *, model, system=None):
+        self.calls_messages.append(messages)
+        return verdict_json(self.returned_items)
+
+
+def test_judge_retry_tells_the_model_exactly_what_it_returned_versus_expected():
+    """The retry must not resend the identical prompt: it shows the model its own short answer
+    and states the returned/expected counts explicitly, so a persistent short rubric is a model
+    that was told precisely what was wrong and still got it wrong, not a model asked the same
+    question twice."""
+    case = make_case(4)
+    provider = RecordingShortRubricProvider(returned_items=1)
+    J.judge(case, EVIDENCE, [], PRE, "ground truth text", {}, world=None, provider=provider)
+    assert len(provider.calls_messages) == 2
+    first_call, second_call = provider.calls_messages
+    assert len(first_call) == 1 and first_call[0]["role"] == "user"
+    # Second call carries the original prompt, the model's own short response, and a correction.
+    assert len(second_call) == 3
+    assert second_call[0] == first_call[0]
+    assert second_call[1]["role"] == "assistant"
+    correction = second_call[2]["content"]
+    assert second_call[2]["role"] == "user"
+    assert "1" in correction and "4" in correction
+    assert "rubric" in correction.lower()
+
+
 # ---------------------------------------------------------------------------------------------
 # normalise_verdict(): the raise itself, and the cases that must NOT raise
 # ---------------------------------------------------------------------------------------------
