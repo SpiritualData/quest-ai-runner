@@ -2717,6 +2717,11 @@ Use an OTHER past conversation ONLY when the latest message clearly continues th
 just because it happens to contain a list, an option, or a proposal.
 
 Rules (check in order):
+- A message that names its own subject in its own words needs no referent from anywhere, however
+  short it is: "summarize my latest daily reflection", "list my goals for this week", "what is my
+  outcome". Words like "my latest", "my most recent", "today's" or "this week's" are NOT missing
+  referents; they are found by reading the user's data, never by asking the user. Rewrite such a
+  message as the instruction; never CLARIFY on it.
 - If the referent is genuinely missing from the CURRENT conversation (for example "the third one"
   when fewer than three were offered, or "do it" / "go ahead" when nothing actionable was proposed),
   reply: CLARIFY: <one short question>. Do NOT invent or borrow a referent to avoid asking.
