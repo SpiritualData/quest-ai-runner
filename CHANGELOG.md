@@ -106,6 +106,23 @@ All notable changes to this project are documented here. The format is based on
 - **A not-met goal verdict now says why another attempt would or would not help, and the run acts on it.** The verifier returns a `blocker` in the call it already makes (no extra LLM call): `more_work` retries as before, `evidence_only` (the work is reported complete and the only gap is proof beyond what the request asked for) is accepted as done with one line naming what was not independently confirmed, and `needs_person` (only a person can supply the missing input) stops retrying and reports needs-you with the one question. When the attempts run out, the report now leads with what is still open, the next step, and that a reply continues the same session, then keeps the unchanged `WHAT THE RUN DID BEFORE IT STOPPED` heading the quest-backend mailer matches. Task-modal and chat tasks share this path. Tests: `tests/test_goal_not_met_decides_next.py`.
 
 ### Fixed
+- **The goal verifier now sees a deep run's OWN structured evidence, not only the worker's output
+  text.** Live finding: a Quest chat turn's code runner really added a goal (the database diff
+  showed it, and the run's own `DeepResult.observations` carried the receipt line "Added the goal
+  ..."), yet `Orchestrator._verify_goal` judged the worker's output text and brief alone, saw no
+  evidence, and returned `met=False` with "the worker claimed to add a goal ... but ... no
+  evidence" -- so "Goal not met: ..." reached the chat right next to the correct reply. `_verify_goal`
+  gains `observations`/`observations_reported` (the SAME shape `DeepResult.observations` already
+  carries): when `observations_reported` is true, the run's write receipts and read confirmations
+  render in the verify prompt's volatile tail, capped like the existing web-evidence section
+  (reuses `VERIFY_WEB_EVIDENCE_MAX_CHARS`), framed as the system's own record rather than the
+  worker's claim, with a new `VERIFY_RUN_OBSERVATIONS_NOTE` telling the verifier a receipt there is
+  proof the write happened and an empty list (on a run that DOES report observations) is proof it
+  did not. Wired at the deep-goal loop's own verify call site (`_run_deep`), from the SAME attempt's
+  `res.observations`/`res.observations_reported`. "Verifier failure is never success" is untouched:
+  an unparseable verdict is still UNVERIFIED regardless of this evidence. A runner that does not
+  report observations (`observations_reported=False`, the default) leaves the verify prompt
+  byte-for-byte unchanged. Tests: `tests/test_verify_run_observations.py`.
 - **A deep run that was not verified and changed nothing no longer reads as completed work.** A
   consumer's chat eval produced the worst pairing twice in one pass: the runner's own output
   announced a change, the verifier returned not met for exactly that reason (no execution record
