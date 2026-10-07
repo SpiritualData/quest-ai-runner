@@ -16,6 +16,17 @@ def test_self_named_subject_rule_comes_before_the_clarify_rule():
     assert "my latest" in text and "never CLARIFY on it" in text
 
 
+def test_a_named_person_or_thing_is_a_subject_not_a_missing_referent():
+    # "What did <name> want again?" was answered with CLARIFY ("which conversation involving <name>?")
+    # before any read, though the name is exactly what a read of the user's records finds.
+    text = RESOLVE_REQUEST_PROMPT
+    rule = text.find("A NAME is a subject too")
+    clarify = text.find("reply: CLARIFY:")
+    assert rule != -1 and rule < clarify
+    assert "never CLARIFY on it" in text[rule:clarify]
+    assert "—" not in text
+
+
 def test_prompt_still_formats():
     out = RESOLVE_REQUEST_PROMPT.format(conv_context="", user_message="Summarize my latest daily reflection.")
     assert "Summarize my latest daily reflection." in out

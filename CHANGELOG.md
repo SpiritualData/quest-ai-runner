@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A named person or thing is not a missing referent.** The request resolver asked "which
+  conversation involving <name>?" for "What did <name> want again?" before any read, though the
+  name is exactly what a read of the user's records finds. `RESOLVE_REQUEST_PROMPT` now says a
+  name (person, place, event, project) is a subject to look up, never a reason to CLARIFY; only a
+  pronoun or pointer word can be a missing referent.
 - **Review fixes for the escalation changes above.** A queue-only wiring keeps the queue pin for
   net-inferred work (it has nowhere else to go). The self-initiated decline applies only when the
   user's own words did not ask for work, and happens before any "Working on" status line; when an

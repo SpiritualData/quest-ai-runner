@@ -2803,6 +2803,11 @@ Rules (check in order):
   outcome". Words like "my latest", "my most recent", "today's" or "this week's" are NOT missing
   referents; they are found by reading the user's data, never by asking the user. Rewrite such a
   message as the instruction; never CLARIFY on it.
+- A NAME is a subject too, not a missing referent: a person ("what did Priya say"), a place, an
+  event ("the conference"), a project or a thing the user owns ("my garden plan"), with or without
+  "again" or "last time". You cannot see the user's records, but a read can: rewrite it as "find
+  <name> in the user's records and <what they asked>", never CLARIFY on it. Only a pronoun or
+  pointer word ("it", "that", "the second one", "do it") can be a missing referent.
 - If the referent is genuinely missing from the CURRENT conversation (for example "the third one"
   when fewer than three were offered, or "do it" / "go ahead" when nothing actionable was proposed),
   reply: CLARIFY: <one short question>. Do NOT invent or borrow a referent to avoid asking.
