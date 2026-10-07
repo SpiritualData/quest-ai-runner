@@ -48,6 +48,24 @@ def clip(value, limit=MAX_FIELD):
     return text if len(text) <= limit else text[:limit] + f"...[+{len(text) - limit} chars]"
 
 
+WEB_STATUS = re.compile(r"searching the web|reading a web page", re.I)
+WEB_SPEC = re.compile(r'"(?:web|web_page)"\s*:')
+
+
+def web_read_fired(events):
+    """True when a planner web read ran in this turn: a "Searching the web" / "Reading a web
+    page" status tick, or a plan/read frame whose read spec carries a ``web`` or ``web_page``
+    key. Deterministic, so a case can assert it (precheck ``web_read``) instead of guessing from
+    links in the reply."""
+    for e in events:
+        name = event_name(e)
+        if name == "status" and WEB_STATUS.search(str(e.get("text") or "")):
+            return True
+        if name in ("plan", "replan", "read") and WEB_SPEC.search(json.dumps(e.get("data") or {})):
+            return True
+    return False
+
+
 def build_evidence(turns, tasks=None):
     """Condense the raw SSE frames of every turn into what a judge (or a human) needs.
 
@@ -141,6 +159,7 @@ def build_evidence(turns, tasks=None):
     else:
         out["kind"] = "answer"
     out["errors"] = [e for t in out["turns"] for e in t["errors"]]
+    out["web_read"] = any(web_read_fired(t["events"]) for t in turns)
     return out
 
 
@@ -249,6 +268,11 @@ def precheck(case, evidence, world, after, changes):
                            f"delegated={evidence['delegated']})")
 
     pre = case.get("precheck") or {}
+    if "web_read" in pre:
+        want = bool(pre["web_read"])
+        add("web_read", evidence.get("web_read") == want,
+            f"expected a web read {'to fire' if want else 'NOT to fire'}, "
+            f"observed web_read={evidence.get('web_read')}")
     for needle in pre.get("reply_contains_all", []):
         add(f"reply_contains {needle!r}", norm(needle) in norm(reply),
             "present" if norm(needle) in norm(reply) else "missing from reply")

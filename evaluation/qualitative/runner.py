@@ -47,7 +47,7 @@ RESET_LOCK = threading.Lock()
 PRECHECK_KEYS = frozenset({
     "reply_contains_all", "reply_contains_any", "reply_not_contains", "reply_regex",
     "reply_regex_forbidden", "code_contains_all", "code_contains_any", "code_not_contains",
-    "tools_called", "tools_not_called", "pivot_values_in_reply"})
+    "tools_called", "tools_not_called", "pivot_values_in_reply", "web_read"})
 WRITE_ENTITIES = frozenset({"quest_field", "quest_note", "goal", "entry", "task"})
 OPTIONAL_RUBRIC = re.compile(r"\(bonus|\bbonus:|\boptionally\b|\bmay (?:mention|note|say|add)\b", re.I)
 WRITE_OPS = frozenset({"contains", "equals", "number_close", "gte", "lte", "regex", "exists",
