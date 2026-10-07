@@ -457,6 +457,11 @@ class DeepResult:
     # The full model id the worker's CLI resolved ``model`` to (``sonnet`` -> ``claude-sonnet-...``),
     # read from the run's own session record. None when the runner cannot tell.
     resolved_model: Optional[str] = None
+    # The orchestrator did NOT start this goal: the run was its OWN escalation (not something the
+    # user or the planner asked for) and the runner the goal resolved to starts work that outlives
+    # the turn (``DeepRunnerBase.starts_background_work``). Set by the orchestrator, never by a
+    # runner; the escalation site then keeps the answer it already has.
+    declined_background: bool = False
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as
@@ -1476,9 +1481,23 @@ class DeepRunnerBase(abc.ABC):
     # work "ran on sonnet" or is "retrying with opus", because neither would be true.
     uses_deep_model: bool = True
 
+    # Whether THIS runner's work OUTLIVES the turn: it queues a task, schedules a job or otherwise
+    # starts something that runs and leaves a trace after the reply (see ``runner_starts_background
+    # _work``). False by default. The orchestrator never sends its OWN escalations (the verifier's
+    # "need more context" and the last-resort deep run before giving up) to such a runner: those
+    # runs are the assistant's initiative, and a durable job the person never asked for is a side
+    # effect, not a better answer. A planner or user hand-off to the same runner is unaffected.
+    starts_background_work: bool = False
+
     @abc.abstractmethod
     def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None,
                  context_preamble=None, run_id=None) -> DeepResult: ...
+
+
+def runner_starts_background_work(runner: Any) -> bool:
+    """Whether ``runner`` starts work that outlives the turn (``starts_background_work``). Read
+    with ``getattr(..., False)`` so a duck-typed runner keeps today's behaviour."""
+    return bool(getattr(runner, "starts_background_work", False)) if runner is not None else False
 
 
 def runner_uses_deep_model(runner: Any) -> bool:

@@ -66,3 +66,27 @@ def test_no_deep_runner_means_no_escalation():
     provider = VerdictProvider([ANSWER], [NOT_MET, NOT_MET])
     res = orch(provider, None).run("What is the status of the tesmd bot issue?")
     assert res.kind == "answer"
+
+
+class QueueRunner(StubDeepRunner):
+    """A runner whose work outlives the turn (a consumer's task-queue hand-off)."""
+    starts_background_work = True
+
+
+def test_own_escalation_never_starts_background_work():
+    """Found 2026-10-07 in Quest's chat: a remark ("I'm buying the yellow paint tomorrow") got a
+    not-met verdict and the last-resort escalation queued a background task to buy the paint. The
+    orchestrator's own escalations may not start work that outlives the turn; the answer stands."""
+    provider = VerdictProvider([ANSWER], [NOT_MET, NOT_MET])
+    runner = QueueRunner(met=True, output="Queued as task #1")
+    res = orch(provider, runner).run("Mia loves the yellow one, I'm buying it tomorrow.")
+    assert res.kind == "answer"
+    assert runner.calls == []
+
+
+def test_need_more_context_escalation_never_starts_background_work():
+    provider = VerdictProvider([ANSWER], [dict(NOT_MET, need_more_context=True), NOT_MET, NOT_MET])
+    runner = QueueRunner(met=True, output="Queued as task #1")
+    res = orch(provider, runner).run("What is the status of the tesmd bot issue?")
+    assert res.kind == "answer"
+    assert runner.calls == []

@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The orchestrator's own escalations never start background work.** The answer verifier's
+  "need more context" run and the last-resort deep run before giving up are the assistant's own
+  initiative, so a goal that resolves to a runner declaring the new
+  `DeepRunnerBase.starts_background_work` (a consumer's task-queue runner, for example) is not
+  started: its `DeepResult` comes back `declined_background` and the turn keeps its answer. Before
+  this, a chat remark ("I'm buying the yellow paint tomorrow") got a not-met verdict and the
+  last-resort run queued a background task to buy the paint. Planner and user hand-offs to the same
+  runner are unchanged.
 - **`_DailyLimiter`'s web-search daily cap is now enforced across processes, not just within
   one.** When persisted (`QAR_WEB_CACHE_DIR` set), `record()` takes a cross-process file lock,
   re-reads the shared count, and writes atomically, and `exhausted()` re-reads the file, so

@@ -66,6 +66,7 @@ from .adapters import (
     EVENT_UNDERSTANDING,
     FUTURE_CONTEXT_VIA_FIELD,
     FUTURE_CONTEXT_VIA_OUTPUT,
+    runner_starts_background_work,
     runner_uses_deep_model,
     WRITE_SURFACE_AGENT,
     WRITE_SURFACE_FILES,
@@ -1198,6 +1199,13 @@ DEFERRED_DEEP_FIELD_DESC_QUEUED = (
     "(the answer ships first; the queued work then runs as its own background task and the user "
     "is told in this conversation when it finishes)."
 )
+
+def _deep_declined_background(result: Any) -> bool:
+    """True when a self-initiated deep run started nothing: every goal came back
+    ``declined_background`` (see ``Orchestrator._run_deep``'s ``self_initiated``)."""
+    results = list(getattr(result, "deep_results", None) or [])
+    return bool(results) and all(getattr(d, "declined_background", False) for d in results)
+
 
 # Reserved named-runner registry key for QUEUED deployments: when OrchestratorConfig.
 # deferred_deep_queued is on and the consumer registered a runner under this key in
@@ -7331,7 +7339,15 @@ class Orchestrator:
                   cancel_check: Optional[Callable[[], bool]] = None,
                   runner_override: Optional[Any] = None,
                   working_dir_override: Optional[str] = None,
-                  resume_session_id: Optional[str] = None) -> OrchestratorResult:
+                  resume_session_id: Optional[str] = None,
+                  self_initiated: bool = False) -> OrchestratorResult:
+        # ``self_initiated``: this deep run is the orchestrator's OWN escalation (the answer
+        # verifier asked for more context, or the last-resort run before giving up), not work the
+        # user or the planner asked for. A goal that resolves to a runner whose work outlives the
+        # turn (``starts_background_work``, e.g. a consumer's task-queue runner) is then NOT
+        # started: its DeepResult comes back ``declined_background`` and the escalation site keeps
+        # the answer it has. Found 2026-10-07 in Quest's chat: "Mia loves the yellow paint, I'm
+        # buying it tomorrow" got a background task queued to "purchase the paint".
         # ``resume_session_id``: a session left behind by an EARLIER RUN of this thread (see
         # ``Orchestrator.run``). The first attempt of a SINGLE-goal deep run picks it up through
         # the same ``resume_session`` variable the within-run turn-budget continuation uses, so
@@ -7562,6 +7578,12 @@ class Orchestrator:
             # from an instruction in its brief, while the terminal rung is a prose worker that does
             # need to be asked.
             terminal_runner = runner_ladder[-1]
+            if self_initiated and any(runner_starts_background_work(r) for r in runner_ladder):
+                log.info("Self-initiated escalation resolved to a background-work runner; "
+                         "not starting it (the current answer stands)")
+                return DeepResult(met=False, output="", declined_background=True,
+                                  error="escalation not started: the runner it resolved to "
+                                        "starts background work the user did not ask for")
             announce_model_selection(terminal_runner)
 
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
@@ -11384,6 +11406,9 @@ class Orchestrator:
         # real outcome is verified by the external runner's own goal loop and reported back.
         _last_verdict: Optional[Dict[str, Any]] = None
         _claim_corrected = False
+        # Set when one of the orchestrator's own escalations resolved to a background-work runner
+        # and was not started (see _run_deep's ``self_initiated``): no further escalation this turn.
+        _self_escalation_declined = False
         if (not _deferred_handoff_confirmed
                 and (self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims)):
             try:
@@ -11521,6 +11546,7 @@ class Orchestrator:
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.
                     if (verdict.get("need_more_context") and not brainstorm_active
+                            and not _self_escalation_declined
                             and self._has_deep_execution_capability()):
                         if emit is not None:
                             emit.status("Need more context to answer — searching further…")
@@ -11546,14 +11572,20 @@ class Orchestrator:
                             pending_inputs=pending_inputs, model_hint=model_hint,
                             ctx_meta=_ctx_meta, cancel_check=cancel_check,
                             working_dir_override=working_dir_override,
-                            resume_session_id=take_resume_session())
+                            resume_session_id=take_resume_session(), self_initiated=True)
                         if _esc_res.kind == "cancelled":
                             return finish(_esc_res)
-                        _esc_res.exit_reason = "escalated_deep"
-                        _esc_res.goal_verdict = verdict
-                        # Async, best-effort: prepare this user's cards for next time.
-                        self._kickoff_card_update(_esc_res, _esc_plan, user_message, _ctx_meta, emit)
-                        return finish(_esc_res)
+                        if _deep_declined_background(_esc_res):
+                            # Not started (see _run_deep's ``self_initiated``). Nothing else can
+                            # search further, so the last-resort run below must not try again.
+                            _self_escalation_declined = True
+                        else:
+                            _esc_res.exit_reason = "escalated_deep"
+                            _esc_res.goal_verdict = verdict
+                            # Async, best-effort: prepare this user's cards for next time.
+                            self._kickoff_card_update(_esc_res, _esc_plan, user_message, _ctx_meta,
+                                                      emit)
+                            return finish(_esc_res)
                     # Goal not met: surface the current answer as a milestone so the user sees
                     # progress while we continue iterating toward the goal.
                     if emit is not None and text:
@@ -11579,7 +11611,7 @@ class Orchestrator:
         # verifier naming a gap without setting need_more_context, a non-answer like "which file
         # should I look in?"). One pass only; skipped when something already mutated this turn (a
         # re-run could double the change) or the human asked us to hold off.
-        if (self.cfg.deep_before_giving_up
+        if (self.cfg.deep_before_giving_up and not _self_escalation_declined
                 and not _deferred_handoff_confirmed and not _claim_corrected
                 and not brainstorm_active
                 and _last_verdict is not None and not _last_verdict.get("met")
@@ -11614,13 +11646,14 @@ class Orchestrator:
                     pending_inputs=pending_inputs, model_hint=model_hint,
                     ctx_meta=_ctx_meta, cancel_check=cancel_check,
                     working_dir_override=working_dir_override,
-                    resume_session_id=take_resume_session())
+                    resume_session_id=take_resume_session(), self_initiated=True)
                 if _lr_res.kind == "cancelled":
                     return finish(_lr_res)
-                _lr_res.exit_reason = "escalated_deep"
-                _lr_res.goal_verdict = _last_verdict
-                self._kickoff_card_update(_lr_res, _lr_plan, user_message, _ctx_meta, emit)
-                return finish(_lr_res)
+                if not _deep_declined_background(_lr_res):
+                    _lr_res.exit_reason = "escalated_deep"
+                    _lr_res.goal_verdict = _last_verdict
+                    self._kickoff_card_update(_lr_res, _lr_plan, user_message, _ctx_meta, emit)
+                    return finish(_lr_res)
             except Exception:  # noqa: BLE001 — the net must never break the turn
                 log.warning("last-resort deep run failed", exc_info=True)
 
