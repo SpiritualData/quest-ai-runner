@@ -209,7 +209,8 @@ class _EmptyRetrieval:
 def test_cap_with_nothing_gathered_escalates_to_deep():
     # Planner keeps asking to read, but nothing comes back -> nothing gathered -> escalate to deep.
     provider = StubProvider(decisions=[
-        {"action": "read", "reads": [{"rel_path": "x.md"}], "rationale": "again"}
+        {"action": "read", "reads": [{"rel_path": "x.md"}], "rationale": "again",
+         "user_intent": "act"}
         for _ in range(2)  # matches max_steps below; escalation to deep is auto-derived, not planned
     ] + [{"met": True, "reason": "did it"}])  # goal verification for the escalated deep run
     runner = StubDeepRunner(met=True, output="did it")
@@ -228,7 +229,8 @@ def test_answer_describing_unexecuted_work_escalates_to_deep():
     # talked about the change instead of doing it. The orchestrator must auto-escalate to a deep
     # run that actually applies the work.
     provider = StubProvider(
-        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe"}],
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe",
+                    "user_intent": "act"}],
         answer_text="To fix this, I need to update the date-assignment logic in the code.",
     )
     runner = StubDeepRunner(met=True, output="applied the date fix")
@@ -264,7 +266,8 @@ def test_deferred_deep_output_is_folded_into_final_answer():
     # consumers). The final answer must be RE-SYNTHESIZED grounded in the deep run's output, so the
     # user sees the real deliverable, not a stale proposal.
     provider = StubProvider(
-        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe"}],
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe",
+                    "user_intent": "act"}],
         answer_text="I need to update the architecture; let me know if you want me to proceed.",
     )
     deliverable = "MULTILANG_PLAN_DELIVERABLE: phase 1 extract strings, phase 2 Spanish locale."
@@ -758,11 +761,12 @@ def test_actionable_message_with_proposal_answer_escalates_to_deep():
     # The real-world failure the user hit: the planner answers (PROPOSES) a code change in one step
     # and forgets the explicit flag. The proposal phrasing ("Aligning these to use the same
     # created_at field will guarantee ...") matches NONE of the answer-text regex nets, so the turn
-    # used to end as a proposal that never ran. The message-intent fallback (keyed off the stable
-    # user message "the system incorrectly assigns dates ...") must still escalate to a deep run,
+    # used to end as a proposal that never ran. The message-intent fallback (the planner's
+    # user_intent "act" verdict on "the system incorrectly assigns dates ...") must still escalate,
     # and the brief must carry the proposed approach so the deep run APPLIES it.
     provider = StubProvider(
-        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose"}],
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose",
+                    "user_intent": "act"}],
         answer_text=("Aligning these to use the same created_at field will guarantee that editing "
                      "an entry's time to yesterday immediately moves it out of today's actions."),
     )
@@ -788,11 +792,19 @@ def test_plain_informational_answer_does_not_escalate():
     assert not runner.calls, "informational answer must not escalate to a deep run"
 
 
-def test_message_requests_change_distinguishes_questions_from_commands():
+def test_escalation_nets_follow_the_planner_intent_verdict_not_the_words():
     # Regression: a QUESTION that merely mentions an action verb ("how would I add X?") was being
-    # auto-escalated into a task instead of answered. _message_requests_change must read INTENT:
-    # questions -> False (answer), commands -> True (execute).
-    from quest_ai_runner.core.orchestrator import _message_requests_change
+    # auto-escalated into a task instead of answered. The nets used to read the message with a
+    # regex; they now honor the planner's structured ``user_intent``: "ask" -> answer, "act" ->
+    # execute, whatever verbs the message contains.
+    def escalates(message, intent):
+        provider = StubProvider(
+            decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "r",
+                        "user_intent": intent}],
+            answer_text="Here is how that would work.")
+        runner = StubDeepRunner(met=True)
+        _orch(provider, StubRetrieval(), deep_runner=runner).run(message)
+        return bool(runner.calls)
 
     # COMMANDS (the user is directing the work) -> should execute.
     for cmd in [
@@ -805,7 +817,7 @@ def test_message_requests_change_distinguishes_questions_from_commands():
         "please update the endpoint",
         "the system incorrectly assigns dates to actions",  # bug report = implicit command
     ]:
-        assert _message_requests_change(cmd) is True, f"command should escalate: {cmd!r}"
+        assert escalates(cmd, "act") is True, f"command should escalate: {cmd!r}"
 
     # QUESTIONS (the user is asking ABOUT something, even with an action verb) -> should answer.
     for q in [
@@ -817,11 +829,8 @@ def test_message_requests_change_distinguishes_questions_from_commands():
         "is it possible to add SSO?",
         "what's the best way to update a goal?",
         "do you think we should change this?",
-        # Casual/uncertain openers with NO trailing "?" -- these read as questions in speech
-        # (people drop the question mark when talking or typing fast) but were previously missed
-        # by both the interrogative-opener check and the "?"-ending check, so they fell through to
-        # the unconditional True at the end of the function and force-escalated to a task despite
-        # being genuine questions. _INFO_QUESTION_RE now recognizes these openers.
+        # Casual/uncertain openers with NO trailing "?" read as questions in speech; the old
+        # regex net needed a new pattern for each of them.
         "Not sure why the export looks broken",
         "No idea why this is failing",
         "Any idea why the metrics look off",
@@ -829,7 +838,7 @@ def test_message_requests_change_distinguishes_questions_from_commands():
         "Wondering if the sync job is broken",
         "I'm curious why the build is slow",
     ]:
-        assert _message_requests_change(q) is False, f"question should NOT escalate: {q!r}"
+        assert escalates(q, "ask") is False, f"question should NOT escalate: {q!r}"
 
 
 def test_question_with_change_verb_is_answered_not_executed():
@@ -1832,7 +1841,8 @@ def test_net_inferred_work_is_routed_not_pinned_to_the_queue():
     background task (found 2026-10-07: "... then add a goal" queued a task for a one-line add)."""
     queue_runner = StubDeepRunner(met=True, output="Queued as task #5.", deferred=True)
     inline_runner = StubDeepRunner(met=True, output="Added the goal 'Order lavender wax'.")
-    provider = StubProvider(decisions=[{"action": "answer", "rationale": "explained it"}],
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "explained it",
+                                        "user_intent": "act"}],
                             answer_text="You should add a goal to order lavender wax.")
     _orch(provider, StubRetrieval(),
           deep_runners={"deferred": queue_runner, "inline": inline_runner},
@@ -1847,7 +1857,8 @@ def test_queue_only_wiring_still_queues_net_inferred_work():
     """With no inline runner, the queue is the only place net-inferred work can go, so it keeps
     the pin (the classifier can never select the reserved queue key)."""
     queue_runner = StubDeepRunner(met=True, output="Queued as task #9.", deferred=True)
-    provider = StubProvider(decisions=[{"action": "answer", "rationale": "explained it"}],
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "explained it",
+                                        "user_intent": "act"}],
                             answer_text="You should add a goal to order lavender wax.")
     res = _orch(provider, StubRetrieval(), deep_runners={"deferred": queue_runner},
                 config=OrchestratorConfig(deferred_deep_queued=True)).run(

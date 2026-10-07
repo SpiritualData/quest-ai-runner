@@ -278,6 +278,12 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
   5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep
      runner can reach: choose "deep" now, with no read first.
   6. OTHERWISE. Read what you need, then answer.
+ALWAYS set `user_intent`: what the CURRENT message asks of YOU. It describes the message, not your
+next step, so an order you will read up on first is still "act". "act" = do, produce, send or
+change something now (a polite "can you", or a bare report of a defect in something you can
+change, counts); "ask" = a question, or asking to be told, shown or given something you can say in
+the reply; "inform" = news, context, or what the user will do THEMSELVES; "hold_off" = about your
+own work itself: do not open a task, answer here, not yet, stop or cancel runs.
 """
 
 # Fresh, GENERAL boundary examples. They exist because the four hardest calls above are hard in
@@ -1010,6 +1016,25 @@ def render_planner_prompt(**slots: Any) -> str:
     return PLANNER_PROMPT.format(**values)
 
 
+# The planner's structured reading of what the user's CURRENT message asks of the assistant
+# (``PlanDecision.user_intent``). This REPLACED a regex net over the user's words (2026-10-07):
+# every fix to that net was one more pattern, and each pattern leaked the next phrasing nobody had
+# anticipated ("I'll lean on the claim ... and move on" queued a task because "move" is a change
+# verb). The planner already reads the whole message, the transcript and the context to choose
+# its action, so it states this verdict on the same call and the escalation nets honor it.
+USER_INTENT_ACT = "act"
+USER_INTENT_HOLD_OFF = "hold_off"
+USER_INTENTS = (USER_INTENT_ACT, "ask", "inform", USER_INTENT_HOLD_OFF)
+
+
+def normalize_user_intent(raw: Any) -> Optional[str]:
+    """The planner's ``user_intent`` as one of ``USER_INTENTS``, or None when it is missing or not
+    one of them (a hallucinated value is "not given", never a guess). Never raises."""
+    if isinstance(raw, str) and raw.strip().lower() in USER_INTENTS:
+        return raw.strip().lower()
+    return None
+
+
 # The structured decision schema the planner MUST return (forced tool use).
 DECIDE_TOOL: Dict[str, Any] = {
     "name": "decide",
@@ -1155,8 +1180,13 @@ DECIDE_TOOL: Dict[str, Any] = {
                 "required": ["question"],
             },
             "rationale": {"type": "string"},
+            # What the CURRENT message asks of the assistant (see USER_INTENTS). No description:
+            # the rubric at the top of both planner profiles states it, so neither pays twice.
+            "user_intent": {"type": "string", "enum": list(USER_INTENTS)},
         },
-        "required": ["action", "rationale"],
+        # REQUIRED, like card_thread: an optional field is one a model quietly omits, and every
+        # omission costs an intent-judge call on an answer turn.
+        "required": ["action", "rationale", "user_intent"],
     },
 }
 
@@ -1532,15 +1562,13 @@ class OrchestratorConfig:
     # the strong model on judgment, keep the cheap tiers for gathering. Empty string falls back to
     # ``planner_tier`` (the previous behavior).
     verify_tier: str = "best"
-    # INTENT-DIRECTIVE JUDGE (WS3: structured judgment replacing a regex-only call). The cheap
-    # regex prefilter (``_message_requests_change``) decides most turns for free; when it CANNOT
-    # (a change-verb/wrongness signal fired but an interrogative opener or a bare "?" overrode it --
-    # see ``message_change_signal_ambiguous``), ONE structured LLM call judges the ambiguous
-    # message instead of guessing. This is a ROUTING decision, not the run's outcome gate
-    # (``verify_tier`` is that), so it defaults to the cheaper "balanced" tier. The call is
-    # hard-timeout-guarded (``intent_judge_timeout_seconds()``) and ALWAYS falls back to the regex
-    # verdict on any failure/timeout/parse miss -- it can only ever ADD an escalation the regex
-    # missed, never block the turn or override a "yes" the regex already gave.
+    # INTENT-DIRECTIVE JUDGE: the FALLBACK for a turn whose planner gave no usable ``user_intent``
+    # verdict (the planner's structured verdict decides every other turn for free, on the call it
+    # already makes). ONE structured LLM call judges the message instead of guessing. This is a
+    # ROUTING decision, not the run's outcome gate (``verify_tier`` is that), so it defaults to the
+    # cheaper "balanced" tier. The call is hard-timeout-guarded (``intent_judge_timeout_seconds()``)
+    # and falls back to "not a directive" on any failure/timeout/parse miss, so it can never block
+    # the turn.
     intent_judge_tier: str = "balanced"
     # BRAINSTORM-RELEASE JUDGE TIER. The tier ``judge_brainstorm_release`` (does THIS message lift
     # the no-action hold?) resolves its model from. Deliberately NOT the planner tier: the planner
@@ -2015,6 +2043,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         confirm_default_on_silence=confirm_silence_raw,
         tool_calls=tool_calls,
         confidence=confidence,
+        user_intent=normalize_user_intent(raw.get("user_intent")),
     )
 
 
@@ -2238,10 +2267,9 @@ VERIFY_WEB_EVIDENCE_NOTE = (
 VERIFY_WEB_EVIDENCE_MAX_CHARS = 8000
 
 # ---------------------------------------------------------------------------
-# INTENT-DIRECTIVE JUDGE (WS3): the ONE structured LLM call that decides the AMBIGUOUS band the
-# cheap regex prefilter (_message_requests_change / message_change_signal_ambiguous) leaves
-# undecided. See Orchestrator.judge_execution_directive. Kept tiny and app-agnostic: no org names,
-# no examples baked from any one deployment's data.
+# INTENT-DIRECTIVE JUDGE: the ONE structured LLM call that decides whether the user ordered work
+# when the planner gave no usable ``user_intent`` verdict. See Orchestrator.judge_execution_directive.
+# Kept tiny and app-agnostic: no org names, no examples baked from any one deployment's data.
 # ---------------------------------------------------------------------------
 
 INTENT_DIRECTIVE_TOOL: Dict[str, Any] = {
@@ -2266,8 +2294,7 @@ INTENT_DIRECTIVE_TOOL: Dict[str, Any] = {
 }
 
 INTENT_DIRECTIVE_PROMPT = """\
-A cheap keyword prefilter could not confidently classify this user message. Judge whether it is a
-DIRECTIVE to actually execute a change (code, files, or data) right now, as opposed to a question,
+Judge whether this user message is a DIRECTIVE to actually execute a change (code, files, or data) right now, as opposed to a question,
 an exploration ("how would I..."), an opinion request, or a hypothetical.
 
 Set is_execution_directive=true ONLY when the user is telling the assistant to make the change now
@@ -3164,8 +3191,18 @@ def _guidance_model_pref(quality_standards: Optional[str]) -> Optional[str]:
     return None
 
 
-# Imperative change/build verbs and bug/wrongness signals that mark a USER MESSAGE as a request to
-# CHANGE something (code, files, or data), not just to be informed. Kept app-agnostic.
+# THE REGEX NET OVER THE USER'S WORDS IS RETIRED (2026-10-07). Whether an answer turn should
+# escalate to work used to be decided here by keyword lists (change verbs, wrongness words,
+# interrogative openers, polite-command openers, discourse markers, "I'll ..." plans, hold-off
+# phrases). Every misroute was "fixed" with one more pattern, and each pattern leaked the next
+# phrasing. The escalation nets now honor the planner's structured ``user_intent`` verdict (see
+# USER_INTENTS), with the one-shot ``judge_execution_directive`` as the fallback when the verdict
+# is missing. Do not reintroduce a keyword reading of the message for that decision: if the planner
+# misreads intent, fix the planner prompt.
+#
+# What remains below is the minimum the PRE-PLANNER veto (``message_forbids_new_task``) needs. It
+# has to run before any planner verdict exists, because it shapes the planner's own prompt and
+# action space for the turn, and it can only ever REMOVE execution, never add it.
 _CHANGE_VERBS = (
     r"fix|implement|build|refactor|add|remove|delete|change|update|edit|rewrite|apply|create|"
     r"make|migrate|rename|move|replace|configure|enable|disable|integrate|wire\s+up|hook\s+up|"
@@ -3174,121 +3211,6 @@ _CHANGE_VERBS = (
     r"convert|transform|format|parse|extract|inject|wrap|unwrap|expose|attach|detach"
 )
 _CHANGE_VERB_RE = re.compile(r"\b(?:" + _CHANGE_VERBS + r")\b", re.IGNORECASE)
-# Bug/wrongness descriptions ("it incorrectly X", "doesn't work", "should X but Y", "is broken").
-_WRONGNESS_RE = re.compile(
-    r"\b(?:bug|broken|incorrect(?:ly)?|wrong(?:ly)?|fail(?:s|ing|ed)?|error|"
-    r"does\s*n['’]?t\s+work|do\s+not\s+work|not\s+working|is\s*n['’]?t\s+working|"
-    r"should\b.{0,60}\bbut\b|instead\s+of)\b",
-    re.IGNORECASE,
-)
-# A purely interrogative opener: when the message ASKS ABOUT something (information, explanation,
-# or opinion), it wants an answer, not an edit -- even if it also mentions an action verb ("how
-# would I add X?", "should we refactor Y?"). Used to avoid auto-executing a question as a task.
-# Includes casual/uncertain openers ("any idea", "not sure why", "wondering if") that read as
-# questions in natural speech even though they are not textbook interrogatives -- these were
-# previously missed here, which meant they only survived via the "?"-ending check (and not at all
-# when the speaker dropped the question mark, as people often do when talking, not typing).
-# A leading discourse marker ("so how do we move forward", "okay what's next", "hey where are we")
-# is how people actually open a question in chat. Anchoring on the interrogative alone missed every
-# one of them, and each miss fell through to the unconditional "this is a command" at the end.
-_DISCOURSE_OPENER_RE = re.compile(
-    r"^\s*(?:so|ok|okay|and|but|also|well|hey|hi|hello|actually|alright|right|now|then|"
-    r"quick\s+question|question|just)\b[\s,:-]*",
-    re.IGNORECASE,
-)
-
-# A SHORT SCENE-SETTING CLAUSE the speaker puts before the question itself: "from the database,
-# tell me what you know about X", "for the August campaign, what were the opens?". Because
-# _INFO_QUESTION_RE is anchored at the start of the message, ANY such preamble hid the
-# interrogative from it and the message fell through to the unconditional "this is a command" at
-# the end -- a plain question opened a task purely for having a comma in front of it. One leading
-# clause is stripped, and only a genuinely short one that ENDS IN A COMMA, so a real instruction
-# followed by a request for confirmation ("update the sheet and tell me when done" -- no comma;
-# "update the sheet, then tell me when done" -- the clause is a command, not scene-setting) keeps
-# its command reading: the strip requires the clause to carry no change verb of its own.
-_LEADING_CLAUSE_RE = re.compile(r"^\s*([^,.!?\n]{1,40}),\s*")
-
-
-def _strip_question_preamble(message: str) -> str:
-    """Strip a leading discourse marker and, at most, one short scene-setting clause.
-
-    Returns the text ``_INFO_QUESTION_RE`` should be matched against. The clause is only removed
-    when it contains no change verb used as a verb, so "update the sheet, tell me when done" is
-    left intact (the preamble IS the instruction) while "from the database, tell me what you know"
-    is reduced to the question it actually is. Never raises.
-    """
-    try:
-        stripped = _DISCOURSE_OPENER_RE.sub("", message or "")
-        m = _LEADING_CLAUSE_RE.match(stripped)
-        if m and not _change_verb_used_as_verb(m.group(1)):
-            stripped = stripped[m.end():]
-        return _DISCOURSE_OPENER_RE.sub("", stripped)
-    except Exception:  # noqa: BLE001 — intent classification must never break the turn
-        return message or ""
-
-_INFO_QUESTION_RE = re.compile(
-    r"^\s*(?:how|what|what['’]?s|why|which|who|whom|whose|when|where|explain|describe|summari[sz]e|"
-    r"tell\s+me|walk\s+me\s+through|is\s+it|are\s+there|is\s+there|do\s+you|does\s+it|did\s+you|"
-    r"would\s+it|could\s+we|should\s+(?:i|we|it)|do\s+we|is\s+it\s+possible|"
-    r"any\s+(?:idea|clue|chance|reason)|no\s+idea\s+why|not\s+sure\s+why|"
-    r"(?:i'?m\s+)?(?:wondering|curious)\s+(?:if|why|whether)|"
-    # STATUS / PROGRESS asks. "where are we with X", "give me an update on Y", "how are we doing
-    # on Z" ask to be TOLD where something stands. They carry change verbs ("update", "move") and
-    # were escalated into tasks that redid the work the human only wanted reported.
-    r"where\s+(?:are\s+we|do\s+we\s+stand)|any\s+update|update\s+me\b|"
-    # BEING ASKED FOR SOMETHING SAYABLE. "give me a report on the campaign", "give me the link to
-    # the leads sheet", "list out my tasks" ask to be TOLD, in the reply. The nouns here are the
-    # same strings as the change verbs ("report", "list", "update"), so without these the ask was
-    # read as an order to GO PRODUCE the thing and opened a task that redid the work. Only the
-    # "hand it to me" phrasings are listed: "create a report", "write the list", "send the link"
-    # keep their command reading and still escalate.
-    r"give\s+me\s+(?:an?\s+|the\s+)?"
-    r"(?:update|status|rundown|recap|breakdown|report|summary|overview|list|link|url)\b|"
-    r"(?:provide|share)\s+(?:me\s+)?(?:with\s+)?(?:an?\s+|the\s+)?"
-    r"(?:link|url|list|report|summary|overview|update|status)\b|"
-    r"list\s+(?:out\s+)?(?:my|our|the|all)\b|"
-    r"(?:catch|fill)\s+me\s+(?:up|in)\b|"
-    r"status\s+(?:on|of)\b|how\s+(?:are|is)\s+(?:we|it|things|that)\b|"
-    r"did\s+we|have\s+we|has\s+(?:it|he|she|they))\b",
-    re.IGNORECASE,
-)
-# A POLITE IMPERATIVE aimed at the assistant ("can you fix…", "could you add…", "please update…").
-# This reads like a question but is really a COMMAND to perform the action -- keep treating it as a
-# change request. Distinguishes "can you add a field" (do it) from "should we add a field?" (advise).
-_POLITE_COMMAND_RE = re.compile(
-    r"^\s*(?:please\b|(?:can|could|would|will)\s+you\b|i'?d\s+like\s+you\s+to\b|"
-    r"i\s+(?:want|need)\s+you\s+to\b|let'?s\b|go\s+ahead\b)",
-    re.IGNORECASE,
-)
-
-
-# The speaker announcing THEIR OWN next step ("I'll lean on that claim and move on", "I'm going to
-# buy the paint tomorrow", "I plan to rewrite the intro tonight"). The change verb belongs to the
-# person, not to the assistant: it is news, often context the assistant should weigh in on, never
-# an order to go and do it. Read only when nothing in the message addresses the assistant ("you"),
-# so "I'll need you to update the sheet" keeps its command reading. Such a message is sent to the
-# one-shot LLM judgment band rather than escalated by regex (found 2026-10-07: "I'll lean on the
-# claim ... and move on to the next section" queued a background task to "apply" it).
-SPEAKER_OWN_PLAN_RE = re.compile(
-    r"^\s*(?:i['’]?ll|i\s+will|i\s+shall|i['’]?m\s+(?:going\s+to|gonna|planning\s+to|about\s+to)|"
-    r"i\s+am\s+(?:going\s+to|planning\s+to|about\s+to)|i\s+plan\s+to|i\s+intend\s+to|"
-    r"i\s+think\s+i['’]?ll|i['’]?ve\s+decided\s+to|i\s+decided\s+to)\b",
-    re.IGNORECASE,
-)
-ADDRESSES_ASSISTANT_RE = re.compile(r"\b(?:you|your)\b", re.IGNORECASE)
-
-
-def message_announces_own_plan(message: Optional[str]) -> bool:
-    """True when the user is telling the assistant what THEY are going to do, without asking the
-    assistant to do anything ("I'll lean on that claim and move on"). Reads the USER's words only.
-    Never raises."""
-    try:
-        m = _strip_question_preamble((message or "").strip())
-        return bool(SPEAKER_OWN_PLAN_RE.search(m)) and not ADDRESSES_ASSISTANT_RE.search(m)
-    except Exception:  # noqa: BLE001
-        return False
-
-
 # Words that turn a change verb into a NOUN: "give me an update", "the latest change", "a quick
 # fix", "any improvements". Without this, every status request read as an order to go change
 # something, because "update"/"fix"/"change"/"report" are the same string as verb or noun.
@@ -3318,35 +3240,14 @@ def _change_verb_used_as_verb(message: str) -> bool:
     return False
 
 
-# The human speaking about the ASSISTANT'S OWN machinery rather than about the work: telling it not
-# to open a task, to answer in the chat instead, to kill what is running, or that no instruction has
-# been given yet. These are the messages that must never become a task, and they used to become one
-# most reliably of all, because "create", "delete" and "make" are change verbs. Read from the USER's
-# own words (never from model output), which is the reading QAR's rules allow.
-_HOLD_OFF_RE = re.compile(
-    r"(?:"
-    r"\b(?:do\s*n[o\u2019']?t|dont|never|stop|avoid|refrain\s+from|without)\b[^.!?\n]{0,40}"
-    r"\b(?:creat\w*|open\w*|start\w*|spawn\w*|queu\w*|mak\w*|run\w*)\b[^.!?\n]{0,25}\btasks?\b"
-    r"|\bno\s+(?:new\s+|more\s+)?tasks?\b"
-    r"|\bjust\b[^.!?\n]{0,30}\b(?:answer|reply|respond|tell\s+me|drop|say)\b"
-    r"|\b(?:answer|reply|respond|drop)\b[^.!?\n]{0,25}\b(?:here|in\s+(?:the\s+)?chat)\b"
-    r"|\b(?:kill|stop|cancel|abort|dismiss|delete|remove)\b[^.!?\n]{0,30}\b(?:task|tasks|run|runs|job|jobs)\b"
-    r"|\bhave\s*n[o\u2019']?t\s+(?:even\s+)?(?:given|asked|told)\b|\bhavent\s+(?:even\s+)?(?:given|asked|told)\b"
-    r"|\bhold\s+(?:on|off)\b|\bstand\s+by\b|\bnot\s+yet\b"
-    r")",
-    re.IGNORECASE,
-)
-
-
-# The subset of the hold-off intents that VETO a planner "deep" as well as the escalation nets:
-# the human talking about whether a TASK MAY BE OPENED AT ALL ("don't create a task", "no new
-# tasks", "just answer me here", "hold off", "I haven't given you an instruction yet").
+# The PRE-PLANNER veto: the human talking about whether a TASK MAY BE OPENED AT ALL ("don't create
+# a task", "no new tasks", "just answer me here", "hold off", "I haven't given you an instruction
+# yet"). It vetoes a planner "deep" too, which is why it cannot wait for the planner's verdict.
 #
-# The one hold-off intent deliberately NOT included is "kill/cancel/dismiss that run": that is an
-# instruction to ACT on the runner's own state, and a consumer may well execute it as deep work.
-# Suppressing the planner there would answer "sure, I'll cancel it" and cancel nothing -- the exact
-# false-completion failure this file is full of fixes for. It still gates the escalation nets
-# (via ``message_holds_off_work``), which is all it ever did.
+# "kill/cancel/dismiss that run" is deliberately NOT included: that is an instruction to ACT on the
+# runner's own state, and a consumer may well execute it as deep work. Suppressing the planner
+# there would answer "sure, I'll cancel it" and cancel nothing. The escalation nets read that case
+# from the planner's ``user_intent`` ("hold_off"), not from here.
 _FORBIDS_NEW_TASK_RE = re.compile(
     r"(?:"
     r"\b(?:do\s*n[o’']?t|dont|never|stop|avoid|refrain\s+from|without)\b[^.!?\n]{0,40}"
@@ -3373,8 +3274,8 @@ _BARE_HOLD_PHRASE_RE = re.compile(r"\bhold\s+(?:on|off)\b|\bstand\s+by\b|\bnot\s
 def message_forbids_new_task(message: Optional[str]) -> bool:
     """True when the human's own words say NO TASK MAY BE OPENED for this message.
 
-    Unlike ``message_holds_off_work`` (which only gates the escalation nets), this DOES veto a
-    planner ``action="deep"``: it degrades the turn to "answer", through the same structural
+    Unlike the planner's ``user_intent == "hold_off"`` (which only gates the escalation nets), this
+    DOES veto a planner ``action="deep"``: it degrades the turn to "answer", through the same structural
     no-action gate brainstorm mode uses. Without it, "don't create a task, just answer me here"
     was unanswerable -- every guard in this file could only ever ADD execution, so the one thing a
     user could not do was ask for less of it, and the request not to open a task opened one.
@@ -3400,82 +3301,11 @@ def message_forbids_new_task(message: Optional[str]) -> bool:
         return False
 
 
-def message_holds_off_work(message: Optional[str]) -> bool:
-    """True when the human is telling the assistant NOT to go do work right now.
-
-    Gates every ESCALATION NET (the fallbacks that turn an answer turn into a task). The stricter
-    subset that ALSO vetoes a planner ``action="deep"`` is ``message_forbids_new_task``; outside
-    that subset a planner "deep" still stands, so "cancel that run" is executed rather than merely
-    talked about. Never raises.
-    """
-    if not message or not message.strip():
-        return False
-    try:
-        return bool(_HOLD_OFF_RE.search(message))
-    except Exception:  # noqa: BLE001
-        return False
-
-
-def _message_requests_change(message: Optional[str], *, honor_hold_off: bool = True) -> bool:
-    """True iff the USER MESSAGE asks for a CHANGE to be made (code/files/data), not just info.
-
-    ``honor_hold_off=False`` skips the hold-off veto (``message_holds_off_work``). Pass it for a
-    QUEUED TASK's brief (``run(message_is_user_turn=False)``): that text is machine-composed and
-    quotes earlier runs' own output, so a "not yet released" inside a prior result read as the
-    human saying "not yet" and switched every escalation net off (live 2026-09-27: a reply
-    reporting two new bugs on a fix thread ended as a best-effort answer, marked done).
-
-    Keyed off the STABLE user message rather than the (highly variable) answer text, because the
-    cheap planner often misroutes an actionable request to "answer" and then only DESCRIBES the
-    change. This is the reliable signal that the turn should have executed work. Conservative on
-    QUESTIONS: an interrogative message that ASKS ABOUT something (information, explanation, or
-    opinion) returns False even when it mentions an action verb ("how would I add X?", "should we
-    refactor Y?"), so a question is never auto-escalated into a file-editing task. A polite
-    imperative aimed at the assistant ("can you add…", "please fix…") is still a command and
-    returns True. Never raises.
-    """
-    if not message or not message.strip():
-        return False
-    try:
-        m = message.strip()
-        # "don't create a task", "just answer here", "kill those runs": the human is talking about
-        # the assistant's own behavior, not asking for work. Never escalate that.
-        if honor_hold_off and message_holds_off_work(m):
-            return False
-        has_verb = _change_verb_used_as_verb(m)
-        has_wrongness = bool(_WRONGNESS_RE.search(m))
-        if not (has_verb or has_wrongness):
-            return False
-        # A polite imperative directed at the assistant ("can you fix…", "please add…") IS a
-        # command even though it is phrased as a question -- keep escalating it.
-        if _POLITE_COMMAND_RE.search(m):
-            return True
-        # An interrogative message ASKS ABOUT something (explanation, status, opinion) -- answer
-        # it, do not execute, even if it mentions a change verb ("how would I add X?", "should we
-        # refactor Y?", "what would it take to fix Z?"). This is the fix for questions being
-        # mishandled as tasks.
-        if _INFO_QUESTION_RE.search(_strip_question_preamble(m)):
-            return False
-        # The speaker announcing their own next step is news, not an order (see
-        # message_announces_own_plan). It still reaches the LLM judgment band, which reads the
-        # whole message and the answer, via message_change_signal_ambiguous.
-        if message_announces_own_plan(m):
-            return False
-        # A message ending in "?" reads as a question by default, not a command, unless it was
-        # already caught above as a polite command directed at the assistant ("can you fix...?").
-        # This also covers conversational/opinion questions that carry a change verb but no
-        # "you"-directed phrasing or interrogative opener ("can we improve conversion here?",
-        # "should we optimize this query?") -- previously these fell through to True here even
-        # though they read as questions. Returning False does not silently drop them: a verb/
-        # wrongness signal still makes ``message_change_signal_ambiguous`` true, so they land in
-        # the one-shot LLM judgment band (``judge_execution_directive``) instead of being forced
-        # into a task by regex alone. A bug statement or plain imperative with no "?" still
-        # escalates via the plain ``return True`` below.
-        if m.endswith("?"):
-            return False
-        return True
-    except Exception:  # noqa: BLE001
-        return False
+def user_ordered_work(user_intent: Optional[str]) -> bool:
+    """True when the planner's structured verdict says the user's CURRENT message asks the
+    assistant to do or change something now (``user_intent == "act"``). Missing is False here;
+    callers that must not lose a real order to a missing verdict ask the intent judge instead."""
+    return user_intent == USER_INTENT_ACT
 
 
 # NOTE (do not reintroduce): there was once a `_confirm_is_redundant` gate here, keyed on a
@@ -3502,26 +3332,6 @@ def clip_head_and_tail(text: str, limit: int) -> str:
     head = limit * 2 // 5
     tail = limit - head
     return text[:head].rstrip() + "\n[...]\n" + text[-tail:].lstrip()
-
-
-def message_change_signal_ambiguous(message: Optional[str], *,
-                                    honor_hold_off: bool = True) -> bool:
-    """True when ``message`` carries a cheap signal of an executable directive (a change verb or a
-    wrongness description) but ``_message_requests_change`` still returned False for it -- because
-    an interrogative opener or a bare "?" ending overrode the signal. This is the AMBIGUOUS band
-    worth spending ONE structured LLM judgment on (see ``Orchestrator.judge_execution_directive``):
-    a message with NO signal at all (e.g. "thanks!") never reaches here, so the judgment call is not
-    spent on every regex miss, only on messages a human would find genuinely borderline ("how would
-    I add X, go ahead and do it if you can"). Never raises."""
-    if not message or not message.strip():
-        return False
-    try:
-        m = message.strip()
-        if honor_hold_off and message_holds_off_work(m):
-            return False
-        return bool(_change_verb_used_as_verb(m) or _WRONGNESS_RE.search(m))
-    except Exception:  # noqa: BLE001
-        return False
 
 
 def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
@@ -4482,8 +4292,8 @@ def intent_judge_timeout_seconds() -> float:
     """Wall-clock budget for the ONE structured intent-directive judgment call (see
     ``Orchestrator.judge_execution_directive``). Env ``QAR_INTENT_JUDGE_TIMEOUT_SECONDS`` (default
     8, accepts a float); read fresh on every call, not cached. A short cap is deliberate: this call
-    only runs in the ambiguous band the regex prefilter left undecided, and must never be the reason
-    a turn feels slow -- a timeout falls back to the regex verdict instead of blocking."""
+    only runs when the planner gave no ``user_intent`` verdict, and must never be the reason a turn
+    feels slow -- a timeout falls back to "no directive" instead of blocking."""
     raw = os.getenv("QAR_INTENT_JUDGE_TIMEOUT_SECONDS")
     if raw is None or not raw.strip():
         return 8.0
@@ -6553,25 +6363,25 @@ class Orchestrator:
         return payload
 
     def judge_execution_directive(self, user_message: str, answer_text: str) -> Tuple[bool, str]:
-        """ONE structured LLM judgment for the AMBIGUOUS band ``_message_requests_change`` (the
-        cheap regex prefilter) leaves undecided -- see ``message_change_signal_ambiguous`` for
-        exactly which messages reach here. Design: HANDS_FREE_QUEST_AI_DESIGN.md section 4 --
-        intent-ambiguity calls belong to a structured judgment, not regex.
+        """ONE structured LLM judgment of whether the user ordered work, used ONLY when the
+        planner gave no usable ``user_intent`` verdict this turn (the verdict decides every other
+        turn). Design: HANDS_FREE_QUEST_AI_DESIGN.md section 4 -- intent calls belong to a
+        structured judgment, not regex.
 
         Runs at ``cfg.intent_judge_tier`` (default "balanced"): this is a routing decision, not the
         run's outcome gate (``verify_tier``/``_verify_goal`` is that), so it does not need the
         strong tier. Hard-capped by ``intent_judge_timeout_seconds()`` so a slow/hung provider can
-        NEVER block the turn. On ANY failure, timeout, or unusable response, falls back to the
-        regex verdict -- False, since the caller only reaches here after the regex already said no
-        -- and returns that with a clear reason so the caller can log why. Never raises.
+        NEVER block the turn. On ANY failure, timeout, or unusable response, falls back to False
+        (open no work nobody clearly asked for) and returns that with a clear reason so the caller
+        can log why. Never raises.
 
         Returns ``(is_execution_directive, reason)``.
         """
-        fallback_reason = "regex prefilter verdict (LLM judgment unavailable)"
+        fallback_reason = "no directive assumed (LLM judgment unavailable)"
         try:
             model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
         except Exception as e:  # noqa: BLE001 — an unresolvable tier just means no judgment
-            log.warning("Intent-directive judge: could not resolve tier %r (%s); using the regex verdict.",
+            log.warning("Intent-directive judge: could not resolve tier %r (%s); assuming no directive.",
                        self.cfg.intent_judge_tier, e)
             return False, fallback_reason
         if not model:
@@ -6595,17 +6405,17 @@ class Orchestrator:
             result = future.result(timeout=timeout)
         except FuturesTimeoutError:
             log.warning("Intent-directive judge timed out after %.0fs "
-                       "(QAR_INTENT_JUDGE_TIMEOUT_SECONDS to adjust); falling back to the regex verdict.",
+                       "(QAR_INTENT_JUDGE_TIMEOUT_SECONDS to adjust); assuming no directive.",
                        timeout)
             return False, fallback_reason
         except Exception as e:  # noqa: BLE001 — the judgment call must never break the turn
-            log.warning("Intent-directive judge failed (%s: %s); falling back to the regex verdict.",
+            log.warning("Intent-directive judge failed (%s: %s); assuming no directive.",
                        type(e).__name__, e)
             return False, fallback_reason
         finally:
             pool.shutdown(wait=False)
         if not isinstance(result, dict) or "is_execution_directive" not in result:
-            log.warning("Intent-directive judge returned no usable verdict; falling back to the regex verdict.")
+            log.warning("Intent-directive judge returned no usable verdict; assuming no directive.")
             return False, fallback_reason
         is_directive = bool(result.get("is_execution_directive"))
         reason = str(result.get("reason") or "").strip() or "LLM intent judgment"
@@ -7408,7 +7218,8 @@ class Orchestrator:
                   runner_override: Optional[Any] = None,
                   working_dir_override: Optional[str] = None,
                   resume_session_id: Optional[str] = None,
-                  self_initiated: bool = False) -> OrchestratorResult:
+                  self_initiated: bool = False,
+                  user_ordered: bool = False) -> OrchestratorResult:
         # ``self_initiated``: this deep run is the orchestrator's OWN escalation (the answer
         # verifier asked for more context, or the last-resort run before giving up), not work the
         # user or the planner asked for. A goal that resolves to a runner whose work outlives the
@@ -7416,6 +7227,10 @@ class Orchestrator:
         # started: its DeepResult comes back ``declined_background`` and the escalation site keeps
         # the answer it has. Found 2026-10-07 in Quest's chat: "Mia loves the yellow paint, I'm
         # buying it tomorrow" got a background task queued to "purchase the paint".
+        # ``user_ordered``: the planner's structured verdict said the user's message ordered work
+        # (``user_ordered_work(turn_user_intent)``), so a self-initiated run may still start
+        # background work. A missing verdict is False here: the conservative side is not starting
+        # background work the user did not clearly ask for.
         # ``resume_session_id``: a session left behind by an EARLIER RUN of this thread (see
         # ``Orchestrator.run``). The first attempt of a SINGLE-goal deep run picks it up through
         # the same ``resume_session`` variable the within-run turn-budget continuation uses, so
@@ -7645,7 +7460,7 @@ class Orchestrator:
             # Decline BEFORE anything is announced, so no status line promises a run that never
             # starts. Only when the user's own words did not ask for work: a request the planner
             # merely answered ("research venues for me") may still go to the queue this way.
-            if (self_initiated and not _message_requests_change(user_message)
+            if (self_initiated and not user_ordered
                     and any(runner_starts_background_work(r) for r in runner_ladder)):
                 log.info("Self-initiated escalation resolved to a background-work runner the "
                          "user did not ask for; not starting it (the current answer stands)")
@@ -9469,6 +9284,12 @@ class Orchestrator:
         # for a change?" fallbacks below): on a queued task's brief it would read quoted output of
         # earlier runs as the human holding off. Only a message typed this turn can hold off.
         nets_honor_hold_off = message_is_user_turn
+        # The planner's structured verdict on what the CURRENT message asks of the assistant
+        # (``PlanDecision.user_intent``): the latest one any planner step this turn gave. The
+        # escalation nets below honor it in place of the retired regex net over the message.
+        # None = no planner step gave a usable verdict (planner error, a path with no planner
+        # call): the nets then ask ``judge_execution_directive`` instead.
+        turn_user_intent: Optional[str] = None
         if hold_off_active:
             log.info("User message forbids opening a task this turn; running under the no-action "
                      "gate (planner deep/confirm will degrade to answer).")
@@ -10545,6 +10366,8 @@ class Orchestrator:
                     f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
                 )
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
+            if getattr(plan, "user_intent", None):
+                turn_user_intent = plan.user_intent
 
             # --- PER-IDEA THREADING: resolve the turn's TOPIC ----------------------------------
             # The topic is a property of the MESSAGE, so the FIRST plan that actually EXPRESSES one
@@ -10972,21 +10795,23 @@ class Orchestrator:
         #   1. the PLANNER already prepared deep work (``deferred_deep`` or a ``deep_brief`` on its
         #      last read step: it was reading "to ground a brief before escalating"). Honoring its
         #      own structured decision, never keywords in its text;
-        #   2. the regex prefilter on the user's words (hold-off honored only for a typed turn);
-        #   3. the ambiguous band gets the same one-shot LLM judgment the answer path uses.
+        #   2. the planner's structured ``user_intent`` verdict on the user's message ("act");
+        #   3. no verdict at all: the same one-shot LLM judgment the answer path uses.
+        # A "hold_off" verdict counts only for a message typed this turn: a queued task's brief is
+        # machine-composed and quotes earlier runs' output, and the decision to act on it was
+        # already taken when the task was created. On a brief it is treated as no verdict.
+        nets_intent = (None if (turn_user_intent == USER_INTENT_HOLD_OFF and not nets_honor_hold_off)
+                       else turn_user_intent)
         if final not in ("answer", "deep", "confirm", "clarify"):
             must_execute = False
             last_plan = plan or PlanDecision(action="answer")
             if not brainstorm_active:
                 planner_prepared_deep = bool(last_plan.deferred_deep
                                              or (last_plan.deep_brief or "").strip())
-                must_execute = planner_prepared_deep or _message_requests_change(
-                    user_message, honor_hold_off=nets_honor_hold_off)
-                if (not must_execute
+                must_execute = planner_prepared_deep or user_ordered_work(nets_intent)
+                if (not must_execute and nets_intent is None
                         and (self._has_deep_execution_capability()
-                             or self._has_deferred_queue_capability())
-                        and message_change_signal_ambiguous(
-                            user_message, honor_hold_off=nets_honor_hold_off)):
+                             or self._has_deferred_queue_capability())):
                     must_execute, _why = self.judge_execution_directive(user_message, "")
                     log.info("Read budget spent; intent judgment on the request: %s (%s).",
                              must_execute, _why)
@@ -11022,7 +10847,7 @@ class Orchestrator:
         # A planner-originated "confirm" is HONORED as a confirm (it surfaces below via
         # _run_confirm). QAR does not re-route or auto-execute a confirm by inspecting keywords in
         # the planner's confirm question — that brittle keyword gate was removed (see the note by
-        # message_change_signal_ambiguous). If the planner over-confirms, fix the planner, not this.
+        # clip_head_and_tail). If the planner over-confirms, fix the planner, not this.
 
         if final == "clarify":
             # User clarification/selection needed: surface as decision-request
@@ -11182,7 +11007,8 @@ class Orchestrator:
                         pending_inputs=pending_inputs, model_hint=model_hint,
                         ctx_meta=_ctx_meta, cancel_check=cancel_check,
                         working_dir_override=working_dir_override,
-                        resume_session_id=take_resume_session(), self_initiated=True)
+                        resume_session_id=take_resume_session(), self_initiated=True,
+                        user_ordered=user_ordered_work(turn_user_intent))
                     if _ov_res.kind == "cancelled":
                         return finish(_ov_res)
                     if not own_escalation_adds_nothing(_ov_res, exec_record, ov_facts_before):
@@ -11225,18 +11051,20 @@ class Orchestrator:
         # OR auto-detect false claims (fallback for broken prompts)
         # BRAINSTORM MODE: this entire block is an escalation net (it can only ADD execution to
         # an answer turn), so while the latch is held it is skipped wholesale: no deferred deep,
-        # no work-to-execute flag, no described-work net, no message-intent fallback (regex OR
-        # LLM judgment). Describing possible work IS the product in brainstorm.
+        # no work-to-execute flag, no described-work net, no message-intent fallback (planner
+        # verdict OR LLM judgment). Describing possible work IS the product in brainstorm.
         should_defer_deep = None if brainstorm_active else plan.deferred_deep
         # Capability for these nets = inline execution OR a wired deferred queue: everything they
         # can set flows through the deferred block below, which reaches the queue runner by explicit
         # override, so a queue-only consumer (no default runner, no classifier) is capable here.
         # Every net below can only ADD execution to an answer turn, so the human telling us to hold
-        # off ("don't create a task", "just answer here", "I haven't given you an instruction yet")
-        # turns the whole block off. Those messages carry change verbs, so without this they were
-        # the most reliably escalated of all: the request not to open a task opened one.
+        # off ("don't create a task", "just answer here", "I haven't given you an instruction yet",
+        # "kill those runs") turns the whole block off. That is the planner's structured
+        # ``user_intent == "hold_off"`` verdict on a typed message (``nets_intent``), never a
+        # keyword reading: those messages carry change verbs, and the keyword net that preceded
+        # this escalated them most reliably of all.
         if (not should_defer_deep and not brainstorm_active
-                and not (nets_honor_hold_off and message_holds_off_work(user_message))
+                and nets_intent != USER_INTENT_HOLD_OFF
                 and (self._has_deep_execution_capability()
                      or self._has_deferred_queue_capability())):
             # Primary: trust planner's explicit flag
@@ -11250,51 +11078,40 @@ class Orchestrator:
             # answer_contains_work_to_execute on code/file-change tasks, so without this net the
             # turn ends having only TALKED about the fix instead of doing it (the "it just finishes
             # the request" regression). Re-wired here so a described-but-unexecuted fix still
-            # escalates to a deep run that actually applies it -- but ONLY when the user's own
-            # message was itself a change request (``_message_requests_change``), never for a
-            # genuine question ("why is X broken?", "what would it take to fix Y?"). Explaining
-            # what a fix would involve IS the correct answer to a question; describing it must
-            # never silently open a task. A question whose message still carries an ambiguous
-            # action signal gets a fair shot at the message-intent LLM judgment below, which sees
-            # this same answer text (``judge_execution_directive``), instead of being escalated by
-            # this regex alone.
-            elif _answer_describes_unexecuted_work(text) and _message_requests_change(
-                    user_message, honor_hold_off=nets_honor_hold_off):
+            # escalates to a deep run that actually applies it -- but ONLY when the planner's
+            # verdict says the user's own message ordered work (``user_intent == "act"``), never
+            # for a genuine question ("why is X broken?", "what would it take to fix Y?").
+            # Explaining what a fix would involve IS the correct answer to a question; describing
+            # it must never silently open a task.
+            elif _answer_describes_unexecuted_work(text) and user_ordered_work(nets_intent):
                 should_defer_deep = {"goal": f"Execute the work the answer describes: {user_message}",
                                       "rationale": "auto-detected unexecuted work in answer (fallback)"}
                 if emit is not None:
                     emit.status("Executing described work now…")
-            # Decisive fallback, keyed off the STABLE USER MESSAGE (not the variable answer text):
-            # the user asked for a CHANGE (fix/implement/"it incorrectly X"…), a deep runner is
-            # available, yet the planner routed to "answer" and nothing executed this turn. The
-            # earlier regex nets only match specific ANSWER phrasings, which a model like gemini
-            # rarely produces verbatim, so an actionable request would silently end as a proposal.
-            # Detecting intent from the message instead reliably catches that case. The brief carries
-            # the assistant's proposed approach so the deep run APPLIES it rather than re-deriving.
-            # (Executing here is fine even when the answer falsely claims completion: the goal
-            # verification below re-checks the folded post-deep answer against the execution record.)
+            # Decisive fallback: the planner's own verdict says the user ORDERED work
+            # (``user_intent == "act"``), a deep runner is available, yet the planner routed to
+            # "answer" and nothing executed this turn, so an actionable request would silently end
+            # as a proposal. The brief carries the assistant's proposed approach so the deep run
+            # APPLIES it rather than re-deriving. (Executing here is fine even when the answer
+            # falsely claims completion: the goal verification below re-checks the folded post-deep
+            # answer against the execution record.)
             #
-            # The regex (_message_requests_change) is a cheap PREFILTER, decisive on its own for the
-            # common case (a match is trusted with zero extra cost). Only in the AMBIGUOUS band it
-            # leaves undecided -- a change verb/wrongness signal fired but an interrogative opener or
-            # a bare "?" ending overrode it, see message_change_signal_ambiguous -- does ONE
-            # structured LLM judgment step in (WS3, HANDS_FREE_QUEST_AI_DESIGN.md section 4),
-            # hard-timeout-guarded and falling back to the regex verdict (False) on any failure. So
-            # this never adds a blocking call to the ordinary "clearly not a directive" case, and
-            # never blocks the turn even in the ambiguous case.
+            # This honors a STRUCTURED field the planner fills on the call it already makes, so it
+            # costs nothing. Only when no planner step gave a usable verdict does ONE structured LLM
+            # judgment step in (``judge_execution_directive``), hard-timeout-guarded and falling
+            # back to "no directive" on any failure. There is no keyword reading of the message here
+            # any more: the regex net it replaced leaked every phrasing nobody had listed.
             elif exec_record is None or not exec_record.any_mutation_attempted:
                 # A turn that just RELEASED the brainstorm hold is a directive by definition: the
                 # release judge only says true when the user told us to stop holding back and act on
                 # what was discussed. The work itself usually lives in the transcript, not in that
-                # short message ("go ahead"), so the regex below cannot see it and the turn would
-                # otherwise end with one more proposal (and, worse, a reply claiming it had acted).
-                _is_directive = brainstorm_released_this_turn or _message_requests_change(
-                    user_message, honor_hold_off=nets_honor_hold_off)
+                # short message ("go ahead"), so the turn would otherwise end with one more proposal
+                # (and, worse, a reply claiming it had acted).
+                _is_directive = brainstorm_released_this_turn or user_ordered_work(nets_intent)
                 _directive_reason = ("brainstorm release: the user lifted the hold and told us to act"
                                      if brainstorm_released_this_turn
-                                     else "message-intent fallback (regex)")
-                if not _is_directive and message_change_signal_ambiguous(
-                        user_message, honor_hold_off=nets_honor_hold_off):
+                                     else "message-intent fallback (planner user_intent)")
+                if not _is_directive and nets_intent is None:
                     _is_directive, _llm_reason = self.judge_execution_directive(user_message, text)
                     _directive_reason = f"message-intent fallback (LLM judgment: {_llm_reason})"
                 if _is_directive:
@@ -11663,7 +11480,8 @@ class Orchestrator:
                             pending_inputs=pending_inputs, model_hint=model_hint,
                             ctx_meta=_ctx_meta, cancel_check=cancel_check,
                             working_dir_override=working_dir_override,
-                            resume_session_id=take_resume_session(), self_initiated=True)
+                            resume_session_id=take_resume_session(), self_initiated=True,
+                            user_ordered=user_ordered_work(turn_user_intent))
                         if _esc_res.kind == "cancelled":
                             return finish(_esc_res)
                         if own_escalation_adds_nothing(_esc_res, exec_record, esc_facts_before):
@@ -11743,7 +11561,8 @@ class Orchestrator:
                     pending_inputs=pending_inputs, model_hint=model_hint,
                     ctx_meta=_ctx_meta, cancel_check=cancel_check,
                     working_dir_override=working_dir_override,
-                    resume_session_id=take_resume_session(), self_initiated=True)
+                    resume_session_id=take_resume_session(), self_initiated=True,
+                    user_ordered=user_ordered_work(turn_user_intent))
                 if _lr_res.kind == "cancelled":
                     return finish(_lr_res)
                 if not own_escalation_adds_nothing(_lr_res, exec_record, lr_facts_before):

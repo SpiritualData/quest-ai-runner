@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **The escalation nets honor the planner's structured `user_intent`, and the regex net over the
+  user's words is retired.** Whether an answer turn should become work (the decisive message-intent
+  fallback, the described-work net, the read-budget wrap-up, the hold-off gate on all of them, and
+  whether a self-initiated escalation may start background work) used to be decided by keyword lists
+  over the message (`_message_requests_change`, `message_change_signal_ambiguous`,
+  `message_holds_off_work`, `message_announces_own_plan` and their patterns). Each misroute added a
+  pattern and each pattern leaked the next phrasing. The planner now states, on the call it already
+  makes, a REQUIRED `user_intent` field: `act` | `ask` | `inform` | `hold_off` (defined in one rubric
+  line in both prompt profiles; about 150 input tokens a planner call). `act` escalates an answered
+  order; `hold_off` turns the nets off for a typed message (on a queued task's brief it counts as no
+  verdict); a missing or unknown verdict falls back to the one-shot `judge_execution_directive`,
+  never to a regex. The pre-planner veto `message_forbids_new_task` stays: it runs before any verdict
+  exists, shapes the planner's own prompt, and can only remove execution. Measured live (80 paired
+  cases: 54 sampled routing-harness messages plus the escalation test messages,
+  gemini-3.1-flash-lite, compact profile): 73/80 old vs 74/80 new, 5 vs 6 discordant, exact McNemar
+  p=1.0; orders that should become work 24/30 -> 30/30, messages that should stay conversation
+  49/50 -> 44/50. Of those five, two are the planner's own answer-plus-hand-off on a status ask
+  (not the net; old arm read first on the same messages), one is vetoed before planning in a real
+  turn by `message_forbids_new_task` (the harness does not model the veto), and two are real
+  verdict misreads ("draft X here in chat" and a first-person "I'll do it myself" plan read as
+  `act`). The harness scores the planner decision plus the net, not a full turn.
+
 ### Fixed
 - **A named person or thing is not a missing referent.** The request resolver asked "which
   conversation involving <name>?" for "What did <name> want again?" before any read, though the

@@ -1,16 +1,14 @@
-"""WS3: intent judgment owned by a structured LLM call, regex demoted to prefilter.
+"""The intent judge: the FALLBACK when the planner gives no usable ``user_intent`` verdict.
 
-``_message_requests_change`` (the regex prefilter) is decisive on its own -- and free -- for the
-common cases. Only in the AMBIGUOUS band it leaves undecided (a change-verb/wrongness signal
-fired, but an interrogative opener or bare "?" ending overrode it -- see
-``message_change_signal_ambiguous``) does ONE structured LLM judgment
-(``Orchestrator.judge_execution_directive``) step in, hard-timeout-guarded and falling back to
-the regex verdict on any failure. Covers:
+The escalation nets honor the planner's structured verdict (free: it rides the planning call).
+Only when no planner step gave a usable one does ONE structured LLM judgment
+(``Orchestrator.judge_execution_directive``) decide, hard-timeout-guarded and falling back to
+"no directive" on any failure. There is no keyword reading of the message anywhere on this path.
+Covers:
 
-  * the ambiguous-band gate itself (pure function, no LLM);
   * the judgment call in isolation: success, timeout, exception, and unusable-response fallback;
-  * the end-to-end wiring in ``run()``: the judge is NOT called when the regex is conclusive
-    (either way) and IS called, and can change the outcome, only in the ambiguous band.
+  * the end-to-end wiring in ``run()``: the judge is NOT called when the planner gave a verdict
+    (either way) and IS called, and can change the outcome, only when the verdict is missing.
 
 Offline, no network.
 """
@@ -18,11 +16,7 @@ import time
 from typing import Any, Dict, List
 
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    message_change_signal_ambiguous,
-    _message_requests_change,
-)
+from quest_ai_runner.core.orchestrator import Orchestrator
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 
@@ -30,29 +24,6 @@ from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 def _orch(provider, **kw):
     return Orchestrator(retrieval=StubRetrieval(), provider=provider,
                         registry=ModelRegistry(provider), **kw)
-
-
-# --- the ambiguous-band gate (pure function) ----------------------------------------------------
-
-def test_ambiguous_band_true_when_signal_present_but_regex_says_no():
-    msg = "how would I fix the login bug?"
-    assert _message_requests_change(msg) is False        # interrogative opener overrides
-    assert message_change_signal_ambiguous(msg) is True  # but a verb + wrongness signal fired
-
-
-def test_ambiguous_band_false_when_no_signal_at_all():
-    msg = "thanks so much, that's really helpful!"
-    assert _message_requests_change(msg) is False
-    assert message_change_signal_ambiguous(msg) is False
-
-
-def test_ambiguous_band_false_when_regex_already_says_yes():
-    msg = "please fix the login bug in auth.py"
-    assert _message_requests_change(msg) is True
-    # Not part of the "ambiguous" contract -- the regex already decided -- but the signal helper
-    # itself is still True here (verb present); the orchestrator's gate short-circuits on the
-    # regex verdict before ever consulting ambiguity, covered by the integration test below.
-    assert message_change_signal_ambiguous(msg) is True
 
 
 # --- judge_execution_directive in isolation ------------------------------------------------
@@ -103,7 +74,7 @@ def testjudge_execution_directive_falls_back_on_exception():
     orch = _orch(provider)
     is_directive, reason = orch.judge_execution_directive("how would I fix the bug?", "answer")
     assert is_directive is False
-    assert "regex" in reason.lower()
+    assert "no directive" in reason.lower()
 
 
 def testjudge_execution_directive_falls_back_on_missing_key():
@@ -111,7 +82,7 @@ def testjudge_execution_directive_falls_back_on_missing_key():
     orch = _orch(provider)
     is_directive, reason = orch.judge_execution_directive("how would I fix the bug?", "answer")
     assert is_directive is False
-    assert "regex" in reason.lower()
+    assert "no directive" in reason.lower()
 
 
 def testjudge_execution_directive_falls_back_on_timeout(monkeypatch):
@@ -127,45 +98,44 @@ def testjudge_execution_directive_falls_back_on_timeout(monkeypatch):
     is_directive, reason = orch.judge_execution_directive("how would I fix the bug?", "answer")
     elapsed = time.monotonic() - started
     assert is_directive is False
-    assert "regex" in reason.lower()
+    assert "no directive" in reason.lower()
     assert elapsed < 0.4, "the call must not block the turn past its configured timeout"
 
 
 # --- end-to-end wiring in run() -------------------------------------------------------------
 
-def test_run_does_not_consult_llm_when_regex_is_conclusive_yes():
-    # A clear command ("please fix...") is decided by the regex alone -- zero LLM judge calls.
+def test_run_does_not_consult_llm_when_the_planner_says_act():
+    # The planner's verdict decides an order on its own -- zero LLM judge calls.
     provider = _ToolRoutedProvider(
         on_intent_call=lambda p: (_ for _ in ()).throw(AssertionError("judge should not be called")),
-        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose"}],
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose",
+                    "user_intent": "act"}],
         answer_text="I could update the auth check.",
     )
     runner = StubDeepRunner(met=True, output="fixed it")
     res = _orch(provider, deep_runner=runner).run("please fix the login bug in auth.py")
     assert res.kind == "answer"
     assert provider.intent_calls == 0
-    assert runner.calls, "a conclusive regex match must still escalate to deep"
+    assert runner.calls, "an act verdict on an answered order must escalate to deep"
 
 
-def test_run_does_not_consult_llm_when_no_signal_at_all():
-    # A message with no change-verb/wrongness signal at all never reaches the ambiguous-band
-    # check, let alone the LLM -- zero judge calls, no escalation.
+def test_run_does_not_consult_llm_when_the_planner_says_ask():
     provider = _ToolRoutedProvider(
         on_intent_call=lambda p: (_ for _ in ()).throw(AssertionError("judge should not be called")),
-        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "chit-chat"}],
-        answer_text="You're welcome!",
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "explain",
+                    "user_intent": "ask"}],
+        answer_text="You could check the auth module for the bug.",
     )
     runner = StubDeepRunner(met=True, output="n/a")
-    res = _orch(provider, deep_runner=runner).run("thanks so much, that's great!")
+    res = _orch(provider, deep_runner=runner).run("how would I fix the login bug?")
     assert res.kind == "answer"
     assert provider.intent_calls == 0
     assert not runner.calls
 
 
-def test_run_consults_llm_in_ambiguous_band_and_escalates_when_directive():
-    # Ambiguous band: verb+wrongness signal present, but the interrogative opener made the regex
-    # say no. The LLM judge is consulted and, when it says "yes, this is a directive", the turn
-    # escalates to deep exactly like a conclusive regex match would.
+def test_run_consults_llm_when_the_verdict_is_missing_and_escalates_when_directive():
+    # No user_intent from the planner: the LLM judge is consulted and, when it says "yes, this is
+    # a directive", the turn escalates to deep exactly like an act verdict would.
     provider = _ToolRoutedProvider(
         on_intent_call=lambda p: {"is_execution_directive": True, "reason": "go ahead and do it"},
         decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose"}],
@@ -179,9 +149,9 @@ def test_run_consults_llm_in_ambiguous_band_and_escalates_when_directive():
     assert runner.calls, "the LLM judge said yes -- the turn must still escalate to deep"
 
 
-def test_run_consults_llm_in_ambiguous_band_and_stays_answer_when_not_directive():
-    # Same ambiguous message, but the LLM judge says "no, not a directive" -- the turn must stay
-    # a plain answer, not be force-escalated.
+def test_run_consults_llm_when_the_verdict_is_missing_and_stays_answer_when_not_directive():
+    # No verdict, and the LLM judge says "no, not a directive" -- the turn must stay a plain
+    # answer, not be force-escalated.
     provider = _ToolRoutedProvider(
         on_intent_call=lambda p: {"is_execution_directive": False, "reason": "purely exploratory"},
         decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose"}],

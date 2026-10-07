@@ -191,7 +191,8 @@ def test_unbacked_claim_after_failed_execution_corrects_honestly_without_rerun()
     # attempt was made (double-mutation risk), the loop must NOT re-run — it regenerates the reply
     # to be honest and flags the result.
     provider = GuardProvider(
-        plan_decisions=[{"action": "answer", "rationale": "claimed without doing"}],
+        plan_decisions=[{"action": "answer", "rationale": "claimed without doing",
+                         "user_intent": "act"}],
         goal_verdicts=[{"met": False, "claims_unexecuted": True,
                         "reason": "record shows the action FAILED"},
                        {"met": True}],
@@ -220,7 +221,7 @@ def test_unbacked_claim_after_successful_execution_never_reruns():
     # claim (e.g. the reply also claims a second change that never ran). Re-running risks a double
     # mutation, so the loop corrects the reply honestly instead.
     provider = GuardProvider(
-        plan_decisions=[{"action": "answer", "rationale": "overstates"}],
+        plan_decisions=[{"action": "answer", "rationale": "overstates", "user_intent": "act"}],
         goal_verdicts=[{"met": False, "claims_unexecuted": True,
                         "reason": "the emailed-the-team claim is unbacked"},
                        {"met": True}],

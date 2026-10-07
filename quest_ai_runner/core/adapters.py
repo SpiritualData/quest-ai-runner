@@ -387,6 +387,13 @@ class PlanDecision:
     # (see CLAUDE.md hard rule #3). None = not assessed, and the cascade then leaves the decision
     # alone rather than escalating everything.
     confidence: Optional[str] = None
+    # WHAT THE USER'S CURRENT MESSAGE ASKS OF THE ASSISTANT, judged on the same planning call (zero
+    # extra LLM calls): "act" (do, produce or change something now) | "ask" (a question, or asking
+    # to be told something) | "inform" (news, context, or the user's own plan) | "hold_off" (do
+    # not open work, answer here, stop or cancel runs). The orchestrator's escalation nets honor
+    # this structured verdict instead of reading the message with a keyword list. None = not given
+    # (the nets then fall back to the one-shot intent judge, never to a regex).
+    user_intent: Optional[str] = None
 
 
 @dataclass
