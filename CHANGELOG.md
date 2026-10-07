@@ -7,6 +7,24 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Planner input tokens cut by not re-sending content a turn already saw.** Measured on a real
+  30-turn eval pass: a discovery/capability menu (`list_operations`, `describe_operation`,
+  `tools`, ...) now renders IN FULL only on the planner call for the step right after it was
+  gathered; every later re-plan call of the same turn gets a one-line reminder instead
+  (`_discovery_reminder_line`, `_collapse_shown_discovery`), tagged via a new `discovery_step` on
+  the observation. `MODEL TIER DISCIPLINE` is now a conditional `{model_tier_block}` slot, omitted
+  when every wired deep runner declares `uses_deep_model = False` (true of Quest's in-process chat
+  runners, which never touch the `QAR_MODEL_*` ladder the doctrine is about), via
+  `Orchestrator._model_tier_doctrine_applies()`; it fails open (keeps the doctrine) when no runner
+  is known. The "ALREADY SAID OUT LOUD" narration echo-back is capped to its last 3 lines
+  (`NARRATION_SAID_PLANNER_MAX`), since its only job is stopping an immediate echo, not holding an
+  audit trail. `DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT` flips off -> on: the static
+  `context_view` (vector hits, cards, earlier conversations) does not change within a turn, so the
+  existing, already-tested abbreviation now applies by default on re-plan steps; the final answer
+  always gets the full context regardless. Projected: ~20,700 -> ~11,500 input tokens per planner
+  call (-45%) on the measured probe log. Tests: `tests/test_planner_prompt_profiles.py` (discovery
+  menu, model-tier conditional, and said-echo-bound cases), `tests/test_context_assembler.py`,
+  `tests/test_unified_card_context.py`, `tests/test_orchestrator.py`.
 - **A not-met goal verdict now says why another attempt would or would not help, and the run acts on it.** The verifier returns a `blocker` in the call it already makes (no extra LLM call): `more_work` retries as before, `evidence_only` (the work is reported complete and the only gap is proof beyond what the request asked for) is accepted as done with one line naming what was not independently confirmed, and `needs_person` (only a person can supply the missing input) stops retrying and reports needs-you with the one question. When the attempts run out, the report now leads with what is still open, the next step, and that a reply continues the same session, then keeps the unchanged `WHAT THE RUN DID BEFORE IT STOPPED` heading the quest-backend mailer matches. Task-modal and chat tasks share this path. Tests: `tests/test_goal_not_met_decides_next.py`.
 
 ### Fixed

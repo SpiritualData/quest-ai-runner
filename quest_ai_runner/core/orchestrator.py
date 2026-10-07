@@ -216,9 +216,15 @@ DEFAULT_PLANNER_COMPRESS_OVER = 6    # leave gathered untouched until it exceeds
 # observations, not to re-read context it already saw on step 1. When enabled, steps after the
 # first replace the unchanged transcript + context_view with a short "already provided on step 1"
 # reference. This NEVER affects step 1 (the planner still sees both in full) and NEVER affects the
-# final ANSWER (which always gets the full transcript + context_view). Default off → byte-for-byte
-# current behavior unless a consumer opts in.
-DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT = False
+# final ANSWER (which always gets the full transcript + context_view).
+#
+# Default ON (2026-10-06, token-usage pass): the static context_view alone (vector hits + cards +
+# earlier conversations) measured about 5,200 tokens on a real planner call, and with ~2.4 planner
+# calls per turn, re-sending that unchanged block on every re-plan step was most of the cost for no
+# benefit the planner could use -- it does not change within a turn. Flip back to False only if a
+# consumer finds a planner that genuinely needs the raw context on a re-plan step; the final answer
+# is unaffected either way (see ``test_repeat_context_on_answer_still_gets_full_context``).
+DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT = True
 # CARD MERGE (semantic dedup). When the post-deep card updater would CREATE a NEW card, it first asks
 # the vector-backed card store whether a sufficiently-similar card already exists for THIS user (by
 # embedding COSINE similarity) and, if so, UPDATES that card instead of creating a near-duplicate
@@ -851,6 +857,15 @@ assume an answer and do not act on one. The open question is:
 # literal {/} characters, so they pass through .format() untouched when the final assembled
 # string is .format()-ed in _plan(). Only the real {slot_name} placeholders in _PLANNER_ACTIONS
 # and _PLANNER_TAIL are substituted; JSON-example braces use the standard {{...}} double-brace form.
+# MODEL_TIER_GATE, header + body, in the same "--- HEADER ---\nbody" shape every other gate uses
+# here. Rendered via the ``{model_tier_block}`` format slot (NOT baked in statically, unlike the
+# other gates above) because whether it belongs in the prompt at all depends on the TURN, not just
+# the profile: see ``Orchestrator._model_tier_doctrine_applies``.
+MODEL_TIER_BLOCK = (
+    "\n--- " + MODEL_TIER_GATE.split("\n")[0] + "\n"
+    + "\n".join(MODEL_TIER_GATE.split("\n")[1:]) + "\n\n"
+)
+
 PLANNER_PROMPT = (
     _PLANNER_HEAD
     + "\n--- SUFFICIENCY (read enough before acting) ---\n"
@@ -861,8 +876,7 @@ PLANNER_PROMPT = (
     + "\n--- SPECIFICITY (match the exact subject, not its category) ---\n"
     + SPECIFICITY_GATE + "\n\n"
     + _PLANNER_ACTIONS
-    + "\n--- " + MODEL_TIER_GATE.split("\n")[0] + "\n"
-    + "\n".join(MODEL_TIER_GATE.split("\n")[1:]) + "\n\n"
+    + "{model_tier_block}"
     + "\n--- " + CACHED_HINT_GATE.split("\n")[0] + "\n"
     + "\n".join(CACHED_HINT_GATE.split("\n")[1:]) + "\n\n"
     + _PLANNER_TAIL
@@ -959,8 +973,7 @@ PLANNER_PROMPT_COMPACT = (
     + PLANNER_BOUNDARY_EXAMPLES
     + "\n"
     + _PLANNER_COMPACT_ACTIONS
-    + "\n--- " + MODEL_TIER_GATE.split("\n")[0] + "\n"
-    + "\n".join(MODEL_TIER_GATE.split("\n")[1:]) + "\n\n"
+    + "{model_tier_block}"
     + _PLANNER_TAIL
 )
 
@@ -1003,6 +1016,10 @@ def planner_prompt_defaults() -> Dict[str, Any]:
         # Inline is the DEFAULT deployment (OrchestratorConfig.deferred_deep_queued = False), so
         # the default wording must be the inline one: it is the only one true by default.
         "deferred_deep_semantics": DEFERRED_DEEP_INLINE_SEMANTICS,
+        # Fail OPEN: with no runner known (true of a raw render with nothing wired), keep the
+        # doctrine rather than silently drop it. ``Orchestrator._plan`` computes the real,
+        # turn-aware value instead of using this default.
+        "model_tier_block": MODEL_TIER_BLOCK,
         "rationale_instruction": _RATIONALE_INSTRUCTION_PLAIN,
     }
 
@@ -3746,6 +3763,29 @@ def _oversee_worth_a_look(*, consecutive_reads: int, plan_repeats_prev: bool,
         return False
 
 
+# How many of THIS turn's own narration lines (the Narrator's ``_said``) ride the "ALREADY SAID
+# OUT LOUD" preamble on each later planner call. Its only job is stopping the next line from
+# repeating the shape of the last one or two -- not an audit trail of the whole turn -- so an
+# unbounded list (one line per re-plan step, growing all turn) is pure cost past a handful: measured
+# at 1,970 tokens on a real eval run, nearly a tenth of a planner call.
+NARRATION_SAID_PLANNER_MAX = 3
+
+
+def _already_said_tail(already_said: Optional[List[str]], max_lines: int = NARRATION_SAID_PLANNER_MAX) -> List[str]:
+    """The most recent suffix of ``already_said`` worth repeating back to the planner.
+
+    Bounded hard rather than summarized: the lines are already one short spoken sentence each, and
+    only the last few are what the NEXT line could plausibly echo. Never raises on a bad
+    ``max_lines``."""
+    if not already_said:
+        return []
+    try:
+        n = max(0, int(max_lines))
+    except (TypeError, ValueError):
+        n = NARRATION_SAID_PLANNER_MAX
+    return list(already_said)[-n:] if n else []
+
+
 def _recent_conversation_turns(conv_ctx_text: str, *, exclude: Optional[List[str]] = None,
                                max_turns: int = 3) -> List[str]:
     """Extract the last few PRIOR user turns from THIS conversation's rendered context block (the
@@ -3867,21 +3907,72 @@ def declined_proposals_block(prior_escalations: Optional[List[Dict[str, Any]]]) 
         return ""
 
 
+def _discovery_reminder_line(obs: Dict[str, Any]) -> str:
+    """One-line stand-in for a discovery/capability MENU (``list_operations``,
+    ``describe_operation``, ``tools``, ...) that was already shown to the planner in full earlier
+    this turn. Names only the kind of menu it was (via its ``locator``), not its content: the
+    planner was already told what it covers at the step right after it was gathered, and a menu
+    never changes within a turn, so there is nothing new to repeat."""
+    loc = obs.get("locator") or "capabilities"
+    step = obs.get("discovery_step")
+    where = f" at step {step + 1}" if isinstance(step, int) else ""
+    return (f"CAPABILITY MENU [{loc}] was already shown IN FULL{where} earlier this turn (not "
+            f"repeated here to save tokens). It has not changed. Re-issue the same read only if "
+            f"you genuinely need to see it again.")
+
+
+def _collapse_shown_discovery(gathered: List[Dict[str, Any]], current_step: int) -> List[Dict[str, Any]]:
+    """Replace any discovery/capability observation (menu) with a one-line reminder once it has
+    already been shown to the planner in full, so the SAME menu is never rendered in full twice in
+    one turn (measured: the menu was 29.6% of all planner input tokens across a real eval run,
+    almost entirely from this exact repetition).
+
+    A discovery observation renders in full only on the planner call for the step it names as its
+    ``discovery_step`` -- the step right after it was gathered (see the two tagging sites in
+    ``run()``). Every OTHER planner call this turn sees only the reminder. An observation with no
+    ``discovery_step`` (should not happen; defensive) is treated as already shown, since showing a
+    menu with no known origin step in full forever is the exact bug this guards against.
+
+    Returns a NEW list; never mutates the caller's ``gathered``. ``planner_only`` notes (repeated-
+    read markers, course corrections, ...) are untouched -- they are not menus and are already
+    one line."""
+    out: List[Dict[str, Any]] = []
+    for obs in gathered:
+        if isinstance(obs, dict) and obs.get("discovery") and not obs.get("planner_only") \
+                and obs.get("discovery_step") != current_step:
+            out.append({
+                "kind": obs.get("kind", "query"),
+                "locator": obs.get("locator", ""),
+                "text": _discovery_reminder_line(obs),
+            })
+        else:
+            out.append(obs)
+    return out
+
+
 def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
-                                 recent_full: int, compress_over: int) -> str:
+                                 recent_full: int, compress_over: int,
+                                 current_step: int = 0) -> str:
     """Leaner view of ``gathered`` for the PER-STEP PLANNER.
 
     The newest ``recent_full`` observations are rendered in FULL (same as ``_render_gathered``);
     everything older is collapsed to one-line summaries. To stay byte-for-byte identical for short
     runs, compression only kicks in once ``len(gathered) > compress_over`` (and only ever when there
     are genuinely older observations to compress, i.e. more than ``recent_full``). The full
-    ``gathered`` is unaffected and is what the final ANSWER is still synthesized from."""
+    ``gathered`` is unaffected and is what the final ANSWER is still synthesized from.
+
+    Before any of that, discovery/capability menus already shown on an earlier step are collapsed
+    to a one-line reminder (``_collapse_shown_discovery``) -- independent of the recency window,
+    since a short turn keeps almost everything "recent" and the menu would otherwise render in
+    full on every single call of the turn."""
+    gathered = _collapse_shown_discovery(gathered, current_step)
     if not gathered:
         return "[]"
     notes = [o for o in gathered if isinstance(o, dict) and o.get("planner_only")]
     if notes:
         content = gathered_content(gathered)
-        body = _render_gathered_for_planner(content, recent_full, compress_over) if content else ""
+        body = (_render_gathered_for_planner(content, recent_full, compress_over, current_step)
+                if content else "")
         return (body + "\n\n" if body else "") + _render_gathered(notes)
     n = len(gathered)
     recent_full = max(0, recent_full)
@@ -5652,22 +5743,32 @@ class Orchestrator:
         # the prompt is byte-identical to a build without the feature.
         thread_block = card_thread_block if self.cfg.card_thread_enabled else ""
         planner_template = planner_prompt_for_profile(self.cfg.planner_prompt_profile)
+        # MODEL TIER DISCIPLINE is only worth its tokens when some wired deep runner actually runs
+        # against the ladder it describes (see ``_model_tier_doctrine_applies``); otherwise it is
+        # dead weight on every planner call (Quest's in-process chat runners never touch it).
+        model_tier_block = MODEL_TIER_BLOCK if self._model_tier_doctrine_applies() else ""
         prompt = planner_template.format(
             user_message=user_message,
             transcript=plan_transcript or "(no prior messages)",
             context_view=plan_context or "(no context)",
             gathered=_render_gathered_for_planner(
-                gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over),
+                gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over,
+                current_step=step),
             max_reads=self.cfg.max_reads_per_step,
             max_subq=self.cfg.max_subquestions,
             max_deep=self.cfg.max_deep_subtasks,
             mode_signal_block=mode_signal_block,
             card_thread_block=thread_block,
             deferred_deep_semantics=deferred_semantics,
+            model_tier_block=model_tier_block,
             rationale_instruction=(
                 (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
                 if narrate else _RATIONALE_INSTRUCTION_PLAIN),
         )
+        # Bounded hard (see NARRATION_SAID_PLANNER_MAX): the only job of this block is stopping the
+        # NEXT line from echoing the shape of the one or two just said, not an audit trail of the
+        # whole turn's narration.
+        said_tail = _already_said_tail(already_said)
         preamble_parts: List[str] = []
         if brainstorm:
             preamble_parts.append(brainstorm_note)
@@ -5676,10 +5777,10 @@ class Orchestrator:
                 "--- SPEAK AS THIS PERSONA (for your `rationale` line only) ---\n"
                 + persona.strip()[:1500]
             )
-        if narrate and already_said:
+        if narrate and said_tail:
             preamble_parts.append(
-                "--- ALREADY SAID OUT LOUD THIS TURN (do NOT repeat, echo, or paraphrase) ---\n"
-                + "\n".join(f"• {s}" for s in already_said)
+                "--- MOST RECENTLY SAID OUT LOUD THIS TURN (do NOT repeat, echo, or paraphrase) ---\n"
+                + "\n".join(f"• {s}" for s in said_tail)
             )
         if preamble_parts:
             prompt = "\n\n".join(preamble_parts) + "\n\n" + prompt
@@ -5716,13 +5817,15 @@ class Orchestrator:
                 transcript=plan_transcript or "(no prior messages)",
                 context_view="(provided in the CONTEXT section above)",
                 gathered=_render_gathered_for_planner(
-                    gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over),
+                    gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over,
+                    current_step=step),
                 max_reads=self.cfg.max_reads_per_step,
                 max_subq=self.cfg.max_subquestions,
                 max_deep=self.cfg.max_deep_subtasks,
                 mode_signal_block=mode_signal_block,
                 card_thread_block=thread_block,
                 deferred_deep_semantics=deferred_semantics,
+                model_tier_block=model_tier_block,
                 rationale_instruction=(
                     (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
                     if narrate else _RATIONALE_INSTRUCTION_PLAIN),
@@ -5730,10 +5833,10 @@ class Orchestrator:
             tail_parts: List[str] = []
             if brainstorm:
                 tail_parts.append(brainstorm_note)
-            if narrate and already_said:
+            if narrate and said_tail:
                 tail_parts.append(
-                    "--- ALREADY SAID OUT LOUD THIS TURN (do NOT repeat, echo, or paraphrase) ---\n"
-                    + "\n".join(f"• {s}" for s in already_said)
+                    "--- MOST RECENTLY SAID OUT LOUD THIS TURN (do NOT repeat, echo, or paraphrase) ---\n"
+                    + "\n".join(f"• {s}" for s in said_tail)
                 )
             tail_parts.append(plan_body)
             if tools_block:
@@ -7235,6 +7338,31 @@ class Orchestrator:
         """
         return bool(self.cfg.deferred_deep_queued and self.deep_runners
                     and self.deep_runners.get(DEFERRED_RUNNER_KEY) is not None)
+
+    def _model_tier_doctrine_applies(self) -> bool:
+        """Whether ``MODEL_TIER_GATE`` is worth a planner call's tokens THIS deployment.
+
+        The gate is about picking a model tier for a DEEP run. When every deep runner this
+        orchestrator could hand work to declares ``uses_deep_model = False`` (Quest's in-process
+        chat runners: they execute on Quest's own tiers, never on ``QAR_MODEL_*``), the whole block
+        is dead weight on every single planner call -- there is no ladder for the planner's choice
+        to affect. Checks the single default ``deep_runner``, the escalation ``deep_runner_ladder``,
+        and every named runner in the ``deep_runners`` registry (whichever one a later classifier
+        picks, the doctrine must already be right or already be absent).
+
+        Fails OPEN (returns True, keeps the doctrine) when NO runner is known at all -- a bare
+        orchestrator with nothing wired yet, or a consumer this check has not been taught about --
+        rather than silently dropping guidance for an unfamiliar wiring. Only turns it off when we
+        positively know every wired runner ignores the ladder.
+        """
+        runners: List[Any] = []
+        if self.deep_runner is not None:
+            runners.append(self.deep_runner)
+        runners.extend(r for r in (self.deep_runner_ladder or []) if r is not None)
+        runners.extend(r for r in (self.deep_runners or {}).values() if r is not None)
+        if not runners:
+            return True
+        return any(runner_uses_deep_model(r) for r in runners)
 
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
                   emit: Optional[_Emitter] = None,
@@ -10401,6 +10529,10 @@ class Orchestrator:
                         if ops_obs is not None:
                             _ops = ops_obs.to_dict()
                             _ops["discovery"] = True  # a capability menu, not answer content
+                            # The planner call for THIS step (step 0) is the one that reads it in
+                            # full; every later re-plan step this turn sees only a reminder (see
+                            # ``_collapse_shown_discovery``).
+                            _ops["discovery_step"] = step
                             gathered.append(_ops)
                     except Exception as e:  # noqa: BLE001
                         log.debug(f"Auto-injection of list_operations failed: {type(e).__name__}: {e}")
@@ -10684,6 +10816,11 @@ class Orchestrator:
                         emit.status("Searching…" if any(r.get("grep") for r in plan.reads) else "Reading…")
                     content_before = len(gathered_content(gathered))
                     new_obs = self._do_reads(fresh_reads, guidance_selected_ids, card_context)
+                    for obs in new_obs:
+                        if isinstance(obs, dict) and obs.get("discovery"):
+                            # The NEXT planner call (the re-plan for this step's own gather) is the
+                            # one that reads it in full; every later step sees only a reminder.
+                            obs["discovery_step"] = step + 1
                     gathered.extend(new_obs)
                     # Recorded only when each spec's own observation is known and is not an error:
                     # a failed or timed-out read stays retryable.
