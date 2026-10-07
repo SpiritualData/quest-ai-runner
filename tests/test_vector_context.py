@@ -493,6 +493,23 @@ class TestScopeTagsFence:
         ac = asm.assemble("billing", meta={"scope_tags": ["quest:q1"]})
         assert ac.card_ids == ["tagged"]
 
+    def test_card_metadata_passes_through_each_hits_own_scope_tags(self):
+        """A caller that persists ``AssembledContext`` across turns (e.g. the anticipation
+        engine's precompute, see ``core/anticipation.py``'s ``bundle_scope_tags``) must be able to
+        read back which quest(s) a surfaced hit actually belongs to even when THIS call ran with
+        no ``meta["scope_tags"]`` at all (an unscoped call does not drop the tagged hit -- see
+        ``test_no_meta_scope_tags_keeps_both_hits`` above -- so its origin must still be visible)."""
+        hits = [
+            VectorHit(id="tagged", score=0.9, text="billing", payload={"scope_tags": ["quest:q1"]}),
+            VectorHit(id="untagged", score=0.9, text="billing", payload={}),
+        ]
+        asm = VectorContextAssembler(_FixedHitsStore(hits), confidence_min_score=0.0)
+
+        ac = asm.assemble("billing")
+        by_id = {m["id"]: m for m in ac.card_metadata}
+        assert by_id["tagged"]["scope_tags"] == ["quest:q1"]
+        assert by_id["untagged"]["scope_tags"] == []
+
 
 # ---------------------------------------------------------------------------
 # VectorContextAssembler: with provider (query-gen + LLM review)

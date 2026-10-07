@@ -4658,6 +4658,12 @@ class FileContextStore(ContextAssemblerBase):
                 # that does not use them, so nothing changes for a consumer that never sets them.
                 "card_type": card.get("card_type", ""),
                 "lifecycle": card.get("lifecycle", ""),
+                # The card's OWN scope_tags (see core/scope_tags.py), passed through verbatim so a
+                # caller that persists this bundle across turns (the anticipation engine's
+                # precompute) can UNION them onto whatever it stores, even when THIS call's own
+                # ``meta["scope_tags"]`` was empty. See vector_context_assembler's matching field
+                # for why this matters. Empty when the card is untagged.
+                "scope_tags": list(card.get("scope_tags") or []),
                 # The VERBATIM rendered section this card contributed to context_view (the whole
                 # ``### Card: ...`` block: summary + Files listing + Content + Conventions). The hybrid
                 # consolidator rebuilds from this so a keyword card's file listings are never lost when

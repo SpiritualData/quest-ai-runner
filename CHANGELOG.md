@@ -7,6 +7,28 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The fourth cross-quest leak: an UNSCOPED anticipation precompute could cache another quest's
+  card content as an untagged, forever-visible bundle.** `scope_tags_allow` correctly treats "the
+  turn has no tags" as "hide nothing" for the precompute CALL itself (a conversation with no quest
+  attached must still be able to search), but that call's own per-arm fence being inert for exactly
+  that reason meant its vector/card search was free to surface a hit genuinely tagged for one of
+  the user's OTHER quests. `Anticipator.plan_next` then stamped the resulting prediction with the
+  call's own (empty) `scope_tags`, so the bundle was stored UNTAGGED and served to every later
+  turn regardless of quest, including one scoped to a quest that never produced the card. Fix:
+  `AssembledContext.card_metadata` entries from `VectorContextAssembler` and `FileContextStore` now
+  pass through the surfaced card's own `scope_tags` (previously dropped on the floor, unlike the
+  existing `card_type`/`lifecycle` pass-through fields), and the new `bundle_scope_tags(assembled)`
+  helper unions them; `plan_next` now stamps each prediction with `union_scope_tags(turn_tags,
+  bundle_scope_tags(assembled))` instead of `turn_tags` alone, so a bundle that incidentally pulled
+  in quest X's card is fenced from quest Y's turns even though the precompute itself ran unscoped.
+  A consumer's own chip-precompute path (quest-backend's `precompute_chip_bundles`) must apply the
+  same union. Tests: `tests/test_anticipation.py` (`bundle_scope_tags` unit tests plus
+  `test_plan_next_unscoped_call_still_fences_a_bundle_that_leaked_another_quests_card` and its
+  same-quest companion), `tests/test_vector_context.py::TestScopeTagsFence`,
+  `tests/test_context_assembler.py::TestFileContextStoreScopeTagsSelection` (card_metadata
+  scope_tags pass-through).
+
+### Fixed
 - **A planner read written as a structured lookup without its `query` wrapper now runs instead of
   being silently dropped.** `normalize_decision` kept only reads carrying a known surface key, so
   `{"operation": "<name>", "args": {...}}` (the shape a consumer's discovery text may show) was

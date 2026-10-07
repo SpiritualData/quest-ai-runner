@@ -32,6 +32,7 @@ from quest_ai_runner.core.anticipation import (
     Prediction,
     apply_refresh,
     assemble_with_scope_tags,
+    bundle_scope_tags,
     chips_for_now,
     extract_features,
     generate_predictions,
@@ -553,6 +554,41 @@ class _MetaAwareStubAssembler:
     def assemble(self, text: str, *, meta: Optional[Dict[str, Any]] = None) -> _StubAssembledContext:
         self.calls.append((text, meta))
         return _StubAssembledContext(context_view=f"BUNDLE FOR: {text}", card_ids=[f"card-{text[:8]}"])
+
+
+class _TaggedCardStubAssembledContext:
+    """A stub bundle carrying ``card_metadata`` with a ``scope_tags`` field, the shape
+    ``VectorContextAssembler``/``FileContextStore`` actually return (see their own card_metadata
+    entries) -- unlike ``_StubAssembledContext`` above, which has no ``card_metadata`` at all."""
+
+    def __init__(self, context_view: str, card_ids: List[str], card_scope_tags: List[str]):
+        self.context_view = context_view
+        self.card_ids = card_ids
+        self.card_metadata = [{"id": card_ids[0], "scope_tags": list(card_scope_tags)}]
+
+
+class _CrossQuestCardStubAssembler:
+    """A ContextAssembler-shaped stub whose search always surfaces ONE card tagged for a fixed
+    OTHER quest, regardless of the ``meta["scope_tags"]`` it is called with -- modeling the real
+    vector store, whose per-hit fence only ever DROPS a disjoint-tagged hit when the call's own
+    ``scope_tags`` is non-empty (see ``VectorContextAssembler._assemble_inner`` step b.5): an
+    UNSCOPED call (the fourth-leak scenario) searches across every quest's cards with no fence
+    active at all."""
+
+    def __init__(self, card_scope_tags: List[str]):
+        self.card_scope_tags = list(card_scope_tags)
+        self.calls: List[Tuple[str, Optional[Dict[str, Any]]]] = []
+
+    def assemble(self, text: str, *, meta: Optional[Dict[str, Any]] = None) -> _TaggedCardStubAssembledContext:
+        self.calls.append((text, meta))
+        turn_tags = (meta or {}).get("scope_tags") or []
+        if turn_tags and not (set(turn_tags) & set(self.card_scope_tags)):
+            # A real fenced arm would drop the card here; model that so a MISTAKENLY-scoped call
+            # in a test cannot silently "pass" by finding the card anyway.
+            return _TaggedCardStubAssembledContext(context_view="", card_ids=[], card_scope_tags=[])
+        return _TaggedCardStubAssembledContext(
+            context_view=f"BUNDLE FOR: {text}", card_ids=[f"card-{text[:8]}"],
+            card_scope_tags=self.card_scope_tags)
 
 
 def test_anticipator_plan_next_persists_predictions_with_precomputed_views(tmp_path):
@@ -1197,6 +1233,89 @@ def test_plan_next_no_quest_key_in_scope_passes_no_meta(tmp_path):
     assert len(planned) == 1
     assert planned[0].scope_tags == []
     assert assembler.calls == [("what is our roadmap", None)]
+
+
+# =================================================================================================
+# THE FOURTH LEAK: an UNSCOPED plan_next call (turn_tags == []) must not store a bundle that
+# incidentally surfaced a different quest's tagged card as if it were untagged (visible to every
+# quest's turn forever). See ``bundle_scope_tags`` and the module docstring's SCOPE TAGS section.
+# =================================================================================================
+
+def test_bundle_scope_tags_unions_the_tags_carried_by_the_assembled_cards():
+    assembled = _TaggedCardStubAssembledContext(
+        context_view="x", card_ids=["c1"], card_scope_tags=["quest:other-quest"])
+    assert bundle_scope_tags(assembled) == ["quest:other-quest"]
+
+
+def test_bundle_scope_tags_empty_for_a_bundle_with_no_card_metadata():
+    # The plain stub used by every other test in this file has no ``card_metadata`` attribute at
+    # all; ``bundle_scope_tags`` must degrade to [] rather than raise.
+    assembled = _StubAssembledContext(context_view="x", card_ids=["c1"])
+    assert bundle_scope_tags(assembled) == []
+
+
+def test_plan_next_unscoped_call_still_fences_a_bundle_that_leaked_another_quests_card(tmp_path):
+    """Reproduces the live leak (eval EXP-033, 2026-10-07): a conversation with NO quest attached
+    (``turn_tags == []``) asks something that matches a pattern under the always-in-scope
+    ``"global"`` key. The wired assembler's search is unfenced for this call (empty scope_tags is
+    the documented "hide nothing" case) and happens to surface a card that IS tagged for one
+    specific OTHER quest. Before the fix this bundle was stamped ``scope_tags=[]`` (the call's own
+    turn_tags) and so was visible to EVERY later turn, including one scoped to a quest that never
+    produced the card. After the fix the stored prediction is fenced to the quest the card actually
+    came from."""
+    store = FilePredictionStore(str(tmp_path))
+    assembler = _CrossQuestCardStubAssembler(card_scope_tags=["quest:marathon"])
+    anticipator = Anticipator(store, assembler=assembler)
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(scope="global", canonical_text="what is my total distance",
+                keywords=["total", "distance"], weight=0.9, hour_bucket=1, dow=0)
+    store.save_patterns("global", [p])
+
+    # The originating turn has NO quest attached at all -- turn_tags is [].
+    planned = anticipator.plan_next(
+        ["conv:unscoped", "global"], recent_texts=["what is my total distance"], now=now)
+
+    assert len(planned) == 1
+    # The call itself ran unscoped (no quest key to pass through meta)...
+    assert assembler.calls == [("what is my total distance", None)]
+    # ...but the stored prediction is fenced to the quest whose card actually fed the bundle, not
+    # left untagged (which would make it visible to every quest's turn below).
+    assert planned[0].scope_tags == ["quest:marathon"]
+
+    live = store.load_predictions("global")
+    assert live[0].scope_tags == ["quest:marathon"]
+
+    # A later turn scoped to a DIFFERENT quest must not have this bundle served to it. (`observe`
+    # consumes the live set it judges either way, fenced or not, so this is the only `observe` in
+    # this test; the "still visible to its own quest" half is its own test below with a fresh
+    # `plan_next`, so each check starts from an unconsumed live set.)
+    match_other_quest = anticipator.observe(
+        "what is my total distance", ["conv:b", "quest:riverside-10k", "global"],
+        now=datetime(2026, 7, 20, 9, 1, 0))
+    assert match_other_quest.matched is None
+    assert match_other_quest.precomputed is None
+
+
+def test_plan_next_unscoped_call_leaked_bundle_still_visible_to_the_quest_it_came_from(tmp_path):
+    """Companion to the leak-reproduction test above: the fenced tag is the UNION of turn_tags
+    (empty here) and the card's own tags, so the one quest that genuinely produced the card can
+    still be served the bundle -- this is a fence, not a blanket hide."""
+    store = FilePredictionStore(str(tmp_path))
+    assembler = _CrossQuestCardStubAssembler(card_scope_tags=["quest:marathon"])
+    anticipator = Anticipator(store, assembler=assembler)
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(scope="global", canonical_text="what is my total distance",
+                keywords=["total", "distance"], weight=0.9, hour_bucket=1, dow=0)
+    store.save_patterns("global", [p])
+
+    anticipator.plan_next(
+        ["conv:unscoped", "global"], recent_texts=["what is my total distance"], now=now)
+
+    match_same_quest = anticipator.observe(
+        "what is my total distance", ["conv:c", "quest:marathon", "global"],
+        now=datetime(2026, 7, 20, 9, 2, 0))
+    assert match_same_quest.precomputed is not None
+    assert match_same_quest.precomputed.context_view == "BUNDLE FOR: what is my total distance"
 
 
 def test_plan_next_falls_back_when_assembler_rejects_meta_kwarg(tmp_path):

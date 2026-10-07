@@ -75,6 +75,18 @@ closes that gap the same way it closes it for recent-context and the vector/card
     pattern's EMA update.
   * A prediction with NO ``scope_tags`` (legacy data, or planned with no quest key in scope at
     all) stays visible everywhere, per the shared fence rule -- untagged is never hidden.
+  * THE FOURTH LEAK (found 2026-10-07): "planned with no quest key in scope" also means the
+    precompute's OWN assembler call ran with an empty ``meta["scope_tags"]``, so the per-arm fence
+    inside ``VectorContextAssembler``/``FileContextStore`` was inert for that one call too (see
+    their own SCOPE TAGS sections) -- an unscoped turn is free to search across EVERY quest's
+    cards, same as any other unscoped read. If that search surfaces a card that IS tagged for one
+    specific quest, stamping the resulting prediction with the (empty) ``turn_tags`` alone would
+    cache that quest's content as an UNTAGGED bundle, served to every future turn forever
+    regardless of which quest it names. ``bundle_scope_tags(assembled)`` reads back the tags the
+    surfaced cards actually carry (``AssembledContext.card_metadata[i]["scope_tags"]``), and
+    ``plan_next``/any chip-precompute path UNIONS it onto ``turn_tags`` before stamping the
+    prediction, so the stored bundle is fenced to the quest(s) its content came from even when the
+    call that built it was itself unscoped.
 
 This is opt-in and inert by construction when no quest key is ever in scope: ``scope_tags_from_keys``
 returns ``[]`` for a plain ``["conv:<id>", "global"]`` turn, and ``scope_tags_allow`` treats "the
@@ -97,7 +109,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
 
 from .adapters import AssembledContext
-from .scope_tags import scope_tags_allow, scope_tags_from_keys
+from .scope_tags import scope_tags_allow, scope_tags_from_keys, union_scope_tags
 from .file_modes import match_umask
 
 log = logging.getLogger("quest-ai-runner.anticipation")
@@ -748,6 +760,33 @@ def assemble_with_scope_tags(assembler: Any, text: str, scope_tags: List[str]) -
     return assembler.assemble(text)
 
 
+def bundle_scope_tags(assembled: Any) -> List[str]:
+    """The scope tags actually carried by the cards/hits inside a precomputed ``assembled``
+    bundle (``AssembledContext.card_metadata``'s optional ``"scope_tags"`` field -- see
+    ``VectorContextAssembler``/``FileContextStore``), unioned into one deduped list.
+
+    THE FOURTH-LEAK FIX (see the module docstring's SCOPE TAGS section): ``assemble_with_scope_tags``
+    only fences OUT cards that disagree with a non-empty ``scope_tags`` -- when the call it wraps
+    ran with EMPTY scope_tags (an unscoped turn: no quest attached, or genuinely ambiguous), the
+    fence inside the assembler is inert by the documented rule "the turn has no tags -> nothing is
+    hidden", so the search is free to surface a hit that IS tagged for one specific quest. A
+    precomputed bundle built from that unfiltered search, stored and stamped with the call's own
+    (empty) ``scope_tags``, is then an UNTAGGED prediction -- visible to every later turn, scoped or
+    not, including one scoped to a DIFFERENT quest than the quest whose card actually fed the text.
+
+    Callers (``Anticipator.plan_next`` below, and any consumer precomputing bundles OUTSIDE it, e.g.
+    a chip-precompute path) must UNION this onto the call's own ``scope_tags`` before stamping a
+    stored prediction, so a bundle that incidentally pulled in quest-X content gets fenced from
+    quest-Y turns even when the precompute itself ran unscoped. Returns ``[]`` for a bundle with no
+    tagged cards (the common case; stamping stays exactly the call's own scope_tags). Never raises.
+    """
+    try:
+        metas = getattr(assembled, "card_metadata", None) or []
+        return union_scope_tags(*(m.get("scope_tags") for m in metas if isinstance(m, dict)))
+    except Exception:  # noqa: BLE001 -- a malformed bundle must never block the precompute
+        return []
+
+
 class FilePredictionStore:
     """The runner lane's persistence for the anticipation engine: one JSON file per SCOPE KEY
     under ``<root_dir>/predictions/<sha1(key)[:16]>.json`` (the same layout convention as
@@ -1134,7 +1173,12 @@ class Anticipator:
         active stays fenced out of a later turn scoped to a different quest (see
         ``Anticipator.observe``). The precompute call threads ``turn_tags`` through the assembler's
         ``meta`` via ``assemble_with_scope_tags`` (falls back to the old positional-only call for
-        an assembler whose ``assemble`` does not accept ``meta`` at all).
+        an assembler whose ``assemble`` does not accept ``meta`` at all). Once a bundle comes back,
+        its final ``scope_tags`` is ``turn_tags`` UNIONED with ``bundle_scope_tags(assembled)`` --
+        the tags actually carried by the cards the bundle surfaced -- so a call that ran UNSCOPED
+        (``turn_tags`` empty: no quest attached, or genuinely ambiguous) but still pulled in a
+        quest-tagged card does not store that bundle untagged (visible to every quest forever);
+        it is fenced to the quest(s) the content actually came from instead.
         """
         planned: List[Prediction] = []
         try:
@@ -1167,6 +1211,12 @@ class Anticipator:
                                 views[p.prediction_id] = view
                             p.context_card_ids = [
                                 str(c) for c in (getattr(assembled, "card_ids", None) or [])]
+                            # Fourth-leak fix: UNION the quest tags the bundle's own cards carry
+                            # onto this prediction, so an unscoped precompute (turn_tags empty)
+                            # that still surfaced a quest-tagged card fences that bundle out of a
+                            # later DIFFERENT quest's turn instead of being stored untagged /
+                            # visible everywhere. See ``bundle_scope_tags``.
+                            p.scope_tags = union_scope_tags(turn_tags, bundle_scope_tags(assembled))
                         except Exception:  # noqa: BLE001 -- a failed precompute is just no bundle
                             log.debug("prediction precompute failed", exc_info=True)
                 self.store.save_predictions(key, preds, views)

@@ -429,6 +429,23 @@ class TestFileContextStoreScopeTagsSelection:
         ac = store.assemble("who is the contractor?")
         assert "scoped-card" in ac.card_ids
 
+    def test_card_metadata_passes_through_the_cards_own_scope_tags(self, tmp_path):
+        """A caller persisting this bundle across turns (e.g. the anticipation engine's
+        precompute, ``core/anticipation.py``'s ``bundle_scope_tags``) must be able to read back
+        which quest a selected card belongs to even on an UNSCOPED call (see the test above: the
+        card is selected either way, so its origin must still be visible)."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        card = _make_card("scoped-card", ["contractor", "orlando", "vasquez"],
+                          summary="The contractor is Orlando Vasquez.")
+        card["scope_tags"] = ["quest:q1"]
+        _write_card(cards_dir, card)
+        store = FileContextStore(str(cards_dir), confidence_threshold=0.0)
+
+        ac = store.assemble("who is the contractor?")
+        by_id = {m["id"]: m for m in ac.card_metadata}
+        assert by_id["scoped-card"]["scope_tags"] == ["quest:q1"]
+
 
 # ---------------------------------------------------------------------------
 # FileContextStore: record()

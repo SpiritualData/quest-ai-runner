@@ -1065,6 +1065,13 @@ class VectorContextAssembler(ContextAssemblerBase):
                 # Empty for a card that does not use them.
                 "card_type": payload.get("card_type") or "",
                 "lifecycle": payload.get("lifecycle") or "",
+                # The hit's OWN scope_tags (see core/scope_tags.py), passed through verbatim so a
+                # caller that persists this bundle across turns (the anticipation engine's
+                # precompute) can UNION them onto whatever it stores, even when THIS call's own
+                # ``meta["scope_tags"]`` was empty (an unscoped precompute can still surface a
+                # quest-tagged card; without this the resulting bundle would be cached untagged and
+                # served to every other quest's turn forever). Empty when the card is untagged.
+                "scope_tags": list(payload.get("scope_tags") or []),
                 # The VERBATIM rendered block this hit contributed to context_view, so the hybrid
                 # consolidator rebuilds from it (a hit's payload fields + resolved content, not just
                 # its content items) instead of dropping them when consolidation engages.
