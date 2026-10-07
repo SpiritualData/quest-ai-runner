@@ -88,6 +88,13 @@ from .adapters import (
     RetrievalAdapter,
 )
 from .card_filter import _extract_json
+from .card_learning import (
+    OBSERVATIONS_HEADING,
+    narrow_edits_to_removals,
+    render_observations_block,
+    turn_observations,
+    turn_teaches_new_facts,
+)
 from .card_thread import (
     CardCandidate,
     CardThreadContext,
@@ -2743,6 +2750,12 @@ description but no reference items cannot pull fresh data later, so it is nearly
 the references is the MAIN job.
 
 Rules:
+  - A CARD MAY RECORD WHAT THIS TURN OBSERVED, NEVER WHAT IT CLAIMED. The OBSERVED section below is
+    the only material a new fact may come from: a receipt for a change that actually landed, or a
+    read that actually returned content. The result text above is the turn's own claim, not
+    evidence, so a statement it makes that no observation supports is not learnable: leave it out.
+    When the observed section says nothing landed, no card may say anything was created, added,
+    updated, logged or deleted.
   - Extract EVERY external source named in the FUTURE-CONTEXT or the executed work as a resolvable
     reference and put it in the card's "add" list:
       * a collection named with an id  -> {{"type": "collection", "locator": {{"name": "...", "id": "..."}}, "why": "..."}}
@@ -2785,14 +2798,29 @@ and stress is tracked in "Daily Mood" (id col_456), return:
 --- THE USER'S REQUEST / GOAL ---
 {request}
 
---- WHAT WAS EXECUTED (brief + result) ---
+--- WHAT WAS EXECUTED (brief + result; the result is the turn's own CLAIM, not evidence) ---
 {executed}
 
 --- FUTURE-CONTEXT THE WORKER FLAGGED ---
 {future_context}
 
+{observed_heading}
+{observed}
+{learning_limit}
 --- THIS USER'S CURRENT RELEVANT CARDS (id, name, and current items) ---
 {current_cards}
+"""
+
+# Added to the card-updater prompt when the turn's structured facts say it may teach NOTHING new
+# (see ``core/card_learning.py``): a not-met or unverified run, a write whose receipts show nothing
+# landed, or a turn with no observation at all. The gate is STRUCTURAL (the edit plan is narrowed to
+# its removals whatever comes back), and this paragraph is here so the call does not spend itself
+# proposing edits that will be dropped. No em dash.
+CARD_UPDATE_NOTHING_LEARNABLE = """\
+THIS TURN MAY RECORD NOTHING NEW. Its own records show it did not land a change, did not verify
+what it did, or observed nothing at all, so there is no fact here to learn. Return an empty "edits"
+list, unless one of the CURRENT CARDS below carries a statement this turn shows to be wrong: you may
+drop that item with "remove". Nothing else will be applied.
 """
 
 
@@ -8276,6 +8304,8 @@ class Orchestrator:
         executed: str,
         future_context: str,
         ctx_meta: Optional[Dict[str, Any]],
+        observations: Optional[List[str]] = None,
+        teaches_new_facts: bool = True,
     ) -> int:
         """SYNC post-deep card updater (the loop also runs this in a background thread).
 
@@ -8285,6 +8315,14 @@ class Orchestrator:
         of cards it successfully wrote (0 when inactive, nothing to do, or a parse miss). Best-effort:
         NEVER raises and NEVER affects the OrchestratorResult. Exposed as a sync method so a test can
         call it directly; the loop invokes it off the result path in a thread.
+
+        ``observations`` is WHAT THE TURN OBSERVED (``core/card_learning.py``): the deep runs' own
+        write receipts and the reads that returned content. It is the material a new card fact may
+        come from, and it is handed to the model as such. ``teaches_new_facts`` is the structural
+        verdict on whether this turn may record anything new at all; when False the edit plan is
+        NARROWED to its removals after the call, so a turn that landed no change, did not verify
+        what it did, or observed nothing cannot write a fact onto a durable card no matter what the
+        model returns.
         """
         try:
             store = _card_update_store(self.context_assembler)
@@ -8292,6 +8330,12 @@ class Orchestrator:
                 return 0
             user_id = (ctx_meta or {}).get("user_id")
             current_cards = self._select_current_cards(request, ctx_meta)
+            if not teaches_new_facts and not current_cards:
+                # Nothing new may be recorded and there is no existing card to correct, so the only
+                # edits that could survive the narrowing do not exist. Skip the call entirely.
+                log.debug("post-deep card update skipped: this turn teaches nothing and there is "
+                          "no current card to correct")
+                return 0
             current_view = self._render_cards_for_updater(current_cards)
             # The user-scoped ids of the cards we SHOWED the updater (its CURRENT CARDS). These are
             # exactly the ids it can reference for an UPDATE; any other id is a would-be CREATE and is
@@ -8307,15 +8351,28 @@ class Orchestrator:
                 request=(request or "")[:2000],
                 executed=(executed or "")[:6000],
                 future_context=(future_context or "(none)")[:3000],
+                observed_heading=OBSERVATIONS_HEADING,
+                observed=render_observations_block(observations),
+                learning_limit=("" if teaches_new_facts else CARD_UPDATE_NOTHING_LEARNABLE),
                 current_cards=current_view or "(no current cards)",
             )
             # Prefer a forced-tool structured return; degrade to text + _extract_json on a provider
             # that only does plain answers. The model can return an empty set even when the
             # future-context names reusable sources, so retry ONCE on empty (still at most two cheap
-            # calls). Any miss after that -> do nothing.
+            # calls). Any miss after that -> do nothing. A turn that may teach nothing is NOT
+            # retried: an empty answer there is the right answer, and coaxing it costs a second call
+            # for edits that would be narrowed away.
             edits = self._call_card_updater(prompt, model)
-            if not edits:
+            if not edits and teaches_new_facts:
                 edits = self._call_card_updater(prompt, model)
+            if not teaches_new_facts:
+                # STRUCTURAL GATE: the turn observed nothing it may record, so only removals stand.
+                kept = narrow_edits_to_removals(edits)
+                if len(kept) != len(edits):
+                    log.info("Card learning: this turn may teach nothing new, so %d of %d proposed "
+                             "card edit(s) were dropped and only removals kept",
+                             len(edits) - len(kept), len(edits))
+                edits = kept
             if not edits:
                 return 0
             scope_tags = (ctx_meta or {}).get("scope_tags")
@@ -8472,6 +8529,8 @@ class Orchestrator:
         future_context: str,
         ctx_meta: Optional[Dict[str, Any]],
         emit: Optional[_Emitter] = None,
+        observations: Optional[List[str]] = None,
+        teaches_new_facts: bool = True,
     ) -> None:
         """Spawn the post-deep card updater in a BACKGROUND daemon thread so it never blocks the
         returned answer. Inert when the updater is not active. Best-effort: a failure to even start
@@ -8484,7 +8543,8 @@ class Orchestrator:
             try:
                 n = self._update_cards_after_deep(
                     request=request, executed=executed,
-                    future_context=future_context, ctx_meta=ctx_meta)
+                    future_context=future_context, ctx_meta=ctx_meta,
+                    observations=observations, teaches_new_facts=teaches_new_facts)
                 if n and emit is not None:
                     try:
                         emit.status(f"Updated {n} context card(s) for next time.")
@@ -8568,12 +8628,19 @@ class Orchestrator:
 
     def _kickoff_card_update(self, res: OrchestratorResult, plan: Optional[PlanDecision],
                              user_message: str, ctx_meta: Optional[Dict[str, Any]],
-                             emit: Optional[_Emitter]) -> None:
+                             emit: Optional[_Emitter],
+                             gathered: Optional[List[Dict[str, Any]]] = None) -> None:
         """Build the updater's input bundle from a finished deep result and kick off the async card
         updater. The request is the user's goal/condition; ``executed`` is the brief + each deep
         result's output; the FUTURE-CONTEXT bullets come from each result's ``future_context`` field
         (filled at the runner seam by ``_normalize_future_context``, from EITHER channel). Inert when
-        the updater is not active or nothing executed. Never raises."""
+        the updater is not active or nothing executed. Never raises.
+
+        WHAT THE TURN MAY TEACH is decided here, from structured facts only (see
+        ``core/card_learning.py``): the deep runs' verified verdict (``DeepResult.met``), their write
+        receipts (``observations`` / ``changed_nothing``) and this turn's ``gathered`` reads. Those
+        observations are also what the updater is given as the material for a new fact, so a card
+        cannot end up holding a sentence the reply invented."""
         try:
             if not self._card_updater_active():
                 return
@@ -8597,6 +8664,8 @@ class Orchestrator:
                 future_context=future,
                 ctx_meta=ctx_meta,
                 emit=emit,
+                observations=turn_observations(results, gathered),
+                teaches_new_facts=turn_teaches_new_facts(results, gathered),
             )
         except Exception:  # noqa: BLE001 — kicking off the updater must never break the turn
             log.debug("card-update kickoff failed", exc_info=True)
@@ -11080,7 +11149,8 @@ class Orchestrator:
                 self._update_context_cards_after_deep(res, context_meta)
             # Background (ASYNC, best-effort): prepare reusable context for this user's NEXT similar
             # request by updating their cards from this run. Off the result path; never blocks finish.
-            self._kickoff_card_update(res, plan, user_message, _ctx_meta, emit)
+            self._kickoff_card_update(res, plan, user_message, _ctx_meta, emit,
+                                      gathered=gathered)
             return finish(res)
 
         if final == "confirm":
@@ -11203,7 +11273,8 @@ class Orchestrator:
                         return finish(_ov_res)
                     if not own_escalation_adds_nothing(_ov_res, exec_record, ov_facts_before):
                         _ov_res.exit_reason = "overseer_escalated_deep"
-                        self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
+                        self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta,
+                                                  emit, gathered=gathered)
                         return finish(_ov_res)
                     # Not started (background work the user did not ask for) or it produced
                     # nothing: the draft answer ships.
@@ -11479,7 +11550,8 @@ class Orchestrator:
                 # Async, best-effort: prepare this user's cards for next time from the deferred run.
                 # Skipped for a confirmed hand-off: a queue receipt sentinel holds nothing to learn.
                 if not _deferred_handoff_confirmed:
-                    self._kickoff_card_update(deep_res, deferred_plan, user_message, _ctx_meta, emit)
+                    self._kickoff_card_update(deep_res, deferred_plan, user_message, _ctx_meta,
+                                              emit, gathered=gathered)
             except Exception as e:  # noqa: BLE001 — deferred work must never break the answer
                 log.warning(f"Deferred deep work failed: {type(e).__name__}: {e}", exc_info=True)
 
@@ -11620,7 +11692,7 @@ class Orchestrator:
                                     user_message, prior_answer=text, deep_output=_rem_out,
                                     transcript=transcript, model=model, rep_preamble=rep_preamble)
                                 self._kickoff_card_update(_rem_res, _rem_plan, user_message,
-                                                          _ctx_meta, emit)
+                                                          _ctx_meta, emit, gathered=gathered)
                             continue  # re-verify the remediated answer (attempt not consumed)
                         # Cannot safely re-run: correct the reply instead and flag the result so a
                         # background task maps to needs_you/failed, never a false done.
@@ -11688,7 +11760,7 @@ class Orchestrator:
                             _esc_res.goal_verdict = verdict
                             # Async, best-effort: prepare this user's cards for next time.
                             self._kickoff_card_update(_esc_res, _esc_plan, user_message, _ctx_meta,
-                                                      emit)
+                                                      emit, gathered=gathered)
                             return finish(_esc_res)
                     # Goal not met: surface the current answer as a milestone so the user sees
                     # progress while we continue iterating toward the goal.
@@ -11758,7 +11830,8 @@ class Orchestrator:
                 if not own_escalation_adds_nothing(_lr_res, exec_record, lr_facts_before):
                     _lr_res.exit_reason = "escalated_deep"
                     _lr_res.goal_verdict = _last_verdict
-                    self._kickoff_card_update(_lr_res, _lr_plan, user_message, _ctx_meta, emit)
+                    self._kickoff_card_update(_lr_res, _lr_plan, user_message, _ctx_meta, emit,
+                                              gathered=gathered)
                     return finish(_lr_res)
                 log.info("last-resort escalation added nothing; keeping the answer")
                 if emit is not None:

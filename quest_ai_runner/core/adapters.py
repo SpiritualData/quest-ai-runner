@@ -479,6 +479,17 @@ class DeepResult:
     verdict_next_action: str = ""
     needs_person: str = ""
     unconfirmed_note: str = ""
+    # WHAT THIS RUN OBSERVED, one plain line each, built by the runner from its OWN records and
+    # never from the wording of its output: a receipt for each change its write log proves landed,
+    # and each source it really read back. This is the material the async card updater may draw a
+    # new card fact from (see ``core/card_learning.py``); the run's reply text is not, because a
+    # card is durable and a claim recorded as a fact grounds every later turn.
+    observations: List[str] = field(default_factory=list)
+    # THIS RUNNER RECORDS ITS OBSERVATIONS, so an EMPTY ``observations`` list means the run observed
+    # nothing, rather than that the runner has no way to tell. Only with this set may the card
+    # updater drop an edit for lack of support. A runner that cannot tell leaves it False and its
+    # turns behave exactly as they did before.
+    observations_reported: bool = False
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as

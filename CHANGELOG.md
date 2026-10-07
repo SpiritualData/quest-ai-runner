@@ -7,6 +7,21 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **A context card may record what a turn OBSERVED, never what it CLAIMED.** The end-of-turn card
+  updater learned from the reply text, so an assistant's own false claims became durable facts that
+  then grounded later turns (two live cards: one said a goal had been added although the turn's
+  generated write matched no document, one recorded a "definitive summary" of a project the turn's
+  reads had never found). New `core/card_learning.py` decides what a turn may teach from structured
+  facts only: `DeepResult.met` (the goal loop's own verdict, false for a verified not-met AND for a
+  run that could not be verified), `DeepResult.changed_nothing` (write receipts show nothing
+  landed), the new `DeepResult.observations` / `observations_reported` (a runner's own receipt lines,
+  the flag making an EMPTY list mean "observed nothing" rather than "cannot tell"), and this turn's
+  `gathered` reads that actually returned content. Those observations are handed to the updater as
+  the material a new fact may come from, and when the facts do not support learning the returned
+  edit plan is NARROWED to its removals (dropping a wrong statement needs no evidence), so nothing
+  depends on a model policing itself in prose and no model output is keyword-scanned. A runner that
+  reports no observations behaves exactly as before. Tests:
+  `tests/test_card_learning_gate.py`.
 - **Compact JSON formatting for the two schemas rendered as TEXT into a prompt.**
   `adapters/claude_cli_provider.py`'s `plan()` appends the decide-tool schema to every planner
   prompt on that backend (the CLI has no native tool-use surface to pass it out of band) and
