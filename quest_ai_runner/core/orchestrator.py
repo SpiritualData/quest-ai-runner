@@ -3635,17 +3635,28 @@ PLANNER_TOOLS_HEAD = (
 # ``tests/test_tools.py::test_tools_block_comes_after_the_planner_body``): a block placed BEFORE
 # the action list gets noticed but not chosen. Absent entirely when no web adapter is wired, so
 # the prompt is byte-for-byte unchanged for a deployment that never configures one.
+#
+# It states its own PRECEDENCE on purpose. PLANNER_DECISION_RUBRIC rule 1 ("CURRENT FACTS ABOUT
+# THE WORLD ... Answer it: say what you reliably know, and say plainly that you cannot check a
+# live source") is FIRST in a rubric that says "stop at the FIRST rule that applies", and it
+# covers exactly the requests this block exists for. Without the override sentence the two blocks
+# contradict each other and the earlier, stop-here one wins, so a wired web adapter would sit
+# unused on the single most common web request. The REACH OF A READ doctrine's "a document or
+# spreadsheet link ... is work you HAND OFF" is the same collision for a pasted URL, which is why
+# the web_page line names it.
 PLANNER_WEB_HEAD = (
-    "--- LIVE WEB (via {describe}) ---\n"
-    "For public facts that may have changed or aren't in your sources (news, prices, schedules, "
-    "releases, people, events, docs), read the web instead of handing off or guessing:\n"
+    "--- LIVE WEB ({describe}) ---\n"
+    "Read the live web for public facts that may have changed: news, prices, schedules, releases, "
+    "people, events, public docs. This SUPERSEDES rule 1 and every line above that says a current "
+    "public fact can only be answered from memory or handed off.\n"
     "{{\"web\": \"<query>\"}} -> ~5 results (title, url, snippet) plus a short summary. Write the "
-    "query yourself: key terms, names, and a year/date for anything time-sensitive (today's date "
-    "is in the context). Several {{\"web\": ...}} reads in one step run in parallel; use more than "
-    "one only when the question has genuinely separate parts.\n"
+    "query yourself: key terms, names, and a year or date for anything time-sensitive. Several "
+    "{{\"web\": ...}} in one step run in parallel; use more than one only for genuinely separate "
+    "parts.\n"
     "{{\"web_page\": \"<url from the results>\", \"focus\": \"<what you need>\"}} -> the relevant "
-    "passages of ONE page, only when the snippets don't already answer.\n"
-    "Add \"fresh\": true only for hourly facts (live scores, today's prices, breaking news).\n"
+    "passages of ONE page, only when the snippets don't already answer. A public URL the user "
+    "pasted is a web_page read, not a hand-off.\n"
+    "Add \"fresh\": true only for facts that change hourly.\n"
     "Never web-search the user's own data, this deployment's files, or chit-chat. Cite web facts "
     "inline as [title](url), using only URLs from the results.\n"
 )

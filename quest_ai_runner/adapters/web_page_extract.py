@@ -121,6 +121,9 @@ _VOID_TAGS = {
 }
 _NOISE_CLASS_RE = re.compile(r"nav|menu|footer|header|sidebar|cookie|banner|subscribe|advert|share|comment", re.I)
 _MIN_ARTICLE_CHARS = 200
+#: Below this many extracted characters, the structured pass is treated as having failed outright
+#: and ``_salvage_text`` gets a chance (see ``_extract_builtin``).
+_SALVAGE_WHEN_UNDER_CHARS = 100
 
 
 class _MainTextParser(HTMLParser):
@@ -223,6 +226,33 @@ def _render_body(raw: str) -> str:
     return "\n\n".join(lines)
 
 
+_SCRIPTISH_BLOCK_RE = re.compile(
+    r"<(script|style|noscript|svg|template)\b[^>]*>.*?</\1\s*>", re.I | re.S
+)
+_BLOCK_TAG_RE = re.compile(
+    r"</?(?:p|div|li|ul|ol|h[1-6]|tr|br|section|article|main|table|blockquote|pre)\b[^>]*>", re.I
+)
+
+
+def _salvage_text(raw_html: str) -> str:
+    """Last-resort extraction: drop script/style blocks, turn block tags into breaks, strip the
+    rest. Keeps page chrome that the structured parser would have dropped, so it is only used
+    when the structured parser produced (almost) nothing.
+
+    Why it exists: the structured parser tracks "am I inside dropped chrome" with a depth counter
+    decremented by the matching end tag, and real HTML often never sends one. An unclosed
+    ``<aside class="sidebar">`` or ``<div class="banner">`` therefore left the counter pinned
+    above zero and silently blanked the ENTIRE rest of the document (measured: 0 characters
+    extracted from a page whose body was 3 KB of article text). The 2 MB read cap makes this
+    systematic rather than rare, because a truncated document is an unclosed document by
+    construction.
+    """
+    without_scripts = _SCRIPTISH_BLOCK_RE.sub(" ", raw_html or "")
+    broken = _BLOCK_TAG_RE.sub("\n", without_scripts)
+    stripped = re.sub(r"<[^>]*>", " ", broken)
+    return _render_body(stripped)
+
+
 def _extract_builtin(raw_html: str) -> Tuple[str, str]:
     parser = _MainTextParser()
     try:
@@ -237,7 +267,16 @@ def _extract_builtin(raw_html: str) -> Tuple[str, str]:
     article_text = "".join(parser.article_chunks)
     general_text = "".join(parser.general_chunks)
     body = article_text if len(article_text.strip()) >= _MIN_ARTICLE_CHARS else (general_text or article_text)
-    return title, _render_body(body)
+    rendered = _render_body(body)
+    # Deliberately narrow: fires only when the structured pass came back with essentially nothing
+    # AND the salvage finds a real page's worth of text. A page whose correct extraction is merely
+    # SHORT (a stub, a notice, a disambiguation page) must keep its chrome dropped rather than get
+    # the cookie banner pasted back in.
+    if len(rendered.strip()) < _SALVAGE_WHEN_UNDER_CHARS:
+        salvaged = _salvage_text(raw_html).strip()
+        if len(salvaged) >= _MIN_ARTICLE_CHARS and len(salvaged) > 3 * len(rendered.strip()):
+            return title, salvaged
+    return title, rendered
 
 
 def extract_main_text(raw_html: str) -> Tuple[str, str]:

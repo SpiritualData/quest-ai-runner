@@ -201,3 +201,51 @@ def test_select_passages_always_returns_at_least_one_even_over_budget():
     passages = ["a single very long passage " + "word " * 500]
     chosen = select_passages(passages, "word", token_budget=1)
     assert len(chosen) == 1
+
+
+# ---------------------------------------------------------------------------
+# salvage pass: an UNCLOSED dropped element must not blank the rest of the page
+# ---------------------------------------------------------------------------
+
+
+def test_unclosed_dropped_element_does_not_blank_the_page():
+    """A real page that opens <aside>/<div class="banner"> and never closes it used to leave the
+    skip counter pinned above zero, so NOTHING after it was extracted (0 chars from a 3 KB body).
+    A truncated document (the 2 MB read cap) is unclosed by construction, so this is the common
+    case, not an exotic one."""
+    body = "real article content word " * 200
+    for broken in (
+        f"<html><body><aside class='sidebar'>junk<p>{body}</p></body></html>",
+        f"<html><body><div class='banner'>ad<p>{body}</p></body></html>",
+        f"<html><body><footer>chrome<p>{body}</p></body></html>",
+    ):
+        _, text = extract_main_text(broken)
+        assert "real article content" in text
+        assert len(text) > 1000, broken[:40]
+
+
+def test_salvage_pass_still_drops_script_and_style_bodies():
+    body = "visible paragraph text here " * 40
+    html = (
+        "<html><body><aside class='nav'>never closed"
+        "<script>var secret = 'do not include this script body';</script>"
+        "<style>.x { color: red; }</style>"
+        f"<p>{body}</p></body></html>"
+    )
+    _, text = extract_main_text(html)
+    assert "visible paragraph text" in text
+    assert "do not include this script body" not in text
+    assert "color: red" not in text
+
+
+def test_well_formed_page_is_unaffected_by_the_salvage_pass():
+    """The salvage pass must only fire when the structured pass found (almost) nothing: a normal
+    page keeps its chrome dropped."""
+    html = (
+        "<html><body><nav>Home About Contact</nav><article><p>"
+        + ("the substantive article body goes on for a while " * 20)
+        + "</p></article></body></html>"
+    )
+    _, text = extract_main_text(html)
+    assert "substantive article body" in text
+    assert "Home About Contact" not in text

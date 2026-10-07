@@ -158,3 +158,18 @@ def test_disk_file_is_valid_json(tmp_path):
     raw = json.loads(files[0].read_text(encoding="utf-8"))
     assert raw["value"] == {"nested": True}
     assert "expires_at" in raw
+
+
+def test_disk_prune_never_deletes_a_file_this_cache_did_not_write(tmp_path):
+    """The daily-limit counter lives in this same directory as web_search_daily_count.json;
+    pruning it would silently reset the day's cost guard to zero."""
+    counter = tmp_path / "web_search_daily_count.json"
+    counter.write_text(json.dumps({"day": "2026-10-06", "count": 1400}), encoding="utf-8")
+    cache = WebCache(directory=tmp_path, max_entries=1000, max_disk_entries=2)
+    for i in range(120):
+        cache.set("ns", f"k{i}", i, ttl_seconds=3600)
+    assert counter.exists()
+    assert json.loads(counter.read_text(encoding="utf-8"))["count"] == 1400
+    assert cache.stats()["disk_entries"] == len(
+        [p for p in tmp_path.glob("*.json") if p.name != counter.name]
+    )

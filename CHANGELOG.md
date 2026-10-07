@@ -38,6 +38,19 @@ All notable changes to this project are documented here. The format is based on
     legacy `ProviderWebSearchAdapter` fold-in (Anthropic/Gemini native search, folded into
     retrieval) is kept as a fallback for the rare case `WebResearchAdapter` could not be built, so
     no deployment regresses to no web capability.
+  - Review pass (2026-10-06): the SSRF guard is re-run on EVERY redirect hop (the default
+    fetcher follows redirects by hand, max 5) -- `follow_redirects=True` meant the guard only
+    ever saw the URL the planner asked for, so a public URL that 302'd to `127.0.0.1` or a cloud
+    metadata endpoint was fetched anyway. Page bytes are decoded with the charset the header or
+    the document's `<meta>` declares instead of assumed UTF-8 (a windows-1252 page used to arrive
+    as U+FFFD soup). An unclosed chrome element (`<aside>`, `<div class="banner">`, or any
+    document truncated at the 2 MB cap) no longer blanks the whole page: a salvage pass runs when
+    the structured extractor returns almost nothing. A hit snippet that is just a span of the
+    backend's own summary is dropped instead of billed twice (Gemini grounding does exactly that;
+    measured live, ~40% of a 406-token observation). A fetch failure names its cause. The WEB
+    block states its precedence over the decision rubric's "answer a current public fact from
+    memory" rule, which otherwise wins by being first. The disk cache prunes only its own files,
+    never the daily-limit counter beside them.
   - Costs: a search call is a few hundred input tokens (cached per query/TTL); a page fetch is
     bounded to roughly 800 tokens of extracted passages; the Gemini-grounding backend bills to
     that key, every other backend is billed by the search provider itself (several offer a free

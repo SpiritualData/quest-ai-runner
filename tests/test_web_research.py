@@ -370,3 +370,207 @@ def test_build_from_env_no_fallback_without_gemini_key():
     adapter = build_web_research_from_env(env)
     assert adapter is not None
     assert adapter._url_fetch_fallback is None
+
+
+# ---------------------------------------------------------------------------
+# _default_page_fetcher: redirects are re-checked by the SSRF guard, and the page's
+# declared charset is honored
+# ---------------------------------------------------------------------------
+
+
+class _FakeStream:
+    """A stand-in for httpx.stream's context manager."""
+
+    def __init__(self, status_code: int, headers: Dict[str, str], body: bytes = b"") -> None:
+        self.status_code = status_code
+        self.headers = headers
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def iter_bytes(self):
+        yield self._body
+
+
+def _patch_stream(monkeypatch, script):
+    """Make httpx.stream return the scripted response for each URL, recording the order.
+
+    Also stubs the SSRF guard's DNS resolver so the per-hop re-check runs its real logic against
+    a fake public address instead of making a real DNS query from the test host.
+    """
+    import httpx
+
+    from quest_ai_runner.adapters import web_page_extract
+
+    monkeypatch.setattr(web_page_extract, "default_resolver", lambda host: ["93.184.216.34"])
+
+    seen: List[str] = []
+
+    def fake_stream(method, url, **kwargs):
+        seen.append(url)
+        assert kwargs.get("follow_redirects") is False, "the fetcher must follow redirects by hand"
+        return script[url]
+
+    monkeypatch.setattr(httpx, "stream", fake_stream)
+    return seen
+
+
+def test_default_fetcher_refuses_a_redirect_into_a_private_address(monkeypatch):
+    """follow_redirects=True would have walked straight past check_url_is_safe: the guard only
+    ever saw the URL the planner asked for, so a public URL that 302s to localhost or a cloud
+    metadata endpoint was fetched anyway."""
+    from quest_ai_runner.adapters.web_research import PageFetchError, _default_page_fetcher
+
+    script = {
+        "https://public.example/go": _FakeStream(
+            302, {"location": "http://169.254.169.254/latest/meta-data/"}
+        ),
+    }
+    seen = _patch_stream(monkeypatch, script)
+    with pytest.raises(PageFetchError) as excinfo:
+        _default_page_fetcher("https://public.example/go")
+    assert "169.254.169.254" in str(excinfo.value)
+    assert "private/loopback/link-local" in str(excinfo.value)
+    assert seen == ["https://public.example/go"]  # the metadata endpoint was never opened
+
+
+def test_default_fetcher_follows_a_safe_relative_redirect(monkeypatch):
+    from quest_ai_runner.adapters.web_research import _default_page_fetcher
+
+    script = {
+        "https://public.example/a": _FakeStream(301, {"location": "/b"}),
+        "https://public.example/b": _FakeStream(
+            200, {"content-type": "text/html; charset=utf-8"}, b"<html><p>hi</p></html>"
+        ),
+    }
+    seen = _patch_stream(monkeypatch, script)
+    page = _default_page_fetcher("https://public.example/a")
+    assert page.status_code == 200
+    assert "hi" in page.html
+    assert seen == ["https://public.example/a", "https://public.example/b"]
+
+
+def test_default_fetcher_stops_after_too_many_redirects(monkeypatch):
+    from quest_ai_runner.adapters.web_research import PageFetchError, _default_page_fetcher
+
+    url = "https://public.example/loop"
+    script = {url: _FakeStream(302, {"location": url})}
+    _patch_stream(monkeypatch, script)
+    with pytest.raises(PageFetchError) as excinfo:
+        _default_page_fetcher(url)
+    assert "too many redirects" in str(excinfo.value)
+
+
+def test_default_fetcher_decodes_the_declared_charset_not_assumed_utf8(monkeypatch):
+    """A windows-1252 page decoded as UTF-8 turns every accented character into U+FFFD, which
+    then poisons the focus scoring as well as the text the model reads."""
+    from quest_ai_runner.adapters.web_research import _default_page_fetcher
+
+    body = "<html><body><p>café résumé naïve</p></body></html>".encode("windows-1252")
+    script = {
+        "https://public.example/p": _FakeStream(
+            200, {"content-type": "text/html; charset=windows-1252"}, body
+        ),
+    }
+    _patch_stream(monkeypatch, script)
+    page = _default_page_fetcher("https://public.example/p")
+    assert "café résumé naïve" in page.html
+    assert "�" not in page.html
+
+
+def test_default_fetcher_sniffs_a_meta_charset_when_the_header_omits_one(monkeypatch):
+    from quest_ai_runner.adapters.web_research import _default_page_fetcher
+
+    body = (
+        "<html><head><meta charset='iso-8859-1'></head><body><p>naïve</p></body></html>"
+    ).encode("iso-8859-1")
+    script = {
+        "https://public.example/m": _FakeStream(200, {"content-type": "text/html"}, body),
+    }
+    _patch_stream(monkeypatch, script)
+    page = _default_page_fetcher("https://public.example/m")
+    assert "naïve" in page.html
+
+
+# ---------------------------------------------------------------------------
+# search(): a snippet that is just a span of the backend's own summary is not billed twice
+# ---------------------------------------------------------------------------
+
+
+def test_search_drops_a_snippet_already_contained_in_the_summary():
+    """Gemini grounding builds each hit's snippet out of the answer's grounding supports, so the
+    summary and the snippets are the same sentences. Measured live: ~40% of a 406-token search
+    observation was the summary repeated back."""
+    answer = "Widgets cost twelve dollars as of October 2026, up from ten dollars in June."
+    hits = [
+        _hit("Widget News", "https://example.com/1", "Widgets cost twelve dollars as of October 2026"),
+        _hit("Widget Blog", "https://example.com/2", "An independent snippet with its own wording."),
+    ]
+    backend = FakeBackend({"widgets": SearchResponse(hits=hits, answer=answer)})
+    adapter = WebResearchAdapter(backend, cache=WebCache())
+    text = adapter.search("widgets").text
+    assert text.count("Widgets cost twelve dollars as of October 2026") == 1
+    assert "An independent snippet with its own wording." in text
+    assert "https://example.com/1" in text  # the hit itself is still listed and citable
+
+
+def test_search_keeps_a_snippet_whose_text_falls_past_the_summary_trim():
+    long_answer = ("a" * 420) + " the tail sentence only the snippet shows."
+    hits = [_hit("T", "https://example.com/1", "the tail sentence only the snippet shows.")]
+    backend = FakeBackend({"q": SearchResponse(hits=hits, answer=long_answer)})
+    adapter = WebResearchAdapter(backend, cache=WebCache())
+    text = adapter.search("q").text
+    assert "the tail sentence only the snippet shows." in text
+
+
+# ---------------------------------------------------------------------------
+# fetch(): the page token budget holds end to end, and a failure names its cause
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_body_honors_the_token_budget_on_a_long_page():
+    paragraphs = "".join(
+        f"<p>{'alpha beta gamma delta epsilon ' * 25}</p>" for _ in range(60)
+    )
+    html = f"<html><head><title>Long</title></head><body><article>{paragraphs}</article></body></html>"
+
+    def fake_fetcher(url):
+        return SimpleNamespace(html=html, content_type="text/html", status_code=200)
+
+    adapter = WebResearchAdapter(
+        FakeBackend(), cache=WebCache(), page_fetcher=fake_fetcher, page_token_budget=800
+    )
+    obs = adapter.fetch("https://example.com/long", focus="gamma delta")
+    assert obs.kind == "read"
+    # One passage may land the total just over the budget; it must not be a multiple of it.
+    assert estimate_tokens(obs.text) < 1100
+
+
+def test_fetch_error_names_the_underlying_cause():
+    def failing_fetcher(url):
+        raise RuntimeError("web fetch: HTTP 403 for https://example.com/blocked")
+
+    adapter = WebResearchAdapter(FakeBackend(), cache=WebCache(), page_fetcher=failing_fetcher)
+    obs = adapter.fetch("https://example.com/blocked")
+    assert obs.kind == "error"
+    assert "403" in obs.error
+
+
+def test_fetch_error_names_a_failing_fallback_fetcher():
+    def failing_fetcher(url):
+        raise RuntimeError("connect timeout")
+
+    def failing_fallback(url):
+        raise RuntimeError("url_context could not retrieve the page")
+
+    adapter = WebResearchAdapter(
+        FakeBackend(), cache=WebCache(), page_fetcher=failing_fetcher,
+        url_fetch_fallback=failing_fallback,
+    )
+    obs = adapter.fetch("https://example.com/blocked")
+    assert obs.kind == "error"
+    assert "connect timeout" in obs.error

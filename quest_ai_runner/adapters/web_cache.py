@@ -21,6 +21,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
@@ -34,6 +35,14 @@ logger = logging.getLogger("quest-ai-runner.web-cache")
 
 # Punctuation/quote characters stripped from the ends of a normalized query.
 _STRIP_CHARS = " \t\n\r\"'.,;:!?()[]{}"
+
+# A cache entry's filename is "<sha256 hex>.json" and nothing else; see ``_disk_path``.
+_ENTRY_NAME_RE = re.compile(r"^[0-9a-f]{64}\.json$")
+
+
+def _is_entry_filename(name: str) -> bool:
+    """True only for a file this cache itself wrote (so pruning never touches a neighbor's)."""
+    return bool(_ENTRY_NAME_RE.match(name))
 
 
 def normalize_query(query: str) -> str:
@@ -170,7 +179,9 @@ class WebCache:
         disk_entries = 0
         if self._dir is not None:
             try:
-                disk_entries = sum(1 for _ in self._dir.glob("*.json"))
+                disk_entries = sum(
+                    1 for p in self._dir.glob("*.json") if _is_entry_filename(p.name)
+                )
             except OSError:
                 pass
 
@@ -243,7 +254,14 @@ class WebCache:
         if not should_prune:
             return
         try:
-            files = sorted(self._dir.glob("*.json"), key=lambda p: p.stat().st_mtime)
+            # Only this cache's OWN files: an entry is named for the sha256 of its key, so
+            # anything else in the directory is somebody else's (the daily-limit counter writes
+            # ``web_search_daily_count.json`` into this same directory, and deleting that resets
+            # the day's cost guard to zero).
+            files = sorted(
+                (p for p in self._dir.glob("*.json") if _is_entry_filename(p.name)),
+                key=lambda p: p.stat().st_mtime,
+            )
         except OSError:
             return
         excess = len(files) - self._max_disk_entries

@@ -19,10 +19,11 @@ Neither method ever raises. Every failure comes back as `Observation(kind="error
 
 This repo also ships two older, simpler web-search `RetrievalAdapter`s: `WebSearchAdapter`
 (Tavily) and `ProviderWebSearchAdapter` (the model provider's own native web search -- Claude's
-`web_search` tool or Gemini grounding -- reusing the LLM key, no separate search key). Either one
-is wired automatically today whenever a provider/key supports it, via the ordinary
-`query`/`grep`/discovery `RetrievalAdapter` surface, and they still work exactly as before; nothing
-here removes or changes them.
+`web_search` tool or Gemini grounding -- reusing the LLM key, no separate search key). Both still
+work if a consumer wires them, but `build_orchestrator` no longer reaches for them first: the
+`WebSearchAdapter` (Tavily) fold-in was removed from `cli.py` (Tavily is now a backend here), and
+the `ProviderWebSearchAdapter` fold-in into `CompositeRetrievalAdapter` is only a FALLBACK for the
+case where no `WebResearchAdapter` could be built, so no deployment loses web capability.
 
 `WebResearchAdapter` is a separate, newer surface purpose-built for the planner's dedicated
 `{"web": ...}` / `{"web_page": ...}` read shapes (see below), not a drop-in replacement: it adds
@@ -32,11 +33,15 @@ adapters. A consumer decides how the two coexist (e.g. `WebResearchAdapter` for 
 explicit web reads, falling back to or alongside the native/Tavily adapter for the general
 retrieval stack) -- see `core/orchestrator.py`'s wiring for the decision actually shipped.
 
-## The read shapes a consumer wires into its orchestrator
+## The read shapes, and how they are wired
 
-This library's `core/orchestrator.py` does not know about `WebResearchAdapter` -- a consumer
-(or a sibling piece of `quest_ai_runner` wiring code) maps the planner's read-spec shapes onto
-its two methods:
+`core/orchestrator.py` dispatches these two read shapes itself, through the generic
+`core/adapters.WebResearch` Protocol (`Orchestrator.web`) -- never through
+`CompositeRetrievalAdapter`, which broadcasts every `grep`/`query` to every member adapter and so
+would fire a paid web search on an ordinary corpus read. `build_orchestrator` sets
+`Orchestrator.web` from `RunnerConfig.web_research`, which it auto-builds with
+`build_web_research_from_env` when the consumer left it unset (an adapter the consumer DID set is
+never overwritten). The dispatch in `Orchestrator._exec_one_read` is, in effect:
 
 ```python
 # planner emits: {"web": "<query>"}  or  {"web": ["<query1>", "<query2>"]}
@@ -45,6 +50,11 @@ obs = web_research.search(spec["web"], fresh=spec.get("fresh", False))
 # planner emits: {"web_page": "<url>", "focus": "<what you need>"}
 obs = web_research.fetch(spec["web_page"], focus=spec.get("focus"), fresh=spec.get("fresh", False))
 ```
+
+With no web adapter wired, the planner is told nothing about the web (no WEB prompt block, no
+`web`/`web_page`/`focus`/`fresh` fields in the decide schema), so the prompt is byte-for-byte what
+it was before this feature existed; a stray `{"web": ...}` spec from a model that invented one
+comes back as a named "not configured" error rather than a crash or a silent drop.
 
 `fresh: true` bypasses the cache READ for that one call (it still writes the fresh result back
 to the cache).
@@ -129,6 +139,11 @@ be out of date.")` once it's reached, without calling the backend. The count is 
 default, or persisted as one small JSON file under `QAR_WEB_CACHE_DIR` (when that's configured)
 so a process restart doesn't reset it mid-day. `fetch()` is never limited by this guard.
 
+The counter is per PROCESS: the file is read once at construction and written after each real
+call, so two lanes sharing one `QAR_WEB_CACHE_DIR` each keep their own count and the effective
+cap is per lane, not per deployment. Size the limit accordingly (or give each lane its own cache
+dir); it is a cost guard, not a quota enforcer.
+
 For a deployment on Gemini 2.5 Flash-Lite grounding (1,500 free grounded prompts/day), a sensible
 value is something like **1400**, leaving headroom below the free quota for non-web-search
 grounded calls.
@@ -142,8 +157,18 @@ be installed (it is an OPTIONAL dependency, never required), falling back to a s
 prefers `<article>`/`<main>` content when it's substantial. The built-in extractor has to be
 good on its own -- `trafilatura` is a bonus, not a requirement.
 
+When that structured pass yields under ~200 characters, a salvage pass runs instead: script/style
+blocks removed, block tags turned into breaks, remaining tags stripped. It exists because real
+HTML frequently never closes a chrome element (and a document truncated at the 2 MB read cap never
+closes anything), which used to leave the chrome-skipping parser skipping the entire rest of the
+page and returning nothing at all.
+
 A page fetch refuses non-`http(s)` schemes and any host (literal IP or resolved hostname) that is
-loopback/private/link-local/reserved (`check_url_is_safe`) before opening a socket. A PDF (or
+loopback/private/link-local/reserved (`check_url_is_safe`) before opening a socket, and refuses it
+again on **every redirect hop** (the default fetcher follows redirects by hand, up to 5, so a
+public URL cannot 302 the fetch onto `127.0.0.1` or a cloud metadata endpoint). Page bytes are
+decoded with the charset the response header or the document's own `<meta>` declares, falling back
+to UTF-8 with replacement. A PDF (or
 any other non-text content-type) comes back as an error suggesting a deep run instead. When
 direct extraction yields too little text (a JS-rendered shell, a 403, a block), and a
 `url_fetch_fallback` callable is configured, that's tried next -- `build_web_research_from_env`

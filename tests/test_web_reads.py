@@ -87,11 +87,11 @@ def _orch(provider, *, web=None, tools=None, config=None) -> Orchestrator:
 def test_web_search_dispatch_single_query():
     web = FakeWeb()
     orch = _orch(StubProvider([]), web=web)
-    obs = orch._exec_one_read({"web": "spiritual data news 2026"})
-    assert web.search_calls == [{"queries": "spiritual data news 2026", "max_results": None,
+    obs = orch._exec_one_read({"web": "tide tables bristol 2026"})
+    assert web.search_calls == [{"queries": "tide tables bristol 2026", "max_results": None,
                                  "fresh": False}]
     assert obs.kind == "query"
-    assert obs.rel_path == "web_search:spiritual data news 2026"
+    assert obs.rel_path == "web_search:tide tables bristol 2026"
     assert obs.hits and obs.hits[0]["url"] == "https://x.example/1"
 
 

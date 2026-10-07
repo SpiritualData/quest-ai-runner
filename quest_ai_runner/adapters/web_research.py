@@ -27,6 +27,7 @@ import concurrent.futures
 import json
 import logging
 import os
+import re
 import tempfile
 import threading
 from dataclasses import dataclass
@@ -61,6 +62,7 @@ _DEFAULT_SEARCH_TTL = 86400
 _DEFAULT_PAGE_TTL = 604800
 _FETCH_TIMEOUT = 8.0
 _MAX_PAGE_BYTES = 2 * 1024 * 1024
+_MAX_REDIRECTS = 5
 _ALLOWED_CONTENT_TYPES = ("text/html", "text/plain", "application/xhtml")
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -127,46 +129,111 @@ class UnsupportedContentTypeError(PageFetchError):
     ``url_fetch_fallback`` -- a fallback fetch would hit the same PDF."""
 
 
+def _charset_from_content_type(header: str) -> str:
+    """The ``charset=`` parameter of a content-type header, lowercased, or ``""``."""
+    for part in (header or "").split(";")[1:]:
+        name, _, value = part.partition("=")
+        if name.strip().lower() == "charset":
+            return value.strip().strip("\"'").lower()
+    return ""
+
+
+def _sniff_meta_charset(raw: bytes) -> str:
+    """The charset declared in the document's own ``<meta>``, from the first 4 KB, or ``""``.
+
+    Sniffed as ASCII-ish bytes because that is all a charset declaration can legally be, and we
+    do not yet know the encoding of the rest of the document.
+    """
+    head = raw[:4096].decode("ascii", errors="ignore")
+    match = re.search(r"<meta[^>]+charset\s*=\s*[\"']?\s*([A-Za-z0-9_.:-]+)", head, re.I)
+    return match.group(1).strip().lower() if match else ""
+
+
+def _decode_page(raw: bytes, content_type_header: str) -> str:
+    """Decode page bytes with the charset the page actually declares, not an assumed UTF-8.
+
+    Before this, every page was decoded as UTF-8 with ``errors="replace"``, so a windows-1252 /
+    latin-1 / Shift-JIS page arrived as U+FFFD soup: every non-ASCII character in it (names,
+    prices, quotes, every accented word) became a replacement character, which then also poisoned
+    the BM25 focus scoring. The declared charset wins, the document's own ``<meta>`` is the
+    fallback, and UTF-8 with replacement is the last resort so this still never raises.
+    """
+    candidates = [
+        _charset_from_content_type(content_type_header),
+        _sniff_meta_charset(raw),
+    ]
+    for charset in candidates:
+        if not charset or charset in ("utf-8", "utf8"):
+            continue
+        try:
+            return raw.decode(charset, errors="replace")
+        except (LookupError, UnicodeDecodeError, ValueError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 def _default_page_fetcher(url: str) -> FetchedPage:
-    """GET ``url`` with bounded size/time/content-type. Raises ``PageFetchError`` on failure."""
+    """GET ``url`` with bounded size/time/content-type. Raises ``PageFetchError`` on failure.
+
+    Redirects are followed BY HAND, re-running ``check_url_is_safe`` on every hop, because
+    ``follow_redirects=True`` would have walked straight past the SSRF guard: the guard only ever
+    saw the URL the planner asked for, so any public URL that 302s to ``http://127.0.0.1:9000/``
+    or ``http://169.254.169.254/latest/meta-data/`` was fetched anyway, and the guard's promise
+    (checked "before we ever open a socket") held only for the first hop.
+    """
     import httpx
 
     headers = {"User-Agent": _USER_AGENT}
+    current = url
     try:
-        with httpx.stream(
-            "GET", url, headers=headers, timeout=_FETCH_TIMEOUT, follow_redirects=True
-        ) as resp:
-            status_code = resp.status_code
-            content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
-            if status_code >= 400:
-                raise PageFetchError(f"web fetch: HTTP {status_code} for {url}")
-            if content_type and not any(content_type.startswith(ct) for ct in _ALLOWED_CONTENT_TYPES):
-                if "pdf" in content_type:
+        for _hop in range(_MAX_REDIRECTS + 1):
+            with httpx.stream(
+                "GET", current, headers=headers, timeout=_FETCH_TIMEOUT, follow_redirects=False
+            ) as resp:
+                status_code = resp.status_code
+                content_type_header = resp.headers.get("content-type") or ""
+                if status_code in (301, 302, 303, 307, 308):
+                    location = resp.headers.get("location") or ""
+                    if not location:
+                        raise PageFetchError(
+                            f"web fetch: HTTP {status_code} with no Location for {current}")
+                    current = str(httpx.URL(current).join(location))
+                    safety_error = check_url_is_safe(current)
+                    if safety_error:
+                        raise PageFetchError(f"web fetch: redirect to {current} {safety_error}")
+                    continue
+                content_type = content_type_header.split(";")[0].strip().lower()
+                if status_code >= 400:
+                    raise PageFetchError(f"web fetch: HTTP {status_code} for {current}")
+                if content_type and not any(
+                    content_type.startswith(ct) for ct in _ALLOWED_CONTENT_TYPES
+                ):
+                    if "pdf" in content_type:
+                        raise UnsupportedContentTypeError(
+                            f"web fetch: {url} is a PDF (content-type {content_type}); "
+                            "request a deep run to read PDFs"
+                        )
                     raise UnsupportedContentTypeError(
-                        f"web fetch: {url} is a PDF (content-type {content_type}); "
-                        "request a deep run to read PDFs"
+                        f"web fetch: unsupported content-type {content_type!r} for {url}"
                     )
-                raise UnsupportedContentTypeError(
-                    f"web fetch: unsupported content-type {content_type!r} for {url}"
-                )
-            chunks: List[bytes] = []
-            total = 0
-            for chunk in resp.iter_bytes():
-                total += len(chunk)
-                if total > _MAX_PAGE_BYTES:
-                    break
-                chunks.append(chunk)
-            raw = b"".join(chunks)
+                chunks: List[bytes] = []
+                total = 0
+                for chunk in resp.iter_bytes():
+                    total += len(chunk)
+                    if total > _MAX_PAGE_BYTES:
+                        break
+                    chunks.append(chunk)
+                raw = b"".join(chunks)
+            return FetchedPage(
+                html=_decode_page(raw, content_type_header),
+                content_type=content_type,
+                status_code=status_code,
+            )
+        raise PageFetchError(f"web fetch: too many redirects for {url}")
     except (PageFetchError, UnsupportedContentTypeError):
         raise
     except httpx.HTTPError as exc:
-        raise PageFetchError(f"web fetch: request failed for {url}: {exc}") from exc
-
-    try:
-        text = raw.decode("utf-8", errors="replace")
-    except Exception:  # noqa: BLE001
-        text = raw.decode("latin-1", errors="replace")
-    return FetchedPage(html=text, content_type=content_type, status_code=status_code)
+        raise PageFetchError(f"web fetch: request failed for {current}: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +420,17 @@ class WebResearchAdapter:
             ]
             if resp.answer:
                 lines.append(f"Summary: {_trim(resp.answer, _SUMMARY_MAX_CHARS)}")
+            # A backend whose per-hit "snippet" is a SPAN OF ITS OWN SUMMARY bills the same words
+            # twice. Gemini grounding does exactly that (its snippets come from the answer's
+            # grounding supports): measured live, the summary and the first two snippets were the
+            # same sentences, roughly 40% of a 406-token observation. A snippet already contained
+            # in the summary is therefore dropped, and the title+URL stay so the hit is still
+            # citable. Backends with independent snippets (Serper, Brave, Tavily, SearXNG) never
+            # match this and are unaffected.
+            # Compared against the summary AS RENDERED (trimmed), never the full answer, so a
+            # snippet whose text falls past the trim point is kept rather than dropped as a
+            # duplicate of something the planner never sees.
+            shown_answer = _trim(resp.answer, _SUMMARY_MAX_CHARS) if resp.answer else ""
 
             shown = 0
             for hit in resp.hits:
@@ -365,7 +443,12 @@ class WebResearchAdapter:
                 date_part = f" | {hit.date}" if hit.date else ""
                 lines.append(f"{shown}. {hit.title} | {hit.url}{date_part}")
                 snippet = _trim(hit.snippet, _SNIPPET_MAX_CHARS)
-                if snippet:
+                # An already-truncated snippet carries a trailing ellipsis that the summary does
+                # not, so the containment check compares the part before it.
+                collapsed_snippet = _collapse_ws(hit.snippet).rstrip(".… ")
+                if snippet and not (
+                    shown_answer and collapsed_snippet and collapsed_snippet in shown_answer
+                ):
                     lines.append(f"   {snippet}")
                 hits.append(
                     {
@@ -454,7 +537,7 @@ class WebResearchAdapter:
             title = cached_page.get("title", "")
             full_text = cached_page.get("text", "")
         else:
-            title, full_text, hard_error = self._fetch_and_extract(url)
+            title, full_text, hard_error, cause = self._fetch_and_extract(url)
             if hard_error:
                 return Observation(kind="error", rel_path=url, error=hard_error)
 
@@ -464,14 +547,21 @@ class WebResearchAdapter:
                     fallback_text = self._url_fetch_fallback(url) or ""
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("url_fetch_fallback failed for %r: %s", url, exc)
+                    cause = cause or str(exc)
                 if len(fallback_text.strip()) > len(full_text.strip()):
                     full_text = fallback_text.strip()
                     if not title:
                         title = url
 
             if not full_text.strip():
+                # Name WHY, not just that it failed: "no extractable content" alone sent the
+                # planner off to retry other reads when the real cause was an HTTP 403, a
+                # connection timeout, or a refusal from the fallback fetcher. A status line or an
+                # error the planner acts on has to be honest about the cause.
+                detail = f" ({cause})" if cause else ""
                 return Observation(
-                    kind="error", rel_path=url, error=f"web fetch: no extractable content from {url}"
+                    kind="error", rel_path=url,
+                    error=f"web fetch: no extractable content from {url}{detail}",
                 )
 
             self._cache.set(
@@ -491,23 +581,24 @@ class WebResearchAdapter:
         return Observation(kind="read", rel_path=url, locator=f"web extract: {url}", text=text)
 
     def _fetch_and_extract(self, url: str) -> Any:
-        """Returns ``(title, text, hard_error)``. ``hard_error`` is set only for a content-type
-        we deliberately refuse (e.g. PDF); any other fetch failure returns empty text so the
-        caller can still try ``url_fetch_fallback``."""
+        """Returns ``(title, text, hard_error, cause)``. ``hard_error`` is set only for a
+        content-type we deliberately refuse (e.g. PDF); any other fetch failure returns empty text
+        plus a short ``cause`` string, so the caller can still try ``url_fetch_fallback`` and can
+        still say WHY if nothing worked."""
         try:
             page = self._page_fetcher(url)
         except UnsupportedContentTypeError as exc:
-            return "", "", str(exc)
+            return "", "", str(exc), None
         except Exception as exc:  # noqa: BLE001
             logger.debug("page fetch failed for %r: %s", url, exc)
-            return "", "", None
+            return "", "", None, str(exc)
 
         try:
             title, text = extract_main_text(page.html)
         except Exception:  # noqa: BLE001
             logger.debug("extract_main_text failed for %r", url, exc_info=True)
             title, text = "", ""
-        return title, text, None
+        return title, text, None, None
 
 
 # ---------------------------------------------------------------------------
