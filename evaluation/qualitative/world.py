@@ -886,7 +886,10 @@ def snapshot(world=None):
         c = meta_by_id.get(cid) or {}
         snap["collection_meta"][key] = {
             "name": c.get("name"),
-            "fields": sorted(str(f.get("id") or f.get("name")) for f in (c.get("custom_fields") or []))}
+            # The listing speaks camelCase (``customFields``); reading only ``custom_fields`` made
+            # every schema change, including a write that wiped a collection's fields, invisible.
+            "fields": sorted(str(f.get("id") or f.get("name")) for f in (
+                c.get("customFields") or c.get("custom_fields") or c.get("fields") or []))}
     return snap
 
 
