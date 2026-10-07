@@ -1825,6 +1825,24 @@ def test_deferred_handoff_pins_the_registered_deferred_runner():
     assert inline_runner.calls == [], "classifier must not re-route deferred work inline"
 
 
+def test_net_inferred_work_is_routed_not_pinned_to_the_queue():
+    """The queue pin is for the planner's OWN deferred_deep. When the planner only answered and an
+    escalation net infers the user asked for a change, that work is routed like any deep action:
+    here the classifier picks the inline runner, so the change happens now instead of becoming a
+    background task (found 2026-10-07: "... then add a goal" queued a task for a one-line add)."""
+    queue_runner = StubDeepRunner(met=True, output="Queued as task #5.", deferred=True)
+    inline_runner = StubDeepRunner(met=True, output="Added the goal 'Order lavender wax'.")
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "explained it"}],
+                            answer_text="You should add a goal to order lavender wax.")
+    _orch(provider, StubRetrieval(),
+          deep_runners={"deferred": queue_runner, "inline": inline_runner},
+          deep_runner_classifier=lambda msg, goal, brief: "inline",
+          config=OrchestratorConfig(deferred_deep_queued=True)).run(
+        "add a goal to order lavender wax")
+    assert queue_runner.calls == [], "net-inferred work must not be forced into the queue"
+    assert len(inline_runner.calls) >= 1
+
+
 def test_deferred_handoff_failure_reply_does_not_claim_queued():
     """HONEST-ENQUEUE: in a queued deployment, when the hand-off is NOT confirmed (the enqueue
     failed), the reply must be regenerated with a steer saying the work was NOT queued; it must

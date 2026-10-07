@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Only the planner's own `deferred_deep` is pinned to the background queue.** In a queued
+  deployment (`deferred_deep_queued`), work that an escalation net inferred (the planner answered,
+  but the user's message asked for a change) is now routed like any deep action by the runner
+  classifier, so an in-chat change runs inline instead of becoming a background task. Queue
+  receipts are still recognised and reported as queued.
 - **A user announcing their own next step is not an order.** `_message_requests_change` no longer
   escalates "I'll lean on that claim and move on", "I'm going to move the launch myself" and similar
   first-person plans that do not address the assistant (`message_announces_own_plan`); they go to the

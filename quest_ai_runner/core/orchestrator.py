@@ -11275,10 +11275,18 @@ class Orchestrator:
         # for this turn: the deferred contract trusts met and never re-verifies a hand-off sentinel
         # against the user's goal (that would always fail and could relaunch, double-enqueueing).
         _deferred_handoff_confirmed = False
+        # The queue pin is for the PLANNER'S OWN hand-off (``deferred_deep``): it decided the work
+        # belongs in the background. The escalation nets above only infer that the user asked for
+        # a change the turn did not make ("you asked for a change, making it now"), so their work
+        # is routed like any deep action (the classifier picks inline or queue) instead of being
+        # forced into the background queue. Found 2026-10-07 in Quest's chat: "work out how far
+        # over budget I am ... then add a goal" ended in a background task for a goal the chat can
+        # add inline in a second.
         _queued_mode = bool(self.cfg.deferred_deep_queued)
+        _pin_queue = _queued_mode and bool(plan.deferred_deep)
         if should_defer_deep:
             try:
-                if _queued_mode:
+                if _pin_queue:
                     emit.status("Handing this work to the background queue…")
                 elif not plan.deferred_deep:
                     emit.status("Executing follow-up work…")
@@ -11296,14 +11304,14 @@ class Orchestrator:
                 # Queued deployments pin deferred work to the registered queue runner (reserved
                 # key), so the classifier can never re-route it to an inline runner.
                 _deferred_runner = (self.deep_runners.get(DEFERRED_RUNNER_KEY)
-                                    if _queued_mode else None)
+                                    if _pin_queue else None)
                 # Announce the follow-up goal before executing it — same rules as the main deep
                 # branch above: EVENT_INTENT (an announcement of intent, never usable as a turn's
                 # outcome), and only when something can actually run it. The gate mirrors
                 # _run_deep's exactly: a pinned ``runner_override`` IS the capability.
                 if emit is not None and (_deferred_runner is not None
                                          or self._has_deep_execution_capability()):
-                    _followup_verb = "Queueing" if _queued_mode else "Executing"
+                    _followup_verb = "Queueing" if _pin_queue else "Executing"
                     emit.emit(ProgressEvent(type=EVENT_INTENT,
                                             text=f"{_followup_verb} follow-up: {deferred_plan.goal}"))
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
