@@ -26,7 +26,8 @@ from pathlib import Path
 BACKEND_DIR = Path(os.environ.get("QUAL_BACKEND_DIR")
                    or Path(__file__).resolve().parents[3] / "quest-backend")
 TIERS = ("fast", "balanced", "quality", "science", "best")
-LOCK = threading.RLock()
+LOCK = threading.RLock()  # serializes requests; held for a whole chat stream
+USAGE_LOCK = threading.Lock()  # never LOCK here: LLM calls run on worker threads mid-stream
 STATE = {"client": None, "models": None}
 
 
@@ -36,17 +37,28 @@ def model_pins():
     return {tier: model for tier in TIERS} if model else {}
 
 
-def start_main_loop():
-    """Register a persistent background loop as the app's main loop, as app startup would."""
+def persistent_portal(test_client):
+    """Give the TestClient ONE persistent event loop (an anyio blocking portal, lifespan NOT run)
+    and register that loop as the app's main loop, as the real server's startup does.
+
+    Without this every request runs on a fresh per-request loop while the sandboxed AI helpers
+    dispatch their DB calls onto the registered main loop (``run_on_main_loop``): async resources
+    made on one loop were awaited from the other and every sandboxed write hung until its 120s
+    timeout. One loop for requests and helpers is what the live server has."""
+    import contextlib
+
+    import anyio.from_thread
     from app.core.main_loop import set_main_event_loop
-    loop = asyncio.new_event_loop()
+    stack = contextlib.ExitStack()
+    portal = stack.enter_context(anyio.from_thread.start_blocking_portal("asyncio"))
+    STATE["portal_stack"] = stack  # keep the portal (and its loop thread) alive for the process
 
-    def spin():
-        asyncio.set_event_loop(loop)
-        loop.run_forever()
+    async def running_loop():
+        return asyncio.get_running_loop()
 
-    threading.Thread(target=spin, name="qual-main-loop", daemon=True).start()
-    set_main_event_loop(loop)
+    set_main_event_loop(portal.call(running_loop))
+    test_client.portal = portal
+    return test_client
 
 
 def record_llm_usage():
@@ -60,7 +72,7 @@ def record_llm_usage():
     previous = getattr(cff, "_llm_background_callback", None)
 
     def callback(count, record):
-        with LOCK:
+        with USAGE_LOCK:
             row = usage.setdefault(str(record.get("model")), {"calls": 0, "prompt_tokens": 0,
                                                               "completion_tokens": 0})
             row["calls"] += 1
@@ -100,9 +112,11 @@ def client():
             STATE["models"] = core.effective_models(llm_config)
         except Exception as e:  # noqa: BLE001
             STATE["models"] = {"error": str(e)}
-        start_main_loop()
         record_llm_usage()
-        STATE["client"] = TestClient(app, raise_server_exceptions=False)
+        import faulthandler
+        import signal
+        faulthandler.register(signal.SIGUSR1, all_threads=True)  # kill -USR1 <pid>: dump stacks
+        STATE["client"] = persistent_portal(TestClient(app, raise_server_exceptions=False))
         print(f"IN-PROCESS backend {BACKEND_DIR.name}, models: {json.dumps(STATE['models'])}")
         return STATE["client"]
 
