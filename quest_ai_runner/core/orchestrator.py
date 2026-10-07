@@ -215,6 +215,35 @@ def _result_reports_something(result: Any) -> bool:
     except Exception:  # noqa: BLE001
         return False
 
+
+def result_landed_work(result: Any) -> bool:
+    """Whether a deep result is work that really LANDED, judged only on its structured fields.
+
+    The run's OWN RECORDS decide: not parked on a decision (``decision_id``); its write receipts do
+    not say it changed nothing (``changed_nothing``); and, when the runner records what it observed
+    (``observations_reported``), a run that was NOT verified met observed something. "Not parked"
+    alone is NOT "landed": a sibling that failed, or could not be verified and has no receipt of any
+    effect, folded into a "you already did the work" synthesis is how a failure was reported as
+    done. A verified text answer with nothing to record still counts (its answer is the work), and
+    a runner that keeps no receipts at all is judged as before. Never reads wording (hard rule #3).
+    Never raises."""
+    try:
+        if getattr(result, "decision_id", None) or getattr(result, "changed_nothing", False):
+            return False
+        if (getattr(result, "observations_reported", False)
+                and not (getattr(result, "observations", None) or [])
+                and not getattr(result, "met", False)):
+            return False
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+# Named in the reply for every fan-out sibling that never got to run because another subgoal of the
+# same turn parked on a human decision first: silently dropping it made the turn read as if that
+# part were handled. Code-written (the goal text is the plan's own), no em dash.
+NOT_STARTED_AFTER_DECISION_NOTE = "Not done yet, waiting on your answer above: {goals}."
+
 # Defaults (all overridable via OrchestratorConfig). The elapsed/chars budget bounds the WHOLE
 # read cascade for a turn (every grep + read this turn shares it), not a single read: a 60s/60000
 # char cap left a simple "check these 3 named files" request no room left after one broad grep,
@@ -7659,6 +7688,10 @@ class Orchestrator:
         # next retry/rung) stops rather than producing a second, competing ask. Scoped to a single
         # ``_run_deep`` call; a single-goal turn never sets or checks it (``multi`` guards both).
         fanout_parked = threading.Event()
+        # Which subgoal each result came from (keyed by the result object's id), so a sibling the
+        # aggregation step cannot report on (it stopped before it ever ran) is still NAMED in the
+        # reply as not done yet instead of vanishing.
+        result_goals: Dict[int, str] = {}
 
         def announce_model_selection(runner: Any) -> None:
             if deep_selection is None or emit is None or not runner_uses_deep_model(runner):
@@ -8363,6 +8396,7 @@ class Orchestrator:
                         self.recent_context.record(goal_scope_keys, per_goal_cards, goal)
                 except Exception:  # noqa: BLE001
                     log.debug("per-goal recent-context record failed", exc_info=True)
+            result_goals[id(res)] = goal
             return res
 
         # Handle nested task groups for sequential dependencies:
@@ -8454,11 +8488,22 @@ class Orchestrator:
         if multi:
             parked = next((r for r in deep_results if getattr(r, "decision_id", None)), None)
             if parked is not None:
+                # A sibling with nothing of its own to report (it was stopped before it ever ran,
+                # because this ask came first) is NAMED as not done yet, never silently dropped:
+                # otherwise the turn reads as though that part were handled (review, 2026-10-07).
+                not_started = [result_goals.get(id(r)) for r in deep_results
+                               if r is not parked and not getattr(r, "decision_id", None)
+                               and not _result_reports_something(r)]
+                not_started = [g.strip().rstrip(".") for g in not_started if g and g.strip()]
+                tail = CONTINUE_AFTER_DECISION_NOTE
+                if not_started:
+                    tail = (NOT_STARTED_AFTER_DECISION_NOTE.format(goals="; ".join(not_started))
+                            + "\n\n" + CONTINUE_AFTER_DECISION_NOTE)
                 if (parked.output or "").strip():
                     if CONTINUE_AFTER_DECISION_NOTE not in parked.output:
-                        parked.output = f"{parked.output}\n\n{CONTINUE_AFTER_DECISION_NOTE}"
+                        parked.output = f"{parked.output}\n\n{tail}"
                 else:
-                    parked.output = CONTINUE_AFTER_DECISION_NOTE
+                    parked.output = tail
                 deep_results = [r for r in deep_results
                                 if r is parked
                                 or (not getattr(r, "decision_id", None)
@@ -11632,6 +11677,10 @@ class Orchestrator:
         # intentionally not met yet (a human still has to answer the card), so regenerating
         # toward "met" would only invite a rewrite that claims the parked change already happened.
         _decision_parked = False
+        # True once this turn's deferred deep work neither landed nor parked (every run failed or
+        # could not be verified), so the reply is the runs' own honest text. Gates the
+        # goal-verification loop off, same reasoning as ``_decision_parked``.
+        deferred_unconfirmed = False
         # The parked result's own decision_id, carried onto the final OrchestratorResult below so
         # a consumer can tell structurally (never by scanning the reply text) that this turn ended
         # on a pending approval card, not a completed answer.
@@ -11734,10 +11783,20 @@ class Orchestrator:
                 # appends the parked ask verbatim, never through the LLM resynthesis.
                 _parked = next((d for d in _inline_results if getattr(d, "decision_id", None)),
                                None)
-                _landed_results = [d for d in _inline_results
-                                   if not getattr(d, "decision_id", None)]
+                # "Not parked" is not "landed" (review, 2026-10-07): only a result whose own
+                # structured fields say its work landed (``result_landed_work``: met, and its
+                # receipts do not say it changed nothing) may feed the "you already DID the work"
+                # synthesis. A failed or unverified sibling is reported in its own words through
+                # ``unconfirmed_no_change_text`` (which leads with the honest line when it both
+                # failed and changed nothing), never rewritten into a done claim.
+                landed_results = [d for d in _inline_results if result_landed_work(d)]
+                unconfirmed_text = "\n\n".join(
+                    s for s in (unconfirmed_no_change_text(d) for d in _inline_results
+                                if not getattr(d, "decision_id", None)
+                                and not result_landed_work(d)) if s
+                ).strip()
                 deep_output = "\n\n".join(
-                    s for s in (_strip_future_context(d.output) for d in _landed_results) if s
+                    s for s in (_strip_future_context(d.output) for d in landed_results) if s
                 ).strip()
                 if _confirmed:
                     _handoff_out = "\n\n".join(
@@ -11773,6 +11832,10 @@ class Orchestrator:
                     _deep_block = "--- WHAT WAS JUST EXECUTED (deep run output) ---\n" + deep_output
                     context_view = (context_view + "\n\n" + _deep_block) if context_view else _deep_block
                     _deferred_deep_grounded = True
+                    if unconfirmed_text and unconfirmed_text not in text:
+                        # A sibling that did NOT land: its own honest text, verbatim, after the
+                        # landed work and never through the synthesis above.
+                        text = f"{text}\n\n{unconfirmed_text}"
                     if _parked is not None:
                         # Something ALSO parked alongside the landed work this turn: append its
                         # own code-written wording verbatim, never through the "already done"
@@ -11790,10 +11853,20 @@ class Orchestrator:
                     if emit is not None:
                         emit.status("Parked on an approval card, waiting for your answer…")
                     _parked_text = (_parked.output or "").strip()
-                    if _parked_text:
-                        text = _parked_text
+                    # What happened first (a sibling that did not land, in its own words), then
+                    # the one ask.
+                    reply_parts = [p for p in (unconfirmed_text, _parked_text) if p]
+                    if reply_parts:
+                        text = "\n\n".join(reply_parts)
                     _decision_parked = True
                     _parked_decision_id = _parked.decision_id
+                elif unconfirmed_text:
+                    # Nothing landed and nothing parked: the runs failed or could not be verified.
+                    # Their own honest text IS the reply, verbatim; the goal-verification loop is
+                    # skipped (``deferred_unconfirmed``) so no regeneration can rewrite a failure
+                    # toward "done".
+                    text = unconfirmed_text
+                    deferred_unconfirmed = True
                 elif _queued_mode:
                     # HONEST-ENQUEUE: this deployment queues deferred work, NO hand-off was
                     # confirmed this turn (the enqueue failed, or the run errored before it), and
@@ -11852,7 +11925,7 @@ class Orchestrator:
         # Set when one of the orchestrator's own escalations resolved to a background-work runner
         # and was not started (see _run_deep's ``self_initiated``): no further escalation this turn.
         own_escalation_settled = False
-        if (not _deferred_handoff_confirmed and not _decision_parked
+        if (not _deferred_handoff_confirmed and not _decision_parked and not deferred_unconfirmed
                 and (self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims)):
             try:
                 # Verify against the turn's DERIVED GOAL CONDITION (the checkable done-standard
@@ -12063,6 +12136,7 @@ class Orchestrator:
         # re-run could double the change) or the human asked us to hold off.
         if (self.cfg.deep_before_giving_up and not own_escalation_settled
                 and not _deferred_handoff_confirmed and not _decision_parked
+                and not deferred_unconfirmed
                 and not _claim_corrected and not brainstorm_active
                 and _last_verdict is not None and not _last_verdict.get("met")
                 and not _ctx_meta.get("deep_attempted")

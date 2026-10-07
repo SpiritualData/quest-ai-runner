@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A deferred run that failed is never written up as done, and a fan-out sibling that never ran
+  is named as not done yet.** The parked-decision fix below kept every non-parked result in the
+  "you already DID the work" synthesis, so "not parked" was read as "landed": a sibling that failed
+  (its receipts saying it changed nothing) or could not be verified with no observed effect could
+  still read as done. `result_landed_work` now decides from the run's own structured fields
+  (`decision_id`, `changed_nothing`, `observations_reported`/`observations` with `met`); a result
+  that did not land is reported in its own words through `unconfirmed_no_change_text`, after any
+  landed work and before a parked ask, and when nothing landed or parked that text is the reply and
+  the goal-verification loop and last-resort deep run are skipped (so no regeneration rewrites a
+  failure toward "done"). Separately, a fan-out sibling stopped before its first attempt because
+  another subgoal parked first used to be filtered out silently; it is now named in a code-written
+  line (`NOT_STARTED_AFTER_DECISION_NOTE`, the plan's own goal text) ahead of the continuation
+  sentence. Tests: `tests/test_orchestrator.py` (the two new deferred cases, the not-started
+  sibling case, and every existing fan-out/park case).
 - **A run whose own text already says nothing changed no longer gets a second "nothing was
   changed" lead.** `DeepResult` gains `states_no_change`, a structured field a runner sets when its
   output already carries a code-written no-change sentence; `unconfirmed_no_change_text` then adds

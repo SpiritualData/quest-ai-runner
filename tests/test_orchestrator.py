@@ -165,6 +165,34 @@ def test_fan_out_stops_a_sibling_before_it_ever_starts_once_one_parks():
     assert res.deep_results[0].decision_id == "dec_a"
 
 
+def test_fan_out_names_a_sibling_stopped_before_it_ran_as_not_done_yet():
+    # Review finding (2026-10-07): a sibling stopped before its first attempt (because another
+    # subgoal parked first) left an empty result that the aggregation silently filtered out, so the
+    # reply read as if that part were handled. It must be NAMED as not done yet, by its own goal.
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import (CONTINUE_AFTER_DECISION_NOTE,
+                                                   NOT_STARTED_AFTER_DECISION_NOTE)
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "Add the venue goal", "brief": "a"},
+            {"goal": "Email the caterer.", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = _PerGoalDeepRunner({
+        "Add the venue goal": DeepResult(met=False, output="Venue question?", decision_id="dec_a"),
+        "Email the caterer.": DeepResult(met=True, output="Emailed."),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(max_parallel=1)).run("do both")
+    assert runner.calls == ["Add the venue goal"]
+    assert len(res.deep_results) == 1
+    out = res.deep_results[0].output
+    assert NOT_STARTED_AFTER_DECISION_NOTE.format(goals="Email the caterer") in out
+    assert out.index("Venue question?") < out.index("Not done yet") < out.index(
+        CONTINUE_AFTER_DECISION_NOTE)
+    assert "—" not in out
+
+
 def test_fan_out_reports_what_landed_as_well_as_the_one_ask():
     # Round-2 regression: keeping ONLY the parked result threw away the siblings that had already
     # written. Live trace: all three requested goals actually landed, and the reply the person read
@@ -2122,6 +2150,71 @@ def test_deferred_deep_park_is_reported_as_proposal_not_a_done_claim():
     assert "YOUR PREVIOUS ANSWER" not in all_prompts
     assert "fell short" not in all_prompts
     assert provider.plan_calls == 1
+
+
+class _FixedResultDeepRunner:
+    """A deep runner that returns one pre-built ``DeepResult`` (any fields) for every goal."""
+
+    def __init__(self, result):
+        self._result = result
+        self.calls: List[str] = []
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None):
+        self.calls.append(goal)
+        return self._result
+
+
+def test_deferred_deep_that_failed_and_changed_nothing_is_never_written_up_as_done():
+    """Review finding (2026-10-07): "not parked" was treated as "landed", so a deferred run that
+    FAILED (verified not met, its receipts saying it changed nothing) still went through the "you
+    already DID the work" synthesis and could read as done. Only a result whose structured fields
+    say its work landed may feed that synthesis; this one is reported in its own words through
+    ``unconfirmed_no_change_text``, and no regeneration rewrites it."""
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import UNCONFIRMED_NO_CHANGE_LEAD
+    failed_text = "The goal could not be added: the quest was not found."
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the goal"}}],
+        answer_text="I'll add the goal.",
+    )
+    runner = _FixedResultDeepRunner(DeepResult(met=False, output=failed_text, exhausted=True,
+                                               changed_nothing=True))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("add the goal")
+    assert res.kind == "answer"
+    assert runner.calls
+    assert res.text == f"{UNCONFIRMED_NO_CHANGE_LEAD}\n\n{failed_text}"
+    prompts = _all_answer_prompts(provider)
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in prompts
+    assert "YOUR PREVIOUS ANSWER" not in prompts
+
+
+def test_deferred_deep_unverified_with_no_observed_effect_is_reported_in_its_own_words():
+    """A run that records its observations, was not verified met, and observed nothing has no
+    receipt of any effect: it is reported verbatim, never written up as done."""
+    from quest_ai_runner.core.adapters import DeepResult
+    text = "I looked for the goal but found nothing to change."
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Change the goal"}}],
+        answer_text="I'll change it.",
+    )
+    runner = _FixedResultDeepRunner(DeepResult(met=False, output=text, exhausted=True,
+                                               observations_reported=True))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("change the goal")
+    assert res.text == text
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in _all_answer_prompts(provider)
+
+
+def test_deferred_deep_that_landed_is_still_written_up_as_before():
+    from quest_ai_runner.core.adapters import DeepResult
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the goal"}}],
+    )
+    runner = _FixedResultDeepRunner(DeepResult(met=True, output="Added the goal.", exhausted=True))
+    _orch(provider, StubRetrieval(), deep_runner=runner).run("add the goal")
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" in _all_answer_prompts(provider)
 
 
 # ---------------------------------------------------------------------------
