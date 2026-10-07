@@ -479,6 +479,13 @@ class DeepResult:
     verdict_next_action: str = ""
     needs_person: str = ""
     unconfirmed_note: str = ""
+    # NOTHING CHANGED: the runner's own receipts of what it wrote show that this attempt changed
+    # nothing in the system it acts on (no write completed, or every write matched nothing). It is
+    # a structural fact the runner reports from its own bookkeeping, never inferred from the wording
+    # of its output. Together with a not-met (or unverified) verdict it means the turn has no change
+    # to report, so the goal loop must not let the result read as completed work; see
+    # ``core/orchestrator.py``'s ``finish``. A runner that cannot tell leaves it False.
+    changed_nothing: bool = False
     # WHAT THIS RUN OBSERVED, one plain line each, built by the runner from its OWN records and
     # never from the wording of its output: a receipt for each change its write log proves landed,
     # and each source it really read back. This is the material the async card updater may draw a

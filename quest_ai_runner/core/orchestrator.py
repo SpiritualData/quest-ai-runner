@@ -3572,6 +3572,35 @@ def _strip_future_context(output: Optional[str]) -> str:
         return output
 
 
+# The lead line for a deep result the verifier did NOT confirm, whose own receipts say it changed
+# nothing. Written by CODE, never by a model, and placed BEFORE the runner's own text so a reader
+# cannot take that text as a record of completed work. Two real failures made this necessary (a
+# chat eval, 2026-10-07): a generated program whose write matched no document, and one that wrote
+# nothing at all, each ran, each verified not met for exactly that reason, and the turn still told
+# the person the change was done. No em dash (brand voice of the first consumer, harmless here).
+UNCONFIRMED_NO_CHANGE_LEAD = "Not confirmed as done, and nothing was changed."
+
+
+def unconfirmed_no_change_text(result: Any) -> str:
+    """One deep result's text for the user, with the honesty gate for an unconfirmed no-change run.
+
+    The verdict is STRUCTURED (``DeepResult.met``, written by the goal loop from the verifier's own
+    verdict, false also when verification could not run) and so is the receipt
+    (``DeepResult.changed_nothing``, set by the runner from its own bookkeeping). When a run both
+    failed to verify and reports changing nothing, its output may not stand alone as the turn's
+    result: the lead line above goes first. Nothing here reads the WORDS of the output (hard rule
+    #3); it is the pair of structured facts that decides. Never raises.
+    """
+    text = _strip_future_context(getattr(result, "output", None))
+    try:
+        if text and not getattr(result, "met", False) and \
+                getattr(result, "changed_nothing", False):
+            return f"{UNCONFIRMED_NO_CHANGE_LEAD}\n\n{text}"
+    except Exception:  # noqa: BLE001 — the honesty note must never break the reply
+        return text
+    return text
+
+
 def _future_context_for_display(results: Any) -> str:
     """Collect the FUTURE-CONTEXT bullets across deep results into ONE display string for the user.
 
@@ -10457,7 +10486,7 @@ class Orchestrator:
                                         decision_id=res.decision_id, result_kind="confirm"))
             elif res.kind == "deep":
                 out = "\n\n".join(
-                    s for s in (_strip_future_context(d.output) for d in res.deep_results) if s
+                    s for s in (unconfirmed_no_change_text(d) for d in res.deep_results) if s
                 ) or None
                 # Surface the internal FUTURE-CONTEXT bullets as structured data (NOT in the message
                 # body) so a consumer can show them as an expandable "what I'll remember" panel.

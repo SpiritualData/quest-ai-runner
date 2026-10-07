@@ -60,6 +60,18 @@ All notable changes to this project are documented here. The format is based on
 - **A not-met goal verdict now says why another attempt would or would not help, and the run acts on it.** The verifier returns a `blocker` in the call it already makes (no extra LLM call): `more_work` retries as before, `evidence_only` (the work is reported complete and the only gap is proof beyond what the request asked for) is accepted as done with one line naming what was not independently confirmed, and `needs_person` (only a person can supply the missing input) stops retrying and reports needs-you with the one question. When the attempts run out, the report now leads with what is still open, the next step, and that a reply continues the same session, then keeps the unchanged `WHAT THE RUN DID BEFORE IT STOPPED` heading the quest-backend mailer matches. Task-modal and chat tasks share this path. Tests: `tests/test_goal_not_met_decides_next.py`.
 
 ### Fixed
+- **A deep run that was not verified and changed nothing no longer reads as completed work.** A
+  consumer's chat eval produced the worst pairing twice in one pass: the runner's own output
+  announced a change, the verifier returned not met for exactly that reason (no execution record
+  behind the claim), and the turn surfaced that text verbatim as its result, because `finish()`
+  concatenated every `DeepResult.output` without looking at `met`. `DeepResult` gains
+  `changed_nothing`, a structural fact a runner sets from its OWN receipts of what it wrote (never
+  inferred from the wording of its output), and `unconfirmed_no_change_text` puts a code-written
+  lead line ("Not confirmed as done, and nothing was changed.") in front of a result that is both
+  not met (which includes a run that could not be verified) and reports changing nothing. The
+  runner's own text is still shown, never hidden, and a met result or one that really changed
+  something is passed through untouched. Both inputs are structured, so nothing here reads words
+  out of model output (hard rule #3). Tests: `tests/test_deep_not_met_no_change_honesty.py`.
 - **The planner now tells the "deep" hand-off to gather a data-dependent write value FIRST, instead
   of leaving the worker to invent or hardcode it.** Round-2 trace: a multistep request ("add up my
   launch expenses against the cap; if over, add a goal ...") had the planner do several reads and
