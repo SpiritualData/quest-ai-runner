@@ -5966,6 +5966,49 @@ class Orchestrator:
                 cache.popitem(last=False)
             return future
 
+    def peek_reach_verdict(self, user_message: str) -> Optional[Dict[str, Any]]:
+        """A non-blocking read of an ALREADY-FINISHED reach verdict for ``user_message``, or None.
+
+        Never starts the judge and never waits on it: only a verdict some earlier
+        ``prefetch_reach_verdict``/``reach_verdict`` call already resolved is returned. Built for
+        callers that run LATER in the same turn than the planner's own (blocking) reach-verdict
+        read -- e.g. a deep goal's own context assembly, or a widening retry -- where the judge's
+        single small call is essentially guaranteed to have finished already, so this is free. A
+        caller at the very top of the turn (the reach judge and the turn-start context prefetch
+        both kick off around the same moment) will usually see a miss here, which is correct: this
+        must never add latency by waiting, so it only ever reuses a verdict that was free to read.
+        """
+        try:
+            key = (user_message or "")[:500]
+            cache = self.__dict__.get("reach_verdict_cache")
+            if not cache:
+                return None
+            future = cache.get(key)
+            if future is None or not future.done():
+                return None
+            return future.result()
+        except Exception:  # noqa: BLE001
+            return None
+
+    def gate_docs_fallback(self, ctx_meta: Optional[Dict[str, Any]], user_message: str) -> None:
+        """Best-effort: stamp ``ctx_meta["skip_corpus_fallback"] = True`` IN PLACE when a
+        non-blocking peek at an ALREADY-RESOLVED reach verdict for ``user_message`` says this
+        turn's request does not live inside this corpus at all ("outside" or "world").
+
+        This is the one place that decides whether a context assembly reached through
+        ``ctx_meta`` should skip ``FileContextStore``'s keyword-grep corpus fallback (see its
+        ``skip_corpus_fallback`` meta key): that fallback has no relevance signal of its own
+        beyond "the keyword appears somewhere in the corpus", so it should not run at all for a
+        turn the reach judge already settled as not being about this corpus. Never blocks (see
+        ``peek_reach_verdict``) and never overrides a value the caller already set. No-op when
+        ``ctx_meta`` is None.
+        """
+        if ctx_meta is None or "skip_corpus_fallback" in ctx_meta:
+            return
+        verdict = self.peek_reach_verdict(user_message)
+        if verdict and verdict.get("reach") != "inside":
+            ctx_meta["skip_corpus_fallback"] = True
+
     def reach_verdict(self, user_message: str) -> Optional[Dict[str, Any]]:
         """The stronger tier's answer to where what this request needs lives, or None.
 
@@ -7476,6 +7519,12 @@ class Orchestrator:
         if ctx_meta is not None:
             # Turn-level record that a deep run was attempted (see ``deep_before_giving_up``).
             ctx_meta["deep_attempted"] = True
+            # DOCS-FALLBACK GATING (see ``gate_docs_fallback``): by the time a deep run starts,
+            # the planner has already BLOCKED on this same turn's reach verdict to build its own
+            # prompt, so a non-blocking peek here is free. Every per-goal/widening context
+            # assembly for the rest of THIS deep run reads ``ctx_meta``, so stamping it once here
+            # covers all of them.
+            self.gate_docs_fallback(ctx_meta, user_message)
         quest_id = (ctx_meta or {}).get("quest_id")
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
@@ -9983,6 +10032,14 @@ class Orchestrator:
                     soft_budget = max(hard_budget - 0.5, hard_budget * 0.5)
                     assemble_meta = {**(_ctx_meta or {}),
                                      "assembly_deadline": time.monotonic() + soft_budget}
+                    # DOCS-FALLBACK GATING (see ``gate_docs_fallback``): usually a miss this early
+                    # in the turn (the reach judge was only just prefetched above, around the same
+                    # moment as this), which is correct -- this must never wait on it -- but a
+                    # repeated/already-cached message resolves it for free. The far more common
+                    # case is the matching gate at the top of ``_run_deep``, where a deep goal's
+                    # own context assembly runs well after the planner already blocked on this
+                    # same verdict.
+                    self.gate_docs_fallback(assemble_meta, user_message)
                     return _ctx_assembler.assemble(_ctx_msg, meta=assemble_meta)
 
                 _ctx_executor = ThreadPoolExecutor(max_workers=1)

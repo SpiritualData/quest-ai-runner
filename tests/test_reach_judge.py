@@ -513,3 +513,85 @@ def test_a_timed_out_judge_is_waited_on_once_per_turn_not_once_per_step():
     assert orch.reach_verdict("restart the service") is None   # a re-plan step: no second wait
     assert time.monotonic() - started < 0.1
     assert provider.judge_calls == 1
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator.peek_reach_verdict + gate_docs_fallback (2026-10-06 token-usage pass): a
+# NON-BLOCKING reuse of an already-resolved reach verdict to gate the context assembler's
+# keyword-grep corpus fallback for a turn that is not about this corpus at all.
+# ---------------------------------------------------------------------------
+
+def test_peek_reach_verdict_is_a_miss_before_the_judge_resolves():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    # Nothing has started the judge yet: a peek is a miss, not a wait, and makes no call.
+    assert orch.peek_reach_verdict("restart the service") is None
+    assert provider.calls == []
+
+
+def test_peek_reach_verdict_reuses_an_already_resolved_verdict_for_free():
+    provider = RecordingProvider(response={"reach": "outside", "covered_by": "x"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    first = orch.reach_verdict("restart the service")  # the normal, blocking read
+    assert first == {"reach": "outside", "covered_by": "x"}
+    assert len(provider.calls) == 1
+    # A LATER non-blocking peek for the SAME message reuses it without another call.
+    assert orch.peek_reach_verdict("restart the service") == first
+    assert len(provider.calls) == 1
+
+
+def test_peek_reach_verdict_is_per_message_and_never_raises():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("restart the service")
+    # A DIFFERENT message was never asked about: still a clean miss, no call, no exception.
+    assert orch.peek_reach_verdict("a completely different request") is None
+    # An orchestrator with the judge off entirely: no cache exists at all; still no exception.
+    off = build(RecordingProvider(response={"reach": "outside"}), planner_reach_judge=False,
+                read_reach_summary="Can read local notes.")
+    assert off.peek_reach_verdict("restart the service") is None
+
+
+def test_gate_docs_fallback_sets_the_flag_only_for_a_resolved_non_inside_verdict():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("restart the service")  # resolve it first, same as the planner would
+    meta: Dict[str, Any] = {}
+    orch.gate_docs_fallback(meta, "restart the service")
+    assert meta.get("skip_corpus_fallback") is True
+
+
+def test_gate_docs_fallback_does_nothing_for_an_inside_verdict():
+    provider = RecordingProvider(response={"reach": "inside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("what's on my list")
+    meta: Dict[str, Any] = {}
+    orch.gate_docs_fallback(meta, "what's on my list")
+    assert "skip_corpus_fallback" not in meta
+
+
+def test_gate_docs_fallback_does_nothing_when_no_verdict_is_resolved_yet():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    meta: Dict[str, Any] = {}
+    # No reach_verdict()/prefetch call happened first: the peek is a miss, so the gate is a no-op
+    # (today's unchanged fallback behavior), never a guess and never a wait.
+    orch.gate_docs_fallback(meta, "restart the service")
+    assert "skip_corpus_fallback" not in meta
+    assert provider.calls == []
+
+
+def test_gate_docs_fallback_never_overrides_an_explicit_caller_value():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("restart the service")
+    meta: Dict[str, Any] = {"skip_corpus_fallback": False}
+    orch.gate_docs_fallback(meta, "restart the service")
+    assert meta["skip_corpus_fallback"] is False
+
+
+def test_gate_docs_fallback_is_a_no_op_on_none_meta():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("restart the service")
+    orch.gate_docs_fallback(None, "restart the service")  # must not raise
