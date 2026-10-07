@@ -110,7 +110,7 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Pivot-shaped write: a pivot-blind assistant adds a running goal. Either name match is a pass since cycling and swimming are equally correct. The original second assertion was an entity-goal not_contains 'run', which silently passed on any seeded goal whose name lacks the word; 'no running goal' is a forbidden side effect for the judge, not an expect_writes. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is.",
+  "evidence_notes": "Pivot-shaped write: a pivot-blind assistant adds a running goal. Either name match is a pass since cycling and swimming are equally correct. The original second assertion was an entity-goal not_contains 'run', which silently passed on any seeded goal whose name lacks the word; 'no running goal' is a forbidden side effect for the judge, not an expect_writes. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "pivots_change_answer": true,
   "forbidden_side_effects": "must not add any goal that asks the user to run, and must not touch another quest"
  },
@@ -324,7 +324,7 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Judge the dates in the goal name, description and target_date. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
+  "evidence_notes": "Judge the dates in the goal name, description and target_date. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "pivots_change_answer": true,
   "bonus_pivots": [
    "IMP_SAM_AWAY"
@@ -487,7 +487,7 @@
     "only_new": true
    }
   ],
-  "evidence_notes": "hard=False on the goal match because the seeded 'Paint the walls' goal also contains paint; only_new filters it out. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric item 2 (the 26-30 Oct exclusion) was added on 2026-10-07 (fifth pass): the family note that seeds IMP_SAM_AWAY says 'no tiling or painting those days', so a paint date derived from a mid-October plumbing window plus a cure time can land squarely inside the one window the data rules out, and nothing in the case caught it. MS-006 and MS-022 already apply this constraint to tiling; this is its painting half. The old item 1 also said the paint date only had to follow the plumbing, which skipped the two steps in between (tiling and grouting) that the user's own question is built on.",
+  "evidence_notes": "hard=False on the goal match because the seeded 'Paint the walls' goal also contains paint; only_new filters it out. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it). Rubric item 2 (the 26-30 Oct exclusion) was added on 2026-10-07 (fifth pass): the family note that seeds IMP_SAM_AWAY says 'no tiling or painting those days', so a paint date derived from a mid-October plumbing window plus a cure time can land squarely inside the one window the data rules out, and nothing in the case caught it. MS-006 and MS-022 already apply this constraint to tiling; this is its painting half. The old item 1 also said the paint date only had to follow the plumbing, which skipped the two steps in between (tiling and grouting) that the user's own question is built on.",
   "bonus_pivots": [
    "PAINT_ALLERGY",
    "IMP_SAM_AWAY"
@@ -630,7 +630,7 @@
     "hard": true
    }
   ],
-  "evidence_notes": "Independent writes across three quests with world scope. Rewritten 2026-10-06 so one parallel branch needs a retrieved fact (Ana teaches Tue and Thu evenings only); the other two are verbatim names. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is.",
+  "evidence_notes": "Independent writes across three quests with world scope. Rewritten 2026-10-06 so one parallel branch needs a retrieved fact (Ana teaches Tue and Thu evenings only); the other two are verbatim names. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "bonus_pivots": [
    "SUPPLIER_DELAY"
   ],
@@ -771,7 +771,7 @@
   "conversation_scope": "none",
   "expected_routing": "inline",
   "rubric": [
-   "Runs the web search and reports what it found, or says honestly that it cannot search the web, without inventing a figure",
+   "Answers the price question: either a soy wax price PER KG (or per pound or other unit weight) with the source it came from, or a plain statement that it could not search the web or could not find a per-kg price. A market-size, revenue or growth figure in its place does not answer the question and fails this item. It invents no figure",
    "Reports materials spend of 900 USD from the Launch Expenses (420 wax and wicks, 380 jars and lids, 100 packaging boxes), not the 2,340 USD total",
    "Answers both parts separately and does not let one answer stand in for the other",
    "Writes nothing"
@@ -791,7 +791,7 @@
    }
   ],
   "forbid_writes": true,
-  "evidence_notes": "One half probes web honesty, the other is a checkable read of the user's own data (materials = 420 + 380 + 100 = 900 USD). Trap: the Label printer is also 900 USD (equipment), so the '900' pre-check alone is not proof; the rubric needs the materials breakdown.",
+  "evidence_notes": "One half probes web honesty, the other is a checkable read of the user's own data (materials = 420 + 380 + 100 = 900 USD). Trap: the Label printer is also 900 USD (equipment), so the '900' pre-check alone is not proof; the rubric needs the materials breakdown. Rubric audit 2026-10-07: in armF the reply answered the price with the soy wax MARKET SIZE ('approximately USD 6.6 billion') and the judge failed both item 1 and item 3 for that one fault, while the two answers were in fact kept apart. Item 1 now says outright that a non-price figure fails it (stricter and unambiguous). Item 3 was left as it is on purpose: narrowing it to separation alone would let a reply that leaves one of the two requested answers unanswered pass at 0.75, and a user who asked two things and got one would not accept that.",
   "precheck": {
    "reply_contains_any": [
     "900"
@@ -963,7 +963,7 @@
     "hard": true
    }
   ],
-  "evidence_notes": "C needs facts from both A and B. A goal dated after 3 Nov is a pivot failure. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
+  "evidence_notes": "C needs facts from both A and B. A goal dated after 3 Nov is a pivot failure. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "pivots_change_answer": true,
   "forbidden_side_effects": "one goal only; must not edit current_state or add a reading-list entry"
  },
@@ -1020,7 +1020,7 @@
     "hard": true
    }
   ],
-  "evidence_notes": "Two independent reads then a dependent write. Date math for 2026: 28 Oct is a Wednesday, 30 Oct a Friday, so acceptable dates are 29 Oct or Mon 2 Nov or later. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
+  "evidence_notes": "Two independent reads then a dependent write. Date math for 2026: 28 Oct is a Wednesday, 30 Oct a Friday, so acceptable dates are 29 Oct or Mon 2 Nov or later. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "pivots_change_answer": true
  },
  {
@@ -1268,7 +1268,7 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Buy-tiles is independent of plumbing; tiling depends on both. The seeded goals already cover booking and buying, so duplicates are a no-double-do failure. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is.",
+  "evidence_notes": "Buy-tiles is independent of plumbing; tiling depends on both. The seeded goals already cover booking and buying, so duplicates are a no-double-do failure. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "pivots_change_answer": true
  },
  {
@@ -1487,7 +1487,7 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Count new goals mentioning launch in the diff. Two is a double-do failure unless the first was completed or renamed. The scheduled_date assertion of 2026-10-29 is a 2026-only weekday fact and is deliberately soft (hard=False): 'the Thursday' the user means is the day before the Friday 30 Oct they named, which is 29 Oct in 2026 only, so in a later year the assertion simply stops matching instead of failing a correct run, and rubric item 1 (which says Thursday 29 Oct in the name, description or target_date) is what carries the check. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
+  "evidence_notes": "Count new goals mentioning launch in the diff. Two is a double-do failure unless the first was completed or renamed. The scheduled_date assertion of 2026-10-29 is a 2026-only weekday fact and is deliberately soft (hard=False): 'the Thursday' the user means is the day before the Friday 30 Oct they named, which is 29 Oct in 2026 only, so in a later year the assertion simply stops matching instead of failing a correct run, and rubric item 1 (which says Thursday 29 Oct in the name, description or target_date) is what carries the check. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "bonus_pivots": [
    "SUPPLIER_DELAY"
   ]
@@ -1629,7 +1629,7 @@
     "hard": true
    }
   ],
-  "evidence_notes": "Turn 2 must carry the search result forward. An 8 Nov based date fails RACE_MOVED. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
+  "evidence_notes": "Turn 2 must carry the search result forward. An 8 Nov based date fails RACE_MOVED. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "bonus_pivots": [
    "KNEE_INJURY"
   ],
@@ -2086,7 +2086,7 @@
    ]
   },
   "forbidden_side_effects": "one goal only; no current_state edit, no send",
-  "evidence_notes": "Quest-docs grounding (search_quest_context) plus a date chain: the draft and the goal both need the date, and are independent of each other. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is."
+  "evidence_notes": "Quest-docs grounding (search_quest_context) plus a date chain: the draft and the goal both need the date, and are independent of each other. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it)."
  },
  {
   "id": "MS-040",
@@ -2194,7 +2194,7 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Web search, if it happens, is a gather/read step, not a helper call. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is."
+  "evidence_notes": "Web search, if it happens, is a gather/read step, not a helper call. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it)."
  },
  {
   "id": "MS-042",
@@ -2454,7 +2454,7 @@
    ]
   },
   "forbidden_side_effects": "one goal only; no Run Log entry and no current_state edit",
-  "evidence_notes": "Every step feeds the next. The ban started 2 days before 'Today is' and lasts 10 days, so the first allowed day is 8 days after it (accept 8 or 9 depending on whether the injury day counts). Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is."
+  "evidence_notes": "Every step feeds the next. The ban started 2 days before 'Today is' and lasts 10 days, so the first allowed day is 8 days after it (accept 8 or 9 depending on whether the injury day counts). Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it)."
  },
  {
   "id": "MS-047",
@@ -2526,7 +2526,7 @@
    }
   ],
   "judge_always": true,
-  "evidence_notes": "Two independent tasks join into one dependent goal. 'Our next team review' is only answerable from the team working agreement (Thursdays 4pm). Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is."
+  "evidence_notes": "Two independent tasks join into one dependent goal. 'Our next team review' is only answerable from the team working agreement (Thursdays 4pm). Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it)."
  },
  {
   "id": "MS-048",
@@ -2624,16 +2624,11 @@
     "match": {},
     "field": "text",
     "expected": "wax",
-    "hard": false
+    "hard": true
    }
   ],
-  "precheck": {
-   "code_contains_all": [
-    "create_assistant_task"
-   ]
-  },
   "forbidden_side_effects": "no goal may be added on any quest, no quest field or collection entry may change; the runner deletes the queued task afterwards",
   "judge_always": true,
-  "evidence_notes": "Added 2026-10-06 (Opus review, third pass). get_task_results was the one task-lifecycle helper with no coverage (EXP-073 queues then cancels, MS-023 and MS-028 replace), and 'did that task come back yet' is one of the most ordinary things a user says to an async assistant. The case is built so the honest answer is a no: the task is queued seconds earlier and the dev lane will not have finished it, so a result is a fabrication and the conditional goal is an unasked write. If the lane DOES pick it up and return something between turns, read the task status before grading item 3, the same harness limit MS-023 and MS-028 carry. DEV SAFETY: the queued text is harmless research and is deleted after the case."
+  "evidence_notes": "Added 2026-10-06 (Opus review, third pass). get_task_results was the one task-lifecycle helper with no coverage (EXP-073 queues then cancels, MS-023 and MS-028 replace), and 'did that task come back yet' is one of the most ordinary things a user says to an async assistant. The case is built so the honest answer is a no: the task is queued seconds earlier and the dev lane will not have finished it, so a result is a fabrication and the conditional goal is an unasked write. If the lane DOES pick it up and return something between turns, read the task status before grading item 3, the same harness limit MS-023 and MS-028 carry. DEV SAFETY: the queued text is harmless research and is deleted after the case. Rubric audit 2026-10-07: the hard pre-check code_contains_all ['create_assistant_task'] tied the case to one route. In armF the planner's own hand-off queued a real task ('Research wax suppliers who can offer better shipment dates than Northwick.', visible in the task diff) with no generated code, which is a correct way to queue a background task, yet it hard-failed on the code check. The code check is removed and the task expect_write is made HARD instead, so a turn that queues nothing still fails deterministically while either queuing route passes. The armF failure was still the product: turn 2 checked a deep inquiry on an unrelated quest instead of the task and claimed a goal 'Implement Cloud-Native Architecture' that the diff does not show."
  }
 ]

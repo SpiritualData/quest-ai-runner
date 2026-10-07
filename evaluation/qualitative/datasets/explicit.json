@@ -55,7 +55,7 @@
         "Adds exactly one new goal on the business quest named like 'Send 20 sample candles to testers'",
         "The criterion is measurable and goal-specific (for example 20 samples shipped, with a verifiable count such as 20 tracking numbers or 20 tester names), not a copy of the soft-launch criterion",
         "The goal is filed in the current month (create_goal always files the current month, so this checks nothing was moved to another period)",
-        "Does not alter the soft launch plan, the budget statement or any quest field",
+        "Does not alter the soft launch plan, the budget statement or any quest field, and does not park an approval card proposing a change to any of them: the user asked for a goal only",
         "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
       ],
       "forbid_writes": false,
@@ -81,7 +81,7 @@
         }
       ],
       "forbidden_side_effects": "must not change the outcome, current state, acceptance criteria, preferences, purpose or measurable outcomes, and must not touch any other quest",
-      "evidence_notes": "The user asks for a measurable success criterion, but create_goal has no criteria parameter: it takes name, description and target_date only, so the criterion has to land in the description (or the name), which is what the description assertion checks. It also always files the CURRENT MONTH period, so a month period is not a failure here even though the user said 'this month'. Rubric item 2 judges name and description together."
+      "evidence_notes": "The user asks for a measurable success criterion, but create_goal has no criteria parameter: it takes name, description and target_date only, so the criterion has to land in the description (or the name), which is what the description assertion checks. It also always files the CURRENT MONTH period, so a month period is not a failure here even though the user said 'this month'. Rubric item 2 judges name and description together. Rubric audit 2026-10-07: armF failed this case on an unrequested acceptance_criteria approval card (filed by the background context extractor off a goal-creation message) that the reply never mentioned. That is a real product fault, but item 4 only said 'does not alter', so the judge had to stretch it to cover a parked proposal; item 4 now names the parked card explicitly, so the verdict no longer depends on the judge's reading. Not weakened."
     },
     {
       "id": "EXP-003",
@@ -2359,7 +2359,7 @@
       "message": "Move my 'Run one tempo session per week' goal to next week, I am not going to get to it.",
       "expected_routing": "inline",
       "rubric": [
-        "The existing 'Run one tempo session per week' goal moves to the NEXT ISO week relative to the ground truth's 'Today is' date (the diff shows its period changed, from this week to next). No helper changes a goal's period, so a raw update on the goals collection is the only route and is permitted here",
+        "The existing 'Run one tempo session per week' goal moves to the NEXT ISO week relative to the ground truth's 'Today is' date (the diff shows its period changed, from this week to next). Two routes are correct: bulk_update_goals(action=\"reschedule\", payload={\"level\": \"week\", \"period_start\": <next Monday>}) on the quest's team, or a raw update on the goals collection",
         "No second tempo goal is created, and the existing one is not completed or deleted",
         "No other goal's period moves, and no quest field changes",
         "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
@@ -2375,10 +2375,11 @@
         "code_contains_any": [
           "update_one",
           "update_many",
-          "create_period_goals"
+          "create_period_goals",
+          "bulk_update_goals"
         ]
       },
-      "evidence_notes": "Added 2026-10-06 (Opus review, third pass). Deferring a goal to the next period is one of the commonest real actions in the product and nothing tested it: EXP-005 renames a goal and EXP-006 edits its criteria, but no case moves a period. The expected value cannot be hardcoded (the period string is derived from the run date by world.week_period), so there is no expect_writes: goal `period` IS in world.snapshot and the ground truth prints every goal's period, so the judge can compare the diff against it directly. An honest 'I cannot move a goal' is a FAIL, same as EXP-005: the raw-write guard covers only the quests collection."
+      "evidence_notes": "Added 2026-10-06 (Opus review, third pass). Deferring a goal to the next period is one of the commonest real actions in the product and nothing tested it: EXP-005 renames a goal and EXP-006 edits its criteria, but no case moves a period. The expected value cannot be hardcoded (the period string is derived from the run date by world.week_period), so there is no expect_writes: goal `period` IS in world.snapshot and the ground truth prints every goal's period, so the judge can compare the diff against it directly. An honest 'I cannot move a goal' is a FAIL, same as EXP-005: the raw-write guard covers only the quests collection. Rubric audit 2026-10-07: the code_contains_any pre-check and rubric item 1 said no helper moves a goal's period, which is wrong: bulk_update_goals (on the sandbox allow-list, documented in ai_commands.yaml) has action 'reschedule' with payload {level: 'week', period_start}, and the world quests sit on a team, so it is a correct route and is now accepted. The armF run still failed for a product reason: the model called it with team_id=None, got 'ambiguous_team', and replied 'What went wrong: ambiguous_team' with nothing moved."
     },
     {
       "id": "EXP-084",

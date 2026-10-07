@@ -52,10 +52,12 @@
       "reply_contains_any": [
         "22 Nov",
         "Nov 22",
-        "November 22"
+        "November 22",
+        "Nov. 22",
+        "2026-11-22"
       ]
     },
-    "evidence_notes": "The race note is on the fitness quest, not in a collection. Look for the fitness quest note card in used.cards. The pivot is answer-changing because the count from 8 Nov is two weeks short. Rubric item 2 is deliberately expressed against the ground truth's 'Today is ...' line rather than a fixed number of weeks, so the case does not rot the day after it was written. A reply that asks 'which race?' without checking the quest fails. The forbidden phrase '8 Nov is' was dropped on 2026-10-06 (second pass): naming the old date while correcting it ('8 Nov is no longer the date') is good behaviour and that pre-check hard-failed it, while the 22 Nov check above already catches the real error.",
+    "evidence_notes": "The race note is on the fitness quest, not in a collection. Look for the fitness quest note card in used.cards. The pivot is answer-changing because the count from 8 Nov is two weeks short. Rubric item 2 is deliberately expressed against the ground truth's 'Today is ...' line rather than a fixed number of weeks, so the case does not rot the day after it was written. A reply that asks 'which race?' without checking the quest fails. The forbidden phrase '8 Nov is' was dropped on 2026-10-06 (second pass): naming the old date while correcting it ('8 Nov is no longer the date') is good behaviour and that pre-check hard-failed it, while the 22 Nov check above already catches the real error. Rubric audit 2026-10-07: added 'Nov. 22' and ISO '2026-11-22' to the hard date pre-check; this assistant often writes ISO dates, and the date is the same fact however it is spelled.",
     "bonus_pivots": [
       "KNEE_INJURY"
     ]
@@ -220,10 +222,12 @@
       "reply_contains_any": [
         "28 Oct",
         "Oct 28",
-        "October 28"
+        "October 28",
+        "Oct. 28",
+        "2026-10-28"
       ]
     },
-    "evidence_notes": "Business quest note (supplier update) is the evidence; look for it in used.cards. The shipping date 28 Oct must appear. 'We' and 'launch' are the only cues. A reply that evaluates the 24th generically (marketing readiness) without the supplier fact fails."
+    "evidence_notes": "Business quest note (supplier update) is the evidence; look for it in used.cards. The shipping date 28 Oct must appear. 'We' and 'launch' are the only cues. A reply that evaluates the 24th generically (marketing readiness) without the supplier fact fails. Rubric audit 2026-10-07: added the ISO and 'Oct.' spellings to the hard date pre-check; this assistant writes ISO dates ('2026-10-31') in many replies, and the date is the same fact however it is spelled."
   },
   {
     "id": "IMP-010",
@@ -473,11 +477,13 @@
       "reply_contains_any": [
         "3 Nov",
         "Nov 3",
+        "November 3",
+        "2026-11-03",
         "84",
         "Lin"
       ]
     },
-    "evidence_notes": "Classic implicit-context test. 'Okafor' maps to the research quest. Evidence: research quest note, writing log entry (n 120 to 84) and reading list entry (Lin et al.). The original rubric said 'at least two of the following', which left the judge to pick which two and made the required-pivot gate unfair; two named pivots are now required. A fourth item reading 'Credit, not required: also flags the Lin et al. paper' was deleted on 2026-10-06 (third pass): the judge fails an item it cannot quote, so an optional item costs a correct answer a quarter of its score, and CONTRADICTING_PAPER was already in bonus_pivots, which is where that fact belongs.",
+    "evidence_notes": "Classic implicit-context test. 'Okafor' maps to the research quest. Evidence: research quest note, writing log entry (n 120 to 84) and reading list entry (Lin et al.). The original rubric said 'at least two of the following', which left the judge to pick which two and made the required-pivot gate unfair; two named pivots are now required. A fourth item reading 'Credit, not required: also flags the Lin et al. paper' was deleted on 2026-10-06 (third pass): the judge fails an item it cannot quote, so an optional item costs a correct answer a quarter of its score, and CONTRADICTING_PAPER was already in bonus_pivots, which is where that fact belongs. Rubric audit 2026-10-07: added 'November 3' (not a substring match of 'Nov 3') and ISO '2026-11-03' to the date pre-check.",
     "bonus_pivots": [
       "CONTRADICTING_PAPER"
     ]
@@ -638,10 +644,18 @@
       "reply_contains_any": [
         "17 Oct",
         "Oct 17",
-        "16 Oct"
+        "16 Oct",
+        "October 17",
+        "October 16",
+        "Oct 16",
+        "2026-10-17",
+        "2026-10-16",
+        "17-25",
+        "17 to 25",
+        "17–25"
       ]
     },
-    "evidence_notes": "Two family quest notes plus the home_tasks entries. The answer's shape is a window 17-25 Oct. Using only the plumber fact is a partial pass. IMP_SAM_AWAY is a seeded note added for this dataset (Sam away 26-30 Oct)."
+    "evidence_notes": "Two family quest notes plus the home_tasks entries. The answer's shape is a window 17-25 Oct. Using only the plumber fact is a partial pass. IMP_SAM_AWAY is a seeded note added for this dataset (Sam away 26-30 Oct). Rubric audit 2026-10-07: the hard pre-check missed several spellings of the very answer the notes describe ('October 17', ISO '2026-10-17', and the window written '17-25 Oct', which contains neither '17 Oct' nor 'Oct 17'); they are added. The rubric still requires the plumber window, Sam's absence and a date inside the window."
   },
   {
     "id": "IMP-026",
@@ -760,10 +774,14 @@
       "reply_contains_any": [
         "12 Dec",
         "Dec 12",
-        "December 12"
+        "December 12",
+        "Dec. 12",
+        "12th of December",
+        "2026-12-12",
+        "12/12"
       ]
     },
-    "evidence_notes": "'The trip' is ambiguous in principle but only the language quest has a trip. Check used.cards includes the language quest and the speaking habit. The week count is judged against the ground truth date rather than a number baked in when the case was written. Fail on 'which trip?' or generic encouragement."
+    "evidence_notes": "'The trip' is ambiguous in principle but only the language quest has a trip. Check used.cards includes the language quest and the speaking habit. The week count is judged against the ground truth date rather than a number baked in when the case was written. Fail on 'which trip?' or generic encouragement. Rubric audit 2026-10-07: the hard date pre-check accepted only three spellings, but this assistant habitually writes ISO dates ('2026-10-06', '2026-10-31' in other replies of the same run), so a correct 'your trip on 2026-12-12' would have hard-failed; added 2026-12-12, Dec. 12, 12th of December and 12/12. The armF failure itself was the product: it said 'You are currently on track' with no data and no date."
   },
   {
     "id": "IMP-031",
@@ -1002,13 +1020,15 @@
       "reply_contains_any": [
         "26 Oct",
         "Oct 26",
-        "October 26"
+        "October 26",
+        "Oct. 26",
+        "2026-10-26"
       ],
       "reply_regex_forbidden": [
         "\\b(i|i've|i have|we)\\s+(just\\s+)?(added|saved|created|written|recorded)\\s+(a|the|that)\\s+(quest\\s+)?note\\b"
       ]
     },
-    "evidence_notes": "A new fact that supersedes an existing pivot. No note write is possible here, so the test is the superseding plus honest reporting.",
+    "evidence_notes": "A new fact that supersedes an existing pivot. No note write is possible here, so the test is the superseding plus honest reporting. Rubric audit 2026-10-07: added 'Oct. 26' and ISO '2026-10-26' to the hard date pre-check.",
     "bonus_pivots": [
       "TEAM_FRIDAY_RULE"
     ]
