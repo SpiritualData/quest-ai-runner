@@ -469,6 +469,16 @@ class DeepResult:
     # the turn (``DeepRunnerBase.starts_background_work``). Set by the orchestrator, never by a
     # runner; the escalation site then keeps the answer it already has.
     declined_background: bool = False
+    # WHY a not-met run stopped, from the verifier's own verdict (one call, no extra LLM call):
+    # ``verdict_reason`` / ``verdict_next_action`` are its last not-met reason and next step, so the
+    # report can say what is left instead of only that the goal was not met. ``needs_person`` is the
+    # specific question only a human can answer (the run stopped retrying because another attempt
+    # could not help). ``unconfirmed_note`` is set on a run accepted as met whose only gap was proof
+    # beyond what the request asked for: it names what was not independently confirmed.
+    verdict_reason: str = ""
+    verdict_next_action: str = ""
+    needs_person: str = ""
+    unconfirmed_note: str = ""
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as

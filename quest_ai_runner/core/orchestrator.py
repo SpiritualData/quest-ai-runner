@@ -2124,6 +2124,17 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
                                          "fast, balanced, quality, best (or haiku, sonnet, opus). Omit to "
                                          "keep the current tier. Raise it when the failure looks like a "
                                          "reasoning/capability gap."},
+            "blocker": {"type": "string", "enum": ["more_work", "evidence_only", "needs_person"],
+                        "description": "Only when met=false. more_work: the work is genuinely "
+                                       "incomplete or wrong and another attempt can fix it. "
+                                       "evidence_only: the output states the work is complete and "
+                                       "names the specifics, and the ONLY gap is proof beyond what "
+                                       "the request asked for. needs_person: it cannot finish without "
+                                       "a specific input only a person can give."},
+            "question": {"type": "string",
+                         "description": "If blocker is needs_person: the ONE specific question for "
+                                        "that person, answerable in a sentence. If blocker is "
+                                        "evidence_only: what was not independently confirmed."},
             "claims_unexecuted": {"type": "boolean",
                                   "description": "True if the output CLAIMS it completed a change "
                                                  "(edited a file, saved data, sent something, changed "
@@ -2215,6 +2226,15 @@ entirely (not shown at all) and the answer could not have known whether history 
     work poorly, leave need_more_context=false.
   - optionally set next_tier to a stronger model tier (fast, balanced, quality, best) when the
     failure looks like a reasoning or capability gap rather than missing context.
+  - set blocker, the reason another attempt would or would not help:
+      more_work: the work is genuinely incomplete or wrong, so another attempt can fix it (default).
+      evidence_only: the output states the work is complete and names the specifics, and the ONLY gap
+        is proof beyond what the request asked for. Put in question what was not independently
+        confirmed. Never use this for work that is vague, partial, or only planned.
+      needs_person: the work cannot be finished without something only a person can give: an
+        identity, an access grant, a real-world act, a taste or direction call, or sign-off on
+        something irreversible. Put the ONE specific question in question. Never use it for work the
+        worker could do itself, and never to hand the worker's own job to a person.
 Do NOT use em dashes.
 
 {persona}{standards}--- GOAL (done-standard) ---
@@ -6300,6 +6320,11 @@ class Orchestrator:
                             "need_more_context": bool(raw.get("need_more_context")),
                             "context_query": str(raw.get("context_query") or "").strip(),
                             "next_tier": (str(_tier).strip() or None) if _tier else None,
+                            "blocker": (str(raw.get("blocker") or "").strip().lower()
+                                        if str(raw.get("blocker") or "").strip().lower()
+                                        in ("more_work", "evidence_only", "needs_person")
+                                        else "more_work"),
+                            "question": str(raw.get("question") or "").strip(),
                             "claims_unexecuted": bool(raw.get("claims_unexecuted"))}, None
                 last_error = f"verifier response missing 'met' (model={model})"
             except Exception as e:  # noqa: BLE001 — verification must never break the run
@@ -7866,6 +7891,31 @@ class Orchestrator:
                 # Not met: record why; escalate the model; stop if the token budget is spent.
                 res.met = False
                 reason = verdict.get("reason") or "the done-standard was not satisfied"
+                res.verdict_reason = reason
+                res.verdict_next_action = (verdict.get("next_action") or "").strip()
+                # The verifier's own account of WHY another attempt would or would not help. A gap
+                # that is only proof beyond the ask is not re-run (re-running the worker to re-prove
+                # finished work is pure cost); a gap only a person can close is not re-run either,
+                # because the next attempt would hit the same wall. Neither claims a claimed change
+                # the execution record contradicts, which is a different flag.
+                _blocker = verdict.get("blocker") or "more_work"
+                _q = (verdict.get("question") or "").strip()
+                if _blocker == "evidence_only" and _q and not verdict.get("claims_unexecuted"):
+                    res.met = True
+                    res.error = None
+                    res.unconfirmed_note = _q
+                    if emit is not None:
+                        emit.status("Goal accepted; one thing was not independently confirmed: "
+                                    + _q)
+                    break
+                if _blocker == "needs_person" and _q:
+                    res.needs_person = _q
+                    if emit is not None:
+                        emit.status("Stopping here: this needs a person. " + _q)
+                    break
+                # Reads as a sentence, because a person reads it: this lands in the activity feed
+                # and can reach a human. A lowercase "goal not yet met:" followed by a verifier's
+                # raw clause looked like debug output leaking into a report.
                 # Reads as a sentence, because a person reads it: this lands in the activity feed
                 # and can reach a human. A lowercase "goal not yet met:" followed by a verifier's
                 # raw clause looked like debug output leaking into a report.

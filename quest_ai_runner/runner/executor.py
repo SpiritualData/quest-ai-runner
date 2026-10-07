@@ -1545,6 +1545,9 @@ class TaskExecutor:
             done_report = self._with_context_receipt(done_report, request_text, run_output=summary,
                                                       autopilot_composed=autopilot_composed)
             done_report += _model_used_note(deep)
+            _unconfirmed = [d.unconfirmed_note for d in deep if getattr(d, "unconfirmed_note", "")]
+            if _unconfirmed:
+                done_report += ("\n\nNot independently confirmed: " + "; ".join(_unconfirmed))
             self._report_progress(task_id, "done", text="Done.", output=done_report)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_report, kind="done", task_id=task_id,
@@ -1564,6 +1567,20 @@ class TaskExecutor:
             self.dispatch_report("report_needs_you", task_id, summary, decision_id,
                                  session_id=session_id)
             return ExecutionOutcome(task_id, "needs_you", summary, decision_id)
+        # The verifier found the goal unmet for a reason another attempt cannot fix: only a person
+        # can supply the missing input. Ask that one question (task paused at needs_you; the reply
+        # resumes the thread) instead of burning attempts and then reporting a bare shortfall.
+        asks = [d.needs_person for d in deep if getattr(d, "needs_person", "")]
+        if asks:
+            work = "\n\n".join(_strip_future_context(d.output).strip()
+                                for d in deep if (d.output or "").strip()).strip()
+            question = " ".join(asks)
+            summary = f"I need one thing from you to finish this: {question}"
+            chat_text = (f"{work}\n\n{summary}" if work else summary)
+            self._report_progress(task_id, "done", text=f"Paused, needs you: {question}")
+            self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id, card_id=card_id)
+            self.dispatch_report("report_needs_you", task_id, summary, "", session_id=session_id)
+            return ExecutionOutcome(task_id, "needs_you", summary)
         # UNVERIFIED is never reported as done, and never as a bare failure either: the work RAN
         # but its verification could not (LLM outage, no verify tier, parse failure), so the
         # outcome is genuinely unknown. The chat message must say that plainly, presenting any
@@ -1595,6 +1612,19 @@ class TaskExecutor:
         work = "\n\n".join(_strip_future_context(d.output).strip()
                             for d in deep if (d.output or "").strip()).strip()
         failed_text = errs
+        # A verdict-driven stop says what is LEFT, not only that the goal was not met, and that a
+        # reply continues the same session. The heading below is matched by string elsewhere
+        # (quest-backend's FAILED_WORK_MARKER), so it must not change.
+        left = [d for d in deep if getattr(d, "verdict_reason", "") and not d.met]
+        if left and work:
+            lead = ["I got part of the way. What is still open: "
+                    + " ".join(d.verdict_reason.strip() for d in left)]
+            nxt = " ".join(d.verdict_next_action.strip() for d in left if d.verdict_next_action)
+            if nxt:
+                lead.append("Next step: " + nxt)
+            lead.append("Reply here and I will pick this up in the same session.")
+            errs = "\n".join(lead)
+            failed_text = errs
         if work:
             failed_text = (f"{errs}\n\n--- WHAT THE RUN DID BEFORE IT STOPPED (unfinished, not "
                            f"verified) ---\n{work}")
@@ -1604,8 +1634,9 @@ class TaskExecutor:
             # "failed" is reserved for a run that produced nothing because it broke or never ran.
             self._report_progress(task_id, "done", text="Ran, but the goal is not fully met.",
                                   output=failed_text)
-            self._post_conv(conv_id, f"I got part of the way but did not fully reach the goal: "
-                                     f"{failed_text}", kind="incomplete", task_id=task_id,
+            self._post_conv(conv_id, failed_text if left else
+                            f"I got part of the way but did not fully reach the goal: {failed_text}",
+                            kind="incomplete", task_id=task_id,
                             card_id=card_id)
             self.dispatch_incomplete(task_id, failed_text, session_id=session_id)
             return ExecutionOutcome(task_id, "incomplete", failed_text)
