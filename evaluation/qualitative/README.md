@@ -244,6 +244,11 @@ datasets on 2026-10-06:
 * Never run cases while another process is building, resetting or tearing down the same dev world
   (one dev account, one world): its writes land in your diff as this case's side effects.
 * One run per case, one judge call per case: report variance honestly, rerun disputed cases.
+* The judge is a deterministic function of its input: a verdict is cached under
+  `/tmp/qualeval/judge_cache/`, keyed on the hash of model, system prompt and full judge prompt, so
+  identical evidence always gets the identical verdict (`claude -p` exposes no temperature).
+  Re-judging one run's saved evidence twice more found 0 pass/fail flips in 8 judged cases, so run
+  to run differences are the system's, not the judge's. `QUAL_JUDGE_CACHE=0` judges afresh.
 * The judge is sonnet through the subscription CLI; a usage-limit refusal surfaces as `JUDGE ERROR`
   and the case is reported unjudged, never passed.
 

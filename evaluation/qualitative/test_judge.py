@@ -68,6 +68,43 @@ class FlakyThenCorrectProvider:
         return verdict_json(n)
 
 
+@pytest.fixture(autouse=True)
+def judge_cache_off(monkeypatch):
+    """Every test judges afresh unless it turns the verdict cache on itself (in a tmp dir)."""
+    monkeypatch.setenv("QUAL_JUDGE_CACHE", "0")
+
+
+def test_identical_evidence_gets_the_identical_verdict_without_a_second_call(monkeypatch, tmp_path):
+    monkeypatch.setenv("QUAL_JUDGE_CACHE", "1")
+    monkeypatch.setattr(J, "WORK_DIR", tmp_path)
+    case = make_case(2)
+    provider = ShortRubricProvider(returned_items=2)
+    first = J.judge(case, EVIDENCE, [], PRE, "ground truth text", {}, world=None, provider=provider)
+    second = J.judge(case, EVIDENCE, [], PRE, "ground truth text", {}, world=None, provider=provider)
+    assert provider.calls == 1
+    assert second.get("cached") is True
+    assert second["verdict"] == first["verdict"]
+
+
+def test_different_evidence_is_judged_afresh(monkeypatch, tmp_path):
+    monkeypatch.setenv("QUAL_JUDGE_CACHE", "1")
+    monkeypatch.setattr(J, "WORK_DIR", tmp_path)
+    case = make_case(2)
+    provider = ShortRubricProvider(returned_items=2)
+    J.judge(case, EVIDENCE, [], PRE, "ground truth text", {}, world=None, provider=provider)
+    J.judge(case, dict(EVIDENCE, reply="another reply"), [], PRE, "ground truth text", {},
+            world=None, provider=provider)
+    assert provider.calls == 2
+
+
+def test_a_failed_judgment_is_never_cached(monkeypatch, tmp_path):
+    monkeypatch.setenv("QUAL_JUDGE_CACHE", "1")
+    monkeypatch.setattr(J, "WORK_DIR", tmp_path)
+    J.judge(make_case(3), EVIDENCE, [], PRE, "ground truth text", {}, world=None,
+            provider=ShortRubricProvider(returned_items=1))
+    assert not list(tmp_path.rglob("*.json"))
+
+
 # ---------------------------------------------------------------------------------------------
 # judge(): short rubric retries, then reports unjudged (or succeeds on the retry)
 # ---------------------------------------------------------------------------------------------

@@ -24,13 +24,15 @@ Judge output is STRICT JSON, validated by ``normalise_verdict``:
      "code_review": null | {"issues": [...], "verdict": "..."},
      "summary": "one line", "failure_class": null | "short_tag"}
 """
+import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from devclient import DEV_ENV, REPO, event_name  # noqa: E402
+from devclient import DEV_ENV, REPO, WORK_DIR, event_name  # noqa: E402
 
 sys.path.insert(0, str(REPO))
 
@@ -715,6 +717,22 @@ def other_account_data_section(world):
     return section
 
 
+def judge_cache_path(model, prompt):
+    """Where the verdict for this exact judge input is kept, or None when caching is off.
+
+    The judge runs on ``claude -p``, which exposes no temperature, so the same evidence could in
+    principle be scored twice differently. Measured 2026-10-07 by re-judging one run's saved
+    evidence twice more: 0 pass/fail flips in 8 judged cases, scores moving by up to 0.2 inside a
+    failing band. Keying the verdict on the full judge input (model, system prompt, prompt) makes
+    the judge a deterministic function of the evidence: re-running or re-scoring identical
+    evidence returns the identical verdict, so any run-to-run difference left is the system's.
+    ``QUAL_JUDGE_CACHE=0`` turns it off (a fresh judgment every time)."""
+    if os.environ.get("QUAL_JUDGE_CACHE", "1") == "0":
+        return None
+    key = hashlib.sha256("\x00".join([model, JUDGE_SYSTEM, prompt]).encode()).hexdigest()
+    return WORK_DIR / "judge_cache" / f"{key}.json"
+
+
 def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None,
           model=JUDGE_MODEL):
     """Run the LLM judge. Never raises: a failure returns {"error": ...} so a case is reported as
@@ -728,6 +746,11 @@ def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None
     """
     truth = truth + other_account_data_section(world)
     prompt = build_prompt(case, evidence, changes, pre, truth, pivots)
+    cache_path = judge_cache_path(model, prompt)
+    if cache_path and cache_path.exists():
+        raw = cache_path.read_text()
+        return {"verdict": normalise_verdict(extract_json(raw), case), "raw": raw,
+                "prompt_chars": len(prompt), "cached": True}
     provider = provider or claude_provider()
     messages = [{"role": "user", "content": prompt}]
     last = None
@@ -735,8 +758,11 @@ def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None
         raw = None
         try:
             raw = provider.answer(messages, model=model, system=JUDGE_SYSTEM)
-            return {"verdict": normalise_verdict(extract_json(raw), case), "raw": raw,
-                    "prompt_chars": len(prompt)}
+            verdict = normalise_verdict(extract_json(raw), case)
+            if cache_path:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                cache_path.write_text(raw)
+            return {"verdict": verdict, "raw": raw, "prompt_chars": len(prompt)}
         except RubricCountMismatch as e:
             last = f"{type(e).__name__}: {e}"
             if attempt == 0:
