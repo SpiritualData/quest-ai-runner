@@ -3604,12 +3604,15 @@ def unconfirmed_no_change_text(result: Any) -> str:
     (``DeepResult.changed_nothing``, set by the runner from its own bookkeeping). When a run both
     failed to verify and reports changing nothing, its output may not stand alone as the turn's
     result: the lead line above goes first. Nothing here reads the WORDS of the output (hard rule
-    #3); it is the pair of structured facts that decides. Never raises.
+    #3); it is the pair of structured facts that decides. A run whose own text already states that
+    nothing changed (``DeepResult.states_no_change``, again a structured field) gets no second
+    statement of the same fact. Never raises.
     """
     text = _strip_future_context(getattr(result, "output", None))
     try:
         if text and not getattr(result, "met", False) and \
-                getattr(result, "changed_nothing", False):
+                getattr(result, "changed_nothing", False) and \
+                not getattr(result, "states_no_change", False):
             return f"{UNCONFIRMED_NO_CHANGE_LEAD}\n\n{text}"
     except Exception:  # noqa: BLE001 — the honesty note must never break the reply
         return text

@@ -104,6 +104,18 @@ def test_the_text_of_an_unconfirmed_no_change_result_leads_with_the_honest_line(
     assert "—" not in text
 
 
+def test_a_result_whose_own_text_already_states_no_change_gets_no_second_lead():
+    """The runner's code-written text already says nothing changed (``states_no_change``), so the
+    library must not lead with the same fact again: the person reads it once."""
+    own = "I tried, but it did not work, so nothing was changed. What went wrong: no match."
+    text = unconfirmed_no_change_text(
+        DeepResult(met=False, output=own, exhausted=True, changed_nothing=True,
+                   states_no_change=True))
+
+    assert text == own
+    assert UNCONFIRMED_NO_CHANGE_LEAD not in text
+
+
 def test_a_met_result_or_a_real_change_is_passed_through_unchanged():
     met = DeepResult(met=True, output=CLAIM, changed_nothing=True)
     changed = DeepResult(met=False, output=CLAIM, exhausted=True, changed_nothing=False)

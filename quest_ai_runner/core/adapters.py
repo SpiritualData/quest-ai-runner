@@ -486,6 +486,11 @@ class DeepResult:
     # to report, so the goal loop must not let the result read as completed work; see
     # ``core/orchestrator.py``'s ``finish``. A runner that cannot tell leaves it False.
     changed_nothing: bool = False
+    # THE OUTPUT ALREADY SAYS NOTHING CHANGED: the runner's own text carries a code-written sentence
+    # stating that no change was made (set by the runner from its own bookkeeping, never inferred
+    # from the wording). ``unconfirmed_no_change_text`` then adds no second lead line of its own, so
+    # the person reads the no-change fact once. A runner that cannot tell leaves it False.
+    states_no_change: bool = False
     # WHAT THIS RUN OBSERVED, one plain line each, built by the runner from its OWN records and
     # never from the wording of its output: a receipt for each change its write log proves landed,
     # and each source it really read back. This is the material the async card updater may draw a

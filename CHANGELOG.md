@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A run whose own text already says nothing changed no longer gets a second "nothing was
+  changed" lead.** `DeepResult` gains `states_no_change`, a structured field a runner sets when its
+  output already carries a code-written no-change sentence; `unconfirmed_no_change_text` then adds
+  no `UNCONFIRMED_NO_CHANGE_LEAD` of its own. A consumer's chat stacked three no-change lines in one
+  reply (its interpreter's, its own code-written line, and this lead). Decided only on structured
+  fields, never on wording (hard rule #3). Tests: `tests/test_deep_not_met_no_change_honesty.py`.
 - **A parked approval decision is no longer resynthesized into a false "done" claim.** A deferred
   deep run that resolved to a PARKED approval (`DeepResult.decision_id` set, nothing landed) had
   its honest, code-written ask folded into `deep_output` and run through the "you already DID the
