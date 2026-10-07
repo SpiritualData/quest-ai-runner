@@ -502,6 +502,17 @@ class DeepResult:
     # updater drop an edit for lack of support. A runner that cannot tell leaves it False and its
     # turns behave exactly as they did before.
     observations_reported: bool = False
+    # AT LEAST ONE of ``observations`` above is a WRITE RECEIPT: a real change the runner's own
+    # write log proves landed, not a read, a declined-write note, or an approval-parked marker.
+    # Structural, set by the runner from its own write log, never inferred from the wording of its
+    # output or of ``observations`` itself. This is what lets ``core/orchestrator.py``'s
+    # ``result_landed_work`` tell a genuine PARTIAL write (the run is ``exhausted`` and not ``met``
+    # because something else failed afterward, but part of the change already landed) apart from an
+    # honest terminal ask that landed nothing (a clarifying question, a spent budget): both are
+    # ``exhausted`` and not ``met``, and only the receipt flag tells them apart. A runner that
+    # cannot tell leaves it False, which keeps today's "exhausted and not met -> not landed" rule
+    # exactly as it was for every runner that does not set it.
+    has_write_receipt: bool = False
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as

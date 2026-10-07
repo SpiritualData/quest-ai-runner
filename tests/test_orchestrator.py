@@ -2236,6 +2236,41 @@ def test_deferred_deep_exhausted_ask_with_real_observations_is_reported_verbatim
     assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in prompts
 
 
+def test_deferred_deep_exhausted_partial_write_with_receipt_is_still_landed_work():
+    """BLOCKER fix 2026-10-07: the previous fix (the test right above) made EVERY exhausted,
+    not-met, receipt-tracking result count as "not landed" -- but a runner can end a turn
+    ``exhausted`` and not ``met`` while a GENUINE PARTIAL WRITE already happened (quest-backend's
+    ``QuestCommandRunner`` hits this exact shape: one write call in a multi-call program succeeds,
+    a LATER call in the same program raises, and the runner stops rather than retry -- retrying
+    would repeat the write that already landed -- and reports ``PARTIAL_WRITE_MESSAGE``, met=False,
+    exhausted=True, with the write log's own receipt in ``observations``). Dropping that receipt
+    (the regression this test pins) reports real, landed work as not done at all. The ONLY
+    structural difference from the test above is ``has_write_receipt=True``: this must restore the
+    normal "landed work" handling (folded into the synthesis), exactly as a plain ``met=True``
+    result gets below."""
+    from quest_ai_runner.core.adapters import DeepResult
+    partial_text = (
+        "Part of this change went through before the rest ran into a problem: added the goal "
+        "'Hold the open day on Sunday 8 Nov'. The rest did not run, and I am not trying it again "
+        "automatically, since that risks doing the first part twice. What went wrong: the "
+        "quest's budget field could not be updated. Let me know if you would like me to finish "
+        "the rest.")
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the open day goal and update the budget"}}],
+    )
+    runner = FixedResultDeepRunner(DeepResult(
+        met=False, output=partial_text, exhausted=True, error="partial write",
+        observations_reported=True, has_write_receipt=True,
+        observations=["Created goal 'Hold the open day on Sunday 8 Nov'."],
+    ))
+    _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "add the open day goal and update the budget")
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" in _all_answer_prompts(provider), (
+        "a genuine partial write (has_write_receipt=True) must be reported as landed work, not "
+        "silently dropped")
+
+
 def test_deferred_deep_that_landed_is_still_written_up_as_before():
     from quest_ai_runner.core.adapters import DeepResult
     provider = StubProvider(

@@ -250,16 +250,27 @@ def result_landed_work(result: Any) -> bool:
     was computed correctly, the write's quest was ambiguous, the runner asked "which quest should
     this go on?" (met=False, exhausted=True, real observations), and folding that into the "you
     already DID the work" synthesis produced "I have queued the creation of a tempo-run goal for
-    that day" -- nothing was queued, parked, or written anywhere. Structural, like every other
-    branch here: driven by ``observations_reported``/``exhausted``/``met``, never by scanning the
-    output text for "queued"/"asking"/etc. Never raises."""
+    that day" -- nothing was queued, parked, or written anywhere.
+
+    ``has_write_receipt`` is the one exception to "exhausted and not met means not landed"
+    (BLOCKER fix 2026-10-07): a runner can end a turn ``exhausted`` and not ``met`` while a
+    GENUINE PARTIAL WRITE already landed (e.g. three of five updates completed, then the fourth
+    raised and the runner stopped rather than risk a duplicate retry). Dropping that receipt
+    reported real work as not done. The flag is read, never the wording of ``observations`` or
+    ``output`` -- a runner that cannot tell leaves it False, so this stays exactly the blanket
+    "exhausted and not met -> not landed" rule for every runner that does not set it (including
+    the ambiguous-quest clarify question above, which never sets it).
+
+    Structural throughout, like every other branch here: driven by
+    ``observations_reported``/``exhausted``/``met``/``has_write_receipt``, never by scanning the
+    output text for "queued"/"asking"/"wrote"/etc. Never raises."""
     try:
         if getattr(result, "decision_id", None) or getattr(result, "changed_nothing", False):
             return False
         if getattr(result, "observations_reported", False) and not getattr(result, "met", False):
             if not (getattr(result, "observations", None) or []):
                 return False
-            if getattr(result, "exhausted", False):
+            if getattr(result, "exhausted", False) and not getattr(result, "has_write_receipt", False):
                 return False
         return True
     except Exception:  # noqa: BLE001

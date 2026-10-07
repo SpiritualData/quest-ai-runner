@@ -37,6 +37,19 @@ All notable changes to this project are documented here. The format is based on
   observations at all" case; a result whose verification simply could not run (no receipts
   tracked at all, `observations_reported=False`) is unaffected and still folds into the synthesis
   as before. Tests: `tests/test_orchestrator.py::test_deferred_deep_exhausted_ask_with_real_observations_is_reported_verbatim`.
+- **A genuine PARTIAL write, reported `exhausted` and not `met`, was dropped by the fix right
+  above it (round-3 regression on the same code).** The exhausted-and-not-met exclusion added
+  for the terminal-ask case (immediately above) is correct for an honest "nothing landed" ask,
+  but it also caught a DIFFERENT shape: a runner whose write log proves part of a multi-write
+  change already landed before a later call failed, which reports `exhausted=True`/`met=False`
+  with that receipt in `observations` (never retried, since retrying would repeat the write that
+  already happened -- see quest-backend's `QuestCommandRunner`/`PARTIAL_WRITE_MESSAGE`). Dropping
+  that receipt reported real, landed work as not done. Fix: new `DeepResult.has_write_receipt`
+  field (structural, set by the runner from its own write log, never inferred from text);
+  `result_landed_work` now excludes the exhausted-and-not-met shape only when
+  `has_write_receipt` is also False, so the ordinary terminal-ask case is unaffected (it never
+  sets the flag) and a genuine partial write is folded into the synthesis as landed work. Tests:
+  `tests/test_orchestrator.py::test_deferred_deep_exhausted_partial_write_with_receipt_is_still_landed_work`.
 
 ### Fixed
 - **The fourth cross-quest leak: an UNSCOPED anticipation precompute could cache another quest's
