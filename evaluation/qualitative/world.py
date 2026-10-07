@@ -987,6 +987,116 @@ def delete_new_cards(baseline):
     return len(fresh)
 
 
+# ---------------------------------------------------------------------------------------------
+# Decision-request cleanup: a turn that proposes a change (a quest-field write, a quest-command
+# confirm) PARKS it on an "Asks for you" decision-request instead of running it. Left open, these
+# (a) clutter the eval account's ask list across runs and (b) leak into later cases: an open card
+# rides live_context into the NEXT turn on the same quest (quest-backend's
+# ``render_pending_proposals_block``), and an open field-edit proposal makes
+# ``propose_quest_field_edit``'s de-duplication treat a later case's identical suggestion as
+# already asked, so it never raises its own card. See ``cancel_own_asks.py`` for why these are
+# CANCELLED rather than declined (a decline feeds a 7-day per-field suppression memory and the
+# capability-grant downgrade fold; see that script's docstring for the exact mechanism).
+# ---------------------------------------------------------------------------------------------
+
+#: Executable kinds this cleanup must never touch. ``machine_quest_creation`` is the world's OWN
+#: quest-creation lifecycle (``world_asks.json``, ``approve_own_asks.py``, ``--decline-asks``),
+#: with its own 30-day re-ask memory; it is never something a case's chat turn raises.
+NEVER_CANCEL_EXECUTABLE_KINDS = frozenset({"machine_quest_creation"})
+
+
+def open_decisions():
+    """Every OPEN decision-request visible to the eval account. ``GET .../decisions/for-user``
+    already scopes to the caller (assigned to it or created by it), so this can never return
+    another account's asks."""
+    status, body = api("GET", "/api/teams/decisions/for-user")
+    if status != 200:
+        return []
+    return body if isinstance(body, list) else (body or {}).get("decisions") or []
+
+
+def cancellable_decision_ids(rows, pending_asks=None):
+    """Of ``rows`` (decision-request dicts carrying at least ``decision_id`` and ``executable``),
+    those safe to cancel: a real decision id, not a quest-creation ask, and not one of the world's
+    own still-pending quest-creation asks (belt and braces; those already fail the kind check,
+    since a pending ask has no executable yet). Pure: no network, so it is unit-testable with
+    fabricated rows and an explicit ``pending_asks`` set.
+    """
+    if pending_asks is None:
+        pending_asks = set(json.loads(ASKS_PATH.read_text()).values()) if ASKS_PATH.exists() else set()
+    out = []
+    for row in rows:
+        did = row.get("decision_id")
+        kind = (row.get("executable") or {}).get("kind")
+        if did and did not in pending_asks and kind not in NEVER_CANCEL_EXECUTABLE_KINDS:
+            out.append(did)
+    return out
+
+
+def tagged_quest_decision_ids(rows, is_tagged_quest):
+    """Of ``rows``, those whose ``quest_id`` ``is_tagged_quest`` (a ``quest_id -> bool`` callable)
+    confirms carries the eval tag. A row naming no quest, or a quest ``is_tagged_quest`` cannot
+    confirm (deleted, or never tagged), is left alone rather than guessed into a sweep: better to
+    under-clean than to touch a decision that might not be this harness's. Pure: the caller
+    supplies the lookup (the real one asks the backend; a test passes a dict's ``get``).
+    """
+    out = []
+    for row in rows:
+        qid, did = row.get("quest_id"), row.get("decision_id")
+        if qid and did and is_tagged_quest(qid):
+            out.append(did)
+    return out
+
+
+def sweep_cancel_candidates():
+    """Everything ``runner.py cleanup-asks`` would touch: open decisions, anywhere on the eval
+    account, tied to a ZZQEVAL-tagged quest. Unlike the per-case cleanup (scoped by the case's own
+    fresh ``conv_id``), a leftover from an earlier, already-torn-down conversation has no conv_id
+    to match, so this keys on the QUEST itself via ``tagged_quest_decision_ids``. Returns dicts
+    with enough to report: ``decision_id``, ``quest_id``, ``kind`` (the executable kind), ``summary``.
+    """
+    rows_by_id = {r.get("decision_id"): r for r in open_decisions() if r.get("decision_id")}
+    safe_ids = set(cancellable_decision_ids(rows_by_id.values()))
+    safe_rows = [r for did, r in rows_by_id.items() if did in safe_ids]
+    tag_cache = {}
+
+    def is_tagged(qid):
+        if qid not in tag_cache:
+            state = quest_state(qid)
+            tag_cache[qid] = TAG in str(state.get("acceptance_criteria") or "")
+        return tag_cache[qid]
+
+    keep = set(tagged_quest_decision_ids(safe_rows, is_tagged))
+    return [{"decision_id": r["decision_id"], "quest_id": r.get("quest_id"),
+            "kind": (r.get("executable") or {}).get("kind"), "summary": (r.get("summary") or "")[:160]}
+            for r in safe_rows if r["decision_id"] in keep]
+
+
+def cancel_decisions(decision_ids):
+    """DEV ONLY: clear open decision-requests this harness raised, through ``cancel_own_asks.py``
+    inside a quest-backend checkout (same pattern as ``approve_own_asks``: backend's own
+    interpreter, backend directory as cwd, its own dev-environment safety check). Best-effort: a
+    cleanup failure is printed and swallowed, never raised, since it must not fail a case's own
+    run or a sweep over something else that could not be reached. Returns the script's per-id
+    {decision_id, ok, reason?} rows (empty list on total failure)."""
+    import subprocess
+    if not decision_ids:
+        return []
+    python = os.environ.get("QUAL_BACKEND_PYTHON") or str(BACKEND_DIR / "venv" / "bin" / "python3")
+    script = Path(__file__).resolve().parent / "cancel_own_asks.py"
+    try:
+        proc = subprocess.run([python, str(script), *decision_ids], cwd=BACKEND_DIR,
+                              capture_output=True, text=True, timeout=120)
+    except Exception as e:  # noqa: BLE001 -- cleanup is a courtesy, never a gate
+        print(f"  WARN cancel-own-asks could not run: {e}")
+        return []
+    results = [json.loads(ln) for ln in proc.stdout.splitlines() if ln.startswith("{")]
+    if proc.returncode != 0:
+        print(f"  WARN cancel-own-asks failed (exit {proc.returncode}): "
+              f"{(proc.stderr or '').strip().splitlines()[-1:]}")
+    return results
+
+
 def ground_truth(quest_keys=None):
     """Plain-text description of what was SEEDED, for the judge to verify facts against."""
     keys = quest_keys or list(QUESTS)

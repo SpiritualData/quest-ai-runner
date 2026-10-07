@@ -285,9 +285,15 @@ def conversation_proposals(conv_id):
         if not isinstance(row, dict) or row.get("conv_id") != conv_id:
             continue
         executable = row.get("executable") or {}
+        is_exec = isinstance(executable, dict)
         out.append({"decision_id": row.get("decision_id"), "kind": row.get("kind"),
                     "capability": row.get("capability"), "summary": row.get("summary"),
-                    "parked_code": executable.get("code") if isinstance(executable, dict) else None})
+                    "parked_code": executable.get("code") if is_exec else None,
+                    # The field_edit / quest_command / machine_quest_creation discriminator (see
+                    # quest-backend's decision_execution.py KIND_* constants). Not used for
+                    # judging; the per-case cleanup in runner.py reads it to refuse touching a
+                    # machine_quest_creation ask (world.py's own setup/teardown lifecycle).
+                    "executable_kind": executable.get("kind") if is_exec else None})
     return out
 
 

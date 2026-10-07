@@ -35,6 +35,8 @@ $PY evaluation/qualitative/runner.py run --dataset all --workers 4
 $PY evaluation/qualitative/runner.py report             # RESULTS.md
 $PY evaluation/qualitative/runner.py reset              # back to seeded state, no new approvals
 $PY evaluation/qualitative/runner.py teardown           # delete everything and prove it
+$PY evaluation/qualitative/runner.py cleanup-asks       # sweep leftover approval cards, dry run
+$PY evaluation/qualitative/runner.py cleanup-asks --apply   # actually clear them
 ```
 
 ### The one human step: quest approval
@@ -87,9 +89,17 @@ can be exercised without approvals; it cannot serve the datasets. Use `run --exa
 4. deterministic pre-checks (`precheck` + `expect_writes` + `forbid_writes` + routing); a hard
    failure scores 0 and skips the judge unless `judge_always`
 5. LLM judge: per-rubric pass/fail with a quote, score, routing, side effects, pivot use, code review
-6. mutating case: `revert()` the diff; if the world will not return to its snapshot, `reset()`
-7. context cards the turn learned are deleted (they persist per user and would leak into the next
+6. any approval card / decision-request THIS conversation raised (a field-edit proposal, a
+   quest-command confirm) is CANCELLED (not declined: see `cancel_own_asks.py`), or it clutters the
+   account and leaks into the next case's `live_context`
+7. mutating case: `revert()` the diff; if the world will not return to its snapshot, `reset()`
+8. context cards the turn learned are deleted (they persist per user and would leak into the next
    case); the conversation is deleted
+
+Leftovers from an interrupted run (killed mid-case, or from before this cleanup existed) are swept
+separately with `runner.py cleanup-asks` (dry run by default, `--apply` to act): it keys on the
+decision's QUEST carrying the eval tag, since an orphaned card has no conversation left to match.
+It never touches a `machine_quest_creation` ask (`world.py`'s own quest-approval lifecycle).
 
 A case passes when score >= 0.7, no hard pre-check failure, the judge says routing and side effects
 are right, **and the context gate holds**: every pivot in `must_use_pivots` came back `used`, and

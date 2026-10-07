@@ -7,6 +7,7 @@
     .venv/bin/python3 evaluation/qualitative/runner.py report
     .venv/bin/python3 evaluation/qualitative/runner.py reset
     .venv/bin/python3 evaluation/qualitative/runner.py teardown [--keep-quests]
+    .venv/bin/python3 evaluation/qualitative/runner.py cleanup-asks [--apply]
 
 Each case drives ONE FRESH conversation of the real chat (POST
 /api/quest-ai/conversations/{id}/messages/stream, auto_run true, the surface a subscriber uses).
@@ -246,6 +247,16 @@ def run_case(case, world, use_judge=True, parallel=False):
         if verdict:
             record["pivot_gate"] = J.pivot_gate(case, verdict)
         record["_before_after"] = (before, after)
+        # Clear any approval card / decision-request THIS case's own conversation raised (a
+        # field-edit proposal, a quest-command confirm), so it cannot clutter the account or leak
+        # into the next case's live_context. Scoped by conv_id (a fresh conversation per case), so
+        # this can only ever touch what this case itself just created; see world.cancel_decisions
+        # and cancel_own_asks.py for why it cancels rather than declines.
+        cancel_ids = [p["decision_id"] for p in proposals
+                      if p.get("decision_id")
+                      and p.get("executable_kind") not in W.NEVER_CANCEL_EXECUTABLE_KINDS]
+        if cancel_ids:
+            record["decisions_cancelled"] = W.cancel_decisions(cancel_ids)
     except Exception as e:  # noqa: BLE001
         record["error"] = f"{type(e).__name__}: {e}"
         record["traceback"] = traceback.format_exc()[-1500:]
@@ -294,6 +305,10 @@ def print_row(r):
         print(f"           hard fail: {pre['hard_failures'][:4]}")
     if r.get("pivot_gate"):
         print(f"           context gate: {r['pivot_gate']}")
+    cancelled = r.get("decisions_cancelled") or []
+    if cancelled:
+        ok = sum(1 for c in cancelled if c.get("ok"))
+        print(f"           cleared {ok}/{len(cancelled)} approval card(s) this case raised")
     if judged.get("summary"):
         print(f"           {judged['summary']}")
     elif (r.get("judged") or {}).get("error"):
@@ -440,13 +455,41 @@ def write_report():
     print(f"report written to {RESULTS_MD}")
 
 
+def cleanup_asks(apply=False):
+    """One-shot sweep of leftover eval approval cards accumulated on the dev account across past
+    runs. The per-case cleanup in ``run_case`` already clears what each case itself raised; this
+    is for anything that slipped through (a run killed mid-case, an older run from before this
+    cleanup existed). Dry run by default: prints what it would touch and does nothing. ``--apply``
+    actually cancels it, through the same no-side-effect path as the per-case cleanup (see
+    ``cancel_own_asks.py``). Holds the world lock like every other command (see ``main``)."""
+    candidates = W.sweep_cancel_candidates()
+    by_kind = {}
+    for c in candidates:
+        by_kind.setdefault(c["kind"] or "unknown", []).append(c)
+    verb = "would cancel" if not apply else "cancelling"
+    print(f"{verb} {len(candidates)} leftover decision(s) on the eval account:")
+    for kind, items in sorted(by_kind.items()):
+        print(f"  {kind}: {len(items)}")
+    for c in candidates:
+        print(f"    {c['decision_id']} [{c['kind']}] quest={c['quest_id']} {c['summary']!r}")
+    if not candidates:
+        print("nothing to clean")
+        return
+    if not apply:
+        print("\nDRY RUN: re-run with --apply to cancel these")
+        return
+    for result in W.cancel_decisions([c["decision_id"] for c in candidates]):
+        print(f"  {result}")
+
+
 # ---------------------------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command",
-                        choices=["setup", "run", "teardown", "report", "reset", "validate"])
+                        choices=["setup", "run", "teardown", "report", "reset", "validate",
+                                "cleanup-asks"])
     parser.add_argument("--dataset", default="all", choices=["all", *DATASETS])
     parser.add_argument("--only", default=None, help="comma-separated case ids")
     parser.add_argument("--workers", type=int, default=1,
@@ -461,6 +504,8 @@ def main():
                              "quest-backend's resolve path (refuses on a non-dev backend)")
     parser.add_argument("--keep-quests", action="store_true")
     parser.add_argument("--decline-asks", action="store_true")
+    parser.add_argument("--apply", action="store_true",
+                        help="cleanup-asks: actually cancel the leftover cards (default: dry run)")
     args = parser.parse_args()
     global RESULTS_JSON, RESULTS_MD
     if args.examples:  # smoke runs never pollute the real results or RESULTS.md
@@ -473,13 +518,15 @@ def main():
 
 
 def run_command(args):
-    """setup/reset/teardown/run, each holding the world lock (see devclient.WorldLock)."""
+    """setup/reset/teardown/run/cleanup-asks, each holding the world lock (see devclient.WorldLock)."""
     if args.command == "setup":
         W.setup_partial() if args.partial else W.setup(args.wait, args.approve_own_asks)
     elif args.command == "reset":
         W.reset()
     elif args.command == "teardown":
         sys.exit(0 if W.teardown(args.keep_quests, args.decline_asks) else 1)
+    elif args.command == "cleanup-asks":
+        cleanup_asks(args.apply)
     else:
         only = args.only.split(",") if args.only else None
         cases = load_example_cases() if args.examples else load_cases(args.dataset, only)
