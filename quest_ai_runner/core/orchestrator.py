@@ -1200,24 +1200,40 @@ DEFERRED_DEEP_FIELD_DESC_QUEUED = (
     "is told in this conversation when it finishes)."
 )
 
-def _deep_declined_background(result: Any) -> bool:
+# The status line that corrects an escalation's "searching further..." announcement when the
+# escalation was not started or came back empty, so status lines stay true.
+OWN_ESCALATION_KEPT_STATUS = "Nothing more to add from a deeper search, keeping this answer."
+
+
+def deep_declined_background(result: Any) -> bool:
     """True when a self-initiated deep run started nothing: every goal came back
     ``declined_background`` (see ``Orchestrator._run_deep``'s ``self_initiated``)."""
     results = list(getattr(result, "deep_results", None) or [])
     return bool(results) and all(getattr(d, "declined_background", False) for d in results)
 
 
-def _self_escalation_adds_nothing(result: Any) -> bool:
+def own_escalation_adds_nothing(result: Any, exec_record: Any = None, facts_before: int = 0) -> bool:
     """True when one of the orchestrator's OWN escalations should not replace the answer it
-    already has: it started nothing (``_deep_declined_background``), or it ran and produced no
-    output at all. Found 2026-10-07 in Quest's chat: a last-resort run came back empty and the
-    turn ended with no reply, so the person got a generic "could you tell me more?" instead of the
-    totals the answer had already worked out."""
-    if _deep_declined_background(result):
+    already has: it started nothing (``deep_declined_background``), or it came back EMPTY with
+    nothing else to report (no output, no text, no decision filed, no usage limit, and no
+    operation it ran succeeded: ``facts_before`` is how many facts ``exec_record`` held before
+    the escalation started). Found 2026-10-07 in Quest's chat: a last-resort run came back empty and
+    the turn ended with no reply, so the person got a generic "could you tell me more?" instead
+    of the totals the answer had already worked out. A run that filed a decision, hit the usage
+    limit or changed data still reports itself."""
+    if deep_declined_background(result):
         return True
     results = list(getattr(result, "deep_results", None) or [])
-    return not any((getattr(d, "output", "") or "").strip() for d in results) and not (
-        getattr(result, "text", "") or "").strip()
+    if any((getattr(d, "output", "") or "").strip() for d in results):
+        return False
+    if (getattr(result, "text", "") or "").strip():
+        return False
+    if any(getattr(d, "decision_id", None) or getattr(d, "usage_limited", False) for d in results):
+        return False
+    facts = list(getattr(exec_record, "facts", None) or [])[facts_before:]
+    if any(getattr(f, "succeeded", False) for f in facts):
+        return False
+    return True
 
 
 # Reserved named-runner registry key for QUEUED deployments: when OrchestratorConfig.
@@ -2669,12 +2685,12 @@ Rules:
     durable fact with nothing external to point at.
   - A note that only SUMMARIZES something still fetchable MUST carry the fetch alongside it:
     {{"type": "note", "locator": {{"text": "<the summary>", "full_ref": <the read spec that returns
-    the FULL source>}}}}. The read spec is one a read step in the work ACTUALLY USED and that
-    returned the source: copy it verbatim from the gathered reads (e.g. {{"rel_path": "..."}}), and
-    never invent a shape of your own (a made-up spec is refused when a later turn runs it, and
-    planners copy what they see on cards). Without it a later turn
-    cannot tell your summary from the whole source and will answer out of the summary; with it, the
-    full text is pulled first. Never write a summary of a fetchable source with no full_ref.
+    the FULL source>}}}}. The read spec must be one the work above SHOWS it used to fetch the source,
+    copied verbatim (e.g. {{"rel_path": "..."}}). Never invent a shape of your own: a made-up spec
+    is refused when a later turn runs it, and planners copy what they see on cards. With a real
+    full_ref a later turn pulls the full text before answering instead of answering out of your
+    summary. When the work shows no read spec for a source, do not summarize that source in a
+    note; capture it as a reference item instead.
   - Group related references onto ONE topical card. Set its "name"/"description" so it is easy to
     find later.
   - To UPDATE an existing card, reuse its exact card_id from CURRENT CARDS below; for something new,
@@ -3248,13 +3264,13 @@ _POLITE_COMMAND_RE = re.compile(
 # so "I'll need you to update the sheet" keeps its command reading. Such a message is sent to the
 # one-shot LLM judgment band rather than escalated by regex (found 2026-10-07: "I'll lean on the
 # claim ... and move on to the next section" queued a background task to "apply" it).
-_SPEAKER_OWN_PLAN_RE = re.compile(
+SPEAKER_OWN_PLAN_RE = re.compile(
     r"^\s*(?:i['’]?ll|i\s+will|i\s+shall|i['’]?m\s+(?:going\s+to|gonna|planning\s+to|about\s+to)|"
     r"i\s+am\s+(?:going\s+to|planning\s+to|about\s+to)|i\s+plan\s+to|i\s+intend\s+to|"
     r"i\s+think\s+i['’]?ll|i['’]?ve\s+decided\s+to|i\s+decided\s+to)\b",
     re.IGNORECASE,
 )
-_ADDRESSES_ASSISTANT_RE = re.compile(r"\b(?:you|your)\b", re.IGNORECASE)
+ADDRESSES_ASSISTANT_RE = re.compile(r"\b(?:you|your)\b", re.IGNORECASE)
 
 
 def message_announces_own_plan(message: Optional[str]) -> bool:
@@ -3263,7 +3279,7 @@ def message_announces_own_plan(message: Optional[str]) -> bool:
     Never raises."""
     try:
         m = _strip_question_preamble((message or "").strip())
-        return bool(_SPEAKER_OWN_PLAN_RE.search(m)) and not _ADDRESSES_ASSISTANT_RE.search(m)
+        return bool(SPEAKER_OWN_PLAN_RE.search(m)) and not ADDRESSES_ASSISTANT_RE.search(m)
     except Exception:  # noqa: BLE001
         return False
 
@@ -7556,10 +7572,6 @@ class Orchestrator:
             # event and reuse it to label the completion milestone, so the consumer can attach this
             # task's final output to the same run it streamed.
             captured_run_id: Dict[str, Optional[str]] = {"id": None}
-            if per_goal_context and emit is not None:
-                # Progress the person can read, not internal state. "Selected context for goal: ..."
-                # named an orchestrator step and read as leaked machinery in the live status pill.
-                emit.status(f"Working on: {goal[:60]}")
 
             # Resolve which runner(s) handle THIS goal ONCE per task (not per retry — the
             # classifier's inputs (user_message/goal/brief) don't change across retries of the
@@ -7625,12 +7637,20 @@ class Orchestrator:
             # from an instruction in its brief, while the terminal rung is a prose worker that does
             # need to be asked.
             terminal_runner = runner_ladder[-1]
-            if self_initiated and any(runner_starts_background_work(r) for r in runner_ladder):
-                log.info("Self-initiated escalation resolved to a background-work runner; "
-                         "not starting it (the current answer stands)")
+            # Decline BEFORE anything is announced, so no status line promises a run that never
+            # starts. Only when the user's own words did not ask for work: a request the planner
+            # merely answered ("research venues for me") may still go to the queue this way.
+            if (self_initiated and not _message_requests_change(user_message)
+                    and any(runner_starts_background_work(r) for r in runner_ladder)):
+                log.info("Self-initiated escalation resolved to a background-work runner the "
+                         "user did not ask for; not starting it (the current answer stands)")
                 return DeepResult(met=False, output="", declined_background=True,
                                   error="escalation not started: the runner it resolved to "
                                         "starts background work the user did not ask for")
+            if per_goal_context and emit is not None:
+                # Progress the person can read, not internal state. "Selected context for goal: ..."
+                # named an orchestrator step and read as leaked machinery in the live status pill.
+                emit.status(f"Working on: {goal[:60]}")
             announce_model_selection(terminal_runner)
 
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
@@ -11149,6 +11169,7 @@ class Orchestrator:
                         deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                     )
                     _ov_model = self._answer_model(_ov_plan, "opus", hint=model_hint)
+                    ov_facts_before = len(getattr(exec_record, "facts", None) or [])
                     _ov_res = self._run_deep(
                         _ov_plan, user_message, _ov_model,
                         emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
@@ -11159,12 +11180,15 @@ class Orchestrator:
                         resume_session_id=take_resume_session(), self_initiated=True)
                     if _ov_res.kind == "cancelled":
                         return finish(_ov_res)
-                    if not _self_escalation_adds_nothing(_ov_res):
+                    if not own_escalation_adds_nothing(_ov_res, exec_record, ov_facts_before):
                         _ov_res.exit_reason = "overseer_escalated_deep"
                         self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
                         return finish(_ov_res)
                     # Not started (background work the user did not ask for) or it produced
                     # nothing: the draft answer ships.
+                    log.info("overseer escalation added nothing; keeping the draft answer")
+                    if emit is not None:
+                        emit.status(OWN_ESCALATION_KEPT_STATUS)
                 elif _bsig.signal == "escalate_human":
                     # Genuine human-only fork (Fix 2): route through the SAME confirm / decision-
                     # request mechanism as a planner-originated confirm, discarding the drafted
@@ -11301,10 +11325,13 @@ class Orchestrator:
         # over budget I am ... then add a goal" ended in a background task for a goal the chat can
         # add inline in a second.
         _queued_mode = bool(self.cfg.deferred_deep_queued)
-        _pin_queue = _queued_mode and bool(plan.deferred_deep)
+        # A queue-only wiring (no inline runner) still pins: the queue is the only place the
+        # inferred work can go (settled: test_queue_only_wiring_can_still_hand_off).
+        pin_queue = _queued_mode and (bool(plan.deferred_deep)
+                                      or not self._has_deep_execution_capability())
         if should_defer_deep:
             try:
-                if _pin_queue:
+                if pin_queue:
                     emit.status("Handing this work to the background queue…")
                 elif not plan.deferred_deep:
                     emit.status("Executing follow-up work…")
@@ -11322,14 +11349,14 @@ class Orchestrator:
                 # Queued deployments pin deferred work to the registered queue runner (reserved
                 # key), so the classifier can never re-route it to an inline runner.
                 _deferred_runner = (self.deep_runners.get(DEFERRED_RUNNER_KEY)
-                                    if _pin_queue else None)
+                                    if pin_queue else None)
                 # Announce the follow-up goal before executing it — same rules as the main deep
                 # branch above: EVENT_INTENT (an announcement of intent, never usable as a turn's
                 # outcome), and only when something can actually run it. The gate mirrors
                 # _run_deep's exactly: a pinned ``runner_override`` IS the capability.
                 if emit is not None and (_deferred_runner is not None
                                          or self._has_deep_execution_capability()):
-                    _followup_verb = "Queueing" if _pin_queue else "Executing"
+                    _followup_verb = "Queueing" if pin_queue else "Executing"
                     emit.emit(ProgressEvent(type=EVENT_INTENT,
                                             text=f"{_followup_verb} follow-up: {deferred_plan.goal}"))
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
@@ -11466,7 +11493,7 @@ class Orchestrator:
         _claim_corrected = False
         # Set when one of the orchestrator's own escalations resolved to a background-work runner
         # and was not started (see _run_deep's ``self_initiated``): no further escalation this turn.
-        _self_escalation_declined = False
+        own_escalation_settled = False
         if (not _deferred_handoff_confirmed
                 and (self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims)):
             try:
@@ -11604,7 +11631,7 @@ class Orchestrator:
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.
                     if (verdict.get("need_more_context") and not brainstorm_active
-                            and not _self_escalation_declined
+                            and not own_escalation_settled
                             and self._has_deep_execution_capability()):
                         if emit is not None:
                             emit.status("Need more context to answer — searching further…")
@@ -11623,6 +11650,7 @@ class Orchestrator:
                             deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                         )
                         _esc_model = self._answer_model(_esc_plan, "opus", hint=model_hint)
+                        esc_facts_before = len(getattr(exec_record, "facts", None) or [])
                         _esc_res = self._run_deep(
                             _esc_plan, user_message, _esc_model,
                             emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
@@ -11633,10 +11661,15 @@ class Orchestrator:
                             resume_session_id=take_resume_session(), self_initiated=True)
                         if _esc_res.kind == "cancelled":
                             return finish(_esc_res)
-                        if _self_escalation_adds_nothing(_esc_res):
+                        if own_escalation_adds_nothing(_esc_res, exec_record, esc_facts_before):
                             # Not started (see _run_deep's ``self_initiated``) or it produced
-                            # nothing; the last-resort run below must not try again.
-                            _self_escalation_declined = True
+                            # nothing; the last-resort run below must not try again. The status
+                            # line above announced a search, so say it ended here.
+                            own_escalation_settled = True
+                            log.info("own escalation (need more context) added nothing; "
+                                     "keeping the answer")
+                            if emit is not None:
+                                emit.status(OWN_ESCALATION_KEPT_STATUS)
                         else:
                             _esc_res.exit_reason = "escalated_deep"
                             _esc_res.goal_verdict = verdict
@@ -11669,7 +11702,7 @@ class Orchestrator:
         # verifier naming a gap without setting need_more_context, a non-answer like "which file
         # should I look in?"). One pass only; skipped when something already mutated this turn (a
         # re-run could double the change) or the human asked us to hold off.
-        if (self.cfg.deep_before_giving_up and not _self_escalation_declined
+        if (self.cfg.deep_before_giving_up and not own_escalation_settled
                 and not _deferred_handoff_confirmed and not _claim_corrected
                 and not brainstorm_active
                 and _last_verdict is not None and not _last_verdict.get("met")
@@ -11697,6 +11730,7 @@ class Orchestrator:
                     deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                 )
                 _lr_model = self._answer_model(_lr_plan, "opus", hint=model_hint)
+                lr_facts_before = len(getattr(exec_record, "facts", None) or [])
                 _lr_res = self._run_deep(
                     _lr_plan, user_message, _lr_model,
                     emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
@@ -11707,11 +11741,14 @@ class Orchestrator:
                     resume_session_id=take_resume_session(), self_initiated=True)
                 if _lr_res.kind == "cancelled":
                     return finish(_lr_res)
-                if not _self_escalation_adds_nothing(_lr_res):
+                if not own_escalation_adds_nothing(_lr_res, exec_record, lr_facts_before):
                     _lr_res.exit_reason = "escalated_deep"
                     _lr_res.goal_verdict = _last_verdict
                     self._kickoff_card_update(_lr_res, _lr_plan, user_message, _ctx_meta, emit)
                     return finish(_lr_res)
+                log.info("last-resort escalation added nothing; keeping the answer")
+                if emit is not None:
+                    emit.status(OWN_ESCALATION_KEPT_STATUS)
             except Exception:  # noqa: BLE001 — the net must never break the turn
                 log.warning("last-resort deep run failed", exc_info=True)
 

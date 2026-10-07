@@ -110,3 +110,34 @@ def test_an_empty_last_resort_run_keeps_the_answer():
     assert res.kind == "answer"
     assert "I have no material on that" in (res.text or "")
     assert len(runner.calls) >= 1
+
+
+def test_a_users_own_request_may_still_reach_the_queue_through_an_escalation():
+    """The decline is for work the user did not ask for. When their own words asked for work
+    (the planner only answered), an escalation that resolves to the queue still runs."""
+    provider = VerdictProvider([ANSWER], [NOT_MET, NOT_MET])
+    runner = QueueRunner(met=True, output="Queued as task #1")
+    orch(provider, runner).run("add the wedding venues to the shared planning sheet")
+    assert len(runner.calls) >= 1
+
+
+def test_an_empty_escalation_that_filed_a_decision_still_reports_itself():
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import own_escalation_adds_nothing
+
+    class Res:
+        text = ""
+        deep_results = [DeepResult(met=False, output="", decision_id="dec_1")]
+    assert own_escalation_adds_nothing(Res()) is False
+    Res.deep_results = [DeepResult(met=False, output="")]
+    assert own_escalation_adds_nothing(Res()) is True
+
+    from quest_ai_runner.core.guard import ExecutionFact
+
+    class Record:
+        facts = [ExecutionFact(goal="old")]
+    done = ExecutionFact(goal="wrote it")
+    done.succeeded = True
+    Record.facts.append(done)
+    assert own_escalation_adds_nothing(Res(), Record(), facts_before=1) is False
+    assert own_escalation_adds_nothing(Res(), Record(), facts_before=2) is True

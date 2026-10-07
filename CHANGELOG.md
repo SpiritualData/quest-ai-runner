@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Review fixes for the escalation changes above.** A queue-only wiring keeps the queue pin for
+  net-inferred work (it has nowhere else to go). The self-initiated decline applies only when the
+  user's own words did not ask for work, and happens before any "Working on" status line; when an
+  own escalation is declined or comes back empty the turn says it is keeping its answer. "Came back
+  empty" now excludes a run that filed a decision, hit the usage limit or succeeded at an
+  operation. `CARD_UPDATE_PROMPT` no longer asks the updater to copy read specs it cannot see.
 - **The card updater no longer teaches an invented read shape.** `CARD_UPDATE_PROMPT`'s
   `full_ref` example was `{"query": {"kind": ..., "id": ...}}`, which no read adapter accepts;
   cards stored it and planners copied it. A `full_ref` is now copied from a read the work really used.

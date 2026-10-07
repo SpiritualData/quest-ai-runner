@@ -1843,6 +1843,19 @@ def test_net_inferred_work_is_routed_not_pinned_to_the_queue():
     assert len(inline_runner.calls) >= 1
 
 
+def test_queue_only_wiring_still_queues_net_inferred_work():
+    """With no inline runner, the queue is the only place net-inferred work can go, so it keeps
+    the pin (the classifier can never select the reserved queue key)."""
+    queue_runner = StubDeepRunner(met=True, output="Queued as task #9.", deferred=True)
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "explained it"}],
+                            answer_text="You should add a goal to order lavender wax.")
+    res = _orch(provider, StubRetrieval(), deep_runners={"deferred": queue_runner},
+                config=OrchestratorConfig(deferred_deep_queued=True)).run(
+        "add a goal to order lavender wax")
+    assert len(queue_runner.calls) == 1
+    assert res.exit_reason == "deferred"
+
+
 def test_deferred_handoff_failure_reply_does_not_claim_queued():
     """HONEST-ENQUEUE: in a queued deployment, when the hand-off is NOT confirmed (the enqueue
     failed), the reply must be regenerated with a steer saying the work was NOT queued; it must

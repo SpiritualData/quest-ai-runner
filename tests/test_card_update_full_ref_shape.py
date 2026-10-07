@@ -9,4 +9,7 @@ from quest_ai_runner.core.orchestrator import CARD_UPDATE_PROMPT
 
 def test_full_ref_is_copied_from_a_real_read_never_invented():
     assert '"kind": "...", "id"' not in CARD_UPDATE_PROMPT
-    assert "never invent a shape" in CARD_UPDATE_PROMPT
+    assert "never invent a shape" in CARD_UPDATE_PROMPT.lower()
+    # The updater is never told to copy something it cannot see, nor forced to invent one.
+    assert "When the work shows no read spec" in CARD_UPDATE_PROMPT
+    assert "Never write a summary of a fetchable source with no full_ref" not in CARD_UPDATE_PROMPT
