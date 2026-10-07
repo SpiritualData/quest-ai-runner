@@ -336,6 +336,8 @@ def print_row(r):
         # (and, pre-fix, that something would have leaked into whatever case ran next).
         print(f"           card drift: deleted {restored.get('deleted', 0)} new, restored "
               f"{restored.get('restored', 0)} changed {restored.get('changed_ids') or ''}")
+    if (r.get("judged") or {}).get("cached"):
+        print("           (verdict from the judge cache: identical evidence was judged before)")
     if judged.get("summary"):
         print(f"           {judged['summary']}")
     elif (r.get("judged") or {}).get("error"):

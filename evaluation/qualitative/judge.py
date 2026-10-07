@@ -28,6 +28,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -726,11 +727,56 @@ def judge_cache_path(model, prompt):
     failing band. Keying the verdict on the full judge input (model, system prompt, prompt) makes
     the judge a deterministic function of the evidence: re-running or re-scoring identical
     evidence returns the identical verdict, so any run-to-run difference left is the system's.
-    ``QUAL_JUDGE_CACHE=0`` turns it off (a fresh judgment every time)."""
+    ``QUAL_JUDGE_CACHE=0`` turns it off (a fresh judgment every time).
+
+    The model is a family alias that the CLI resolves itself, so the key also carries the CLI's
+    own version string: an upgraded CLI (which is how a newer model behind the alias arrives)
+    starts a fresh cache instead of serving verdicts from the previous model."""
     if os.environ.get("QUAL_JUDGE_CACHE", "1") == "0":
         return None
-    key = hashlib.sha256("\x00".join([model, JUDGE_SYSTEM, prompt]).encode()).hexdigest()
+    parts = [model, judge_cli_version(), JUDGE_SYSTEM, prompt]
+    key = hashlib.sha256("\x00".join(parts).encode()).hexdigest()
     return WORK_DIR / "judge_cache" / f"{key}.json"
+
+
+JUDGE_CLI_VERSION = {}
+
+
+def judge_cli_version():
+    """``claude --version`` once per process ("" when it cannot be read). Never raises."""
+    if "value" not in JUDGE_CLI_VERSION:
+        try:
+            out = subprocess.run([DEV_ENV.get("QAR_CLAUDE_PATH") or "claude", "--version"],
+                                 capture_output=True, text=True, timeout=30)
+            JUDGE_CLI_VERSION["value"] = (out.stdout or "").strip()
+        except Exception:  # noqa: BLE001
+            JUDGE_CLI_VERSION["value"] = ""
+    return JUDGE_CLI_VERSION["value"]
+
+
+def read_cached_verdict(cache_path, case):
+    """The cached judgment for this input, or None when there is none or it cannot be used (a
+    corrupt or partial file is a cache miss, never an exception)."""
+    if not cache_path or not cache_path.exists():
+        return None
+    try:
+        raw = cache_path.read_text()
+        return raw, normalise_verdict(extract_json(raw), case)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def write_cached_verdict(cache_path, raw):
+    """Write atomically (temp file then rename), so a killed run never leaves a partial verdict."""
+    if not cache_path:
+        return
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = cache_path.with_suffix(f".{os.getpid()}.tmp")
+        tmp.write_text(raw)
+        os.replace(tmp, cache_path)
+    except OSError:
+        pass
 
 
 def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None,
@@ -747,10 +793,10 @@ def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None
     truth = truth + other_account_data_section(world)
     prompt = build_prompt(case, evidence, changes, pre, truth, pivots)
     cache_path = judge_cache_path(model, prompt)
-    if cache_path and cache_path.exists():
-        raw = cache_path.read_text()
-        return {"verdict": normalise_verdict(extract_json(raw), case), "raw": raw,
-                "prompt_chars": len(prompt), "cached": True}
+    cached = read_cached_verdict(cache_path, case)
+    if cached:
+        return {"verdict": cached[1], "raw": cached[0], "prompt_chars": len(prompt),
+                "cached": True}
     provider = provider or claude_provider()
     messages = [{"role": "user", "content": prompt}]
     last = None
@@ -759,9 +805,7 @@ def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None
         try:
             raw = provider.answer(messages, model=model, system=JUDGE_SYSTEM)
             verdict = normalise_verdict(extract_json(raw), case)
-            if cache_path:
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(raw)
+            write_cached_verdict(cache_path, raw)
             return {"verdict": verdict, "raw": raw, "prompt_chars": len(prompt)}
         except RubricCountMismatch as e:
             last = f"{type(e).__name__}: {e}"

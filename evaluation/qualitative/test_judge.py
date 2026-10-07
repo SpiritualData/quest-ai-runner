@@ -72,6 +72,31 @@ class FlakyThenCorrectProvider:
 def judge_cache_off(monkeypatch):
     """Every test judges afresh unless it turns the verdict cache on itself (in a tmp dir)."""
     monkeypatch.setenv("QUAL_JUDGE_CACHE", "0")
+    monkeypatch.setitem(J.JUDGE_CLI_VERSION, "value", "test-cli 1.0")
+
+
+def test_a_corrupt_cache_file_is_a_miss_not_an_exception(monkeypatch, tmp_path):
+    monkeypatch.setenv("QUAL_JUDGE_CACHE", "1")
+    monkeypatch.setattr(J, "WORK_DIR", tmp_path)
+    case = make_case(2)
+    provider = ShortRubricProvider(returned_items=2)
+    J.judge(case, EVIDENCE, [], PRE, "ground truth text", {}, world=None, provider=provider)
+    for f in tmp_path.rglob("*.json"):
+        f.write_text("{not json")
+    result = J.judge(case, EVIDENCE, [], PRE, "ground truth text", {}, world=None, provider=provider)
+    assert provider.calls == 2
+    assert "verdict" in result and not result.get("cached")
+
+
+def test_a_new_cli_version_starts_a_fresh_cache(monkeypatch, tmp_path):
+    monkeypatch.setenv("QUAL_JUDGE_CACHE", "1")
+    monkeypatch.setattr(J, "WORK_DIR", tmp_path)
+    case = make_case(2)
+    provider = ShortRubricProvider(returned_items=2)
+    J.judge(case, EVIDENCE, [], PRE, "ground truth text", {}, world=None, provider=provider)
+    monkeypatch.setitem(J.JUDGE_CLI_VERSION, "value", "test-cli 2.0")
+    J.judge(case, EVIDENCE, [], PRE, "ground truth text", {}, world=None, provider=provider)
+    assert provider.calls == 2
 
 
 def test_identical_evidence_gets_the_identical_verdict_without_a_second_call(monkeypatch, tmp_path):
