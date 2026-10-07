@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Compact JSON formatting for the two schemas rendered as TEXT into a prompt.**
+  `adapters/claude_cli_provider.py`'s `plan()` appends the decide-tool schema to every planner
+  prompt on that backend (the CLI has no native tool-use surface to pass it out of band) and
+  `adapters/mcp_retrieval_adapter.py`'s `describe_operation()` embeds an MCP tool's input schema in
+  its discovery observation; both used to pretty-print with default/`indent=2` whitespace that is
+  billed on every read for no readability gain a model needs. Both now use
+  `separators=(",", ":")`. No behavior change: JSON validity and the parsed decision are unaffected.
 - **Planner input tokens cut by not re-sending content a turn already saw.** Measured on a real
   30-turn eval pass: a discovery/capability menu (`list_operations`, `describe_operation`,
   `tools`, ...) now renders IN FULL only on the planner call for the step right after it was

@@ -616,7 +616,10 @@ class ClaudeCliProvider(ModelProviderBase):
             "Respond with ONLY a single JSON object recording your decision — no prose, no "
             "explanation, no markdown code fence around it. The object must conform to this JSON "
             "schema (include at least the required fields):\n"
-            f"{json.dumps(schema, ensure_ascii=False)}\n"
+            # Compact separators: this schema rides the prompt on EVERY planner call on this
+            # backend (the CLI has no native tool-use surface to pass it out of band), so its own
+            # formatting whitespace is paid for every time.
+            f"{json.dumps(schema, ensure_ascii=False, separators=(',', ':'))}\n"
             "Output the JSON object and nothing else."
         )
         try:
