@@ -8044,9 +8044,6 @@ class Orchestrator:
                 # Reads as a sentence, because a person reads it: this lands in the activity feed
                 # and can reach a human. A lowercase "goal not yet met:" followed by a verifier's
                 # raw clause looked like debug output leaking into a report.
-                # Reads as a sentence, because a person reads it: this lands in the activity feed
-                # and can reach a human. A lowercase "goal not yet met:" followed by a verifier's
-                # raw clause looked like debug output leaking into a report.
                 res.error = res.error or ("Goal not yet met: " + reason[:1].upper() + reason[1:])
                 # A runner that reported it is out of moves gets no retry even when its own ``met``
                 # was optimistic: the verifier said no, and the runner said another run would only
