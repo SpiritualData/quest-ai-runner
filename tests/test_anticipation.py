@@ -601,6 +601,24 @@ class CrossQuestCardStubAssembler:
             card_scope_tags=self.card_scope_tags)
 
 
+class UnfencedCrossQuestCardStubAssembler:
+    """Unlike ``CrossQuestCardStubAssembler`` above, this stub NEVER fences by the call's own
+    ``meta["scope_tags"]`` -- it always surfaces its one fixed-other-quest card, modeling a
+    composite retrieval arm that forgot to apply the per-hit fence at all (the gap the SIXTH leak
+    backstop, ``bundle_is_cross_quest_mixed(turn_tags, bundle_tags)``, exists to catch even when
+    nothing upstream already dropped the foreign card)."""
+
+    def __init__(self, card_scope_tags: List[str]):
+        self.card_scope_tags = list(card_scope_tags)
+        self.calls: List[Tuple[str, Optional[Dict[str, Any]]]] = []
+
+    def assemble(self, text: str, *, meta: Optional[Dict[str, Any]] = None) -> TaggedCardStubAssembledContext:
+        self.calls.append((text, meta))
+        return TaggedCardStubAssembledContext(
+            context_view=f"BUNDLE FOR: {text}", card_ids=[f"card-{text[:8]}"],
+            card_scope_tags=self.card_scope_tags)
+
+
 class MixedQuestCardStubAssembler:
     """A ContextAssembler-shaped stub whose search always surfaces TWO cards tagged for two
     DIFFERENT quests, regardless of ``meta`` -- modeling an UNSCOPED search (no fence active)
@@ -1363,20 +1381,31 @@ def test_plan_next_unscoped_call_leaked_bundle_still_visible_to_the_quest_it_cam
 # =================================================================================================
 
 def test_bundle_is_cross_quest_mixed_true_for_two_distinct_quest_tags():
-    assert bundle_is_cross_quest_mixed(["quest:book-club", "quest:garden-club"]) is True
+    # Unscoped call (turn_tags=[]), bundle itself names two quests.
+    assert bundle_is_cross_quest_mixed([], ["quest:book-club", "quest:garden-club"]) is True
 
 
 def test_bundle_is_cross_quest_mixed_false_for_a_single_tag():
-    assert bundle_is_cross_quest_mixed(["quest:book-club"]) is False
+    assert bundle_is_cross_quest_mixed([], ["quest:book-club"]) is False
 
 
 def test_bundle_is_cross_quest_mixed_false_for_no_tags():
-    assert bundle_is_cross_quest_mixed([]) is False
+    assert bundle_is_cross_quest_mixed([], []) is False
 
 
 def test_bundle_is_cross_quest_mixed_false_for_a_repeated_tag():
     # Same tag appearing twice (e.g. two cards from the same quest) is NOT mixed.
-    assert bundle_is_cross_quest_mixed(["quest:book-club", "quest:book-club"]) is False
+    assert bundle_is_cross_quest_mixed([], ["quest:book-club", "quest:book-club"]) is False
+
+
+def test_bundle_is_cross_quest_mixed_true_when_a_scoped_turn_surfaces_a_different_single_quest():
+    """THE SIXTH LEAK (round 3): a turn scoped to quest A whose bundle's own tags name only
+    quest B (a single tag -- not "mixed" if the bundle is checked alone) is still mixed once
+    turn_tags is unioned in, because that union is exactly what gets stored."""
+    assert bundle_is_cross_quest_mixed(["quest:a"], ["quest:b"]) is True
+    # The happy path: a scoped turn whose bundle matches its own scope is NOT mixed.
+    assert bundle_is_cross_quest_mixed(["quest:a"], ["quest:a"]) is False
+    assert bundle_is_cross_quest_mixed(["quest:a"], []) is False
 
 
 def test_plan_next_drops_a_bundle_whose_cards_mix_two_different_quests(tmp_path):
@@ -1437,6 +1466,37 @@ def test_plan_next_dropped_mixed_bundle_serves_no_content_to_either_quest(tmp_pa
         "what did we decide last time", ["conv:c", "quest:garden-club", "global"],
         now=datetime(2026, 7, 20, 9, 2, 0))
     assert match_garden_club.precomputed is None
+
+
+def test_plan_next_drops_a_bundle_when_a_scoped_turn_surfaces_only_a_different_quest(tmp_path):
+    """THE SIXTH LEAK (round 3): a precompute call SCOPED to quest "book-club"
+    (``scope_keys`` includes ``"quest:book-club"``) whose assembler arm surfaces a card tagged
+    only "quest:garden-club" (a SINGLE tag -- not "mixed" if the bundle were checked alone) must
+    still be dropped, because unioning ``turn_tags=["quest:book-club"]`` with
+    ``bundle_tags=["quest:garden-club"]`` would store ``scope_tags=["quest:book-club",
+    "quest:garden-club"]``, which ``scope_tags_allow`` would then serve to EITHER quest's turns."""
+    store = FilePredictionStore(str(tmp_path))
+    assembler = UnfencedCrossQuestCardStubAssembler(card_scope_tags=["quest:garden-club"])
+    anticipator = Anticipator(store, assembler=assembler)
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(scope="quest:book-club", canonical_text="what did we decide last time",
+                keywords=["decide", "last", "time"], weight=0.9, hour_bucket=1, dow=0)
+    store.save_patterns("quest:book-club", [p])
+
+    planned = anticipator.plan_next(
+        ["conv:scoped", "quest:book-club", "global"],
+        recent_texts=["what did we decide last time"], now=now)
+
+    assert len(planned) == 1
+    # The cross-quest bundle is dropped: no cached content, and scope_tags stays exactly this
+    # call's own turn_tags (the scoped quest alone), never the leaking two-quest union.
+    assert planned[0].context_card_ids == []
+    assert planned[0].scope_tags == ["quest:book-club"]
+
+    live = store.load_predictions("quest:book-club")
+    assert live[0].context_card_ids == []
+    view = store.load_view("quest:book-club", live[0].prediction_id)
+    assert view == ""
 
 
 def test_plan_next_falls_back_when_assembler_rejects_meta_kwarg(tmp_path):

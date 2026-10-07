@@ -99,6 +99,14 @@ closes that gap the same way it closes it for recent-context and the vector/card
     rendered context prose back into "the part from quest A's card" vs "quest B's card", so a
     mixed bundle is never stored as a shareable prediction, scoped or not. A bundle naming zero or
     one quest (the overwhelming common case) is completely unaffected.
+  * THE SIXTH LEAK (found 2026-10-07, round 3): the fifth-leak check above looked only at
+    ``bundle_scope_tags(assembled)`` ALONE, which misses a call that is ITSELF scoped: a
+    precompute for a turn attached to quest A (``turn_tags=["quest:a"]``) whose bundle surfaces
+    cards tagged only quest B (``bundle_scope_tags(assembled) == ["quest:b"]``, a single tag --
+    not "mixed" by the bundle-only check) still produces ``["quest:a", "quest:b"]`` once unioned
+    onto the prediction, which ``scope_tags_allow`` then serves to either quest.
+    ``bundle_is_cross_quest_mixed`` now takes BOTH ``turn_tags`` and ``bundle_tags`` and checks
+    their UNION's distinct count, since that union is exactly what would be stored.
 
 This is opt-in and inert by construction when no quest key is ever in scope: ``scope_tags_from_keys``
 returns ``[]`` for a plain ``["conv:<id>", "global"]`` turn, and ``scope_tags_allow`` treats "the
@@ -799,21 +807,23 @@ def bundle_scope_tags(assembled: Any) -> List[str]:
         return []
 
 
-def bundle_is_cross_quest_mixed(bundle_tags: List[str]) -> bool:
-    """True when ``bundle_tags`` (as returned by ``bundle_scope_tags``) names MORE THAN ONE
-    distinct quest -- i.e. the bundle's surfaced cards came from two or more different quests in
-    one precompute call.
+def bundle_is_cross_quest_mixed(turn_tags: List[str], bundle_tags: List[str]) -> bool:
+    """True when ``turn_tags`` (this call's own scope) UNIONED with ``bundle_tags`` (as returned
+    by ``bundle_scope_tags``) names MORE THAN ONE distinct quest -- i.e. storing their union as a
+    prediction's ``scope_tags`` would fence the bundle to more than one quest.
 
     THE FIFTH LEAK (found 2026-10-07, same review that caught the fourth): unioning
     ``bundle_scope_tags(assembled)`` onto a prediction's ``scope_tags`` (the fourth-leak fix
-    above) is only safe when the bundle names at most ONE quest. When an unscoped precompute
-    (``turn_tags`` empty) surfaces cards from BOTH quest A and quest B in the same bundle,
-    ``bundle_scope_tags`` returns ``["quest:a", "quest:b"]``, and stamping that straight onto the
-    prediction stores it as ``scope_tags=["quest:a", "quest:b"]``. ``scope_tags_allow`` then
-    serves the WHOLE bundle -- prose that mixes both quests' content -- to EITHER quest's turns,
-    since a two-tag item intersects a one-tag turn on either side. A mixed bundle is therefore
-    never safe to store as a shareable prediction, regardless of how many tags the call's own
-    ``turn_tags`` carried.
+    above) is only safe when the RESULT names at most ONE quest. Checking ``bundle_tags`` ALONE
+    (the first version of this function) missed the SIXTH leak (found 2026-10-07, round 3): a
+    precompute call SCOPED to quest A (``turn_tags=["quest:a"]``) whose bundle surfaces cards
+    tagged ONLY quest B (``bundle_tags=["quest:b"]``, a single tag -- not "mixed" by the old,
+    bundle-only check) still produces ``union_scope_tags(turn_tags, bundle_tags) ==
+    ["quest:a", "quest:b"]`` once unioned, which ``scope_tags_allow`` then serves to EITHER
+    quest's turns. The union-of-both-inputs check here catches that case the same way it already
+    caught the unscoped multi-quest-bundle case (``turn_tags=[]``, ``bundle_tags=["quest:a",
+    "quest:b"]``): either way, the UNION that would actually be stored is what must stay at most
+    one quest, not either input alone.
 
     Callers must check this BEFORE unioning and storing a precomputed bundle: on True, drop the
     bundle for this prediction (no ``context_view``, no ``card_ids``) rather than store a leaking
@@ -821,14 +831,14 @@ def bundle_is_cross_quest_mixed(bundle_tags: List[str]) -> bool:
     part that came from quest A's card" vs "quest B's card", so the two choices the review named
     were (a) drop the offending cards before the bundle is ever rendered, or (b) drop the whole
     bundle. This module takes (b): it is far simpler, it cannot mis-split rendered text, and it
-    costs nothing in the overwhelmingly common case (a bundle naming zero or one quest, which
-    includes every genuinely single-quest conversation) -- a mixed bundle just falls back to a
-    fresh, correctly-scoped assembly at serve time, exactly the existing "a served bundle is a
-    discardable hint, the fresh assembly still leads" contract every consumer already honors.
-    Never raises.
+    costs nothing in the overwhelmingly common case (a bundle naming zero or one quest, matching
+    the turn's own scope, which includes every genuinely single-quest conversation) -- a mixed
+    bundle just falls back to a fresh, correctly-scoped assembly at serve time, exactly the
+    existing "a served bundle is a discardable hint, the fresh assembly still leads" contract
+    every consumer already honors. Never raises.
     """
     try:
-        return len(set(bundle_tags or [])) > 1
+        return len(set(turn_tags or []) | set(bundle_tags or [])) > 1
     except Exception:  # noqa: BLE001
         return False
 
@@ -1225,11 +1235,14 @@ class Anticipator:
         (``turn_tags`` empty: no quest attached, or genuinely ambiguous) but still pulled in a
         quest-tagged card does not store that bundle untagged (visible to every quest forever);
         it is fenced to the quest(s) the content actually came from instead. EXCEPT when
-        ``bundle_is_cross_quest_mixed(bundle_scope_tags(assembled))`` is True -- the bundle's
-        cards name more than one distinct quest -- in which case the union is never computed:
-        the bundle is dropped for that prediction (no ``context_view``, no ``card_ids``,
-        ``scope_tags`` stays exactly ``turn_tags``) rather than stored as a tag set that would
-        let EITHER quest's turns see the whole mixed bundle. See ``bundle_is_cross_quest_mixed``.
+        ``bundle_is_cross_quest_mixed(turn_tags, bundle_scope_tags(assembled))`` is True -- the
+        UNION of this call's own scope and the bundle's cards would name more than one distinct
+        quest (either because the bundle itself mixes two quests, or because a turn scoped to
+        one quest surfaced a bundle tagged only with a DIFFERENT one) -- in which case the union
+        is never computed: the bundle is dropped for that prediction (no ``context_view``, no
+        ``card_ids``, ``scope_tags`` stays exactly ``turn_tags``) rather than stored as a tag set
+        that would let EITHER quest's turns see the whole mixed bundle. See
+        ``bundle_is_cross_quest_mixed``.
         """
         planned: List[Prediction] = []
         try:
@@ -1258,14 +1271,16 @@ class Anticipator:
                         try:
                             assembled = assemble_with_scope_tags(self.assembler, p.text, turn_tags)
                             leaked_tags = bundle_scope_tags(assembled)
-                            if bundle_is_cross_quest_mixed(leaked_tags):
-                                # Fifth-leak fix: the bundle's own surfaced cards name MORE THAN
-                                # ONE distinct quest (see ``bundle_is_cross_quest_mixed``).
-                                # Unioning these tags would store a bundle that mixes two quests'
-                                # content under a tag set that ``scope_tags_allow`` would serve to
-                                # EITHER quest's turns. Drop the bundle for this prediction
-                                # instead of storing a leaking one; the next real turn just falls
-                                # back to a fresh, correctly-scoped assembly.
+                            if bundle_is_cross_quest_mixed(turn_tags, leaked_tags):
+                                # Fifth/sixth-leak fix: UNIONING turn_tags with the bundle's own
+                                # surfaced-card tags would name MORE THAN ONE distinct quest (see
+                                # ``bundle_is_cross_quest_mixed`` -- either because the bundle
+                                # itself mixes two quests, or because a turn scoped to quest A
+                                # surfaced a bundle tagged only quest B). Storing that union
+                                # would let ``scope_tags_allow`` serve the bundle to EITHER
+                                # quest's turns. Drop the bundle for this prediction instead of
+                                # storing a leaking one; the next real turn just falls back to a
+                                # fresh, correctly-scoped assembly.
                                 p.context_card_ids = []
                                 p.scope_tags = list(turn_tags)
                                 continue
