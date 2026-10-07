@@ -2199,3 +2199,65 @@ class TestStaleRegenKeepsOneCard:
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         assert store.bootstrap(root=str(repo), provider=_topic_provider(one)) == 0
         assert _card_files(cards_dir) == []
+
+
+# ---------------------------------------------------------------------------
+# Docs-fallback gating + hard cap (2026-10-06 token-usage pass). The ``_fallback_file_search``
+# grep-the-corpus path fires precisely when NO card matched, so it carries no relevance signal
+# beyond "the keyword appears somewhere in this corpus" -- a turn with nothing to do with this
+# corpus can still share a word with some unrelated file.
+# ---------------------------------------------------------------------------
+
+class TestFileContextStoreDocsFallbackGating:
+    # NB: ``_assemble_inner`` returns empty BEFORE the fallback whenever there are literally NO
+    # cards at all (``if not cards: return AssembledContext()``) -- the fallback only engages when
+    # cards EXIST but none of them score above threshold for this task, so every test here seeds
+    # one deliberately non-matching card.
+
+    def test_fallback_file_search_fires_when_no_cards_match(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "notes.py").write_text("# zorblatt marker line\nother text\n", encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("irrelevant-card", ["database", "schema"]))
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        ac = store.assemble("zorblatt")
+        assert "zorblatt" in ac.context_view.lower()
+        assert ac.sources and ac.sources[0]["adapter"] == "fallback_grep"
+
+    def test_skip_corpus_fallback_meta_flag_suppresses_it(self, tmp_path):
+        """A consumer with its OWN structured signal that this turn is not about this corpus at
+        all (a reach judge, a classifier verdict) sets ``meta["skip_corpus_fallback"]`` and the
+        grep-the-corpus path is skipped entirely, instead of injecting unrelated lines."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "notes.py").write_text("# zorblatt marker line\nother text\n", encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("irrelevant-card", ["database", "schema"]))
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        ac = store.assemble("zorblatt", meta={"skip_corpus_fallback": True})
+        assert ac.context_view == ""
+        assert ac.sources == []
+
+    def test_fallback_file_search_is_hard_capped(self, tmp_path):
+        """Even when the gate above is NOT set (the default, unchanged behavior), the fallback
+        can only inject a bounded number of files and lines, never a dozen files of unrelated
+        content for one weak keyword match."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        for i in range(10):
+            (repo / f"f{i}.py").write_text("zorblatt\n" * 10, encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("irrelevant-card", ["database", "schema"]))
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        ac = store.assemble("zorblatt")
+        assert len(ac.sources[0]["items"]) <= FileContextStore._FALLBACK_MAX_FILES_WALKED
+        shown_files = ac.context_view.count("**f")
+        assert 0 < shown_files <= FileContextStore._FALLBACK_MAX_FILES_SHOWN
+        # Each shown file contributes at most the capped number of lines.
+        for block in ac.context_view.split("**")[1:]:
+            line_count = sum(1 for ln in block.splitlines() if ln.startswith("  zorblatt"))
+            assert line_count <= FileContextStore._FALLBACK_MAX_LINES_PER_FILE

@@ -4153,12 +4153,30 @@ class FileContextStore(ContextAssemblerBase):
         """Return the set of all terms in a card (for DF computation)."""
         return set(self._card_term_weights(card).keys())
 
+    # Hard cap on this fallback, independent of any gating a consumer wires (see
+    # ``_assemble_inner``'s ``skip_corpus_fallback`` meta key below). Halved from the original
+    # 20 files walked / 12 shown / 6 lines each (2026-10-06): this path fires precisely when NO
+    # card matched, so it has no relevance signal of its own beyond "the keyword is somewhere in
+    # the corpus" -- a turn that is not about this corpus at all (a Quest-data question, a
+    # personal aside) can still share a few common words with some file, and the old caps could
+    # inject a dozen files' worth of unrelated lines into a turn the corpus has nothing to do
+    # with. Never raised back up without a real relevance signal to go with it.
+    _FALLBACK_MAX_FILES_WALKED = 10
+    _FALLBACK_MAX_FILES_SHOWN = 6
+    _FALLBACK_MAX_LINES_PER_FILE = 3
+
     def _fallback_file_search(self, task_kws: Set[str]) -> AssembledContext:
         """When no cards score above threshold, grep the raw file corpus for query keywords.
 
         This gives the brain relevant file snippets even when the card index is cold or
         misses novel component names, class names, or camelCase identifiers.  Returns an
         empty AssembledContext when no files are reachable or no hits are found.
+
+        Hard-capped (``_FALLBACK_MAX_*`` above) because this path has no relevance signal beyond
+        "the keyword appears somewhere in the corpus" -- see ``_assemble_inner`` for the separate,
+        OPTIONAL ``skip_corpus_fallback`` meta gate a consumer with its own "is this turn even
+        about this corpus" signal (a reach judge, a classifier verdict) can set to skip this path
+        entirely instead of merely shrinking it.
         """
         if self._repo_root is None or not self._repo_root.is_dir():
             return AssembledContext()
@@ -4191,12 +4209,12 @@ class FileContextStore(ContextAssemblerBase):
                         matching = [ln.rstrip() for ln in text.splitlines() if rx.search(ln)]
                         if matching:
                             rel = str(fpath.relative_to(self._repo_root))
-                            hits_by_file[rel] = matching[:6]
+                            hits_by_file[rel] = matching[: self._FALLBACK_MAX_LINES_PER_FILE]
                     except OSError:
                         pass
-                    if len(hits_by_file) >= 20:
+                    if len(hits_by_file) >= self._FALLBACK_MAX_FILES_WALKED:
                         break
-                if len(hits_by_file) >= 20:
+                if len(hits_by_file) >= self._FALLBACK_MAX_FILES_WALKED:
                     break
         except Exception:  # noqa: BLE001
             return AssembledContext()
@@ -4209,7 +4227,7 @@ class FileContextStore(ContextAssemblerBase):
         parts = [
             "No context cards matched this query. Relevant lines found by direct file search:\n"
         ]
-        for rel, lines in sorted(hits_by_file.items())[:12]:
+        for rel, lines in sorted(hits_by_file.items())[: self._FALLBACK_MAX_FILES_SHOWN]:
             parts.append(f"**{rel}**")
             for ln in lines:
                 snippet = ln[:200].rstrip() + ("…" if len(ln) > 200 else "")
@@ -4337,6 +4355,14 @@ class FileContextStore(ContextAssemblerBase):
                 scored.append((-rank_score, -usage, -len(verified_at), verified_at, card))
 
         if not scored and not priority_cards:
+            # OPTIONAL gate: a consumer that already knows (via its own reach judge or
+            # classifier) that this turn is not about this corpus at all can set
+            # ``meta["skip_corpus_fallback"] = True`` to skip the grep fallback entirely instead
+            # of merely shrinking it. This is a STRUCTURED signal the consumer computed, never a
+            # keyword scan of anything here (hard rule #3): the library only reads the flag, it
+            # never guesses at it. Absent/false keeps today's behavior (the capped fallback runs).
+            if (meta or {}).get("skip_corpus_fallback"):
+                return AssembledContext()
             return self._fallback_file_search(task_kws)
 
         # Sort: primary descending score, then tie-break descending usage_count,
