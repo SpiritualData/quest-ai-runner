@@ -939,11 +939,14 @@ def _read_then_answer_provider():
 
 
 def test_repeat_context_off_resends_full_on_replan():
-    # Default (knob off): every plan prompt — step 1 AND re-plan — carries the full transcript
-    # + context_view, byte-for-byte the prior behavior.
+    # Knob explicitly OFF: every plan prompt — step 1 AND re-plan — carries the full transcript
+    # + context_view, the pre-2026-10-06 behavior. The library default flipped to ON that day (a
+    # turn's context_view does not change within the turn, so re-sending it on every re-plan step
+    # was pure cost); this test pins what happens when a consumer still wants it off.
     provider = _read_then_answer_provider()
     retrieval = StubRetrieval({"f.md": "GROUNDING body"})
-    res = _orch(provider, retrieval).run(
+    cfg = OrchestratorConfig(planner_abbreviate_repeat_context=False)
+    res = _orch(provider, retrieval, config=cfg).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
     # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2..3] are the post-answer verification
