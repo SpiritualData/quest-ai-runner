@@ -24,7 +24,7 @@ from quest_ai_runner.core.orchestrator import Orchestrator
 from .conftest import StubProvider, StubRetrieval
 
 
-class _StepRecordingProvider(StubProvider):
+class StepRecordingProvider(StubProvider):
     """A ModelProvider whose ``plan``/``answer`` DECLARE ``step`` and record every value given."""
 
     def __init__(self, decisions: Optional[List[Dict[str, Any]]] = None,
@@ -44,7 +44,7 @@ class _StepRecordingProvider(StubProvider):
         return super().answer(messages, model=model, system=system)
 
 
-def _orch(provider, **kw) -> Orchestrator:
+def make_orchestrator(provider, **kw) -> Orchestrator:
     return Orchestrator(retrieval=StubRetrieval(), provider=provider,
                         registry=ModelRegistry(provider), **kw)
 
@@ -54,15 +54,15 @@ def _orch(provider, **kw) -> Orchestrator:
 # ---------------------------------------------------------------------------
 
 def test_plan_passes_step_plan_to_a_provider_that_declares_it():
-    provider = _StepRecordingProvider(decisions=[{"action": "answer", "rationale": "ok"}])
-    orch = _orch(provider)
+    provider = StepRecordingProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    orch = make_orchestrator(provider)
     orch._plan("a flight plan for Thursday's launch", "", "", [])
     assert provider.plan_steps == [STEP_PLAN]
 
 
 def test_verify_goal_passes_step_verify_to_a_provider_that_declares_it():
-    provider = _StepRecordingProvider(decisions=[{"met": True, "reason": "done"}])
-    orch = _orch(provider)
+    provider = StepRecordingProvider(decisions=[{"met": True, "reason": "done"}])
+    orch = make_orchestrator(provider)
     verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is True
     assert error is None
@@ -70,8 +70,8 @@ def test_verify_goal_passes_step_verify_to_a_provider_that_declares_it():
 
 
 def test_grounded_answer_passes_step_reply_to_a_provider_that_declares_it():
-    provider = _StepRecordingProvider()
-    orch = _orch(provider)
+    provider = StepRecordingProvider()
+    orch = make_orchestrator(provider)
     model = ModelRegistry(provider).resolve_tier("sonnet")
     out = orch._grounded_answer("what's the launch window?", "", "", [], model, False)
     assert isinstance(out, str) and out
@@ -89,14 +89,14 @@ def test_grounded_answer_passes_step_reply_to_a_provider_that_declares_it():
 
 def test_plan_omits_step_for_a_provider_that_does_not_declare_it():
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
-    orch = _orch(provider)
+    orch = make_orchestrator(provider)
     orch._plan("a flight plan for Thursday's launch", "", "", [])  # no TypeError
     assert provider.plan_calls == 1
 
 
 def test_verify_goal_omits_step_for_a_provider_that_does_not_declare_it():
     provider = StubProvider(decisions=[{"met": True, "reason": "done"}])
-    orch = _orch(provider)
+    orch = make_orchestrator(provider)
     verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")  # no TypeError
     assert verdict is not None and verdict["met"] is True
     assert error is None
@@ -104,7 +104,7 @@ def test_verify_goal_omits_step_for_a_provider_that_does_not_declare_it():
 
 def test_grounded_answer_omits_step_for_a_provider_that_does_not_declare_it():
     provider = StubProvider(decisions=[])
-    orch = _orch(provider)
+    orch = make_orchestrator(provider)
     model = ModelRegistry(provider).resolve_tier("sonnet")
     out = orch._grounded_answer("what's the launch window?", "", "", [], model, False)  # no TypeError
     assert isinstance(out, str) and out
@@ -115,7 +115,7 @@ def test_grounded_answer_omits_step_for_a_provider_that_does_not_declare_it():
 # MultiProvider forwards ``step`` to the wrapped provider under the same accepts-check.
 # ---------------------------------------------------------------------------
 
-class _WrappedWithStep:
+class WrappedWithStep:
     """A minimal ModelProvider that DECLARES ``step`` and records it."""
 
     def __init__(self):
@@ -136,7 +136,7 @@ class _WrappedWithStep:
         return ["gemini-3.1-flash-lite"]
 
 
-class _WrappedWithoutStep:
+class WrappedWithoutStep:
     """A minimal ModelProvider with the pre-existing, narrower signature -- no ``step``, no
     ``**kwargs`` -- so it raises TypeError if ``step`` is ever forwarded to it."""
 
@@ -159,7 +159,7 @@ class _WrappedWithoutStep:
 
 
 def test_multi_provider_forwards_step_to_a_wrapped_plan_that_declares_it():
-    wrapped = _WrappedWithStep()
+    wrapped = WrappedWithStep()
     mp = MultiProvider(wrapped)
     result = mp.plan("do the thing", model="gemini-3.1-flash-lite",
                      tool_schema={"name": "decide"}, step=STEP_PLAN)
@@ -168,7 +168,7 @@ def test_multi_provider_forwards_step_to_a_wrapped_plan_that_declares_it():
 
 
 def test_multi_provider_forwards_step_to_a_wrapped_answer_that_declares_it():
-    wrapped = _WrappedWithStep()
+    wrapped = WrappedWithStep()
     mp = MultiProvider(wrapped)
     result = mp.answer([{"role": "user", "content": "hi"}], model="gemini-3.1-flash-lite",
                        step=STEP_REPLY)
@@ -177,7 +177,7 @@ def test_multi_provider_forwards_step_to_a_wrapped_answer_that_declares_it():
 
 
 def test_multi_provider_omits_step_for_a_wrapped_plan_that_does_not_declare_it():
-    wrapped = _WrappedWithoutStep()
+    wrapped = WrappedWithoutStep()
     mp = MultiProvider(wrapped)
     result = mp.plan("do the thing", model="gemini-3.1-flash-lite",
                      tool_schema={"name": "decide"}, step=STEP_PLAN)  # no TypeError
@@ -186,7 +186,7 @@ def test_multi_provider_omits_step_for_a_wrapped_plan_that_does_not_declare_it()
 
 
 def test_multi_provider_omits_step_for_a_wrapped_answer_that_does_not_declare_it():
-    wrapped = _WrappedWithoutStep()
+    wrapped = WrappedWithoutStep()
     mp = MultiProvider(wrapped)
     result = mp.answer([{"role": "user", "content": "hi"}], model="gemini-3.1-flash-lite",
                        step=STEP_REPLY)  # no TypeError
@@ -197,7 +197,7 @@ def test_multi_provider_omits_step_for_a_wrapped_answer_that_does_not_declare_it
 def test_multi_provider_plan_and_answer_work_with_no_step_given_at_all():
     # The default (no caller passes step=...) must stay byte-for-byte the old behavior on either
     # kind of wrapped provider.
-    for wrapped in (_WrappedWithStep(), _WrappedWithoutStep()):
+    for wrapped in (WrappedWithStep(), WrappedWithoutStep()):
         mp = MultiProvider(wrapped)
         mp.plan("do the thing", model="gemini-3.1-flash-lite", tool_schema={"name": "decide"})
         mp.answer([{"role": "user", "content": "hi"}], model="gemini-3.1-flash-lite")

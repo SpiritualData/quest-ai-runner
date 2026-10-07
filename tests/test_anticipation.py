@@ -32,6 +32,7 @@ from quest_ai_runner.core.anticipation import (
     Prediction,
     apply_refresh,
     assemble_with_scope_tags,
+    bundle_is_cross_quest_mixed,
     bundle_scope_tags,
     chips_for_now,
     extract_features,
@@ -556,18 +557,27 @@ class _MetaAwareStubAssembler:
         return _StubAssembledContext(context_view=f"BUNDLE FOR: {text}", card_ids=[f"card-{text[:8]}"])
 
 
-class _TaggedCardStubAssembledContext:
+class TaggedCardStubAssembledContext:
     """A stub bundle carrying ``card_metadata`` with a ``scope_tags`` field, the shape
     ``VectorContextAssembler``/``FileContextStore`` actually return (see their own card_metadata
-    entries) -- unlike ``_StubAssembledContext`` above, which has no ``card_metadata`` at all."""
+    entries) -- unlike ``_StubAssembledContext`` above, which has no ``card_metadata`` at all.
 
-    def __init__(self, context_view: str, card_ids: List[str], card_scope_tags: List[str]):
+    ``card_metadata`` defaults to ONE card (``card_ids[0]``) carrying ``card_scope_tags``; pass
+    ``card_metadata`` explicitly to model several cards with DIFFERENT tags in one bundle (the
+    fifth-leak / mixed-bundle scenario below)."""
+
+    def __init__(self, context_view: str, card_ids: List[str],
+                 card_scope_tags: Optional[List[str]] = None,
+                 card_metadata: Optional[List[Dict[str, Any]]] = None):
         self.context_view = context_view
         self.card_ids = card_ids
-        self.card_metadata = [{"id": card_ids[0], "scope_tags": list(card_scope_tags)}]
+        if card_metadata is not None:
+            self.card_metadata = card_metadata
+        else:
+            self.card_metadata = [{"id": card_ids[0], "scope_tags": list(card_scope_tags or [])}]
 
 
-class _CrossQuestCardStubAssembler:
+class CrossQuestCardStubAssembler:
     """A ContextAssembler-shaped stub whose search always surfaces ONE card tagged for a fixed
     OTHER quest, regardless of the ``meta["scope_tags"]`` it is called with -- modeling the real
     vector store, whose per-hit fence only ever DROPS a disjoint-tagged hit when the call's own
@@ -579,16 +589,38 @@ class _CrossQuestCardStubAssembler:
         self.card_scope_tags = list(card_scope_tags)
         self.calls: List[Tuple[str, Optional[Dict[str, Any]]]] = []
 
-    def assemble(self, text: str, *, meta: Optional[Dict[str, Any]] = None) -> _TaggedCardStubAssembledContext:
+    def assemble(self, text: str, *, meta: Optional[Dict[str, Any]] = None) -> TaggedCardStubAssembledContext:
         self.calls.append((text, meta))
         turn_tags = (meta or {}).get("scope_tags") or []
         if turn_tags and not (set(turn_tags) & set(self.card_scope_tags)):
             # A real fenced arm would drop the card here; model that so a MISTAKENLY-scoped call
             # in a test cannot silently "pass" by finding the card anyway.
-            return _TaggedCardStubAssembledContext(context_view="", card_ids=[], card_scope_tags=[])
-        return _TaggedCardStubAssembledContext(
+            return TaggedCardStubAssembledContext(context_view="", card_ids=[], card_scope_tags=[])
+        return TaggedCardStubAssembledContext(
             context_view=f"BUNDLE FOR: {text}", card_ids=[f"card-{text[:8]}"],
             card_scope_tags=self.card_scope_tags)
+
+
+class MixedQuestCardStubAssembler:
+    """A ContextAssembler-shaped stub whose search always surfaces TWO cards tagged for two
+    DIFFERENT quests, regardless of ``meta`` -- modeling an UNSCOPED search (no fence active)
+    that happened to pull in both quests' content in the SAME bundle. This is the fifth-leak
+    scenario (``bundle_is_cross_quest_mixed``): unioning both tags onto one prediction would let
+    ``scope_tags_allow`` serve the whole mixed bundle to either quest's turns."""
+
+    def __init__(self, tag_a: str, tag_b: str):
+        self.tag_a = tag_a
+        self.tag_b = tag_b
+        self.calls: List[Tuple[str, Optional[Dict[str, Any]]]] = []
+
+    def assemble(self, text: str, *, meta: Optional[Dict[str, Any]] = None) -> TaggedCardStubAssembledContext:
+        self.calls.append((text, meta))
+        return TaggedCardStubAssembledContext(
+            context_view=f"BUNDLE FOR: {text}", card_ids=["card-a", "card-b"],
+            card_metadata=[
+                {"id": "card-a", "scope_tags": [self.tag_a]},
+                {"id": "card-b", "scope_tags": [self.tag_b]},
+            ])
 
 
 def test_anticipator_plan_next_persists_predictions_with_precomputed_views(tmp_path):
@@ -1242,7 +1274,7 @@ def test_plan_next_no_quest_key_in_scope_passes_no_meta(tmp_path):
 # =================================================================================================
 
 def test_bundle_scope_tags_unions_the_tags_carried_by_the_assembled_cards():
-    assembled = _TaggedCardStubAssembledContext(
+    assembled = TaggedCardStubAssembledContext(
         context_view="x", card_ids=["c1"], card_scope_tags=["quest:other-quest"])
     assert bundle_scope_tags(assembled) == ["quest:other-quest"]
 
@@ -1264,33 +1296,34 @@ def test_plan_next_unscoped_call_still_fences_a_bundle_that_leaked_another_quest
     produced the card. After the fix the stored prediction is fenced to the quest the card actually
     came from."""
     store = FilePredictionStore(str(tmp_path))
-    assembler = _CrossQuestCardStubAssembler(card_scope_tags=["quest:marathon"])
+    assembler = CrossQuestCardStubAssembler(card_scope_tags=["quest:book-club"])
     anticipator = Anticipator(store, assembler=assembler)
     now = datetime(2026, 7, 20, 9, 0, 0)
-    p = _pattern(scope="global", canonical_text="what is my total distance",
-                keywords=["total", "distance"], weight=0.9, hour_bucket=1, dow=0)
+    p = _pattern(scope="global", canonical_text="how many books are on our reading list",
+                keywords=["books", "reading", "list"], weight=0.9, hour_bucket=1, dow=0)
     store.save_patterns("global", [p])
 
     # The originating turn has NO quest attached at all -- turn_tags is [].
     planned = anticipator.plan_next(
-        ["conv:unscoped", "global"], recent_texts=["what is my total distance"], now=now)
+        ["conv:unscoped", "global"], recent_texts=["how many books are on our reading list"],
+        now=now)
 
     assert len(planned) == 1
     # The call itself ran unscoped (no quest key to pass through meta)...
-    assert assembler.calls == [("what is my total distance", None)]
+    assert assembler.calls == [("how many books are on our reading list", None)]
     # ...but the stored prediction is fenced to the quest whose card actually fed the bundle, not
     # left untagged (which would make it visible to every quest's turn below).
-    assert planned[0].scope_tags == ["quest:marathon"]
+    assert planned[0].scope_tags == ["quest:book-club"]
 
     live = store.load_predictions("global")
-    assert live[0].scope_tags == ["quest:marathon"]
+    assert live[0].scope_tags == ["quest:book-club"]
 
     # A later turn scoped to a DIFFERENT quest must not have this bundle served to it. (`observe`
     # consumes the live set it judges either way, fenced or not, so this is the only `observe` in
     # this test; the "still visible to its own quest" half is its own test below with a fresh
     # `plan_next`, so each check starts from an unconsumed live set.)
     match_other_quest = anticipator.observe(
-        "what is my total distance", ["conv:b", "quest:riverside-10k", "global"],
+        "how many books are on our reading list", ["conv:b", "quest:garden-club", "global"],
         now=datetime(2026, 7, 20, 9, 1, 0))
     assert match_other_quest.matched is None
     assert match_other_quest.precomputed is None
@@ -1301,21 +1334,109 @@ def test_plan_next_unscoped_call_leaked_bundle_still_visible_to_the_quest_it_cam
     (empty here) and the card's own tags, so the one quest that genuinely produced the card can
     still be served the bundle -- this is a fence, not a blanket hide."""
     store = FilePredictionStore(str(tmp_path))
-    assembler = _CrossQuestCardStubAssembler(card_scope_tags=["quest:marathon"])
+    assembler = CrossQuestCardStubAssembler(card_scope_tags=["quest:book-club"])
     anticipator = Anticipator(store, assembler=assembler)
     now = datetime(2026, 7, 20, 9, 0, 0)
-    p = _pattern(scope="global", canonical_text="what is my total distance",
-                keywords=["total", "distance"], weight=0.9, hour_bucket=1, dow=0)
+    p = _pattern(scope="global", canonical_text="how many books are on our reading list",
+                keywords=["books", "reading", "list"], weight=0.9, hour_bucket=1, dow=0)
     store.save_patterns("global", [p])
 
     anticipator.plan_next(
-        ["conv:unscoped", "global"], recent_texts=["what is my total distance"], now=now)
+        ["conv:unscoped", "global"], recent_texts=["how many books are on our reading list"],
+        now=now)
 
     match_same_quest = anticipator.observe(
-        "what is my total distance", ["conv:c", "quest:marathon", "global"],
+        "how many books are on our reading list", ["conv:c", "quest:book-club", "global"],
         now=datetime(2026, 7, 20, 9, 2, 0))
     assert match_same_quest.precomputed is not None
-    assert match_same_quest.precomputed.context_view == "BUNDLE FOR: what is my total distance"
+    assert (match_same_quest.precomputed.context_view
+            == "BUNDLE FOR: how many books are on our reading list")
+
+
+# =================================================================================================
+# THE FIFTH LEAK (found in the same review, 2026-10-07): unioning the bundle's card tags onto a
+# prediction (the fourth-leak fix above) is only safe when the bundle names AT MOST ONE quest. An
+# unscoped search that pulls in cards from TWO different quests must not be stored as a shareable
+# prediction at all -- unioning both tags would let ``scope_tags_allow`` serve the whole mixed
+# bundle (including the OTHER quest's card) to either quest's turns. See
+# ``bundle_is_cross_quest_mixed`` and ``Anticipator.plan_next``.
+# =================================================================================================
+
+def test_bundle_is_cross_quest_mixed_true_for_two_distinct_quest_tags():
+    assert bundle_is_cross_quest_mixed(["quest:book-club", "quest:garden-club"]) is True
+
+
+def test_bundle_is_cross_quest_mixed_false_for_a_single_tag():
+    assert bundle_is_cross_quest_mixed(["quest:book-club"]) is False
+
+
+def test_bundle_is_cross_quest_mixed_false_for_no_tags():
+    assert bundle_is_cross_quest_mixed([]) is False
+
+
+def test_bundle_is_cross_quest_mixed_false_for_a_repeated_tag():
+    # Same tag appearing twice (e.g. two cards from the same quest) is NOT mixed.
+    assert bundle_is_cross_quest_mixed(["quest:book-club", "quest:book-club"]) is False
+
+
+def test_plan_next_drops_a_bundle_whose_cards_mix_two_different_quests(tmp_path):
+    """An unscoped precompute (no quest attached, ``turn_tags == []``) whose search surfaces
+    cards from BOTH quest book-club and quest garden-club in the SAME bundle must not be stored
+    as a shareable prediction: there is no tag set that fences it correctly to one quest without
+    also admitting the other, so the bundle is dropped (no context_view, no card_ids) rather than
+    stored as ``scope_tags=["quest:book-club", "quest:garden-club"]``, which ``scope_tags_allow``
+    would serve to either quest's turn whole."""
+    store = FilePredictionStore(str(tmp_path))
+    assembler = MixedQuestCardStubAssembler(tag_a="quest:book-club", tag_b="quest:garden-club")
+    anticipator = Anticipator(store, assembler=assembler)
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(scope="global", canonical_text="what did we decide last time",
+                keywords=["decide", "last", "time"], weight=0.9, hour_bucket=1, dow=0)
+    store.save_patterns("global", [p])
+
+    planned = anticipator.plan_next(
+        ["conv:unscoped", "global"], recent_texts=["what did we decide last time"], now=now)
+
+    assert len(planned) == 1
+    # The mixed bundle is dropped: no cached content, and the stored tag set stays exactly the
+    # call's own (empty) turn_tags -- never the leaking two-quest union.
+    assert planned[0].context_card_ids == []
+    assert planned[0].scope_tags == []
+
+    live = store.load_predictions("global")
+    assert live[0].context_card_ids == []
+    view = store.load_view("global", live[0].prediction_id)
+    assert view == ""
+
+
+def test_plan_next_dropped_mixed_bundle_serves_no_content_to_either_quest(tmp_path):
+    """Companion to the drop test above: with the mixed bundle's content dropped, a later turn
+    scoped to EITHER quest the bundle would have mixed gets no precomputed bundle at all -- the
+    leak this review caught (either quest seeing the other's content) is closed for both sides,
+    not just shifted to favor one of them."""
+    store = FilePredictionStore(str(tmp_path))
+    assembler = MixedQuestCardStubAssembler(tag_a="quest:book-club", tag_b="quest:garden-club")
+    anticipator = Anticipator(store, assembler=assembler)
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(scope="global", canonical_text="what did we decide last time",
+                keywords=["decide", "last", "time"], weight=0.9, hour_bucket=1, dow=0)
+    store.save_patterns("global", [p])
+
+    anticipator.plan_next(
+        ["conv:unscoped", "global"], recent_texts=["what did we decide last time"], now=now)
+
+    match_book_club = anticipator.observe(
+        "what did we decide last time", ["conv:b", "quest:book-club", "global"],
+        now=datetime(2026, 7, 20, 9, 1, 0))
+    assert match_book_club.precomputed is None
+
+    # Fresh live set for the second quest (the first ``observe`` consumed it).
+    anticipator.plan_next(
+        ["conv:unscoped", "global"], recent_texts=["what did we decide last time"], now=now)
+    match_garden_club = anticipator.observe(
+        "what did we decide last time", ["conv:c", "quest:garden-club", "global"],
+        now=datetime(2026, 7, 20, 9, 2, 0))
+    assert match_garden_club.precomputed is None
 
 
 def test_plan_next_falls_back_when_assembler_rejects_meta_kwarg(tmp_path):

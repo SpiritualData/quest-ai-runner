@@ -29,6 +29,33 @@ All notable changes to this project are documented here. The format is based on
   scope_tags pass-through).
 
 ### Fixed
+- **The fifth cross-quest leak: the fourth-leak fix's union was itself unsafe for a MIXED bundle.**
+  Review of the fourth-leak fix above found that unioning `bundle_scope_tags(assembled)` onto a
+  prediction's `scope_tags` only fences correctly when the bundle names at most one quest. An
+  unscoped precompute whose search happened to surface cards from BOTH quest A and quest B in the
+  SAME bundle got stored as `scope_tags=["quest:a", "quest:b"]`, and `scope_tags_allow` serves a
+  two-tag item to EITHER quest's turn whole (the two sets intersect on both sides), so quest A's
+  turns would see quest B's content mixed into the bundle and vice versa. Fix: the new
+  `bundle_is_cross_quest_mixed(tags)` helper in `core/anticipation.py` flags a bundle naming more
+  than one distinct quest tag; `Anticipator.plan_next` now checks it before unioning and, on a
+  mixed bundle, drops it for that prediction entirely (no `context_view`, no `card_ids`, and
+  `scope_tags` stays exactly the call's own `turn_tags`) rather than store a leaking union -- there
+  is no way to retroactively split already-rendered context prose back into "the part from quest
+  A's card" vs "quest B's card". A bundle naming zero or one quest (the overwhelming common case,
+  including every genuinely single-quest conversation) is completely unaffected; a mixed bundle
+  simply falls back to a fresh, correctly-scoped assembly at serve time, exactly the existing "a
+  served bundle is a discardable hint" contract every consumer already honors. A consumer's own
+  chip-precompute path (quest-backend's `precompute_chip_bundles`) must apply the same check before
+  unioning; it also had a second, independent leak where a cached view warmed for one quest was
+  reused unchanged for a different quest's precompute (same stable chip id, different quest) --
+  fixed there by checking `scope_tags_allow` against the previously stored prediction's own tags
+  before reusing its view (see quest-backend's own CHANGELOG/commit). Tests:
+  `tests/test_anticipation.py::test_bundle_is_cross_quest_mixed_true_for_two_distinct_quest_tags`
+  and its false-case companions,
+  `test_plan_next_drops_a_bundle_whose_cards_mix_two_different_quests`,
+  `test_plan_next_dropped_mixed_bundle_serves_no_content_to_either_quest`.
+
+### Fixed
 - **A planner read written as a structured lookup without its `query` wrapper now runs instead of
   being silently dropped.** `normalize_decision` kept only reads carrying a known surface key, so
   `{"operation": "<name>", "args": {...}}` (the shape a consumer's discovery text may show) was
