@@ -29,6 +29,6 @@ def test_verifier_never_fails_a_run_for_being_unreleased():
 def test_verifier_prompt_still_formats():
     rendered = o.VERIFY_GOAL_PROMPT.format(
         claims_rules="", persona="", standards="", goal="g", brief="b", transcript="",
-        context="", output="o",
+        context="", evidence="", output="o",
     )
     assert "RELEASES:" in rendered

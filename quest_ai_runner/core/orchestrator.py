@@ -2154,9 +2154,40 @@ Do NOT use em dashes.
 --- CONVERSATION HISTORY (what the worker had access to; empty means no prior turns exist) ---
 {transcript}
 
-{context}--- WORKER OUTPUT (what it reports it did) ---
+{context}{evidence}--- WORKER OUTPUT (what it reports it did) ---
 {output}
 """
+
+# Gates ``_verify_goal``'s web-evidence precedence note (below) onto this turn's gathered reads: it
+# fires ONLY when at least one observation came from the LIVE WEB adapter (core/adapters.WebResearch
+# -- a search's ``rel_path`` is "web_search:<q>", a page fetch's ``locator`` starts "web extract: "),
+# never for an ordinary corpus/grep/query read, so a deployment with no web adapter wired -- or a
+# turn that never searched -- renders byte-identical to before this existed.
+def _gathered_has_web_evidence(gathered: Optional[List[Dict[str, Any]]]) -> bool:
+    for obs in (gathered or []):
+        if not isinstance(obs, dict):
+            continue
+        if str(obs.get("rel_path") or "").startswith("web_search:"):
+            return True
+        if str(obs.get("locator") or "").startswith("web extract:"):
+            return True
+    return False
+
+
+# The verifier used to judge a web-grounded answer with NO view of the web results that grounded
+# it (see ``_verify_goal``'s ``evidence`` block below) -- only the stable L2 context_layer, never the
+# volatile gathered/tail content the answer call itself used. Lacking any evidence to check against,
+# it fell back to its own training knowledge, which has a fixed cutoff, and rejected a CORRECT,
+# web-grounded answer as wrong (live: "the latest stable Python release is 3.14.x" flagged as
+# "incorrect version information" and corrected to a stale "3.12.7"). This note fires only when
+# ``_gathered_has_web_evidence`` is true, so it never changes behavior for a non-web turn.
+VERIFY_WEB_EVIDENCE_NOTE = (
+    "\nWEB EVIDENCE PRECEDENCE: this turn gathered live web results (shown above). For anything "
+    "time-sensitive (a version, price, schedule, or current event), trust that gathered evidence "
+    "over your own training knowledge, which has a fixed cutoff and can be stale. Judge met "
+    "against what the evidence actually shows; never set met=false, and never write a next_action "
+    "that changes a fact, solely because it conflicts with what you believe you already know.\n"
+)
 
 # ---------------------------------------------------------------------------
 # INTENT-DIRECTIVE JUDGE (WS3): the ONE structured LLM call that decides the AMBIGUOUS band the
@@ -4140,6 +4171,15 @@ def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
         parts.append("\n--- ACTUAL CONTENT READ FOR THIS ANSWER (INTERNAL: same rule, use it "
                      "silently; do not list or count these items back to them) ---")
         parts.append(_render_gathered(content_gathered))
+        if _gathered_has_web_evidence(content_gathered):
+            # REPLY_VOICE_SYSTEM's "never a list of retrieval hits / source counts" rule is about
+            # YOUR OWN internal retrieval (cards, files, corpus); a live web citation is different
+            # on purpose (the LIVE WEB block asks for it) and must survive that rule, not be read
+            # as the same kind of "retrieval metadata" it forbids.
+            parts.append(
+                "A [title](url) citation to a LIVE WEB result above is not retrieval metadata or "
+                "a source list; it is how a web fact stays checkable. Keep every such citation in "
+                "your reply exactly as given, inline where you state the fact.")
     if partial:
         parts.append(
             "NOTE: this is a BEST-EFFORT answer assembled before fully exploring; if the content "
@@ -6188,6 +6228,7 @@ class Orchestrator:
                      transcript: Optional[str] = None,
                      exec_record: Optional[ExecutionRecord] = None,
                      context_layer: Optional[str] = None,
+                     gathered: Optional[List[Dict[str, Any]]] = None,
                      ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Decide whether the worker's run met the done-standard AT THE QUALITY BAR.
 
@@ -6209,6 +6250,18 @@ class Orchestrator:
         ``QAR_VERIFY_CONTEXT_MAX_CHARS``), preserving the stable head/prefix; see
         ``truncate_verify_context``. ``None`` or empty means no context was available at the call
         site (e.g. no assembler/store wired) -- the verdict logic is unaffected either way.
+
+        ``gathered`` is this turn's list of ``Observation``-shaped dicts from the ANSWER call's OWN
+        volatile L3 tail (``grounding_answer_tail``/``_render_gathered``; see ``_grounded_answer``) --
+        deliberately NOT folded into ``context_layer`` (that would break the L2 byte-identity the
+        caching/overseer design and ``tests/test_verify_context_layer.py`` depend on). It rides in the
+        verify prompt's own volatile tail instead, as an EVIDENCE section placed just before the
+        output it grounds. Without it the verifier judges purely from its own knowledge with no view
+        of what the answer actually read -- the bug this parameter exists to close: a correct,
+        web-grounded answer ("Python 3.14.x is latest") judged "incorrect" against the verifier's own
+        stale prior, with no gathered evidence to check against. ``None``/``[]`` (the default) is
+        byte-for-byte the old prompt shape. When any observation came from the LIVE WEB adapter this
+        turn (see ``_gathered_has_web_evidence``), ``VERIFY_WEB_EVIDENCE_NOTE`` is appended too.
 
         Returns a ``(verdict, error)`` pair:
         - ``verdict`` is ``{"met": bool, "reason": str, "next_action": str, "need_more_context":
@@ -6252,8 +6305,22 @@ class Orchestrator:
                 "--- CONTEXT AVAILABLE TO THE WORKER (INTERNAL: the same assembled context/cards the "
                 "worker had access to when producing this output; use it to judge whether the output "
                 "is actually grounded and complete) ---\n" + context_text + "\n\n")
+        # EVIDENCE (volatile, like output/brief/transcript -- never part of the cached L2 context
+        # block above): this turn's gathered reads, the SAME content the answer call it is judging
+        # grounded on. See the docstring and ``_gathered_has_web_evidence``.
+        evidence_block = ""
+        content_gathered = [o for o in (gathered or []) if isinstance(o, dict) and not _is_discovery_obs(o)]
+        if content_gathered:
+            rendered_evidence = truncate_verify_context(_render_gathered(content_gathered))
+            if rendered_evidence.strip():
+                evidence_block = (
+                    "--- EVIDENCE GATHERED THIS TURN (INTERNAL: the actual search/read results the "
+                    "output above is grounded in) ---\n" + rendered_evidence + "\n\n")
+                if _gathered_has_web_evidence(content_gathered):
+                    evidence_block += VERIFY_WEB_EVIDENCE_NOTE + "\n"
         prompt = VERIFY_GOAL_PROMPT.format(
             persona=persona, standards=standards, claims_rules=claims_rules, context=context_block,
+            evidence=evidence_block,
             goal=(goal or "")[:1000], brief=(brief or "")[:2000],
             transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
             output=verify_output_view(output))
@@ -6271,6 +6338,7 @@ class Orchestrator:
             context=context_text,
             tail=VERIFY_GOAL_PROMPT.format(
                 persona="", standards="", claims_rules=claims_rules, context="",
+                evidence=evidence_block,
                 goal=(goal or "")[:1000], brief=(brief or "")[:2000],
                 transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
                 output=verify_output_view(output)),
@@ -11336,7 +11404,8 @@ class Orchestrator:
                         quality_standards=quality_standards,
                         transcript=transcript,
                         exec_record=exec_record if self.cfg.verify_claims else None,
-                        context_layer=answer_context_layer)
+                        context_layer=answer_context_layer,
+                        gathered=gathered)
                     if verdict is not None:
                         _last_verdict = verdict
                     if verdict is not None and verdict.get("met"):

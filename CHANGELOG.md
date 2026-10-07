@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **The answer-verification pass can now see the web evidence it is judging, and trusts it over its
+  own training knowledge.** `Orchestrator._verify_goal` judged a web-grounded answer with only the
+  stable L2 `context_layer` (cards/corpus) -- never the turn's `gathered` web search/page results,
+  which rode only in the answer call's own volatile tail (`grounding_answer_tail`). Live bug: asked
+  "What is the latest stable Python release right now?", the planner correctly searched the web and
+  the answer was correctly grounded in the results, but the verifier (with no evidence to check
+  against) judged it "incorrect version information" against its own stale prior and steered a
+  regeneration to a wrong, older version. `_verify_goal` now takes a `gathered` parameter, renders
+  it as an EVIDENCE section in its own volatile tail (never the cached L2, so
+  `tests/test_verify_context_layer.py`'s byte-identity contract is untouched), and appends
+  `VERIFY_WEB_EVIDENCE_NOTE` (telling the judge to trust this turn's live web results over its own
+  training knowledge, which has a cutoff) whenever `_gathered_has_web_evidence` finds a LIVE WEB
+  observation. `None`/`[]` (the default) is byte-for-byte the old prompt. Tests:
+  `tests/test_verify_web_evidence.py`.
+- **A live web citation no longer gets silently dropped by the "no retrieval hits" voice rule.**
+  `REPLY_VOICE_SYSTEM` tells the answer step never to present "a list of retrieval hits" or "source
+  counts" (correctly, for the assistant's OWN internal retrieval), but nothing distinguished that
+  from a `[title](url)` citation to a live web result, which the LIVE WEB block and the web
+  adapter's own observation text both ask for -- so the one system-level instruction every answer
+  call actually sees could read as "never cite," while the citation instruction sat only inside
+  retrieved data (easy to follow past) or the planner-only `PLANNER_WEB_HEAD` block (never reaches
+  the answer step at all). `grounding_answer_tail` now appends a short carve-out, conditioned on
+  `_gathered_has_web_evidence`, saying a live web citation is not retrieval metadata and must be
+  kept. Tests: `tests/test_verify_web_evidence.py`.
+
 ### Added
 - **Fast, token-efficient live web search (`WebResearch`, `core/adapters.py`).** Web search was
   previously a `RetrievalAdapter` folded INTO `CompositeRetrievalAdapter`, which broadcasts every
