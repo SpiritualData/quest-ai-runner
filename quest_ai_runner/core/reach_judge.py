@@ -164,10 +164,15 @@ def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000
                  web_configured: bool = False) -> str:
     """The judge's own prompt. ``web_configured=False`` (the default) is byte-for-byte unchanged
     from before a web adapter existed; ``True`` adds ``WEB_REACH_NOTE`` so the judge itself, not
-    only the verdict text stamped into the planner afterwards, knows a live web read exists."""
+    only the verdict text stamped into the planner afterwards, knows a live web read exists.
+
+    The note gets the same blank-line paragraph framing as every other section of this prompt
+    (a leading and trailing blank line); with no note the template collapses back to the single
+    blank line the unchanged, web-off rendering has always had.
+    """
     return REACH_JUDGE_PROMPT.format(
         reach_summary=reach_summary.strip(), message=(message or "")[:max_message_chars],
-        web_note=WEB_REACH_NOTE if web_configured else "")
+        web_note=("\n" + WEB_REACH_NOTE + "\n") if web_configured else "")
 
 
 def verdict_block(verdict: Optional[Dict[str, Any]], *, web_configured: bool = False) -> str:

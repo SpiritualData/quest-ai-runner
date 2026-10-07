@@ -263,11 +263,23 @@ def test_judge_prompt_truncates_an_over_long_message():
     assert "TAIL_THAT_SHOULD_BE_CUT" not in prompt
 
 
+# Captured by running quest-ai-runner's core/reach_judge.py AT ITS COMMIT PARENT TO bf609a8
+# (`git show bf609a8^:quest_ai_runner/core/reach_judge.py`), where judge_prompt() had no
+# web_configured parameter at all, calling it with the exact same arguments this test uses. This
+# is the real pin: comparing the default call against an explicit web_configured=False call, both
+# through the NEW code (what this test used to do), proves nothing about whether either one
+# matches what the judge actually said before web_configured existed.
+_PRE_CHANGE_JUDGE_PROMPT_NO_WEB = (
+    'Decide ONE thing about the request below, and nothing else. Do not answer it and do not plan it.\n\nWHAT THIS ASSISTANT CAN REACH:\na short summary\n\nTHE REQUEST:\ncheck the latest score\n\n"outside": doing or answering this needs a machine or server and its files, folders, processes,\n  jobs, logs or quotas; a code repository; or a document, spreadsheet, drive or service held\n  somewhere other than the readable sources above. Set "covered_by" to the environment whose\n  description covers that kind of work on that place, or null when none of them does.\n"world": it asks for a current public fact about the world (news, a price, the weather, a result,\n  what is happening now). General knowledge the assistant simply knows is NOT this.\n"inside": everything it needs is in the readable sources above.\n\nJUDGE WHERE THE ANSWER LIVES, NOT WHERE THE WORK HAPPENED. A request about someone\'s own or their\nteam\'s work, plans, goals, tasks, records or progress is "inside" even when the work it describes\nis carried out elsewhere: the answer is in the records above. "How is that piece of work going",\n"what is the team on this week", "what is still open", "remind me to do X" are all "inside". It is\n"outside" only when the request needs you to INSPECT OR CHANGE the other place itself. A request\nthat merely RECORDS a fact about another place into these records is also "inside".\n'
+)
+
+
 def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
     prompt_default = judge_prompt("check the latest score", "a short summary")
+    assert prompt_default == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB
     prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
                                          web_configured=False)
-    assert prompt_default == prompt_explicit_false
+    assert prompt_explicit_false == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB
     assert WEB_REACH_NOTE not in prompt_default
 
 
@@ -276,6 +288,14 @@ def test_judge_prompt_adds_the_web_sentence_when_web_is_configured():
     assert WEB_REACH_NOTE in prompt
     assert "a short summary" in prompt
     assert "check the latest score" in prompt
+
+
+def test_judge_prompt_web_note_has_blank_line_framing():
+    """Cosmetic fix: with web on, WEB_REACH_NOTE used to sit flush against its neighbors (no
+    blank line before or after it), unlike every other section of this prompt. It now gets the
+    same blank-line paragraph framing; the web-off rendering is untouched, pinned above."""
+    prompt = judge_prompt("check the latest score", "a short summary", web_configured=True)
+    assert "above.\n\n" + WEB_REACH_NOTE + "\n\nJUDGE WHERE" in prompt
 
 
 # ---------------------------------------------------------------------------
