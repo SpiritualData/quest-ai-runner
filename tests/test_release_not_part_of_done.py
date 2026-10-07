@@ -32,3 +32,11 @@ def test_verifier_prompt_still_formats():
         context="", evidence="", output="o",
     )
     assert "RELEASES:" in rendered
+
+
+def test_verifier_accepts_named_commits_as_evidence_of_implementation():
+    t = flat(o.VERIFY_GOAL_PROMPT)
+    assert "COMMITS ARE EVIDENCE" in t
+    assert "names the commit hash(es) and the files or behaviour changed IS concrete evidence" in t
+    assert "Do not set met=false because the output is a summary rather than a pasted diff" in t
+    assert "explicitly require other proof" in t

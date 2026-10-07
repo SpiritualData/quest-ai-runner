@@ -2197,6 +2197,15 @@ production, and never tell the next attempt to request, ask someone for, or wait
 ONLY exception is a goal or original request that explicitly asked for a production release,
 deploy, or production test; asking to fix, build, or improve something is not such a request.
 
+COMMITS ARE EVIDENCE: when the task was to implement, fix, or change something in code, config, or a
+prompt, an output that names the commit hash(es) and the files or behaviour changed IS concrete
+evidence of completion. Do not set met=false because the output is a summary rather than a pasted
+diff, a test log, or a transcript of the commands, and do not ask the next attempt to re-prove work
+a named commit already records. Judge whether what the commits claim matches the goal. The only
+exceptions are a goal, the original request, or the QUALITY STANDARDS that explicitly require other
+proof (for example a passing test run, a screenshot, or a deployed check); then that named proof is
+what is missing, so say exactly which one in next_action.
+
 CRITICAL: Absence of context can be the correct answer. If the goal asks about prior conversation
 history, prior messages, or what was previously said, and the CONVERSATION HISTORY below confirms
 there is no prior history (it is empty or shows only the current message), then an answer of
