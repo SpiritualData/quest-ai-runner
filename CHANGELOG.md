@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **A fan-out splits only the person's own ask, and a parked subgoal stops its siblings from
+  piling up more asks (round-2 trace: "add that as a goal" with a Friday-launch conflict got two
+  parked asks, two goal proposals, and an unrequested note in one reply).** Three parts: (1) the
+  PLANNER prompt's `deep_subtasks` guidance (`_PLANNER_TAIL`, shared by both the full and compact
+  profiles) now says plainly to split only what the person's message asks for and never add a
+  subtask of its own (a note, a reminder, a decision record) -- one short line, +26 tokens
+  measured via `tiktoken` cl100k. (2) `Orchestrator._run_deep`'s fan-out sets a per-call
+  `fanout_parked` event the moment any subgoal's `DeepResult.decision_id` is set; every OTHER
+  subgoal's attempt loop checks it before starting a new attempt, so a sibling not yet underway
+  stops rather than running further. (3) Regardless of how the concurrent runs happened to race,
+  the aggregation step keeps only the FIRST parked result (by subtask order) and drops every
+  other result from the turn, appending one short, code-written sentence
+  (`CONTINUE_AFTER_DECISION_NOTE`, never derived from any result's own text) that the rest will
+  continue once the person answers. A single-goal turn and a fan-out where nothing parks are both
+  byte-for-byte unaffected. Also added `run_goal`'s optional `is_subgoal` keyword
+  (`_run_goal_accepts_is_subgoal`), set True only on a fan-out, so an opted-in runner (e.g.
+  quest-backend's `QuestCommandRunner`) can scope itself to just its own subgoal instead of
+  re-deriving a sibling's work from the fuller "USER'S REQUEST" header every subgoal's brief also
+  carries; a runner that ignores the kwarg is unaffected. Tests: `tests/test_orchestrator.py`
+  (fan-out/park/subgoal cases), `tests/test_planner_prompt_profiles.py`.
 - **Token-usage pass on the context assembly path (measured against a real probe log of a chat
   turn's actual LLM calls, no live calls made to decide any of this).** Four changes:
   (1) `VectorContextAssembler`'s query-generation and relevance-review LLM calls are now memoized

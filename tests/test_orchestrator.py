@@ -97,6 +97,124 @@ def test_deep_fanout_runs_subtasks_in_parallel():
     assert res.kind == "deep"
     assert len(res.deep_results) == 2
     assert {c["goal"] for c in runner.calls} == {"A", "B"}
+    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    assert not any(CONTINUE_AFTER_DECISION_NOTE in (d.output or "") for d in res.deep_results), \
+        "a fan-out where nothing parks must stay byte-for-byte unaffected"
+
+
+class _PerGoalDeepRunner:
+    """A deep runner that returns a DIFFERENT, pre-scripted ``DeepResult`` per goal name, and
+    records every goal it was actually invoked for -- used to prove a sibling subtask was (or
+    was not) run at all once another subtask of the same fan-out parked on a human decision."""
+
+    def __init__(self, results: Dict[str, Any]):
+        self._results = results
+        self.calls: List[str] = []
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None):
+        self.calls.append(goal)
+        return self._results[goal]
+
+
+def test_fan_out_reply_carries_only_one_ask_when_two_subgoals_both_park():
+    # Round-2 trace: a planner fanned "add that goal" into a goal-creation subtask and a second,
+    # self-initiated "record the conflict" subtask; EACH subtask's own write review independently
+    # parked on the same working-agreement conflict, so the reply concatenated the conflict
+    # question twice plus an extra, unrequested goal proposal. However the two subtasks happen to
+    # race, the AGGREGATED reply must carry exactly ONE ask (the first subtask, by order), never
+    # both -- this is checked at aggregation, not by timing.
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = _PerGoalDeepRunner({
+        "A": DeepResult(met=False, output="A's conflict question", decision_id="dec_a"),
+        "B": DeepResult(met=False, output="B's conflict question", decision_id="dec_b"),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("do A and B")
+    assert res.kind == "deep"
+    assert len(res.deep_results) == 1, "only one ask may reach the reply"
+    kept = res.deep_results[0]
+    assert kept.decision_id == "dec_a", "the FIRST subtask by order, not whichever finished first"
+    assert "A's conflict question" in kept.output
+    assert "B's conflict question" not in kept.output
+    assert CONTINUE_AFTER_DECISION_NOTE in kept.output
+
+
+def test_fan_out_stops_a_sibling_before_it_ever_starts_once_one_parks():
+    # With a single worker the thread pool runs subtasks strictly one at a time, so this proves
+    # the STRUCTURAL stop (fanout_parked), not just the aggregation filter above: sibling "B" is
+    # never even handed to the runner once "A" has parked.
+    from quest_ai_runner.core.adapters import DeepResult
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = _PerGoalDeepRunner({
+        "A": DeepResult(met=False, output="A's conflict question", decision_id="dec_a"),
+        "B": DeepResult(met=True, output="B finished"),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(max_parallel=1)).run("do A and B")
+    assert runner.calls == ["A"], "B must never be dispatched once A has parked"
+    assert len(res.deep_results) == 1
+    assert res.deep_results[0].decision_id == "dec_a"
+
+
+def test_a_single_goal_turn_that_parks_is_unaffected():
+    # The aggregation filter and the stop-event are both gated on ``multi``: a plain single-goal
+    # deep run that parks must come back exactly as before, with no continuation sentence added.
+    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+    ])
+    runner = StubDeepRunner(decision_id="dec_single", output="needs a decision")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("do it")
+    assert res.kind == "deep"
+    assert len(res.deep_results) == 1
+    assert res.deep_results[0].decision_id == "dec_single"
+    assert res.deep_results[0].output == "needs a decision"
+    assert CONTINUE_AFTER_DECISION_NOTE not in res.deep_results[0].output
+
+
+class _IsSubgoalCapturingDeepRunner:
+    """A deep runner whose ``run_goal`` accepts ``is_subgoal`` and records it per call -- used to
+    prove a consumer (e.g. quest-backend's QuestCommandRunner) can tell a fan-out subtask apart
+    from a single-goal run without reading any model-generated text (hard rule #3)."""
+
+    def __init__(self):
+        self.calls: List[Dict[str, Any]] = []
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None, is_subgoal=None):
+        from quest_ai_runner.core.adapters import DeepResult
+        self.calls.append({"goal": goal, "is_subgoal": is_subgoal})
+        return DeepResult(met=True, output=f"did {goal}")
+
+
+def test_fan_out_tells_an_opted_in_runner_it_is_one_of_several_subtasks():
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = _IsSubgoalCapturingDeepRunner()
+    _orch(provider, StubRetrieval(), deep_runner=runner).run("do A and B")
+    assert {c["goal"]: c["is_subgoal"] for c in runner.calls} == {"A": True, "B": True}
+
+
+def test_single_goal_turn_does_not_set_is_subgoal():
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+    ])
+    runner = _IsSubgoalCapturingDeepRunner()
+    _orch(provider, StubRetrieval(), deep_runner=runner).run("do it")
+    assert len(runner.calls) == 1
+    assert runner.calls[0]["is_subgoal"] is None, \
+        "a single-goal run must not claim to be one of several subtasks"
 
 
 def test_confirm_raises_escalation_and_returns_decision_id():

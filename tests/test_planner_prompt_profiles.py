@@ -266,6 +266,36 @@ def test_both_profiles_tell_the_planner_to_gather_data_dependent_write_values_fi
 
 
 # ---------------------------------------------------------------------------
+# Deep fan-out splits only what the person asked for (round 2 trace): a planner
+# that fanned "add that goal" into one subtask for the goal and a second,
+# self-initiated subtask (a note recording the Friday-launch conflict) made the
+# reply carry the same parked conflict question twice, two different goal
+# proposals, and a note nobody asked for. Pinned cheaply in the shared
+# _PLANNER_TAIL, so both profiles get it from one edit.
+# ---------------------------------------------------------------------------
+
+def test_deep_fan_out_tells_the_planner_to_split_only_the_ask():
+    for profile_prompt in (PLANNER_PROMPT, PLANNER_PROMPT_COMPACT):
+        assert "DEEP FAN-OUT" in profile_prompt
+        fan_out = profile_prompt[profile_prompt.index("DEEP FAN-OUT"):]
+        fan_out = fan_out[:fan_out.index("\n\n")]
+        assert "never add your own subtask" in fan_out
+
+
+def test_deep_fan_out_guidance_stays_small():
+    """The added sentence is one short line (~35 tokens or fewer); use the file's own
+    character-count proxy (see ``token_estimate`` above) rather than a hard tiktoken
+    dependency this repo does not declare."""
+    base = ('DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtasks, set\n'
+            '  `deep_subtasks` to 2-{max_deep} of {"goal": "...", "brief": "..."} -- each a '
+            'concurrent run.')
+    fan_out = PLANNER_PROMPT[PLANNER_PROMPT.index("DEEP FAN-OUT"):]
+    fan_out = fan_out[:fan_out.index("\n\n")]
+    delta_chars = token_estimate(fan_out) - token_estimate(base)
+    assert 0 < delta_chars <= 160, delta_chars  # ~35 tokens at ~4.5 chars/token
+
+
+# ---------------------------------------------------------------------------
 # Token-usage pass (2026-10-06): a discovery menu renders in full at most once per turn,
 # MODEL TIER DISCIPLINE is omitted when it cannot apply, and narration echo-back is bounded.
 # ---------------------------------------------------------------------------

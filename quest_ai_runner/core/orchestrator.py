@@ -190,6 +190,15 @@ NO_DEEP_EXECUTOR_TEXT = (
     "wired, or pass RunnerConfig.deep_runner explicitly, then ask again."
 )
 
+# Said once a fanned-out turn has a subgoal PARKED on a human decision (``DeepResult.decision_id``
+# set): the rest of that turn's subgoals do not also surface, so the person sees exactly one ask,
+# not a pile of them. Code-written, never derived from any result's own text (hard rule #3: a
+# control-flow/reply decision is never gated on a model's words), and kept free of em dashes per
+# the copy conventions every QAR-rendered sentence follows.
+CONTINUE_AFTER_DECISION_NOTE = (
+    "I will continue with the rest of this once you answer that."
+)
+
 # Defaults (all overridable via OrchestratorConfig). The elapsed/chars budget bounds the WHOLE
 # read cascade for a turn (every grep + read this turn shares it), not a single read: a 60s/60000
 # char cap left a simple "check these 3 named files" request no room left after one broad grep,
@@ -626,6 +635,8 @@ PARALLEL SUB-QUESTIONS (optional): if the message has INDEPENDENT parts, set `su
 
 DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtasks, set
   `deep_subtasks` to 2-{max_deep} of {{"goal": "...", "brief": "..."}} -- each a concurrent run.
+  Split only work the person asked for; never add your own subtask (a note, reminder, decision
+  record).
 
 {mode_signal_block}{card_thread_block}{rationale_instruction}
 
@@ -4416,6 +4427,27 @@ def _run_goal_accepts_resume_session_id(deep_runner: Any) -> bool:
     return False
 
 
+def _run_goal_accepts_is_subgoal(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts an ``is_subgoal`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_emit``. True ONLY on a fan-out (``multi``: the
+    turn split into several concurrent subgoals), so a runner that opts in can scope ITSELF to
+    just the one subgoal it was handed instead of re-deriving a sibling's work from the fuller
+    USER'S REQUEST header every call also carries. Round-2 trace: a subtask's own code generation
+    (QuestCommandRunner) read the whole turn's request as context and re-created a SIBLING
+    subtask's goal alongside its own. A runner that ignores the kwarg, or a single-goal turn,
+    behaves exactly as before -- this is purely additive.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "is_subgoal" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 def provider_call_accepts_layers(fn: Any) -> bool:
     """Whether a provider's ``plan``/``answer`` accepts the ``layers`` cache-hint kwarg (or **kwargs).
 
@@ -7636,6 +7668,12 @@ class Orchestrator:
         # starting when none was. Once per deep run, whichever subgoal reaches it first.
         selection_announced = threading.Event()
         selection_lock = threading.Lock()
+        # SIBLINGS DO NOT PILE UP MORE ASKS: set the moment any subgoal of this fan-out parks on a
+        # human decision (``DeepResult.decision_id``). Checked by every OTHER subgoal's attempt
+        # loop before it starts a new attempt, so a sibling not yet underway (or not yet on its
+        # next retry/rung) stops rather than producing a second, competing ask. Scoped to a single
+        # ``_run_deep`` call; a single-goal turn never sets or checks it (``multi`` guards both).
+        fanout_parked = threading.Event()
 
         def announce_model_selection(runner: Any) -> None:
             if deep_selection is None or emit is None or not runner_uses_deep_model(runner):
@@ -7834,7 +7872,7 @@ class Orchestrator:
             def caps_for(runner: Any) -> Dict[str, bool]:
                 if runner is None:
                     return {"emit": False, "run_id": False, "preamble": False,
-                            "working_dir": False, "resume": False}
+                            "working_dir": False, "resume": False, "is_subgoal": False}
                 cached = runner_caps.get(id(runner))
                 if cached is None:
                     cached = {
@@ -7843,6 +7881,7 @@ class Orchestrator:
                         "preamble": _run_goal_accepts_context_preamble(runner),
                         "working_dir": _run_goal_accepts_working_dir(runner),
                         "resume": _run_goal_accepts_resume_session_id(runner),
+                        "is_subgoal": _run_goal_accepts_is_subgoal(runner),
                     }
                     runner_caps[id(runner)] = cached
                 return cached
@@ -7930,6 +7969,12 @@ class Orchestrator:
                             kwargs["context_preamble"] = "\n\n".join(preamble_parts)
                     if caps["working_dir"] and working_dir_override:
                         kwargs["working_dir"] = working_dir_override
+                    # Tell an opted-in runner this is ONE of several concurrent subgoals of the
+                    # same turn (see ``_run_goal_accepts_is_subgoal`` above), so it can scope
+                    # itself to just this subgoal rather than re-deriving a sibling's work from
+                    # the fuller USER'S REQUEST header this call's brief also carries.
+                    if caps["is_subgoal"] and multi:
+                        kwargs["is_subgoal"] = True
                     # The runner LADDER was resolved once per task, above (not re-resolved per
                     # retry — the classifier's inputs don't change across retries of the same
                     # task); which rung of it runs THIS attempt is decided by the loop below and
@@ -8020,6 +8065,11 @@ class Orchestrator:
                 # a full agentic subprocess run, so this is the natural point to stop rather than
                 # mid-subprocess). ``res`` keeps whatever the prior attempt produced.
                 if cancel_check is not None and cancel_check():
+                    break
+                # A SIBLING subgoal of this same fan-out already parked on a human decision: stop
+                # before starting another attempt rather than piling a second ask onto the same
+                # turn (see ``fanout_parked`` above). Single-goal runs never set this (``multi``).
+                if multi and fanout_parked.is_set():
                     break
                 run_model = deep_models[min(tier_idx, len(deep_models) - 1)]
                 # WHICH RUNNER runs this attempt: the ladder indexed by attempt, cheapest rung
@@ -8288,6 +8338,11 @@ class Orchestrator:
                 current_brief = self._augment_brief(base_brief, res.output or "", verdict)
                 verified_not_met = True
 
+            # This subgoal parked on a human decision: tell siblings so none of them starts a new
+            # attempt after this (see ``fanout_parked`` above; checked at the aggregation step too,
+            # which is what actually keeps a second ask out of the reply regardless of timing).
+            if multi and res.decision_id:
+                fanout_parked.set()
             # res.met is now the brain-verified outcome (not just the worker's exit code). The fact
             # records it for the broken-promise guard; a verified-not-met run is a confirmed failure.
             if fact is not None:
@@ -8391,9 +8446,30 @@ class Orchestrator:
             return OrchestratorResult(kind="cancelled", goals=all_goals, rationale=plan.rationale,
                                       exit_reason="cancelled")
 
+        deep_results = [r for r in all_results if r is not None]
+        # SIBLINGS DO NOT PILE UP MORE ASKS (structural, on ``decision_id``, never on any result's
+        # own text -- hard rule #3): once ANY subgoal of this fan-out parked on a human decision,
+        # keep only the FIRST such result (by subtask order) and drop every other result this
+        # turn, whether it also parked or finished its own work. ``fanout_parked`` above already
+        # stops a sibling that had not yet started its next attempt; this is what guarantees the
+        # outcome regardless of how the concurrent runs happened to race, which is what the bug
+        # actually needs fixed: two independently-reviewed subtasks both parked on the SAME
+        # conflict, so the reply carried the conflict question twice plus an extra, unrequested
+        # goal. The one short sentence that replaces the rest is code-written, not model-written.
+        # A single-goal turn (``multi`` False) and a fan-out where nothing parked are unaffected.
+        if multi:
+            parked = next((r for r in deep_results if getattr(r, "decision_id", None)), None)
+            if parked is not None:
+                if (parked.output or "").strip():
+                    if CONTINUE_AFTER_DECISION_NOTE not in parked.output:
+                        parked.output = f"{parked.output}\n\n{CONTINUE_AFTER_DECISION_NOTE}"
+                else:
+                    parked.output = CONTINUE_AFTER_DECISION_NOTE
+                deep_results = [parked]
+
         return OrchestratorResult(
             kind="deep",
-            deep_results=[r for r in all_results if r is not None],
+            deep_results=deep_results,
             goals=all_goals,
             rationale=plan.rationale,
         )
