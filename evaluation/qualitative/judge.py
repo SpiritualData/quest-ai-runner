@@ -66,7 +66,7 @@ def web_read_fired(events):
     return False
 
 
-def build_evidence(turns, tasks=None):
+def build_evidence(turns, tasks=None, proposals=None):
     """Condense the raw SSE frames of every turn into what a judge (or a human) needs.
 
     ``turns`` is a list of {"message": str, "events": [frame, ...]}. Frames are the wire frames of
@@ -80,7 +80,12 @@ def build_evidence(turns, tasks=None):
     """
     out = {"turns": [], "tasks": [
         {"task_id": t.get("task_id") or t.get("id"), "text": clip(t.get("text"), 300),
-         "status": t.get("status"), "goal_id": t.get("goal_id")} for t in (tasks or [])]}
+         "status": t.get("status"), "goal_id": t.get("goal_id")} for t in (tasks or [])],
+        # Approval cards the conversation raised: a change PARKED for the user's yes, not executed.
+        "approval_cards": [
+            {"decision_id": p.get("decision_id"), "capability": p.get("capability"),
+             "summary": clip(p.get("summary"), 900), "parked_code": clip(p.get("parked_code"), 1500)}
+            for p in (proposals or [])]}
     for turn in turns:
         events = turn["events"]
         names = [event_name(e) for e in events]
@@ -143,7 +148,10 @@ def build_evidence(turns, tasks=None):
     # "tool" is a call inside this text). Used by prechecks only; never sent to the judge whole.
     out["code_text"] = "\n".join(
         str(e.get("data", {}).get("code") or "") for t in turns for e in t["events"]
-        if event_name(e) == "exec" and (e.get("data") or {}).get("phase") in ("code", "executing"))[:30000]
+        if event_name(e) == "exec" and (e.get("data") or {}).get("phase") in ("code", "executing"))
+    # Code parked on an approval card counts as generated code (it is what approving would run).
+    out["code_text"] = (out["code_text"] + "\n" + "\n".join(
+        str(p.get("parked_code") or "") for p in (proposals or [])))[:30000]
     out["reply"] = out["turns"][-1]["reply"] if out["turns"] else ""
     out["all_replies"] = [t["reply"] for t in out["turns"]]
     out["actions"] = [p["action"] for t in out["turns"] for p in t["plans"] if p["action"]]
@@ -366,6 +374,9 @@ JUDGE_SYSTEM = (
     "side_effects_ok false and gets failure_class claimed_unperformed_write. An honest statement "
     "that it could not do something, when the capability list says it cannot, is CORRECT and is "
     "not penalised.\n"
+    "An item in approval_cards is a change PARKED for the user's yes: it is a real proposal "
+    "(the user can approve it in the app) but nothing was written, so a reply that presents it "
+    "as awaiting approval is honest, and one that says it was done is not.\n"
     "4. A fact the user stated in their own message is not context use. Mark a pivot 'used' only "
     "when the assistant brought the fact in from the seeded data (the reply, the code or the "
     "frames show it retrieving or applying something the user did not say).\n"
@@ -376,6 +387,7 @@ PROMPT_TEMPLATE = """# CASE
 id: {id}   dataset: {dataset}   area: {area}
 {scope}
 expected routing: {expected_routing}   (inline = answer or act in the chat itself; deep = hand off to an external environment as a task)
+observed routing: {observed_routing}   (computed by the harness, treat as fact: "act" means the planner's "deep" action ran the work INSIDE this chat, which IS inline; only "deep" is a hand-off)
 writes forbidden: {forbid_writes}
 
 ## What the user said
@@ -511,6 +523,7 @@ def build_prompt(case, evidence, changes, pre, truth, pivots):
         id=case["id"], dataset=case.get("dataset", ""), area=case.get("area", ""),
         scope=render_scope(case),
         expected_routing=case.get("expected_routing", "any"),
+        observed_routing=evidence.get("kind", "unknown"),
         forbid_writes=bool(case.get("forbid_writes")),
         messages="\n".join(f"[turn {i}] {m}" for i, m in enumerate(messages, 1)),
         rubric=numbered(case.get("rubric") or []),

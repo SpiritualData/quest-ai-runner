@@ -40,6 +40,7 @@ from devclient import (  # noqa: E402
 
 STATE_PATH = WORK_DIR / "world.json"
 FALLBACK_CATEGORY = "cat_df82187e53c0"  # a known dev category ("Fitness"); used when a name lookup misses
+AUTOPILOT_PASS_KIND = "autopilot"  # task_kind of the lane's recurring pass (runner/autopilot.py)
 
 TODAY = datetime.date.today()
 
@@ -815,10 +816,16 @@ def task_id_of(task):
 
 def world_task_ids(world):
     """Tasks that belong to the eval: on a world quest, or carrying the tag. Tasks other people or
-    lanes create on the shared dev account are NOT ours and are never diffed or deleted."""
+    lanes create on the shared dev account are NOT ours and are never diffed or deleted.
+
+    A quest's recurring "Autopilot pass" (task_kind ``autopilot``) is excluded too: the dev lane's
+    poller files one for every opted-in quest on its own schedule, so it is not a chat side effect.
+    Counting it failed correct cases, and deleting it in ``revert`` only made the lane file another
+    one before the next case. ``arm_autopilot`` schedules it a month out, so it never runs mid-eval."""
     quest_ids = set(world["quests"].values())
     return {task_id_of(t): (t.get("text") or "")[:160] for t in all_tasks()
-            if t.get("goal_id") in quest_ids or TAG in str(t.get("text") or "")}
+            if (t.get("goal_id") in quest_ids or TAG in str(t.get("text") or ""))
+            and t.get("task_kind") != AUTOPILOT_PASS_KIND}
 
 
 def conversation_tasks(conv_id):

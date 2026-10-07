@@ -29,7 +29,8 @@ sys.path.insert(0, str(HERE))
 import judge as J  # noqa: E402
 import world as W  # noqa: E402
 from devclient import (  # noqa: E402
-    QUEST_BASE, WORK_DIR, WorldLock, api, create_conversation, delete_conversation, sse_send)
+    QUEST_BASE, WORK_DIR, WorldLock, api, conversation_proposals, create_conversation,
+    delete_conversation, sse_send)
 
 DATASET_DIR = HERE / "datasets"
 RAW_DIR = WORK_DIR / "raw"
@@ -228,7 +229,8 @@ def run_case(case, world, use_judge=True, parallel=False):
             # the snapshot never held. Put it there before the pre-checks read it.
             after["tasks"].setdefault(tid, (task.get("text") or "")[:160])
             api("DELETE", f"/api/assistant-tasks/{tid}")  # never let the dev lane execute it
-        evidence = J.build_evidence(turns, queued)
+        proposals = conversation_proposals(conv)
+        evidence = J.build_evidence(turns, queued, proposals)
         pre = J.precheck(case, evidence, world, after, changes)
         record.update({"evidence": evidence, "changes": changes, "precheck": pre,
                        "side_effects_ambiguous": bool(parallel and changes)})
@@ -325,6 +327,10 @@ def run_cases(cases, use_judge=True, workers=1):
             for r in pool.map(lambda c: run_case(c, world, use_judge, parallel=workers > 1),
                               read_only):
                 r.pop("_before_after", None)
+                if workers <= 1:
+                    # Serial: drop the cards this case learned before the next case starts, or the
+                    # next case is answered from this one's conversation card (seen 2026-10-07).
+                    W.delete_new_cards(world.get("cards_baseline"))
                 records.append(r)
                 save_result(r)
                 print_row(r)

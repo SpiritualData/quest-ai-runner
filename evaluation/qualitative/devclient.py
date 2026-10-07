@@ -35,6 +35,28 @@ assert "batmanhq" in QUEST_BASE and "spiritualdata.org" not in QUEST_BASE, (
 # so one run can pin its own models without touching the shared dev server's config.
 INPROCESS = os.environ.get("QUAL_INPROCESS") == "1"
 
+
+
+def local_timezone():
+    """The IANA zone this machine runs in (``QUAL_TIMEZONE`` overrides). The real app sends the
+    device's zone with every chat turn, and the ground truth's "Today is ..." line is this
+    machine's local date, so the simulated user must send the same zone: without it the backend
+    falls back to UTC and, for part of every day, "today" in the reply and in the ground truth
+    are different dates."""
+    zone = (os.environ.get("QUAL_TIMEZONE") or os.environ.get("TZ") or "").strip().lstrip(":")
+    if zone:
+        return zone
+    try:
+        target = os.path.realpath("/etc/localtime")
+        if "zoneinfo/" in target:
+            return target.split("zoneinfo/", 1)[1]
+    except OSError:
+        pass
+    return None
+
+
+CLIENT_TIMEZONE = local_timezone()
+
 TAG = "ZZQEVAL"
 WORK_DIR = Path("/tmp/qualeval")
 WORK_DIR.mkdir(parents=True, exist_ok=True)
@@ -203,12 +225,15 @@ def list_quests():
 
 def sse_send(conv_id, content, *, auto_run=True, timeout=600):
     """POST one chat turn to the in-app streaming route and collect every SSE event."""
+    payload = {"content": content, "auto_run": auto_run}
+    if CLIENT_TIMEZONE:
+        payload["timezone"] = CLIENT_TIMEZONE
     if INPROCESS:
         import inprocess
         return inprocess.sse_send(f"/api/quest-ai/conversations/{conv_id}/messages/stream",
-                                  QUEST_KEY, {"content": content, "auto_run": auto_run}, timeout)
+                                  QUEST_KEY, payload, timeout)
     url = f"{QUEST_BASE}/api/quest-ai/conversations/{conv_id}/messages/stream"
-    data = json.dumps({"content": content, "auto_run": auto_run}).encode()
+    data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Authorization", f"Bearer {QUEST_KEY}")
     req.add_header("Content-Type", "application/json")
@@ -243,6 +268,27 @@ def create_conversation(quest_ids):
     if status != 201:
         raise RuntimeError(f"create conversation failed: {status} {body}")
     return body.get("conversation_id") or body.get("id") or (body.get("data") or {}).get("id")
+
+
+def conversation_proposals(conv_id):
+    """The open approval cards this conversation raised (decision-requests carrying the parked
+    change). With auto-run on, a change the product decides to ask about first (for example a
+    quest-field write on an autopilot-off quest) is parked on such a card instead of executed, and
+    nothing about it appears in the exec frames, so without this the evidence shows no write and
+    no proposal. Read-only; the cards are left open (resolving one runs or teaches)."""
+    status, body = api("GET", "/api/teams/decisions/for-user")
+    if status != 200:
+        return []
+    rows = body if isinstance(body, list) else (body or {}).get("decisions") or []
+    out = []
+    for row in rows:
+        if not isinstance(row, dict) or row.get("conv_id") != conv_id:
+            continue
+        executable = row.get("executable") or {}
+        out.append({"decision_id": row.get("decision_id"), "kind": row.get("kind"),
+                    "capability": row.get("capability"), "summary": row.get("summary"),
+                    "parked_code": executable.get("code") if isinstance(executable, dict) else None})
+    return out
 
 
 def delete_conversation(conv_id):
