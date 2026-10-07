@@ -414,7 +414,7 @@
     "rubric": [
       "Finds Tom in the Customer Interviews journal: he wanted lavender and a refill option",
       "Answers directly without asking which Tom or which quest",
-      "Attributes nothing to Tom that his interview entry does not record, and does not swap in another customer's answer"
+      "Attributes nothing to Tom that his interview entry does not record, and does not swap in another customer's answer. A plain paraphrase of the entry (lavender, interest in a refill option, in a candle-shop context) is faithful; inventing a price, a size, a second scent or another customer's words is not"
     ],
     "must_use_pivots": [
       "LAVENDER_DEMAND"
@@ -428,7 +428,7 @@
         "lavender"
       ]
     },
-    "evidence_notes": "Only a first name. Evidence: the customer_interviews collection read (used.sources or exec code). The interviews are in the business quest, but nothing in the message says so. Fail if it asks who Tom is."
+    "evidence_notes": "Only a first name. Evidence: the customer_interviews collection read (used.sources or exec code). The interviews are in the business quest, but nothing in the message says so. Fail if it asks who Tom is. Rubric audit 2026-10-07: item 3 failed a reply that read the entry and said 'Tom requested a lavender-scented candle and asked about a refill option' as an embellishment; it is a faithful paraphrase of 'Lavender, and a refill option' in a candle-shop interview, so the item now says what faithful means and keeps failing invented detail or a swapped customer."
   },
   {
     "id": "IMP-018",
