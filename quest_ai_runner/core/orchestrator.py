@@ -5883,7 +5883,8 @@ class Orchestrator:
             kwargs: Dict[str, Any] = {"model": model, "tool_schema": REACH_JUDGE_TOOL}
             if provider_call_accepts_tier(provider.plan):
                 kwargs["tier"] = self.cfg.planner_reach_judge_tier
-            raw = provider.plan(judge_prompt(user_message, summary), **kwargs)
+            raw = provider.plan(judge_prompt(user_message, summary,
+                                             web_configured=self.web is not None), **kwargs)
             verdict = normalize_verdict(raw) or parse_judge_text(raw)
         except Exception as e:  # noqa: BLE001
             log.warning("Reach judge failed, planning without a verdict: %s: %s",
@@ -5910,7 +5911,7 @@ class Orchestrator:
             return decision
         digest = build_review_digest(
             user_message, decision, PLANNER_DECISION_RUBRIC, context_view, gathered,
-            max_chars=self.cfg.planner_cascade_digest_chars)
+            max_chars=self.cfg.planner_cascade_digest_chars, web_configured=self.web is not None)
         model = self.registry.resolve_tier(self.cfg.planner_cascade_tier)
         review_provider = self.get_provider_for_model(model)
         review_kwargs: Dict[str, Any] = {"model": model, "tool_schema": REVIEW_TOOL}

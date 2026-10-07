@@ -467,7 +467,14 @@ class GeminiGroundingBackend:
                 loc = _location_header(resp)
                 if loc:
                     return loc
+                # HEAD answered but carried no usable Location (e.g. 405 Method Not Allowed, or
+                # 200 with no redirect): a GET may behave differently, so fall through and try it.
+            except httpx.TimeoutException:
+                # HEAD timed out: keep the redirect URL as-is. Retrying with GET would double the
+                # worst-case latency for a dead or slow redirector, for no better outcome.
+                return u
             except Exception:  # noqa: BLE001
+                # Some other HEAD failure (connection refused, TLS error, ...): a GET may still work.
                 pass
             try:
                 resp = self.http("GET", u, timeout=_REDIRECT_TIMEOUT, follow_redirects=False)

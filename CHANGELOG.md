@@ -55,6 +55,17 @@ All notable changes to this project are documented here. The format is based on
     bounded to roughly 800 tokens of extracted passages; the Gemini-grounding backend bills to
     that key, every other backend is billed by the search provider itself (several offer a free
     tier).
+  - Second review pass (2026-10-06): the reach judge's own prompt (`core/reach_judge.py`), not
+    only the verdict text stamped into the planner afterwards, now says a live web read is
+    available when one is configured, and the cascade's review digest (`core/planner_cascade.py`,
+    shipped off) gets the same treatment; both are byte-for-byte unchanged without a web adapter.
+    A HEAD redirect-resolution request that TIMES OUT (`adapters/web_search_backends.py`) keeps
+    the original URL instead of doubling the worst-case latency with a GET retry; a GET retry
+    still runs when HEAD answers with no usable Location. The paid `url_fetch_fallback` (Gemini
+    `url_context`) call is now counted against `QAR_WEB_SEARCH_DAILY_LIMIT`
+    (`adapters/web_research.py`); once reached, the fallback is skipped and `fetch()` keeps the
+    thin direct result or names the limit as the cause, never raises; direct HTML fetches and
+    cache hits stay free and uncounted.
 - **`OrchestratorConfig.planner_model` / `QAR_PLANNER_MODEL`: the routing decision's own model.**
   Empty (default) keeps resolving `planner_tier`. A model id there is sent verbatim on the decide
   call alone, so routing can run on a cheaper model than the calls that share `planner_tier`

@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
+import httpx
 import pytest
 
 from quest_ai_runner.adapters.web_search_backends import (
@@ -252,6 +253,51 @@ def test_gemini_grounding_keeps_redirect_url_when_resolution_fails():
     urls = {h.url for h in resp.hits}
     assert "https://vertexaisearch.example/redirect/0" in urls
     assert "https://vertexaisearch.example/redirect/1" in urls
+
+
+def test_gemini_grounding_redirect_head_timeout_keeps_url_without_a_get_retry():
+    """A HEAD that times out must NOT be followed by a GET: that would double the worst-case
+    latency for a dead or slow redirector. The URL is kept as-is."""
+    response = _make_fake_genai_response()
+    client = _FakeGenaiClient(response)
+    calls: List[str] = []
+
+    def timing_out_http(method, url, **kwargs):
+        calls.append(method)
+        raise httpx.ReadTimeout("timed out")
+
+    backend = GeminiGroundingBackend(api_key="gm-key", client=client, http=timing_out_http)
+    resp = backend.search("q")
+    urls = {h.url for h in resp.hits}
+    assert "https://vertexaisearch.example/redirect/0" in urls
+    assert "https://vertexaisearch.example/redirect/1" in urls
+    assert calls.count("GET") == 0
+    assert calls.count("HEAD") == 2
+
+
+def test_gemini_grounding_redirect_head_no_location_retries_with_get():
+    """A HEAD that answers (e.g. 405 Method Not Allowed) but carries no usable Location is a
+    different case from a timeout: a GET may still resolve it, so it is retried."""
+    response = _make_fake_genai_response()
+    client = _FakeGenaiClient(response)
+    calls: List[str] = []
+
+    def no_location_on_head_http(method, url, **kwargs):
+        calls.append(method)
+        if method == "HEAD":
+            return FakeResponse(status_code=405)
+        if "redirect/0" in url:
+            return FakeResponse(status_code=301, headers={"Location": "https://real-source.com/article-0"})
+        if "redirect/1" in url:
+            return FakeResponse(status_code=301, headers={"Location": "https://real-source.com/article-1"})
+        return FakeResponse(status_code=404)
+
+    backend = GeminiGroundingBackend(api_key="gm-key", client=client, http=no_location_on_head_http)
+    resp = backend.search("q")
+    urls = {h.url for h in resp.hits}
+    assert "https://real-source.com/article-0" in urls
+    assert "https://real-source.com/article-1" in urls
+    assert calls.count("GET") == 2
 
 
 def test_gemini_grounding_no_metadata_still_returns_answer():

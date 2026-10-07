@@ -76,6 +76,11 @@ _DAILY_LIMIT_MESSAGE = (
     "Web search daily limit reached for this deployment; answer from what you know and say "
     "the information may be out of date."
 )
+#: Shown (as the fetch's ``cause``) when a thin direct fetch has nothing else to fall back on
+#: because the daily limit is reached: the paid ``url_fetch_fallback`` call is skipped outright.
+_DAILY_LIMIT_FALLBACK_MESSAGE = (
+    "Page needs a rendering fetch, but the web daily limit is reached for this deployment."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +247,9 @@ def _default_page_fetcher(url: str) -> FetchedPage:
 
 
 class _DailyLimiter:
-    """UTC-day counter of REAL backend search calls (cache hits never count).
+    """UTC-day counter of REAL, PAID calls: backend searches and ``url_fetch_fallback`` (Gemini
+    url_context) fetches that are actually issued. Cache hits and direct HTML fetches never
+    count; they are free.
 
     Thread-safe; optionally persisted to ``state_dir`` (one small JSON file) so a process
     restart doesn't reset the count mid-day. A limit of ``None``/``0`` disables the guard.
@@ -306,7 +313,8 @@ class _DailyLimiter:
             return self._count >= self._limit
 
     def record(self) -> None:
-        """Record one real backend call. No-op when the guard is disabled."""
+        """Record one real, paid call (a backend search, or a url_fetch_fallback fetch that was
+        actually issued). No-op when the guard is disabled."""
         if self._limit <= 0:
             return
         with self._lock:
@@ -542,16 +550,23 @@ class WebResearchAdapter:
                 return Observation(kind="error", rel_path=url, error=hard_error)
 
             if len(full_text.strip()) < _MIN_EXTRACTED_CHARS and self._url_fetch_fallback is not None:
-                fallback_text = ""
-                try:
-                    fallback_text = self._url_fetch_fallback(url) or ""
-                except Exception as exc:  # noqa: BLE001
-                    logger.debug("url_fetch_fallback failed for %r: %s", url, exc)
-                    cause = cause or str(exc)
-                if len(fallback_text.strip()) > len(full_text.strip()):
-                    full_text = fallback_text.strip()
-                    if not title:
-                        title = url
+                if self._limiter.exhausted():
+                    # The fallback is a PAID model call (Gemini url_context); the direct HTML
+                    # fetch above stays free and is never counted. Skip it outright rather than
+                    # issuing a call the deployment has already spent its daily budget on.
+                    cause = cause or _DAILY_LIMIT_FALLBACK_MESSAGE
+                else:
+                    self._limiter.record()
+                    fallback_text = ""
+                    try:
+                        fallback_text = self._url_fetch_fallback(url) or ""
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("url_fetch_fallback failed for %r: %s", url, exc)
+                        cause = cause or str(exc)
+                    if len(fallback_text.strip()) > len(full_text.strip()):
+                        full_text = fallback_text.strip()
+                        if not title:
+                            title = url
 
             if not full_text.strip():
                 # Name WHY, not just that it failed: "no extractable content" alone sent the
@@ -652,12 +667,15 @@ def build_web_research_from_env(
       QAR_WEB_SEARCH_TTL_SECONDS  -- search-result cache TTL in seconds (default 86400 = 1 day).
       QAR_WEB_PAGE_TTL_SECONDS    -- fetched-page cache TTL in seconds (default 604800 = 7 days).
       QAR_WEB_CACHE_DIR           -- on-disk cache directory (unset = memory-only cache).
-      QAR_WEB_SEARCH_DAILY_LIMIT  -- max REAL backend search calls per UTC day (unset/0 = no
-                                     limit). Cache hits don't count. Persisted under
-                                     QAR_WEB_CACHE_DIR when that's set, so a restart doesn't
-                                     reset the count. Once reached, ``search()`` returns an
-                                     error instead of calling the backend; ``fetch()`` is never
-                                     limited.
+      QAR_WEB_SEARCH_DAILY_LIMIT  -- max REAL, PAID calls per UTC day: backend searches plus
+                                     url_fetch_fallback (Gemini url_context) fetches that are
+                                     actually issued (unset/0 = no limit). Cache hits and direct
+                                     HTML fetches don't count. Persisted under QAR_WEB_CACHE_DIR
+                                     when that's set, so a restart doesn't reset the count. Once
+                                     reached, ``search()`` returns an error instead of calling the
+                                     backend; ``fetch()`` skips the fallback and keeps the thin
+                                     direct result, or names the limit as the cause when there is
+                                     nothing else to show.
     """
     env = env if env is not None else os.environ
     backend = select_search_backend(env, provider=provider)

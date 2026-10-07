@@ -307,6 +307,75 @@ def test_fetch_no_content_anywhere_is_an_error():
     assert "no extractable content" in obs.error
 
 
+# ---------------------------------------------------------------------------
+# fetch(): the daily cost guard counts the PAID fallback, never the free direct fetch
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_fallback_counted_against_the_daily_limit():
+    def thin_fetcher(url):
+        return SimpleNamespace(html="<html><body><div id='app'></div></body></html>",
+                               content_type="text/html", status_code=200)
+
+    fallback_calls = []
+
+    def fallback(url):
+        fallback_calls.append(url)
+        return "This is the real page content retrieved by the fallback mechanism instead, " * 5
+
+    adapter = WebResearchAdapter(
+        FakeBackend(), cache=WebCache(), page_fetcher=thin_fetcher, url_fetch_fallback=fallback,
+        daily_limit=1,
+    )
+    obs = adapter.fetch("https://example.com/js-shell")
+    assert obs.kind == "read"
+    assert fallback_calls == ["https://example.com/js-shell"]  # the one allowed paid call ran
+
+
+def test_fetch_fallback_skipped_once_the_daily_limit_is_reached():
+    def thin_fetcher(url):
+        return SimpleNamespace(html="<html><body><div id='app'></div></body></html>",
+                               content_type="text/html", status_code=200)
+
+    fallback_calls = []
+
+    def fallback(url):
+        fallback_calls.append(url)
+        return "This is the real page content retrieved by the fallback mechanism instead, " * 5
+
+    adapter = WebResearchAdapter(
+        FakeBackend(), cache=WebCache(), page_fetcher=thin_fetcher, url_fetch_fallback=fallback,
+        daily_limit=1,
+    )
+    adapter.fetch("https://example.com/first")  # spends the one allowed fallback call
+    assert fallback_calls == ["https://example.com/first"]
+
+    obs = adapter.fetch("https://example.com/second")  # different URL, no cache hit either
+    assert fallback_calls == ["https://example.com/first"]  # never called a second time
+    assert obs.kind == "error"
+    assert "daily limit" in obs.error.lower()
+
+
+def test_fetch_direct_fetch_never_counted_against_the_daily_limit():
+    def good_fetcher(url):
+        return SimpleNamespace(html=_ARTICLE_HTML, content_type="text/html", status_code=200)
+
+    fallback_calls = []
+
+    def fallback(url):
+        fallback_calls.append(url)
+        return "should not be used"
+
+    adapter = WebResearchAdapter(
+        FakeBackend(), cache=WebCache(), page_fetcher=good_fetcher, url_fetch_fallback=fallback,
+        daily_limit=1,
+    )
+    for i in range(5):
+        obs = adapter.fetch(f"https://example.com/article-{i}")
+        assert obs.kind == "read"
+    assert fallback_calls == []  # direct fetches are sufficient and free; never counted
+
+
 def test_fetch_empty_focus_keeps_leading_passages():
     def fake_fetcher(url):
         return SimpleNamespace(html=_ARTICLE_HTML, content_type="text/html", status_code=200)

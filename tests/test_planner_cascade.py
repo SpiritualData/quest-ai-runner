@@ -35,6 +35,7 @@ from quest_ai_runner.core.orchestrator import (
     provider_call_accepts_tier,
 )
 from quest_ai_runner.core.planner_cascade import (
+    WEB_REVIEW_NOTE,
     apply_review,
     build_review_digest,
     describe_decision,
@@ -160,6 +161,24 @@ def test_build_review_digest_includes_the_message():
     digest = build_review_digest("restart the deploy pipeline please", decision,
                                  PLANNER_DECISION_RUBRIC)
     assert "restart the deploy pipeline please" in digest
+
+
+def test_build_review_digest_is_byte_for_byte_unchanged_when_web_is_not_configured():
+    decision = PlanDecision(action="answer", rationale="ok")
+    default = build_review_digest("restart the deploy pipeline please", decision,
+                                  PLANNER_DECISION_RUBRIC)
+    explicit_false = build_review_digest("restart the deploy pipeline please", decision,
+                                         PLANNER_DECISION_RUBRIC, web_configured=False)
+    assert default == explicit_false
+    assert WEB_REVIEW_NOTE not in default
+
+
+def test_build_review_digest_adds_the_web_note_when_web_is_configured():
+    decision = PlanDecision(action="answer", rationale="ok")
+    digest = build_review_digest("restart the deploy pipeline please", decision,
+                                 PLANNER_DECISION_RUBRIC, web_configured=True)
+    assert WEB_REVIEW_NOTE in digest
+    assert "{\"web\":" in digest
 
 
 # ---------------------------------------------------------------------------
@@ -320,9 +339,10 @@ class RecordingProvider:
         return ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
 
 
-def build(provider: Any, **cfg: Any) -> Orchestrator:
+def build(provider: Any, *, web: Any = None, **cfg: Any) -> Orchestrator:
     return Orchestrator(retrieval=StubRetrieval({}), provider=provider,
-                        registry=ModelRegistry(provider), config=OrchestratorConfig(**cfg))
+                        registry=ModelRegistry(provider), config=OrchestratorConfig(**cfg),
+                        web=web)
 
 
 # ---------------------------------------------------------------------------
@@ -382,3 +402,18 @@ def test_cascade_review_tier_is_only_sent_to_a_provider_whose_plan_accepts_one()
     cheap = PlanDecision(action="read", reads=[{"grep": "x"}])
     orch.cascade_review(cheap, "restart the service", "some context", [])
     assert provider.calls[0]["tier"] == orch.cfg.planner_cascade_tier
+
+
+def test_cascade_review_passes_web_configured_through_to_the_review_digest():
+    """``self.web is not None`` must reach ``build_review_digest``, the same way it already
+    reaches the reach judge and ``verdict_block``."""
+    provider_no_web = RecordingProvider(response={"action": "answer", "rationale": "ok"})
+    orch_no_web = build(provider_no_web, planner_cascade=True)
+    cheap = PlanDecision(action="read", reads=[{"grep": "x"}], confidence="low")
+    orch_no_web.cascade_review(cheap, "restart the service", "some context", [])
+    assert WEB_REVIEW_NOTE not in provider_no_web.calls[0]["prompt"]
+
+    provider_with_web = RecordingProvider(response={"action": "answer", "rationale": "ok"})
+    orch_with_web = build(provider_with_web, web=object(), planner_cascade=True)
+    orch_with_web.cascade_review(cheap, "restart the service", "some context", [])
+    assert WEB_REVIEW_NOTE in provider_with_web.calls[0]["prompt"]

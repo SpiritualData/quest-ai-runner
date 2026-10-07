@@ -32,8 +32,11 @@ from quest_ai_runner.core.orchestrator import (
     provider_call_accepts_tier,
 )
 from quest_ai_runner.core.reach_judge import (
+    OUTSIDE_UNCOVERED_LINE,
+    OUTSIDE_UNCOVERED_LINE_WEB,
     REACH_VERDICTS,
     VERDICT_HEADING,
+    WEB_REACH_NOTE,
     judge_prompt,
     normalize_verdict,
     parse_judge_text,
@@ -119,9 +122,10 @@ class DispatchingProvider:
         return ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
 
 
-def build(provider: Any, **cfg: Any) -> Orchestrator:
+def build(provider: Any, *, web: Any = None, **cfg: Any) -> Orchestrator:
     return Orchestrator(retrieval=StubRetrieval({}), provider=provider,
-                        registry=ModelRegistry(provider), config=OrchestratorConfig(**cfg))
+                        registry=ModelRegistry(provider), config=OrchestratorConfig(**cfg),
+                        web=web)
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +235,17 @@ def test_verdict_block_world_tells_the_planner_to_answer():
     assert "Do not hand it off" in block
 
 
+def test_verdict_block_outside_uncovered_text_depends_on_web_configured_flag():
+    verdict = {"reach": "outside", "covered_by": None}
+    assert verdict_block(verdict) == verdict_block(verdict, web_configured=False)
+    assert OUTSIDE_UNCOVERED_LINE in verdict_block(verdict, web_configured=False)
+    assert OUTSIDE_UNCOVERED_LINE_WEB in verdict_block(verdict, web_configured=True)
+    assert "{\"web\":" in verdict_block(verdict, web_configured=True)
+    # the COVERED case (an environment handles it) is untouched by the flag either way
+    covered = {"reach": "outside", "covered_by": "a-local-service"}
+    assert verdict_block(covered, web_configured=True) == verdict_block(covered, web_configured=False)
+
+
 # ---------------------------------------------------------------------------
 # judge_prompt
 # ---------------------------------------------------------------------------
@@ -246,6 +261,21 @@ def test_judge_prompt_truncates_an_over_long_message():
     prompt = judge_prompt(message, "a short summary", max_message_chars=20)
     assert "a" * 20 in prompt
     assert "TAIL_THAT_SHOULD_BE_CUT" not in prompt
+
+
+def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
+    prompt_default = judge_prompt("check the latest score", "a short summary")
+    prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
+                                         web_configured=False)
+    assert prompt_default == prompt_explicit_false
+    assert WEB_REACH_NOTE not in prompt_default
+
+
+def test_judge_prompt_adds_the_web_sentence_when_web_is_configured():
+    prompt = judge_prompt("check the latest score", "a short summary", web_configured=True)
+    assert WEB_REACH_NOTE in prompt
+    assert "a short summary" in prompt
+    assert "check the latest score" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +428,22 @@ def test_a_judge_that_overruns_its_timeout_leaves_the_plan_without_a_verdict():
     started = time.monotonic()
     assert orch.reach_verdict("restart the service") is None
     assert time.monotonic() - started < 0.5
+
+
+def test_judge_reach_passes_web_configured_through_to_the_judge_prompt():
+    """The orchestrator knows whether a web adapter is wired (``self.web``); that fact must reach
+    the judge's own prompt, not only the verdict text stamped into the planner afterwards."""
+    provider = RecordingProvider(response={"reach": "inside"})
+    orch_no_web = build(provider, planner_reach_judge=True,
+                        read_reach_summary="Can read local notes.")
+    orch_no_web.judge_reach("what is the weather today")
+    assert WEB_REACH_NOTE not in provider.calls[0]["prompt"]
+
+    provider2 = RecordingProvider(response={"reach": "inside"})
+    orch_with_web = build(provider2, web=object(), planner_reach_judge=True,
+                          read_reach_summary="Can read local notes.")
+    orch_with_web.judge_reach("what is the weather today")
+    assert WEB_REACH_NOTE in provider2.calls[0]["prompt"]
 
 
 def test_the_verdict_cache_is_bounded():

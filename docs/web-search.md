@@ -127,17 +127,22 @@ A failed search or fetch is never cached.
 | `QAR_WEB_CACHE_DIR` | unset (memory-only) | On-disk cache directory. |
 | `QAR_WEB_SEARCH_MODEL` | `gemini-2.5-flash-lite` | Gemini grounding model (and the fallback-fetch model). |
 | `QAR_WEB_SEARCH_PROVIDER_MODEL` | unset | Model id for the `provider`-native backend option. |
-| `QAR_WEB_SEARCH_DAILY_LIMIT` | unset (no limit) | Max REAL backend search calls per UTC day; see below. |
+| `QAR_WEB_SEARCH_DAILY_LIMIT` | unset (no limit) | Max REAL, paid calls per UTC day (searches plus fallback fetches); see below. |
 
 ## Daily cost guard
 
-`QAR_WEB_SEARCH_DAILY_LIMIT` caps the number of REAL backend search calls per UTC day (cache hits
-never count against it). It's a cost guard, not a hard quota: each `search()` call checks the
-counter before calling the backend and returns `Observation(kind="error", error="Web search
-daily limit reached for this deployment; answer from what you know and say the information may
-be out of date.")` once it's reached, without calling the backend. The count is in-memory by
-default, or persisted as one small JSON file under `QAR_WEB_CACHE_DIR` (when that's configured)
-so a process restart doesn't reset it mid-day. `fetch()` is never limited by this guard.
+`QAR_WEB_SEARCH_DAILY_LIMIT` caps the number of REAL, PAID calls per UTC day: backend searches
+and `url_fetch_fallback` (Gemini `url_context`) fetches that are actually issued. Cache hits and
+direct HTML fetches stay free and never count. It's a cost guard, not a hard quota: each
+`search()` call checks the counter before calling the backend and returns `Observation(kind=
+"error", error="Web search daily limit reached for this deployment; answer from what you know
+and say the information may be out of date.")` once it's reached, without calling the backend.
+`fetch()` checks the same counter before calling the fallback: once reached, it skips the
+fallback and keeps whatever the free direct fetch got (a thin page is still returned), or, if
+the direct fetch got nothing at all, returns an error naming the limit as the cause ("Page needs
+a rendering fetch, but the web daily limit is reached for this deployment.") -- never a raise.
+The count is in-memory by default, or persisted as one small JSON file under `QAR_WEB_CACHE_DIR`
+(when that's configured) so a process restart doesn't reset it mid-day.
 
 The counter is per PROCESS: the file is read once at construction and written after each real
 call, so two lanes sharing one `QAR_WEB_CACHE_DIR` each keep their own count and the effective
