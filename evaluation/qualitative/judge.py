@@ -458,7 +458,10 @@ HOW TO COMPUTE score, in this order (do not substitute your own impression):
 
 context_used: list EVERY pivot named in the MUST and BONUS sections. "used" means the reply, the
 code or the frames show the assistant bringing that fact in from the user's data, NOT that the fact
-was available and not that the user said it themselves. "changed_answer" means a reply written
+was available and not that the user said it themselves. A pivot names the seeded records it lives in
+("seeded in: ..."); its description summarizes those records. Bringing in the content of any of
+those records that the question needs counts as used, so a question about one entry is answered by
+that entry and does not have to restate the summary. "changed_answer" means a reply written
 without that fact would have been materially different or wrong; a reply that merely name-drops the
 fact and then gives the same generic answer is used=true, changed_answer=false.
 
