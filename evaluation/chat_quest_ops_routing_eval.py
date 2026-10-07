@@ -281,6 +281,27 @@ def collections_linked_to_quest(quest_id):
     return out
 
 
+def reflection_days():
+    """The day(s) "today" can mean for an account-level daily reflection: this machine's local
+    date and the UTC date. The chat writes the reflection under the ACCOUNT's own timezone, which
+    this harness cannot read, and for part of every day those two dates differ (an evening run
+    here wrote under tomorrow's UTC date, and a local-date-only check both failed the case and
+    left the entry behind at teardown)."""
+    local = datetime.date.today().isoformat()
+    utc = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    return sorted({local, utc})
+
+
+def reflection_entries_by_day(coll_id):
+    out = {}
+    for e in entries_of(coll_id):
+        fv = e.get("fieldValues") or e.get("field_values") or {}
+        ed = str(fv.get("entry_date") or e.get("createdAt") or e.get("created_at") or "")[:10]
+        if ed in reflection_days():
+            out[ed] = (e.get("id"), dict(fv))
+    return out
+
+
 def find_collection_by_system_type(system_type):
     """The ONE account-level collection with this system_type (daily_reflection, week_review, ...),
     or None. There should only ever be zero or one per account."""
@@ -628,16 +649,12 @@ def setup():
     # teardown can restore it exactly. Writes this eval makes to that collection are NOT scoped to
     # the fixture quest (it's an account-level singleton), so deleting the fixture quest alone
     # would leave someone else's real reflection clobbered or an eval entry orphaned.
-    today_str = today.isoformat()
     refl_coll = find_collection_by_system_type("daily_reflection")
-    snapshot = {"existed": False}
+    snapshot = {"existed": False, "by_day": {}}
     if refl_coll:
-        for e in entries_of(refl_coll["id"]):
-            fv = e.get("fieldValues") or e.get("field_values") or {}
-            ed = str(fv.get("entry_date") or e.get("created_at") or "")
-            if ed.startswith(today_str):
-                snapshot = {"existed": True, "entry_id": e.get("id"), "field_values": dict(fv)}
-                break
+        for day, (entry_id, fv) in reflection_entries_by_day(refl_coll["id"]).items():
+            snapshot["by_day"][day] = {"entry_id": entry_id, "field_values": fv}
+        snapshot["existed"] = bool(snapshot["by_day"])
     out["daily_reflection_snapshot"] = snapshot
     print("daily reflection snapshot:", snapshot)
 
@@ -679,24 +696,17 @@ def teardown(fx=None):
 
     # 1. Restore (or delete) the account-level daily-reflection entry for today.
     snap = fx.get("daily_reflection_snapshot") or {"existed": False}
-    today_str = datetime.date.today().isoformat()
+    before_by_day = snap.get("by_day") or {}
     refl_coll = find_collection_by_system_type("daily_reflection")
     if refl_coll:
-        current_entry_id = None
-        for e in entries_of(refl_coll["id"]):
-            fv = e.get("fieldValues") or e.get("field_values") or {}
-            ed = str(fv.get("entry_date") or e.get("created_at") or "")
-            if ed.startswith(today_str):
-                current_entry_id = e.get("id")
-                break
-        if snap.get("existed"):
-            if current_entry_id:
+        for day, (current_entry_id, _fv) in reflection_entries_by_day(refl_coll["id"]).items():
+            before = before_by_day.get(day)
+            if before:
                 report.append(("daily-reflection-restore", current_entry_id, api(
                     "PUT", f"/api/data/entries/{current_entry_id}",
-                    {"field_values": snap["field_values"]},
+                    {"field_values": before["field_values"]},
                     params={"collection_id": refl_coll["id"]})[0]))
-        else:
-            if current_entry_id:
+            else:
                 report.append(("daily-reflection-delete", current_entry_id,
                                api("DELETE", f"/api/data/entries/{current_entry_id}",
                                   params={"collection_id": refl_coll["id"]})[0]))
@@ -981,13 +991,10 @@ def build_dataset(fx):
             coll = find_collection_by_system_type("daily_reflection")
             if not coll:
                 return False, "no daily-reflection collection exists for this account"
-            today = datetime.date.today().isoformat()
+            found = reflection_entries_by_day(coll["id"])
             entry = None
-            for e in entries_of(coll["id"]):
-                fv = e.get("fieldValues") or e.get("field_values") or {}
-                ed = str(fv.get("entry_date") or e.get("createdAt") or e.get("created_at") or "")
-                if ed.startswith(today):
-                    entry = fv
+            for _day, (_id, fv) in sorted(found.items()):
+                entry = fv
             if not entry:
                 return False, f"no daily-reflection entry for today in collection {coll['id']}"
             text = " ".join(str(entry.get(k) or "")
