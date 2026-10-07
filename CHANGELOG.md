@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Qualitative-eval judge: a short rubric response now retries and reports unjudged, instead of
+  padding the gap in as fails.** `evaluation/qualitative/judge.py`'s `normalise_verdict` used to
+  pad any rubric item the judge model did not return in as a silent FAIL, which could score a case
+  confidently from an incomplete judge response. It now raises `RubricCountMismatch`, which flows
+  into `judge()`'s existing 2-attempt retry; if both attempts come back short, the case is reported
+  unjudged (`{"error": ...}`) rather than scored.
+- **Qualitative-eval judge: ground truth now lists the dev account's other quest outcomes and
+  collection/habit names that sit outside the eval's seeded world,** so citing real-but-off-topic
+  account data is no longer scored as an invented fact under the judge's "never invent a fact,
+  number, source or entity" rule. Fetched once per run, cached, and never crashes a judge call on a
+  lookup failure. `judge()` takes a new `world` parameter to build this section.
+
 ### Changed
 - **The escalation nets honor the planner's structured `user_intent`, and the regex net over the
   user's words is retired.** Whether an answer turn should become work (the decisive message-intent

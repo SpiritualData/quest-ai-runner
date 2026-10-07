@@ -358,6 +358,14 @@ def precheck(case, evidence, world, after, changes):
 # LLM judge
 # ---------------------------------------------------------------------------------------------
 
+
+class RubricCountMismatch(ValueError):
+    """The judge model returned fewer rubric items than the case defines. Raised by
+    ``normalise_verdict`` so the call is retried (``judge()``'s own retry loop) and, if both
+    attempts come back short, the case is reported unjudged instead of silently scored with the
+    missing items padded in as fails."""
+
+
 JUDGE_SYSTEM = (
     "You are a strict, evidence-based QA judge for an AI assistant that works inside a quest and "
     "goal tracking app. You judge one test case. Judge ONLY from the evidence supplied.\n"
@@ -550,22 +558,27 @@ def extract_json(raw):
 
 
 def normalise_verdict(raw, case):
-    """Coerce the judge's JSON into the strict shape; raise on a missing core field."""
+    """Coerce the judge's JSON into the strict shape; raise on a missing core field.
+
+    A SHORT rubric (the model reported fewer items than the case defines) raises
+    ``RubricCountMismatch`` instead of padding the gap in as fails: ``judge()``'s retry loop
+    catches that and, if both attempts come back short, the case is reported UNJUDGED rather than
+    silently scored from an incomplete response. A rubric that matches or runs LONGER than the
+    case is fine; the longer case is simply truncated below.
+    """
     v = dict(raw)
     rubric = v.get("rubric")
     if not isinstance(rubric, list):
         raise ValueError("rubric missing")
     items = case.get("rubric") or []
+    if items and len(rubric) < len(items):
+        raise RubricCountMismatch(
+            f"judge reported {len(rubric)} rubric item(s), case defines {len(items)}")
     fixed = []
     for i, r in enumerate(rubric[:len(items)] if items else rubric, 1):
         fixed.append({"id": r.get("id", i), "item": str(r.get("item") or (
             items[i - 1] if i - 1 < len(items) else "")), "pass": bool(r.get("pass")),
             "evidence": str(r.get("evidence") or "")[:300]})
-    # An item the judge did not return is a FAIL, never a free pass. Dropping an item used to raise
-    # the score, because the score is a fraction over the items the judge chose to report.
-    for i in range(len(fixed), len(items)):
-        fixed.append({"id": i + 1, "item": items[i], "pass": False,
-                      "evidence": "JUDGE DID NOT REPORT THIS ITEM (scored as a failure)"})
     # A pass with no quote is not a pass: rule 2 of the judge's own instructions.
     for r in fixed:
         # Non-empty is the bar, not a minimum length: a legitimate quote can be two characters
@@ -604,9 +617,58 @@ def claude_provider():
                              timeout_seconds=420)
 
 
-def judge(case, evidence, changes, pre, truth, pivots, provider=None, model=JUDGE_MODEL):
+# The dev account the eval runs against carries OTHER quests and collections that are not part of
+# the eval world. Fetched once per process (this is a long-lived harness run, not a per-case cost)
+# and cached here; cleared only by restarting the run.
+_OTHER_ACCOUNT_DATA = {"built": False, "section": ""}
+
+
+def other_account_data_section(world):
+    """A short, labelled list of this dev account's OTHER quest outcomes and collection/habit
+    names, EXCLUDING anything whose id is in ``world`` (the eval's own seeded data), so the judge
+    can tell real-but-off-topic account data from an invented fact (rule 6: score 0.0 for
+    inventing a fact, number, source or entity not in the ground truth). Fetched once per run and
+    cached; never raises, a lookup failure degrades to a short explanatory note instead of
+    crashing the judge call."""
+    if _OTHER_ACCOUNT_DATA["built"]:
+        return _OTHER_ACCOUNT_DATA["section"]
+    _OTHER_ACCOUNT_DATA["built"] = True
+    try:
+        from devclient import list_collections, list_quests, quest_state
+        world = world or {}
+        world_quest_ids = set((world.get("quests") or {}).values())
+        world_collection_ids = set((world.get("collections") or {}).values())
+        lines = []
+        for q in list_quests():
+            qid = q.get("quest_id")
+            if not qid or qid in world_quest_ids:
+                continue
+            outcome = (quest_state(qid) or {}).get("outcome")
+            if outcome:
+                lines.append(f"- quest outcome: {outcome}")
+        for c in list_collections():
+            cid = c.get("id")
+            if not cid or cid in world_collection_ids:
+                continue
+            name = c.get("name")
+            if name:
+                lines.append(f"- collection/habit: {name}")
+        section = "" if not lines else (
+            "\n\nREAL DATA ON THIS ACCOUNT OUTSIDE THE EVAL WORLD: citing it is not invention, "
+            "but using it instead of the world data the case is about is still wrong.\n"
+            + "\n".join(lines))
+    except Exception as e:  # noqa: BLE001
+        section = (f"\n\n(could not list the account's other data outside the eval world: "
+                   f"{type(e).__name__}: {e})")
+    _OTHER_ACCOUNT_DATA["section"] = section
+    return section
+
+
+def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None,
+          model=JUDGE_MODEL):
     """Run the LLM judge. Never raises: a failure returns {"error": ...} so a case is reported as
     UNJUDGED rather than silently passed."""
+    truth = truth + other_account_data_section(world)
     prompt = build_prompt(case, evidence, changes, pre, truth, pivots)
     provider = provider or claude_provider()
     last = None

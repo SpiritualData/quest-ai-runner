@@ -240,7 +240,7 @@ def run_case(case, world, use_judge=True, parallel=False):
             if pre["hard_failures"] and not case.get("judge_always", False):
                 record["judged"] = {"skipped": "hard pre-check failure"}
             else:
-                record["judged"] = J.judge(case, evidence, changes, pre, truth, W.PIVOTS)
+                record["judged"] = J.judge(case, evidence, changes, pre, truth, W.PIVOTS, world)
         record["score"] = J.final_score(pre, record.get("judged"))
         record["passed"] = J.case_passed(case, pre, record.get("judged"), PASS_THRESHOLD)
         verdict = (record.get("judged") or {}).get("verdict")
