@@ -567,9 +567,8 @@ The four actions:
         returns to the previous screen", "a backdated habit entry no longer counts toward today").
         ONE sentence, ideally under 200 characters. It is NOT a place for the task details, the
         analysis, the plan, code, or a restatement of the whole request -- a long or dumped `goal`
-        is WRONG and will be rejected by the executor. Never make a production release, deploy, or
-        production test part of it unless the user's own message explicitly asked for one; asking
-        to fix, build, or improve something does not.
+        is WRONG and will be rejected by the executor. It covers only what the user's own message
+        asked for, no extra steps they did not name.
       * `deep_brief` = the clear self-contained brief with the details, which PRESERVES the user's
         action verb (say "add/update ...", not "look up/review ..."). All the context goes HERE,
         never in `goal`.
@@ -932,8 +931,7 @@ THE ACTIONS:
     Give BOTH, and keep them DISTINCT:
       `goal` = the short CHECKABLE done-standard only, one sentence under 200 characters, the
         single condition an executor is held to. Not the plan, the analysis, or the request again.
-        Never make a production release, deploy, or production test part of it unless the user's
-        own message explicitly asked for one; asking to fix or improve something does not.
+        It covers only what the user's own message asked for, no extra steps they did not name.
       `deep_brief` = the self-contained brief with all the detail, preserving the user's own
         action verb (say "add ...", not "review ...").
     When a write depends on a value from the person's data (an id, amount, total, date, or count),
@@ -2191,20 +2189,14 @@ finishes, a requirement to email, send, or deliver the work is MET by the output
 finished work itself. Never set met=false because the worker did not send it separately, and never
 tell the next attempt to send it: that is how the person receives the same thing twice.
 
-RELEASES: a code, config, or prompt change is done once it is committed where the task works and
-verified there. Never set met=false because the change is not yet released, deployed, or tested on
-production, and never tell the next attempt to request, ask someone for, or wait on a release. The
-ONLY exception is a goal or original request that explicitly asked for a production release,
-deploy, or production test; asking to fix, build, or improve something is not such a request.
-
-COMMITS ARE EVIDENCE: when the task was to implement, fix, or change something in code, config, or a
-prompt, an output that names the commit hash(es) and the files or behaviour changed IS concrete
-evidence of completion. Do not set met=false because the output is a summary rather than a pasted
-diff, a test log, or a transcript of the commands, and do not ask the next attempt to re-prove work
-a named commit already records. Judge whether what the commits claim matches the goal. The only
-exceptions are a goal, the original request, or the QUALITY STANDARDS that explicitly require other
-proof (for example a passing test run, a screenshot, or a deployed check); then that named proof is
-what is missing, so say exactly which one in next_action.
+SCOPE AND EVIDENCE: judge the output against what the goal and the original request actually asked
+for, and nothing more. Never set met=false for something the request did not ask for, and never tell
+the next attempt to do extra work the request did not name. Accept the kind of evidence the task
+naturally produces: for a change to code, files, or data, a report naming what was changed (for
+example the commit, file, or record and the behaviour) is concrete evidence; for an answer, the
+answer itself. A summary is not a lack of proof just because it is not a pasted diff, log, or
+transcript. Ask for specific extra proof only when the goal, the request, or the QUALITY STANDARDS
+below explicitly require it, and then say exactly which proof is missing in next_action.
 
 CRITICAL: Absence of context can be the correct answer. If the goal asks about prior conversation
 history, prior messages, or what was previously said, and the CONVERSATION HISTORY below confirms

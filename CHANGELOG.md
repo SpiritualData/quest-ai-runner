@@ -274,13 +274,13 @@ All notable changes to this project are documented here. The format is based on
   server" as its answer with the field empty. That description is kept
   (`COMPACT_SCHEMA_KEPT_DESCRIPTIONS`) and the compact actions block says a hand-off is the field.
   Hand-off groups on the dev half: 24/38 to 32/38, and 14/38 to 36/38 after an empty read.
-- **A deep run is no longer failed, or retried into a release request, because its change is not
-  on production yet.** The goal verifier (`VERIFY_GOAL_PROMPT`) now treats a code, config, or
-  prompt change as done once it is committed and verified where the task works, and never tells
-  the next attempt to ask for or wait on a release. Both planners (`PLANNER_PROMPT`,
-  `PLANNER_PROMPT_COMPACT`) keep a production release, deploy, or production test out of the
-  done-standard. The one exception, in both places, is a request that explicitly asked for one.
-  Covered by `tests/test_release_not_part_of_done.py`.
+- **The shared prompts no longer carry any release or deploy rule; they judge the user's ask.**
+  The goal verifier (`VERIFY_GOAL_PROMPT`) has one generic SCOPE AND EVIDENCE clause: judge only
+  what the goal and request asked for, accept the evidence the task naturally produces (a report
+  naming the commit, file, or record changed counts for a change), and ask for extra proof only
+  when the goal, request, or quality standards explicitly require it. Both planners say a goal
+  covers only what the user's own message asked for. Per-org rules belong in a deployment's own
+  preamble. Covered by `tests/test_verifier_judges_the_ask.py`.
 
 ### Added
 - **Routing can run reliably on a cheap model, and costs about half as much input to do it.**
