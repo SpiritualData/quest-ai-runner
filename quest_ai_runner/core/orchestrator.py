@@ -4442,7 +4442,7 @@ def _run_goal_accepts_context_preamble(deep_runner: Any) -> bool:
     return False
 
 
-def _run_goal_accepts_gathered_observations(deep_runner: Any) -> bool:
+def run_goal_accepts_gathered_observations(deep_runner: Any) -> bool:
     """Whether a DeepRunner's ``run_goal`` accepts a ``gathered_observations`` keyword (or **kwargs).
 
     Same opt-in discipline as ``_run_goal_accepts_emit``. ``context_preamble`` hands a runner the
@@ -7978,7 +7978,7 @@ class Orchestrator:
             #                 quest, one folder, one env" -- the worker starts where that quest's
             #                 real work lives.
             #   gathered    — the SAME brain content as ``preamble``, as structured dicts instead of
-            #                 flattened text (see ``_run_goal_accepts_gathered_observations``).
+            #                 flattened text (see ``run_goal_accepts_gathered_observations``).
             runner_caps: Dict[int, Dict[str, bool]] = {}
 
             def caps_for(runner: Any) -> Dict[str, bool]:
@@ -7991,7 +7991,7 @@ class Orchestrator:
                         "emit": emit is not None and _run_goal_accepts_emit(runner),
                         "run_id": _run_goal_accepts_run_id(runner),
                         "preamble": _run_goal_accepts_context_preamble(runner),
-                        "gathered": _run_goal_accepts_gathered_observations(runner),
+                        "gathered": run_goal_accepts_gathered_observations(runner),
                         "working_dir": _run_goal_accepts_working_dir(runner),
                         "resume": _run_goal_accepts_resume_session_id(runner),
                         "is_subgoal": run_goal_accepts_is_subgoal(runner),
@@ -8063,7 +8063,7 @@ class Orchestrator:
                         # are planner-only routing aids, not content the worker should ground on (the
                         # worker has its own tools). Pass forward only the real content the brain read.
                         _brain_content = [o for o in (gathered or []) if not _is_discovery_obs(o)]
-                        # Same list, as structured dicts (see ``_run_goal_accepts_gathered_observations``)
+                        # Same list, as structured dicts (see ``run_goal_accepts_gathered_observations``)
                         # for a runner that wants to filter it itself instead of re-parsing text.
                         if caps["gathered"] and _brain_content and not multi:
                             kwargs["gathered_observations"] = _brain_content
