@@ -165,6 +165,59 @@ def test_fan_out_stops_a_sibling_before_it_ever_starts_once_one_parks():
     assert res.deep_results[0].decision_id == "dec_a"
 
 
+def test_fan_out_reports_what_landed_as_well_as_the_one_ask():
+    # Round-2 regression: keeping ONLY the parked result threw away the siblings that had already
+    # written. Live trace: all three requested goals actually landed, and the reply the person read
+    # was a bare "please approve these changes to proceed", with no mention of any of them. The
+    # reply must carry what happened FIRST, then the single ask, then the continuation sentence.
+    # ``max_parallel=1`` makes the order deterministic: the landed subtask runs and finishes before
+    # the parking one is dispatched at all.
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import (CONTINUE_AFTER_DECISION_NOTE,
+                                                   unconfirmed_no_change_text)
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = _PerGoalDeepRunner({
+        "A": DeepResult(met=True, output="Added the goal for A."),
+        "B": DeepResult(met=False, output="B needs your call first.", decision_id="dec_b"),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(max_parallel=1)).run("do A and B")
+    assert res.kind == "deep"
+    assert [getattr(d, "decision_id", None) for d in res.deep_results] == [None, "dec_b"], \
+        "the landed sibling is kept, and the one ask comes last"
+    reply = "\n\n".join(s for s in (unconfirmed_no_change_text(d) for d in res.deep_results) if s)
+    assert reply.index("Added the goal for A.") < reply.index("B needs your call first."), \
+        "what landed is read before the ask, never after it"
+    assert reply.count(CONTINUE_AFTER_DECISION_NOTE) == 1
+    assert reply.endswith(CONTINUE_AFTER_DECISION_NOTE)
+
+
+def test_fan_out_drops_only_the_extra_asks_not_the_finished_work():
+    # Three subtasks: one landed, two parked. Exactly one ask survives (the first parked, by
+    # subtask order) and the landed one is still reported.
+    from quest_ai_runner.core.adapters import DeepResult
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}, {"goal": "C", "brief": "c"}],
+         "rationale": "split"},
+    ])
+    runner = _PerGoalDeepRunner({
+        "A": DeepResult(met=True, output="A landed."),
+        "B": DeepResult(met=False, output="B's question", decision_id="dec_b"),
+        "C": DeepResult(met=False, output="C's question", decision_id="dec_c"),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(max_parallel=1)).run("do A, B and C")
+    outputs = [d.output for d in res.deep_results]
+    assert any("A landed." in o for o in outputs)
+    assert sum(1 for d in res.deep_results if getattr(d, "decision_id", None)) == 1
+    assert not any("C's question" in o for o in outputs)
+
+
 def test_a_single_goal_turn_that_parks_is_unaffected():
     # The aggregation filter and the stop-event are both gated on ``multi``: a plain single-goal
     # deep run that parks must come back exactly as before, with no continuation sentence added.

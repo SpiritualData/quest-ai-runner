@@ -199,6 +199,22 @@ CONTINUE_AFTER_DECISION_NOTE = (
     "I will continue with the rest of this once you answer that."
 )
 
+
+def _result_reports_something(result: Any) -> bool:
+    """Whether a deep result has anything of its own to tell the person: text it produced, a
+    verified outcome, or a usage-limit wait.
+
+    Used where a fan-out's results are trimmed around a single ask (below): a sibling subgoal that
+    was stopped before it ever ran leaves an EMPTY placeholder result, which must not become a
+    blank paragraph in the reply, while a sibling that genuinely finished its work must survive.
+    Judged on structure and emptiness only, never on what any wording says. Never raises."""
+    try:
+        if (getattr(result, "output", "") or "").strip():
+            return True
+        return bool(getattr(result, "met", False) or getattr(result, "usage_limited", False))
+    except Exception:  # noqa: BLE001
+        return False
+
 # Defaults (all overridable via OrchestratorConfig). The elapsed/chars budget bounds the WHOLE
 # read cascade for a turn (every grep + read this turn shares it), not a single read: a 60s/60000
 # char cap left a simple "check these 3 named files" request no room left after one broad grep,
@@ -8409,15 +8425,24 @@ class Orchestrator:
                                       exit_reason="cancelled")
 
         deep_results = [r for r in all_results if r is not None]
-        # SIBLINGS DO NOT PILE UP MORE ASKS (structural, on ``decision_id``, never on any result's
-        # own text -- hard rule #3): once ANY subgoal of this fan-out parked on a human decision,
-        # keep only the FIRST such result (by subtask order) and drop every other result this
-        # turn, whether it also parked or finished its own work. ``fanout_parked`` above already
-        # stops a sibling that had not yet started its next attempt; this is what guarantees the
-        # outcome regardless of how the concurrent runs happened to race, which is what the bug
-        # actually needs fixed: two independently-reviewed subtasks both parked on the SAME
+        # ONE ASK, BUT NEVER AT THE COST OF WHAT ALREADY HAPPENED (structural, on ``decision_id``,
+        # never on any result's own text -- hard rule #3).
+        #
+        # Once ANY subgoal of this fan-out parked on a human decision, exactly ONE ask reaches the
+        # reply: the FIRST parked result by subtask order. Every FURTHER parked result is dropped,
+        # which is the bug this guards (two independently-reviewed subtasks parked on the same
         # conflict, so the reply carried the conflict question twice plus an extra, unrequested
-        # goal. The one short sentence that replaces the rest is code-written, not model-written.
+        # goal proposal).
+        #
+        # What is NOT dropped is a sibling that already DID its work. The first version of this
+        # filter kept the parked result alone, so in a live run where all three requested goals
+        # had actually landed the reply was a bare "please approve these changes to proceed": the
+        # landed subgoals' own receipts and text never reached the reader, and the ask was the
+        # only thing left to read. The order is therefore what happened, then the one ask, then
+        # one short code-written continuation sentence. ``fanout_parked`` above still stops a
+        # sibling that had not yet started its next attempt; this step guarantees the shape
+        # regardless of how the concurrent runs happened to race.
+        #
         # A single-goal turn (``multi`` False) and a fan-out where nothing parked are unaffected.
         if multi:
             parked = next((r for r in deep_results if getattr(r, "decision_id", None)), None)
@@ -8427,7 +8452,11 @@ class Orchestrator:
                         parked.output = f"{parked.output}\n\n{CONTINUE_AFTER_DECISION_NOTE}"
                 else:
                     parked.output = CONTINUE_AFTER_DECISION_NOTE
-                deep_results = [parked]
+                deep_results = [r for r in deep_results
+                                if r is parked
+                                or (not getattr(r, "decision_id", None)
+                                    and _result_reports_something(r))]
+                deep_results.sort(key=lambda r: 1 if r is parked else 0)
 
         return OrchestratorResult(
             kind="deep",
