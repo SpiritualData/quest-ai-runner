@@ -917,6 +917,21 @@ def test_hook_a_gate_skips_a_clean_run_but_fires_on_a_looping_run():
                                                   answer_goal_max_iterations=1)).run(
                             "q", sink=_CaptureSink())
     assert looping_res.kind == "answer"
+    # The stuck-read-loop safety net (``repeat_only_steps >= 2``) breaks the planning loop the
+    # SAME step hook A's second submit fires, so that consult's background future is still
+    # in flight when run() returns -- finish() deliberately tears down the executor with
+    # ``wait=False`` ("finishes on its own without blocking the return, and is never joined
+    # synchronously here") rather than joining it, by design (Fix 1). Asserting on
+    # ``overseer_calls`` the instant run() returns is therefore a race with that background
+    # thread, not with the orchestrator's decision logic: the submit already happened (proven by
+    # ``tests/test_overseer.py``'s other gate tests), only its cheap, local, no-network stub call
+    # has not necessarily finished executing yet. Wait briefly, bounded, for it to settle instead
+    # of joining the executor ourselves (which would require reaching into a local variable of
+    # ``run()``) or weakening the assertion.
+    deadline = time.monotonic() + 1.0
+    while looping_provider.overseer_calls <= clean_provider.overseer_calls and \
+            time.monotonic() < deadline:
+        time.sleep(0.01)
     assert looping_provider.overseer_calls > clean_provider.overseer_calls
     assert looping_provider.overseer_calls >= 2  # at least one hook-A submit + hook B
 
