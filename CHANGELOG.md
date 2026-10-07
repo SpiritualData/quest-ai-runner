@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **An own escalation that produces nothing keeps the answer.** When the verifier's, the
+  last-resort or the overseer's deep run comes back with no output, the turn keeps the answer it
+  already had instead of ending with an empty result (which a consumer had to replace with a
+  generic "could you tell me more?").
 - **The overseer leaves an honest decline alone, and its own deep escalation stays in the turn.**
   `escalate_human` is no longer for requests nothing here can carry out when the draft already
   says so, and its `reason` (shown to the user as the question) is written to the user. The

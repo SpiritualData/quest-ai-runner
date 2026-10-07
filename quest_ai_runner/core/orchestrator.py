@@ -1207,6 +1207,19 @@ def _deep_declined_background(result: Any) -> bool:
     return bool(results) and all(getattr(d, "declined_background", False) for d in results)
 
 
+def _self_escalation_adds_nothing(result: Any) -> bool:
+    """True when one of the orchestrator's OWN escalations should not replace the answer it
+    already has: it started nothing (``_deep_declined_background``), or it ran and produced no
+    output at all. Found 2026-10-07 in Quest's chat: a last-resort run came back empty and the
+    turn ended with no reply, so the person got a generic "could you tell me more?" instead of the
+    totals the answer had already worked out."""
+    if _deep_declined_background(result):
+        return True
+    results = list(getattr(result, "deep_results", None) or [])
+    return not any((getattr(d, "output", "") or "").strip() for d in results) and not (
+        getattr(result, "text", "") or "").strip()
+
+
 # Reserved named-runner registry key for QUEUED deployments: when OrchestratorConfig.
 # deferred_deep_queued is on and the consumer registered a runner under this key in
 # ``deep_runners``, every planner ``deferred_deep`` is PINNED to that runner (bypassing the
@@ -11144,12 +11157,12 @@ class Orchestrator:
                         resume_session_id=take_resume_session(), self_initiated=True)
                     if _ov_res.kind == "cancelled":
                         return finish(_ov_res)
-                    if not _deep_declined_background(_ov_res):
+                    if not _self_escalation_adds_nothing(_ov_res):
                         _ov_res.exit_reason = "overseer_escalated_deep"
                         self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
                         return finish(_ov_res)
-                    # Not started (the overseer's escalation resolved to background work the
-                    # user did not ask for): the draft answer ships.
+                    # Not started (background work the user did not ask for) or it produced
+                    # nothing: the draft answer ships.
                 elif _bsig.signal == "escalate_human":
                     # Genuine human-only fork (Fix 2): route through the SAME confirm / decision-
                     # request mechanism as a planner-originated confirm, discarding the drafted
@@ -11618,9 +11631,9 @@ class Orchestrator:
                             resume_session_id=take_resume_session(), self_initiated=True)
                         if _esc_res.kind == "cancelled":
                             return finish(_esc_res)
-                        if _deep_declined_background(_esc_res):
-                            # Not started (see _run_deep's ``self_initiated``). Nothing else can
-                            # search further, so the last-resort run below must not try again.
+                        if _self_escalation_adds_nothing(_esc_res):
+                            # Not started (see _run_deep's ``self_initiated``) or it produced
+                            # nothing; the last-resort run below must not try again.
                             _self_escalation_declined = True
                         else:
                             _esc_res.exit_reason = "escalated_deep"
@@ -11692,7 +11705,7 @@ class Orchestrator:
                     resume_session_id=take_resume_session(), self_initiated=True)
                 if _lr_res.kind == "cancelled":
                     return finish(_lr_res)
-                if not _deep_declined_background(_lr_res):
+                if not _self_escalation_adds_nothing(_lr_res):
                     _lr_res.exit_reason = "escalated_deep"
                     _lr_res.goal_verdict = _last_verdict
                     self._kickoff_card_update(_lr_res, _lr_plan, user_message, _ctx_meta, emit)

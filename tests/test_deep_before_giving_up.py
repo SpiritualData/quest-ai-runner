@@ -99,3 +99,14 @@ def test_overseer_prompt_keeps_impossible_asks_and_its_question_user_facing():
     from quest_ai_runner.core.overseer import OVERSEER_PROMPT
     assert "NOTHING here can" in OVERSEER_PROMPT
     assert "never about them" in OVERSEER_PROMPT
+
+
+def test_an_empty_last_resort_run_keeps_the_answer():
+    """A last-resort run that comes back with nothing must not replace the answer (2026-10-07:
+    the turn ended with no reply and the person got a generic 'could you tell me more?')."""
+    provider = VerdictProvider([ANSWER], [NOT_MET, NOT_MET])
+    runner = StubDeepRunner(met=False, output="")
+    res = orch(provider, runner).run("What is the status of the tesmd bot issue?")
+    assert res.kind == "answer"
+    assert "I have no material on that" in (res.text or "")
+    assert len(runner.calls) >= 1
