@@ -591,17 +591,10 @@ def normalise_verdict(raw, case):
             r["evidence"] = "PASS CLAIMED WITH NO QUOTED EVIDENCE (scored as a failure)"
     v["rubric"] = fixed
     try:
-        v["score"] = max(0.0, min(1.0, float(v.get("score"))))
+        judge_score = max(0.0, min(1.0, float(v.get("score"))))
     except (TypeError, ValueError):
-        v["score"] = (sum(r["pass"] for r in fixed) / len(fixed)) if fixed else 0.0
-    # The prompt's own step 1 is "start from the fraction of items that passed", so the score can
-    # never exceed it. Enforced here, because the two downgrades above (an unquoted pass, an item
-    # the judge never reported) would otherwise leave a generous number standing over failed items.
-    if fixed:
-        ceiling = sum(r["pass"] for r in fixed) / len(fixed)
-        if v["score"] > ceiling:
-            v["score"] = round(ceiling, 2)
-            v["score_capped_to_rubric"] = True
+        judge_score = None
+    v["judge_score"] = judge_score
     for key in ("routing_ok", "side_effects_ok"):
         v[key] = bool(v.get(key))
     v["context_used"] = [
@@ -611,7 +604,43 @@ def normalise_verdict(raw, case):
     v.setdefault("code_review", None)
     v.setdefault("failure_class", None)
     v["summary"] = str(v.get("summary") or "")[:300]
+    v["score"] = formula_score(case, v)
     return v
+
+
+# Failure classes whose cap the judge's own number may apply below the computed formula (prompt
+# caps 4 to 6: a claimed but unperformed action, an invented fact, a forbidden write). Every other
+# part of the formula is computed here from the verdict's structured fields.
+JUDGE_CAPPED_FAILURE_CLASSES = {"claimed_unperformed_write", "hallucinated_fact", "forbidden_write"}
+
+
+def formula_score(case, v):
+    """The case score, computed from the verdict's STRUCTURED fields by the formula the judge is
+    given, instead of trusted from the number the judge writes.
+
+    The judge reported every rubric item passed, the required pivot used and answer-changing, no
+    failure class, and then a score of 0.6 (2026-10-07): arithmetic, not judgment. Items, pivots,
+    routing and side effects are judgments the verdict records field by field, so the arithmetic
+    over them is done here. The judge's own number can still pull the score lower only when it
+    names a failure class whose cap needs its judgment (``JUDGE_CAPPED_FAILURE_CLASSES``)."""
+    items = v.get("rubric") or []
+    judge_score = v.get("judge_score")
+    if items:
+        score = sum(r["pass"] for r in items) / len(items)
+    else:
+        score = judge_score if judge_score is not None else 0.0
+    required = case.get("must_use_pivots") or []
+    seen = {c["pivot"]: c for c in (v.get("context_used") or []) if c.get("pivot")}
+    if any(not (seen.get(n) or {}).get("used") for n in required):
+        score = min(score, 0.6)
+    elif required and case.get("pivots_change_answer", case.get("dataset") == "implicit"):
+        if all(not (seen.get(n) or {}).get("changed_answer") for n in required):
+            score = min(score, 0.4)
+    if not (v.get("routing_ok") and v.get("side_effects_ok")):
+        score = min(score, 0.6)
+    if v.get("failure_class") in JUDGE_CAPPED_FAILURE_CLASSES and judge_score is not None:
+        score = min(score, judge_score)
+    return round(score, 2)
 
 
 def claude_provider():

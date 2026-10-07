@@ -155,8 +155,10 @@ datasets on 2026-10-06:
   a decision-request instead. `setup` now arms four quests with `mode="act"` and leaves **family**
   off deliberately (`world.AUTOPILOT_BY_QUEST`), so both halves of the gate are tested. Before this,
   every field case was unpassable.
-* **A quest note cannot be written at all** (no helper, and `notes` is not one of the five raw
-  collections). `runner.validate_case` now refuses a `quest_note` assertion outright.
+* **A quest note CAN be written since 2026-10-06** (`add_quest_note(quest_id, text)` joined the
+  sandbox that day; before it there was no helper). `world.CHAT_CAPABILITIES` says so, so the judge
+  no longer calls a proposed note a nonexistent capability. `runner.validate_case` still refuses a
+  `quest_note` assertion until a case needs one.
 * **No mail helper, and no case may ask for a send.** EXP-043 used to instruct a real
   `send_quest_email` to the dev team, which meant running the suite mailed whoever that team
   carries. It is now a draft-only case, and the email cases hard-fail on `send_quest_email`

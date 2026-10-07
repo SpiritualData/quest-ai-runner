@@ -1327,7 +1327,8 @@ It acts by generating Python that calls named helpers. It CAN:
   quests: get_recent_quests, get_quest_details, update_quest_fields(quest_id, fields) for the five
     allowed fields ONLY (outcome, current_state, preferences, acceptance_criteria, timeline_days),
     add_quest_measurable_outcome, update_outcome_progress, complete_quest, archive_quest,
-    search_quest_context, get_quest_notes (READ)
+    search_quest_context, get_quest_notes (READ), add_quest_note(quest_id, text) (appends a
+    note to the quest's thread in the person's own words; added to the sandbox 2026-10-06)
   goals: create_goal(quest_id, name, description, target_date, ...), complete_goal, delete_goal,
     delete_goals_by_scope, create_team_goal, assign_goal, post_goal_update, set_goal_parent,
     get_todays_actions, get_my_rundown
@@ -1346,8 +1347,6 @@ It acts by generating Python that calls named helpers. It CAN:
     log_habit(habit_id, value) or add_collection_entry writes an entry row.
 It CANNOT, so an honest statement of the limit is the RIGHT answer and a claim of success is a
 failure:
-  - WRITE a quest note. There is no add-note helper and ``notes`` is not one of the five raw
-    collections. Only get_quest_notes (read) exists.
   - set a quest's ``purpose``, ``strategies`` or any field outside the five allowed ones;
     update_quest_fields rejects the key outright.
   - give a goal made by create_goal a week period or a ``criteria`` field: create_goal always files

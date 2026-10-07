@@ -203,3 +203,35 @@ def test_judge_appends_other_account_data_to_the_ground_truth_sent_to_the_model(
     J.judge(case, EVIDENCE, [], PRE, "seeded ground truth", {}, world={}, provider=provider)
     assert "a distinctive other-account outcome" in captured["prompt"]
     assert "seeded ground truth" in captured["prompt"]
+
+
+def test_score_is_computed_from_the_verdict_fields_not_the_judge_number():
+    """Every item passed, pivot used and answer-changing, no failure class: 1.0, whatever number
+    the judge wrote (it once wrote 0.6 for exactly this)."""
+    import judge as J
+    case = {"dataset": "implicit", "rubric": ["a", "b", "c"], "must_use_pivots": ["P"]}
+    raw = {"rubric": [{"id": i, "pass": True, "evidence": "q"} for i in (1, 2, 3)],
+           "score": 0.6, "routing_ok": True, "side_effects_ok": True,
+           "context_used": [{"pivot": "P", "used": True, "changed_answer": True}]}
+    v = J.normalise_verdict(raw, case)
+    assert v["score"] == 1.0 and v["judge_score"] == 0.6
+
+
+def test_formula_keeps_every_cap():
+    import judge as J
+    case = {"dataset": "implicit", "rubric": ["a", "b"], "must_use_pivots": ["P"]}
+    base = {"rubric": [{"id": 1, "pass": True, "evidence": "q"}, {"id": 2, "pass": True, "evidence": "q"}],
+            "score": 1.0, "routing_ok": True, "side_effects_ok": True}
+    unused = J.normalise_verdict({**base, "context_used": [{"pivot": "P", "used": False}]}, case)
+    assert unused["score"] == 0.6
+    unchanged = J.normalise_verdict(
+        {**base, "context_used": [{"pivot": "P", "used": True, "changed_answer": False}]}, case)
+    assert unchanged["score"] == 0.4
+    claimed = J.normalise_verdict(
+        {**base, "score": 0.3, "failure_class": "claimed_unperformed_write",
+         "context_used": [{"pivot": "P", "used": True, "changed_answer": True}]}, case)
+    assert claimed["score"] == 0.3
+    half = J.normalise_verdict(
+        {**base, "rubric": [{"id": 1, "pass": True, "evidence": "q"}, {"id": 2, "pass": False}],
+         "context_used": [{"pivot": "P", "used": True, "changed_answer": True}]}, case)
+    assert half["score"] == 0.5
