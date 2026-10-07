@@ -1086,14 +1086,15 @@
     },
     {
       "id": "EXP-033",
+      "evidence_notes": "Rubric audit 2026-10-07: the judge failed a reply that gave both asked-for numbers correctly (41.7 km, three entries at effort 4 or higher) because items 1 and 2 carried the ground truth in parentheses (5 entries; the three distances) and were read as required content. The question asks two numbers, so the items now require those and say the extra detail is welcome but optional; item 3 still fails any invented entry or distance.",
       "dataset": "explicit",
       "area": "collection insight",
       "quest_key": "fitness",
       "message": "In my Run Log, what is my total distance and how many entries had effort 4 or higher?",
       "expected_routing": "inline",
       "rubric": [
-        "Total distance is 41.7 km across 5 entries",
-        "Three entries had effort 4 or higher (8.2 km at 4, 6.0 km at 5, 10.0 km at 5)",
+        "States the total distance as 41.7 km (the sum of the 5 seeded entries; saying how many entries is welcome but not required, the question did not ask for it)",
+        "States that three entries had effort 4 or higher (they are 8.2 km at 4, 6.0 km at 5 and 10.0 km at 5; listing them is welcome but not required, the question asked how many)",
         "Lists or counts no entry that is not in the seeded Run Log, and every distance it quotes matches a seeded entry",
         "Does not write anything"
       ],
