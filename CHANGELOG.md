@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A parked approval decision is no longer resynthesized into a false "done" claim.** A deferred
+  deep run that resolved to a PARKED approval (`DeepResult.decision_id` set, nothing landed) had
+  its honest, code-written ask folded into `deep_output` and run through the "you already DID the
+  work" synthesis prompt; the goal-verification loop then judged the honest ask "not met" and told
+  a plain text-completion step (no tool access) to "execute the create_goal operation", which it
+  cannot do, so it fabricated a false completion with a made-up pace and date that did not even
+  match the parked card. A parked result is now kept out of `deep_output` entirely; when nothing
+  landed this turn the reply becomes the parked card's own wording, verbatim, `exit_reason` becomes
+  `"parked"`, `decision_id` is carried onto the `OrchestratorResult`, and the goal-verification
+  loop and the last-resort deep run are both gated off for a parked turn (same reasoning as a
+  confirmed queued hand-off). A mixed turn (something landed, something else parked) still reports
+  the landed work through the normal synthesis and appends the parked ask verbatim.
+  Tests: `tests/test_orchestrator.py`
+  (`test_deferred_deep_park_is_reported_as_proposal_not_a_done_claim`).
 - **A fan-out that parks one subgoal no longer throws away the siblings that already did their
   work.** The one-ask filter added in the entry below kept ONLY the parked result, so in a live
   run where all three requested items had actually landed, the single thing the person read was a

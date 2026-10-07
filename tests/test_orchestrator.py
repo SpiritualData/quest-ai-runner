@@ -2086,6 +2086,44 @@ def test_inline_default_never_uses_queued_synthesis():
     assert "CONFIRMED HAND-OFF RECORD" not in joined
 
 
+def test_deferred_deep_park_is_reported_as_proposal_not_a_done_claim():
+    """Round-2 regression (MS-046): a deferred_deep that resolves to a PARKED approval decision
+    (DeepResult.decision_id set, nothing landed) must reach the user as that card's own
+    code-written "awaiting your answer" wording, verbatim -- never re-synthesized through the
+    "you already DID the work" prompt, and never handed to the goal-verification loop, whose
+    "improve it" regeneration asked a plain text-completion step (no tool access) to "execute
+    the create_goal operation", which it cannot do, so it fabricated a false "I have added this
+    goal" reply with a made-up date and pace. Default config (verify_claims on,
+    answer_goal_max_iterations=2) is used deliberately: the loop would normally run here, so
+    its absence proves the gate, not a config that happens to skip it."""
+    ask_text = ("Approve this change to your Quest data?\n\nI will add a new goal named "
+                "\"Tempo run at 5.21 min/km\" to your quest. Do you approve this change?")
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the tempo-run goal"}}],
+        answer_text="I'll work out the pace and add the goal.",
+    )
+    runner = StubDeepRunner(met=False, decision_id="dec_tempo", output=ask_text)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "find my pace and add a tempo-run goal")
+    assert res.kind == "answer"
+    assert res.exit_reason == "parked"
+    assert res.decision_id == "dec_tempo"
+    assert res.text == ask_text, "the reply must BE the parked card's own wording, verbatim"
+    assert "I have added this as a goal" not in (res.text or "")
+    # No resynthesis: the misleading "already did the work" framing was never sent to the model.
+    all_prompts = "\n".join(
+        (m["content"] if isinstance(m["content"], str) else str(m["content"]))
+        for msgs in provider.all_answer_messages for m in msgs)
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in all_prompts
+    # No goal-verification regeneration either: no "fell short ... improving it" steer was ever
+    # sent, and no extra plan() call beyond the one planning decision (the verifier calls
+    # provider.plan(), same as the planner, so a second call would mean it ran anyway).
+    assert "YOUR PREVIOUS ANSWER" not in all_prompts
+    assert "fell short" not in all_prompts
+    assert provider.plan_calls == 1
+
+
 # ---------------------------------------------------------------------------
 # Deferred hand-off: the honesty edges. A queued deployment may be MISCONFIGURED (no runner under
 # the reserved key, a runner that lies about its enqueue, a classifier reaching for the reserved

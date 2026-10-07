@@ -1854,7 +1854,8 @@ class OrchestratorResult:
     text: Optional[str] = None         # for answer
     deep_results: List[DeepResult] = field(default_factory=list)   # for deep (1..N)
     goals: List[str] = field(default_factory=list)                 # the goal(s) run
-    decision_id: Optional[str] = None  # for confirm (if an EscalationSink was provided)
+    decision_id: Optional[str] = None  # for confirm, or an "answer" turn whose deferred work
+                                        # parked on an approval card (exit_reason == "parked")
     question: Optional[str] = None     # for confirm
     rationale: str = ""
     steps: int = 0
@@ -1876,6 +1877,9 @@ class OrchestratorResult:
     # Why the loop exited. One of: "verified" | "max_turns" | "escalated_deep" | "read_budget" |
     # "unverified" | "deferred" (a queued deployment confirmed a deferred hand-off this turn; the
     # external runner verifies the real outcome out-of-band) |
+    # "parked" (deferred work resolved to a parked approval decision with nothing landed; see
+    # ``decision_id``, never re-verified against the goal -- the goal is intentionally not met
+    # yet) |
     # "deep_met" | "deep_not_met" | "clarify" | "confirm" |
     # "overseer_answer_now" | "overseer_escalated_deep" | "overseer_escalated_human" (set when an
     # overseer signal decided the path) | "cancelled" (a caller-supplied ``cancel_check`` reported
@@ -11619,6 +11623,16 @@ class Orchestrator:
         # for this turn: the deferred contract trusts met and never re-verifies a hand-off sentinel
         # against the user's goal (that would always fail and could relaunch, double-enqueueing).
         _deferred_handoff_confirmed = False
+        # True once this turn's deferred deep work resolved to a PARKED approval decision
+        # (``DeepResult.decision_id``) with nothing landed. Gates the goal-verification loop off
+        # for this turn, same reasoning as ``_deferred_handoff_confirmed``: the goal is
+        # intentionally not met yet (a human still has to answer the card), so regenerating
+        # toward "met" would only invite a rewrite that claims the parked change already happened.
+        _decision_parked = False
+        # The parked result's own decision_id, carried onto the final OrchestratorResult below so
+        # a consumer can tell structurally (never by scanning the reply text) that this turn ended
+        # on a pending approval card, not a completed answer.
+        _parked_decision_id: Optional[str] = None
         # The queue pin is for the PLANNER'S OWN hand-off (``deferred_deep``): it decided the work
         # belongs in the background. The escalation nets above only infer that the user asked for
         # a change the turn did not make ("you asked for a change, making it now"), so their work
@@ -11702,8 +11716,25 @@ class Orchestrator:
                 # ordinary deep output, exactly as before.
                 _inline_results = ([d for d in _results if not getattr(d, "deferred", False)]
                                    if _queued_mode else list(_results))
+                # PARKED DECISION (round-2 regression, MS-046): a DeepResult with ``decision_id``
+                # set was NOT executed, only parked on an approval card awaiting the person's
+                # answer; its own ``output`` IS the user-facing ask, already written by the park
+                # path (e.g. quest-backend's ``park_for_approval``) in the correct "awaiting your
+                # answer" voice. Folding that text into ``deep_output`` fed the "you already DID
+                # the work" synthesis prompt below, which could turn an honest ask into a false
+                # "I have added this" claim, and the goal-verification loop after it then tried to
+                # "improve" the honest ask into an executed one by telling a plain text-completion
+                # step (no tool access) to "execute the create_goal operation" -- which it cannot
+                # do, so it fabricated having done so. Keep every parked result OUT of
+                # ``deep_output`` so nothing downstream can describe it as done; a mixed turn
+                # (some work landed, one result parked) still reports the landed work normally and
+                # appends the parked ask verbatim, never through the LLM resynthesis.
+                _parked = next((d for d in _inline_results if getattr(d, "decision_id", None)),
+                               None)
+                _landed_results = [d for d in _inline_results
+                                   if not getattr(d, "decision_id", None)]
                 deep_output = "\n\n".join(
-                    s for s in (_strip_future_context(d.output) for d in _inline_results) if s
+                    s for s in (_strip_future_context(d.output) for d in _landed_results) if s
                 ).strip()
                 if _confirmed:
                     _handoff_out = "\n\n".join(
@@ -11739,6 +11770,27 @@ class Orchestrator:
                     _deep_block = "--- WHAT WAS JUST EXECUTED (deep run output) ---\n" + deep_output
                     context_view = (context_view + "\n\n" + _deep_block) if context_view else _deep_block
                     _deferred_deep_grounded = True
+                    if _parked is not None:
+                        # Something ALSO parked alongside the landed work this turn: append its
+                        # own code-written wording verbatim, never through the "already done"
+                        # synthesis above, so the ask is neither dropped nor rewritten into a claim.
+                        _parked_text = (_parked.output or "").strip()
+                        if _parked_text and _parked_text not in text:
+                            text = f"{text}\n\n{_parked_text}"
+                        _decision_parked = True
+                        _parked_decision_id = _parked.decision_id
+                elif _parked is not None:
+                    # NOTHING landed this turn: the whole deferred attempt resolved to a parked
+                    # approval card. The reply IS that card's own code-written lead, verbatim --
+                    # not a fresh LLM synthesis grounded on a misleading "you already DID the
+                    # work" framing, which is what fabricated the false completion this guards.
+                    if emit is not None:
+                        emit.status("Parked on an approval card, waiting for your answer…")
+                    _parked_text = (_parked.output or "").strip()
+                    if _parked_text:
+                        text = _parked_text
+                    _decision_parked = True
+                    _parked_decision_id = _parked.decision_id
                 elif _queued_mode:
                     # HONEST-ENQUEUE: this deployment queues deferred work, NO hand-off was
                     # confirmed this turn (the enqueue failed, or the run errored before it), and
@@ -11797,7 +11849,7 @@ class Orchestrator:
         # Set when one of the orchestrator's own escalations resolved to a background-work runner
         # and was not started (see _run_deep's ``self_initiated``): no further escalation this turn.
         own_escalation_settled = False
-        if (not _deferred_handoff_confirmed
+        if (not _deferred_handoff_confirmed and not _decision_parked
                 and (self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims)):
             try:
                 # Verify against the turn's DERIVED GOAL CONDITION (the checkable done-standard
@@ -12007,8 +12059,8 @@ class Orchestrator:
         # should I look in?"). One pass only; skipped when something already mutated this turn (a
         # re-run could double the change) or the human asked us to hold off.
         if (self.cfg.deep_before_giving_up and not own_escalation_settled
-                and not _deferred_handoff_confirmed and not _claim_corrected
-                and not brainstorm_active
+                and not _deferred_handoff_confirmed and not _decision_parked
+                and not _claim_corrected and not brainstorm_active
                 and _last_verdict is not None and not _last_verdict.get("met")
                 and not _ctx_meta.get("deep_attempted")
                 and self._has_deep_execution_capability()
@@ -12063,16 +12115,22 @@ class Orchestrator:
             # The work was confirmed queued out-of-band (deferred contract): neither verified nor
             # unverified applies to this turn; the external runner verifies the real outcome.
             _exit_reason = "deferred"
+        elif _decision_parked:
+            # This turn's change was parked on an approval decision, not completed: the goal is
+            # intentionally not met yet (a human still has to answer the card), so this is neither
+            # "verified" nor "unverified" -- it never entered that loop at all (see the gate above).
+            _exit_reason = "parked"
         elif _last_verdict is not None:
             _exit_reason = "verified" if _last_verdict.get("met") else "max_turns"
         # An overseer answer_now that short-circuited the read loop to this answer wins the reason,
         # so a consumer can see the terminal path was decided by the overseer.
         if (overseer_decided == "overseer_answer_now" and _last_verdict is None
-                and not _deferred_handoff_confirmed):
+                and not _deferred_handoff_confirmed and not _decision_parked):
             _exit_reason = "overseer_answer_now"
         _res = OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                   model=model, exit_reason=_exit_reason,
-                                  goal_verdict=_last_verdict)
+                                  goal_verdict=_last_verdict,
+                                  decision_id=_parked_decision_id)
         if _claim_corrected:
             # The reply had to be corrected for honesty and the claimed work never executed: flag
             # the result so a background task maps to needs_you/failed, never a false done.
