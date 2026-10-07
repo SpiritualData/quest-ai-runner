@@ -66,8 +66,8 @@ DEV ONLY, AND PATH-AGNOSTIC (public-repo hard rule #1)
 ---------------------------------------------------------
 Quest credentials are read from the file named by the required env var ``QAR_EVAL_DEV_ENV_FILE``
 (for this deployment, export it as ``<product>/setup/sd-dev-runner/.env`` in your shell -- never
-hardcode that path into this file). The URL in that file is asserted to be a dev host, never
-``api.spiritualdata.org``. The fixture's quest category comes from ``QAR_EVAL_CATEGORY_ID`` if
+hardcode that path into this file). The URL in that file must be exactly on the host named by the
+required env var ``QAR_EVAL_DEV_HOST`` (an allowlist; anything else refuses to run). The fixture's quest category comes from ``QAR_EVAL_CATEGORY_ID`` if
 set, else this harness looks one up live via ``GET /api/categories/all`` (a category whose name
 contains "fitness"); it refuses to run if neither source finds one. Scratch output goes under
 ``QAR_EVAL_OUT_DIR`` (default ``/tmp/qopseval``). Test data is created through the REAL dev REST
@@ -163,8 +163,14 @@ for line in DEV_ENV_FILE.read_text().splitlines():
 QUEST_BASE = DEV_ENV["QUEST_BASE_URL"].rstrip("/")
 QUEST_KEY = DEV_ENV["QUEST_API_KEY"]
 QUEST_TEAM = DEV_ENV.get("QUEST_TEAM_ID") or ""
-assert "spiritualdata.org" not in QUEST_BASE, (
-    f"REFUSING TO RUN: {QUEST_BASE} looks like the production Quest backend, not dev")
+# An ALLOWLIST, not a denylist: this harness creates and deletes data and rewrites the account's
+# daily reflection for today, so it runs only against the one host the operator named as dev.
+# A denylist of the production domain would pass a raw IP or a tunnel to production.
+DEV_HOST = (os.environ.get("QAR_EVAL_DEV_HOST") or "").strip().lower()
+assert DEV_HOST, ("REFUSING TO RUN: set QAR_EVAL_DEV_HOST to the dev Quest backend's host name "
+                  "(exactly the host of QUEST_BASE_URL in the dev env file)")
+assert (urllib.parse.urlparse(QUEST_BASE).hostname or "").lower() == DEV_HOST, (
+    f"REFUSING TO RUN: {QUEST_BASE} is not the dev host QAR_EVAL_DEV_HOST={DEV_HOST}")
 
 OUT_DIR = Path(os.environ.get("QAR_EVAL_OUT_DIR") or "/tmp/qopseval")
 STATE_PATH = OUT_DIR / "fixture.json"
