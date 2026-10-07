@@ -158,6 +158,20 @@ datasets on 2026-10-06:
 * Learned context cards persist across conversations and some pre-date the world (old conversation
   cards, e.g. from the earlier routing eval). They can leak facts into a case; cards created during
   the run are removed, older ones are not. Note it in findings when a reply cites an unknown fact.
+* **The card sweep identifies a run's cards only by id, against the baseline captured at `setup()`.**
+  `cards_created_since` is a set difference against `world["cards_baseline"]`, so a card that
+  pre-dates the world is indistinguishable from one a case learned except by having been listed at
+  setup. With no baseline recorded the sweep deletes **nothing** rather than sweeping broadly: a run
+  started against a half-built state file leaves every card in place, and leaked facts then show up
+  as answers citing data no case put there. There is no per-case creation timestamp to fall back on,
+  because `GET /api/cards` is listed by id here and the baseline is never refreshed mid-run.
+* **A card write can land after the case that caused it.** The brain's card updater runs in a
+  background daemon thread and finishes after the response the case already read, so the sweep can
+  fire before the write exists. `sweep_new_cards` therefore waits for the card set to go quiet
+  (`settle_card_set`, 2s quiet / 20s cap) and runs twice: once inside the case after judging, and
+  again right before the next case starts. A write that lands later still than that is caught by the
+  next sweep, so it can reach at most one case. Parallel cases get only the single sweep after the
+  batch, by design: with several cases in flight the baseline diff cannot tell whose card is whose.
 * Parallel cases share one snapshot space; a side effect seen during a parallel run is flagged
   `side_effects_ambiguous`. Keep anything that might write out of the parallel pool.
 * Dev runs `auto_run=true` except for EXP-070, EXP-071, MS-033, MS-034 and MS-044, the cases that

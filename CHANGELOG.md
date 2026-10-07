@@ -22,6 +22,16 @@ All notable changes to this project are documented here. The format is based on
   depends on a model policing itself in prose and no model output is keyword-scanned. A runner that
   reports no observations behaves exactly as before. Tests:
   `tests/test_card_learning_gate.py`.
+- **Qualitative-eval harness: the per-case card sweep now waits for a turn's card writes to settle,
+  and runs twice.** The brain's card updater finishes in a background thread AFTER the response a
+  case has already read, so the old sweep (fired the instant a case returned) could miss the write
+  and let the next case be answered from it. `evaluation/qualitative/world.py` gains
+  `cards_created_since`, `settle_card_set` (poll until the card set is quiet, bounded) and
+  `sweep_new_cards`; the runner sweeps inside the case after judging and again right before the next
+  case starts. The sweep still identifies a run's cards only by id against the baseline captured at
+  setup, and deletes nothing at all when no baseline was recorded, which is now stated in the
+  README's known limits rather than worked around by deleting broadly. Tests:
+  `evaluation/qualitative/test_card_sweep.py`.
 - **Compact JSON formatting for the two schemas rendered as TEXT into a prompt.**
   `adapters/claude_cli_provider.py`'s `plan()` appends the decide-tool schema to every planner
   prompt on that backend (the CLI has no native tool-use surface to pass it out of band) and

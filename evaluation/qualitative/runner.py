@@ -257,6 +257,14 @@ def run_case(case, world, use_judge=True, parallel=False):
                       and p.get("executable_kind") not in W.NEVER_CANCEL_EXECUTABLE_KINDS]
         if cancel_ids:
             record["decisions_cancelled"] = W.cancel_decisions(cancel_ids)
+        # SWEEP THE CARDS THIS CASE LEARNED, after judging and after waiting for the turn's card
+        # writes to settle. The brain's card updater runs in a background thread and finishes after
+        # the response this case already read, so a sweep fired the instant the case returned left
+        # the write behind for the NEXT case to be answered from. Serial runs only: with several
+        # cases in flight the baseline diff cannot tell whose card is whose, so the parallel batch
+        # keeps its single sweep after the batch (see run_cases).
+        if not parallel:
+            record["cards_swept"] = W.sweep_new_cards(world.get("cards_baseline"))
     except Exception as e:  # noqa: BLE001
         record["error"] = f"{type(e).__name__}: {e}"
         record["traceback"] = traceback.format_exc()[-1500:]
@@ -345,12 +353,17 @@ def run_cases(cases, use_judge=True, workers=1):
                 if workers <= 1:
                     # Serial: drop the cards this case learned before the next case starts, or the
                     # next case is answered from this one's conversation card (seen 2026-10-07).
-                    W.delete_new_cards(world.get("cards_baseline"))
+                    # The case already swept once after judging; this second sweep is what catches
+                    # a card the background updater wrote after that one.
+                    W.sweep_new_cards(world.get("cards_baseline"))
                 records.append(r)
                 save_result(r)
                 print_row(r)
-    W.delete_new_cards(world.get("cards_baseline"))
+    # Between the parallel batch and the serial one: the only sweep the parallel cases get.
+    W.sweep_new_cards(world.get("cards_baseline"))
     for case in mutating:
+        # Right before this case starts: catch anything the previous case's updater wrote late.
+        W.sweep_new_cards(world.get("cards_baseline"))
         r = run_case(case, world, use_judge)
         try:
             world = restore_world(r, world)
@@ -360,7 +373,7 @@ def run_cases(cases, use_judge=True, workers=1):
             print_row(r)
             merge_results(records + [r])
             raise
-        W.delete_new_cards(world.get("cards_baseline"))
+        W.sweep_new_cards(world.get("cards_baseline"))
         records.append(r)
         save_result(r)
         print_row(r)

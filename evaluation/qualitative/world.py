@@ -31,6 +31,7 @@ import datetime
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -977,14 +978,69 @@ def card_ids():
     return {c.get("id") for c in cards if c.get("id")}
 
 
-def delete_new_cards(baseline):
-    """Delete cards that did not exist at setup. Returns how many were removed."""
+def cards_created_since(baseline, current=None):
+    """The card ids that exist now but were not in ``baseline``, sorted.
+
+    ``baseline`` is the set captured at ``setup()`` and never refreshed, so after each sweep this is
+    exactly "the cards this run created and has not yet removed". ``None`` yields nothing: with no
+    baseline the sweep cannot tell a card the run created from one that pre-dates it, and it must
+    then delete nothing rather than guess (see the README's known limits). Never raises."""
     if baseline is None:
-        return 0  # no baseline recorded: refuse to guess which cards are ours
-    fresh = card_ids() - set(baseline)
+        return []
+    try:
+        return sorted((card_ids() if current is None else set(current)) - set(baseline))
+    except Exception:  # noqa: BLE001
+        return []
+
+
+# How long the sweep waits for a turn's card writes to SETTLE. The card updater runs in a background
+# daemon thread in the brain and finishes after the HTTP response the case already read, so a write
+# can land after the case's own sweep and be inherited by the next case. The wait is short: it only
+# has to outlast one cheap model call plus the write.
+CARD_SETTLE_QUIET_SECONDS = 2.0
+CARD_SETTLE_TIMEOUT_SECONDS = 20.0
+
+
+def settle_card_set(fetch, *, quiet_seconds=CARD_SETTLE_QUIET_SECONDS,
+                    timeout=CARD_SETTLE_TIMEOUT_SECONDS, sleep=time.sleep, clock=time.monotonic):
+    """Poll ``fetch`` until the card set stops changing for ``quiet_seconds``, then return it.
+
+    Returns the last set seen, whether it went quiet or the ``timeout`` ran out (the caller sweeps
+    either way: a late write is better caught on the next sweep than waited on forever). ``fetch``,
+    ``sleep`` and ``clock`` are injected so this is testable with no network and no real waiting."""
+    deadline = clock() + max(0.0, timeout)
+    seen = fetch()
+    quiet_since = clock()
+    while clock() < deadline:
+        if clock() - quiet_since >= quiet_seconds:
+            return seen
+        sleep(min(0.5, max(0.05, quiet_seconds / 4)))
+        current = fetch()
+        if current != seen:
+            seen, quiet_since = current, clock()
+    return seen
+
+
+def delete_new_cards(baseline, current=None):
+    """Delete cards that did not exist at setup. Returns how many were removed."""
+    fresh = cards_created_since(baseline, current)
     for cid in fresh:
         api("DELETE", f"/api/cards/{cid}")
     return len(fresh)
+
+
+def sweep_new_cards(baseline, *, settle=True):
+    """Delete the cards this run created, after WAITING for the turn's card writes to settle.
+
+    The per-case sweep used to fire the moment a case returned, which is before the brain's
+    background card updater has finished: the write landed after the sweep and the NEXT case was
+    answered from it (seen 2026-10-07, an eval card about one quest rewriting answers about
+    another). Call this after judging AND again right before the next case starts; it is cheap when
+    there is nothing new (one listing). Returns how many cards were removed."""
+    if baseline is None:
+        return 0
+    current = settle_card_set(card_ids) if settle else None
+    return delete_new_cards(baseline, current)
 
 
 # ---------------------------------------------------------------------------------------------
