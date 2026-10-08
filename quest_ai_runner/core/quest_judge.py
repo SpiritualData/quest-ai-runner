@@ -11,9 +11,12 @@ module never reads a database.
 """
 
 import json
+import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .card_filter import _extract_json
+
+log = logging.getLogger("quest-ai-runner.quest_judge")
 
 JUDGE_WINDOW = 25
 
@@ -186,7 +189,8 @@ def rank_quests(
         messages=_message_blocks(items))
     try:
         rows = _parse_results(call_judge(prompt, QUEST_RANKING_TOOL), len(items))
-    except Exception:  # noqa: BLE001 - ranking must never break the caller
+    except Exception as exc:  # noqa: BLE001 - ranking must never break the caller
+        log.warning("quest ranking failed for %d message(s), using fallback order: %s", len(items), exc)
         return [fallback_for() for _ in range(len(items))]
 
     results: List[Tuple[Optional[str], List[str]]] = []

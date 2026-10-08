@@ -9,6 +9,8 @@ All notable changes to this project are documented here. The format is based on
 ### Changed
 - Quest ranking keeps the END of a quest's state, not its start: the judge sees the last 320 characters
   (`quest_judge.STATE_LIMIT`, `tail_clip`), because the newest words say where the quest stands now.
+- A failed quest-ranking judge call is now logged (`quest-ai-runner.quest_judge`) before the priority-order
+  fallback, so a dropped ranking leaves a trace instead of disappearing silently.
 
 ### Added
 - `quest_ai_runner.runner.plan_reconcile` and `quest-ai-runner reconcile-plan <quest_id>`: keeps a quest's

@@ -139,3 +139,14 @@ def test_short_state_is_untouched():
     from quest_ai_runner.core.quest_judge import _quest_lines
     line = _quest_lines([{"quest_id": "q1", "title": "Run", "state": "Ran 5k today"}], None)
     assert line.endswith("| state: Ran 5k today")
+
+
+def test_failed_judge_call_is_logged_and_falls_back_to_priority_order(caplog):
+    # A rate-limited or timed-out judge must leave a trace, not silently drop the ranking.
+    items = [{"text": "run the grant report", "previous": ""}]
+    with caplog.at_level("WARNING", logger="quest-ai-runner.quest_judge"):
+        results = rank_quests(items, QUESTS, judge_returning(TimeoutError("judge timed out")),
+                              fallback_order=["q_c", "q_a", "q_b"])
+    assert results == [(None, ["q_c", "q_a", "q_b"])]
+    assert "quest ranking failed for 1 message(s)" in caplog.text
+    assert "judge timed out" in caplog.text
