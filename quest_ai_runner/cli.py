@@ -1974,7 +1974,6 @@ def main(argv=None) -> int:
     if args.command == "paste-context":
         import sys
         import hashlib
-        import json
         from pathlib import Path
 
         corpus = args.corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()

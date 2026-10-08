@@ -31,6 +31,10 @@ All notable changes to this project are documented here. The format is based on
   `tests/test_deep_gathered.py`.
 
 ### Fixed
+- **`quest-ai-runner reconcile-plan` crashed with `UnboundLocalError` on `json`.** `cli.py`'s `main()`
+  had a function-local `import json` in its `paste-context` branch, which made `json` a local name for the
+  whole function, so the `reconcile-plan` branch's `json.dumps` failed before the import ran. The redundant
+  local import is removed; the module-level `json` import is used everywhere.
 - **A deferred-deep run's own TERMINAL ASK, with real observations attached, was folded into the
   "you already DID the work" synthesis and reported as done (round-2 regression, MS-046 L10c).**
   `result_landed_work` treated "not parked on a decision_id" plus "reported non-empty
