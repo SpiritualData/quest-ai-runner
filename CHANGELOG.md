@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- Quest ranking keeps the END of a quest's state, not its start: the judge sees the last 320 characters
+  (`quest_judge.STATE_LIMIT`, `tail_clip`), because the newest words say where the quest stands now.
+
 ### Added
 - `quest_ai_runner.runner.plan_reconcile` and `quest-ai-runner reconcile-plan <quest_id>`: keeps a quest's
   day and week goals current. Unfinished past day goals roll forward to today, unfinished past week goals roll to

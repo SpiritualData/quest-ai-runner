@@ -93,11 +93,22 @@ def clip_text(text: str, limit: int) -> str:
     return text[:head].rstrip() + "\n[...]\n" + text[-tail:].lstrip()
 
 
+STATE_LIMIT = 320
+
+
+def tail_clip(text: str, limit: int) -> str:
+    """The LAST ``limit`` chars of ``text``, with a leading marker when cut. The newest words of a
+    quest's state are the ones that say where it stands now, so the start is what gets dropped."""
+    if len(text) <= limit:
+        return text
+    return "[...] " + text[-limit:].lstrip()
+
+
 def _quest_lines(shown: List[Dict[str, str]], home_quest_id: Optional[str]) -> str:
     lines = []
     for q in shown:
         tag = " [HOME]" if q["quest_id"] == home_quest_id else ""
-        state = " ".join((q.get("state") or "").split())[:240]
+        state = tail_clip(" ".join((q.get("state") or "").split()), STATE_LIMIT)
         lines.append(f"- {q['quest_id']}{tag}: {q.get('title') or '(untitled)'}"
                      + (f" | state: {state}" if state else ""))
     return "\n".join(lines)
