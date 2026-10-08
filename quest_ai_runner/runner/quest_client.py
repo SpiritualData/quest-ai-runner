@@ -70,6 +70,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, FrozenSet, List, Optional, Sequence
 
 from ..core.adapters import Escalation, EscalationSinkBase
+from ..core.work_model import RUNNABLE_MODELS
 
 log = logging.getLogger("quest-ai-runner.quest_client")
 
@@ -140,10 +141,14 @@ class QuestClient:
     def __init__(self, base_url: str, api_key: str, *, team_id: Optional[str] = None,
                  timeout: float = 30.0,
                  decision_assignees: Optional[Dict[str, str]] = None,
-                 default_assignee_user_id: Optional[str] = None):
+                 default_assignee_user_id: Optional[str] = None,
+                 env_id: Optional[str] = None):
         self.base_url = (base_url or "").rstrip("/")
         self.api_key = api_key or ""
         self.team_id = team_id or ""
+        # Which of the team's environments this runner is (None = the default env). Used to read that
+        # environment's work-model configuration when a task does not name its own env_id.
+        self.env_id = env_id or ""
         self.timeout = timeout
         # {role name -> user id} for ``create_decision(assignee="...")``. WHO a decision goes to is
         # deployment policy, not client logic: one deployment routes money to an owner and errands
@@ -645,6 +650,9 @@ class QuestClient:
         """
         try:
             body: Dict[str, Any] = {"capabilities": dict(capabilities)}
+            # The work models this runner can run (Claude Code deep worker). The backend narrows the
+            # environment's configured options to these, so an org never offers a model the runner lacks.
+            body["available_models"] = [{"provider": "anthropic", "model": m} for m in RUNNABLE_MODELS]
             if runner_label:
                 body["runner_label"] = runner_label
             if env_id:
@@ -660,6 +668,21 @@ class QuestClient:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("post_environment_heartbeat failed: %s", e)
             return {}
+
+    def get_work_model_config(self, *, team_id: Optional[str] = None,
+                              env_id: Optional[str] = None) -> Dict[str, Any]:
+        """The effective work-model view for one of the team's environments.
+
+        GETs ``/api/teams/{team_id}/environments/{env_id}/work-model``. The backend resolves the
+        team override, else the org's config for that env, else the Claude default, and returns it
+        under ``effective`` (see ``quest_ai_runner.core.work_model.apply_work_model``). ``env_id``
+        omitted means the default environment. Raises on failure: the caller decides the fallback.
+        """
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to read the work-model configuration")
+        eid = urllib.parse.quote(env_id or self.env_id or "default", safe="")
+        return self._request("GET", f"/api/teams/{tid}/environments/{eid}/work-model") or {}
 
     # --- escalation (team decision-requests; the confirm-before-act surface) --
 

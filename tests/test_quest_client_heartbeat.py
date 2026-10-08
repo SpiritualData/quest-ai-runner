@@ -11,6 +11,9 @@ import pytest
 
 from quest_ai_runner.runner.quest_client import QuestApiError, QuestNotConfigured, QuestClient
 
+# The runner reports the Claude models its deep worker can run on every heartbeat.
+RUNNABLE_AVAILABLE_MODELS = [{"provider": "anthropic", "model": m} for m in ("haiku", "sonnet", "opus", "fable")]
+
 
 def client_capturing_body(team_id="team_1"):
     client = QuestClient("https://quest.example", "test-api-key", team_id=team_id)
@@ -32,7 +35,10 @@ def test_heartbeat_with_org_id_posts_to_org_scoped_endpoint():
                                        org_id="org_example")
     assert captured["method"] == "POST"
     assert captured["path"] == "/api/orgs/org_example/environment/heartbeat"
-    assert captured["body"] == {"capabilities": {"web": True, "corpus": True, "code": True}}
+    assert captured["body"] == {
+        "capabilities": {"web": True, "corpus": True, "code": True},
+        "available_models": RUNNABLE_AVAILABLE_MODELS,
+    }
 
 
 def test_heartbeat_with_org_id_ignores_team_id_requirement():
@@ -63,6 +69,7 @@ def test_heartbeat_with_no_org_id_keeps_hitting_team_url_exactly_as_before():
     assert captured["path"] == "/api/teams/team_1/environment/heartbeat"
     assert captured["body"] == {
         "capabilities": {"web": True, "corpus": True, "code": True},
+        "available_models": RUNNABLE_AVAILABLE_MODELS,
         "runner_label": "my-runner",
         "env_id": "env_1",
     }

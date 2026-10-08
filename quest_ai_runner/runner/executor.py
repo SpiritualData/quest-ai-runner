@@ -31,6 +31,7 @@ from typing import Any, Callable, Dict, List, Optional
 from ..core import usage_limit
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult, _strip_future_context
+from ..core.work_model import WorkModelUnavailable, apply_work_model, default_effective, is_tier_word
 from ..core.reader_first import READER_FIRST_STANDARD
 from .context_updates import (parse_manifest, parse_usage_notes, render_receipt,
                               strip_usage_block)
@@ -802,6 +803,15 @@ class TaskExecutor:
         # that never made it), behaviour is exactly as before. This mirrors the same precedence on
         # the in-process path, so a task runs on the same model whichever lane picks it up.
         model_hint: Optional[str] = task.get("deep_run_model") or task.get("model") or None
+        # The environment's work-model configuration (allowed models, default, excluded cost tiers) is
+        # applied to the literal deep-run pin, or to an unpinned run. A QAR-call tier word is not a work
+        # model and passes through unchanged. A refused run fails here, before any work starts.
+        try:
+            model_hint = self._work_model_hint(task, model_hint)
+        except WorkModelUnavailable as e:
+            self._report_progress(task_id, "error", text=str(e))
+            self._safe_report_failed(task_id, str(e))
+            return ExecutionOutcome(task_id, "failed", str(e))
         # resume_session_id (optional, additive): the Claude session a PREVIOUS run on this same
         # thread left behind, handed back by the backend so this run opens holding what that run
         # read and decided instead of rediscovering it. Absent on a first run, on a backend that
@@ -1781,6 +1791,37 @@ class TaskExecutor:
         return raw_summary
 
     # --- per-task working directory (quest_folder_map) ------------------------
+
+    def _work_model_hint(self, task: Dict[str, Any], model_hint: Optional[str]) -> Optional[str]:
+        """The model hint for this run after the environment's work-model configuration is applied.
+
+        Reads the effective view for the task's environment (``env_id`` on the task, else this runner's
+        own). A literal pin the environment does not allow falls back to its default. An unpinned run
+        takes the configured default only when the environment has one; otherwise it stays unpinned.
+        If the read fails, nothing is restricted, exactly as before this existed, and the failure is
+        logged. Raises ``WorkModelUnavailable`` when the environment allows no Claude model this runner
+        can run.
+        """
+        if model_hint and is_tier_word(model_hint):
+            return model_hint
+        requested = task.get("deep_run_model") or None
+        requested = requested or (None if is_tier_word(task.get("model")) else task.get("model") or None)
+        fetch = getattr(self._client, "get_work_model_config", None)
+        effective = None
+        configured = False
+        if fetch is not None:
+            try:
+                payload = fetch(team_id=task.get("team_id") or None,
+                                env_id=task.get("env_id") or None) or {}
+                effective = payload.get("effective")
+                configured = (payload.get("source") or "default") != "default"
+            except Exception as e:  # noqa: BLE001 (a config read must never break a run)
+                log.warning("work-model config unavailable for task %s, using the Claude default: %s",
+                            task.get("id") or task.get("task_id"), e)
+        choice = apply_work_model(requested, effective or default_effective(), configured=configured)
+        if choice.note:
+            log.info("task %s: %s", task.get("id") or task.get("task_id"), choice.note)
+        return choice.model
 
     def _resolve_working_dir(self, goal_id: Optional[str],
                              quest_id: Optional[str]) -> Optional[str]:

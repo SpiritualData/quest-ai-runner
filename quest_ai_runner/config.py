@@ -961,6 +961,7 @@ def quest_client_from_config(cfg: RunnerConfig, *, timeout: float = 30.0) -> Any
         cfg.quest_base_url, cfg.quest_api_key, team_id=cfg.team_id, timeout=timeout,
         decision_assignees=cfg.decision_assignees,
         default_assignee_user_id=cfg.default_assignee_user_id,
+        env_id=cfg.env_id,
     )
 
 
