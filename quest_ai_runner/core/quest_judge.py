@@ -62,6 +62,9 @@ Do NOT use em dashes.
 """
 
 
+JUDGE_WINDOW = 25
+
+
 def clip_text(text: str, limit: int) -> str:
     """``text`` cut to about ``limit`` chars keeping its START and its END (same cut as the
     orchestrator's clip_head_and_tail, which judges the newest words of a message too)."""
@@ -79,6 +82,7 @@ def select_and_rank_quests(
     *,
     previous_message: str = "",
     home_quest_id: Optional[str] = None,
+    judge_limit: int = JUDGE_WINDOW,
 ) -> Tuple[Optional[str], List[str]]:
     """Return ``(chosen, ranked)`` for ``message`` over ``quests``.
 
@@ -89,6 +93,10 @@ def select_and_rank_quests(
 
     ``ranked`` holds every candidate id: the pick first when there is one, otherwise the home quest
     first when it is known, then the rest in the order given.
+
+    The judge sees only a window: the first ``judge_limit`` candidates in the given order, plus the
+    home quest when it falls outside that window. The pick is only ever one the judge was shown, so
+    ``ranked`` can cover every quest while the prompt stays small.
     """
     known = [q["quest_id"] for q in quests if q.get("quest_id")]
     if not known:
@@ -100,10 +108,13 @@ def select_and_rank_quests(
         rest = [qid for qid in known if qid != first]
         return ([first] if first else []) + rest
 
+    shown = [q for q in quests if q.get("quest_id")][:max(judge_limit, 1)]
+    if home is not None and home not in {q["quest_id"] for q in shown}:
+        shown.append(next(q for q in quests if q.get("quest_id") == home))
+    shown_ids = {q["quest_id"] for q in shown}
+
     lines = []
-    for q in quests:
-        if not q.get("quest_id"):
-            continue
+    for q in shown:
         tag = " [HOME]" if q["quest_id"] == home_quest_id else ""
         state = " ".join((q.get("state") or "").split())[:240]
         lines.append(f"- {q['quest_id']}{tag}: {q.get('title') or '(untitled)'}"
@@ -124,7 +135,7 @@ def select_and_rank_quests(
     chosen = str(result.get("quest_id") or "").strip()
     if not chosen:
         return None, ordered(home)
-    if chosen not in known:
+    if chosen not in shown_ids:
         return fallback, ordered(fallback)
     return chosen, ordered(chosen)
 

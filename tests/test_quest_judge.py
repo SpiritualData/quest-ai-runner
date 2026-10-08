@@ -88,3 +88,32 @@ def test_prompt_marks_home_and_carries_state():
 def test_select_quest_returns_only_the_pick():
     assert select_quest(QUESTS, "x", judge_returning({"quest_id": "q_c"})) == "q_c"
     assert select_quest(QUESTS, "x", judge_returning({"quest_id": ""})) is None
+
+
+def many_quests(n):
+    return [{"quest_id": f"q{i}", "title": f"Quest {i}", "state": ""} for i in range(n)]
+
+
+def test_ranked_covers_every_candidate_but_judge_sees_only_the_window():
+    quests = many_quests(40)
+    judge = judge_returning({"quest_id": ""})
+    chosen, ranked = select_and_rank_quests(quests, "x", judge)
+    assert chosen is None
+    assert ranked == [f"q{i}" for i in range(40)]
+    assert "q24" in judge.seen["prompt"] and "q25" not in judge.seen["prompt"]
+
+
+def test_home_outside_the_window_is_still_shown_to_the_judge():
+    quests = many_quests(40)
+    judge = judge_returning({"quest_id": ""})
+    chosen, ranked = select_and_rank_quests(quests, "x", judge, home_quest_id="q35")
+    assert "q35 [HOME]" in judge.seen["prompt"]
+    assert ranked[0] == "q35" and len(ranked) == 40
+
+
+def test_pick_outside_the_window_is_rejected_as_unknown():
+    quests = many_quests(40)
+    chosen, ranked = select_and_rank_quests(
+        quests, "x", judge_returning({"quest_id": "q30"}), home_quest_id="q1", judge_limit=10)
+    assert chosen == "q1"
+    assert len(ranked) == 40
