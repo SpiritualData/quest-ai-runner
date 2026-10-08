@@ -1211,6 +1211,13 @@ def main(argv=None) -> int:
                         help="Do not auto-select context cards from the task text when no "
                              "--card is given.")
 
+    # --- reconcile-plan subcommand: roll a quest's day/week goals forward, turn open asks into goals -----
+    rec_p = sub.add_parser("reconcile-plan",
+                           help="roll unfinished day/week goals forward and add open asks as goals for their assignee")
+    rec_p.add_argument("quest_id", help="the quest whose plan to reconcile")
+    rec_p.add_argument("--today", default=None, help="the date to treat as today (YYYY-MM-DD); default: today")
+    rec_p.add_argument("--write", action="store_true", help="apply the changes (default: dry run, print only)")
+
     # --- create-goal subcommand: create a real, typed Goal (not an AI task -- see `send`) -----
     goal_p = sub.add_parser("create-goal",
                             help="create a real Quest goal (period-scoped, on a quest's plan) and print its id")
@@ -1532,6 +1539,27 @@ def main(argv=None) -> int:
             pass
         task_id = task.get("id") or task.get("task_id") or "?"
         print(f"Queued: {args.text[:80]}  ({task_id})")
+        return 0
+
+    # --- reconcile-plan ---------------------------------------------------------
+    if args.command == "reconcile-plan":
+        from .runner.quest_client import QuestClient, QuestApiError, QuestNotConfigured
+        from .runner.plan_reconcile import reconcile_quest
+        base_url = os.getenv("QUEST_BASE_URL", "")
+        api_key = os.getenv("QUEST_API_KEY", "")
+        if not base_url or not api_key:
+            log.error("QUEST_BASE_URL and QUEST_API_KEY must be set")
+            return 1
+        client = QuestClient(base_url, api_key)
+        today = date.fromisoformat(args.today) if args.today else date.today()
+        try:
+            actions = reconcile_quest(client, args.quest_id, today, write=args.write)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.error(f"reconcile-plan failed: {e}")
+            return 1
+        for action in actions:
+            print(json.dumps(action, ensure_ascii=False))
+        print(f"{len(actions)} change(s) {'applied' if args.write else 'planned (dry run)'}")
         return 0
 
     # --- create-goal ------------------------------------------------------------

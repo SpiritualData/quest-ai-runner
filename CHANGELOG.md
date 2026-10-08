@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- `quest_ai_runner.runner.plan_reconcile` and `quest-ai-runner reconcile-plan <quest_id>`: keeps a quest's
+  day and week goals current. Unfinished past day goals roll forward to today, unfinished past week goals roll to
+  the current week, and each open request addressed to a person becomes a day goal for them (creating it with the
+  assignee notifies them). It never marks a goal complete or changes a milestone. Dry run by default; `--write` applies.
 - `quest_ai_runner.core.quest_judge.select_and_rank_quests`: the quest-selection judgment as a
   reusable function with no provider dependency. It returns the pick AND every candidate in order
   (pick first, else home first, else the caller's order), so consumers can rank as well as select.
