@@ -2494,49 +2494,7 @@ Do NOT use em dashes.
 # about. Selecting a quest is never done by word overlap alone. See Orchestrator.judge_quest_for_turn.
 # ---------------------------------------------------------------------------
 
-QUEST_SELECTION_TOOL: Dict[str, Any] = {
-    "name": "quest_selection",
-    "description": "Choose which quest, if any, the user's message is about.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "quest_id": {
-                "type": "string",
-                "description": "The id of the one quest the message is about, copied exactly from "
-                               "the list, or the empty string when no listed quest is clearly it.",
-            },
-            "reason": {"type": "string", "description": "One short sentence: why."},
-        },
-        "required": ["quest_id"],
-    },
-}
-
-QUEST_SELECTION_PROMPT = """\
-Decide which ONE quest the user's latest message is about, or none.
-
-Rules:
-  * Judge by what the user is actually asking about, not by shared words. A word that happens to
-    appear in a quest's state ("registration", "grant", "deadline") does not make the message about
-    that quest.
-  * The quest marked HOME is the one the user is working inside right now. It is the default: choose
-    another quest only when the message clearly concerns that other quest's subject.
-  * A short follow-up that names nothing ("and what is next for it?") continues the previous
-    message's quest.
-  * When no listed quest is clearly the subject, answer with an empty quest_id. A wrong quest puts
-    unrelated state into the answer, which is worse than none.
-  * Copy quest_id exactly from the list.
-
-Do NOT use em dashes.
-
---- QUESTS ---
-{quests}
-
---- PREVIOUS USER MESSAGE ---
-{previous}
-
---- LATEST USER MESSAGE ---
-{message}
-"""
+from .quest_judge import select_quest
 
 # ---------------------------------------------------------------------------
 # BRAINSTORM-RELEASE JUDGE: the ONE structured judgment that decides, on a LATCHED brainstorm turn,
@@ -6854,10 +6812,10 @@ class Orchestrator:
                              home_quest_id: Optional[str] = None) -> Optional[str]:
         """ONE structured LLM judgment: which quest id (from ``quests``) is this message about, or None.
 
-        ``quests`` is ``[{"quest_id", "title", "state"}, ...]``. Runs at the intent-judge tier,
-        hard-capped by ``quest_judge_timeout_seconds()``. On ANY failure, timeout, or an id that is
-        not in the list, returns the HOME quest when there is one (the folder the person is working
-        in), else None; it never guesses by word overlap. Never raises.
+        Delegates the prompt, validation and home fallback to ``quest_judge.select_quest``. This
+        method only supplies the model: the intent-judge tier, the provider call, and a hard
+        ``quest_judge_timeout_seconds()`` cap. On ANY failure, timeout, or an id that is not in the
+        list, returns the HOME quest when there is one, else None; never guesses by word overlap.
         """
         known = {q["quest_id"] for q in quests if q.get("quest_id")}
         fallback = home_quest_id if home_quest_id in known else None
@@ -6871,21 +6829,11 @@ class Orchestrator:
             return fallback
         if not model:
             return fallback
-        lines = []
-        for q in quests:
-            tag = " [HOME]" if q["quest_id"] == home_quest_id else ""
-            state = " ".join((q.get("state") or "").split())[:240]
-            lines.append(f"- {q['quest_id']}{tag}: {q.get('title') or '(untitled)'}"
-                         + (f" | state: {state}" if state else ""))
-        prompt = QUEST_SELECTION_PROMPT.format(
-            quests="\n".join(lines),
-            previous=clip_head_and_tail(previous_message or "", 400) or "(none)",
-            message=clip_head_and_tail(user_message or "", 1000))
 
-        def call_judge() -> Dict[str, Any]:
+        def call_judge(prompt: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
             provider = self.get_provider_for_model(model)
-            raw = plan_with_step(provider, prompt, model=model, tool_schema=QUEST_SELECTION_TOOL,
-                                step=STEP_JUDGE)
+            raw = plan_with_step(provider, prompt, model=model, tool_schema=tool_schema,
+                                 step=STEP_JUDGE)
             if isinstance(raw, str):
                 raw = json.loads(_extract_json(raw) or "{}")
             return raw if isinstance(raw, dict) else {}
@@ -6893,27 +6841,20 @@ class Orchestrator:
         timeout = quest_judge_timeout_seconds()
         pool = ThreadPoolExecutor(max_workers=1)
         try:
-            result = pool.submit(call_judge).result(timeout=timeout)
+            return pool.submit(
+                select_quest, quests, user_message, call_judge,
+                previous_message=previous_message, home_quest_id=home_quest_id,
+            ).result(timeout=timeout)
         except FuturesTimeoutError:
             log.warning("Quest selection timed out after %.0fs (QAR_QUEST_JUDGE_TIMEOUT_SECONDS to "
                         "adjust); using the home quest.", timeout)
             return fallback
-        except Exception as e:  # noqa: BLE001 — selection must never break the turn
+        except Exception as e:  # noqa: BLE001 - selection must never break the turn
             log.warning("Quest selection failed (%s: %s); using the home quest.",
                         type(e).__name__, e)
             return fallback
         finally:
             pool.shutdown(wait=False)
-        if not isinstance(result, dict) or "quest_id" not in result:
-            log.warning("Quest selection returned no usable verdict; using the home quest.")
-            return fallback
-        chosen = str(result.get("quest_id") or "").strip()
-        if not chosen:
-            return None
-        if chosen not in known:
-            log.warning("Quest selection returned unknown id %r; using the home quest.", chosen)
-            return fallback
-        return chosen
 
     def judge_brainstorm_release(self, user_message: str, transcript: str = "") -> Tuple[bool, str]:
         """ONE structured LLM judgment, on a LATCHED brainstorm turn only: did the user RELEASE the

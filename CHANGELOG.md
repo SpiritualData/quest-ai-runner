@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- `quest_ai_runner.core.quest_judge.select_and_rank_quests`: the quest-selection judgment as a
+  reusable function with no provider dependency. It returns the pick AND every candidate in order
+  (pick first, else home first, else the caller's order), so consumers can rank as well as select.
+  `select_quest` returns only the pick. `Orchestrator.judge_quest_for_turn` now delegates to it.
 - **`run_goal(gathered_observations=...)`: this turn's gather as STRUCTURED dicts, not just
   flattened text.** `context_preamble` hands a deep runner this turn's real gather content
   already rendered to prose (`_render_gathered`), which mixes genuine data reads with
