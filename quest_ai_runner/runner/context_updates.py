@@ -99,7 +99,7 @@ FIRST_LOOK_DAYS = 14
 # reproduce the exact ``quest_notes`` failure above under a new name: a signal that exists but
 # that a deployment has to remember to switch on is a signal that is effectively off.
 DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes", "goal_updates",
-                                "quest_events")
+                                "quest_events", "decisions")
 
 # Looking for where the previous AUTOPILOT RUN's own output comes from? It is NOT a source here.
 # ``runner/autopilot.py``'s ``compose_batch_text`` carries it as its own ``last_run`` parameter,
@@ -1675,6 +1675,114 @@ class GoalUpdatesSource(_BaseSource):
         return result
 
 
+class DecisionsSource(_BaseSource):
+    """Asks sent to people on this quest: the ones still open, and the answers to the ones settled.
+
+    WHAT THIS FIXES. A decision is where someone outside the work asks the person for a call
+    (approve, decline, answer), and the answer lives on the decision row, not on the quest. Nothing
+    in this library read decisions before, so a run or an autopilot pass could not see that a
+    question was still waiting, or that it had been declined and why, and could re-raise a settled
+    question or re-propose a declined one.
+
+    OPEN ASKS ARE OFFERED ON EVERY LOOK, RESOLVED ONES ONLY WHEN NEW. An open ask is owed an answer
+    however old it is, so it keeps being offered (bounded by ``MAX_OPEN_PER_SOURCE``, newest first).
+    A resolved ask is history except on the look that first sees its resolution, so it is offered
+    only when resolved after the watermark, and never on a first look.
+
+    NOT AN ASK FOR THE RUN (``tracks_asks = False``). The person the ask went to answers it on the
+    decision itself; a run's result does not resolve it. The backend row is the source of truth for
+    status, so the feedback ledger would only hold a stale copy of it.
+
+    CARD-SCOPED, SO NEVER JUDGED. A decision row names this quest, the same reason notes are not
+    judged.
+    """
+    name = "decisions"
+    describes = "asks sent to people on this quest, still open or answered since the last look"
+    judge_relevance = False
+    tracks_asks = False
+
+    def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
+        client = request.client
+        quest_id = request.card_id
+        lister = getattr(client, "list_decisions_for_quest", None)
+        if not callable(lister) or not quest_id:
+            return []
+        try:
+            rows = [r for r in (lister(quest_id) or []) if isinstance(r, dict)]
+        except Exception as e:  # noqa: BLE001 -- one broken read never costs the rest of a bundle
+            log.info("context updates: could not read decisions for %s (%s)", quest_id, e)
+            return []
+        where = request.card_label or _card_label(request.card) or "this quest"
+        statuses = [str(r.get("status") or "").strip().lower() for r in rows]
+        opens = [r for r, s in zip(rows, statuses) if s == "open"]
+        settled = [r for r, s in zip(rows, statuses) if s != "open"]
+        out: List[ContextUpdate] = []
+        for row in opens[:MAX_OPEN_PER_SOURCE]:
+            out.append(self._open_update(row, where))
+        if not request.first_look:
+            for row in settled:
+                when = _as_utc(row.get("resolved_at"))
+                if when and request.since and when <= request.since:
+                    continue                   # resolved before the last look: already seen
+                if when is None and request.since:
+                    continue                   # no resolution time, so it cannot be shown as new
+                out.append(self._resolved_update(row, where, when))
+        request.account(len(rows), _decisions_explanation(len(rows), len(out)))
+        return out
+
+    @staticmethod
+    def _open_update(row: Dict[str, Any], where: str) -> ContextUpdate:
+        asker = str(row.get("requester_name") or "").strip() or "Someone"
+        assignee = str(row.get("assignee_name") or "").strip() or "the person it went to"
+        summary = _clip(row.get("summary") or "a decision", 200)
+        return ContextUpdate(
+            source="decisions",
+            kind="open ask",
+            item_id=str(row.get("decision_id") or ""),
+            title=f'{asker} asked {assignee}: "{_clip(summary, 100)}"',
+            body=summary,
+            author=asker,
+            occurred_at=_as_utc(row.get("created_at")),
+            location=where,
+            needs_response=True,
+            how_to_respond=("say what you would recommend in your result; the decision itself is "
+                            "made on the ask, not by a run"),
+            raw=dict(row),
+        )
+
+    @staticmethod
+    def _resolved_update(row: Dict[str, Any], where: str, when: Optional[datetime]) -> ContextUpdate:
+        asker = str(row.get("requester_name") or "").strip() or "Someone"
+        summary = _clip(row.get("summary") or "a decision", 200)
+        resolution = str(row.get("resolution") or "").strip()
+        response = str(row.get("response_text") or "").strip()
+        if row.get("auto_resolved") and not row.get("resolved_by_name"):
+            outcome = "resolved automatically at its deadline"
+        else:
+            outcome = f"resolved as {resolution or 'answered'}"
+        return ContextUpdate(
+            source="decisions",
+            kind="resolved ask",
+            item_id=str(row.get("decision_id") or ""),
+            title=f'The ask "{_clip(summary, 100)}" from {asker} was {outcome}',
+            body=response or resolution or outcome,
+            verbatim=bool(response),           # the resolver's own words, when they wrote any
+            excerpt=response,
+            author=str(row.get("resolved_by_name") or "").strip(),
+            occurred_at=when,
+            location=where,
+            needs_response=False,
+            raw=dict(row),
+        )
+
+
+def _decisions_explanation(total: int, offered: int) -> str:
+    """Why fewer decisions were offered than the quest has."""
+    if not total or offered:
+        return ""
+    return f"{total} decision(s), none open or newly answered"
+
+
 def render_quest_event(event: Dict[str, Any]) -> str:
     """One ``analytics_events`` row's ``event_data`` as a short line saying what changed.
 
@@ -3132,6 +3240,7 @@ class UpdateEngine:
             QuestNotesSource(),
             GoalUpdatesSource(),
             QuestEventsSource(),
+            DecisionsSource(),
             CollectionEntriesSource(),
             DriveCommentsSource(drive_comments),
             DriveChangesSource(drive_comments),

@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- `DecisionsSource` (`runner/context_updates.py`, source name `decisions`, in the default always-on set): a
+  quest's open asks are offered on every look, and an ask resolved since the last look is offered once with the
+  resolver's own note. Autopilot and runs previously had no view of decisions in the "since last run" context.
+
 ### Changed
 - Quest ranking keeps the END of a quest's state, not its start: the judge sees the last 320 characters
   (`quest_judge.STATE_LIMIT`, `tail_clip`), because the newest words say where the quest stands now.
