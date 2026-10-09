@@ -276,6 +276,9 @@ class QuestClient:
         iso = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         tid = self.team_param(team_id, team_ids)
         params: Dict[str, Any] = {"status": status, "due_before": iso}
+        if status == "queued":
+            # Executable work only: the server returns queued tasks whose start time has come.
+            params["for_execution"] = "true"
         if tid:
             params["team_id"] = tid
         if env_id:
@@ -301,7 +304,7 @@ class QuestClient:
         ``team_ids`` for a lane serving several teams. Never raises.
         """
         tid = self.team_param(team_id, team_ids)
-        params: Dict[str, Any] = {"status": "queued", "real_time": "true"}
+        params: Dict[str, Any] = {"status": "queued", "real_time": "true", "for_execution": "true"}
         if tid:
             params["team_id"] = tid
         if env_id:
