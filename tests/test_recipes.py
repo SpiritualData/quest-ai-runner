@@ -194,3 +194,80 @@ def test_skeleton_ignores_payload_words_so_free_text_requests_still_match():
     assert store.match("add a note saying buy oat milk and two lemons for the weekend")
     # the operation's words are absent: a different request, however much payload it shares
     assert store.match("remind me to call the dentist on Friday") == []
+
+
+# --------------------------------------------------------------------------- deep recipes
+
+from quest_ai_runner.core.adapters import DeepResult
+
+
+class RecordingDeepRunner:
+    def __init__(self, *, met=True, decision_id=None, deferred=False):
+        self.goals = []
+        self._res = dict(met=met, decision_id=decision_id, deferred=deferred)
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None, context_preamble=None):
+        self.goals.append(goal)
+        return DeepResult(output=f"done: {goal}", **self._res)
+
+
+def deep_orch(provider, runner, store, assembler=None):
+    cfg = OrchestratorConfig(deep_goal_max_iterations=1, deep_model_ladder=["sonnet"])
+    cfg.overseer = False
+    return Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                        registry=ModelRegistry(provider), config=cfg, deep_runner=runner,
+                        recipes=store, context_assembler=assembler)
+
+
+DEEP_PLAN = {"action": "deep", "goal": "Mark the meditation habit done today",
+             "deep_brief": "mark it", "deep_target": "quest_data", "rationale": "quest op"}
+
+
+def learned_deep_store(**runner_kw):
+    store = RecipeStore()
+    deep_orch(StubProvider(decisions=[dict(DEEP_PLAN), {"met": runner_kw.get("met", True)}]),
+              RecordingDeepRunner(**runner_kw), store).run(
+        "mark my meditation habit done", quest_id="q1")
+    return store
+
+
+def test_a_completed_quest_data_deep_run_is_learned():
+    recipes = learned_deep_store().all()
+    assert len(recipes) == 1 and recipes[0].tool == "deep:quest_data"
+    assert recipes[0].example_args == {"goal": "Mark the meditation habit done today"}
+
+
+@pytest.mark.parametrize("kw", [{"met": False}, {"decision_id": "d1"}, {"deferred": True}])
+def test_a_deep_run_that_did_not_complete_is_not_learned(kw):
+    assert learned_deep_store(**kw).all() == []
+
+
+def test_a_deep_recipe_skips_the_planner_and_the_turn_start_context_search():
+    store = learned_deep_store()
+    runner, assembler = RecordingDeepRunner(), CountingAssembler()
+    provider = StubProvider(decisions=[
+        {"applies": True, "args": {"goal": "Mark the yoga habit done today"}}, {"met": True}])
+    res = deep_orch(provider, runner, store, assembler).run(
+        "mark my yoga habit done", quest_id="q1")
+    assert runner.goals and "yoga" in runner.goals[0]
+    assert assembler.calls == 0                 # no turn-start or per-goal context search
+    assert provider.plan_calls == 2             # the verdict call + the goal verifier, no planner
+    assert res.deep_results and res.deep_results[0].met
+
+
+def test_a_deep_recipe_does_not_fire_on_a_near_miss():
+    store = learned_deep_store()
+    runner = RecordingDeepRunner()
+    provider = StubProvider(decisions=[
+        {"applies": False, "args": {}},
+        {"action": "answer", "rationale": "a question"}])
+    res = deep_orch(provider, runner, store).run(
+        "mark my meditation habit done streak report", quest_id="q1")
+    assert runner.goals == [] and res.kind == "answer"
+
+
+def test_a_deep_recipe_is_not_offered_to_a_tool_lookup_or_another_quest():
+    store = learned_deep_store()
+    assert store.match("mark my meditation habit done", scope_tags=["quest:q1"], deep=False) == []
+    assert store.match("mark my meditation habit done", scope_tags=["quest:q2"], deep=True) == []
+    assert store.match("mark my meditation habit done", scope_tags=["quest:q1"], deep=True)

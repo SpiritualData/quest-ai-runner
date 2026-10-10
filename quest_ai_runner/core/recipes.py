@@ -62,6 +62,10 @@ log = logging.getLogger(__name__)
 # and the verdict call below is the real gate, so this only has to keep unrelated requests from
 # paying for that call.
 DEFAULT_MIN_SCORE = 0.6
+# A recipe whose tool name starts with this is a DEEP recipe: not a registered tool but a governed
+# deep-runner operation (a consumer whose operations are generated code, e.g. Quest chat's quest-data
+# commands, has no tool registry to learn from). Its example_args hold {"goal": ...}.
+DEEP_PREFIX = "deep:"
 MAX_EXAMPLES_PER_RECIPE = 6
 MAX_RECIPES = 300
 
@@ -207,10 +211,12 @@ class RecipeStore:
     # --- lookup -------------------------------------------------------------------------
 
     def match(self, request: str, *, scope_tags: Any = None, limit: int = 3,
-              tools: Optional[Any] = None) -> List[Tuple[Recipe, float]]:
+              tools: Optional[Any] = None, deep: Optional[bool] = None
+              ) -> List[Tuple[Recipe, float]]:
         """Candidate recipes for ``request``, best first, each with its similarity score.
 
-        ``tools`` (a ToolRegistry, optional) drops recipes whose tool no longer exists.
+        ``tools`` (a ToolRegistry, optional) drops tool recipes whose tool no longer exists.
+        ``deep`` True keeps only deep recipes, False only tool recipes, None both.
         """
         req = content_tokens(request)
         if len(req) < 2:
@@ -221,7 +227,10 @@ class RecipeStore:
             for r in self._recipes.values():
                 if not scope_tags_allow(r.scope_tags, scope_tags):
                     continue
-                if tools is not None and tools.get(r.tool) is None:
+                is_deep = r.tool.startswith(DEEP_PREFIX)
+                if deep is not None and is_deep != deep:
+                    continue
+                if tools is not None and not is_deep and tools.get(r.tool) is None:
                     continue
                 if len(r.skeleton) >= 2:
                     best = containment(frozenset(r.skeleton), req)
@@ -259,7 +268,7 @@ class RecipeStore:
                                    for e in r.examples):
                             r.examples = ([request] + r.examples)[:MAX_EXAMPLES_PER_RECIPE]
                         r.example_args = dict(args or {})
-                        sk = skeleton_of(request, args or {})
+                        sk = skeleton_of(request, {} if tool.startswith(DEEP_PREFIX) else args or {})
                         common = frozenset(r.skeleton) & sk
                         if len(common) >= 2:
                             r.skeleton = sorted(common)
@@ -267,7 +276,9 @@ class RecipeStore:
                         return r
                 recipe = Recipe(id=f"recipe-{len(self._recipes) + 1}-{int(now)}", tool=tool,
                                 example_args=dict(args or {}), examples=[request],
-                                scope_tags=tags, skeleton=sorted(skeleton_of(request, args or {})),
+                                scope_tags=tags,
+                                skeleton=sorted(skeleton_of(
+                                    request, {} if tool.startswith(DEEP_PREFIX) else args or {})),
                                 learned_at=now)
                 self._recipes[recipe.id] = recipe
                 if len(self._recipes) > MAX_RECIPES:
@@ -343,6 +354,27 @@ Rules:
 """
 
 
+RECIPE_DEEP_PROMPT = """\
+A saved recipe performs a kind of operation on the person's own data through a governed runner.
+Decide whether the NEW request asks for that same kind of operation, and if so restate it as one
+self-contained goal for the runner. Answer nothing else.
+
+SAVED EXAMPLE
+  request: {example_request}
+  goal given to the runner: {example_goal}
+
+NEW REQUEST: {request}
+
+Rules:
+  * applies = true only when the NEW request wants the same kind of operation done now, on its own
+    words alone. A question ABOUT the thing ("show", "what is", "how many"), a different operation,
+    a request that leans on earlier conversation ("do that again", "the second one"), or one that
+    needs several different operations is applies = false.
+  * args.goal is the NEW request restated as one self-contained instruction, taking every value from
+    the NEW request, never from the example.
+"""
+
+
 @dataclass
 class RecipeOutcome:
     """What a fast-path attempt produced. ``text`` is the receipt to answer with."""
@@ -365,8 +397,36 @@ class RecipeRunner:
         self.tools = tools
         self._fill_args = fill_args
 
-    def nominate(self, request: str, scope_tags: Any = None) -> List[Tuple[Recipe, float]]:
-        return self.store.match(request, scope_tags=scope_tags, tools=self.tools)
+    def nominate(self, request: str, scope_tags: Any = None, *,
+                 deep: bool = False) -> List[Tuple[Recipe, float]]:
+        return self.store.match(request, scope_tags=scope_tags, tools=self.tools, deep=deep)
+
+    def deep_goal(self, request: str, candidates: List[Tuple[Recipe, float]]
+                  ) -> Optional[Tuple[Recipe, str]]:
+        """The goal to hand the deep runner for ``request`` under the best deep recipe, or None.
+
+        One small fast-tier call decides whether the request repeats the saved operation (a recipe
+        never fires on a near-miss) and restates it as a self-contained goal. Nothing is executed
+        here: the caller runs the goal through the normal governed deep path. Never raises.
+        """
+        try:
+            if not candidates:
+                return None
+            recipe, _score = candidates[0]
+            example_goal = str((recipe.example_args or {}).get("goal") or recipe.examples[0])
+            verdict = self._fill_args(RECIPE_DEEP_PROMPT.format(
+                example_request=recipe.examples[0], example_goal=example_goal[:600],
+                request=request))
+            if not isinstance(verdict, dict) or verdict.get("applies") is not True:
+                return None
+            goal = (verdict.get("args") or {}).get("goal")
+            if not isinstance(goal, str) or not goal.strip():
+                return None
+            return recipe, goal.strip()
+        except Exception as e:  # noqa: BLE001 -- a recipe must never break a turn
+            log.warning("Deep recipe verdict failed, taking the normal path: %s: %s",
+                        type(e).__name__, e)
+            return None
 
     def try_fast_path(self, request: str, ctx: Any, *, scope_tags: Any = None,
                       candidates: Optional[List[Tuple[Recipe, float]]] = None,

@@ -123,7 +123,8 @@ from .context_doctrine import (
 from .anticipation import Anticipator
 from .inbox import InputInbox
 from .tools import ToolContext, ToolRegistry
-from .recipes import RECIPE_ARGS_TOOL, RecipeRunner, RecipeStore
+RECIPE_SKIP_GOAL_CONTEXT = "recipe_skip_goal_context"   # ctx_meta key set on a deep-recipe turn
+from .recipes import DEEP_PREFIX, RECIPE_ARGS_TOOL, RecipeRunner, RecipeStore
 from .guard import (
     ExecutionFact,
     ExecutionRecord,
@@ -1622,6 +1623,12 @@ class OrchestratorConfig:
     # read-only tools. A new operation is learned from every successful planner ``tool`` action.
     recipe_fast_path: bool = True
     recipe_allow_mutating: bool = True
+    # DEEP RECIPES: the same idea for a consumer whose operations are generated code run by a deep
+    # runner rather than registered tools (Quest chat). A quest-data deep run that succeeded is
+    # remembered; the next matching request skips the planner and the turn-start context search and
+    # goes straight to that deep run, which still applies all of its own gates (approval cards,
+    # write review). Needs a deep runner and a store; inert otherwise.
+    recipe_deep: bool = True
     planner_reach_judge: bool = False
     planner_reach_judge_tier: str = "best"
     # The judge starts at the top of run(), concurrently with request understanding and context
@@ -5876,6 +5883,55 @@ class Orchestrator:
             log.warning("Recipe fast path skipped: %s: %s", type(e).__name__, e, exc_info=True)
             return None
 
+    def _recipe_deep_plan(self, user_message: str, *, quest_id: Optional[str],
+                          context_meta: Optional[Dict[str, Any]],
+                          emit: "_Emitter") -> Optional[PlanDecision]:
+        """A ready ``deep`` plan for a request that repeats a saved quest-data operation, or None.
+
+        Lexical nomination first (microseconds, no model, no index), then ONE fast-tier verdict that
+        also restates the request as a self-contained goal. The caller uses the plan in place of
+        the planner call and never starts the turn-start context search. Never raises.
+        """
+        try:
+            runner = RecipeRunner(self.recipes, self.tools, fill_args=self._recipe_fill_args)
+            tags = self._recipe_scope_tags(quest_id, context_meta)
+            candidates = runner.nominate(user_message, tags, deep=True)
+            if not candidates:
+                return None
+            hit = runner.deep_goal(user_message, candidates)
+            if hit is None:
+                return None
+            recipe, goal = hit
+            self.recipes.mark_used(recipe, user_message)
+            emit.status("Running a saved operation…")
+            log.info("Deep recipe %s matched; skipping the planner and turn-start context search",
+                     recipe.id)
+            return PlanDecision(action="deep", goal=goal, deep_brief=goal,
+                                deep_target="quest_data",
+                                rationale=f"recipe {recipe.id} ({recipe.tool})")
+        except Exception as e:  # noqa: BLE001 -- the fast path must never break a turn
+            log.warning("Deep recipe skipped: %s: %s", type(e).__name__, e, exc_info=True)
+            return None
+
+    def _recipe_learn_deep(self, user_message: str, plan: PlanDecision, res: Any,
+                           scope_tags: Any, *, learnable: bool) -> None:
+        """Save a successful quest-data deep run as a recipe. Never raises, never learns a failure."""
+        try:
+            if (self.recipes is None or not learnable or not self.cfg.recipe_fast_path
+                    or not self.cfg.recipe_deep
+                    or getattr(plan, "deep_target", None) != "quest_data"):
+                return
+            results = list(getattr(res, "deep_results", None) or [])
+            if not results or not all(getattr(d, "met", False) and not getattr(d, "deferred", False)
+                                      and not getattr(d, "decision_id", None) for d in results):
+                return                      # only an operation that actually completed
+            goal = (plan.goal or "").strip()
+            if goal:
+                self.recipes.learn(user_message, DEEP_PREFIX + "quest_data", {"goal": goal},
+                                   scope_tags=scope_tags)
+        except Exception:  # noqa: BLE001 -- learning a recipe never breaks a turn
+            pass
+
     def _recipe_learner(self, user_message: str, scope_tags: Any, *,
                         learnable: bool) -> Optional[Callable[[str, Dict[str, Any]], None]]:
         """The callback that saves a successful planner tool call as a recipe (None when off).
@@ -7412,6 +7468,8 @@ class Orchestrator:
         it back to the warm store after the goal completes (see ``run_one`` in ``_run_deep``), the
         same way the main turn does. Returns ``("", [])`` when nothing is wired or found. Never
         raises — a degraded source is simply skipped."""
+        if (ctx_meta or {}).get(RECIPE_SKIP_GOAL_CONTEXT):
+            return "", []           # a saved operation: the runner grounds itself, no context search
         parts: List[str] = []
         fresh_card_ids: set = set()
         fresh_card_meta: List[Dict[str, Any]] = []
@@ -10026,6 +10084,14 @@ class Orchestrator:
                                            context_meta=context_meta, emit=emit)
             if _fast is not None:
                 return _fast
+        # DEEP RECIPE: a request that repeats a saved quest-data operation gets a ready plan, so the
+        # planner call and the turn-start context search below never run for it.
+        _forced_plan: Optional[PlanDecision] = None
+        if (self.recipes is not None and cfg.recipe_fast_path and cfg.recipe_deep
+                and mode is Mode.LIVE and message_is_user_turn and not attachments
+                and self._has_deep_execution_capability()):
+            _forced_plan = self._recipe_deep_plan(user_message, quest_id=quest_id,
+                                                  context_meta=context_meta, emit=emit)
 
         # --- INSTANT ACK (Feature 1): best-effort, no latency impact -------------------------
         # When cfg.instant_ack is True:
@@ -10112,6 +10178,8 @@ class Orchestrator:
             _ctx_meta.setdefault(
                 "scope_tags", [quest_scope_key(q) for q in _scope_tag_quest_ids]
             )
+        if _forced_plan is not None:
+            _ctx_meta[RECIPE_SKIP_GOAL_CONTEXT] = True
 
         # --- Mid-run user messages: auto-drain a wired inbox for THIS conversation ----------------
         # If the caller didn't pass an explicit ``pending_inputs`` but an ``input_inbox`` is wired,
@@ -10363,7 +10431,7 @@ class Orchestrator:
         _assembled = None
         _ctx_future = None
         _ctx_executor = None
-        if self.context_assembler is not None:
+        if self.context_assembler is not None and _forced_plan is None:
             try:
                 _ctx_assembler = self.context_assembler
                 # STEP 2 (context selection) targets the RESOLVED request: when Step 1 rewrote the
@@ -11031,7 +11099,7 @@ class Orchestrator:
             # AUTO-INJECT FUNCTION DISCOVERY on step 0: pre-load all available operations
             # so the planner sees them from the start, ordered by relevance. This eliminates
             # the need for the planner to first ASK for operations; they're already in hand.
-            if step == 0 and self.retrieval is not None:
+            if step == 0 and self.retrieval is not None and _forced_plan is None:
                 if getattr(self.retrieval, "list_operations", None) is not None:
                     try:
                         ops_obs = self._exec_one_read({"list_operations": True})
@@ -11051,13 +11119,16 @@ class Orchestrator:
             _prev_plan_for_gate = plan
 
             try:
-                plan = self._plan(user_message, transcript, context_view, gathered, step=step,
-                                  narrate=narrator.enabled, persona=rep_preamble or "",
-                                  already_said=narrator._said if narrator.enabled else None,
-                                  brainstorm=brainstorm_active,
-                                  user_vetoed_task=(hold_off_active
-                                                    and cfg.execution_mode != "brainstorm"),
-                                  card_thread_block=card_thread_block)
+                if _forced_plan is not None and step == 0:
+                    plan = _forced_plan         # deep recipe: no planner call for a known operation
+                else:
+                    plan = self._plan(user_message, transcript, context_view, gathered, step=step,
+                                      narrate=narrator.enabled, persona=rep_preamble or "",
+                                      already_said=narrator._said if narrator.enabled else None,
+                                      brainstorm=brainstorm_active,
+                                      user_vetoed_task=(hold_off_active
+                                                        and cfg.execution_mode != "brainstorm"),
+                                      card_thread_block=card_thread_block)
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
                 log.exception(
                     f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
@@ -11591,6 +11662,9 @@ class Orchestrator:
             res.exit_reason = "deep_met" if (res.deep_results and all(d.met for d in res.deep_results)) else "deep_not_met"
             if overseer_decided == "overseer_escalated_deep":
                 res.exit_reason = "overseer_escalated_deep"
+            if not attachments:
+                self._recipe_learn_deep(user_message, plan, res, _ctx_meta.get("scope_tags"),
+                                        learnable=message_is_user_turn and mode is Mode.LIVE)
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
