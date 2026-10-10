@@ -7,6 +7,8 @@ hardcodes none of them. Build the wired-up brain + poller via the factory helper
 """
 from __future__ import annotations
 
+from .core.recipes import build_recipe_store_from_env
+
 import dataclasses
 import fcntl
 import json
@@ -205,6 +207,9 @@ class RunnerConfig:
     # a custom ``WebResearch`` (or a test fake); ``build_orchestrator`` never overwrites an
     # already-set value.
     web_research: Optional[Any] = None
+    # A ``core.recipes.RecipeStore`` (operations replayed before context search). None builds one from
+    # ``QAR_RECIPES=1`` (``QAR_RECIPES_DIR``, ``QAR_RECIPES_MIN_SCORE``), or leaves the feature off.
+    recipe_store: Optional[Any] = None
     model_provider: Optional[ModelProvider] = None   # AnthropicProvider or another
     model_fallback: Optional[dict] = None            # override tier->model mapping (e.g. {"haiku": "gpt-4o", "sonnet": "claude-4"})
     model_providers: Optional[dict] = None           # multi-provider support: dict of name -> ModelProvider (e.g. {"anthropic": AnthropicProvider(), "gemini": GeminiProvider()})
@@ -2820,4 +2825,5 @@ def build_orchestrator(
         anticipator=resolve_anticipator(cfg, context_assembler),
         tools=resolve_tool_registry(cfg),
         web=cfg.web_research,
+        recipes=cfg.recipe_store or build_recipe_store_from_env(),
     )

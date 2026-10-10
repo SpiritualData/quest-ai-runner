@@ -1,0 +1,324 @@
+[
+ {
+  "id": "RH1",
+  "group": "repeat",
+  "tool": "complete_habit",
+  "teach": "mark my meditation habit done",
+  "ask": "mark my yoga habit as done",
+  "expect_tool": "complete_habit",
+  "expect_args": {
+   "habit": "yoga"
+  }
+ },
+ {
+  "id": "RH2",
+  "group": "repeat",
+  "tool": "complete_habit",
+  "teach": "mark my meditation habit done",
+  "ask": "I finished my reading habit, mark it done",
+  "expect_tool": "complete_habit",
+  "expect_args": {
+   "habit": "reading"
+  }
+ },
+ {
+  "id": "RH3",
+  "group": "repeat",
+  "tool": "complete_habit",
+  "teach": "mark my meditation habit done",
+  "ask": "mark the stretching habit done please",
+  "expect_tool": "complete_habit",
+  "expect_args": {
+   "habit": "stretching"
+  }
+ },
+ {
+  "id": "RH4",
+  "group": "repeat",
+  "tool": "complete_habit",
+  "teach": "mark my meditation habit done",
+  "ask": "mark my meditation habit done",
+  "expect_tool": "complete_habit",
+  "expect_args": {
+   "habit": "meditation"
+  }
+ },
+ {
+  "id": "RN1",
+  "group": "repeat",
+  "tool": "add_note",
+  "teach": "add a note saying call the dentist on Friday",
+  "ask": "add a note saying buy oat milk",
+  "expect_tool": "add_note",
+  "expect_args": {
+   "text": "oat milk"
+  }
+ },
+ {
+  "id": "RN2",
+  "group": "repeat",
+  "tool": "add_note",
+  "teach": "add a note saying call the dentist on Friday",
+  "ask": "add a note: renew the passport",
+  "expect_tool": "add_note",
+  "expect_args": {
+   "text": "passport"
+  }
+ },
+ {
+  "id": "RN3",
+  "group": "repeat",
+  "tool": "add_note",
+  "teach": "add a note saying call the dentist on Friday",
+  "ask": "add a note saying water the plants on Sunday",
+  "expect_tool": "add_note",
+  "expect_args": {
+   "text": "plants"
+  }
+ },
+ {
+  "id": "RN4",
+  "group": "repeat",
+  "tool": "add_note",
+  "teach": "add a note saying call the dentist on Friday",
+  "ask": "add a note saying call the dentist on Friday",
+  "expect_tool": "add_note",
+  "expect_args": {
+   "text": "dentist"
+  }
+ },
+ {
+  "id": "RT1",
+  "group": "repeat",
+  "tool": "log_time",
+  "teach": "log 20 minutes on my running habit",
+  "ask": "log 45 minutes on my piano habit",
+  "expect_tool": "log_time",
+  "expect_args": {
+   "habit": "piano",
+   "minutes": 45
+  }
+ },
+ {
+  "id": "RT2",
+  "group": "repeat",
+  "tool": "log_time",
+  "teach": "log 20 minutes on my running habit",
+  "ask": "log 15 minutes on my journaling habit",
+  "expect_tool": "log_time",
+  "expect_args": {
+   "habit": "journaling",
+   "minutes": 15
+  }
+ },
+ {
+  "id": "RT3",
+  "group": "repeat",
+  "tool": "log_time",
+  "teach": "log 20 minutes on my running habit",
+  "ask": "log 30 minutes on my running habit",
+  "expect_tool": "log_time",
+  "expect_args": {
+   "habit": "running",
+   "minutes": 30
+  }
+ },
+ {
+  "id": "RT4",
+  "group": "repeat",
+  "tool": "log_time",
+  "teach": "log 20 minutes on my running habit",
+  "ask": "log 10 minutes on my stretching habit",
+  "expect_tool": "log_time",
+  "expect_args": {
+   "habit": "stretching",
+   "minutes": 10
+  }
+ },
+ {
+  "id": "RG1",
+  "group": "repeat",
+  "tool": "add_goal",
+  "teach": "add a weekly goal called finish the quarterly report",
+  "ask": "add a weekly goal called plan the offsite",
+  "expect_tool": "add_goal",
+  "expect_args": {
+   "title": "plan the offsite",
+   "period": "weekly"
+  }
+ },
+ {
+  "id": "RG2",
+  "group": "repeat",
+  "tool": "add_goal",
+  "teach": "add a weekly goal called finish the quarterly report",
+  "ask": "add a weekly goal called clean the garage",
+  "expect_tool": "add_goal",
+  "expect_args": {
+   "title": "garage",
+   "period": "weekly"
+  }
+ },
+ {
+  "id": "RG3",
+  "group": "repeat",
+  "tool": "add_goal",
+  "teach": "add a weekly goal called finish the quarterly report",
+  "ask": "add a weekly goal called read two chapters",
+  "expect_tool": "add_goal",
+  "expect_args": {
+   "title": "chapters",
+   "period": "weekly"
+  }
+ },
+ {
+  "id": "RG4",
+  "group": "repeat",
+  "tool": "add_goal",
+  "teach": "add a weekly goal called finish the quarterly report",
+  "ask": "add a weekly goal called finish the quarterly report",
+  "expect_tool": "add_goal",
+  "expect_args": {
+   "title": "quarterly report",
+   "period": "weekly"
+  }
+ },
+ {
+  "id": "RS1",
+  "group": "repeat",
+  "tool": "habit_streak",
+  "teach": "what is my streak on the meditation habit",
+  "ask": "what is my streak on the yoga habit",
+  "expect_tool": "habit_streak",
+  "expect_args": {
+   "habit": "yoga"
+  }
+ },
+ {
+  "id": "RS2",
+  "group": "repeat",
+  "tool": "habit_streak",
+  "teach": "what is my streak on the meditation habit",
+  "ask": "what's my streak on the reading habit",
+  "expect_tool": "habit_streak",
+  "expect_args": {
+   "habit": "reading"
+  }
+ },
+ {
+  "id": "RS3",
+  "group": "repeat",
+  "tool": "habit_streak",
+  "teach": "what is my streak on the meditation habit",
+  "ask": "what is my streak on the running habit",
+  "expect_tool": "habit_streak",
+  "expect_args": {
+   "habit": "running"
+  }
+ },
+ {
+  "id": "RS4",
+  "group": "repeat",
+  "tool": "habit_streak",
+  "teach": "what is my streak on the meditation habit",
+  "ask": "what is my streak on the meditation habit",
+  "expect_tool": "habit_streak",
+  "expect_args": {
+   "habit": "meditation"
+  }
+ },
+ {
+  "id": "NM1",
+  "group": "near_miss",
+  "tool": "complete_habit",
+  "ask": "show me my meditation habit",
+  "expect_tool": "habit_streak",
+  "expect_args": {
+   "habit": "meditation"
+  },
+  "forbid_tool": "complete_habit"
+ },
+ {
+  "id": "NM2",
+  "group": "near_miss",
+  "tool": "complete_habit",
+  "ask": "is my meditation habit done today",
+  "expect_tool": "habit_streak",
+  "expect_args": {
+   "habit": "meditation"
+  },
+  "forbid_tool": "complete_habit"
+ },
+ {
+  "id": "NM3",
+  "group": "near_miss",
+  "tool": "add_note",
+  "ask": "how do I add a note about the dentist",
+  "expect_tool": null,
+  "expect_args": {},
+  "forbid_tool": "add_note"
+ },
+ {
+  "id": "NM4",
+  "group": "near_miss",
+  "tool": "log_time",
+  "ask": "how many minutes have I logged on my running habit",
+  "expect_tool": null,
+  "expect_args": {},
+  "forbid_tool": "log_time"
+ },
+ {
+  "id": "NM5",
+  "group": "near_miss",
+  "tool": "add_goal",
+  "ask": "do I have a weekly goal called plan the offsite",
+  "expect_tool": null,
+  "expect_args": {},
+  "forbid_tool": "add_goal"
+ },
+ {
+  "id": "NM6",
+  "group": "near_miss",
+  "tool": "complete_habit",
+  "ask": "mark my meditation habit not done yet, I only meant to ask about it",
+  "expect_tool": null,
+  "expect_args": {},
+  "forbid_tool": "complete_habit"
+ },
+ {
+  "id": "U1",
+  "group": "unrelated",
+  "tool": null,
+  "ask": "what is the capital of Portugal",
+  "expect_tool": null,
+  "expect_args": null,
+  "forbid_tool": "any"
+ },
+ {
+  "id": "U2",
+  "group": "unrelated",
+  "tool": null,
+  "ask": "explain what a habit loop is in two sentences",
+  "expect_tool": null,
+  "expect_args": null,
+  "forbid_tool": "any"
+ },
+ {
+  "id": "U3",
+  "group": "unrelated",
+  "tool": null,
+  "ask": "give me one tip for staying focused",
+  "expect_tool": null,
+  "expect_args": null,
+  "forbid_tool": "any"
+ },
+ {
+  "id": "U4",
+  "group": "unrelated",
+  "tool": null,
+  "ask": "what does the word stoic mean",
+  "expect_tool": null,
+  "expect_args": null,
+  "forbid_tool": "any"
+ }
+]

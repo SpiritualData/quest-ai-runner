@@ -123,6 +123,7 @@ from .context_doctrine import (
 from .anticipation import Anticipator
 from .inbox import InputInbox
 from .tools import ToolContext, ToolRegistry
+from .recipes import RECIPE_ARGS_TOOL, RecipeRunner, RecipeStore
 from .guard import (
     ExecutionFact,
     ExecutionRecord,
@@ -1614,6 +1615,13 @@ class OrchestratorConfig:
     # before planning: does what this request needs live inside the readable sources, outside them,
     # or in the world right now. Its verdict is stamped into the planner prompt as settled fact.
     # Off by default, and inert without ``read_reach_summary``, which only a consumer can write.
+    # RECIPE FAST PATH (core/recipes.py). With a ``RecipeStore`` wired on the Orchestrator, a request
+    # that matches an operation already worked out once (a tool call that succeeded) runs that
+    # operation immediately, before understanding and context search, and the tool's receipt is the
+    # answer. Inert without a store. ``recipe_allow_mutating`` False limits the fast path to
+    # read-only tools. A new operation is learned from every successful planner ``tool`` action.
+    recipe_fast_path: bool = True
+    recipe_allow_mutating: bool = True
     planner_reach_judge: bool = False
     planner_reach_judge_tier: str = "best"
     # The judge starts at the top of run(), concurrently with request understanding and context
@@ -5266,6 +5274,7 @@ class Orchestrator:
         anticipator: Optional[Anticipator] = None,
         tools: Optional[ToolRegistry] = None,
         web: Optional[Any] = None,
+        recipes: Optional[RecipeStore] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -5359,6 +5368,8 @@ class Orchestrator:
         # a stray {"web": ...} spec from a model that hallucinated one returns a named "not
         # configured" error instead of being silently dropped.
         self.web: Optional[Any] = web
+        # Operations learned from earlier turns, replayed before any context search (core/recipes.py).
+        self.recipes: Optional[RecipeStore] = recipes
         # The single-flight handle for the turn-end anticipation learn/plan thread (see
         # _kickoff_anticipation): while it is alive, further kickoffs are skipped, not queued.
         self._anticipation_thread: Optional[threading.Thread] = None
@@ -5788,9 +5799,99 @@ class Orchestrator:
 
     # --- planner call --------------------------------------------------------
 
+    # --- recipes (core/recipes.py) ---------------------------------------------------------
+
+    def _recipe_scope_tags(self, quest_id: Optional[str],
+                           context_meta: Optional[Dict[str, Any]]) -> Optional[List[str]]:
+        meta = {**(context_meta or {})}
+        if quest_id is not None:
+            meta.setdefault("quest_id", quest_id)
+        if meta.get("scope_tags"):
+            return list(meta["scope_tags"])
+        ids = self._meta_quest_ids(meta)
+        return [quest_scope_key(q) for q in ids] if ids else None
+
+    def _recipe_fill_args(self, prompt: str) -> Dict[str, Any]:
+        """The ONE small model call a non-exact recipe replay makes (fast tier, structured)."""
+        model = self.registry.resolve_tier("fast")
+        provider = self.get_provider_for_model(model)
+        kwargs: Dict[str, Any] = {"model": model, "tool_schema": RECIPE_ARGS_TOOL}
+        if provider_call_accepts_tier(provider.plan):
+            kwargs["tier"] = "fast"
+        raw = plan_with_step(provider, prompt, step=STEP_JUDGE, **kwargs)
+        return raw if isinstance(raw, dict) else {}
+
+    def _recipe_fast_path(self, user_message: str, *, quest_id: Optional[str],
+                          context_meta: Optional[Dict[str, Any]],
+                          emit: "_Emitter") -> Optional[OrchestratorResult]:
+        """Replay a known operation now, or None to take the normal path. Never raises."""
+        try:
+            tags = self._recipe_scope_tags(quest_id, context_meta)
+            runner = RecipeRunner(self.recipes, self.tools, fill_args=self._recipe_fill_args)
+            candidates = runner.nominate(user_message, tags)
+            if not candidates:
+                return None
+            ctx_meta = {**(context_meta or {})}
+            if quest_id is not None:
+                ctx_meta.setdefault("quest_id", quest_id)
+            emit.status("Running a saved recipe…")
+            try:                                    # same per-turn counters the normal path resets
+                if hasattr(self.provider, "tokens_in"):
+                    self.provider.tokens_in = 0
+                    self.provider.tokens_out = 0
+            except Exception:  # noqa: BLE001
+                pass
+            outcome = runner.try_fast_path(
+                user_message,
+                ToolContext(quest_id=quest_id, user_id=ctx_meta.get("user_id"),
+                            task_id=ctx_meta.get("task_id"), meta=ctx_meta),
+                scope_tags=tags, candidates=candidates,
+                allow_mutating=self.cfg.recipe_allow_mutating)
+            if outcome is None:
+                return None
+            record = ExecutionRecord()
+            if outcome.mutates:
+                record.facts.append(ExecutionFact(
+                    goal=f"tool {outcome.tool}: {outcome.text[:200]}", succeeded=True, failed=False,
+                    error=None, phases=["tool_call", "done"]))
+            res = OrchestratorResult(kind="answer", text=outcome.text, steps=0,
+                                     rationale=f"recipe {outcome.recipe_id} ({outcome.tool})",
+                                     exit_reason="recipe", execution_record=record)
+            try:
+                res.tokens_in = int(getattr(self.provider, "tokens_in", 0) or 0)
+                res.tokens_out = int(getattr(self.provider, "tokens_out", 0) or 0)
+            except Exception:  # noqa: BLE001
+                pass
+            emit.emit(ProgressEvent(type=EVENT_EXEC, step=0, text=f"tool {outcome.tool}",
+                                    data={"phase": "done", "tool": outcome.tool,
+                                          "recipe": outcome.recipe_id}))
+            emit.emit(ProgressEvent(type=EVENT_RESULT, text=res.text, result_kind="answer",
+                                    data={"exit_reason": "recipe", "recipe_id": outcome.recipe_id,
+                                          "llm_calls": outcome.llm_calls}))
+            emit.emit(ProgressEvent(type=EVENT_DONE, result_kind="answer", step=0))
+            log.info("Recipe fast path: %s via %s in %.2fs (%d model call(s))",
+                     outcome.recipe_id, outcome.tool, outcome.seconds, outcome.llm_calls)
+            return res
+        except Exception as e:  # noqa: BLE001 -- the fast path must never break a turn
+            log.warning("Recipe fast path skipped: %s: %s", type(e).__name__, e, exc_info=True)
+            return None
+
+    def _recipe_learner(self, user_message: str, scope_tags: Any, *,
+                        learnable: bool) -> Optional[Callable[[str, Dict[str, Any]], None]]:
+        """The callback that saves a successful planner tool call as a recipe (None when off).
+
+        Only a typed user turn teaches: a queued brief or autopilot pass quotes earlier runs, so
+        its text is not a request someone will type again.
+        """
+        if self.recipes is None or not learnable or not self.cfg.recipe_fast_path:
+            return None
+        store = self.recipes
+        return lambda name, args: store.learn(user_message, name, args, scope_tags=scope_tags)
+
     def run_tool_calls(self, calls: List[Dict[str, Any]], *, gathered: List[Dict[str, Any]],
                         exec_record: ExecutionRecord, tool_ok_signatures: set,
-                        emit: "_Emitter", steps: int, ctx: ToolContext) -> None:
+                        emit: "_Emitter", steps: int, ctx: ToolContext,
+                        on_success: Optional[Callable[[str, Dict[str, Any]], None]] = None) -> None:
         """Run the planner's direct tool calls in order, in-process (no deep run).
 
         Each outcome lands twice: in ``gathered`` (so the re-plan and the answer see the receipt)
@@ -5817,6 +5918,11 @@ class Orchestrator:
             text = result.text if result is not None else "no tools configured"
             if ok:
                 tool_ok_signatures.add(sig)
+                if on_success is not None:
+                    try:
+                        on_success(name, dict(args))
+                    except Exception:  # noqa: BLE001 -- learning a recipe never breaks a turn
+                        pass
             gathered.append({"kind": "query", "locator": f"tool:{name}",
                              "text": f"TOOL {name} {'SUCCEEDED' if ok else 'FAILED'} "
                                      f"(args {json.dumps(args, default=str)[:600]}):\n{text}"})
@@ -6395,11 +6501,13 @@ class Orchestrator:
                              gathered: List[Dict[str, Any]], model: str,
                              subquestions: List[str],
                              native_blocks: Optional[List[Dict[str, Any]]] = None,
-                             reply_directive: Optional[str] = None) -> str:
+                             reply_directive: Optional[str] = None,
+                             rep_preamble: Optional[str] = None) -> str:
         subs = [s for s in subquestions if s][: self.cfg.max_subquestions]
         if len(subs) < 2:
             return self._grounded_answer(user_message, transcript, context_view, gathered, model,
                                          False, native_blocks=native_blocks,
+                                         rep_preamble=rep_preamble,
                                          reply_directive=reply_directive)
         ground = _grounding_block(context_view, gathered, False)
         # Same contract as _grounded_answer: a per-turn reply directive rides on the system prompt.
@@ -6417,7 +6525,11 @@ class Orchestrator:
                     sub_msg = {"role": "user", "content": focus_content}
                 else:
                     sub_msg = {"role": "user", "content": focus}
+                # The per-turn rep_preamble (persona + plan-mode addenda such as the free-plan
+                # documentation-mode refusal) leads, exactly as on the single-answer path.
                 msgs = [{"role": "user", "content": ground}, sub_msg]
+                if rep_preamble:
+                    msgs.insert(0, {"role": "user", "content": rep_preamble})
                 provider = self.get_provider_for_model(model)
                 # A single surviving sub-answer is returned to them verbatim (see below), so each one
                 # is written under the same voice contract as a whole reply.
@@ -6441,6 +6553,7 @@ class Orchestrator:
         if not ok:
             return self._grounded_answer(user_message, transcript, context_view, gathered, model,
                                          False, native_blocks=native_blocks,
+                                         rep_preamble=rep_preamble,
                                          reply_directive=reply_directive)
         if len(ok) == 1:
             return ok[0]["a"]
@@ -6449,9 +6562,11 @@ class Orchestrator:
             # The old wording here opened with "The user asked: ...", which handed the model a
             # third-person frame and invited it to narrate the split back ("The user asked about X,
             # here is the merged answer"). Address it as their message, and say the split is internal.
+            merge_msgs: List[Dict[str, Any]] = (
+                [{"role": "user", "content": rep_preamble}] if rep_preamble else [])
             return answer_with_reasoning(
                 self.provider,
-                [{"role": "user", "content": (
+                merge_msgs + [{"role": "user", "content": (
                     f"Their message was:\n\n{user_message}\n\nYou answered its independent parts "
                     "below. The split is INTERNAL scaffolding: merge the parts into ONE coherent, "
                     "non-repetitive reply written straight to them, and never mention the split, "
@@ -9900,6 +10015,18 @@ class Orchestrator:
             on_detach = fan.detach
         emit = _Emitter(active_sink, mode, self._status, detach_check=detach_check, on_detach=on_detach)
 
+        # --- RECIPE FAST PATH (core/recipes.py): a known operation runs BEFORE any context search ---
+        # The lookup is lexical and model-free, so it costs microseconds ahead of everything else in
+        # the turn; only a strong nominee pays for one small fast-tier call (same operation? what
+        # arguments?). A hit returns the tool's receipt now; a miss, a failure, or a near-miss
+        # falls through to the unchanged run below.
+        if (self.recipes is not None and self.tools is not None and cfg.recipe_fast_path
+                and mode is Mode.LIVE and message_is_user_turn and not attachments):
+            _fast = self._recipe_fast_path(user_message, quest_id=quest_id,
+                                           context_meta=context_meta, emit=emit)
+            if _fast is not None:
+                return _fast
+
         # --- INSTANT ACK (Feature 1): best-effort, no latency impact -------------------------
         # When cfg.instant_ack is True:
         #   1. Synchronously emit "Looking into this..." so the consumer gets an immediate tick.
@@ -11151,7 +11278,10 @@ class Orchestrator:
                                          quest_id=quest_id,
                                          user_id=_ctx_meta.get("user_id"),
                                          task_id=_ctx_meta.get("task_id"),
-                                         meta=dict(_ctx_meta)))
+                                         meta=dict(_ctx_meta)),
+                                     on_success=self._recipe_learner(
+                                         user_message, _ctx_meta.get("scope_tags"),
+                                         learnable=message_is_user_turn))
                 tool_calls_ran = True
                 executed_reads.clear()
                 repeat_only_steps = 0
@@ -11407,6 +11537,7 @@ class Orchestrator:
                                     if reply_directive else READ_BUDGET_WRAPUP_HONESTY_NOTE)
                 text = self._grounded_answer(user_message, transcript, _answer_grounding(), gathered,
                                              model, True, native_blocks=native_blocks,
+                                             rep_preamble=rep_preamble,
                                              reply_directive=wrapup_directive)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True, model=model,
@@ -11497,7 +11628,8 @@ class Orchestrator:
             if len(plan.subquestions) >= 2:
                 return self._answer_subquestions(user_message, transcript, cv, gathered,
                                                  model, plan.subquestions, native_blocks=native_blocks,
-                                                 reply_directive=reply_directive)
+                                                 reply_directive=reply_directive,
+                                                 rep_preamble=rep_preamble)
             return self._grounded_answer(user_message, transcript, cv, gathered, model,
                                          False, native_blocks=native_blocks,
                                          rep_preamble=rep_preamble,
