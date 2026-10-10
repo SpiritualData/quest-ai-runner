@@ -5918,13 +5918,22 @@ class Orchestrator:
         """Save a successful quest-data deep run as a recipe. Never raises, never learns a failure."""
         try:
             if (self.recipes is None or not learnable or not self.cfg.recipe_fast_path
-                    or not self.cfg.recipe_deep
-                    or getattr(plan, "deep_target", None) != "quest_data"):
+                    or not self.cfg.recipe_deep):
                 return
             results = list(getattr(res, "deep_results", None) or [])
-            if not results or not all(getattr(d, "met", False) and not getattr(d, "deferred", False)
-                                      and not getattr(d, "decision_id", None) for d in results):
+            # An overseer-escalated deep plan carries no deep_target, so a completed run that left a
+            # write receipt through the governed runner also counts as a quest-data operation.
+            if (getattr(plan, "deep_target", None) != "quest_data"
+                    and not any(getattr(d, "has_write_receipt", False) for d in results)):
+                return
+            if not results or any(getattr(d, "deferred", False) or getattr(d, "decision_id", None)
+                                  for d in results):
                 return                      # only an operation that actually completed
+            # Completed = every run met its goal, or the governed runner left a write receipt (the
+            # goal verdict can still call a landed write unmet when the run was short on proof).
+            if not (all(getattr(d, "met", False) for d in results)
+                    or any(getattr(d, "has_write_receipt", False) for d in results)):
+                return
             goal = (plan.goal or "").strip()
             if goal:
                 self.recipes.learn(user_message, DEEP_PREFIX + "quest_data", {"goal": goal},
@@ -10858,6 +10867,18 @@ class Orchestrator:
                 card_context.close()
             except Exception:  # noqa: BLE001
                 pass
+            # A chat turn reaches its deep run through several paths (planner, overseer, own
+            # escalation, last resort) that all end here, so this is where a completed governed
+            # write is learned as a recipe (the store de-duplicates a repeat of the same request).
+            if (res.deep_results and not attachments
+                    and any(getattr(d, "has_write_receipt", False) for d in res.deep_results)):
+                try:
+                    self._recipe_learn_deep(
+                        user_message, PlanDecision(action="deep", goal=user_message), res,
+                        (_ctx_meta or {}).get("scope_tags"),
+                        learnable=message_is_user_turn and mode is Mode.LIVE)
+                except Exception:  # noqa: BLE001 -- learning never breaks a turn
+                    pass
             # Collect token counts from the provider if it tracks them.
             try:
                 if hasattr(self.provider, "tokens_in"):
@@ -12278,6 +12299,12 @@ class Orchestrator:
                                                       resume_session_id=take_resume_session())
                             if _rem_res.kind == "cancelled":
                                 return finish(_rem_res)
+                            if not attachments:
+                                self._recipe_learn_deep(
+                                    user_message, PlanDecision(action="deep", goal=user_message,
+                                                               deep_target="quest_data"), _rem_res,
+                                    (_ctx_meta or {}).get("scope_tags"),
+                                    learnable=message_is_user_turn and mode is Mode.LIVE)
                             _rem_out = ""
                             if _rem_res and _rem_res.deep_results:
                                 _rem_out = "\n\n".join(

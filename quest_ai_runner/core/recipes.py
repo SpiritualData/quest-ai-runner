@@ -62,6 +62,11 @@ log = logging.getLogger(__name__)
 # and the verdict call below is the real gate, so this only has to keep unrelated requests from
 # paying for that call.
 DEFAULT_MIN_SCORE = 0.6
+DEEP_MERGE_SIMILARITY = 0.5
+# A deep recipe is only NOMINATED by this lexical floor; the fast verdict call then decides whether the
+# request really repeats the operation, so the floor can be low (it must not miss a rephrased repeat).
+DEEP_MIN_SCORE = 0.3
+DEEP_VERDICTS = 2
 # A recipe whose tool name starts with this is a DEEP recipe: not a registered tool but a governed
 # deep-runner operation (a consumer whose operations are generated code, e.g. Quest chat's quest-data
 # commands, has no tool registry to learn from). Its example_args hold {"goal": ...}.
@@ -236,7 +241,9 @@ class RecipeStore:
                     best = containment(frozenset(r.skeleton), req)
                 else:       # a recipe saved without a usable skeleton: compare whole requests
                     best = max((similarity(req, content_tokens(e)) for e in r.examples), default=0.0)
-                if best >= self.min_score:
+                if is_deep:
+                    best = max([best] + [similarity(req, content_tokens(e)) for e in r.examples])
+                if best >= (DEEP_MIN_SCORE if is_deep else self.min_score):
                     scored.append((r, best))
         scored.sort(key=lambda p: (-p[1], -p[0].uses))
         return scored[:limit]
@@ -261,8 +268,13 @@ class RecipeStore:
                 for r in self._recipes.values():
                     if r.tool != tool or r.scope_tags != tags:
                         continue
+                    # A deep recipe's only argument is the whole request, so two phrasings of one
+                    # operation over different names ("mark my run habit done" / "mark my walk habit
+                    # done") overlap less than two tool calls do: merge them at a lower bar so the
+                    # skeleton shrinks to the operation words instead of staying one example.
+                    merge_at = DEEP_MERGE_SIMILARITY if tool.startswith(DEEP_PREFIX) else 0.8
                     if r.example_args == dict(args or {}) or any(
-                            similarity(content_tokens(request), content_tokens(e)) >= 0.8
+                            similarity(content_tokens(request), content_tokens(e)) >= merge_at
                             for e in r.examples):
                         if not any(normalize_request(e) == normalize_request(request)
                                    for e in r.examples):
@@ -412,17 +424,17 @@ class RecipeRunner:
         try:
             if not candidates:
                 return None
-            recipe, _score = candidates[0]
-            example_goal = str((recipe.example_args or {}).get("goal") or recipe.examples[0])
-            verdict = self._fill_args(RECIPE_DEEP_PROMPT.format(
-                example_request=recipe.examples[0], example_goal=example_goal[:600],
-                request=request))
-            if not isinstance(verdict, dict) or verdict.get("applies") is not True:
-                return None
-            goal = (verdict.get("args") or {}).get("goal")
-            if not isinstance(goal, str) or not goal.strip():
-                return None
-            return recipe, goal.strip()
+            for recipe, _score in candidates[:DEEP_VERDICTS]:
+                example_goal = str((recipe.example_args or {}).get("goal") or recipe.examples[0])
+                verdict = self._fill_args(RECIPE_DEEP_PROMPT.format(
+                    example_request=recipe.examples[0], example_goal=example_goal[:600],
+                    request=request))
+                if not isinstance(verdict, dict) or verdict.get("applies") is not True:
+                    continue
+                goal = (verdict.get("args") or {}).get("goal")
+                if isinstance(goal, str) and goal.strip():
+                    return recipe, goal.strip()
+            return None
         except Exception as e:  # noqa: BLE001 -- a recipe must never break a turn
             log.warning("Deep recipe verdict failed, taking the normal path: %s: %s",
                         type(e).__name__, e)
