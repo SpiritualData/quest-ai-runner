@@ -1859,17 +1859,195 @@ def write_summary(all_rows, arm, ts):
     return summary_path
 
 
+# ---------------------------------------------------------------------------------------------
+# RECIPE FAST PATH on the in-app chat (``run-recipes``). Quest chat has no tools; its operations are
+# deep-runner runs over generated code, so the question is whether a quest-data operation that
+# completed once is replayed WITHOUT the planner and the context search the next time it is asked.
+#
+# Per arm (one fresh fixture): TEACH cases run first (unscored; the first time anyone asks for the
+# operation), then the SCORED cases run in order. Scored = REPEATS of a taught operation with new
+# values (RP*, plus the existing paraphrases G8/G7/E2/E3), NEAR-MISSES that look like a taught
+# operation but want something else (RN*: must not fire it), and unrelated controls (reads,
+# inform, contrast). The two arms differ ONLY in the flag file ``ENABLED`` in QAR_EVAL_RECIPES_DIR
+# (the dev backend's recipes directory, quest-backend ``QUEST_AI_RECIPES_DIR``), toggled live, so
+# no restart sits between them. Everything is verified against real Quest state, never the reply.
+# The sets are nested on purpose (1 within 10 within 30) and each is run on its own fixture.
+# ---------------------------------------------------------------------------------------------
+
+RECIPE_SUBSETS = {
+    1: dict(teach=["H1"], score=["RP1"]),
+    10: dict(teach=["H1", "G3", "G1", "E1"],
+             score=["RP1", "RN1", "RP2", "RP3", "RN2", "RP4", "G8", "RP5", "RP6", "C1"]),
+    30: dict(teach=["H1", "G3", "G1", "E1"],
+             score=["RP1", "RN1", "RP2", "RP3", "RN2", "RP4", "G8", "G7", "RP5", "RP6", "E2", "E3",
+                    "R1", "R2", "R3", "R4", "R5", "FR1", "FR2", "L2", "LA1", "LA2", "LA6",
+                    "C1", "C2", "C3", "C4", "D2", "X4", "X5"]),
+}
+RECIPE_REPEAT_IDS = {"RP1", "RP2", "RP3", "RP4", "RP5", "RP6", "G8"}
+
+
+def build_recipe_cases(fx):
+    quest = fx["quest"]
+
+    def habit_done(habit_id):
+        row = habit_today_status(quest, habit_id)
+        return bool(row and row.get("completed"))
+
+    def verify_done(habit_id):
+        return lambda res: (habit_done(habit_id), f"Today's Actions completed={habit_done(habit_id)}")
+
+    def verify_not_done_and_answered(habit_id):
+        def fn(res):
+            done, answered = habit_done(habit_id), bool((res.text or "").strip())
+            return ((not done) and answered), f"habit completed={done} (must stay False), replied={answered}"
+        return fn
+
+    def verify_note(keyword):
+        def fn(res):
+            hits = [n for n in notes_of(quest) if keyword.lower() in str(n.get("text", "")).lower()]
+            return bool(hits), f"{len(hits)} quest note(s) mention {keyword!r}"
+        return fn
+
+    def note_count_before(fx_):
+        fx_["notes_before_RN2"] = len(notes_of(quest))
+
+    def verify_no_new_note(res):
+        before, now = fx.get("notes_before_RN2"), len(notes_of(quest))
+        return (before == now and bool((res.text or "").strip())), f"notes {before} -> {now} (must not change)"
+
+    def verify_goal(keyword):
+        known = set(fx["goals"].values())
+
+        def fn(res):
+            hits = [g for g in goals_of(quest) if (g.get("id") or g.get("goal_id")) not in known
+                    and keyword.lower() in str(g.get("name") or g.get("title") or "").lower()]
+            return bool(hits), f"new goal(s) matching {keyword!r}: {len(hits)}"
+        return fn
+
+    def verify_entry(*distances):
+        def fn(res):
+            for entry in entries_of(fx["journal"]):
+                fv = entry.get("fieldValues") or entry.get("field_values") or {}
+                if str(fv.get("distance_km")) in distances:
+                    return True, f"found a Run Log entry {fv}"
+            return False, f"no Run Log entry with distance_km in {distances}"
+        return fn
+
+    def w(id_, area, msg, verify, **kw):
+        return dict(id=id_, area=area, kind=kw.pop("kind", "write"), expect="inline", msg=msg,
+                    verify=verify, **kw)
+
+    return [
+        w("RP1", "recipe repeat: habit", "Mark my evening walk habit complete for today.",
+          verify_done(fx["evening_walk"])),
+        w("RN1", "recipe near-miss: habit", "Is my meditation habit complete for today?",
+          verify_not_done_and_answered(fx["meditation"]), kind="read"),
+        w("RP2", "recipe repeat: habit", "Mark my meditation habit complete for today.",
+          verify_done(fx["meditation"])),
+        w("RP3", "recipe repeat: note",
+          "Add a note to this quest: my left knee felt sore after Sunday's run.",
+          verify_note("knee")),
+        w("RN2", "recipe near-miss: note", "What notes have I added to this quest so far?",
+          verify_no_new_note, kind="read", before=note_count_before),
+        w("RP4", "recipe repeat: note",
+          "Add a note to this quest: race registration closes on Friday.",
+          verify_note("registration")),
+        w("RP5", "recipe repeat: goal",
+          "Add a goal to this quest: stretch for ten minutes every evening in October.",
+          verify_goal("stretch")),
+        w("RP6", "recipe repeat: entry",
+          "Add an entry to my Run Log collection: distance 5.5 km, effort 2, notes 'easy recovery jog'.",
+          verify_entry("5.5", "5.5000")),
+    ]
+
+
+def set_recipes_arm(arm):
+    """Switch the dev backend's recipe store on/off live by the flag file (see quest_ai_recipes)."""
+    d = os.environ.get("QAR_EVAL_RECIPES_DIR")
+    assert d, ("set QAR_EVAL_RECIPES_DIR to the dev backend's recipes directory "
+               "(its QUEST_AI_RECIPES_DIR, default <quest-backend>/data/quest_ai_recipes)")
+    flag = Path(d).expanduser() / "ENABLED"
+    flag.parent.mkdir(parents=True, exist_ok=True)
+    if arm == "recipes":
+        flag.write_text("on\n")
+    elif flag.exists():
+        flag.unlink()
+    assert flag.exists() == (arm == "recipes")
+
+
+def run_recipes(subset, arm):
+    spec = RECIPE_SUBSETS[subset]
+    set_recipes_arm(arm)
+    fx = setup()
+    try:
+        by_id = {c["id"]: c for c in build_dataset(fx) + build_recipe_cases(fx)}
+        rows = []
+        print(f"\n########## RECIPES EVAL subset={subset} arm={arm} quest={fx['quest']} ##########")
+        for phase, ids in (("teach", spec["teach"]), ("score", spec["score"])):
+            for cid in ids:
+                case = by_id[cid]
+                status, body = api("POST", "/api/quest-ai/conversations", {"quest_ids": [fx["quest"]]})
+                assert status == 201, (status, body)
+                conv = body.get("conversation_id") or body.get("id") or (body.get("data") or {}).get("id")
+                fx["last_conv_id"] = conv
+                fx.setdefault("created_conversation_ids", []).append(conv)
+                apply_before_hooks(fx, case)
+                started = time.time()
+                res = InAppResult(sse_send(conv, case["msg"], auto_run=True))
+                took = time.time() - started
+                if res.delegated:
+                    handle_delegation(fx, res, cid)
+                routing_ok = (res.route == "delegated") if case["expect"] == "deep" else (res.route != "delegated")
+                try:
+                    correct, note = case["verify"](res)
+                except Exception as e:  # noqa: BLE001
+                    correct, note = False, f"verifier raised {type(e).__name__}: {e}"
+                hit = any("saved operation" in st.lower() for st in res.statuses)
+                row = dict(case_id=cid, phase=phase, arm=arm, subset=subset, kind=case.get("kind"),
+                           repeat=cid in RECIPE_REPEAT_IDS, message=case["msg"], route=res.route,
+                           routing_ok=routing_ok, correct=bool(correct), note=note,
+                           recipe_hit=hit, seconds=round(took, 1), max_step=res.max_step,
+                           read_frame_count=res.read_frame_count, actions=res.actions,
+                           reply=(res.text or "")[:600], errors=res.errors)
+                rows.append(row)
+                print(f"[{phase:5}] {cid:4} route={res.route:12} correct={'OK ' if correct else 'BAD'} "
+                      f"recipe_hit={hit!s:5} ({row['seconds']}s)  {note[:90]}")
+        out = OUT_DIR / f"results_recipes_{arm}_{subset}.json"
+        out.write_text(json.dumps({"quest_backend": QUEST_BASE, "arm": arm, "subset": subset,
+                                   "rows": rows}, indent=1))
+        scored = [r for r in rows if r["phase"] == "score"]
+        reps = [r for r in scored if r["repeat"]]
+        print(f"\nscored correct : {sum(r['correct'] for r in scored)}/{len(scored)}")
+        print(f"repeat correct : {sum(r['correct'] for r in reps)}/{len(reps)}  "
+              f"recipe hits {sum(r['recipe_hit'] for r in reps)}/{len(reps)}")
+        if reps:
+            print(f"repeat mean s  : {sum(r['seconds'] for r in reps) / len(reps):.1f}")
+        print(f"false hits     : {[r['case_id'] for r in scored if r['recipe_hit'] and not r['repeat']]}")
+        print(f"results written: {out}")
+        return rows
+    finally:
+        gone = teardown(fx)
+        print(f"cleanup: {'VERIFIED' if gone else 'INCOMPLETE'}")
+        set_recipes_arm("baseline")     # leave the dev backend as found: feature off
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=["setup", "selftest", "run", "run-inapp", "teardown"])
+    parser.add_argument("phase", choices=["setup", "selftest", "run", "run-inapp", "run-recipes", "teardown"])
     parser.add_argument("--only", default=None, help="comma-separated case ids")
     parser.add_argument("--repeat", type=int, default=2,
                         help="run-inapp only: number of fresh setup->run->teardown passes")
     parser.add_argument("--auto-run", choices=["on", "off"], default="on",
                         help="run-inapp only: 'on' = auto_run=true (Allow all); "
                              "'off' = the app's real default, approval-card arm (write cases only)")
+    parser.add_argument("--subset", type=int, choices=[1, 10, 30], default=1,
+                        help="run-recipes only: the 1, 10 or 30 scored-case set")
+    parser.add_argument("--arm", choices=["baseline", "recipes"], default="baseline",
+                        help="run-recipes only: recipe store off (baseline) or on")
     args = parser.parse_args()
-    if args.phase == "setup":
+    if args.phase == "run-recipes":
+        run_recipes(args.subset, args.arm)
+    elif args.phase == "setup":
         setup()
     elif args.phase == "selftest":
         selftest()
