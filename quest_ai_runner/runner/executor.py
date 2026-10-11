@@ -996,10 +996,10 @@ class TaskExecutor:
                 session_id=terminal_session_id(result) or resume_session_id)
         if self._context_bundle is not None:
             self._safe(self._context_bundle.mark_seen)
-        return self._report(task_id, result, conv_id, request_text=text,
-                            rep_preamble=rep_preamble,
-                            card_id=(task.get("card_id") or None),
-                            autopilot_composed=composed_by_autopilot)
+        return self.report(task_id, result, conv_id, request_text=text,
+                           rep_preamble=rep_preamble,
+                           card_id=(task.get("card_id") or None),
+                           autopilot_composed=composed_by_autopilot)
 
     @staticmethod
     def _usage_limit_behind(result: OrchestratorResult,
@@ -1176,9 +1176,53 @@ class TaskExecutor:
         itself. A caller with no such task to check defaults to False, the safe choice: the receipt
         then falls back to this executor's own context bundle, when one is wired, rather than
         risking a false receipt from text that merely quotes a prior brief."""
-        return self._report(task_id, result, conv_id, request_text=request_text,
-                            rep_preamble=rep_preamble, card_id=card_id,
-                            autopilot_composed=autopilot_composed)
+        outcome = self._report(task_id, result, conv_id, request_text=request_text,
+                               rep_preamble=rep_preamble, card_id=card_id,
+                               autopilot_composed=autopilot_composed)
+        # Only after the terminal report: a steer that landed after the run's last drain point
+        # has to be claimed now, or it sits on a finished task forever. See the helper.
+        if outcome.status != "cancelled":
+            self._start_run_for_leftover_messages(task_id)
+        return outcome
+
+    def _start_run_for_leftover_messages(self, task_id: str) -> None:
+        """Turn steering messages the run never folded in into a new run on the same task.
+
+        A person can send a message while the task is in_progress. The run only claims messages at
+        its own drain points (the start, and each planning, retry or verification boundary), so one
+        that arrives after the last of those, or during a deep run's single subprocess, is still
+        unclaimed when the run reports. Before this, such a message was left on a terminal task:
+        the chat showed it as "missed" and asked the person to send it again.
+
+        Now it is claimed (which also stamps it delivered, so it cannot be folded in twice) and
+        opened as a run on the thread via ``open_run_on_task``. The thread goes back in the queue
+        and the runner produces a second output for it, with no resend. If that open fails, the
+        person is told on the task's feed, since the claim already marked the message delivered.
+        Best-effort like the other reads: never raises, and nothing happens when nothing is pending.
+        """
+        leftover = self._message_texts(self._claim_task_messages(task_id))
+        if not leftover:
+            return
+        text = "\n\n".join(leftover)
+        open_run = getattr(self._client, "open_run_on_task", None)
+        try:
+            if not callable(open_run):
+                raise RuntimeError("this client cannot open a run on a task")
+            open_run(task_id, text)
+        except Exception as e:  # noqa: BLE001 -- the report already went out; never break it
+            log.warning("could not start a run for %d late message(s) on task %s: %s",
+                        len(leftover), task_id, e)
+            self._report_progress(
+                task_id, "error",
+                text=("Your message arrived after the run finished, and it could not start a new "
+                      "run. Send it again to try once more."))
+            return
+        self._report_progress(
+            task_id, "status",
+            text=("Your message arrived after the run finished, so it started a new run."
+                  if len(leftover) == 1 else
+                  f"Your {len(leftover)} messages arrived after the run finished, so they "
+                  "started a new run."))
 
     def _on_milestone(self, task_id: str, conv_id: Optional[str], event: ProgressEvent,
                       card_id: Optional[str] = None) -> None:

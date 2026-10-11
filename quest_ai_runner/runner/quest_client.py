@@ -605,6 +605,18 @@ class QuestClient:
             log.warning("claim_task_messages failed for task %s: %s", task_id, e)
             return []
 
+    def open_run_on_task(self, task_id: str, text: str) -> Dict[str, Any]:
+        """POST /api/assistant-tasks/{task_id}/iterate: open a NEW run on this task's thread.
+
+        Used for messages the running run never folded in: once the task is terminal, the thread
+        takes a fresh run carrying ``text`` and the runner picks it up, so the person gets a second
+        output rather than a message that was received and then ignored. Unlike the best-effort
+        reads above this RAISES on failure, because the caller must tell the person the message did
+        not start anything; a silent no-op here would be the same ignored-message bug again.
+        """
+        return self._request("POST", f"/api/assistant-tasks/{task_id}/iterate",
+                             body={"text": text})
+
     # --- live progress into the originating chat -----------------------------
 
     def post_conversation_message(self, conv_id: str, content: str, *,

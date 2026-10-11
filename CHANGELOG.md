@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- A steering message the run never folded in is no longer stranded on a finished task. The run claims messages only at its own drain points, so one sent late in the run (or during a deep run's single subprocess) was left unclaimed when the task went terminal, and the chat showed it as "missed" and asked the person to send it again. After the terminal report the executor now claims those messages and opens a new run on the thread with their text (`QuestClient.open_run_on_task`, `POST /api/assistant-tasks/{id}/iterate`), so the runner produces a second output with no resend. A failed open is reported on the task's feed rather than dropped. Tests: `tests/test_pending_messages.py` (late-message group).
 - A queued task that hits a model-provider outage (overloaded, 503/529, 429, unavailable) waits and retries instead of failing "after 1 attempt". `core/provider_outage.py` recognises the outage and records the last one the provider's retry wrapper gave up on; the executor requeues the task with `hold_reason=provider_unavailable` and a retry time 10 minutes ahead, and the progress feed says so ("paused, not failed"). The retry wait is a fresh probe each time, so the wait is open-ended while the outage lasts. A backend that refuses the hold reports the task failed rather than letting it be claimed again at once. Tests: `tests/test_provider_outage.py`. Needs the backend hold reason (`provider_unavailable`) to be deployed.
 
 ### Changed

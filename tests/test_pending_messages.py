@@ -195,3 +195,79 @@ def test_pending_inputs_is_passed_explicitly_into_orchestrator_run(monkeypatch):
     monkeypatch.setattr(orch, "run", capturing_run)
     ex.execute({"id": "t11", "text": "goal-only task, no quest_id"})
     assert callable(captured["pending_inputs"])
+
+
+# --- (c) a message that arrives AFTER the run's last drain point starts a new run ----------
+
+class LateMessageClient(MessageClaimingClient):
+    """A steer that lands in the window between the run's last drain and the terminal report.
+
+    Queues ``late_text`` for the task at the moment the terminal "done" write happens, which is
+    exactly when a message from the person could land on a task still shown as in progress. Also
+    records every ``open_run_on_task`` call, the way the real client would open a run on the thread.
+    """
+
+    def __init__(self, late_text: str, *, fail_open: bool = False):
+        super().__init__([])
+        self.late_text = late_text
+        self.fail_open = fail_open
+        self.opened_runs: List[tuple] = []
+
+    def report_done(self, task_id, result, *args, **kwargs):
+        super().report_done(task_id, result)
+        self.queue_message(task_id, self.late_text, message_id="amsg_late")
+
+    def report_done_with_data(self, task_id, result, result_data=None):
+        out = super().report_done_with_data(task_id, result, result_data)
+        self.queue_message(task_id, self.late_text, message_id="amsg_late")
+        return out
+
+    def open_run_on_task(self, task_id, text):
+        if self.fail_open:
+            raise RuntimeError("backend refused the run")
+        self.opened_runs.append((task_id, text))
+        return {"id": task_id, "status": "queued"}
+
+
+def test_late_message_after_done_opens_a_second_run_with_its_text():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = LateMessageClient("also send the summary to the team")
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "late1", "text": "write the report"})
+
+    assert out.status == "done"
+    assert client.opened_runs == [("late1", "also send the summary to the team")]
+    status_texts = [t for (_tid, k, t, _o) in client.progress if k == "status"]
+    assert any("started a new run" in (t or "") for t in status_texts)
+
+
+def test_late_message_is_claimed_once_so_it_is_not_folded_twice():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = LateMessageClient("one late note")
+    ex = TaskExecutor(client, _brain(provider))
+    ex.execute({"id": "late2", "text": "do it"})
+
+    # The late note was claimed by the post-report step; a second claim finds nothing left.
+    assert client.claim_task_messages("late2") == []
+    assert client.opened_runs == [("late2", "one late note")]
+
+
+def test_no_late_message_opens_no_run():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MessageClaimingClient()
+    ex = TaskExecutor(client, _brain(provider))
+    ex.execute({"id": "late3", "text": "plain task"})
+
+    assert not hasattr(client, "opened_runs")
+
+
+def test_failed_open_is_reported_on_the_task_and_the_outcome_still_stands():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = LateMessageClient("please also check X", fail_open=True)
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "late4", "text": "do it"})
+
+    # The run's own result is untouched; the failure to start a follow-up is said out loud.
+    assert out.status == "done"
+    error_texts = [t for (_tid, k, t, _o) in client.progress if k == "error"]
+    assert any("could not start a new run" in (t or "") for t in error_texts)
