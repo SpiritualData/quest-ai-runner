@@ -484,24 +484,63 @@ ASK_CLASSIFY_SYSTEM = (
 )
 
 
+ASSIGNED_GOAL_JUDGE_SYSTEM = (
+    "You judge one goal from a team's project quest. Reply with one JSON object only: "
+    '{"ai_doable": true or false, "confidence": number from 0 to 1, "reason": one short sentence}. '
+    "ai_doable is true only when an AI assistant could finish the work itself from text and the tools it has, "
+    "such as drafting, reading figures from the quest, summarising, or writing a plan. It is false when the work "
+    "needs a person's voice, a meeting, a physical action, a decision only a person can make, or contact with "
+    "someone outside the team. Never invent facts. Do not use em dashes."
+)
+
+
+def _quest_model():
+    """(provider, model) for the balanced tier, or (None, None) when no model is configured. Never raises."""
+    try:
+        from .config import build_orchestrator
+        from .core.model_registry import ModelRegistry
+        cfg = _config_from_env()
+        build_orchestrator(cfg)
+        provider = cfg.model_provider
+        if provider is None:
+            return None, None
+        return provider, ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
+    except Exception as e:  # noqa: BLE001 -- reconcile must still run without the model
+        log.warning("model unavailable for reconcile judgements: %s", e)
+        return None, None
+
+
+def _goal_judge(quest_id: str, client):
+    """The model that judges whether an assigned goal is AI work, or None without a model."""
+    from .core.card_filter import _extract_json
+    provider, model = _quest_model()
+    if provider is None:
+        return None
+
+    def judge(goal):
+        prompt = json.dumps({"goal": goal.get("name", ""), "description": (goal.get("description") or "")[:800],
+                             "criteria": (goal.get("criteria") or "")[:400]}, ensure_ascii=False)
+        try:
+            raw = provider.answer([{"role": "user", "content": prompt}], model=model,
+                                  system=ASSIGNED_GOAL_JUDGE_SYSTEM)
+            return json.loads(_extract_json(raw))
+        except Exception as e:  # noqa: BLE001 -- one bad answer leaves that goal with its owner
+            log.warning("goal %s not judged: %s", goal.get("id"), e)
+            return None
+
+    return judge
+
+
 def _ask_classifier(quest_id: str, client):
     """The model that sorts open asks for ``reconcile-plan``, or None when no model is configured.
 
     Returns None rather than failing, so reconcile still runs its plain planning without a model. The model
     sees only the note, the quest's members, and each member's current goal names as evidence of their work.
     """
-    try:
-        from .config import build_orchestrator
-        from .core.card_filter import _extract_json
-        from .core.model_registry import ModelRegistry
-        cfg = _config_from_env()
-        build_orchestrator(cfg)
-        provider = cfg.model_provider
-        if provider is None:
-            return None
-        model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
-    except Exception as e:  # noqa: BLE001 -- reconcile must still run without the model
-        log.warning("ask classification unavailable, asks stay unclassified: %s", e)
+    from .core.card_filter import _extract_json
+    provider, model = _quest_model()
+    if provider is None:
+        log.warning("ask classification unavailable, asks stay unclassified")
         return None
 
     goal_names: Dict[str, List[str]] = {}
@@ -1614,8 +1653,11 @@ def main(argv=None) -> int:
         client = QuestClient(base_url, api_key)
         today = date.fromisoformat(args.today) if args.today else date.today()
         classify = _ask_classifier(args.quest_id, client)
+        # AI handoff stays OFF until a human decides the default preference (decision teamdec_f67ecb57050d).
+        judge_goal = _goal_judge(args.quest_id, client) if os.getenv("QAR_RECONCILE_HANDOFF") == "1" else None
         try:
-            actions = reconcile_quest(client, args.quest_id, today, write=args.write, classify=classify)
+            actions = reconcile_quest(client, args.quest_id, today, write=args.write, classify=classify,
+                                      judge_goal=judge_goal)
         except (QuestApiError, QuestNotConfigured) as e:
             log.error(f"reconcile-plan failed: {e}")
             return 1

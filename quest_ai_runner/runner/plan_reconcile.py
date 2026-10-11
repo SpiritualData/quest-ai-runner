@@ -35,6 +35,8 @@ ASK_NOTE = "Added from an ask by {author}. Ask id {ask_id}."
 
 # classify(ask, roster) -> {"kind", "assignee_id", "confidence", "reason"} or None (no answer).
 Classifier = Callable[[Dict[str, Any], List[Dict[str, Any]]], Optional[Dict[str, Any]]]
+# judge_goal(goal) -> {"ai_doable", "confidence", "reason"} or None (no answer).
+GoalJudge = Callable[[Dict[str, Any]], Optional[Dict[str, Any]]]
 
 
 def ask_key(ask: Dict[str, Any]) -> Optional[str]:
@@ -99,6 +101,39 @@ def classify_asks(asks: List[Dict[str, Any]], roster: List[Dict[str, Any]], clas
                               "assignee_id": decision["assignee_id"],
                               "confidence": decision["confidence"], "reason": decision["reason"]})
     return decisions
+
+
+def validate_handoff(raw: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """True only when the model says the work is AI-doable with confidence at or above the bar."""
+    if not isinstance(raw, dict) or raw.get("ai_doable") is not True:
+        return None
+    try:
+        confidence = float(raw.get("confidence"))
+    except (TypeError, ValueError):
+        return None
+    if confidence < MIN_CONFIDENCE:
+        return None
+    return {"confidence": confidence, "reason": str(raw.get("reason") or "")[:300]}
+
+
+def plan_handoffs(goals: List[Dict[str, Any]], today: dt.date, judge: GoalJudge) -> List[Dict[str, Any]]:
+    """Ask the model about each open, assigned, not-yet-judged day goal dated today or later.
+
+    Only proposes. Whether the handoff happens is decided by the assignee's own AI-rep preference
+    (see ``set_goal_ai_handling``), not here. Goals already judged (``ai_handling`` set) are skipped.
+    """
+    today_iso = today.isoformat()
+    handoffs = []
+    for g in goals:
+        if g.get("completed") or not g.get("assigned_to_user_id") or g.get("ai_handling"):
+            continue
+        if g.get("time_scope") != "day" or (g.get("period") or "") < today_iso:
+            continue
+        decision = validate_handoff(judge(g))
+        if decision:
+            handoffs.append({"kind": "handoff", "goal_id": g["id"], "assignee_id": g["assigned_to_user_id"],
+                             "name": g.get("name", ""), **decision})
+    return handoffs
 
 
 def plan_actions(goals: List[Dict[str, Any]], asks: List[Dict[str, Any]], today: dt.date) -> List[Dict[str, Any]]:
@@ -199,7 +234,8 @@ def _create_and_verify(client, quest_id: str, action: Dict[str, Any], today_iso:
 
 def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
                     classify: Optional[Classifier] = None,
-                    roster: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+                    roster: Optional[List[Dict[str, Any]]] = None,
+                    judge_goal: Optional[GoalJudge] = None) -> List[Dict[str, Any]]:
     """Classify open asks, read goals, plan, and (if write) apply. Returns the planned actions."""
     goals_payload = client.list_quest_goals(quest_id)
     goals = [g for pg in goals_payload.get("period_groups", []) for g in pg.get("goals", [])]
@@ -219,6 +255,8 @@ def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
         actions.extend(decisions)
 
     actions.extend(plan_actions(goals, asks, today))
+    if judge_goal is not None:
+        actions.extend(plan_handoffs(goals, today, judge_goal))
     if not write:
         return actions
 
@@ -236,9 +274,22 @@ def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
             applied.append(a)
         elif a["kind"] == "create":
             applied.append(_create_and_verify(client, quest_id, a, today_iso))
+        elif a["kind"] == "handoff":
+            applied.append(_hand_off(client, a))
         else:
             applied.append(a)
     return applied
+
+
+def _hand_off(client, action: Dict[str, Any]) -> Dict[str, Any]:
+    """Ask Quest to route the goal to the assignee's AI rep as an autopilot decision. The assignee's
+    preference then decides: auto queues it, ask proposes it, never keeps it. Never raises."""
+    try:
+        resp = client._request("PUT", f"/api/planning/goals/{action['goal_id']}/ai-handling",
+                               body={"handling": "rep", "decidedBy": "rep"}) or {}
+    except Exception as exc:  # noqa: BLE001 -- one refused goal must not stop the rest of the run
+        return {**action, "kind": "failed", "reason": f"handoff refused: {str(exc)[:200]}"}
+    return {**action, "outcome": resp.get("aiHandling") or resp.get("ai_handling") or "none"}
 
 
 def _description_of(goals: List[Dict[str, Any]], goal_id: str) -> str:

@@ -6,8 +6,10 @@ from quest_ai_runner.runner.plan_reconcile import (
     classify_asks,
     iso_week_key,
     plan_actions,
+    plan_handoffs,
     reconcile_quest,
     validate_decision,
+    validate_handoff,
 )
 
 TODAY = dt.date(2026, 10, 14)  # a Wednesday in ISO week 2026_W42
@@ -243,3 +245,49 @@ def test_a_goal_that_does_not_verify_is_reassigned_once_then_reported_failed():
     assert len(failed) == 1 and failed[0]["goal_id"] == "ghost"
     reassigns = [c for c in client.calls if c[0] == "request" and c[2].endswith("/assign")]
     assert len(reassigns) == 1
+
+
+def test_handoff_needs_an_ai_doable_verdict_at_the_confidence_bar():
+    assert validate_handoff({"ai_doable": True, "confidence": 0.9, "reason": "drafting"}) is not None
+    assert validate_handoff({"ai_doable": True, "confidence": 0.5}) is None
+    assert validate_handoff({"ai_doable": False, "confidence": 0.99}) is None
+    assert validate_handoff({"ai_doable": "yes", "confidence": 0.99}) is None
+    assert validate_handoff(None) is None
+
+
+def test_plan_handoffs_judges_only_open_assigned_future_day_goals_without_a_handling_yet():
+    goals = [
+        {"id": "ok", "time_scope": "day", "period": "2026-10-14", "assigned_to_user_id": "u1", "name": "draft"},
+        {"id": "judged", "time_scope": "day", "period": "2026-10-14", "assigned_to_user_id": "u1",
+         "ai_handling": "me"},
+        {"id": "unassigned", "time_scope": "day", "period": "2026-10-14", "assigned_to_user_id": None},
+        {"id": "past", "time_scope": "day", "period": "2026-10-01", "assigned_to_user_id": "u1"},
+        {"id": "week", "time_scope": "week", "period": THIS_WEEK, "assigned_to_user_id": "u1"},
+        {"id": "done", "time_scope": "day", "period": "2026-10-15", "assigned_to_user_id": "u1", "completed": True},
+    ]
+    seen = []
+
+    def judge(g):
+        seen.append(g["id"])
+        return {"ai_doable": True, "confidence": 0.9, "reason": "drafting"}
+
+    handoffs = plan_handoffs(goals, TODAY, judge)
+    assert seen == ["ok"]
+    assert handoffs[0]["kind"] == "handoff" and handoffs[0]["goal_id"] == "ok" and handoffs[0]["assignee_id"] == "u1"
+
+
+def test_write_routes_a_handoff_to_the_rep_as_an_autopilot_decision():
+    class HandoffClient(FakeClient):
+        def _request(self, method, path, body=None):
+            self.calls.append(("request", method, path, body))
+            return {"aiHandling": "proposed"}
+
+    goals = [{"id": "g1", "time_scope": "day", "period": "2026-10-14", "assigned_to_user_id": "u1",
+              "name": "draft", "completed": False}]
+    client = HandoffClient(goals, [])
+    actions = reconcile_quest(client, "q1", TODAY, write=True,
+                              judge_goal=lambda g: {"ai_doable": True, "confidence": 0.9, "reason": "x"})
+    handoff = [a for a in actions if a["kind"] == "handoff"][0]
+    assert handoff["outcome"] == "proposed"
+    put = [c for c in client.calls if c[0] == "request" and c[2].endswith("/ai-handling")][0]
+    assert put[1] == "PUT" and put[3] == {"handling": "rep", "decidedBy": "rep"}
