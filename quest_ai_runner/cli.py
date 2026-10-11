@@ -139,7 +139,7 @@ Env it reads:
                                                    to supply OrchestratorConfig.read_reach_summary,
                                                    since only a consumer knows what its own reads
                                                    reach; with no summary the judge stays inert.
-  QAR_PLANNER_REACH_JUDGE_TIER (optional)       : the tier the reach judge runs on (default "best").
+  QAR_PLANNER_REACH_JUDGE_TIER (optional)       : the tier the reach judge runs on (default "balanced").
   QAR_READ_REACH_SUMMARY / QAR_READ_REACH_SUMMARY_FILE (optional)
                                                 : the read_reach_summary the reach judge needs,
                                                    inline or from a file: what this lane's reads
@@ -832,7 +832,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         cfg.orchestrator.overseer = True
     elif _ovr in ("0", "false", "off", "no"):
         cfg.orchestrator.overseer = False
-    # QAR_OVERSEER_TIER: the judge's model tier (default "best": judgment is where the expensive
+    # QAR_OVERSEER_TIER: the judge's model tier (default "quality": judgment is where the stronger
     # model pays; the digest keeps its token cost tiny regardless).
     if (os.getenv("QAR_OVERSEER_TIER") or "").strip():
         cfg.orchestrator.overseer_tier = os.environ["QAR_OVERSEER_TIER"].strip().lower()
@@ -841,8 +841,8 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
             cfg.orchestrator.overseer_max_signals = int(os.environ["QAR_OVERSEER_MAX_SIGNALS"])
         except ValueError:
             pass
-    # QAR_VERIFY_TIER: the goal/claims verification judge's tier (default "best" — this one small
-    # hard-capped call gates done vs needs_you/failed and claim honesty). Set "balanced" to cheapen.
+    # QAR_VERIFY_TIER: the goal/claims verification judge's tier (default "balanced": this one small
+    # hard-capped call gates done vs needs_you/failed and claim honesty). Set "quality" to strengthen.
     if (os.getenv("QAR_VERIFY_TIER") or "").strip():
         cfg.orchestrator.verify_tier = os.environ["QAR_VERIFY_TIER"].strip().lower()
     # --- Warm recent-turn context fallback (see core/recent_context.py) ------------------------

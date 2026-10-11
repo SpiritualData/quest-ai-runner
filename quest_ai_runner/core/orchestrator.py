@@ -1559,7 +1559,7 @@ class OrchestratorConfig:
     # AUTOMATIC STARTING MODEL for a deep run nobody pinned (core/deep_model_selection.py). The
     # planner rates the work "simple" | "normal" | "hard" on the call it already makes, and the run
     # STARTS on that difficulty's model, then escalates up the ladder (``deep_model_ladder``, or
-    # ``DEFAULT_AUTO_DEEP_LADDER`` = haiku, sonnet, opus when none is configured) on a not-met goal
+    # ``DEFAULT_AUTO_DEEP_LADDER`` = haiku, sonnet when none is configured) on a not-met goal
     # exactly as before. Defaults: simple -> haiku, normal and hard -> sonnet (the strongest model
     # is the escalation rung, not a starting point). Consumers set these from QAR_DEEP_AUTO_MODEL
     # and QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD. False = the ladder is used exactly as before.
@@ -1601,7 +1601,7 @@ class OrchestratorConfig:
     # strong model's judgment on the few percent of decisions that need it without paying its
     # input cost on all of them. See core/planner_cascade.py.
     planner_cascade: bool = False
-    planner_cascade_tier: str = "best"
+    planner_cascade_tier: str = "balanced"
     # WHICH DECISIONS get reviewed. A comma list of confidence levels ("low", "low,medium") and
     # of actions written "action:read". The default is the ACTION signal, not confidence, because
     # self-reported confidence was measured and did not work: a cheap planner answered "high" on
@@ -1630,7 +1630,7 @@ class OrchestratorConfig:
     # write review). Needs a deep runner and a store; inert otherwise.
     recipe_deep: bool = True
     planner_reach_judge: bool = False
-    planner_reach_judge_tier: str = "best"
+    planner_reach_judge_tier: str = "balanced"
     # The judge starts at the top of run(), concurrently with request understanding and context
     # assembly, and the first plan only COLLECTS it. This is how long that collect may wait before
     # planning proceeds without a verdict (exactly as with the judge off). It bounds a stuck judge;
@@ -1697,7 +1697,7 @@ class OrchestratorConfig:
     # the tier delta on ONE small call whose inputs are already hard-capped (~12.5k chars). Spend
     # the strong model on judgment, keep the cheap tiers for gathering. Empty string falls back to
     # ``planner_tier`` (the previous behavior).
-    verify_tier: str = "best"
+    verify_tier: str = "balanced"
     # INTENT-DIRECTIVE JUDGE: the FALLBACK for a turn whose planner gave no usable ``user_intent``
     # verdict (the planner's structured verdict decides every other turn for free, on the call it
     # already makes). ONE structured LLM call judges the message instead of guessing. This is a
@@ -1805,7 +1805,7 @@ class OrchestratorConfig:
     # (zero overseer calls, no events, no threads). The overseer NEVER raises: any failure degrades
     # to "proceed" (do nothing).
     overseer: bool = True
-    overseer_tier: str = "best"          # the (high-quality) tier the overseer model resolves to
+    overseer_tier: str = "quality"       # the tier the overseer model resolves to
     overseer_every_steps: int = 1        # consult once every N plan steps (>= overseer_min_step)
     overseer_max_signals: int = 3        # hard cap on overseer consultations per run (both hooks)
     overseer_min_step: int = 1           # earliest plan step (1-based) the overseer may run
@@ -6391,8 +6391,8 @@ class Orchestrator:
              ``model`` field). Opaque: the consumer's ModelProvider and ModelRegistry interpret it.
              Unknown tiers degrade gracefully to the registry's default (never raises).
           2. ``plan.model_tier`` — the planner's own choice for this step.
-          3. ``default_tier`` — the caller's compile-time default (``"sonnet"`` for answers,
-             ``"opus"`` for deep runs).
+          3. ``default_tier`` — the caller's compile-time default: a tier name, ``"balanced"``
+             at every call site.
         """
         tier = hint or plan.model_tier or default_tier
         return self.registry.resolve_tier(tier)
@@ -6810,7 +6810,7 @@ class Orchestrator:
                 transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
                 output=verify_output_view(output)),
         ).blocks()
-        # The judge runs at ``verify_tier`` (default "best"): this ONE small, hard-capped call
+        # The judge runs at ``verify_tier`` (default "balanced"): this ONE small, hard-capped call
         # gates the whole turn's outcome (done vs needs_you/failed, claim honesty), so it gets the
         # strong model. Routed through get_provider_for_model (same as the overseer) since the best
         # tier may resolve to a different provider's model than the planner's. FALLBACK: if the
@@ -7260,11 +7260,11 @@ class Orchestrator:
         ACTUALLY invoke (``cli_safe_model``: ``claude-sonnet``, ``sonnet`` and ``claude-sonnet-4-6``
         are one rung, not three), so this adds a step only when it is a genuinely different model.
 
-        Opus is the library's own strongest Claude family (``DEFAULT_FALLBACK_TOP["best"]`` pins
-        the current Opus release; see ``core/model_registry.py``), so a CLI-only deployment whose
-        fallback already sits at the ``claude-opus`` bucket has genuinely nothing further to
-        escalate to via auto-resolution -- "quality" and "best" both resolve back onto the same
-        "opus" CLI invocation, and the tier loop above correctly finds nothing new. That is a real
+        Sonnet is the balanced tier's CLI family (``DEFAULT_FALLBACK_TOP["best"]`` pins
+        ``claude-sonnet``; see ``core/model_registry.py``), so a CLI-only deployment whose fallback
+        already sits at the ``claude-sonnet`` bucket has genuinely nothing further to escalate to via
+        auto-resolution -- "quality" and "best" both resolve back onto the same "sonnet" CLI
+        invocation, and the tier loop above correctly finds nothing new. That is a real
         ceiling, not a bug: it surfaces as the "Escalation unavailable" WARNING (``log_deep_ladder``
         below), same as a deployment that pins a single explicit model on purpose. Do NOT paper
         over it by inventing a further family (e.g. Fable) as an automatic "stronger than Opus"
@@ -11671,7 +11671,7 @@ class Orchestrator:
                 goal_text = plan.goal or f"Complete: {user_message[:100]}"
                 emit.emit(ProgressEvent(type=EVENT_INTENT, text=f"Executing: {goal_text}"))
                 emit.status("Running now…")
-            res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
+            res = self._run_deep(plan, user_message, self._answer_model(plan, "balanced", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
                                  pending_inputs=pending_inputs, model_hint=model_hint,
@@ -11801,7 +11801,7 @@ class Orchestrator:
                         deep_difficulty=getattr(plan, "deep_difficulty", None),
                         deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                     )
-                    _ov_model = self._answer_model(_ov_plan, "opus", hint=model_hint)
+                    _ov_model = self._answer_model(_ov_plan, "balanced", hint=model_hint)
                     ov_facts_before = len(getattr(exec_record, "facts", None) or [])
                     _ov_res = self._run_deep(
                         _ov_plan, user_message, _ov_model,
@@ -11985,7 +11985,7 @@ class Orchestrator:
                     deep_difficulty=getattr(plan, "deep_difficulty", None),
                     deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                 )
-                deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
+                deep_model = self._answer_model(deferred_plan, "balanced", hint=model_hint)
                 # Queued deployments pin deferred work to the registered queue runner (reserved
                 # key), so the classifier can never re-route it to an inline runner.
                 _deferred_runner = (self.deep_runners.get(DEFERRED_RUNNER_KEY)
@@ -12287,7 +12287,7 @@ class Orchestrator:
                                 deep_difficulty=getattr(plan, "deep_difficulty", None),
                                 deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                             )
-                            _rem_model = self._answer_model(_rem_plan, "opus", hint=model_hint)
+                            _rem_model = self._answer_model(_rem_plan, "balanced", hint=model_hint)
                             _rem_res = self._run_deep(_rem_plan, user_message, _rem_model,
                                                       emit=emit, rep_preamble=rep_preamble,
                                                       exec_record=exec_record, gathered=gathered,
@@ -12358,7 +12358,7 @@ class Orchestrator:
                             deep_difficulty=getattr(plan, "deep_difficulty", None),
                             deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                         )
-                        _esc_model = self._answer_model(_esc_plan, "opus", hint=model_hint)
+                        _esc_model = self._answer_model(_esc_plan, "balanced", hint=model_hint)
                         esc_facts_before = len(getattr(exec_record, "facts", None) or [])
                         _esc_res = self._run_deep(
                             _esc_plan, user_message, _esc_model,
@@ -12440,7 +12440,7 @@ class Orchestrator:
                     deep_difficulty=getattr(plan, "deep_difficulty", None),
                     deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                 )
-                _lr_model = self._answer_model(_lr_plan, "opus", hint=model_hint)
+                _lr_model = self._answer_model(_lr_plan, "balanced", hint=model_hint)
                 lr_facts_before = len(getattr(exec_record, "facts", None) or [])
                 _lr_res = self._run_deep(
                     _lr_plan, user_message, _lr_model,

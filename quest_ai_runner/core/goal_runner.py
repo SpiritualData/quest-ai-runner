@@ -55,7 +55,10 @@ DEFAULT_DEEP_MAX_TURNS = 30
 DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS = 300.0
 QAR_DEEP_REVIEW_INTERVAL_SECONDS_ENV_VAR = "QAR_DEEP_REVIEW_INTERVAL_SECONDS"
 QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR = "QAR_DEEP_TIMEOUT_SECONDS"
-DEFAULT_DEEP_REVIEW_MODEL = "haiku"
+# The balanced tier on the Claude CLI. A deep run with no Claude model of its own runs on this, so no
+# default ever reaches the CLI's own choice, which can be Opus.
+BALANCED_CLI_MODEL = "sonnet"
+DEFAULT_DEEP_REVIEW_MODEL = BALANCED_CLI_MODEL
 DEEP_REVIEW_CALL_TIMEOUT_SECONDS = 120.0
 
 # How often the progress monitor emits a liveness beat while otherwise quiet (before the session
@@ -1414,14 +1417,13 @@ class SubprocessGoalRunner(DeepRunner):
         # ...and it must be a model the CLI can actually INVOKE, not merely one that looks like a
         # Claude id: a family-bucket label ("claude-sonnet") passes the syntactic check but makes
         # the binary error out on every attempt. cli_safe_model() translates (label -> alias) and
-        # returns None for anything the worker can't run, which lands on the same "omit --model,
-        # let the worker use its default" behaviour as before.
-        cli_arg = cli_safe_model(model)
-        if cli_arg:
-            cmd += ["--model", cli_arg]
-        elif model:
-            _log.debug("deep worker is Claude Code; ignoring non-Claude model %r, using its default",
-                       model)
+        # returns None for anything the worker can't run. Those runs take the balanced tier
+        # (BALANCED_CLI_MODEL) rather than the worker's own default, which can be Opus.
+        runnable = cli_safe_model(model)
+        if model and not runnable:
+            _log.debug("deep worker is Claude Code; model %r is not runnable, using balanced %r",
+                       model, BALANCED_CLI_MODEL)
+        cmd += ["--model", runnable or BALANCED_CLI_MODEL]
         turns = max_turns if max_turns is not None else DEFAULT_DEEP_MAX_TURNS
         if goal.strip():
             cmd += ["--max-turns", str(int(turns))]

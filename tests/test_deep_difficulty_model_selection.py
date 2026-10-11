@@ -110,9 +110,9 @@ def test_a_start_model_missing_from_the_ladder_goes_to_the_nearest_stronger_rung
     ladder, sel = select_deep_start("simple", ["sonnet", "opus"])
     assert ladder == ["sonnet", "opus"]
     assert "not on the ladder" in sel["reason"]
-    # Nothing stronger available: the strongest rung below it.
+    # Start model not on the ladder and nothing stronger on it: the whole ladder is kept.
     ladder, _ = select_deep_start("hard", ["haiku", "sonnet"], {"hard": "opus"})
-    assert ladder == ["sonnet"]
+    assert ladder == ["haiku", "sonnet"]
 
 
 def test_unknown_difficulty_or_empty_ladder_means_no_selection():
@@ -139,17 +139,18 @@ def test_planner_fields_are_parsed_and_fail_safe():
 
 # --- end to end through the goal loop ----------------------------------------------------------
 
-def test_simple_work_starts_on_haiku_and_escalates_to_sonnet_then_opus():
+def test_simple_work_starts_on_haiku_and_escalates_to_sonnet_and_stops_there():
+    # The default ladder tops out at the balanced tier (sonnet); opus is never a default rung.
     assert run_models("simple", [{"met": True}]) == ["haiku"]
-    assert run_models("simple", [NOT_MET, NOT_MET, {"met": True}]) == ["haiku", "sonnet", "opus"]
+    assert run_models("simple", [NOT_MET, NOT_MET, {"met": True}]) == ["haiku", "sonnet", "sonnet"]
 
 
-def test_normal_work_starts_on_sonnet_and_escalates_to_opus():
-    assert run_models("normal", [NOT_MET, {"met": True}]) == ["sonnet", "opus"]
+def test_normal_work_starts_on_sonnet_and_stays_at_the_ceiling():
+    assert run_models("normal", [NOT_MET, {"met": True}]) == ["sonnet", "sonnet"]
 
 
-def test_hard_work_starts_on_sonnet_by_default_and_escalates_to_opus():
-    assert run_models("hard", [NOT_MET, {"met": True}]) == ["sonnet", "opus"]
+def test_hard_work_starts_on_sonnet_by_default_and_stays_at_the_ceiling():
+    assert run_models("hard", [NOT_MET, {"met": True}]) == ["sonnet", "sonnet"]
 
 
 def test_configured_ladder_is_the_escalation_path():

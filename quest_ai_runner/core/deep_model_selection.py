@@ -29,8 +29,10 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 DIFFICULTIES: Tuple[str, ...] = ("simple", "normal", "hard")
 
-# Claude Code aliases, weak -> strong. Aliases (not dated ids) so the keyless CLI path runs them.
-DEFAULT_AUTO_DEEP_LADDER: Tuple[str, ...] = ("haiku", "sonnet", "opus")
+# Claude Code aliases, weak -> strong, up to the balanced tier (sonnet). Aliases (not dated ids) so
+# the keyless CLI path runs them. Opus is never a default; a deployment that wants it on the ladder
+# sets QAR_DEEP_MODELS explicitly.
+DEFAULT_AUTO_DEEP_LADDER: Tuple[str, ...] = ("haiku", "sonnet")
 
 DEFAULT_DIFFICULTY_MODELS: Dict[str, str] = {
     "simple": "haiku",

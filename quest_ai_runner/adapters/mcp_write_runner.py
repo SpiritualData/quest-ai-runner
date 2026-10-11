@@ -111,7 +111,7 @@ class MCPOperationConfig:
     # Model tier used when the orchestrator does not pin a model for the attempt. Not the
     # cheapest tier: this call decides a real mutating action, same reasoning as
     # ``FastEditConfig.tier``.
-    tier: str = "quality"
+    tier: str = "balanced"
 
 
 class MCPOperationRunner(DeepRunnerBase):

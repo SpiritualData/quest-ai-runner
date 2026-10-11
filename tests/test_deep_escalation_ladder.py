@@ -124,10 +124,12 @@ def test_deep_models_extends_a_bucket_label_ladder_on_a_cli_only_deployment(capl
     with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
         ladder = orch._deep_models(None, None, "claude-sonnet")
 
-    assert len(ladder) > 1, "a CLI-only deployment must still have somewhere to escalate to"
-    assert ladder[0] == "claude-sonnet"
-    assert any("opus" in (m or "") for m in ladder[1:]), f"expected a stronger rung, got {ladder}"
-    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+    # Opus is never a default rung, so the balanced tier (sonnet) is the ceiling on a CLI-only
+    # deployment. A deployment that wants a stronger rung sets QAR_DEEP_MODELS explicitly.
+    assert ladder == ["claude-sonnet"], f"expected the sonnet ceiling, got {ladder}"
+    # A one-rung ladder is the escalation-unavailable case, and the operator is told so.
+    assert any(r.levelno >= logging.WARNING and "escalation" in r.getMessage().lower()
+               for r in caplog.records)
 
 
 def test_fallback_deep_ladder_dedupes_rungs_by_what_the_worker_would_invoke():

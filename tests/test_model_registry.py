@@ -10,23 +10,24 @@ from quest_ai_runner.core.model_registry import (
 
 
 def test_bucket_takes_latest_first_of_each_family():
-    # Latest-first list: the FIRST opus/sonnet/haiku seen wins.
-    # Semantic tiers: opus -> quality, sonnet -> balanced, haiku -> fast.
+    # Latest-first list: the FIRST sonnet/haiku seen wins.
+    # Semantic tiers: sonnet -> quality and balanced, haiku -> fast. Opus is never bucketed.
     models = [
         "claude-opus-4-9", "claude-opus-4-8",
         "claude-sonnet-4-7", "claude-sonnet-4-6",
         "claude-haiku-4-6", "claude-haiku-4-5",
     ]
     top = bucket_top(models)
-    assert top["quality"] == "claude-opus-4-9"
+    assert top["quality"] == "claude-sonnet-4-7"
     assert top["balanced"] == "claude-sonnet-4-7"
     assert top["fast"] == "claude-haiku-4-6"
 
 
 def test_bucket_fills_missing_families_from_fallback():
-    # Only opus present live -> balanced/fast come from the fallback map.
+    # Only opus present live -> opus is never a tier default; balanced/fast/quality come from the
+    # fallback map.
     top = bucket_top(["claude-opus-9-9"])
-    assert top["quality"] == "claude-opus-9-9"
+    assert top["quality"] == DEFAULT_FALLBACK_TOP["quality"]
     assert top["balanced"] == DEFAULT_FALLBACK_TOP["balanced"]
     assert top["fast"] == DEFAULT_FALLBACK_TOP["fast"]
 
@@ -39,7 +40,8 @@ def test_registry_resolves_tiers_from_provider():
             return ["claude-opus-5-0", "claude-sonnet-5-0", "claude-haiku-5-0"]
 
     reg = ModelRegistry(P())
-    assert reg.resolve_tier("opus") == "claude-opus-5-0"
+    # The legacy "opus" name is the quality tier, which resolves to sonnet, never opus.
+    assert reg.resolve_tier("opus") == "claude-sonnet-5-0"
     assert reg.resolve_tier("haiku") == "claude-haiku-5-0"
     # Unknown / None defaults to sonnet.
     assert reg.resolve_tier(None) == "claude-sonnet-5-0"
@@ -126,5 +128,6 @@ def test_family_names_resolve_to_newest_for_every_vendor():
     assert newest_in_family("sonnet", live) == "claude-sonnet-5-5"
     assert newest_in_family("claude-haiku", live) == "claude-haiku-4-5-20251001"
     assert newest_in_family("gpt-4o", live) is None  # a pinned release is never rewritten
-    assert bucket_top(live)["quality"] == "claude-opus-5-5"
+    # bucket_top takes the first sonnet in the list it is given (4-6 is listed first here).
+    assert bucket_top(live)["quality"] == "claude-sonnet-4-6"
     assert bucket_top(live)["fast"] == "claude-haiku-4-5-20251001"

@@ -165,5 +165,5 @@ def test_planner_call_raising_is_caught_and_reported_not_met():
 
 # --- config -----------------------------------------------------------------------------------
 
-def test_default_config_uses_quality_tier():
-    assert MCPOperationConfig().tier == "quality"
+def test_default_config_uses_balanced_tier():
+    assert MCPOperationConfig().tier == "balanced"

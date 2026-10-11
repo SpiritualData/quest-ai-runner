@@ -129,9 +129,10 @@ DEFAULT_FALLBACK_TOP = {
     "fast": "gemini-3.1-flash-lite",
     "balanced": "gemini-3.1-flash-lite",
     "quality": "gemini-3.5-flash",
-    "best": "claude-opus",  # family name, never a release: each provider resolves it to the newest
-    # Opus (the CLI maps it to the `opus` alias, AnthropicProvider.resolve_model to the newest live
-    # id), so a new Opus release needs no edit here. Opus is the strongest Claude family, NOT Fable.
+    "best": "claude-sonnet",  # family name, never a release: each provider resolves it to the newest
+    # Sonnet (the CLI maps it to the `sonnet` alias, AnthropicProvider.resolve_model to the newest
+    # live id), so a new Sonnet release needs no edit here. Opus is never a default: it is reachable
+    # only by an explicit pin, never by tier resolution.
 }
 
 
@@ -212,7 +213,7 @@ def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> 
         families.get("o-series", [None])[0],
     ]
     quality_candidates = [
-        families.get("claude-opus", [None])[0],
+        families.get("claude-sonnet", [None])[0],
         gem_quality,
         gpt_top,
         families.get("gemini-2.0", [None])[0],

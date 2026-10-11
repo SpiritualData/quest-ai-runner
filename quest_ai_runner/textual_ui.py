@@ -1636,9 +1636,9 @@ class QuestAITerminal(App):
         s = self.sess
         model_hint = s._model_hint
         if s._replan_next:
-            model_hint = "opus"
+            model_hint = "quality"
             s._replan_next = False
-            self.call_from_thread(self._console.dim, "  Replan mode: using opus for this turn.")
+            self.call_from_thread(self._console.dim, "  Replan mode: using the quality tier for this turn.")
 
         final: Optional["OrchestratorResult"] = None
         error: Optional[Exception] = None

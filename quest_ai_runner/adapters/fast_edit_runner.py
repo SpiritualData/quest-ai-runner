@@ -198,7 +198,7 @@ class FastEditConfig:
     # Model tier used when the orchestrator does not pin a model for the attempt. NOT the cheapest
     # tier: what makes this path cheap is the ARCHITECTURE (one call instead of a 30-turn agent),
     # not a weak model, and this call decides a real file write.
-    tier: str = "quality"
+    tier: str = "balanced"
     # In-process retries after a failed apply, fed the specific match diagnostic. Aider allows 3;
     # one is right here, because rung 2 of the ladder (the full deep runner) is a better use of
     # the next attempt than a third argument with the same model.
