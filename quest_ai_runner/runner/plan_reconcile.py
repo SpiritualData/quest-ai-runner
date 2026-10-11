@@ -85,8 +85,9 @@ def validate_decision(raw: Optional[Dict[str, Any]], member_ids: set) -> Optiona
             return None
     else:
         assignee = None
+    title = str(raw.get("title") or "").strip()[:90] or None
     return {"kind": kind, "assignee_id": assignee, "confidence": confidence,
-            "reason": str(raw.get("reason") or "")[:300]}
+            "reason": str(raw.get("reason") or "")[:300], "title": title}
 
 
 def classify_asks(asks: List[Dict[str, Any]], roster: List[Dict[str, Any]], classify: Classifier) -> List[Dict[str, Any]]:
@@ -105,7 +106,8 @@ def classify_asks(asks: List[Dict[str, Any]], roster: List[Dict[str, Any]], clas
         if decision:
             decisions.append({"kind": "classify", "ask_key": key, "ask_kind": decision["kind"],
                               "assignee_id": decision["assignee_id"],
-                              "confidence": decision["confidence"], "reason": decision["reason"]})
+                              "confidence": decision["confidence"], "reason": decision["reason"],
+                              "title": decision["title"]})
     return decisions
 
 
@@ -192,7 +194,7 @@ def plan_actions(goals: List[Dict[str, Any]], asks: List[Dict[str, Any]], today:
             continue
         actions.append({
             "kind": "create", "ask_key": key, "assignee_id": assignee, "parent_goal_id": parent,
-            "title": "Ask: " + (ask.get("text") or "").strip()[:90],
+            "title": ask.get("title") or "Ask: " + (ask.get("text") or "").strip()[:90],
             "description": ASK_NOTE.format(author=ask.get("author") or "a teammate", ask_id=key),
             "period": today_iso,
         })
@@ -269,6 +271,8 @@ def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
             for ask in asks:
                 if ask_key(ask) == d["ask_key"]:
                     ask["kind"], ask["assignee_id"] = d["ask_kind"], d["assignee_id"]
+                    if d.get("title"):
+                        ask["title"] = d["title"]
             actions.append(d)
 
     actions.extend(plan_actions(goals, asks, today))

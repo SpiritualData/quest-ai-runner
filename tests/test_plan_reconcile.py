@@ -182,7 +182,7 @@ def test_request_naming_a_non_member_is_rejected():
 def test_non_request_kind_drops_any_assignee():
     raw = {"kind": "context", "assignee_id": "u2", "confidence": 0.4}
     assert validate_decision(raw, {"u1", "u2"}) == {"kind": "context", "assignee_id": None,
-                                                    "confidence": 0.4, "reason": ""}
+                                                    "confidence": 0.4, "reason": "", "title": None}
 
 
 def test_unknown_or_malformed_answers_are_rejected():
@@ -339,3 +339,20 @@ def test_write_marks_a_stalled_goal_without_moving_its_date():
     assert len(updates) == 1
     assert "period" not in updates[0][2]
     assert updates[0][2]["description"].startswith("Stalled: rolled forward 5 times")
+
+
+def test_a_decided_title_becomes_the_goal_title_not_the_raw_note():
+    goals = [goal("wk_u2", "week", THIS_WEEK, owner="u2")]
+    asks = [{"key": "k5", "kind": "unknown", "state": "open", "text": "Hi Joey, I added comments to https://docs.example",
+             "author": "Zee"}]
+    client = FakeClient(goals, asks)
+    classify = lambda a, r: {"kind": "request", "assignee_id": "u2", "confidence": 0.9,
+                             "title": "Confirm the Figma access for the mentor screens"}
+    reconcile_quest(client, "q1", TODAY, write=True, classify=classify, roster=ROSTER)
+    create = [c for c in client.calls if c[0] == "create"][0]
+    assert create[1] == "Confirm the Figma access for the mentor screens"
+
+
+def test_a_title_longer_than_the_limit_is_cut():
+    raw = {"kind": "request", "assignee_id": "u1", "confidence": 0.9, "title": "x" * 200}
+    assert len(validate_decision(raw, {"u1"})["title"]) == 90

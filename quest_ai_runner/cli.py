@@ -476,7 +476,8 @@ def _apply_channel_env(cfg: RunnerConfig) -> None:
 ASK_CLASSIFY_SYSTEM = (
     "You sort one open note or request from a team's project quest. Reply with one JSON object only: "
     '{"kind": "request" | "standing" | "context" | "question" | "unknown", "assignee_id": string or null, '
-    '"confidence": number from 0 to 1, "reason": one short sentence}. '
+    '"confidence": number from 0 to 1, "reason": one short sentence, "title": a short action title of at most "'
+    "80 characters, for example 'Confirm the Figma access for the mentor screens'}. "
     "Use kind request only when someone must do one specific thing that is finished once; set assignee_id "
     "to the single member of the roster whose listed goals show that work is theirs. Use null when the work "
     "belongs to no single member, and use unknown when you cannot tell. A note that only reports, thanks, or "
