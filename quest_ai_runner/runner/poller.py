@@ -1320,7 +1320,8 @@ class Poller:
         return expected_date.isoformat(), run_time
 
     def _list_pass_tasks(self, *, team_id: Optional[str] = None,
-                         goal_id: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+                         goal_id: Optional[str] = None,
+                         status: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
         """Read pass-kind tasks, returning ``None`` when the READ ITSELF failed.
 
         The whole point is that None and ``[]`` are different answers here: every caller's next
@@ -1331,8 +1332,9 @@ class Poller:
         """
         strict = getattr(self.client, "list_tasks_or_none", None)
         if callable(strict):
-            return strict(team_id=team_id, goal_id=goal_id, task_kind=AUTOPILOT_PASS_KIND)
-        return self.client.list_tasks(team_id=team_id, goal_id=goal_id,
+            return strict(team_id=team_id, goal_id=goal_id, status=status,
+                          task_kind=AUTOPILOT_PASS_KIND)
+        return self.client.list_tasks(team_id=team_id, goal_id=goal_id, status=status,
                                       task_kind=AUTOPILOT_PASS_KIND)
 
     def _list_owned_pass_tasks(self) -> Optional[List[Dict[str, Any]]]:
@@ -1352,8 +1354,27 @@ class Poller:
         A failed read is ``None``, never ``[]``: the caller's next move is to retire what is not in
         the list, and a partial answer read as complete is how a rate-limited read retires a live
         series.
+
+        ONE READ PER OPEN STATUS, not one unfiltered read (2026-10-11). An unfiltered owner list is
+        the newest 200 tasks, so an account with more than 200 newer tasks lost its OLDER open
+        passes from this view. The caller then read "no pass" and created a duplicate series, or
+        failed to retire a legacy one. A status filter is a queue read: it is not capped at 200 and
+        is not counted against the unfiltered limit. Only open rows matter to every caller here.
         """
-        return self._list_pass_tasks(team_id="")
+        merged: List[Dict[str, Any]] = []
+        seen: set = set()
+        for status in sorted(OPEN_TASK_STATUSES):
+            rows = self._list_pass_tasks(team_id="", status=status)
+            if rows is None:
+                return None
+            for row in rows:
+                task_id = str(row.get("id") or row.get("task_id") or "")
+                if task_id and task_id in seen:
+                    continue
+                if task_id:
+                    seen.add(task_id)
+                merged.append(row)
+        return merged
 
     def _open_quest_pass_occurrences(self, quest_id: str,
                                      owned: Optional[List[Dict[str, Any]]] = None

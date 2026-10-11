@@ -12,9 +12,15 @@ from datetime import datetime, timezone
 import pytest
 
 from quest_ai_runner.config import RunnerConfig
+from quest_ai_runner.runner.autopilot import OPEN_TASK_STATUSES
 from quest_ai_runner.runner.poller import Poller, _foreign_series_looks_alive
 
 from .conftest import StubProvider, StubRetrieval
+
+
+# The backend's default page for an unfiltered owner-scoped task list (quest-backend
+# ``DEFAULT_OWNER_LIST_LIMIT``). Kept here so the fake can model the cap a real account hits.
+UNFILTERED_OWNER_LIST_CAP = 200
 
 
 class FakePassClient:
@@ -40,22 +46,29 @@ class FakePassClient:
                            task_kind=None):
         """The failure-reporting listing, faked the way the real route BEHAVES.
 
-        Two properties are load-bearing and a stub that ignored them would pass tests the real
-        API fails (2026-09-17). First, ``goal_id`` is answered by the quest-scoped listing, so a
-        row is returned whoever owns it; the team-wide listing (no ``goal_id``) is owner-scoped,
-        so a row owned by anyone but the caller is INVISIBLE there. A row's own ``user_id`` is
-        its owner (the field name the API really returns), and a fake client's own identity is
-        ``self.user_id``. Second, a failed read is ``None``, not ``[]``.
+        Three properties are load-bearing and a stub that ignored them would pass tests the real
+        API fails. First, ``goal_id`` is answered by the quest-scoped listing, so a row is
+        returned whoever owns it; the team-wide listing (no ``goal_id``) is owner-scoped, so a row
+        owned by anyone but the caller is INVISIBLE there (2026-09-17). Second, an UNFILTERED owner
+        list (no ``status`` and no ``goal_id``) is the newest ``UNFILTERED_OWNER_LIST_CAP`` rows
+        only, cut BEFORE the client-side kind filter, exactly like the route's default page
+        (2026-10-11). A ``status`` filter is a queue read and is not capped. Third, a failed read
+        is ``None``, not ``[]``. ``self.tasks`` is listed newest first.
         """
         self.list_tasks_calls.append({"team_id": team_id, "goal_id": goal_id,
-                                      "task_kind": task_kind})
+                                      "status": status, "task_kind": task_kind})
         if self.list_fails:
             return None
-        rows = [t for t in self.tasks
-                if task_kind is None or t.get("task_kind") == task_kind]
-        if goal_id is not None:
-            return [t for t in rows if t.get("goal_id") == goal_id]
-        return [t for t in rows if t.get("user_id", self.user_id) == self.user_id]
+        owned = [t for t in self.tasks if t.get("user_id", self.user_id) == self.user_id]
+        if goal_id is None and status is None:
+            owned = owned[:UNFILTERED_OWNER_LIST_CAP]
+        rows = [t for t in self.tasks if goal_id is None or t.get("goal_id") == goal_id]
+        rows = [t for t in rows if t in owned or goal_id is not None]
+        if status is not None:
+            rows = [t for t in rows if t.get("status") == status]
+        if task_kind is not None:
+            rows = [t for t in rows if t.get("task_kind") == task_kind]
+        return rows
 
     def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None):
         return self.list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
@@ -151,9 +164,9 @@ def test_an_open_pass_task_is_the_liveness_test_for_the_whole_series(status):
     # quest-scoped one hides a series' queued occurrence once the series has run; see
     # Poller._open_quest_pass_occurrences). The owner read is never repeated per quest.
     assert client.list_tasks_calls == [
-        {"team_id": "", "goal_id": None, "task_kind": "autopilot"},
-        {"team_id": None, "goal_id": "q1", "task_kind": "autopilot"},
-    ]
+        {"team_id": "", "goal_id": None, "status": s, "task_kind": "autopilot"}
+        for s in sorted(OPEN_TASK_STATUSES)
+    ] + [{"team_id": None, "goal_id": "q1", "status": None, "task_kind": "autopilot"}]
     assert client.state_reads == ["q1"]       # the schedule snapshot still reads every quest once
 
 
@@ -227,7 +240,7 @@ def test_a_pass_owned_by_the_quests_human_owner_is_still_seen_so_no_duplicate_is
     _poller(client)._ensure_autopilot_pass()
 
     assert client.created == []
-    assert {"team_id": None, "goal_id": "q1", "task_kind": "autopilot"} in client.list_tasks_calls
+    assert {"team_id": None, "goal_id": "q1", "status": None, "task_kind": "autopilot"} in client.list_tasks_calls
 
 
 def test_a_failed_listing_never_creates_a_pass():
@@ -531,8 +544,9 @@ def test_every_team_is_served_by_one_owner_scoped_read_per_scan():
         autopilot_by_quest={q: {"mode": "act"} for q in ("q1", "q2", "q3", "q4")},
     )
     _poller(client, team_ids=["team1", "team2"])._ensure_autopilot_pass()
-    unfiltered = [c for c in client.list_tasks_calls if c["goal_id"] is None]
-    assert len(unfiltered) == 1
+    unfiltered = [c for c in client.list_tasks_calls
+                  if c["goal_id"] is None and c["status"] is None]
+    assert unfiltered == []
     assert {c["goal_id"] for c in client.created} == {"q1", "q2", "q3", "q4"}
 
 
@@ -606,3 +620,22 @@ def test_a_quest_with_no_pending_run_request_is_untouched():
     assert [c["scheduled_date"] for c in client.created] == ["2026-09-22", "2026-09-22"]
     assert client.created[0]["recurrence"] == {"frequency": "weekly",
                                                "days": _ROSTER_WITHOUT_MONDAY, "time": "12:00"}
+
+
+def test_a_legacy_team_pass_older_than_the_newest_200_tasks_is_still_retired():
+    """Regression for the 200-row window (2026-10-11).
+
+    The owner's unfiltered list is the newest 200 tasks. An account with more than 200 newer
+    tasks used to lose its OLDER open team-wide pass from the scan's view, so the legacy pass was
+    never retired and kept firing. The open-status reads are not capped, so it is seen and retired.
+    """
+    newer = [{"id": f"noise_{i}", "task_kind": "chat", "status": "done", "user_id": "acct_app",
+              "goal_id": None} for i in range(UNFILTERED_OWNER_LIST_CAP + 5)]
+    legacy = {"id": "legacy_team_pass", "task_kind": "autopilot", "status": "queued",
+              "goal_id": None, "user_id": "acct_app"}
+    client = FakePassClient(tasks=newer + [legacy], quests=[{"quest_id": "q1"}],
+                            autopilot_by_quest={"q1": {"mode": "off"}})
+    client.update_calls = []
+    client.update_task = lambda task_id, fields: client.update_calls.append((task_id, fields))
+    _poller(client)._ensure_autopilot_pass()
+    assert [task_id for task_id, _ in client.update_calls] == ["legacy_team_pass"]

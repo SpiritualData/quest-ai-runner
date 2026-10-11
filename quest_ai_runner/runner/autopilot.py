@@ -136,6 +136,11 @@ _CADENCE_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
 # backpressure and gets no more autonomous work piled on until it resolves.
 OPEN_TASK_STATUSES = {"queued", "in_progress", "needs_you", "suggested"}
 
+# Every status a task can hold (quest-backend ``TASK_STATUSES``). The daily budget counts a pass's
+# output whatever state it has reached, so the count reads each one.
+TASK_STATUSES_FOR_COUNT = ("cancelled", "done", "failed", "incomplete", "in_progress",
+                           "needs_you", "queued", "suggested")
+
 # Every proposed-goal task's text starts with this, which is how a later pass recognizes the
 # proposal it already made and does not make it again (see ``_open_proposal``).
 #
@@ -2819,15 +2824,25 @@ class AutopilotPass:
         ``team_id`` omitted means the lane's own team, exactly as this always behaved. A lane
         serving several teams passes the quest's team so each team's budget is counted against
         that team's own tasks -- see the decision recorded at the call site in ``run``."""
-        tasks = self._client.list_tasks(team_id=(team_id or self._team_id) or None) or []
+        # One read per task status, never an unfiltered owner list. The unfiltered list is the
+        # newest 200 tasks and is counted against the backend's 10-a-minute unfiltered cap; a
+        # status filter is a queue read that is neither (2026-10-11).
+        scope = (team_id or self._team_id) or None
         today = self._now().date()
+        seen: set = set()
         count = 0
-        for t in tasks:
-            if not self._is_autopilot_authored(t):
-                continue
-            created = _parse_dt(t.get("created_at") or t.get("scheduled_at"))
-            if created is not None and created.date() == today:
-                count += 1
+        for status in TASK_STATUSES_FOR_COUNT:
+            for t in self._client.list_tasks(team_id=scope, status=status) or []:
+                task_id = str(t.get("id") or t.get("task_id") or "")
+                if task_id and task_id in seen:
+                    continue
+                if task_id:
+                    seen.add(task_id)
+                if not self._is_autopilot_authored(t):
+                    continue
+                created = _parse_dt(t.get("created_at") or t.get("scheduled_at"))
+                if created is not None and created.date() == today:
+                    count += 1
         return count
 
     def _has_backpressure(self, quest_id: str) -> bool:
