@@ -308,3 +308,34 @@ def test_a_refused_ask_write_is_reported_and_the_run_continues():
                               classify=lambda a, r: {"kind": "question", "confidence": 0.9}, roster=ROSTER)
     assert [a["kind"] for a in actions if a.get("ask_key") == "bad"] == ["failed"]
     assert any(a["kind"] in ("create", "failed") and a.get("ask_key") == "ok" for a in actions)
+
+
+def stalled_history(rolls):
+    return " ".join(["Rolled forward from 2026-10-0%d." % (i + 1) for i in range(rolls)]) + " Send the list."
+
+
+def test_a_goal_rolled_fewer_than_three_times_still_rolls():
+    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(2))]
+    assert [a["kind"] for a in plan_actions(goals, [], TODAY)] == ["roll"]
+
+
+def test_a_goal_rolled_three_times_stops_moving_and_is_marked_stalled():
+    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(3))]
+    actions = plan_actions(goals, [], TODAY)
+    assert actions == [{"kind": "stall", "goal_id": "d1", "name": "g", "rolls": 3, "old": "2026-10-12"}]
+
+
+def test_a_stalled_goal_is_not_marked_twice():
+    description = "Stalled: rolled forward 3 times without completion. " + stalled_history(3)
+    goals = [goal("d1", "day", "2026-10-12", description=description)]
+    assert plan_actions(goals, [], TODAY) == []
+
+
+def test_write_marks_a_stalled_goal_without_moving_its_date():
+    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(3))]
+    client = FakeClient(goals, [])
+    reconcile_quest(client, "q1", TODAY, write=True)
+    updates = [c for c in client.calls if c[0] == "update"]
+    assert len(updates) == 1
+    assert "period" not in updates[0][2]
+    assert updates[0][2]["description"].startswith("Stalled: rolled forward 3 times")

@@ -31,6 +31,12 @@ UNCLASSIFIED_KINDS = {"", "unknown"}
 VALID_KINDS = {"request", "standing", "context", "question", "unknown"}
 MIN_CONFIDENCE = 0.8
 ROLL_NOTE = "Rolled forward from {old}."
+ROLL_MARK = "Rolled forward from "
+# After this many roll-forwards a goal stops moving and says so; a person then drops, rewords or hands it off.
+MAX_ROLLS = 3
+STALL_NOTE = ("Stalled: rolled forward {rolls} times without completion. The owner or Zee should drop, reword "
+              "or hand it to an AI rep.")
+STALL_MARK = "Stalled: rolled forward"
 ASK_NOTE = "Added from an ask by {author}. Ask id {ask_id}."
 
 # classify(ask, roster) -> {"kind", "assignee_id", "confidence", "reason"} or None (no answer).
@@ -153,6 +159,12 @@ def plan_actions(goals: List[Dict[str, Any]], asks: List[Dict[str, Any]], today:
         if g.get("completed"):
             continue
         scope, period = g.get("time_scope"), g.get("period") or ""
+        overdue = (scope == "day" and period < today_iso) or (scope == "week" and period < this_week)
+        if overdue and (g.get("description") or "").count(ROLL_MARK) >= MAX_ROLLS:
+            if STALL_MARK not in (g.get("description") or ""):
+                actions.append({"kind": "stall", "goal_id": g["id"], "name": g.get("name", ""),
+                                "rolls": (g.get("description") or "").count(ROLL_MARK), "old": period})
+            continue
         if scope == "day" and period < today_iso:
             actions.append({
                 "kind": "roll", "goal_id": g["id"], "name": g.get("name", ""), "old": period,
@@ -281,6 +293,10 @@ def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
             applied.append(_create_and_verify(client, quest_id, a, today_iso))
         elif a["kind"] == "handoff":
             applied.append(_hand_off(client, a))
+        elif a["kind"] == "stall":
+            client.update_goal(a["goal_id"], {"description": STALL_NOTE.format(rolls=a["rolls"]) + " "
+                                              + _description_of(goals, a["goal_id"])})
+            applied.append(a)
         else:
             applied.append(a)
     return applied
