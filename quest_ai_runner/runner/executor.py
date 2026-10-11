@@ -28,7 +28,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
-from ..core import usage_limit
+from ..core import provider_outage, usage_limit
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult, _strip_future_context
 from ..core.work_model import WorkModelUnavailable, apply_work_model, default_effective, is_tier_word
@@ -967,6 +967,11 @@ class TaskExecutor:
             if limit is not None:
                 return self._pause_for_usage_limit(task, task_id, limit, conv_id=conv_id,
                                                    card_id=card_id, session_id=resume_session_id)
+            # The model provider is overloaded or down: the same kind of wait, not a failure.
+            outage = provider_outage.from_exception(e)
+            if outage is not None:
+                return self._pause_for_provider_outage(task, task_id, outage, conv_id=conv_id,
+                                                       card_id=card_id, session_id=resume_session_id)
             msg = f"orchestrator error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)
             self._safe_report_failed(task_id, msg)
@@ -983,6 +988,11 @@ class TaskExecutor:
         if limit is not None:
             return self._pause_for_usage_limit(
                 task, task_id, limit, conv_id=conv_id, card_id=card_id,
+                session_id=terminal_session_id(result) or resume_session_id)
+        outage = self._provider_outage_behind(result, run_started)
+        if outage is not None:
+            return self._pause_for_provider_outage(
+                task, task_id, outage, conv_id=conv_id, card_id=card_id,
                 session_id=terminal_session_id(result) or resume_session_id)
         if self._context_bundle is not None:
             self._safe(self._context_bundle.mark_seen)
@@ -1074,6 +1084,69 @@ class TaskExecutor:
             return ExecutionOutcome(task_id, "failed", msg)
         log.info("task %s paused on the Claude usage limit (%s); resumes at %s", task_id,
                  limit.message, resume_at.isoformat())
+        self._post_conv(conv_id, note, kind="progress", task_id=task_id, card_id=card_id)
+        return ExecutionOutcome(task_id, "waiting", note)
+
+    @staticmethod
+    def _provider_outage_behind(result: OrchestratorResult,
+                                run_started: float) -> Optional["provider_outage.ProviderOutage"]:
+        """The provider outage that stopped this run, or None when the run's outcome stands.
+
+        Same rule as ``_usage_limit_behind``: a run that produced its result is never paused, and an
+        outage is blamed only when one was recorded during this run and the run came back empty
+        or unmet. A deep run that the runner reports as met, or that escalated to a human, stands.
+        """
+        kind = getattr(result, "kind", None)
+        if kind == "cancelled":
+            return None
+        recent = provider_outage.seen_since(run_started)
+        if recent is None:
+            return None
+        deep = list(getattr(result, "deep_results", None) or [])
+        if kind == "answer":
+            return None if (getattr(result, "text", "") or "").strip() else recent
+        if kind == "deep":
+            if deep and all(d.met for d in deep):
+                return None
+            if any(d.decision_id for d in deep):
+                return None
+            return recent
+        return None
+
+    def _pause_for_provider_outage(self, task: Dict[str, Any], task_id: str,
+                                   outage: "provider_outage.ProviderOutage", *,
+                                   conv_id: Optional[str], card_id: Optional[str],
+                                   session_id: Optional[str]) -> ExecutionOutcome:
+        """Put a task back in the queue to retry once the model provider is available again.
+
+        The task waits (``start_at`` a few minutes ahead, ``hold_reason=provider_unavailable``) and
+        the backend shows the wait on it. It is never marked failed for an outage. The one case that
+        is reported failed is a backend that refuses the hold: a plain requeue would let the lane
+        claim it again at once, so the person is told to run it again instead.
+        """
+        resume_at = provider_outage.resume_at()
+        note = (f"The AI model provider is unavailable right now, so this is paused, not failed. "
+                f"It will be tried again at {utc_stamp(resume_at)}.")
+        self._report_progress(task_id, "status", text=note,
+                              data={"phase": "provider_unavailable",
+                                    "resume_at": utc_stamp(resume_at),
+                                    "detail": outage.message})
+        requeue = getattr(self._client, "requeue_for_provider_outage", None)
+        requeued = None
+        if callable(requeue):
+            try:
+                requeued = requeue(task_id, start_at=resume_at, detail=outage.message,
+                                   resume_session_id=session_id)
+            except Exception:  # noqa: BLE001 -- handled below exactly like a refused write
+                log.error("provider-outage requeue failed for task %s", task_id, exc_info=True)
+        if not requeued:
+            msg = (f"{note} The task could not be put back in the queue automatically, so it is "
+                   f"marked failed. Run it again once the provider is available. ({outage.message})")
+            self._post_conv(conv_id, msg, kind="failed", task_id=task_id, card_id=card_id)
+            self._safe_report_failed(task_id, msg)
+            return ExecutionOutcome(task_id, "failed", msg)
+        log.info("task %s paused on a provider outage (%s); retries at %s", task_id,
+                 outage.message, resume_at.isoformat())
         self._post_conv(conv_id, note, kind="progress", task_id=task_id, card_id=card_id)
         return ExecutionOutcome(task_id, "waiting", note)
 

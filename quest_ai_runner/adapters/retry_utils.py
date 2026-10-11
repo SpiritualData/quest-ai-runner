@@ -17,7 +17,9 @@ import time
 from functools import wraps
 from typing import Any, Callable, Optional
 
-_log = logging.getLogger("quest-ai-runner.retry")
+from ..core import provider_outage
+
+_log =logging.getLogger("quest-ai-runner.retry")
 
 
 def parse_json_with_retry(
@@ -169,7 +171,9 @@ def retry_transient(max_retries: int = 3, base_delay: float = 1.0) -> Callable:
                         raise  # Not transient; fail immediately
 
                     if attempt >= max_retries:
-                        # Last attempt; give up
+                        # Last attempt; give up. Remember an outage so the task that made this
+                        # call waits for the provider instead of failing (core/provider_outage).
+                        provider_outage.note(exc)
                         _log.error(
                             f"{func.__name__} failed after {max_retries + 1} attempts: {type(exc).__name__}: {exc}"
                         )

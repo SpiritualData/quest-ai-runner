@@ -508,15 +508,35 @@ class QuestClient:
         the write failed (the caller must then report the task some other way, since it is still
         marked in_progress and nothing else will pick it up).
         """
+        return self.requeue_with_hold("claude_limit", task_id, start_at=start_at, detail=detail,
+                                      resume_session_id=resume_session_id)
+
+    def requeue_for_provider_outage(self, task_id: str, *, start_at: datetime, detail: str,
+                                    resume_session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Put a CLAIMED task back in the queue to wait out a model-provider outage.
+
+        The same put-back as ``requeue_for_usage_limit`` with ``hold_reason=provider_unavailable``:
+        the backend keeps every lane off the task until ``start_at`` and shows the wait on it. A
+        backend that refuses the reason returns None, and the caller reports the task failed rather
+        than letting it go straight back to a claim.
+        """
+        return self.requeue_with_hold("provider_unavailable", task_id, start_at=start_at,
+                                      detail=detail, resume_session_id=resume_session_id)
+
+    def requeue_with_hold(self, hold_reason: str, task_id: str, *, start_at: datetime, detail: str,
+                          resume_session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """PATCH a claimed task back to queued, held until ``start_at`` for ``hold_reason``.
+
+        Returns the task, or None when the write failed (see ``requeue_for_usage_limit``)."""
         body: Dict[str, Any] = {"status": "queued", "start_at": self.utc_stamp(start_at),
-                                "hold_reason": "claude_limit", "hold_detail": (detail or "")[:500]}
+                                "hold_reason": hold_reason, "hold_detail": (detail or "")[:500]}
         sid = (resume_session_id or "").strip()
         if sid:
             body["resume_session_id"] = sid
         try:
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
         except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("requeue_for_usage_limit failed for task %s: %s", task_id, e)
+            log.warning("requeue (%s) failed for task %s: %s", hold_reason, task_id, e)
             return None
 
     def hold_for_usage_limit(self, task_id: str, *, start_at: datetime,
