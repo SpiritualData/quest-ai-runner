@@ -7282,12 +7282,26 @@ class Orchestrator:
             except Exception:  # noqa: BLE001 — an untranslatable id is just its own rung
                 return (m or "").strip().lower()
 
+        def claude_rank(m: Optional[str]) -> Optional[int]:
+            """Weak -> strong among the Claude families (haiku < sonnet < opus); None otherwise."""
+            low = (rung_key(m) or "").lower()
+            for rank, family in enumerate(("haiku", "sonnet", "opus")):
+                if family in low:
+                    return rank
+            return None
+
         ladder: List[str] = [fallback] if fallback else []
         seen = {rung_key(m) for m in ladder}
+        fallback_rank = claude_rank(fallback)
         for tier in ("quality", "best"):
             try:
                 resolved = self.registry.resolve_tier(tier)
             except Exception:  # noqa: BLE001 — an unresolvable tier is just skipped
+                continue
+            # A rung must be a step UP. A tier that resolves to the same family or a weaker one
+            # (quality is sonnet on a deployment whose fallback is already opus) is not escalation.
+            resolved_rank = claude_rank(resolved)
+            if fallback_rank is not None and resolved_rank is not None and resolved_rank <= fallback_rank:
                 continue
             if resolved and _is_claude_model(resolved) and rung_key(resolved) not in seen:
                 ladder.append(resolved)

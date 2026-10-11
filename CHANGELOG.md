@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- An explicit `opus` request for a deep run runs Opus, pinned (no default reaches Opus). The fallback deep ladder adds an escalation rung only when it is a step up, so an Opus fallback no longer gets a Sonnet rung appended.
 - `bucket_top` takes the newest model of each family (highest version numbers), not the first one the provider listed. Before, a list with an older release first picked the older one.
 - No default resolves to Opus. Opus is never a bucket candidate, the default deep ladder tops out at the balanced tier (sonnet), and a CLI deep run with no Claude model of its own runs on the balanced tier (`BALANCED_CLI_MODEL`) instead of the CLI's default. Opus is reachable only by an explicit pin.
 - Tier defaults are tier names, and the default tier is `balanced`: the deep answer path, the write runners, and the reach judge, verifier and overseer tier defaults. The overseer defaults to `quality`. `DEFAULT_FALLBACK_TOP["best"]` is `claude-sonnet`.

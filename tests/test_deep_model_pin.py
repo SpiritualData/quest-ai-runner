@@ -114,15 +114,15 @@ def test_a_per_task_TIER_still_resolves_through_the_registry():
     assert "fable" not in (runner.calls[0]["model"] or "")
 
 
-def test_the_legacy_aliases_are_tiers_not_pins():
-    """``opus`` has always meant "the quality tier", and a deployment may map that anywhere. Taking
-    it literally here would quietly repoint every task that uses the old spelling."""
+def test_an_explicit_opus_request_runs_opus():
+    """Opus is never a default, but an explicit per-task request for the ``opus`` family is honored
+    as Opus and pinned: the deep worker runs ``--model opus`` with no escalation."""
     provider = ScriptedProvider(plans=[PLAN], verdicts=[{"met": True}])
     runner = RecordingRunner()
 
     _orch(provider, runner).run("build X", model_hint="opus")
 
-    assert [c["model"] for c in runner.calls] == [ModelRegistry(provider).resolve_tier("opus")]
+    assert [c["model"] for c in runner.calls] == ["opus"]
 
 
 def test_a_model_the_deep_worker_cannot_run_is_never_passed_through():
