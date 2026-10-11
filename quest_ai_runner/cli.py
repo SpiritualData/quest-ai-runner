@@ -1658,8 +1658,10 @@ def main(argv=None) -> int:
         # preference still decides what a handoff becomes (auto, ask or never).
         judge_goal = _goal_judge(args.quest_id, client) if os.getenv("QAR_RECONCILE_HANDOFF", "1") != "0" else None
         try:
+            notify_stall = {"user_id": os.getenv("QAR_STALL_NOTIFY_USER_ID", ""),
+                            "team_id": os.getenv("QAR_STALL_NOTIFY_TEAM_ID", "")}
             actions = reconcile_quest(client, args.quest_id, today, write=args.write, classify=classify,
-                                      judge_goal=judge_goal)
+                                      judge_goal=judge_goal, notify_stall=notify_stall)
         except (QuestApiError, QuestNotConfigured) as e:
             log.error(f"reconcile-plan failed: {e}")
             return 1

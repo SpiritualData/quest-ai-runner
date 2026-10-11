@@ -249,7 +249,8 @@ def _create_and_verify(client, quest_id: str, action: Dict[str, Any], today_iso:
 def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
                     classify: Optional[Classifier] = None,
                     roster: Optional[List[Dict[str, Any]]] = None,
-                    judge_goal: Optional[GoalJudge] = None) -> List[Dict[str, Any]]:
+                    judge_goal: Optional[GoalJudge] = None,
+                    notify_stall: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
     """Classify open asks, read goals, plan, and (if write) apply. Returns the planned actions."""
     goals_payload = client.list_quest_goals(quest_id)
     goals = [g for pg in goals_payload.get("period_groups", []) for g in pg.get("goals", [])]
@@ -300,10 +301,28 @@ def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
         elif a["kind"] == "stall":
             client.update_goal(a["goal_id"], {"description": STALL_NOTE.format(rolls=a["rolls"]) + " "
                                               + _description_of(goals, a["goal_id"])})
-            applied.append(a)
+            applied.append(_escalate_stall(client, a, notify_stall, quest_id))
         else:
             applied.append(a)
     return applied
+
+
+def _escalate_stall(client, action: Dict[str, Any], notify: Optional[Dict[str, str]], quest_id: str) -> Dict[str, Any]:
+    """Tell the person who follows up stalled goals, as a decision on the quest. ``notify`` is
+    {"user_id", "team_id"} from configuration, never hard-coded. Without it the stall is only recorded
+    on the goal. A refused decision is reported, not raised, so the rest of the run continues."""
+    if not notify or not notify.get("user_id") or not notify.get("team_id"):
+        return action
+    summary = (f"Stalled goal on the quest: \"{action['name']}\" has been rolled forward {action['rolls']} times "
+               f"without completion. Its owner should drop it, reword it, or hand it to their AI rep, or you can "
+               f"decide with them. Open the goal in Quest to see its history.")
+    try:
+        client.create_decision(summary, kind="approve", quest_id=quest_id,
+                               assignee_user_id=notify["user_id"], default_on_silence="hold",
+                               team_id=notify["team_id"])
+    except Exception as exc:  # noqa: BLE001 -- the stall note is already on the goal; escalation is a bonus
+        return {**action, "escalation": f"not sent: {str(exc)[:160]}"}
+    return {**action, "escalation": "sent"}
 
 
 def _hand_off(client, action: Dict[str, Any]) -> Dict[str, Any]:

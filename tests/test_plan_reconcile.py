@@ -356,3 +356,43 @@ def test_a_decided_title_becomes_the_goal_title_not_the_raw_note():
 def test_a_title_longer_than_the_limit_is_cut():
     raw = {"kind": "request", "assignee_id": "u1", "confidence": 0.9, "title": "x" * 200}
     assert len(validate_decision(raw, {"u1"})["title"]) == 90
+
+
+class DecisionClient(FakeClient):
+    def __init__(self, goals, asks):
+        super().__init__(goals, asks)
+        self.decisions = []
+
+    def create_decision(self, summary, **kwargs):
+        self.decisions.append((summary, kwargs))
+        return {"decision_id": "teamdec_x"}
+
+
+def test_a_stall_escalates_to_the_follow_up_person_as_a_decision():
+    client = DecisionClient([goal("d1", "day", "2026-10-12", description=stalled_history(5))], [])
+    actions = reconcile_quest(client, "q1", TODAY, write=True,
+                              notify_stall={"user_id": "zee", "team_id": "team_x"})
+    stall = [a for a in actions if a["kind"] == "stall"][0]
+    assert stall["escalation"] == "sent"
+    summary, kwargs = client.decisions[0]
+    assert kwargs["assignee_user_id"] == "zee" and kwargs["team_id"] == "team_x"
+    assert kwargs["default_on_silence"] == "hold" and '"g"' in summary
+
+
+def test_a_stall_without_notify_configuration_is_recorded_on_the_goal_only():
+    client = DecisionClient([goal("d1", "day", "2026-10-12", description=stalled_history(5))], [])
+    actions = reconcile_quest(client, "q1", TODAY, write=True)
+    assert client.decisions == []
+    assert [a for a in actions if a["kind"] == "stall"][0].get("escalation") is None
+
+
+def test_a_refused_escalation_is_reported_and_does_not_stop_the_run():
+    class Refusing(DecisionClient):
+        def create_decision(self, summary, **kwargs):
+            raise RuntimeError("422 not a member")
+
+    client = Refusing([goal("d1", "day", "2026-10-12", description=stalled_history(5))], [])
+    actions = reconcile_quest(client, "q1", TODAY, write=True,
+                              notify_stall={"user_id": "zee", "team_id": "team_x"})
+    stall = [a for a in actions if a["kind"] == "stall"][0]
+    assert stall["escalation"].startswith("not sent:")
