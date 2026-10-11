@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- `bucket_top` takes the newest model of each family (highest version numbers), not the first one the provider listed. Before, a list with an older release first picked the older one.
 - No default resolves to Opus. Opus is never a bucket candidate, the default deep ladder tops out at the balanced tier (sonnet), and a CLI deep run with no Claude model of its own runs on the balanced tier (`BALANCED_CLI_MODEL`) instead of the CLI's default. Opus is reachable only by an explicit pin.
 - Tier defaults are tier names, and the default tier is `balanced`: the deep answer path, the write runners, and the reach judge, verifier and overseer tier defaults. The overseer defaults to `quality`. `DEFAULT_FALLBACK_TOP["best"]` is `claude-sonnet`.
 - `QAR_CLI_HAIKU_THINKING_TOKENS` (claude_cli backend): caps extended thinking on every Haiku completion (answers, card work, the fast and balanced tiers). Sonnet and Opus are unaffected, and an explicit plan() cap still wins. Unset leaves the CLI default.

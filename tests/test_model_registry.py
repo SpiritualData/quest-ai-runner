@@ -128,7 +128,14 @@ def test_family_names_resolve_to_newest_for_every_vendor():
     assert newest_in_family("sonnet", live) == "claude-sonnet-5-5"
     assert newest_in_family("claude-haiku", live) == "claude-haiku-4-5-20251001"
     assert newest_in_family("gpt-4o", live) is None  # a pinned release is never rewritten
-    # Quality is a sonnet, never opus. Which sonnet release is an artifact of list order, so the
-    # test asserts the family, not a release.
-    assert bucket_top(live)["quality"].startswith("claude-sonnet")
+    # Quality is the newest sonnet, whatever the list order.
+    assert bucket_top(live)["quality"] == "claude-sonnet-5-5"
     assert bucket_top(live)["fast"] == "claude-haiku-4-5-20251001"
+
+
+def test_bucket_picks_the_newest_member_regardless_of_list_order():
+    oldest_first = ["claude-sonnet-4-6", "claude-sonnet-5-5", "claude-haiku-4-5", "claude-haiku-5-0"]
+    top = bucket_top(oldest_first)
+    assert top["balanced"] == "claude-sonnet-5-5"
+    assert top["quality"] == "claude-sonnet-5-5"
+    assert top["fast"] == "claude-haiku-5-0"
