@@ -314,28 +314,28 @@ def stalled_history(rolls):
     return " ".join(["Rolled forward from 2026-10-0%d." % (i + 1) for i in range(rolls)]) + " Send the list."
 
 
-def test_a_goal_rolled_fewer_than_three_times_still_rolls():
-    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(2))]
+def test_a_goal_rolled_fewer_than_five_times_still_rolls():
+    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(4))]
     assert [a["kind"] for a in plan_actions(goals, [], TODAY)] == ["roll"]
 
 
-def test_a_goal_rolled_three_times_stops_moving_and_is_marked_stalled():
-    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(3))]
+def test_a_goal_rolled_five_times_stops_moving_and_is_marked_stalled():
+    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(5))]
     actions = plan_actions(goals, [], TODAY)
-    assert actions == [{"kind": "stall", "goal_id": "d1", "name": "g", "rolls": 3, "old": "2026-10-12"}]
+    assert actions == [{"kind": "stall", "goal_id": "d1", "name": "g", "rolls": 5, "old": "2026-10-12"}]
 
 
 def test_a_stalled_goal_is_not_marked_twice():
-    description = "Stalled: rolled forward 3 times without completion. " + stalled_history(3)
+    description = "Stalled: rolled forward 5 times without completion. " + stalled_history(5)
     goals = [goal("d1", "day", "2026-10-12", description=description)]
     assert plan_actions(goals, [], TODAY) == []
 
 
 def test_write_marks_a_stalled_goal_without_moving_its_date():
-    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(3))]
+    goals = [goal("d1", "day", "2026-10-12", description=stalled_history(5))]
     client = FakeClient(goals, [])
     reconcile_quest(client, "q1", TODAY, write=True)
     updates = [c for c in client.calls if c[0] == "update"]
     assert len(updates) == 1
     assert "period" not in updates[0][2]
-    assert updates[0][2]["description"].startswith("Stalled: rolled forward 3 times")
+    assert updates[0][2]["description"].startswith("Stalled: rolled forward 5 times")

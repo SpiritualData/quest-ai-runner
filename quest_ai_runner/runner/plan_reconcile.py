@@ -33,7 +33,7 @@ MIN_CONFIDENCE = 0.8
 ROLL_NOTE = "Rolled forward from {old}."
 ROLL_MARK = "Rolled forward from "
 # After this many roll-forwards a goal stops moving and says so; a person then drops, rewords or hands it off.
-MAX_ROLLS = 3
+MAX_ROLLS = 5
 STALL_NOTE = ("Stalled: rolled forward {rolls} times without completion. The owner or Zee should drop, reword "
               "or hand it to an AI rep.")
 STALL_MARK = "Stalled: rolled forward"
