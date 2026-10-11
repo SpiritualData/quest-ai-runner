@@ -18,8 +18,9 @@ Three ideas, all generic (nothing here knows about any org):
     ``{"tools": "<query>"}`` read. ``invoke`` validates, fills context/default arguments, runs with
     a timeout, and NEVER raises: a failure comes back as a ``ToolResult`` the loop records.
   * ``build_tool_registry(env)`` is the ONE standard way a deployment gets its catalog: the
-    standard tools every QAR user has (``send_quest_email``, ``file_email_draft`` and ``update_quest_fields`` whenever
-    Quest credentials are configured), plus custom tools declared in TOML files named by
+    standard tools every QAR user has (``send_quest_email``, ``file_email_draft`` and one
+    quest-data tool per quest field, goal, strategy and habit, whenever Quest credentials are
+    configured), plus custom tools declared in TOML files named by
     ``QAR_TOOLS_FILE``. A custom
     tool is either a command (any executable, arguments passed as flags or JSON on stdin) or a
     Python ``module:function`` handler, and it appears in the same catalog, with the same
@@ -68,7 +69,7 @@ import subprocess
 import sys
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -578,121 +579,421 @@ def file_email_draft_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
     )
 
 
-# The quest fields this tool may write: the ones the quest API's field route accepts as "fields the
-# AI has set" (QuestClient.edit_quest_field). Narrow on purpose. A quest's measurable outcomes are
-# deliberately NOT here: they are a structured checklist with its own flow in the app, and a run
-# that wants one adds it there, not by overwriting the person's list from a brief.
-QUEST_WRITABLE_FIELDS = (
-    "outcome", "acceptance_criteria", "current_state", "preferences", "purpose",
-    "quest_goal", "quest_completion_criteria",
-)
+# ---------------------------------------------------------------------------------------------
+# Quest data tools: ONE tool per quest field, plus goals, strategies and habits
+# ---------------------------------------------------------------------------------------------
+#
+# WHY ONE TOOL PER FIELD (2026-10-11). The single ``update_quest_fields`` tool that came before
+# took any of seven fields in one ``fields`` object, so its description could only say WHICH fields
+# exist, never how to write each one, and AI-written vision statements, current states and
+# measurable outcomes read as generic. Each tool below writes exactly one field (or adds one goal,
+# strategy or habit) and its description carries that field's own writing standard from
+# ``core.quest_field_instructions``, so the model reads the standard at the moment it chooses the
+# write. They remain the ONLY way an AI changes quest data: never generated code, a file edit or a
+# coding agent (Joshua, 2026-10-01: "AI generated code should never be used for quest field
+# updates, qar has a specific tool for that").
+#
+# GOVERNANCE IS THE BACKEND'S. Every field write carries ``actor="ai"`` and the structured
+# ``userRequested`` verdict, and Quest's AI field-write gate decides: a write the person did not ask
+# for, or any write on a quest whose autopilot is off, becomes an ask for the owner instead of an
+# edit, which these tools report as NOT applied. Goals and habits are new items rather than the
+# person's own words, so the backend does not gate them; these tools refuse to create one the
+# person did not ask for and say to suggest it instead.
+
+#: Field name on the quest -> the tool that writes it. Tool names say the field in plain words.
+QUEST_FIELD_TOOLS: Dict[str, str] = {
+    "outcome": "update_quest_outcome",
+    "purpose": "update_quest_purpose",
+    "current_state": "update_quest_current_state",
+    "preferences": "update_quest_preferences",
+    "acceptance_criteria": "update_quest_acceptance_criteria",
+    "scope": "update_quest_scope",
+    "quest_goal": "update_quest_goal_statement",
+    "quest_completion_criteria": "update_quest_completion_criteria",
+}
+
+#: Fields the backend's AI field-write gate does not cover, so the tool itself holds the line: a
+#: write the person did not ask for is not sent at all.
+UNGATED_QUEST_FIELDS = frozenset({"scope"})
+
+_NEVER_CODE = ("This tool is the ONLY way this changes: never write code, edit a file, or run a "
+               "coding agent to do it.")
+_SUGGEST_INSTEAD = ("Do not use it off the back of small work inside the quest (a task, a "
+                    "progress note, one new goal): suggest the change in your reply instead.")
+
+_ASKED_PARAM = {
+    "type": "boolean",
+    "description": ("True ONLY when the user's own message explicitly asked for THIS change. It "
+                    "is a verdict you already hold from what they said, never something to read "
+                    "out of your own wording. False means it is offered for the owner to approve "
+                    "(or, for an item, not created) instead of applied."),
+}
+_QUEST_ID_PARAM = {"type": "string", "description": "Quest to change (defaults to this chat's quest)."}
 
 
-def update_quest_fields_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
-    """The standard quest FIELD UPDATE path: ``PATCH /api/quests/{id}/field`` through QuestClient.
+def _with_standard(description: str, key: str, period: Optional[str] = None) -> str:
+    from .quest_field_instructions import (UNIVERSAL_RULES, field_instructions_text,
+                                           goal_instructions_text)
+    standard = goal_instructions_text(period) if key == "goal" else field_instructions_text(key)
+    always = "\n".join(f"- {r}" for r in UNIVERSAL_RULES)
+    return f"{description}\n\nHOW TO WRITE IT:\n{standard}\nAlways:\n{always}"
 
-    WHY IT IS A TOOL. A quest field change is one API call, and before this it had no first-class
-    way to happen: a turn that wanted one fell through to a deep run, i.e. a full coding agent
-    writing code or editing files to accomplish a data edit it could not actually reach that way.
-    Joshua, 2026-10-01: "AI generated code should never be used for quest field updates, qar has a
-    specific tool for that for field update requests." This is that tool, and the orchestrator's
-    quest-data ladder guard keeps the code-writing rungs off the same work.
 
-    HONEST BY CONSTRUCTION. ``user_asked_for_this_field`` is passed straight through to the API as
-    ``userRequested``; the backend's AI field-write gate may answer "not applied, here is a
-    decision for the owner to approve" instead of writing, and this tool reports that as NOT
-    written rather than as a save (see ``QuestClient.edit_quest_field``).
-    """
+def _not_applied_text(what: str, quest_id: str, result: Mapping[str, Any]) -> str:
+    reason = result.get("reason") or result.get("message") or "it needs the owner's approval"
+    return (f"NOT applied: {what} on quest {quest_id} was not changed ({reason}). It is now an ask "
+            f"for the owner to approve, so the quest reads exactly as it did.")
+
+
+def _quest_id(args: Mapping[str, Any], ctx: ToolContext) -> Optional[str]:
+    return str(args.get("quest_id") or ctx.quest_id or "") or None
+
+
+def quest_field_tool_spec(field_name: str, env: Mapping[str, str],
+                          client_factory=None) -> ToolSpec:
+    """The tool that writes ONE quest field through ``PATCH /api/quests/{id}/field``."""
+    from .quest_field_instructions import QUEST_FIELD_INSTRUCTIONS
     factory = client_factory or (lambda: quest_client_from_env(env))
+    spec_text = QUEST_FIELD_INSTRUCTIONS[field_name]
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        quest_id = args.get("quest_id") or ctx.quest_id
+        quest_id = _quest_id(args, ctx)
         if not quest_id:
             return ToolResult(ok=False, text="No quest was named, so there is nothing to update.")
-        fields = args.get("fields")
-        if not isinstance(fields, dict) or not fields:
-            return ToolResult(ok=False, text="No fields were given, so nothing was written.")
-        unknown = [name for name in fields if name not in QUEST_WRITABLE_FIELDS]
-        if unknown:
-            return ToolResult(
-                ok=False,
-                text=(f"Refused: {', '.join(sorted(unknown))} cannot be written here. This tool "
-                      f"writes only {', '.join(QUEST_WRITABLE_FIELDS)}. Measurable outcomes are "
-                      f"managed through Quest's own measurable-outcome flow, not by overwriting "
-                      f"them from here."))
+        value = args.get("value")
+        if not isinstance(value, str) or not value.strip():
+            return ToolResult(ok=False, text=f"No new {spec_text.label} was given, so nothing was "
+                                             f"written.")
         requested = bool(args.get("user_asked_for_this_field"))
-        client = factory()
-        result = client.edit_quest_field(str(quest_id), fields,
-                                         actor="ai", user_requested=requested)
-        names = ", ".join(sorted(fields))
+        if field_name in UNGATED_QUEST_FIELDS and not requested:
+            return ToolResult(ok=False, text=(f"Not written: the user did not ask to change the "
+                                              f"{spec_text.label}. Suggest it in your reply instead."))
+        result = factory().edit_quest_field(quest_id, {field_name: value.strip()},
+                                            actor="ai", user_requested=requested)
         if not result:
             return ToolResult(ok=False, data=result,
-                              text=f"Nothing was written: the update of {names} on quest "
+                              text=f"Nothing was written: the update of {field_name} on quest "
                                    f"{quest_id} failed.")
         if isinstance(result, dict) and result.get("applied") is False:
-            reason = result.get("reason") or result.get("message") or "it needs the owner's approval"
             return ToolResult(ok=True, data=result,
-                              text=(f"NOT applied: {names} on quest {quest_id} was not changed "
-                                    f"({reason}). It is now an ask for the owner to approve, so "
-                                    f"the field still reads exactly as it did."))
-        return ToolResult(ok=True, data=result,
-                          text=f"Updated {names} on quest {quest_id}.")
+                              text=_not_applied_text(field_name, quest_id, result))
+        return ToolResult(ok=True, data=result, text=f"Updated {field_name} on quest {quest_id}.")
 
     return ToolSpec(
-        name="update_quest_fields",
+        name=QUEST_FIELD_TOOLS[field_name],
         handler=handler,
-        description=("Update a field of a quest through Quest's own governed field-update route: "
-                     "its outcome (the vision statement), acceptance criteria, current state, "
-                     "preferences, purpose, quest goal or completion criteria."),
-        when_to_use=("The user explicitly asked to change one of their quest's own fields, for "
-                     "example 'change my outcome to ...', 'update my current state', 'set my "
-                     "acceptance criteria to ...'. This is the ONLY way a quest field changes: "
-                     "never write code, edit a file, or run a coding agent to do it."),
-        when_not_to_use=("The user did not ask for THAT field to change in this message. Do not "
-                         "rewrite a quest's existing outcome, vision statement, acceptance "
-                         "criteria or measurable outcomes off the back of small work inside the "
-                         "quest (a task, a progress note, one new goal): suggest it instead, and "
-                         "give a new goal its own measurable criterion. Not for code or file "
-                         "changes of any kind."),
+        description=_with_standard(
+            f"Write a quest's {spec_text.label} through Quest's governed field-update route.",
+            field_name),
+        when_to_use=(f"The user asked to set or change their quest's {spec_text.label.lower()}. "
+                     + _NEVER_CODE),
+        when_not_to_use=("The user did not ask for THIS field to change in this message. "
+                         + _SUGGEST_INSTEAD + " Not for code or file changes of any kind."),
         parameters={
             "type": "object",
-            "required": ["fields"],
+            "required": ["value"],
             "properties": {
-                "quest_id": {"type": "string",
-                             "description": "Quest to update (defaults to this chat's quest)."},
-                "fields": {
-                    "type": "object",
-                    "description": ("Field name to its FULL new text, one entry per field. "
-                                    "Allowed names: " + ", ".join(QUEST_WRITABLE_FIELDS) + ". "
-                                    "Merge new information into the current value rather than "
-                                    "replacing it with a fragment."),
-                },
-                "user_asked_for_this_field": {
-                    "type": "boolean",
-                    "description": ("True ONLY when the user's own message explicitly asked for "
-                                    "THIS field to change. It is a verdict you already hold from "
-                                    "what they said, never something to read out of your own "
-                                    "wording. False means the change is offered for the owner to "
-                                    "approve instead of being applied."),
-                },
+                "quest_id": _QUEST_ID_PARAM,
+                "value": {"type": "string",
+                          "description": (f"The FULL new {spec_text.label}, written to the "
+                                          f"standard in this tool's description. Merge new "
+                                          f"information into the current value rather than "
+                                          f"replacing it with a fragment.")},
+                "user_asked_for_this_field": _ASKED_PARAM,
             },
         },
         mutates=True,
         origin="standard",
-        keywords=("quest", "field", "outcome", "vision", "current state", "preferences",
-                  "acceptance criteria", "purpose", "update", "change", "set"),
+        keywords=("quest", "field", "update", "change", "set", field_name.replace("_", " "),
+                  *spec_text.label.lower().replace("(", " ").replace(")", " ").split()),
         context_args={"quest_id": "quest_id"},
         timeout_seconds=45.0,
     )
 
 
+def add_measurable_outcome_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    """Add ONE item to a quest's measurable outcomes, keeping every existing item untouched.
+
+    The field is a whole list on the API, so the tool reads the current list and writes it back
+    with the new item appended (the backend keeps every progress field and id the request carries
+    or leaves out). The write passes the same AI field-write gate as any other quest field.
+    """
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = _quest_id(args, ctx)
+        if not quest_id:
+            return ToolResult(ok=False, text="No quest was named, so there is nothing to update.")
+        text = str(args.get("text") or "").strip()
+        if not text:
+            return ToolResult(ok=False, text="No measurable outcome text was given, so nothing "
+                                             "was written.")
+        client = factory()
+        state = client.get_my_quest(quest_id)
+        quest = (state.get("state") if isinstance(state, dict) else None) or state or {}
+        if not quest:
+            return ToolResult(ok=False, text=f"Nothing was written: quest {quest_id} could not be "
+                                             f"read, so its current outcomes are unknown.")
+        current = [o for o in (quest.get("measurable_outcomes") or quest.get("measurableOutcomes")
+                               or []) if isinstance(o, dict)]
+        if any(str(o.get("text") or "").strip().lower() == text.lower() for o in current):
+            return ToolResult(ok=True, text=f"Not added: quest {quest_id} already has the "
+                                            f"measurable outcome {text!r}.")
+        item: Dict[str, Any] = {"text": text, "completed": False}
+        for key in ("target_value", "target_unit", "start_value"):
+            if args.get(key) not in (None, ""):
+                item[key] = args[key]
+        result = client.edit_quest_field(quest_id, {"measurable_outcomes": current + [item]},
+                                         actor="ai",
+                                         user_requested=bool(args.get("user_asked_for_this_field")))
+        if not result:
+            return ToolResult(ok=False, text=f"Nothing was written: adding the measurable outcome "
+                                             f"to quest {quest_id} failed.")
+        if isinstance(result, dict) and result.get("applied") is False:
+            return ToolResult(ok=True, data=result,
+                              text=_not_applied_text("measurable_outcomes", quest_id, result))
+        return ToolResult(ok=True, data=result,
+                          text=f"Added the measurable outcome {text!r} to quest {quest_id}.")
+
+    return ToolSpec(
+        name="add_quest_measurable_outcome",
+        handler=handler,
+        description=_with_standard(
+            "Add one measurable outcome to a quest's checklist, leaving the existing items as "
+            "they are.", "measurable_outcomes"),
+        when_to_use=("The user asked to add a measurable outcome (a success metric) to their "
+                     "quest, or the quest is being specified for the first time. " + _NEVER_CODE),
+        when_not_to_use=("A new goal or task: give THAT goal its own criteria instead. Rewording "
+                         "or deleting existing outcomes. " + _SUGGEST_INSTEAD),
+        parameters={
+            "type": "object",
+            "required": ["text"],
+            "properties": {
+                "quest_id": _QUEST_ID_PARAM,
+                "text": {"type": "string",
+                         "description": "The outcome, one countable metric with its target."},
+                "target_value": {"type": "number", "description": "The target number, e.g. 1000."},
+                "target_unit": {"type": "string", "description": "Its unit, e.g. 'subscribers'."},
+                "start_value": {"type": "number", "description": "Baseline, when known."},
+                "user_asked_for_this_field": _ASKED_PARAM,
+            },
+        },
+        mutates=True,
+        origin="standard",
+        keywords=("quest", "measurable", "outcome", "metric", "success", "target", "kpi", "add"),
+        context_args={"quest_id": "quest_id"},
+        timeout_seconds=45.0,
+    )
+
+
+def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    """Create one Goal on a quest's plan, scoped to a day, week, month, quarter or year."""
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = _quest_id(args, ctx)
+        title = str(args.get("title") or "").strip()
+        period = str(args.get("period") or "").strip()
+        if not quest_id or not title or not period:
+            return ToolResult(ok=False, text="A goal needs a quest, a title and a period; nothing "
+                                             "was created.")
+        if not args.get("user_asked_for_this_field"):
+            return ToolResult(ok=False, text=(f"Not created: the user did not ask for the goal "
+                                              f"{title!r}. Suggest it in your reply instead."))
+        kwargs = {k: args[k] for k in ("description", "criteria", "target_value", "target_unit",
+                                       "parent_goal_id") if args.get(k) not in (None, "")}
+        try:
+            goal = factory().create_goal(title, period=period, quest_id=quest_id, **kwargs)
+        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
+            return ToolResult(ok=False, text=f"Nothing was created: {e}")
+        if not goal:
+            return ToolResult(ok=False, text=f"Nothing was created: the goal {title!r} was refused.")
+        return ToolResult(ok=True, data=goal,
+                          text=f"Created the {period} goal {title!r} on quest {quest_id}.")
+
+    return ToolSpec(
+        name="create_quest_goal",
+        handler=handler,
+        description=_with_standard(
+            "Create one goal on a quest's plan for one period (day, week, month, quarter or "
+            "year). Follow the nuance for the goal's period.", "goal"),
+        when_to_use=("The user asked to add a goal (or a day's, week's, month's, quarter's or "
+                     "year's goal) to their quest. " + _NEVER_CODE),
+        when_not_to_use=("Background AI work for later (that is a task, not a goal). A goal the "
+                         "user did not ask for: suggest it instead. Changing the quest's own "
+                         "fields or measurable outcomes."),
+        parameters={
+            "type": "object",
+            "required": ["title", "period"],
+            "properties": {
+                "quest_id": _QUEST_ID_PARAM,
+                "title": {"type": "string", "description": "Verb-first goal title."},
+                "period": {"type": "string",
+                           "description": ("The goal's period: YYYY-MM-DD (day), YYYY_W## (week), "
+                                           "YYYY_MM (month), YYYY_Q# (quarter) or YYYY (year).")},
+                "description": {"type": "string", "description": "Optional detail."},
+                "criteria": {"type": "string",
+                             "description": "How anyone can check it is done at period end."},
+                "target_value": {"type": "number", "description": "Target number, when it has one."},
+                "target_unit": {"type": "string", "description": "Unit of the target."},
+                "parent_goal_id": {"type": "string",
+                                   "description": "The longer-period goal this one serves."},
+                "user_asked_for_this_field": _ASKED_PARAM,
+            },
+        },
+        mutates=True,
+        origin="standard",
+        keywords=("goal", "plan", "day", "week", "month", "quarter", "year", "add", "create",
+                  "today", "this week"),
+        context_args={"quest_id": "quest_id"},
+        timeout_seconds=45.0,
+    )
+
+
+def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    """Add one strategy to a quest through ``POST /api/quests/{id}/strategies/add`` as the AI."""
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = _quest_id(args, ctx)
+        title = str(args.get("title") or "").strip()
+        if not quest_id or not title:
+            return ToolResult(ok=False, text="A strategy needs a quest and a title; nothing was "
+                                             "added.")
+        result = factory().add_quest_strategy(
+            quest_id, title, str(args.get("description") or "").strip(),
+            actor="ai", user_requested=bool(args.get("user_asked_for_this_field")))
+        if not result:
+            return ToolResult(ok=False, text=f"Nothing was added: the strategy {title!r} on quest "
+                                             f"{quest_id} failed.")
+        if isinstance(result, dict) and result.get("applied") is False:
+            return ToolResult(ok=True, data=result,
+                              text=_not_applied_text(f"the strategy {title!r}", quest_id, result))
+        return ToolResult(ok=True, data=result,
+                          text=f"Added the strategy {title!r} to quest {quest_id}.")
+
+    return ToolSpec(
+        name="add_quest_strategy",
+        handler=handler,
+        description=_with_standard("Add one strategy (an approach) to a quest.", "strategy"),
+        when_to_use="The user asked to add a strategy or approach to their quest. " + _NEVER_CODE,
+        when_not_to_use=("A single goal or task (use create_quest_goal). A strategy the user did "
+                         "not ask for: suggest it instead."),
+        parameters={
+            "type": "object",
+            "required": ["title"],
+            "properties": {
+                "quest_id": _QUEST_ID_PARAM,
+                "title": {"type": "string", "description": "3 to 8 words naming the approach."},
+                "description": {"type": "string",
+                                "description": "What it is, why it fits this person, what it "
+                                               "implies each week."},
+                "user_asked_for_this_field": _ASKED_PARAM,
+            },
+        },
+        mutates=True,
+        origin="standard",
+        keywords=("strategy", "approach", "method", "quest", "add"),
+        context_args={"quest_id": "quest_id"},
+        timeout_seconds=45.0,
+    )
+
+
+def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    """Create one habit under a quest strategy through ``POST /api/planning/habits``."""
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = _quest_id(args, ctx)
+        name = str(args.get("name") or "").strip()
+        if not quest_id or not name:
+            return ToolResult(ok=False, text="A habit needs a quest and a name; nothing was "
+                                             "created.")
+        if not args.get("user_asked_for_this_field"):
+            return ToolResult(ok=False, text=(f"Not created: the user did not ask for the habit "
+                                              f"{name!r}. Suggest it in your reply instead."))
+        client = factory()
+        strategy_id = str(args.get("strategy_id") or "").strip()
+        if not strategy_id:
+            state = client.get_my_quest(quest_id)
+            quest = (state.get("state") if isinstance(state, dict) else None) or state or {}
+            strategies = [s for s in (quest.get("strategies") or []) if isinstance(s, dict)]
+            accepted = [s for s in strategies if s.get("accepted")] or strategies
+            strategy_id = str((accepted[0] if accepted else {}).get("id") or "")
+        if not strategy_id:
+            return ToolResult(ok=False, text=(f"Nothing was created: quest {quest_id} has no "
+                                              f"strategy to put the habit under. Add a strategy "
+                                              f"first (add_quest_strategy)."))
+        fields = {k: args[k] for k in ("description", "days", "time", "duration", "start_date",
+                                       "linked_goal_id") if args.get(k) not in (None, "", [])}
+        try:
+            habit = client.create_habit(quest_id, strategy_id, name,
+                                        frequency=str(args.get("frequency") or "daily"), **fields)
+        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
+            return ToolResult(ok=False, text=f"Nothing was created: {e}")
+        if not habit:
+            return ToolResult(ok=False, text=f"Nothing was created: the habit {name!r} was refused.")
+        return ToolResult(ok=True, data=habit, text=f"Created the habit {name!r} on quest {quest_id}.")
+
+    return ToolSpec(
+        name="create_quest_habit",
+        handler=handler,
+        description=_with_standard("Create one recurring habit on a quest, under one of its "
+                                   "strategies.", "habit"),
+        when_to_use="The user asked to add a habit or routine to their quest. " + _NEVER_CODE,
+        when_not_to_use=("Logging that a habit was done today (that is a habit entry, not a new "
+                         "habit). A one-off action (use create_quest_goal). A habit the user did "
+                         "not ask for: suggest it instead."),
+        parameters={
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+                "quest_id": _QUEST_ID_PARAM,
+                "name": {"type": "string", "description": "Verb-first name with the minimum dose."},
+                "frequency": {"type": "string",
+                              "enum": ["daily", "weekly", "monthly", "quarterly", "yearly"],
+                              "description": "How often (default daily)."},
+                "days": {"type": "array", "items": {"type": "string"},
+                         "description": "For weekly: day names like ['Mon','Wed','Fri']."},
+                "time": {"type": "string", "description": "Time of day, HH:MM."},
+                "duration": {"type": "integer", "description": "Minutes per session."},
+                "description": {"type": "string", "description": "Optional detail."},
+                "strategy_id": {"type": "string",
+                                "description": "Strategy it serves (defaults to the quest's first "
+                                               "accepted strategy)."},
+                "linked_goal_id": {"type": "string",
+                                   "description": "Goal its entries count toward."},
+                "start_date": {"type": "string", "description": "YYYY-MM-DD (default today)."},
+                "user_asked_for_this_field": _ASKED_PARAM,
+            },
+        },
+        mutates=True,
+        origin="standard",
+        keywords=("habit", "routine", "recurring", "daily", "weekly", "quest", "add", "create"),
+        context_args={"quest_id": "quest_id"},
+        timeout_seconds=45.0,
+    )
+
+
+def _with_credentials(build: Callable[[Mapping[str, str]], ToolSpec]):
+    return lambda env: build(env) if quest_credentials_present(env) else None
+
+
 STANDARD_TOOL_BUILDERS: Dict[str, Callable[[Mapping[str, str]], Optional[ToolSpec]]] = {
-    "send_quest_email": lambda env: send_quest_email_spec(env) if quest_credentials_present(env) else None,
-    "update_quest_fields": lambda env: (update_quest_fields_spec(env)
-                                        if quest_credentials_present(env) else None),
-    "file_email_draft": lambda env: (file_email_draft_spec(env)
-                                     if quest_credentials_present(env) else None),
+    "send_quest_email": _with_credentials(send_quest_email_spec),
+    "file_email_draft": _with_credentials(file_email_draft_spec),
+    **{tool: _with_credentials(lambda env, f=field_name: quest_field_tool_spec(f, env))
+       for field_name, tool in QUEST_FIELD_TOOLS.items()},
+    "add_quest_measurable_outcome": _with_credentials(add_measurable_outcome_spec),
+    "create_quest_goal": _with_credentials(create_quest_goal_spec),
+    "add_quest_strategy": _with_credentials(add_quest_strategy_spec),
+    "create_quest_habit": _with_credentials(create_quest_habit_spec),
 }
+
+#: Every standard tool that writes quest data, for guards and briefs that must name them.
+QUEST_DATA_TOOLS: Tuple[str, ...] = (*QUEST_FIELD_TOOLS.values(), "add_quest_measurable_outcome",
+                                     "create_quest_goal", "add_quest_strategy",
+                                     "create_quest_habit")
 
 
 # ---------------------------------------------------------------------------------------------

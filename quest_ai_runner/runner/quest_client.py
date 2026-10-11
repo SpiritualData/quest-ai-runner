@@ -1569,6 +1569,41 @@ class QuestClient:
             log.warning("list_my_quests failed: %s", e)
             return []
 
+    def add_quest_strategy(self, quest_id: str, title: str, description: str = "", *,
+                           actor: str = "ai", user_requested: bool = False) -> Dict[str, Any]:
+        """POST /api/quests/{quest_id}/strategies/add -- add one strategy to a quest.
+
+        ``actor``/``user_requested`` mean exactly what they mean on ``edit_quest_field``: a backend
+        that gates AI strategy writes answers 202 ``{"applied": False, "reason": ...}`` instead of
+        adding it, which is returned as-is so the caller can report it honestly. Returns {} on
+        failure rather than raising.
+        """
+        try:
+            return self._request(
+                "POST", f"/api/quests/{quest_id}/strategies/add",
+                body={"title": title, "description": description or "",
+                      "actor": actor, "userRequested": bool(user_requested)}) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("add_quest_strategy failed for quest %s: %s", quest_id, e)
+            return {}
+
+    def create_habit(self, quest_id: str, strategy_id: str, name: str, *,
+                     frequency: str = "daily", start_date: Optional[str] = None,
+                     **fields: Any) -> Dict[str, Any]:
+        """POST /api/planning/habits -- create one habit under a quest strategy.
+
+        ``fields`` passes the endpoint's optional keys through in snake_case (``description``,
+        ``days``, ``time``, ``duration``, ``linked_goal_id`` ...); ``start_date`` defaults to today.
+        Raises ``QuestApiError``/``QuestNotConfigured`` like ``create_goal``: a caller that says
+        "habit added" must know it was.
+        """
+        from datetime import date
+        body: Dict[str, Any] = {"quest_id": quest_id, "strategy_id": strategy_id, "name": name,
+                                "frequency": frequency,
+                                "start_date": start_date or date.today().isoformat()}
+        body.update({k: v for k, v in fields.items() if v is not None})
+        return self._request("POST", "/api/planning/habits", body=body) or {}
+
     def get_my_quest(self, quest_id: str) -> Dict[str, Any]:
         """GET /api/quests/{quest_id}/state — fetch one account-wide quest's full state.
 

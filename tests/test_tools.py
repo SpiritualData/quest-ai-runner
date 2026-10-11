@@ -20,6 +20,7 @@ from quest_ai_runner.core.orchestrator import (
     normalize_decision,
 )
 from quest_ai_runner.core.tools import (
+    QUEST_DATA_TOOLS,
     SHOW_ALL_AT_OR_BELOW,
     ToolContext,
     ToolRegistry,
@@ -30,6 +31,10 @@ from quest_ai_runner.core.tools import (
     file_email_draft_spec,
     send_quest_email_spec,
 )
+
+# The standard catalog with Quest credentials: the two mail tools plus one quest-data tool per
+# field, goal, strategy and habit (core/tools.py QUEST_DATA_TOOLS).
+STANDARD_WITH_QUEST = sorted(["file_email_draft", "send_quest_email", *QUEST_DATA_TOOLS])
 
 
 def make_spec(name, *, handler=None, mutates=True, keywords=(), description=None, **kw):
@@ -198,8 +203,7 @@ def test_quest_client_posts_the_draft_to_the_email_drafts_route():
 def test_build_registry_standard_tool_needs_quest_credentials():
     assert build_tool_registry({}).names() == []
     env = {"QUEST_BASE_URL": "https://api.example.org", "QUEST_API_KEY": "qsk_x"}
-    assert sorted(build_tool_registry(env).names()) == ["file_email_draft", "send_quest_email",
-                                                         "update_quest_fields"]
+    assert sorted(build_tool_registry(env).names()) == STANDARD_WITH_QUEST
     assert build_tool_registry({**env, "QAR_STANDARD_TOOLS": "0"}).names() == []
 
 
@@ -238,8 +242,7 @@ def test_toml_custom_command_tool_and_standard_override(tmp_path):
     env = {"QUEST_BASE_URL": "https://api.example.org", "QUEST_API_KEY": "qsk_x",
            "QAR_TOOLS_FILE": str(toml)}
     reg = build_tool_registry(env)
-    assert sorted(reg.names()) == ["file_email_draft", "queue_email_for_review",
-                                   "send_quest_email", "update_quest_fields"]
+    assert sorted(reg.names()) == sorted(STANDARD_WITH_QUEST + ["queue_email_for_review"])
     std = reg.get("send_quest_email")
     assert std.defaults == {"quest_id": "quest_default"}
     assert "default quest" in std.when_to_use
@@ -465,8 +468,7 @@ def test_build_orchestrator_wires_tools_from_config_credentials(monkeypatch):
     monkeypatch.delenv("QUEST_API_URL", raising=False)
     monkeypatch.delenv("QUEST_API_KEY", raising=False)
     cfg = RunnerConfig(quest_base_url="https://api.example.org", quest_api_key="qsk_test")
-    assert sorted(resolve_tool_registry(cfg).names()) == ["file_email_draft", "send_quest_email",
-                                                          "update_quest_fields"]
+    assert sorted(resolve_tool_registry(cfg).names()) == STANDARD_WITH_QUEST
     # a registry wired in code wins, including an empty one (= no tools)
     cfg.tool_registry = ToolRegistry()
     assert resolve_tool_registry(cfg).names() == []
