@@ -291,3 +291,20 @@ def test_write_routes_a_handoff_to_the_rep_as_an_autopilot_decision():
     assert handoff["outcome"] == "proposed"
     put = [c for c in client.calls if c[0] == "request" and c[2].endswith("/ai-handling")][0]
     assert put[1] == "PUT" and put[3] == {"handling": "rep", "decidedBy": "rep"}
+
+
+def test_a_refused_ask_write_is_reported_and_the_run_continues():
+    class RefusingClient(FakeClient):
+        def patch_ask(self, item_key, fields):
+            raise RuntimeError("405 Method Not Allowed")
+
+    goals = [goal("wk_u2", "week", THIS_WEEK, owner="u2")]
+    asks = [
+        {"key": "bad", "kind": "unknown", "state": "open", "text": "x"},
+        {"key": "ok", "kind": "request", "state": "open", "assignee_id": "u2", "text": "Do it", "author": "Zee"},
+    ]
+    client = RefusingClient(goals, asks)
+    actions = reconcile_quest(client, "q1", TODAY, write=True,
+                              classify=lambda a, r: {"kind": "question", "confidence": 0.9}, roster=ROSTER)
+    assert [a["kind"] for a in actions if a.get("ask_key") == "bad"] == ["failed"]
+    assert any(a["kind"] in ("create", "failed") and a.get("ask_key") == "ok" for a in actions)

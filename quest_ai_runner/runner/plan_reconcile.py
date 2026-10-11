@@ -248,11 +248,16 @@ def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
         for d in decisions:
             if write:
                 fields = {"kind": d["ask_kind"], "assignee_id": d["assignee_id"] or ""}
-                client.patch_ask(d["ask_key"], fields)
+                try:
+                    client.patch_ask(d["ask_key"], fields)
+                except Exception as exc:  # noqa: BLE001 -- one refused write must not stop the nightly run
+                    d.update(kind="failed", reason=f"ask write refused: {str(exc)[:200]}")
+                    actions.append(d)
+                    continue
             for ask in asks:
                 if ask_key(ask) == d["ask_key"]:
                     ask["kind"], ask["assignee_id"] = d["ask_kind"], d["assignee_id"]
-        actions.extend(decisions)
+            actions.append(d)
 
     actions.extend(plan_actions(goals, asks, today))
     if judge_goal is not None:
