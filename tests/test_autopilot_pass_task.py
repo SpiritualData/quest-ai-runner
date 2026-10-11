@@ -146,13 +146,13 @@ def test_an_open_pass_task_is_the_liveness_test_for_the_whole_series(status):
     )
     _poller(client)._ensure_autopilot_pass()
     assert client.created == []
-    # The team-wide read (legacy team pass), then for the opted-in quest its quest-scoped read
-    # plus this account's own unfiltered read (the quest-scoped one hides a series' queued
-    # occurrence once the series has run; see Poller._open_quest_pass_occurrences).
+    # ONE owner-scoped read for the whole scan (the legacy team-wide view and the owned half of
+    # every opted-in quest's liveness check), then the opted-in quest's quest-scoped read (the
+    # quest-scoped one hides a series' queued occurrence once the series has run; see
+    # Poller._open_quest_pass_occurrences). The owner read is never repeated per quest.
     assert client.list_tasks_calls == [
-        {"team_id": "team1", "goal_id": None, "task_kind": "autopilot"},
-        {"team_id": None, "goal_id": "q1", "task_kind": "autopilot"},
         {"team_id": "", "goal_id": None, "task_kind": "autopilot"},
+        {"team_id": None, "goal_id": "q1", "task_kind": "autopilot"},
     ]
     assert client.state_reads == ["q1"]       # the schedule snapshot still reads every quest once
 
@@ -489,34 +489,51 @@ def test_a_single_team_lane_lists_quests_exactly_as_before():
     assert snapshot["q1"]["team_id"] == "team1"
 
 
-def test_one_teams_failed_pass_listing_voids_the_whole_merged_read():
+def test_a_failed_owner_listing_voids_the_whole_answer():
     """A failed read is not an empty one (incident, 2026-09-17).
 
-    The merged team-wide listing drives RETIREMENT. A partial list read as complete would retire
-    a live series that merely sat on the team whose read failed. So any failure makes the whole
-    answer ``None``, the sweep declines to retire anything, and the lane retries next scan.
+    The owner-scoped listing drives RETIREMENT. A partial list read as complete would retire a
+    live series. So a failure makes the whole answer ``None``, and the scan retires and creates
+    nothing until the next scan gets a real one.
     """
     client = MultiTeamPassClient(
         quests_by_team={"team1": [{"quest_id": "q1"}], "team2": [{"quest_id": "q2"}]},
         autopilot_by_quest={"q1": {"mode": "act"}, "q2": {"mode": "act"}},
-        fail_list_for_teams=["team2"],
+        fail_list_for_teams=[""],
     )
     poller = _poller(client, team_ids=["team1", "team2"])
-    assert poller._list_legacy_pass_tasks() is None
+    assert poller._list_owned_pass_tasks() is None
 
 
-def test_a_failed_team_read_does_not_stop_the_other_teams_quests_getting_a_pass(caplog):
-    """The ``None`` is about RETIRING, not about creating: each quest's own liveness read is
-    per-quest and unaffected, so the teams that answered still converge this scan."""
+def test_a_failed_owner_listing_stops_the_scan_creating_for_any_team(caplog):
+    """The one read is shared by every team, so its failure stops creation for every team."""
     client = MultiTeamPassClient(
         quests_by_team={"team1": [{"quest_id": "q1"}], "team2": [{"quest_id": "q2"}]},
         autopilot_by_quest={"q1": {"mode": "act"}, "q2": {"mode": "act"}},
-        fail_list_for_teams=["team2"],
+        fail_list_for_teams=[""],
     )
     with caplog.at_level("WARNING"):
         _poller(client, team_ids=["team1", "team2"])._ensure_autopilot_pass()
-    assert {c["goal_id"] for c in client.created} == {"q1", "q2"}
-    assert "not retiring anything" in caplog.text
+    assert client.created == []
+    assert "not creating or retiring anything" in caplog.text
+
+
+def test_every_team_is_served_by_one_owner_scoped_read_per_scan():
+    """Regression pin for the 2026-10-11 rate-limit incident.
+
+    The backend caps UNFILTERED task-list reads at 10 a minute per user. An unfiltered read is one
+    with no ``goal_id`` and no ``status``. The scan used to make one per team plus one per opted-in
+    quest, which hit that cap on every 60-second scan. It must make exactly one unfiltered read
+    however many teams and quests the lane serves, and both teams' quests still get a pass."""
+    client = MultiTeamPassClient(
+        quests_by_team={"team1": [{"quest_id": "q1"}, {"quest_id": "q3"}],
+                        "team2": [{"quest_id": "q2"}, {"quest_id": "q4"}]},
+        autopilot_by_quest={q: {"mode": "act"} for q in ("q1", "q2", "q3", "q4")},
+    )
+    _poller(client, team_ids=["team1", "team2"])._ensure_autopilot_pass()
+    unfiltered = [c for c in client.list_tasks_calls if c["goal_id"] is None]
+    assert len(unfiltered) == 1
+    assert {c["goal_id"] for c in client.created} == {"q1", "q2", "q3", "q4"}
 
 
 # --- a pending "Run now" is served ONCE (2026-09-21 incident) --------------------------------------
