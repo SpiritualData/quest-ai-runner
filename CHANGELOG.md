@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- `QAR_CLI_HAIKU_THINKING_TOKENS` (claude_cli backend): caps extended thinking on every Haiku completion (answers, card work, the fast and balanced tiers). Sonnet and Opus are unaffected, and an explicit plan() cap still wins. Unset leaves the CLI default.
+
 ### Added
 - `DecisionsSource` (`runner/context_updates.py`, source name `decisions`, in the default always-on set): a
   quest's open asks are offered on every look, and an ask resolved since the last look is offered once with the

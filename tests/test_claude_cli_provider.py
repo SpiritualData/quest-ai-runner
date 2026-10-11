@@ -471,3 +471,48 @@ def test_no_plan_thinking_cap_leaves_the_cli_default(monkeypatch):
     plan_env, answer_env = _envs_for_plan_and_answer(monkeypatch)
     assert "MAX_THINKING_TOKENS" not in plan_env
     assert "MAX_THINKING_TOKENS" not in answer_env
+
+
+def _captured_thinking_env(monkeypatch, model, *, thinking_tokens=None):
+    """Run _invoke once with subprocess stubbed; return the MAX_THINKING_TOKENS the CLI would get."""
+    import json
+    import subprocess as subprocess_module
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs.get("env", {})
+
+        class P:
+            returncode = 0
+            stdout = json.dumps({"result": "ok", "usage": {"input_tokens": 1, "output_tokens": 1}}).encode()
+            stderr = b""
+        return P()
+
+    monkeypatch.setattr(ccp, "_supported_flags", lambda binary: frozenset(ccp._ONE_SHOT_FLAGS.keys()))
+    monkeypatch.setattr(subprocess_module, "run", fake_run)
+    ClaudeCliProvider()._invoke("hi", model=model, thinking_tokens=thinking_tokens)
+    return captured["env"].get("MAX_THINKING_TOKENS")
+
+
+def test_haiku_completions_take_the_haiku_thinking_cap(monkeypatch):
+    """QAR_CLI_HAIKU_THINKING_TOKENS caps thinking on every Haiku completion (fast and balanced tiers)."""
+    monkeypatch.setenv("QAR_CLI_HAIKU_THINKING_TOKENS", "0")
+    assert _captured_thinking_env(monkeypatch, "haiku") == "0"
+    assert _captured_thinking_env(monkeypatch, "claude-haiku-5-5") == "0"
+
+
+def test_sonnet_and_opus_are_never_capped_by_the_haiku_setting(monkeypatch):
+    monkeypatch.setenv("QAR_CLI_HAIKU_THINKING_TOKENS", "0")
+    assert _captured_thinking_env(monkeypatch, "sonnet") is None
+    assert _captured_thinking_env(monkeypatch, "opus") is None
+
+
+def test_explicit_plan_cap_wins_over_the_haiku_setting(monkeypatch):
+    monkeypatch.setenv("QAR_CLI_HAIKU_THINKING_TOKENS", "0")
+    assert _captured_thinking_env(monkeypatch, "haiku", thinking_tokens=512) == "512"
+
+
+def test_unset_haiku_setting_leaves_the_cli_default(monkeypatch):
+    monkeypatch.delenv("QAR_CLI_HAIKU_THINKING_TOKENS", raising=False)
+    assert _captured_thinking_env(monkeypatch, "haiku") is None

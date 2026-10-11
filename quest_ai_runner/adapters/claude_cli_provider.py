@@ -213,6 +213,12 @@ CLI_RUNNABLE_MODELS = ["claude-opus", "claude-sonnet", "claude-haiku"]
 _FALLBACK_CLAUDE_LOCATIONS = ("~/.local/bin/claude", "~/.claude/local/claude")
 
 
+def _haiku_thinking_tokens() -> Optional[int]:
+    """Thinking cap for Haiku completions, from QAR_CLI_HAIKU_THINKING_TOKENS (None = CLI default)."""
+    raw = (os.getenv("QAR_CLI_HAIKU_THINKING_TOKENS") or "").strip()
+    return int(raw) if raw.isdigit() else None
+
+
 def cli_model(model: Optional[str]) -> Optional[str]:
     """Map a resolved model id to a CLI-acceptable model arg.
 
@@ -484,6 +490,10 @@ class ClaudeCliProvider(ModelProviderBase):
         cli_m = cli_model(model)
         if cli_m:
             cmd += ["--model", cli_m]
+        # Haiku completions (the fast and balanced tiers) take the Haiku thinking cap unless the
+        # caller set one (plan() does). Sonnet and Opus are never capped here.
+        if thinking_tokens is None and cli_m and "haiku" in cli_m.lower():
+            thinking_tokens = _haiku_thinking_tokens()
         # REPLACE the agent's system prompt rather than appending to it (see _ONE_SHOT_FLAGS).
         # Always passed, because --exclude-dynamic-system-prompt-sections is only honoured
         # alongside it, and because an absent system prompt would otherwise restore the agent's.
