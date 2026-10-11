@@ -1653,8 +1653,9 @@ def main(argv=None) -> int:
         client = QuestClient(base_url, api_key)
         today = date.fromisoformat(args.today) if args.today else date.today()
         classify = _ask_classifier(args.quest_id, client)
-        # AI handoff stays OFF until a human decides the default preference (decision teamdec_f67ecb57050d).
-        judge_goal = _goal_judge(args.quest_id, client) if os.getenv("QAR_RECONCILE_HANDOFF") == "1" else None
+        # AI handoff is on by default; QAR_RECONCILE_HANDOFF=0 turns it off. The assignee's own AI-rep
+        # preference still decides what a handoff becomes (auto, ask or never).
+        judge_goal = _goal_judge(args.quest_id, client) if os.getenv("QAR_RECONCILE_HANDOFF", "1") != "0" else None
         try:
             actions = reconcile_quest(client, args.quest_id, today, write=args.write, classify=classify,
                                       judge_goal=judge_goal)
