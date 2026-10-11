@@ -473,6 +473,67 @@ def _apply_channel_env(cfg: RunnerConfig) -> None:
         cfg.channel_state_path = os.environ["QAR_CHANNEL_STATE_PATH"]
 
 
+ASK_CLASSIFY_SYSTEM = (
+    "You sort one open note or request from a team's project quest. Reply with one JSON object only: "
+    '{"kind": "request" | "standing" | "context" | "question" | "unknown", "assignee_id": string or null, '
+    '"confidence": number from 0 to 1, "reason": one short sentence}. '
+    "Use kind request only when someone must do one specific thing that is finished once; set assignee_id "
+    "to the single member of the roster whose listed goals show that work is theirs. Use null when the work "
+    "belongs to no single member, and use unknown when you cannot tell. A note that only reports, thanks, or "
+    "gives feedback is context. Never invent a member id. Do not use em dashes."
+)
+
+
+def _ask_classifier(quest_id: str, client):
+    """The model that sorts open asks for ``reconcile-plan``, or None when no model is configured.
+
+    Returns None rather than failing, so reconcile still runs its plain planning without a model. The model
+    sees only the note, the quest's members, and each member's current goal names as evidence of their work.
+    """
+    try:
+        from .config import build_orchestrator
+        from .core.card_filter import _extract_json
+        from .core.model_registry import ModelRegistry
+        cfg = _config_from_env()
+        build_orchestrator(cfg)
+        provider = cfg.model_provider
+        if provider is None:
+            return None
+        model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
+    except Exception as e:  # noqa: BLE001 -- reconcile must still run without the model
+        log.warning("ask classification unavailable, asks stay unclassified: %s", e)
+        return None
+
+    goal_names: Dict[str, List[str]] = {}
+    try:
+        for pg in client.list_quest_goals(quest_id).get("period_groups", []):
+            for g in pg.get("goals", []):
+                if g.get("assigned_to_user_id") and not g.get("completed"):
+                    names = goal_names.setdefault(g["assigned_to_user_id"], [])
+                    if len(names) < 8:
+                        names.append(g.get("name", ""))
+    except Exception as e:  # noqa: BLE001 -- evidence is optional
+        log.warning("could not read member goals for ask classification: %s", e)
+
+    def classify(ask, roster):
+        members = [{"user_id": m.get("user_id"), "name": m.get("name"),
+                    "current_goals": goal_names.get(str(m.get("user_id")), [])} for m in roster]
+        prompt = json.dumps({"note": ask.get("text", ""), "author": ask.get("author", ""),
+                             "members": members}, ensure_ascii=False)
+        try:
+            raw = provider.answer([{"role": "user", "content": prompt}], model=model, system=ASK_CLASSIFY_SYSTEM)
+            return json.loads(_extract_json(raw))
+        except Exception as e:  # noqa: BLE001 -- one bad answer leaves that ask unclassified
+            log.warning("ask %s not classified: %s", ask_key_of(ask), e)
+            return None
+
+    return classify
+
+
+def ask_key_of(ask) -> str:
+    return str(ask.get("key") or ask.get("id") or "")
+
+
 def float_or_none(raw: Optional[str]) -> Optional[float]:
     """Parse an env var as a float, or None if unset/blank/unparseable.
 
@@ -1552,8 +1613,9 @@ def main(argv=None) -> int:
             return 1
         client = QuestClient(base_url, api_key)
         today = date.fromisoformat(args.today) if args.today else date.today()
+        classify = _ask_classifier(args.quest_id, client)
         try:
-            actions = reconcile_quest(client, args.quest_id, today, write=args.write)
+            actions = reconcile_quest(client, args.quest_id, today, write=args.write, classify=classify)
         except (QuestApiError, QuestNotConfigured) as e:
             log.error(f"reconcile-plan failed: {e}")
             return 1

@@ -2,9 +2,12 @@
 import datetime as dt
 
 from quest_ai_runner.runner.plan_reconcile import (
+    ask_key,
+    classify_asks,
     iso_week_key,
     plan_actions,
     reconcile_quest,
+    validate_decision,
 )
 
 TODAY = dt.date(2026, 10, 14)  # a Wednesday in ISO week 2026_W42
@@ -92,7 +95,7 @@ def test_ask_without_a_current_week_goal_is_skipped_not_guessed():
     goals = [goal("wk_other", "week", THIS_WEEK, owner="u9")]
     asks = [{"id": "ask1", "kind": "request", "state": "open", "assignee_id": "u2", "text": "x"}]
     actions = plan_actions(goals, asks, TODAY)
-    assert actions == [{"kind": "skip", "ask_id": "ask1", "reason": "no current week goal for assignee"}]
+    assert actions == [{"kind": "skip", "ask_key": "ask1", "reason": "no current week goal for assignee"}]
 
 
 class FakeClient:
@@ -112,7 +115,15 @@ class FakeClient:
 
     def create_goal(self, title, **kwargs):
         self.calls.append(("create", title, kwargs))
+        new = {"id": "new", "time_scope": "day", "period": kwargs["period"], "completed": False,
+               "assigned_to_user_id": kwargs.get("assigned_to_user_id"),
+               "scheduled_date": kwargs["period"], "name": title}
+        self.payload["period_groups"][0]["goals"].append(new)
         return {"id": "new"}
+
+    def patch_ask(self, item_key, fields):
+        self.calls.append(("patch_ask", item_key, fields))
+        return {}
 
     def _request(self, method, path, body=None):
         self.calls.append(("request", method, path, body))
@@ -140,3 +151,95 @@ def test_write_applies_roll_with_note_and_reparent_and_creates_assigned_goal():
     create = client.calls[2]
     assert create[2]["assigned_to_user_id"] == "u1"
     assert create[2]["parent_goal_id"] == "wk"
+
+
+ROSTER = [{"user_id": "u1", "name": "Ann"}, {"user_id": "u2", "name": "Bo"}]
+
+
+def test_ask_key_reads_the_key_the_asks_api_returns():
+    assert ask_key({"key": "k-1", "text": "x"}) == "k-1"
+    assert ask_key({"id": "legacy-1"}) == "legacy-1"
+
+
+def test_valid_request_decision_is_accepted_with_its_assignee():
+    raw = {"kind": "request", "assignee_id": "u2", "confidence": 0.93, "reason": "Bo owns it"}
+    decision = validate_decision(raw, {"u1", "u2"})
+    assert decision["kind"] == "request" and decision["assignee_id"] == "u2"
+
+
+def test_request_below_the_confidence_bar_is_rejected():
+    raw = {"kind": "request", "assignee_id": "u2", "confidence": 0.5}
+    assert validate_decision(raw, {"u1", "u2"}) is None
+
+
+def test_request_naming_a_non_member_is_rejected():
+    raw = {"kind": "request", "assignee_id": "stranger", "confidence": 0.99}
+    assert validate_decision(raw, {"u1", "u2"}) is None
+
+
+def test_non_request_kind_drops_any_assignee():
+    raw = {"kind": "context", "assignee_id": "u2", "confidence": 0.4}
+    assert validate_decision(raw, {"u1", "u2"}) == {"kind": "context", "assignee_id": None,
+                                                    "confidence": 0.4, "reason": ""}
+
+
+def test_unknown_or_malformed_answers_are_rejected():
+    assert validate_decision({"kind": "maybe", "confidence": 1}, {"u1"}) is None
+    assert validate_decision({"kind": "request", "assignee_id": "u1", "confidence": "high"}, {"u1"}) is None
+    assert validate_decision(None, {"u1"}) is None
+
+
+def test_only_unclassified_open_asks_are_sent_to_the_model():
+    asks = [
+        {"key": "a1", "kind": "unknown", "state": "open", "text": "x"},
+        {"key": "a2", "kind": "request", "state": "open", "assignee_id": "u1", "text": "x"},
+        {"key": "a3", "kind": "unknown", "state": "done", "text": "x"},
+    ]
+    seen = []
+
+    def classify(ask, roster):
+        seen.append(ask["key"])
+        return {"kind": "context", "confidence": 0.9}
+
+    decisions = classify_asks(asks, ROSTER, classify)
+    assert seen == ["a1"]
+    assert [d["ask_key"] for d in decisions] == ["a1"]
+
+
+def test_write_applies_a_classified_request_and_creates_its_goal_in_the_same_run():
+    goals = [goal("wk_u2", "week", THIS_WEEK, owner="u2")]
+    asks = [{"key": "k9", "kind": "unknown", "state": "open", "text": "Send the links", "author": "Zee"}]
+    client = FakeClient(goals, asks)
+
+    def classify(ask, roster):
+        return {"kind": "request", "assignee_id": "u2", "confidence": 0.95, "reason": "Bo's work"}
+
+    reconcile_quest(client, "q1", TODAY, write=True, classify=classify, roster=ROSTER)
+    kinds = [c[0] for c in client.calls]
+    assert kinds == ["patch_ask", "create"]
+    assert client.calls[0][2] == {"kind": "request", "assignee_id": "u2"}
+    assert client.calls[1][2]["assigned_to_user_id"] == "u2"
+
+
+def test_dry_run_classifies_but_never_patches():
+    client = FakeClient([goal("wk", "week", THIS_WEEK)], [{"key": "k1", "kind": "unknown", "state": "open", "text": "x"}])
+    actions = reconcile_quest(client, "q1", TODAY, write=False,
+                              classify=lambda a, r: {"kind": "question", "confidence": 0.9}, roster=ROSTER)
+    assert [a["kind"] for a in actions] == ["classify"]
+    assert client.calls == []
+
+
+def test_a_goal_that_does_not_verify_is_reassigned_once_then_reported_failed():
+    class NoEcho(FakeClient):
+        def create_goal(self, title, **kwargs):
+            self.calls.append(("create", title, kwargs))
+            return {"id": "ghost"}  # never appears in the goal list
+
+    goals = [goal("wk_u2", "week", THIS_WEEK, owner="u2")]
+    asks = [{"key": "k1", "kind": "request", "state": "open", "assignee_id": "u2", "text": "x", "author": "Zee"}]
+    client = NoEcho(goals, asks)
+    actions = reconcile_quest(client, "q1", TODAY, write=True)
+    failed = [a for a in actions if a["kind"] == "failed"]
+    assert len(failed) == 1 and failed[0]["goal_id"] == "ghost"
+    reassigns = [c for c in client.calls if c[0] == "request" and c[2].endswith("/assign")]
+    assert len(reassigns) == 1

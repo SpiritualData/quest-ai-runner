@@ -2470,6 +2470,11 @@ class QuestClient:
             log.warning("list_asks failed for quest %s: %s", quest_id, e)
             return None
 
+    def patch_ask(self, item_key: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """PATCH /api/asks/{item_key} with ``kind`` and/or ``assignee_id`` (an empty string clears
+        the assignee). Raises ``QuestApiError`` on refusal; the caller decides whether to retry."""
+        return self._request("PATCH", f"/api/asks/{item_key}", body=fields) or {}
+
     # --- quest autopilot config -----------------------------------------------
 
     def get_quest_autopilot(self, quest_id: str) -> Dict[str, Any]:
