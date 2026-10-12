@@ -55,19 +55,30 @@ def test_judge_picks_a_member():
     assert c.handoffs == []
 
 
-def test_invalid_judged_id_is_dropped_to_shared():
+def test_invalid_judged_id_falls_back_to_the_quest_owner():
+    # A named stranger is a judge failure, not "I cannot tell": the goal must not go ownerless.
     c = AssignClient(quests=[_quest("q1", mode="act")], members=[ALICE, BOB])
     _create(c, _judge({"assignee": "u_stranger"}))
+    assert c.created_goals[0]["assigned_to_user_id"] == "u_alice"
+
+
+def test_explicit_null_from_the_judge_leaves_the_goal_ownerless_for_the_owner_to_be_asked():
+    c = AssignClient(quests=[_quest("q1", mode="act")], members=[ALICE, BOB])
+    _create(c, _judge({"assignee": None, "ai_can_do": False}))
     assert c.created_goals[0]["assigned_to_user_id"] is None
 
 
-def test_no_judge_single_member_is_assigned_and_multiple_are_shared():
+def test_no_judge_single_member_is_assigned_and_multiple_go_to_the_owner():
     one = AssignClient(quests=[_quest("q1", mode="act")], members=[ALICE])
     _create(one)
     assert one.created_goals[0]["assigned_to_user_id"] == "u_alice"
     many = AssignClient(quests=[_quest("q1", mode="act")], members=[ALICE, BOB])
     _create(many)
-    assert many.created_goals[0]["assigned_to_user_id"] is None
+    assert many.created_goals[0]["assigned_to_user_id"] == "u_alice"
+    # No owner flagged: the first human member.
+    no_owner = AssignClient(quests=[_quest("q1", mode="act")], members=[{**BOB}, {**ALICE, "is_owner": False}])
+    _create(no_owner)
+    assert no_owner.created_goals[0]["assigned_to_user_id"] == "u_bob"
 
 
 def test_refused_assignee_retries_shared():
@@ -88,7 +99,9 @@ def test_judge_failure_is_nonfatal():
         raise RuntimeError("down")
     c = AssignClient(quests=[_quest("q1", mode="act")], members=[ALICE])
     assert _create(c, boom) == "goal_1"
-    assert choose_assignee(boom, [ALICE, BOB], outcome="", title="t", description="")["assignee"] is None
+    assert choose_assignee(boom, [ALICE, BOB], outcome="", title="t", description="")["assignee"] == "u_alice"
+    assert choose_assignee(lambda p: "not json", [ALICE, BOB], outcome="", title="t",
+                           description="")["assignee"] == "u_alice"
 
 
 def _payload(*goals):
@@ -186,7 +199,8 @@ def test_ai_members_are_never_chosen_or_listed():
         return json.dumps({"assignee": "u_rep", "ai_can_do": True})
 
     out = choose_assignee(judge, [ALICE, BOB, rep], outcome="o", title="t", description="d")
-    assert out["assignee"] is None and "u_rep" not in seen[0]
+    # The rep is never offered or accepted; the goal falls back to the human quest owner.
+    assert out == {"assignee": "u_alice", "ai_can_do": False} and "u_rep" not in seen[0]
     # one human plus an AI rep still counts as a single-human quest
     assert choose_assignee(None, [ALICE, rep], outcome="o", title="t", description="d")["assignee"] == "u_alice"
 

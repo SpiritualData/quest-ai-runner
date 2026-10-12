@@ -40,7 +40,9 @@ Rules:
   example "Identify and document the top 3 'False Balance' misapplications on Wikipedia pages"),
   set ai_can_do to true and still name the human whose AI rep should do it; it must not sit as a
   plain task on a person's list.
-- If it is unknown or unclear who it belongs to, use null (the goal stays shared with everyone).
+- If it is truly unknown who it belongs to, use null. On a quest with two or more people that
+  leaves the goal with no owner: it is hidden from every member and the quest owner is asked to
+  pick someone, so use null only when you cannot reasonably choose.
 - Never use an em dash in the reason.
 
 Answer with one JSON object only: {{"assignee": "<user id or null>", "ai_can_do": true|false, "reason": "<short>"}}"""
@@ -136,18 +138,32 @@ def member_line(m: Dict[str, Any]) -> str:
     return f"- {m.get('user_id')}: {label}" + (f" ({role})" if role else "")
 
 
+def default_owner_id(members: List[Dict[str, Any]]) -> Optional[str]:
+    """The human the goal falls back to when nothing better can be chosen: the quest owner, else
+    the first human member."""
+    humans = human_members(members)
+    for m in humans:
+        if m.get("is_owner"):
+            return str(m.get("user_id"))
+    return str(humans[0].get("user_id")) if humans else None
+
+
 def choose_assignee(judge: Optional[Callable[[str], str]], members: List[Dict[str, Any]], *,
                     outcome: str, title: str, description: str,
                     current_state: str = "", preferences: str = "") -> Dict[str, Any]:
     """Return ``{"assignee": id|None, "ai_can_do": bool}``. Never raises.
 
-    Without a judge: one human member gets it, several leave it shared. A judged id that is not
-    in ``members`` is dropped to None.
+    On a quest with 2+ people an unassigned goal has no owner: it is hidden from every member and
+    the quest owner is asked to pick someone. So a goal must not end up there only because the
+    judge was missing, failed, answered nothing usable or named someone who is not a member: in
+    each of those cases the goal goes to the quest owner (``default_owner_id``), who can hand it
+    on. Only a judge that answers an explicit null leaves it without an owner, which is the
+    judge's own "I cannot tell" and is exactly what the owner ask is for.
     """
     ids = human_member_ids(members)
     if not ids:
         return {"assignee": None, "ai_can_do": False}
-    fallback = {"assignee": ids[0] if len(ids) == 1 else None, "ai_can_do": False}
+    fallback = {"assignee": ids[0] if len(ids) == 1 else default_owner_id(members), "ai_can_do": False}
     if judge is None:
         return fallback
     try:
@@ -163,8 +179,8 @@ def choose_assignee(judge: Optional[Callable[[str], str]], members: List[Dict[st
         return fallback
     chosen = verdict.get("assignee")
     chosen = str(chosen) if chosen not in (None, "", "null") else None
-    if chosen not in ids:
-        chosen = None
+    if chosen is not None and chosen not in ids:
+        return fallback
     return {"assignee": chosen, "ai_can_do": bool(verdict.get("ai_can_do")) and chosen is not None}
 
 
@@ -192,7 +208,7 @@ def run_goal_handoff(client: Any, judge: Optional[Callable[[str], str]], goals_p
         candidates = []
         for group in (goals_payload or {}).get("period_groups") or []:
             for g in group.get("goals") or []:
-                if (g.get("completed") or not g.get("assigned_to_user_id")
+                if (g.get("completed") or g.get("abandoned") or not g.get("assigned_to_user_id")
                         or g.get("ai_handling") or g.get("ai_handling_decided_at")):
                     continue
                 candidates.append(g)

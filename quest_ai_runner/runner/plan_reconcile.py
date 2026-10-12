@@ -128,12 +128,15 @@ def plan_handoffs(goals: List[Dict[str, Any]], today: dt.date, judge: GoalJudge)
     """Ask the model about each open, assigned, not-yet-judged day goal dated today or later.
 
     Only proposes. Whether the handoff happens is decided by the assignee's own AI-rep preference
-    (see ``set_goal_ai_handling``), not here. Goals already judged (``ai_handling`` set) are skipped.
+    (see ``set_goal_ai_handling``), not here. Goals already judged (``ai_handling`` or
+    ``ai_handling_decided_at`` set, which includes a person taking one back) and abandoned goals
+    are skipped.
     """
     today_iso = today.isoformat()
     handoffs = []
     for g in goals:
-        if g.get("completed") or not g.get("assigned_to_user_id") or g.get("ai_handling"):
+        if (g.get("completed") or g.get("abandoned") or not g.get("assigned_to_user_id")
+                or g.get("ai_handling") or g.get("ai_handling_decided_at")):
             continue
         if g.get("time_scope") != "day" or (g.get("period") or "") < today_iso:
             continue
