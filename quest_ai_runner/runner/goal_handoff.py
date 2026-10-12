@@ -45,7 +45,9 @@ Rules:
 
 Answer with one JSON object only: {{"assignee": "<user id or null>", "ai_can_do": true|false, "reason": "<short>"}}"""
 
-DOABILITY_PROMPT = """A goal is assigned to a person whose AI representative could handle it instead.
+DOABILITY_PROMPT = """A goal is assigned to a person. Their AI representative may take it over, but only if the
+AI can finish it completely on its own. The person has not been asked, so a wrong yes costs them a
+goal they must then take back.
 
 Quest outcome: {outcome}
 Where the quest stands now: {current_state}
@@ -53,11 +55,19 @@ The owner's preferences: {preferences}
 Goal: {title}
 Details: {description}
 
-Can an AI do this work on its own (research, drafting, audits, documentation, comparisons)?
-Answer false when it needs the person's body, presence, judgment call, payment, identity, a real
-world action, or a personal or taste decision.
+Judge sufficiency, not resemblance. Ask: with only text, the files and data it can read, and the
+ability to write documents, tables and code, could an AI produce everything this goal needs so that
+the person only has to review it? Work of that kind: drafting a document or message, reading figures
+or a report and summarizing them, researching and comparing options, auditing a page, writing test
+files or code. Answer true only when the whole goal is covered.
 
-Answer with one JSON object only: {{"ai_can_do": true|false, "reason": "<short, no em dashes>"}}"""
+Answer false when any necessary part needs the person's body or presence, a call or meeting, a
+judgment call or taste decision that is theirs, spending or receiving money, their identity or
+sign-off, publishing in their name, a real world action, or information the AI has no way to get.
+Also answer false when the goal is too vague to tell what finished looks like. If it is only partly
+doable, answer false.
+
+Answer with one JSON object only: {{"ai_can_do": true|false, "reason": "<one short sentence, no em dashes>"}}"""
 
 
 def make_judge(provider: Any, tier: str = "fast") -> Optional[Callable[[str], str]]:

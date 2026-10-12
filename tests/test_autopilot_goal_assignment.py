@@ -189,3 +189,32 @@ def test_ai_members_are_never_chosen_or_listed():
     assert out["assignee"] is None and "u_rep" not in seen[0]
     # one human plus an AI rep still counts as a single-human quest
     assert choose_assignee(None, [ALICE, rep], outcome="o", title="t", description="d")["assignee"] == "u_alice"
+
+
+def test_handoff_prompt_asks_for_full_sufficiency_and_bans_em_dashes():
+    seen = []
+
+    def spy(prompt):
+        seen.append(prompt)
+        return json.dumps({"ai_can_do": True})
+
+    c = AssignClient(reps=[{"rep_id": "rep_bob", "owner_user_id": "u_bob"}])
+    run_goal_handoff(c, spy, _payload({"id": "g1", "name": "Draft the FAQ", "assigned_to_user_id": "u_bob"}),
+                     team_id="team1")
+    prompt = " ".join(seen[0].split())
+    assert "completely" in prompt and "partly" in prompt
+    assert "writing test files" in prompt and "reading figures" in prompt
+    assert "no em dashes" in prompt and "—" not in prompt
+
+
+def test_handoff_never_judges_a_goal_nobody_owns_and_a_second_pass_is_a_no_op():
+    c = AssignClient(reps=[{"rep_id": "rep_bob", "owner_user_id": "u_bob"}])
+    open_goal = {"id": "g1", "name": "Draft the FAQ", "assigned_to_user_id": "u_bob"}
+    unowned = {"id": "g2", "name": "Draft the newsletter", "assigned_to_user_id": None}
+    judge = _judge({"ai_can_do": True})
+    assert run_goal_handoff(c, judge, _payload(open_goal, unowned), team_id="team1") == [
+        {"goal_id": "g1", "handling": "rep"}]
+    # The backend stamped g1 with ai_handling and a decision time; a second pass skips it.
+    taken = {**open_goal, "ai_handling": "rep", "ai_handling_decided_at": "2026-10-12"}
+    assert run_goal_handoff(c, judge, _payload(taken, unowned), team_id="team1") == []
+    assert len(c.handoffs) == 1
