@@ -232,3 +232,11 @@ def test_handoff_never_judges_a_goal_nobody_owns_and_a_second_pass_is_a_no_op():
     taken = {**open_goal, "ai_handling": "rep", "ai_handling_decided_at": "2026-10-12"}
     assert run_goal_handoff(c, judge, _payload(taken, unowned), team_id="team1") == []
     assert len(c.handoffs) == 1
+
+
+def test_handoff_stamps_me_once_when_the_verdict_is_unreadable():
+    c = AssignClient(reps=[{"rep_id": "rep_bob", "owner_user_id": "u_bob"}])
+    payload = _payload({"id": "g1", "name": "Call the bank", "assigned_to_user_id": "u_bob"})
+    out = run_goal_handoff(c, lambda prompt: "not json at all", payload, team_id="team1")
+    assert out == [{"goal_id": "g1", "handling": "me"}]
+    assert c.handoffs == [("g1", "me", "rep_bob", "rep")]

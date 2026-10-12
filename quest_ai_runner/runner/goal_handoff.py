@@ -199,7 +199,8 @@ def run_goal_handoff(client: Any, judge: Optional[Callable[[str], str]], goals_p
     """Judge undecided human-assigned goals and ask the backend to hand AI-doable ones to the rep.
 
     Returns one ``{goal_id, handling}`` per call made. Stamping "me" records the decision so the
-    goal is not judged again next pass. Never raises.
+    goal is not judged again next pass; that includes a verdict that could not be read. A judge
+    that raises is not a decision, so that goal is retried on the next pass. Never raises.
     """
     done: List[Dict[str, Any]] = []
     if judge is None or not callable(getattr(client, "set_goal_ai_handling", None)):
@@ -226,9 +227,9 @@ def run_goal_handoff(client: Any, judge: Optional[Callable[[str], str]], goals_p
                     outcome=outcome or "(none)", current_state=current_state or "(none)",
                     preferences=preferences or "(none)", title=g.get("name") or "",
                     description=g.get("description") or "(none)")))
-                if not verdict:
-                    continue
-                handling = "rep" if verdict.get("ai_can_do") is True else "me"
+                # An unreadable verdict is recorded as "me" (the person keeps the goal, the
+                # conservative answer) so the goal is not judged again on every pass.
+                handling = "rep" if (verdict or {}).get("ai_can_do") is True else "me"
                 client.set_goal_ai_handling(g["id"], handling, rep_id=rep_id, decided_by="rep")
                 done.append({"goal_id": g["id"], "handling": handling})
             except Exception:  # noqa: BLE001 -- one goal's failure must not stop the rest
