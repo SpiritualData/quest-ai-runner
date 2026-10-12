@@ -314,3 +314,65 @@ def test_poller_rep_sync_failure_never_breaks_the_task():
     poller = Poller(cfg, state_path=None, client=client)
     assert poller.run_once() == ["rep-task"]                # task still ran
     assert client.reports[0][:2] == ("rep-task", "done")
+
+
+# --- regression: persona that is a whole SKILL.md must never nest managed blocks -------
+
+PERSONA_BLOCK_START = "<!-- QAR:MANAGED:persona START -->"
+PERSONA_BLOCK_END = "<!-- QAR:MANAGED:persona END -->"
+
+
+def _marker_counts(text):
+    return (text.count("QAR:MANAGED:persona START"), text.count("QAR:MANAGED:persona END"),
+            text.count("QAR:MANAGED:learned START"), text.count("QAR:MANAGED:learned END"))
+
+
+def test_pull_with_whole_skill_file_as_persona_does_not_grow_or_nest(tmp_path):
+    """A persona pushed as the entire SKILL.md (which holds managed blocks) used to be rendered
+    back inside the managed persona block, nesting the file in itself on every pull."""
+    skill_dir = tmp_path / "rep"
+    skill_dir.mkdir()
+    path = skill_dir / "SKILL.md"
+    path.write_text(
+        "---\nname: rep\n---\n# Rep\nHuman text.\n\n"
+        f"{PERSONA_BLOCK_START}\nold persona\n{PERSONA_BLOCK_END}\n\n"
+        "<!-- QAR:MANAGED:learned START -->\n## Learned corrections\n\n- a note\n"
+        "<!-- QAR:MANAGED:learned END -->\n", encoding="utf-8")
+    client = MockProfileClient({"persona": path.read_text(encoding="utf-8"), "learned_notes": []})
+    sizes = []
+    for _ in range(5):
+        pull_rep_to_skill(client, "t1", "u1", str(skill_dir))
+        text = path.read_text(encoding="utf-8")
+        sizes.append(len(text))
+        assert _marker_counts(text) == (1, 1, 1, 1)
+        # feed the file back as the persona, exactly like the cockpit provisioning does
+        client = MockProfileClient({"persona": text, "learned_notes": []})
+    assert sizes[1] == sizes[2] == sizes[3] == sizes[4]
+
+
+def test_render_strips_markers_from_persona_and_learned_notes():
+    nested = f"intro\n{PERSONA_BLOCK_START}\ninner\n{PERSONA_BLOCK_END}\nouter\n{PERSONA_BLOCK_END}"
+    out = render_skill_file("", {"persona": nested, "learned_notes": [
+        {"id": "n1", "text": f"note {PERSONA_BLOCK_START} x"}]})
+    assert _marker_counts(out) == (1, 1, 1, 1)
+    assert "intro" in out and "outer" in out
+    assert parse_skill_file(out)["persona"].startswith("intro")
+
+
+def test_replace_between_refuses_body_containing_its_own_markers():
+    from quest_ai_runner.runner._managed_sections import ManagedSectionError, replace_between
+    with pytest.raises(ManagedSectionError):
+        replace_between("", PERSONA_BLOCK_START, PERSONA_BLOCK_END,
+                        f"x {PERSONA_BLOCK_END} y")
+
+
+def test_push_never_sends_a_persona_containing_markers(tmp_path):
+    skill_dir = tmp_path / "rep"
+    skill_dir.mkdir()
+    # a corrupt, already-nested file on disk
+    (skill_dir / "SKILL.md").write_text(
+        f"{PERSONA_BLOCK_START}\nreal\n{PERSONA_BLOCK_START}\nnested\n{PERSONA_BLOCK_END}\n"
+        f"{PERSONA_BLOCK_END}\n", encoding="utf-8")
+    client = MockProfileClient()
+    push_skill_to_rep(client, "t1", "u1", str(skill_dir))
+    assert "QAR:MANAGED" not in client.updates[0]["persona"]

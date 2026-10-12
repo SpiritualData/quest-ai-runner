@@ -609,3 +609,30 @@ def test_persona_card_is_found_even_when_the_store_dwarfs_the_scan_cap(tmp_path,
         "a persona's own card must be found by identity, not by alphabetical luck")
     assert any("exceeds the" in r.getMessage() for r in caplog.records), (
         "a store past the cap must SAY so rather than silently considering fewer cards")
+
+
+def test_seeded_skill_file_survives_repeated_pull_of_itself_as_persona(tmp_path):
+    """The seeded SKILL.md already holds empty managed blocks; a profile whose persona is that
+    whole file must not make repeated pulls nest or grow it."""
+    from quest_ai_runner.runner.personas import seed_skill_file
+    from quest_ai_runner.runner.rep_sync import pull_rep_to_skill
+
+    skill_dir = tmp_path / "zed"
+    seed_skill_file(skill_dir, "zed", "Zed")
+    path = skill_dir / "SKILL.md"
+
+    class Client:
+        def __init__(self, persona):
+            self.persona = persona
+
+        def get_ai_profile(self, user_id, *, team_id=None):
+            return {"persona": self.persona, "learned_notes": []}
+
+    sizes = []
+    for _ in range(4):
+        pull_rep_to_skill(Client(path.read_text(encoding="utf-8")), "t", "u", str(skill_dir))
+        text = path.read_text(encoding="utf-8")
+        sizes.append(len(text))
+        assert text.count("QAR:MANAGED:persona START") == 1
+        assert text.count("QAR:MANAGED:persona END") == 1
+    assert sizes[1] == sizes[2] == sizes[3]

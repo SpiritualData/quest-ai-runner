@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from ._managed_sections import extract_between, replace_between
+from ._managed_sections import extract_between, replace_between, strip_managed_blocks
 
 try:
     import yaml
@@ -98,14 +98,16 @@ def _render_learned_block(learned_notes: List[Dict[str, Any]]) -> str:
         nid = note.get("id")
         prefix = f"<!-- id:{nid} --> " if nid else ""
         # Keep each note on one line so the round-trip parse stays simple.
-        text = " ".join(text.splitlines())
+        text = " ".join(strip_managed_blocks(text).splitlines())
         lines.append(f"- {prefix}{text}")
     return "\n".join(lines)
 
 
 def render_skill_file(existing: str, profile: Dict[str, Any]) -> str:
     """Render the managed sections of a skill file from a Quest AI profile, preserving the rest."""
-    persona = str(profile.get("persona") or "").strip()
+    # A persona pushed as a whole SKILL.md carries its own managed blocks; rendering them back
+    # inside the persona block nests the file in itself on every pull, so strip them first.
+    persona = strip_managed_blocks(str(profile.get("persona") or ""))
     learned = list(profile.get("learned_notes") or [])
     out = existing or ""
     out = replace_between(out, _PERSONA_START, _PERSONA_END, persona)
@@ -164,7 +166,7 @@ def parse_skill_file(text: str) -> Dict[str, Any]:
             learned_notes.append(note)
     meta = _extract_frontmatter_metadata(text)
     return {
-        "persona": persona.strip() if persona is not None else None,
+        "persona": strip_managed_blocks(persona) if persona is not None else None,
         "learned_notes": learned_notes,
         "display_name": meta.get("display_name"),
     }
