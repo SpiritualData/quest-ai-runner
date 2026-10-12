@@ -688,6 +688,11 @@ class QuestClient:
             # The work models this runner can run (Claude Code deep worker). The backend narrows the
             # environment's configured options to these, so an org never offers a model the runner lacks.
             body["available_models"] = [{"provider": "anthropic", "model": m} for m in RUNNABLE_MODELS]
+            # The direct tools this runner has (read-only listing set by the poller), so the backend can
+            # offer each as an action. Omitted when none are known, which leaves the last report alone.
+            tools = getattr(self, "available_tools", None)
+            if tools:
+                body["available_tools"] = list(tools)
             if runner_label:
                 body["runner_label"] = runner_label
             if env_id:

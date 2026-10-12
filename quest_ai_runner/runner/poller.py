@@ -591,6 +591,20 @@ class Poller:
                 log.warning("recovery: could not reconcile abandoned task %s (%s) — it will be "
                             "left for the backend's own staleness sweep", task_id, e)
 
+    def attach_tool_listing(self) -> None:
+        """Hand the client this runner's tool catalog (read-only listing) so the heartbeat reports it.
+        Computed once; best-effort, a failure just means no tools are reported."""
+        if getattr(self, "tool_listing_attached", False):
+            return
+        self.tool_listing_attached = True
+        try:
+            from ..config import resolve_tool_registry
+            registry = resolve_tool_registry(self.cfg)
+            if registry is not None:
+                self.client.available_tools = registry.public_listing()
+        except Exception:  # noqa: BLE001 -- reporting tools must never break a heartbeat
+            log.info("tool listing not attached", exc_info=True)
+
     def _emit_heartbeat(self) -> None:
         """Best-effort env heartbeat: report this runner is live + its capabilities.
 
@@ -615,6 +629,7 @@ class Poller:
         One POST per team, each independently best-effort for the same reason as above."""
         if not self.cfg.org_id and not self.cfg.team_id and not self.cfg.team_ids:
             return  # no team or org to attach the env to — nothing to heartbeat (still a valid poll)
+        self.attach_tool_listing()
         for team in self.configured_teams():
             try:
                 self.client.post_environment_heartbeat(

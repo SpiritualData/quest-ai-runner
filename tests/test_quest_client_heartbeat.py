@@ -89,3 +89,27 @@ def test_heartbeat_org_id_takes_precedence_over_explicit_team_id():
     client.post_environment_heartbeat({"web": True, "corpus": True, "code": True},
                                        team_id="team_9", org_id="org_example")
     assert captured["path"] == "/api/orgs/org_example/environment/heartbeat"
+
+
+def test_heartbeat_reports_the_tool_listing_when_the_client_has_one():
+    client, captured = client_capturing_body(team_id="team_1")
+    client.available_tools = [{"name": "send_quest_email", "description": "Email", "mutates": True,
+                               "parameters": {"type": "object", "properties": {}}}]
+    client.post_environment_heartbeat({"web": True, "corpus": True, "code": True})
+    assert captured["body"]["available_tools"][0]["name"] == "send_quest_email"
+
+
+def test_tool_registry_public_listing_is_serializable_and_hides_handlers():
+    import json
+    from quest_ai_runner.core.tools import ToolRegistry, ToolSpec
+    registry = ToolRegistry([ToolSpec(
+        name="zeta", description="Z", handler=lambda a, c: "x", when_to_use="always", mutates=False,
+        parameters={"type": "object", "properties": {"q": {"type": "string", "flag": "--q"}}, "required": ["q"]},
+    ), ToolSpec(name="alpha", description="A", handler=lambda a, c: "x")])
+    listing = registry.public_listing()
+    assert [t["name"] for t in listing] == ["alpha", "zeta"]
+    zeta = listing[1]
+    assert zeta["mutates"] is False and zeta["when_to_use"] == "always"
+    assert "flag" not in zeta["parameters"]["properties"]["q"]
+    assert "handler" not in zeta
+    json.dumps(listing)

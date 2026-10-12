@@ -137,6 +137,20 @@ class ToolSpec:
                 prop.pop("flag", None)
         return params
 
+    def public_listing(self) -> Dict[str, Any]:
+        """A read-only, serializable description of this tool (no handler, no secrets): what a
+        consumer such as the Quest backend needs to offer the tool as a catalog entry."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "when_to_use": self.when_to_use,
+            "when_not_to_use": self.when_not_to_use,
+            "mutates": bool(self.mutates),
+            "origin": self.origin,
+            "parameters": self.public_parameters(),
+            "auto_filled": self.auto_filled(),
+        }
+
     def auto_filled(self) -> List[str]:
         """Args the loop fills itself when omitted (a default or a turn-context value)."""
         return sorted(set(self.defaults) | set(self.context_args))
@@ -248,6 +262,10 @@ class ToolRegistry:
         return self.search(query, k)
 
     # -- rendering -------------------------------------------------------------------------------
+
+    def public_listing(self) -> List[Dict[str, Any]]:
+        """Every tool as ``ToolSpec.public_listing()``, sorted by name."""
+        return [spec.public_listing() for spec in sorted(self.all(), key=lambda t: t.name)]
 
     @staticmethod
     def render_one(spec: ToolSpec) -> str:
