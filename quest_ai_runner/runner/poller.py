@@ -591,12 +591,29 @@ class Poller:
                 log.warning("recovery: could not reconcile abandoned task %s (%s) — it will be "
                             "left for the backend's own staleness sweep", task_id, e)
 
+    def _requested_action_is_ours(self, task: Dict[str, Any], task_id: str) -> bool:
+        """Whether this runner may claim a task queued for a published action: it must name this
+        runner as publisher, and an environment-pinned task goes only to the runner of that
+        environment (a runner with no environment never claims one). A task that fails either test
+        is left unclaimed for the runner it belongs to."""
+        from .action_catalog import PUBLISHER_ID
+        request = task.get("requested_action") or {}
+        if request.get("publisher") != PUBLISHER_ID:
+            log.info("task %s asks for an action published by %r, not this runner -- not claiming",
+                     task_id, request.get("publisher"))
+            return False
+        pinned = str(request.get("env_id") or task.get("env_id") or "")
+        if pinned and pinned != str(self.cfg.env_id or ""):
+            log.info("task %s is pinned to another environment -- not claiming", task_id)
+            return False
+        return True
+
     def _run_requested_action(self, task: Dict[str, Any], task_id: str) -> Optional[str]:
         """Run the single tool or connector operation a workflow step asked for and report the outcome."""
         from ..config import resolve_tool_registry
         from .requested_action import run_requested_action
         try:
-            outcome = run_requested_action(task, resolve_tool_registry(self.cfg), self.cfg.mcp_servers)
+            outcome = run_requested_action(task, resolve_tool_registry(self.cfg), self.cfg.mcp_servers, self.client)
         except Exception as e:  # noqa: BLE001 -- an action that crashes is a failed task, never a lost one
             log.error("requested action for task %s crashed", task_id, exc_info=True)
             outcome = None
@@ -771,6 +788,8 @@ class Poller:
             return None
         # Resolve WHO will run this (the AI representation/skill) so we can stamp it on the claim:
         # the rep slug if a rep_sync_resolver maps this task to a skill dir, else the runner label.
+        if task.get("requested_action") and not self._requested_action_is_ours(task, task_id):
+            return None
         target = self._resolve_rep_target(task)
         handler = self._handler_label(target)
         # Claim FIRST: claim() now returns None on failure (already claimed by another worker, or a

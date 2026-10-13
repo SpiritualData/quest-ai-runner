@@ -46,10 +46,14 @@ def readable(name: str) -> str:
 
 
 def is_publishable_tool(spec: Any) -> bool:
-    """The documented rule: a tool that acts, unless the tool says otherwise."""
+    """The documented rule: a standard tool that acts, unless the tool says otherwise. An
+    operator-defined (custom) tool can do anything, outward mail included, so it is published only
+    when its entry opts in with ``workflow_step = true``."""
     override = getattr(spec, "workflow_step", None)
     if override is not None:
         return bool(override)
+    if getattr(spec, "origin", "custom") != "standard":
+        return False
     return bool(getattr(spec, "mutates", True))
 
 
@@ -93,7 +97,7 @@ def tool_action(spec: Any) -> Dict[str, Any]:
         "description": f"{description} Changes data.".strip() if listing.get("mutates") else description.strip(),
         "actor_kinds": ["ai"],
         # Values the runner fills from the task (the quest, the task id, defaults) are not asked for.
-        "params_schema": params_schema_from_json_schema(listing.get("parameters"), skip=listing.get("auto_filled") or ()),
+        "params_schema": params_schema_from_json_schema(listing.get("parameters"), skip=[*(listing.get("auto_filled") or ()), *(getattr(spec, "workflow_hidden_params", None) or ())]),
         "request": {"kind": KIND_TOOL, "name": spec.name},
     }
 
@@ -131,6 +135,29 @@ def connector_operations(mcp_servers: Sequence[Any]) -> List[Dict[str, Any]]:
         except Exception:  # noqa: BLE001 -- one dead connector never stops the rest from publishing
             log.info("connector %s: operations not listed", getattr(spec, "alias", "?"), exc_info=True)
     return ops
+
+
+def find_published_action(registry: Any, mcp_servers: Sequence[Any], request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """This runner's own published action matching a task's ``requested_action``, or None.
+
+    Rebuilt from the runner's current definitions (never from the task), and ``action_id``, ``kind``
+    and ``name`` must all match, so a task can only run something this runner offers right now.
+    Connector discovery is limited to the one server the request names."""
+    kind, name = request.get("kind"), str(request.get("name") or "")
+    if kind == KIND_TOOL:
+        spec = registry.get(name) if registry is not None else None
+        candidates = [tool_action(spec)] if spec is not None and is_publishable_tool(spec) else []
+    elif kind == KIND_CONNECTOR:
+        alias = name.split(":", 1)[0]
+        servers = [s for s in mcp_servers or [] if getattr(s, "alias", None) == alias]
+        candidates = connector_actions(connector_operations(servers))
+    else:
+        return None
+    for action in candidates:
+        req = action.get("request") or {}
+        if action["action_id"] == request.get("action_id") and req.get("kind") == kind and req.get("name") == name:
+            return action
+    return None
 
 
 def build_actions(registry: Any, mcp_servers: Sequence[Any] = ()) -> List[Dict[str, Any]]:

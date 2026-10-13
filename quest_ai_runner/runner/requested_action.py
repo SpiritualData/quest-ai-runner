@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 from ..core.tools import ToolContext
-from .action_catalog import KIND_CONNECTOR, KIND_TOOL
+from .action_catalog import KIND_CONNECTOR, KIND_TOOL, PUBLISHER_ID, find_published_action
 
 log = logging.getLogger("quest-ai-runner.requested_action")
 
@@ -43,27 +43,57 @@ def decode_json_params(properties: Dict[str, Any], args: Dict[str, Any]) -> Dict
     return out
 
 
-def run_requested_action(task: Dict[str, Any], registry: Any, mcp_servers: Sequence[Any] = ()) -> ActionOutcome:
+def author_may_act(task: Dict[str, Any], client: Any) -> Optional[str]:
+    """None when the task's author owns the task's quest, else the reason to refuse.
+
+    The action runs with the runner owner's Quest key, so Quest's own permission check sees the
+    runner, not the person who built the workflow. This is the check that stands in for it. Quest
+    exposes a quest's owners (``owner_user_ids``) but no co-editor list to a runner key, so a
+    co-editor who is not an owner is refused until Quest offers that read."""
+    quest_id = str(task.get("goal_id") or "")
+    if not quest_id:
+        return None
+    author = str(task.get("created_by") or task.get("user_id") or "")
+    if not author:
+        return "The task does not say who its author is, so access to the quest cannot be checked."
+    quest = client.get_quest(quest_id) if client is not None else {}
+    owners = [str(o) for o in ((quest or {}).get("owner_user_ids") or [])]
+    if not owners:
+        return "The quest's owners could not be read, so the author's access cannot be checked."
+    if author not in owners:
+        return "The task's author does not own this quest, so the runner will not act on it for them."
+    return None
+
+
+def run_requested_action(task: Dict[str, Any], registry: Any, mcp_servers: Sequence[Any] = (),
+                         client: Any = None) -> ActionOutcome:
     request = task.get("requested_action") or {}
     kind, name = request.get("kind"), str(request.get("name") or "")
-    args = dict(request.get("args") or {})
+    if request.get("publisher") != PUBLISHER_ID:
+        return ActionOutcome(False, "This action was published by another runner, so this runner will not run it.")
+    action = find_published_action(registry, mcp_servers, request)
+    if action is None:
+        return ActionOutcome(False, f"{name!r} (kind {kind!r}) is not an action this runner publishes.")
+    refusal = author_may_act(task, client)
+    if refusal:
+        return ActionOutcome(False, refusal)
+    # Only what the published form asks for is accepted. Anything else (quest_id, task_id, a hidden
+    # parameter) comes from the task's own context or not at all.
+    allowed = {f["name"] for f in action.get("params_schema") or []}
+    args = {k: v for k, v in dict(request.get("args") or {}).items() if k in allowed}
     if kind == KIND_TOOL:
-        spec = registry.get(name) if registry is not None else None
-        if spec is None:
-            return ActionOutcome(False, f"This runner has no tool named {name!r}.")
+        spec = registry.get(name)
+        if any(arg for arg in spec.context_args if arg == "quest_id") and not task.get("goal_id"):
+            return ActionOutcome(False, f"{name} needs a quest and this task has none.")
         ctx = ToolContext(quest_id=str(task.get("goal_id") or "") or None,
                           user_id=str(task.get("user_id") or "") or None,
                           task_id=str(task.get("task_id") or task.get("id") or "") or None)
         result = registry.invoke(name, decode_json_params(spec.properties(), args), ctx)
         return ActionOutcome(result.ok, result.text or ("done" if result.ok else f"{name} failed"))
-    if kind == KIND_CONNECTOR:
-        alias = name.split(":", 1)[0]
-        server = next((s for s in mcp_servers or [] if getattr(s, "alias", None) == alias), None)
-        if server is None or not getattr(server, "writable_tools", None):
-            return ActionOutcome(False, f"This runner has no write-enabled connector {alias!r}.")
-        from ..adapters.mcp_write_adapter import MCPWriteAdapter
-        written = MCPWriteAdapter(alias=server.alias, spec=server, writable_tools=server.writable_tools).write_operation(name, args)
-        if written.ok:
-            return ActionOutcome(True, f"Ran {name}.")
-        return ActionOutcome(False, written.error or f"{name} failed")
-    return ActionOutcome(False, f"This runner does not know how to run an action of kind {kind!r}.")
+    alias = name.split(":", 1)[0]
+    server = next(s for s in mcp_servers if getattr(s, "alias", None) == alias)
+    from ..adapters.mcp_write_adapter import MCPWriteAdapter
+    written = MCPWriteAdapter(alias=server.alias, spec=server, writable_tools=server.writable_tools).write_operation(name, args)
+    if written.ok:
+        return ActionOutcome(True, f"Ran {name}.")
+    return ActionOutcome(False, written.error or f"{name} failed")

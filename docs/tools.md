@@ -147,10 +147,13 @@ hours). Code: `runner/action_catalog.py`.
 
 What is published is decided by a rule, not a list:
 
-- A **tool** is published when it acts (`mutates` is true). Read-only tools return text nothing in a
-  scheduled step would use, so they stay out. A tool overrides the rule either way with
-  `workflow_step` (`workflow_step = true` in its TOML entry publishes a read-only tool, `false`
-  withholds a mutating one).
+- A **standard tool** is published when it acts (`mutates` is true). Read-only tools return text
+  nothing in a scheduled step would use, so they stay out. A tool overrides the rule either way with
+  `workflow_step`. A **custom tool** (from `QAR_TOOLS_FILE`) is published only when its entry says
+  `workflow_step = true`: an operator's tool can do anything, including mail people outside the
+  team, so publishing is opt-in. Outward or irreversible tools stay `workflow_step = false` unless
+  they carry their own approval step. `ToolSpec.workflow_hidden_params` keeps a parameter out of the
+  published form and out of a step's arguments.
 - A **connector** (an MCP server in `mcp_servers`) publishes each operation on its **write**
   allowlist (`writable_tools`). Read-side tools never appear.
 
@@ -165,3 +168,28 @@ task and calls exactly that tool or connector operation with exactly those argum
 (`runner/requested_action.py`): no planner, no deep run, so the step does what it says. The outcome
 is reported done or failed on the task, and Quest's existing reconcile marks the step.
 
+### What a step may and may not do
+
+The action runs with the **runner owner's Quest key**, not the key of the person who built the
+workflow. Quest's own permission check therefore sees the runner. These checks stand in for it:
+
+- The poller does not claim a task whose `requested_action.publisher` is not `quest-ai-runner`, or
+  that is pinned to an environment other than this runner's. A runner with no `env_id` never claims
+  a pinned task. Skipped tasks stay queued for the runner they belong to.
+- Before running, the runner rebuilds its own published list and requires the task's `action_id`,
+  `kind` and `name` to match an entry in it. A read tool, a withheld tool or an unlisted connector
+  operation is refused.
+- Only arguments named in that action's published form are kept. `quest_id`, `task_id` and any
+  hidden parameter always come from the task, never from the arguments.
+- If the task names a quest, its author (`created_by`, else `user_id`) must be one of the quest's
+  `owner_user_ids`. A quest co-editor who is not an owner is refused: Quest does not give a runner
+  key a co-editor list yet (a gap to close on the Quest side).
+
+Published standard tools: `send_quest_email` (subject and body only; it mails the quest's own
+people as the step's persona, never a recipient override or `rep_id`), `file_email_draft` (files one
+draft into the Approval Queue; this is the only path to an outside recipient and nothing is sent
+until a person approves), the quest field tools and `add_quest_measurable_outcome` (the
+`user_asked_for_this_field` claim is hidden, so Quest's AI field-write gate decides and may turn the
+write into an ask for the owner). Withheld: `create_quest_goal`, `add_quest_strategy`,
+`create_quest_habit`, `create_quest_experiment`, `update_quest_experiment` (each refuses without the
+user's own say-so, which a scheduled step cannot assert) and every read tool.

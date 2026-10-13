@@ -125,6 +125,10 @@ class ToolSpec:
     # Whether Quest Workflows may offer this tool as a step action. None = the rule in
     # ``runner.action_catalog`` (tools that act, ``mutates``); True/False overrides it either way.
     workflow_step: Optional[bool] = None
+    # Parameters a workflow step may never set: left out of the published form, and dropped from a
+    # requested action's arguments at run time. For values only a live user (or the step's own
+    # context) may supply, such as a recipient override or a claim that the user asked.
+    workflow_hidden_params: Sequence[str] = ()
 
     def required(self) -> List[str]:
         return list((self.parameters or {}).get("required") or [])
@@ -535,6 +539,7 @@ def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
             },
         },
         mutates=True,
+        workflow_hidden_params=("to", "rep_id"),  # a step mails only the quest's own people, as the step's persona; outside mail is file_email_draft
         origin="standard",
         keywords=("email", "mail", "send", "notify", "message", "inbox"),
         context_args={"quest_id": "quest_id"},
@@ -724,6 +729,7 @@ def quest_field_tool_spec(field_name: str, env: Mapping[str, str],
             },
         },
         mutates=True,
+        workflow_hidden_params=("user_asked_for_this_field",),  # a step cannot assert the user asked; Quest's field-write gate decides
         origin="standard",
         keywords=("quest", "field", "update", "change", "set", field_name.replace("_", " "),
                   *spec_text.label.lower().replace("(", " ").replace(")", " ").split()),
@@ -800,6 +806,7 @@ def add_measurable_outcome_spec(env: Mapping[str, str], client_factory=None) -> 
             },
         },
         mutates=True,
+        workflow_hidden_params=("user_asked_for_this_field",),  # a step cannot assert the user asked; Quest's field-write gate decides
         origin="standard",
         keywords=("quest", "measurable", "outcome", "metric", "success", "target", "kpi", "add"),
         context_args={"quest_id": "quest_id"},
@@ -863,6 +870,7 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
             },
         },
         mutates=True,
+        workflow_step=False,  # needs the user's own say-so (user_asked_for_this_field); a scheduled step cannot assert it
         origin="standard",
         keywords=("goal", "plan", "day", "week", "month", "quarter", "year", "add", "create",
                   "today", "this week"),
@@ -913,6 +921,7 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
             },
         },
         mutates=True,
+        workflow_step=False,  # needs the user's own say-so (user_asked_for_this_field); a scheduled step cannot assert it
         origin="standard",
         keywords=("strategy", "approach", "method", "quest", "add"),
         context_args={"quest_id": "quest_id"},
@@ -989,6 +998,7 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
             },
         },
         mutates=True,
+        workflow_step=False,  # needs the user's own say-so (user_asked_for_this_field); a scheduled step cannot assert it
         origin="standard",
         keywords=("habit", "routine", "recurring", "daily", "weekly", "quest", "add", "create"),
         context_args={"quest_id": "quest_id"},
@@ -1219,6 +1229,7 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
             },
         },
         mutates=True,
+        workflow_step=False,  # needs the user's own say-so (user_asked_for_this_field); a scheduled step cannot assert it
         origin="standard",
         keywords=("experiment", "experiments", "research", "question", "hypothesis", "test",
                   "trial", "start", "set up", "create", "add", "new"),
@@ -1302,6 +1313,7 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
             },
         },
         mutates=True,
+        workflow_step=False,  # needs the user's own say-so (user_asked_for_this_field); a scheduled step cannot assert it
         origin="standard",
         keywords=("experiment", "experiments", "research", "question", "hypothesis", "conclude",
                   "conclusion", "edit", "change", "update", "rename", "reopen", "status"),

@@ -31,7 +31,7 @@ def spec(name, mutates=True, **kw):
         return ToolResult(ok=True, text=f"{name} ok")
 
     s = ToolSpec(name=name, description=f"{name} description", handler=handler, when_to_use="when asked",
-                 parameters=kw.pop("parameters", SEND_PARAMS), mutates=mutates, **kw)
+                 parameters=kw.pop("parameters", SEND_PARAMS), mutates=mutates, origin=kw.pop("origin", "standard"), **kw)
     s.calls = calls
     return s
 
@@ -117,9 +117,20 @@ def test_the_client_puts_to_the_team_or_org_registration_route():
 
 # -- running the requested action ------------------------------------------------------------------
 
-def task_for(kind, name, args, **extra):
+class OwnerClient:
+    def __init__(self, owners=("u1",)):
+        self.owners = list(owners)
+        self.asked = []
+
+    def get_quest(self, quest_id, **kw):
+        self.asked.append(quest_id)
+        return {"quest_id": quest_id, "owner_user_ids": self.owners}
+
+
+def task_for(kind, name, args, publisher="quest-ai-runner", **extra):
+    action_id = ("tool:" if kind == "tool" else "connector:") + name
     return {"task_id": "task_1", "user_id": "u1", "goal_id": "quest_9",
-            "requested_action": {"publisher": "quest-ai-runner", "kind": kind, "name": name, "args": args}, **extra}
+            "requested_action": {"publisher": publisher, "kind": kind, "name": name, "action_id": action_id, "args": args}, **extra}
 
 
 def test_a_tool_action_calls_exactly_that_tool_with_the_saved_args_and_task_context():
@@ -127,7 +138,7 @@ def test_a_tool_action_calls_exactly_that_tool_with_the_saved_args_and_task_cont
         "subject": {"type": "string"}, "quest_id": {"type": "string"}, "to": {"type": "array"}, "count": {"type": "integer"}}},
         context_args={"quest_id": "quest_id"})
     other = spec("other_tool")
-    outcome = run_requested_action(task_for("tool", "send_mail", {"subject": "Hi", "to": '["a@x.org"]', "count": "3"}), ToolRegistry([send, other]))
+    outcome = run_requested_action(task_for("tool", "send_mail", {"subject": "Hi", "to": '["a@x.org"]', "count": "3"}), ToolRegistry([send, other]), client=OwnerClient())
     assert outcome.ok and outcome.text == "send_mail ok"
     ((args, ctx),) = send.calls
     assert args["subject"] == "Hi" and args["to"] == ["a@x.org"] and args["count"] == 3
@@ -136,16 +147,16 @@ def test_a_tool_action_calls_exactly_that_tool_with_the_saved_args_and_task_cont
 
 
 def test_an_unknown_tool_or_kind_fails_honestly():
-    assert not run_requested_action(task_for("tool", "gone", {}), ToolRegistry([])).ok
-    outcome = run_requested_action(task_for("teleport", "x", {}), ToolRegistry([]))
+    assert not run_requested_action(task_for("tool", "gone", {}), ToolRegistry([]), client=OwnerClient()).ok
+    outcome = run_requested_action(task_for("teleport", "x", {}), ToolRegistry([]), client=OwnerClient())
     assert not outcome.ok and "teleport" in outcome.text
 
 
 def test_a_failing_tool_is_a_failed_outcome_with_its_reason():
     def boom(args, ctx):
         return ToolResult(ok=False, text="mail server said no")
-    registry = ToolRegistry([ToolSpec(name="send_mail", description="d", handler=boom)])
-    outcome = run_requested_action(task_for("tool", "send_mail", {}), registry)
+    registry = ToolRegistry([ToolSpec(name="send_mail", description="d", handler=boom, origin="standard")])
+    outcome = run_requested_action(task_for("tool", "send_mail", {}), registry, client=OwnerClient())
     assert not outcome.ok and outcome.text == "mail server said no"
 
 
@@ -157,6 +168,7 @@ def test_a_connector_action_is_refused_unless_the_server_is_write_enabled():
 
 def test_a_connector_action_runs_through_the_write_adapter(monkeypatch):
     from quest_ai_runner.adapters import mcp_write_adapter
+    from quest_ai_runner.runner import action_catalog
     from quest_ai_runner.core.adapters import WriteResult
     seen = {}
 
@@ -169,8 +181,10 @@ def test_a_connector_action_runs_through_the_write_adapter(monkeypatch):
             return WriteResult(ok=True, rel_path=name, detail={})
 
     monkeypatch.setattr(mcp_write_adapter, "MCPWriteAdapter", FakeAdapter)
+    monkeypatch.setattr(action_catalog, "connector_operations", lambda servers: [
+        {"name": "issues:create", "description": "d", "input_schema": {"type": "object", "properties": {"title": {"type": "string"}}}}])
     server = SimpleNamespace(alias="issues", writable_tools=["create"])
-    outcome = run_requested_action(task_for("connector_operation", "issues:create", {"title": "T"}), ToolRegistry([]), [server])
+    outcome = run_requested_action(task_for("connector_operation", "issues:create", {"title": "T"}), ToolRegistry([]), [server], OwnerClient())
     assert outcome.ok and seen["call"] == ("issues:create", {"title": "T"}) and seen["init"] == ("issues", ["create"])
 
 
@@ -188,7 +202,11 @@ class ReportingClient:
         self.reports = []
         self.published = []
 
+    def get_quest(self, quest_id, **kw):
+        return {"quest_id": quest_id, "owner_user_ids": ["u1"]}
+
     def claim(self, task_id, handler=None):
+        self.claimed = getattr(self, "claimed", []) + [task_id]
         return {"task_id": task_id}
 
     def report_done(self, task_id, result, session_id=None):
@@ -240,3 +258,124 @@ def test_the_heartbeat_publishes_the_catalog_to_each_team_and_org_once(tmp_path)
         ("team", "team1", ["tool:send_mail"], {"env_id": "env7", "publisher_label": client.published[0][3]["publisher_label"]}),
         ("org", "org1", ["tool:send_mail"], {"env_id": "env7", "publisher_label": client.published[1][3]["publisher_label"]}),
     ]
+
+
+# -- security: only this runner's own, published, in-scope actions run -----------------------------
+
+def poller_and_client(tmp_path, registry, **cfg_kw):
+    client = ReportingClient()
+    return poller_with(tmp_path, registry, client, **cfg_kw), client
+
+
+def test_a_foreign_publishers_task_is_skipped_unclaimed(tmp_path):
+    poller, client = poller_and_client(tmp_path, ToolRegistry([spec("send_mail")]))
+    assert poller._handle_one(task_for("tool", "send_mail", {}, publisher="someone-else", text="x", status="queued")) is None
+    assert not getattr(client, "claimed", []) and client.reports == []
+
+
+def test_a_task_pinned_to_another_environment_is_skipped_unclaimed(tmp_path):
+    poller, client = poller_and_client(tmp_path, ToolRegistry([spec("send_mail")]), env_id="env_mine")
+    assert poller._handle_one(task_for("tool", "send_mail", {}, env_id="env_other", text="x", status="queued")) is None
+    assert not getattr(client, "claimed", [])
+
+
+def test_a_runner_without_an_environment_never_claims_a_pinned_task(tmp_path):
+    poller, client = poller_and_client(tmp_path, ToolRegistry([spec("send_mail")]))
+    assert poller._handle_one(task_for("tool", "send_mail", {}, env_id="env_other", text="x", status="queued")) is None
+    assert not getattr(client, "claimed", [])
+
+
+def test_a_task_for_this_environment_is_claimed_and_run(tmp_path):
+    send = spec("send_mail", parameters={"type": "object", "properties": {}})
+    poller, client = poller_and_client(tmp_path, ToolRegistry([send]), env_id="env_mine")
+    assert poller._handle_one(task_for("tool", "send_mail", {}, env_id="env_mine", text="x", status="queued")) == "task_1"
+    assert client.reports == [("done", "task_1", "send_mail ok")]
+
+
+def test_run_refuses_a_foreign_publisher_even_if_it_reaches_the_runner():
+    send = spec("send_mail")
+    outcome = run_requested_action(task_for("tool", "send_mail", {}, publisher="evil"), ToolRegistry([send]), client=OwnerClient())
+    assert not outcome.ok and send.calls == []
+
+
+def test_a_read_tool_or_a_withheld_tool_is_not_runnable():
+    read, hidden = spec("find_things", mutates=False), spec("internal_write", workflow_step=False)
+    custom = spec("operator_tool", origin="custom")
+    registry = ToolRegistry([read, hidden, custom])
+    for name in ("find_things", "internal_write", "operator_tool"):
+        assert not run_requested_action(task_for("tool", name, {}), registry, client=OwnerClient()).ok
+    assert read.calls == hidden.calls == custom.calls == []
+
+
+def test_a_custom_tool_publishes_only_when_it_opts_in():
+    assert not is_publishable_tool(spec("t", origin="custom"))
+    assert is_publishable_tool(spec("t", origin="custom", workflow_step=True))
+
+
+def test_an_action_id_that_does_not_match_is_refused():
+    send = spec("send_mail")
+    task = task_for("tool", "send_mail", {})
+    task["requested_action"]["action_id"] = "tool:something_else"
+    assert not run_requested_action(task, ToolRegistry([send]), client=OwnerClient()).ok and send.calls == []
+
+
+def test_a_smuggled_quest_id_is_dropped_and_the_tasks_quest_is_used():
+    send = spec("send_mail", context_args={"quest_id": "quest_id"})
+    outcome = run_requested_action(task_for("tool", "send_mail", {"subject": "Hi", "quest_id": "quest_OTHER", "task_id": "t_x"}),
+                                   ToolRegistry([send]), client=OwnerClient())
+    assert outcome.ok
+    ((args, ctx),) = send.calls
+    assert args["quest_id"] == "quest_9" and "task_id" not in args and ctx.task_id == "task_1"
+
+
+def test_a_quest_the_author_does_not_own_is_refused():
+    send = spec("send_mail")
+    owner = OwnerClient(owners=("someone_else",))
+    outcome = run_requested_action(task_for("tool", "send_mail", {}), ToolRegistry([send]), client=owner)
+    assert not outcome.ok and "does not own" in outcome.text and send.calls == [] and owner.asked == ["quest_9"]
+    unreadable = run_requested_action(task_for("tool", "send_mail", {}), ToolRegistry([send]), client=OwnerClient(owners=()))
+    assert not unreadable.ok and send.calls == []
+
+
+def standard_registry(calls):
+    from quest_ai_runner.core.tools import file_email_draft_spec, send_quest_email_spec
+
+    class Mailer:
+        def send_quest_email(self, quest_id, **kw):
+            calls.append(("send", quest_id, kw))
+            return {"persona": "Quest AI"}
+
+        def create_email_draft(self, **kw):
+            calls.append(("draft", kw))
+            return {"id": "d1"}
+
+    return ToolRegistry([send_quest_email_spec({}, lambda: Mailer()), file_email_draft_spec({}, lambda: Mailer())])
+
+
+def test_send_quest_email_publishes_without_recipient_or_persona_overrides():
+    names = {a["action_id"]: [f["name"] for f in a["params_schema"]] for a in build_actions(standard_registry([]))}
+    assert names["tool:send_quest_email"] == ["subject", "body"]
+    assert "to" in names["tool:file_email_draft"]  # the outside-recipient path is the approval queue
+
+
+def test_an_email_to_an_outsider_cannot_be_sent_and_the_draft_path_files_it_for_approval():
+    calls = []
+    registry = standard_registry(calls)
+    run_requested_action(task_for("tool", "send_quest_email", {"subject": "S", "body": "B", "to": ["outsider@x.org"], "rep_id": "rep_boss"}),
+                         registry, client=OwnerClient())
+    ((kind, quest_id, kw),) = calls
+    assert kind == "send" and quest_id == "quest_9" and kw["recipients"] is None and kw["rep_id"] is None
+    calls.clear()
+    outcome = run_requested_action(task_for("tool", "file_email_draft", {"to": "outsider@x.org", "subject": "S", "body": "B"}),
+                                   registry, client=OwnerClient())
+    assert outcome.ok and "NOT sent" in outcome.text and calls[0][0] == "draft"
+
+
+def test_outward_and_user_attested_tools_are_not_published_or_lose_the_attestation():
+    from quest_ai_runner.core.tools import build_tool_registry
+    registry = build_tool_registry({"QUEST_BASE_URL": "http://x", "QUEST_API_KEY": "qsk_t"})
+    published = {a["action_id"]: [f["name"] for f in a["params_schema"]] for a in build_actions(registry)}
+    for withheld in ("create_quest_goal", "add_quest_strategy", "create_quest_habit", "create_quest_experiment", "update_quest_experiment"):
+        assert f"tool:{withheld}" not in published
+    assert all("user_asked_for_this_field" not in names and "rep_id" not in names for names in published.values())
+    assert "to" not in published["tool:send_quest_email"] and "tool:file_email_draft" in published
