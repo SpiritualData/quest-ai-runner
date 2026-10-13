@@ -837,6 +837,23 @@ def conversation_tasks(conv_id):
     return [t for t in all_tasks() if t.get("conv_id") == conv_id]
 
 
+def experiments_of(qid):
+    """The quest's Experiments section rows (research questions), keyed by id. The chat's
+    create/update helpers write here, not to quest fields, so without this the diff reported
+    "no changes" for a correct experiment write and the judge scored it as a claimed-but-unperformed
+    write."""
+    status, body = api("GET", f"/api/quests/{qid}/research-questions")
+    rows = body.get("research_questions") if status == 200 and isinstance(body, dict) else []
+    return {str(r.get("research_question_id") or r.get("id")): {
+        "question": r.get("question"), "status": r.get("status"), "context": r.get("context"),
+        "hypothesis": r.get("hypothesis"),
+        "conclusion": r.get("conclusion"), "start_date": r.get("start_date"),
+        "end_date": r.get("end_date"), "kind": r.get("kind"),
+        "linked_goal_ids": sorted(r.get("linked_goal_ids") or []),
+        "linked_collection_ids": sorted(r.get("linked_collection_ids") or [])}
+        for r in rows or [] if r.get("research_question_id") or r.get("id")}
+
+
 def snapshot(world=None):
     """Everything a chat turn could change, keyed so diff() can say precisely what moved."""
     world = world or load()
@@ -869,6 +886,7 @@ def snapshot(world=None):
                 (m.get("text"), bool(m.get("completed"))) for m in
                 (state.get("measurable_outcomes") or measurable_outcomes_of(qid))],
             "notes": {str(n.get("id")): str(n.get("text")) for n in notes_of(qid)},
+            "experiments": experiments_of(qid),
             "goals": {
                 (g.get("id") or g.get("goal_id")): {
                     "name": g.get("name") or g.get("title"), "period": g.get("period"),
@@ -933,6 +951,16 @@ def diff(before, after):
         for nid, text in was_notes.items():
             if nid not in now["notes"]:
                 changes.append(f"quest[{key}] NOTE REMOVED: {text[:200]!r}")
+        was_exp = was.get("experiments", {})
+        for xid, exp in now.get("experiments", {}).items():
+            if xid not in was_exp:
+                changes.append(f"quest[{key}] EXPERIMENT ADDED: {exp}")
+            elif was_exp[xid] != exp:
+                changes.append(f"quest[{key}] EXPERIMENT CHANGED {was_exp[xid].get('question')!r}: "
+                               f"{was_exp[xid]} -> {exp}")
+        for xid, exp in was_exp.items():
+            if xid not in now.get("experiments", {}):
+                changes.append(f"quest[{key}] EXPERIMENT REMOVED: {exp}")
         for gid, goal in now["goals"].items():
             old = was.get("goals", {}).get(gid)
             if old is None:
@@ -1402,6 +1430,16 @@ def revert(before, after, world=None):
                 api("PATCH", f"/api/quests/{qid}/field", {"field_name": field, "value": ""})
         for nid in set(now["notes"]) - set(was.get("notes", {})):
             api("DELETE", f"/api/quests/{qid}/notes/{nid}")
+        # Experiments: delete the ones a case created, put an edited one's details back.
+        was_exp = was.get("experiments", {})
+        for xid, exp in now.get("experiments", {}).items():
+            if xid not in was_exp:
+                api("DELETE", f"/api/quests/{qid}/research-questions/{xid}")
+            elif was_exp[xid] != exp:
+                old = was_exp[xid]
+                api("PATCH", f"/api/quests/{qid}/research-questions/{xid}", {
+                    k: old.get(k) for k in ("question", "context", "hypothesis", "status", "conclusion",
+                                            "start_date", "end_date") if old.get(k) is not None})
         for gid, goal in now["goals"].items():
             old = was.get("goals", {}).get(gid)
             if old is None:

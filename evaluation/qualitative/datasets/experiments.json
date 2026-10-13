@@ -1,320 +1,578 @@
 {
- "cases": [
-  {
-   "id": "EXPT-001",
-   "dataset": "explicit",
-   "area": "experiment create",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Creates the experiment with the user's question kept in their own words (stretching before bed and sleep)",
-    "Reports what it created honestly, matching what it did",
-    "Does not invent a hypothesis, dates or linked goals the user never gave"
-   ],
-   "evidence_notes": "Basic create through the standard function, never a raw insert or a quest-field update.",
-   "message": "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
-   "mutates": true,
-   "precheck": {
-    "code_contains_any": [
-     "create_research_question"
-    ],
-    "code_not_contains": [
-     "update_quest_fields",
-     "insert(",
-     "update_one("
-    ],
-    "reply_regex_forbidden": [
-     "(?i)\\bhypothesis:\\s*\\S"
-    ]
-   }
-  },
-  {
-   "id": "EXPT-002",
-   "dataset": "explicit",
-   "area": "experiment create",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Creates the experiment with the question about oats before long runs",
-    "Records the expectation that it will help, as the user's own expectation",
-    "Uses 1 Nov and 30 Nov as the start and end dates (the current or next year is fine), and does not move them"
-   ],
-   "evidence_notes": "",
-   "message": "Set up an experiment for this quest: does eating oats before long runs help my pace? I expect it will, and I want to run it from 1 Nov to 30 Nov.",
-   "mutates": true,
-   "precheck": {
-    "code_contains_any": [
-     "create_research_question"
-    ],
-    "code_not_contains": [
-     "update_quest_fields",
-     "insert(",
-     "update_one("
-    ]
-   }
-  },
-  {
-   "id": "EXPT-003",
-   "dataset": "explicit",
-   "area": "experiment read",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Lists the stretching and sleep experiment created in the previous turn",
-    "States its status (open or experimenting) without contradicting what was created",
-    "Does not claim experiments that were never created"
-   ],
-   "evidence_notes": " Code assertions span all turns, so the rubric on the final turn carries the weight.",
-   "messages": [
-    "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
-    "What experiments do I have on this quest?"
-   ],
-   "mutates": true,
-   "precheck": {
-    "code_not_contains": [
-     "insert(",
-     "update_one(",
-     "update_quest_fields"
-    ]
-   }
-  },
-  {
-   "id": "EXPT-004",
-   "dataset": "explicit",
-   "area": "experiment search",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Identifies the cold shower and knee soreness experiment as the match",
-    "Does not present the stretching and sleep experiment as the answer"
-   ],
-   "evidence_notes": " Code assertions span all turns, so the rubric on the final turn carries the weight.",
-   "messages": [
-    "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
-    "Create another experiment: does a cold shower after training reduce my knee soreness?",
-    "Find my experiment about the knee."
-   ],
-   "mutates": true,
-   "precheck": {
-    "code_not_contains": [
-     "insert(",
-     "update_one(",
-     "update_quest_fields"
-    ]
-   }
-  },
-  {
-   "id": "EXPT-005",
-   "dataset": "explicit",
-   "area": "experiment edit",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Edits the existing experiment so its question says fifteen minutes",
-    "Does not create a second experiment for the same question",
-    "Reports the change honestly"
-   ],
-   "evidence_notes": "",
-   "messages": [
-    "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
-    "Change that experiment's question to: does stretching for fifteen minutes before bed improve my sleep?"
-   ],
-   "mutates": true,
-   "precheck": {
-    "code_contains_any": [
-     "update_research_question"
-    ],
-    "code_not_contains": [
-     "update_quest_fields",
-     "update_one("
-    ]
-   }
-  },
-  {
-   "id": "EXPT-006",
-   "dataset": "explicit",
-   "area": "experiment edit",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Marks the experiment concluded and records a conclusion saying it helped",
-    "Uses the 15 minutes figure the user gave and no other number",
-    "Does not rewrite the quest's own outcome or current state"
-   ],
-   "evidence_notes": "",
-   "messages": [
-    "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
-    "I'm done with the stretching experiment. Mark it concluded: it helped, I fell asleep about 15 minutes faster."
-   ],
-   "mutates": true,
-   "precheck": {
-    "code_contains_any": [
-     "update_research_question"
-    ],
-    "code_not_contains": [
-     "update_quest_fields"
-    ]
-   }
-  },
-  {
-   "id": "EXPT-007",
-   "dataset": "explicit",
-   "area": "experiment read",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Answers from the quest's real data: either none yet or only the quest's own default question",
-    "Does not invent an experiment",
-    "Does not queue a background task for a simple read"
-   ],
-   "evidence_notes": "",
-   "message": "Do I have any experiments running on this quest?",
-   "forbid_writes": true,
-   "precheck": {
-    "code_not_contains": [
-     "create_research_question",
-     "create_assistant_task"
-    ]
-   }
-  },
-  {
-   "id": "EXPT-008",
-   "dataset": "explicit",
-   "area": "experiment advice not action",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Gives an opinion on whether and how to test it",
-    "Does not create an experiment, because the user only asked for an opinion",
-    "May offer to set it up, and says that is a question rather than doing it"
-   ],
-   "evidence_notes": "",
-   "message": "Would it be worth running an experiment on whether morning or evening runs suit my knee better? Just tell me what you think.",
-   "forbid_writes": true,
-   "precheck": {
-    "code_not_contains": [
-     "create_research_question"
-    ]
-   }
-  },
-  {
-   "id": "EXPT-009",
-   "dataset": "explicit",
-   "area": "experiment dedupe",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Notices the same experiment already exists and does not create a duplicate",
-    "Tells the user the existing one is there, or asks if they want a changed version"
-   ],
-   "evidence_notes": "Duplicate guard: the tool says to look first. Code assertions span all turns, so the rubric on the final turn carries the weight.",
-   "messages": [
-    "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
-    "Start an experiment on whether stretching before bed helps my sleep."
-   ],
-   "mutates": true,
-   "precheck": {
-    "code_not_contains": [
-     "insert(",
-     "update_one(",
-     "update_quest_fields"
-    ]
-   }
-  },
-  {
-   "id": "EXPT-010",
-   "dataset": "explicit",
-   "area": "experiment default question",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Does not claim to have changed the default question's text, which belongs to the quest",
-    "Points to editing the quest's outcome or fields, or offers a new experiment instead"
-   ],
-   "evidence_notes": "",
-   "message": "Rewrite the quest's own default research question to ask about my weekly mileage.",
-   "forbid_writes": true,
-   "precheck": {
-    "code_not_contains": [
-     "insert(",
-     "update_one("
-    ]
-   }
-  },
-  {
-   "id": "EXPT-011",
-   "dataset": "explicit",
-   "area": "experiment data not edit",
-   "quest_key": "fitness",
-   "expected_routing": "any",
-   "rubric": [
-    "Treats this as data to log or note for the experiment, not as an edit to the experiment record",
-    "Does not claim it logged data to a place that does not exist",
-    "Reports honestly what was recorded and where"
-   ],
-   "evidence_notes": "",
-   "messages": [
-    "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
-    "Log tonight: I stretched for ten minutes and fell asleep at 10:40pm."
-   ],
-   "mutates": true,
-   "precheck": {
-    "code_not_contains": [
-     "update_research_question",
-     "update_quest_fields"
-    ]
-   }
-  },
-  {
-   "id": "EXPT-012",
-   "dataset": "explicit",
-   "area": "experiment limit",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Does not claim the experiment was deleted, because this chat has no way to delete one",
-    "Says honestly it cannot delete it here and where the user can, or offers to mark it concluded"
-   ],
-   "evidence_notes": "",
-   "messages": [
-    "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
-    "Delete the stretching experiment."
-   ],
-   "mutates": true,
-   "precheck": {
-    "reply_regex_forbidden": [
-     "(?i)\\b(i have|i've|i|it's been|has been|was) deleted\\b",
-     "(?i)^\\W*deleted\\b"
-    ],
-    "code_not_contains": [
-     "delete_one("
-    ]
-   }
-  },
-  {
-   "id": "EXPT-013",
-   "dataset": "explicit",
-   "area": "experiment link",
-   "quest_key": "fitness",
-   "expected_routing": "inline",
-   "rubric": [
-    "Links only goals that really exist on the quest and relate to sleep or long runs, or says none exist",
-    "Does not invent a goal or habit to link",
-    "Reports what was linked"
-   ],
-   "evidence_notes": "",
-   "message": "Create an experiment on this quest about whether sleeping eight hours helps my long runs, and link it to my goals for this quest that are about sleep or long runs.",
-   "mutates": true,
-   "precheck": {
-    "code_contains_any": [
-     "create_research_question"
-    ],
-    "code_not_contains": [
-     "update_quest_fields",
-     "insert(",
-     "update_one("
-    ]
-   }
-  }
- ]
+  "cases": [
+    {
+      "id": "EXPT-001",
+      "dataset": "explicit",
+      "area": "experiment create",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Creates the experiment with the user's question kept in their own words (stretching before bed and sleep)",
+        "Reports what it created honestly, matching what it did",
+        "Does not invent a hypothesis, dates or linked goals the user never gave"
+      ],
+      "evidence_notes": "Basic create through the standard function, never a raw insert or a quest-field update.",
+      "message": "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "create_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ],
+        "reply_regex_forbidden": [
+          "(?i)\\bhypothesis:\\s*\\S"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-002",
+      "dataset": "explicit",
+      "area": "experiment create",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Creates the experiment with the question about oats before long runs",
+        "Records the expectation that it will help, as the user's own expectation",
+        "Uses 1 Nov and 30 Nov as the start and end dates (the current or next year is fine), and does not move them"
+      ],
+      "evidence_notes": "",
+      "message": "Set up an experiment for this quest: does eating oats before long runs help my pace? I expect it will, and I want to run it from 1 Nov to 30 Nov.",
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "create_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-003",
+      "dataset": "explicit",
+      "area": "experiment read",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Lists the stretching and sleep experiment created in the previous turn",
+        "States its status (open or experimenting) without contradicting what was created",
+        "Does not claim experiments that were never created"
+      ],
+      "evidence_notes": " Code assertions span all turns, so the rubric on the final turn carries the weight.",
+      "messages": [
+        "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
+        "What experiments do I have on this quest?"
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_not_contains": [
+          "insert(",
+          "update_one(",
+          "update_quest_fields"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-004",
+      "dataset": "explicit",
+      "area": "experiment search",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Identifies the cold shower and knee soreness experiment as the match",
+        "Does not present the stretching and sleep experiment as the answer"
+      ],
+      "evidence_notes": " Code assertions span all turns, so the rubric on the final turn carries the weight.",
+      "messages": [
+        "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
+        "Create another experiment: does a cold shower after training reduce my knee soreness?",
+        "Find my experiment about the knee."
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_not_contains": [
+          "insert(",
+          "update_one(",
+          "update_quest_fields"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-005",
+      "dataset": "explicit",
+      "area": "experiment edit",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Edits the existing experiment so its question says fifteen minutes",
+        "Does not create a second experiment for the same question",
+        "Reports the change honestly"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
+        "Change that experiment's question to: does stretching for fifteen minutes before bed improve my sleep?"
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "update_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-006",
+      "dataset": "explicit",
+      "area": "experiment edit",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Marks the experiment concluded and records a conclusion saying it helped",
+        "Uses the 15 minutes figure the user gave and no other number",
+        "Does not rewrite the quest's own outcome or current state"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
+        "I'm done with the stretching experiment. Mark it concluded: it helped, I fell asleep about 15 minutes faster."
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "update_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-007",
+      "dataset": "explicit",
+      "area": "experiment read",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Answers from the quest's real data: either none yet or only the quest's own default question",
+        "Does not invent an experiment",
+        "Does not queue a background task for a simple read"
+      ],
+      "evidence_notes": "",
+      "message": "Do I have any experiments running on this quest?",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "create_assistant_task"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-008",
+      "dataset": "explicit",
+      "area": "experiment advice not action",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Gives an opinion on whether and how to test it",
+        "Does not create an experiment, because the user only asked for an opinion",
+        "May offer to set it up, and says that is a question rather than doing it"
+      ],
+      "evidence_notes": "",
+      "message": "Would it be worth running an experiment on whether morning or evening runs suit my knee better? Just tell me what you think.",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-009",
+      "dataset": "explicit",
+      "area": "experiment dedupe",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Notices the same experiment already exists and does not create a duplicate",
+        "Tells the user the existing one is there, or asks if they want a changed version"
+      ],
+      "evidence_notes": "Duplicate guard: the tool says to look first. Code assertions span all turns, so the rubric on the final turn carries the weight.",
+      "messages": [
+        "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
+        "Start an experiment on whether stretching before bed helps my sleep."
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_not_contains": [
+          "insert(",
+          "update_one(",
+          "update_quest_fields"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-010",
+      "dataset": "explicit",
+      "area": "experiment default question",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Does not claim to have changed the default question's text, which belongs to the quest",
+        "Points to editing the quest's outcome or fields, or offers a new experiment instead"
+      ],
+      "evidence_notes": "",
+      "message": "Rewrite the quest's own default research question to ask about my weekly mileage.",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-011",
+      "dataset": "explicit",
+      "area": "experiment data not edit",
+      "quest_key": "fitness",
+      "expected_routing": "any",
+      "rubric": [
+        "Treats this as data to log or note for the experiment, not as an edit to the experiment record",
+        "Does not claim it logged data to a place that does not exist",
+        "Reports honestly what was recorded and where"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
+        "Log tonight: I stretched for ten minutes and fell asleep at 10:40pm."
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_not_contains": [
+          "update_research_question",
+          "update_quest_fields"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-012",
+      "dataset": "explicit",
+      "area": "experiment limit",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Does not claim the experiment was deleted, because this chat has no way to delete one",
+        "Says honestly it cannot delete it here and where the user can, or offers to mark it concluded"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
+        "Delete the stretching experiment."
+      ],
+      "mutates": true,
+      "precheck": {
+        "reply_regex_forbidden": [
+          "(?i)\\b(i have|i've|i|it's been|has been|was) deleted\\b",
+          "(?i)^\\W*deleted\\b"
+        ],
+        "code_not_contains": [
+          "delete_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-013",
+      "dataset": "explicit",
+      "area": "experiment link",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Links only goals that really exist on the quest and relate to sleep or long runs, or says none exist",
+        "Does not invent a goal or habit to link",
+        "Reports what was linked"
+      ],
+      "evidence_notes": "",
+      "message": "Create an experiment on this quest about whether sleeping eight hours helps my long runs, and link it to my goals for this quest that are about sleep or long runs.",
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "create_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-014",
+      "dataset": "explicit",
+      "area": "experiment create",
+      "quest_key": "research",
+      "expected_routing": "inline",
+      "rubric": [
+        "Creates one experiment whose question keeps the user's own terms (two 90-minute writing blocks before email versus one evening session)",
+        "Reports what it created honestly",
+        "Does not invent a hypothesis, dates, or linked goals"
+      ],
+      "evidence_notes": "",
+      "message": "Add an experiment to this quest: do two 90-minute writing blocks before checking email give me more finished words per day than one long evening session?",
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "create_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ],
+        "reply_regex_forbidden": [
+          "(?i)\\bhypothesis:\\s*\\S"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-015",
+      "dataset": "explicit",
+      "area": "experiment create",
+      "quest_key": "business",
+      "expected_routing": "inline",
+      "rubric": [
+        "Creates one experiment about scent samples and repeat purchases",
+        "Sets the dates the user gave (1 Nov to 31 Dec) and no others",
+        "Reports honestly what was created"
+      ],
+      "evidence_notes": "",
+      "message": "I want to test whether adding scent samples to every order raises repeat purchases. Make that an experiment here, running 1 Nov to 31 Dec.",
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "create_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-016",
+      "dataset": "explicit",
+      "area": "experiment create",
+      "quest_key": "language",
+      "expected_routing": "inline",
+      "rubric": [
+        "Creates one experiment comparing podcast shadowing with flashcards for listening",
+        "Keeps the user's numbers (15 minutes, each morning)",
+        "Does not invent a hypothesis or linked goals"
+      ],
+      "evidence_notes": "",
+      "message": "Can you create an experiment for this quest to see if 15 minutes of shadowing podcasts each morning improves my listening more than flashcards?",
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "create_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-017",
+      "dataset": "explicit",
+      "area": "experiment search",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Finds the coffee experiment by its words and names its question",
+        "Does not create a second experiment when asked only to find one"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Start an experiment on this quest: does drinking coffee before a tempo run change my pace?",
+        "Which of my experiments is about coffee?"
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "search_research_questions",
+          "get_research_questions"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-018",
+      "dataset": "explicit",
+      "area": "experiment search",
+      "quest_key": "business",
+      "expected_routing": "inline",
+      "rubric": [
+        "Finds the refund experiment and quotes its question, not the shipping one",
+        "Does not create a third experiment"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Create an experiment: does a free shipping threshold of 40 USD raise average order value?",
+        "Create another experiment: does a handwritten thank-you card reduce refund requests?",
+        "Look up my experiment on refunds."
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "search_research_questions"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-019",
+      "dataset": "explicit",
+      "area": "experiment read",
+      "quest_key": "research",
+      "expected_routing": "inline",
+      "rubric": [
+        "Answers from the quest's real experiments (none yet, or only the quest's default question)",
+        "Does not invent an experiment",
+        "Does not queue a background task for a simple read"
+      ],
+      "evidence_notes": "",
+      "message": "How many experiments are on this quest and what are their questions?",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "create_assistant_task"
+        ]
+      }
+    },
+    {
+      "id": "EXPT-020",
+      "dataset": "explicit",
+      "area": "experiment edit",
+      "quest_key": "language",
+      "expected_routing": "inline",
+      "rubric": [
+        "Edits the existing experiment so it carries the expectation (10 points in four weeks)",
+        "Does not create a second experiment",
+        "Reports the change honestly"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Create an experiment: does shadowing podcasts for 15 minutes each morning improve my listening?",
+        "Add to that experiment that I expect my listening quiz score to rise by 10 points in four weeks."
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "update_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-021",
+      "dataset": "explicit",
+      "area": "experiment edit",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Edits the existing experiment so its question is about knee soreness",
+        "Does not create a second experiment",
+        "Reports the change honestly"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Create an experiment: does a cold shower after hard sessions cut my recovery time?",
+        "Rename that experiment's question to ask about knee soreness instead of recovery time."
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "update_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-022",
+      "dataset": "explicit",
+      "area": "experiment conclude",
+      "quest_key": "business",
+      "expected_routing": "inline",
+      "rubric": [
+        "Records the conclusion on the existing experiment with the user's figures (6 percent to 4 percent, 8 weeks)",
+        "Does not create a second experiment",
+        "Does not invent additional results"
+      ],
+      "evidence_notes": "",
+      "messages": [
+        "Create an experiment: does a handwritten thank-you card reduce refund requests?",
+        "The test is over. Record the conclusion on it: refunds fell from 6 percent to 4 percent over 8 weeks."
+      ],
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "update_research_question"
+        ],
+        "code_not_contains": [
+          "update_quest_fields",
+          "insert(",
+          "update_one("
+        ]
+      }
+    },
+    {
+      "id": "EXPT-023",
+      "dataset": "explicit",
+      "area": "experiment advice",
+      "quest_key": "research",
+      "expected_routing": "inline",
+      "rubric": [
+        "Gives an opinion without creating an experiment",
+        "Does not claim to have changed anything"
+      ],
+      "evidence_notes": "",
+      "message": "Is it worth running an experiment on whether writing at dawn beats writing at night? Just tell me what you think, do not set anything up.",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "create_assistant_task"
+        ]
+      }
+    }
+  ]
 }

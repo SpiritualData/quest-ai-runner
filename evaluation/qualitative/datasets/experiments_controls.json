@@ -1,0 +1,205 @@
+{
+  "cases": [
+    {
+      "id": "EXPCTL-001",
+      "dataset": "explicit",
+      "area": "control read",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "States the quest's current state from the record (about 58 minutes for 10K, three runs a week)",
+        "Does not invent figures"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "What is my current state on this quest, in one sentence?",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      }
+    },
+    {
+      "id": "EXPCTL-002",
+      "dataset": "explicit",
+      "area": "control read",
+      "quest_key": "business",
+      "expected_routing": "inline",
+      "rubric": [
+        "Lists the real goals on the quest and does not invent any",
+        "Does not queue a background task"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "List my goals on this quest for this month.",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      }
+    },
+    {
+      "id": "EXPCTL-003",
+      "dataset": "explicit",
+      "area": "control read",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Says 22 Nov (the moved date), not 8 Nov"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "When is my race now?",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      }
+    },
+    {
+      "id": "EXPCTL-004",
+      "dataset": "explicit",
+      "area": "control read",
+      "quest_key": "business",
+      "expected_routing": "inline",
+      "rubric": [
+        "Names the real measurable outcomes (100 paid orders, the 2,000 USD cap, 10 customer interviews)"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "What measurable outcomes does this quest have?",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      }
+    },
+    {
+      "id": "EXPCTL-005",
+      "dataset": "explicit",
+      "area": "control read",
+      "quest_key": "language",
+      "expected_routing": "inline",
+      "rubric": [
+        "Answers from real notes or says there are none, without inventing"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "What did I write in my notes on this quest recently?",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      }
+    },
+    {
+      "id": "EXPCTL-006",
+      "dataset": "explicit",
+      "area": "control write",
+      "quest_key": "business",
+      "expected_routing": "inline",
+      "rubric": [
+        "Adds exactly one goal about photographing the 6 scents",
+        "Does not create an experiment and changes no quest field"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "Add a goal for this month: Photograph all 6 candle scents for the product page.",
+      "mutates": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      }
+    },
+    {
+      "id": "EXPCTL-007",
+      "dataset": "explicit",
+      "area": "control write",
+      "quest_key": "fitness",
+      "expected_routing": "inline",
+      "rubric": [
+        "Adds one note with the user's content",
+        "Does not create an experiment"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "Add a note to this quest: new shoes arrived, 8 mm drop, felt fine.",
+      "mutates": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      }
+    },
+    {
+      "id": "EXPCTL-008",
+      "dataset": "explicit",
+      "area": "control deep",
+      "quest_key": "research",
+      "expected_routing": "deep",
+      "rubric": [
+        "Treats this as substantial research work and routes it to a deep run rather than answering from memory",
+        "Does not create an experiment"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "Write a full literature review of recent papers on replication failures in social psychology, with citations, and save it as a document.",
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      },
+      "mutates": true,
+      "forbid_writes": false,
+      "forbidden_side_effects": "must not create or edit an experiment or change quest fields; the queued task is removed by the runner"
+    },
+    {
+      "id": "EXPCTL-009",
+      "dataset": "explicit",
+      "area": "control deep",
+      "quest_key": "fitness",
+      "expected_routing": "deep",
+      "rubric": [
+        "Treats this as code work and routes it to a deep run",
+        "Does not create an experiment"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "Write a Python script that parses my watch CSV exports and charts weekly mileage, then run it.",
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      },
+      "mutates": true,
+      "forbid_writes": false,
+      "forbidden_side_effects": "must not create or edit an experiment or change quest fields; the queued task is removed by the runner"
+    },
+    {
+      "id": "EXPCTL-010",
+      "dataset": "explicit",
+      "area": "control advice",
+      "quest_key": "family",
+      "expected_routing": "inline",
+      "rubric": [
+        "Gives practical advice in a few sentences",
+        "Changes nothing and creates no experiment"
+      ],
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "message": "What is a gentle way to bring up chores with my teenager? Just advice, do not set anything up.",
+      "forbid_writes": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_research_question",
+          "update_research_question"
+        ]
+      }
+    }
+  ]
+}
