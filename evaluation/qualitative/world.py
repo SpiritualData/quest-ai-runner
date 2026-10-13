@@ -1437,9 +1437,15 @@ def revert(before, after, world=None):
                 api("DELETE", f"/api/quests/{qid}/research-questions/{xid}")
             elif was_exp[xid] != exp:
                 old = was_exp[xid]
+                # The quest's own default question keeps its question text and context (the API
+                # refuses them), so restore only what a default row lets anyone change.
+                keys = (("hypothesis", "status", "conclusion", "start_date", "end_date")
+                        if old.get("kind") == "default" else
+                        ("question", "context", "hypothesis", "status", "conclusion",
+                         "start_date", "end_date"))
                 api("PATCH", f"/api/quests/{qid}/research-questions/{xid}", {
-                    k: old.get(k) for k in ("question", "context", "hypothesis", "status", "conclusion",
-                                            "start_date", "end_date") if old.get(k) is not None})
+                    k: ("" if old.get(k) is None and k in ("hypothesis", "conclusion") else old.get(k))
+                    for k in keys if old.get(k) is not None or k in ("hypothesis", "conclusion")})
         for gid, goal in now["goals"].items():
             old = was.get("goals", {}).get(gid)
             if old is None:
