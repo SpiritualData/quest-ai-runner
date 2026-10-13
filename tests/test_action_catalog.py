@@ -337,6 +337,32 @@ def test_a_quest_the_author_does_not_own_is_refused():
     assert not unreadable.ok and send.calls == []
 
 
+def stamped(user="u1", quest="quest_9", can_edit=True):
+    task = task_for("tool", "send_mail", {"subject": "Hi"})
+    task["user_id"] = "coeditor"
+    task["requested_action"]["authorized"] = {"user_id": user, "quest_id": quest, "can_edit": can_edit,
+                                              "checked_at": "2026-10-13T00:00:00Z"}
+    return task
+
+
+def test_a_co_editor_with_a_matching_stamp_runs():
+    send = spec("send_mail", context_args={"quest_id": "quest_id"})
+    outcome = run_requested_action(stamped(user="coeditor"), ToolRegistry([send]), client=OwnerClient(owners=("someone_else",)))
+    assert outcome.ok and len(send.calls) == 1
+
+
+def test_a_stamp_for_another_user_or_quest_or_without_edit_rights_is_refused():
+    for task in (stamped(user="someone"), stamped(user="coeditor", quest="quest_OTHER"), stamped(user="coeditor", can_edit=False)):
+        send = spec("send_mail")
+        outcome = run_requested_action(task, ToolRegistry([send]), client=OwnerClient(owners=("someone_else",)))
+        assert not outcome.ok and send.calls == []
+
+
+def test_an_owner_without_a_stamp_still_runs():
+    send = spec("send_mail", context_args={"quest_id": "quest_id"})
+    assert run_requested_action(task_for("tool", "send_mail", {"subject": "Hi"}), ToolRegistry([send]), client=OwnerClient()).ok
+
+
 def standard_registry(calls):
     from quest_ai_runner.core.tools import file_email_draft_spec, send_quest_email_spec
 

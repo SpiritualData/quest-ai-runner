@@ -602,7 +602,7 @@ class Poller:
             log.info("task %s asks for an action published by %r, not this runner -- not claiming",
                      task_id, request.get("publisher"))
             return False
-        pinned = str(request.get("env_id") or task.get("env_id") or "")
+        pinned = str(task.get("env_id") or request.get("env_id") or "")
         if pinned and pinned != str(self.cfg.env_id or ""):
             log.info("task %s is pinned to another environment -- not claiming", task_id)
             return False

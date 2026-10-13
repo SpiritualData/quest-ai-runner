@@ -44,25 +44,31 @@ def decode_json_params(properties: Dict[str, Any], args: Dict[str, Any]) -> Dict
 
 
 def author_may_act(task: Dict[str, Any], client: Any) -> Optional[str]:
-    """None when the task's author owns the task's quest, else the reason to refuse.
+    """None when the task's author may act on the task's quest, else the reason to refuse.
 
     The action runs with the runner owner's Quest key, so Quest's own permission check sees the
-    runner, not the person who built the workflow. This is the check that stands in for it. Quest
-    exposes a quest's owners (``owner_user_ids``) but no co-editor list to a runner key, so a
-    co-editor who is not an owner is refused until Quest offers that read."""
+    runner, not the person who built the workflow. This is the check that stands in for it. It
+    passes when the author owns the quest (``owner_user_ids``), or when Quest stamped
+    ``requested_action.authorized`` (server side only, after re-validating the author's edit rights
+    at dispatch) for this very author and quest with ``can_edit`` true. The stamp is how co-editors,
+    whom a runner key cannot read, get through."""
     quest_id = str(task.get("goal_id") or "")
     if not quest_id:
         return None
     author = str(task.get("created_by") or task.get("user_id") or "")
     if not author:
         return "The task does not say who its author is, so access to the quest cannot be checked."
+    stamp = (task.get("requested_action") or {}).get("authorized")
+    if (isinstance(stamp, dict) and stamp.get("can_edit") is True
+            and str(stamp.get("user_id") or "") == author and str(stamp.get("quest_id") or "") == quest_id):
+        return None
     quest = client.get_quest(quest_id) if client is not None else {}
     owners = [str(o) for o in ((quest or {}).get("owner_user_ids") or [])]
+    if author in owners:
+        return None
     if not owners:
         return "The quest's owners could not be read, so the author's access cannot be checked."
-    if author not in owners:
-        return "The task's author does not own this quest, so the runner will not act on it for them."
-    return None
+    return "The task's author does not own this quest, so the runner will not act on it for them."
 
 
 def run_requested_action(task: Dict[str, Any], registry: Any, mcp_servers: Sequence[Any] = (),

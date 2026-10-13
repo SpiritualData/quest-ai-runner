@@ -182,8 +182,10 @@ workflow. Quest's own permission check therefore sees the runner. These checks s
 - Only arguments named in that action's published form are kept. `quest_id`, `task_id` and any
   hidden parameter always come from the task, never from the arguments.
 - If the task names a quest, its author (`created_by`, else `user_id`) must be one of the quest's
-  `owner_user_ids`. A quest co-editor who is not an owner is refused: Quest does not give a runner
-  key a co-editor list yet (a gap to close on the Quest side).
+  `owner_user_ids`, or Quest must have stamped `requested_action.authorized` (`user_id`, `quest_id`,
+  `can_edit: true`, `checked_at`; set server side only, after re-checking the author's edit rights at
+  dispatch) for that same author and quest. The stamp is how co-editors run actions. A mismatched
+  stamp or `can_edit: false` is refused. Environment pinning uses the task's `env_id`.
 
 Published standard tools: `send_quest_email` (subject and body only; it mails the quest's own
 people as the step's persona, never a recipient override or `rep_id`), `file_email_draft` (files one
