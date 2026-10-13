@@ -195,6 +195,13 @@ the key's; `user_id` (the rep) is passed explicitly.
 The poller posts what the lane can honestly do (`web` / `corpus` / `code`, derived from the wired
 adapters) each cycle, so Quest's router only sends work the lane can handle.
 
+### Action catalog (tools and connectors as workflow step actions)
+`QuestClient.publish_action_catalog(owner_type, owner_id, publisher_id, actions, env_id=, publisher_label=)`
+-> `PUT /api/{teams|orgs}/{id}/action-catalogs/{publisher_id}` (member of that team or org). Sent from
+the heartbeat when the list changed or every 4 hours; see `docs/tools.md` ("Offering tools and
+connectors to Quest Workflows"). A task for a published action arrives with `requested_action`
+(`{publisher, kind: "tool"|"connector_operation", name, action_id, args}`) and is run directly.
+
 ### Fast lane for real-time tasks (cross-environment context requests)
 
 A REAL-TIME task (`"real_time": true` on the task doc) is one its creator flagged as

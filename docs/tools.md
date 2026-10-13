@@ -135,3 +135,33 @@ python -m quest_ai_runner.tools call send_quest_email \
 
 `--args-file PATH` (or `-` for stdin) takes the JSON from a file. Exit code 0 is success, 1 a failed
 call (the reason on stderr), 2 bad arguments.
+
+## Offering tools and connectors to Quest Workflows
+
+Quest Workflows can run a step as one action. Quest does not hard-code this runner's tools: the
+runner **publishes** them. On its heartbeat, per team and org it serves, the runner PUTs an action
+list to `PUT /api/{teams|orgs}/{id}/action-catalogs/quest-ai-runner` (same `qsk_` key, the key's user
+must be a member). Quest stores it and the workflow editor lists each entry; the runner republishes
+when the list changes and every 4 hours as a keep-alive (Quest hides a catalog not refreshed for 48
+hours). Code: `runner/action_catalog.py`.
+
+What is published is decided by a rule, not a list:
+
+- A **tool** is published when it acts (`mutates` is true). Read-only tools return text nothing in a
+  scheduled step would use, so they stay out. A tool overrides the rule either way with
+  `workflow_step` (`workflow_step = true` in its TOML entry publishes a read-only tool, `false`
+  withholds a mutating one).
+- A **connector** (an MCP server in `mcp_servers`) publishes each operation on its **write**
+  allowlist (`writable_tools`). Read-side tools never appear.
+
+Name, description and parameters come straight from the tool or server definition. Parameters the
+runner fills itself (`defaults`, `context_args` such as `quest_id`) are not asked for; object and
+array parameters are entered as JSON text.
+
+When a step runs a published action, Quest queues an ordinary task for the environment that
+published it, carrying `requested_action: {publisher, kind, name, action_id, args}`, as the person
+who set the action and with the step's persona. The poller recognizes the field after claiming the
+task and calls exactly that tool or connector operation with exactly those arguments
+(`runner/requested_action.py`): no planner, no deep run, so the step does what it says. The outcome
+is reported done or failed on the task, and Quest's existing reconcile marks the step.
+

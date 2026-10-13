@@ -591,6 +591,43 @@ class Poller:
                 log.warning("recovery: could not reconcile abandoned task %s (%s) — it will be "
                             "left for the backend's own staleness sweep", task_id, e)
 
+    def _run_requested_action(self, task: Dict[str, Any], task_id: str) -> Optional[str]:
+        """Run the single tool or connector operation a workflow step asked for and report the outcome."""
+        from ..config import resolve_tool_registry
+        from .requested_action import run_requested_action
+        try:
+            outcome = run_requested_action(task, resolve_tool_registry(self.cfg), self.cfg.mcp_servers)
+        except Exception as e:  # noqa: BLE001 -- an action that crashes is a failed task, never a lost one
+            log.error("requested action for task %s crashed", task_id, exc_info=True)
+            outcome = None
+            self.client.report_failed(task_id, f"The requested action crashed: {e}")
+        if outcome is not None:
+            if outcome.ok:
+                self.client.report_done(task_id, outcome.text)
+            else:
+                self.client.report_failed(task_id, outcome.text)
+        log.info("task %s -> requested action %s", task_id, "done" if outcome and outcome.ok else "failed")
+        return task_id
+
+    def publish_action_catalog(self) -> None:
+        """Offer this runner's tools and connectors to Quest Workflows (see runner/action_catalog.py).
+        Runs on the heartbeat; the publisher itself skips unchanged, recently sent catalogs."""
+        from ..config import resolve_tool_registry
+        from .action_catalog import CatalogPublisher, build_actions
+        publisher = getattr(self, "catalog_publisher", None)
+        if publisher is None:
+            publisher = self.catalog_publisher = CatalogPublisher()
+        targets = [("team", t) for t in self.configured_teams()]
+        if self.cfg.org_id:
+            targets.append(("org", self.cfg.org_id))
+        if not targets:
+            return
+        actions = getattr(self, "catalog_actions", None)
+        if actions is None or time.monotonic() - getattr(self, "catalog_built_at", 0.0) > 3600:
+            actions = self.catalog_actions = build_actions(resolve_tool_registry(self.cfg), self.cfg.mcp_servers)
+            self.catalog_built_at = time.monotonic()
+        publisher.publish(self.client, targets, actions, env_id=self.cfg.env_id, label=self.cfg.runner_label)
+
     def attach_tool_listing(self) -> None:
         """Hand the client this runner's tool catalog (read-only listing) so the heartbeat reports it.
         Computed once; best-effort, a failure just means no tools are reported."""
@@ -650,6 +687,10 @@ class Poller:
                 )
             except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
                 log.info("environment heartbeat (org scope) failed (%s) — continuing poll", e)
+        try:
+            self.publish_action_catalog()
+        except Exception:  # noqa: BLE001 — publishing the catalog is best-effort, never breaks the scan
+            log.info("action catalog publish failed — continuing poll", exc_info=True)
 
     def _deferred_task_desc(self, task: Dict[str, Any]) -> str:
         """One "holding N task(s)" line entry, naming the zone it was compared in when it had
@@ -748,6 +789,10 @@ class Poller:
         # runner is on it -- and if this process is killed (OOM, SIGKILL) nothing else will ever
         # notice. ``_recover_orphans`` reconciles this on the next start; see take_orphans().
         self.state.claim_in_flight(task_id)
+        # A task queued for one published action (a Quest workflow step) is that action and nothing
+        # else: no planner, no deep run. See runner/requested_action.py.
+        if task.get("requested_action"):
+            return self._run_requested_action(task, task_id)
         # Opt-in: refresh this rep's skill file from its Quest profile right before running, so the
         # spawned agent reflects the latest persona + learned corrections. Best-effort: a sync
         # failure is logged and the task still runs (it just uses the last-synced skill file).

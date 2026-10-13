@@ -122,6 +122,9 @@ class ToolSpec:
     # arg name -> ToolContext key: filled from the turn when the model leaves the arg out.
     context_args: Dict[str, str] = field(default_factory=dict)
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    # Whether Quest Workflows may offer this tool as a step action. None = the rule in
+    # ``runner.action_catalog`` (tools that act, ``mutates``); True/False overrides it either way.
+    workflow_step: Optional[bool] = None
 
     def required(self) -> List[str]:
         return list((self.parameters or {}).get("required") or [])
@@ -1382,7 +1385,8 @@ def spec_from_toml_entry(entry: Mapping[str, Any]) -> ToolSpec:
         when_not_to_use=str(entry["when_not_to_use"]).strip(),
         parameters=params, mutates=bool(entry.get("mutates", True)), origin="custom",
         keywords=tuple(entry.get("keywords") or ()), defaults=dict(entry.get("defaults") or {}),
-        context_args=dict(entry.get("context_args") or {}), timeout_seconds=timeout)
+        context_args=dict(entry.get("context_args") or {}), timeout_seconds=timeout,
+        workflow_step=(bool(entry["workflow_step"]) if entry.get("workflow_step") is not None else None))
 
 
 def apply_standard_overrides(registry: ToolRegistry, overrides: Mapping[str, Any]) -> None:

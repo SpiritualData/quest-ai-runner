@@ -709,6 +709,27 @@ class QuestClient:
             log.warning("post_environment_heartbeat failed: %s", e)
             return {}
 
+    def publish_action_catalog(self, owner_type: str, owner_id: str, publisher_id: str,
+                               actions: List[Dict[str, Any]], *, env_id: Optional[str] = None,
+                               publisher_label: Optional[str] = None) -> Dict[str, Any]:
+        """Publish the actions this runner offers to Quest Workflows for a team or org.
+
+        PUTs ``/api/{teams|orgs}/{owner_id}/action-catalogs/{publisher_id}``, replacing what this
+        publisher published there before. Authed by this runner's qsk_ key (its user must be a member).
+        Returns Quest's summary (``action_count``, ``unchanged``, ...), or ``{}`` on failure: a failed
+        publish never breaks the poll, the next heartbeat tries again."""
+        plural = "orgs" if owner_type == "org" else "teams"
+        body: Dict[str, Any] = {"actions": actions}
+        if env_id:
+            body["env_id"] = env_id
+        if publisher_label:
+            body["publisher_label"] = publisher_label
+        try:
+            return self._request("PUT", f"/api/{plural}/{owner_id}/action-catalogs/{publisher_id}", body=body) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("publish_action_catalog failed for %s %s: %s", owner_type, owner_id, e)
+            return {}
+
     def get_work_model_config(self, *, team_id: Optional[str] = None,
                               env_id: Optional[str] = None) -> Dict[str, Any]:
         """The effective work-model view for one of the team's environments.
