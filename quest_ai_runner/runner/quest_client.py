@@ -1641,6 +1641,39 @@ class QuestClient:
         body.update({k: v for k, v in fields.items() if v is not None})
         return self._request("POST", "/api/planning/habits", body=body) or {}
 
+    def list_experiments(self, quest_id: str) -> List[Dict[str, Any]]:
+        """GET /api/quests/{quest_id}/research-questions: the quest's experiments.
+
+        The default question (the one the quest's creation inquiry asked) comes first. Raises
+        ``QuestApiError``/``QuestNotConfigured``: an empty list must mean "none", never "failed".
+        """
+        resp = self._request("GET", f"/api/quests/{quest_id}/research-questions") or {}
+        rows = resp.get("research_questions") if isinstance(resp, dict) else resp
+        return [r for r in (rows or []) if isinstance(r, dict)]
+
+    def create_experiment(self, quest_id: str, question: str, **fields: Any) -> Dict[str, Any]:
+        """POST /api/quests/{quest_id}/research-questions: create one experiment.
+
+        ``fields`` are the endpoint's optional keys: ``context``, ``hypothesis``,
+        ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date``,
+        ``conditions``. Raises like ``create_habit``.
+        """
+        body: Dict[str, Any] = {"question": question}
+        body.update({k: v for k, v in fields.items() if v is not None})
+        return self._request("POST", f"/api/quests/{quest_id}/research-questions", body=body) or {}
+
+    def update_experiment(self, quest_id: str, research_question_id: str,
+                          **changes: Any) -> Dict[str, Any]:
+        """PATCH /api/quests/{quest_id}/research-questions/{id}: change only the keys given.
+
+        Keys: ``question``, ``context``, ``hypothesis``, ``status``, ``conclusion``,
+        ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date`` (``""`` clears
+        a date), ``conditions``. Raises like ``create_habit``.
+        """
+        return self._request(
+            "PATCH", f"/api/quests/{quest_id}/research-questions/{research_question_id}",
+            body=changes) or {}
+
     def get_my_quest(self, quest_id: str) -> Dict[str, Any]:
         """GET /api/quests/{quest_id}/state — fetch one account-wide quest's full state.
 

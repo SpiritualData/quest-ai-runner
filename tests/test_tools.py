@@ -34,7 +34,8 @@ from quest_ai_runner.core.tools import (
 
 # The standard catalog with Quest credentials: the two mail tools plus one quest-data tool per
 # field, goal, strategy and habit (core/tools.py QUEST_DATA_TOOLS).
-STANDARD_WITH_QUEST = sorted(["file_email_draft", "send_quest_email", *QUEST_DATA_TOOLS])
+STANDARD_WITH_QUEST = sorted(["file_email_draft", "send_quest_email", "find_quest_experiments",
+                              *QUEST_DATA_TOOLS])
 
 
 def make_spec(name, *, handler=None, mutates=True, keywords=(), description=None, **kw):

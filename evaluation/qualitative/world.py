@@ -1353,6 +1353,8 @@ It acts by generating Python that calls named helpers. It CAN:
   reflection and reviews: save_daily_reflection, get_latest_reflection, parse_daily_plan,
     create_daily_goals, get_period_review_stats, save_period_review, create_period_goals
   tasks: create_assistant_task, cancel_assistant_task, get_task_results
+  experiments (the quest's Experiments section): get_research_questions (READ), search_research_questions(quest_id, query),
+    create_research_question(quest_id, question, ...), update_research_question(quest_id, id, fields). No delete.
   raw Mongo on five collections only: quests, goals, collections, entries, users. A raw write
     (update_one/update_many/delete_one) on ``quests`` is refused by a guard; raw writes on goals,
     collections and entries go through, so renaming a goal, editing a goal's criteria, editing or

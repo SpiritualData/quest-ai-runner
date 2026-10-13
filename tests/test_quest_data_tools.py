@@ -25,8 +25,11 @@ from quest_ai_runner.core.tools import (
     add_quest_strategy_spec,
     build_tool_registry,
     create_quest_goal_spec,
+    create_quest_experiment_spec,
     create_quest_habit_spec,
+    find_quest_experiments_spec,
     quest_field_tool_spec,
+    update_quest_experiment_spec,
 )
 
 CREDS = {"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "key"}
@@ -53,6 +56,28 @@ class FakeQuestClient:
                            user_requested=False):
         self.calls.append(("strategy", quest_id, title, description, actor, user_requested))
         return self.response
+
+    experiments = [
+        {"research_question_id": "rq_default", "kind": "default", "status": "open",
+         "question": "What will it take to run a marathon?"},
+        {"research_question_id": "rq_sleep", "kind": "custom", "status": "experimenting",
+         "question": "Does a cold shower help my sleep?", "hypothesis": "Yes",
+         "context": "Evenings after training"},
+        {"research_question_id": "rq_diet", "kind": "custom", "status": "open",
+         "question": "Which diet best supports my long runs?"},
+    ]
+
+    def list_experiments(self, quest_id):
+        self.calls.append(("list_experiments", quest_id))
+        return list(self.experiments)
+
+    def create_experiment(self, quest_id, question, **kw):
+        self.calls.append(("create_experiment", quest_id, question, kw))
+        return {"research_question_id": "rq_new", "status": "open", "question": question}
+
+    def update_experiment(self, quest_id, rid, **changes):
+        self.calls.append(("update_experiment", quest_id, rid, changes))
+        return {"research_question_id": rid, "status": changes.get("status", "open")}
 
     def create_habit(self, quest_id, strategy_id, name, *, frequency="daily", **kw):
         self.calls.append(("habit", quest_id, strategy_id, name, frequency, kw))
@@ -240,3 +265,96 @@ def test_a_field_request_selects_that_fields_tool():
         "update_quest_current_state"
     assert "create_quest_goal" in [s.name for s in
                                    registry.select("add a goal for this week", k=5)]
+
+
+# --- experiments ----------------------------------------------------------------------------------
+
+def test_find_experiments_lists_and_searches_by_text_without_writing():
+    client = FakeQuestClient()
+    spec = find_quest_experiments_spec({}, client_factory=factory(client))
+    assert not spec.mutates
+    listed = spec.handler({"quest_id": "q1"}, ToolContext())
+    assert listed.ok and "rq_sleep" in listed.text and "rq_diet" in listed.text
+    found = spec.handler({"quest_id": "q1", "query": "my sleep shower"}, ToolContext())
+    assert found.ok and found.data[0]["research_question_id"] == "rq_sleep" and len(found.data) == 1
+    none = spec.handler({"quest_id": "q1", "query": "meditation"}, ToolContext())
+    assert none.ok and none.data == [] and "No experiment" in none.text
+    assert spec.handler({"quest_id": "q1", "query": "the"}, ToolContext()).data == []  # no usable word
+    assert all(c[0] == "list_experiments" for c in client.calls)
+
+
+def test_find_experiments_reports_a_failed_read_not_an_empty_list():
+    class Broken(FakeQuestClient):
+        def list_experiments(self, quest_id):
+            raise RuntimeError("503")
+    spec = find_quest_experiments_spec({}, client_factory=factory(Broken()))
+    assert not spec.handler({"quest_id": "q1"}, ToolContext()).ok
+
+
+def test_create_experiment_needs_the_users_ask_and_passes_only_given_fields():
+    client = FakeQuestClient()
+    spec = create_quest_experiment_spec({}, client_factory=factory(client))
+    assert not spec.handler({"quest_id": "q1", "question": "Does oat milk help?"}, ToolContext()).ok
+    assert client.calls == []
+    result = spec.handler({"quest_id": "q1", "question": "Does oat milk help?", "hypothesis": "",
+                           "linked_goal_ids": ["g1"], "user_asked_for_this_field": True},
+                          ToolContext(quest_id="q1"))
+    assert result.ok and "rq_new" in result.text
+    assert client.calls == [("create_experiment", "q1", "Does oat milk help?",
+                             {"linked_goal_ids": ["g1"]})]
+
+
+def test_update_experiment_sends_only_changed_keys_and_validates_status():
+    client = FakeQuestClient()
+    spec = update_quest_experiment_spec({}, client_factory=factory(client))
+    base = {"quest_id": "q1", "research_question_id": "rq_sleep"}
+    assert not spec.handler({**base, "status": "concluded"}, ToolContext()).ok  # no ask
+    assert not spec.handler({**base, "user_asked_for_this_field": True}, ToolContext()).ok  # no change
+    assert not spec.handler({**base, "status": "done", "user_asked_for_this_field": True},
+                            ToolContext()).ok
+    ok = spec.handler({**base, "status": "concluded", "conclusion": "Slept better",
+                       "user_asked_for_this_field": True}, ToolContext())
+    assert ok.ok
+    assert client.calls == [("update_experiment", "q1", "rq_sleep",
+                             {"status": "concluded", "conclusion": "Slept better"})]
+
+
+def test_experiment_tools_are_standard_and_selected_by_their_words():
+    registry = build_tool_registry(CREDS)
+    assert {"find_quest_experiments", "create_quest_experiment",
+            "update_quest_experiment"} <= set(registry.names())
+    assert not registry.get("find_quest_experiments").mutates
+    assert registry.select("conclude my sleep experiment", k=3)[0].name in (
+        "update_quest_experiment", "find_quest_experiments")
+    assert registry.select("start an experiment on cold showers", k=3)[0].name == \
+        "create_quest_experiment"
+
+
+def test_experiment_search_ignores_filler_stems_and_the_default_questions_context():
+    from quest_ai_runner.core.tools import search_experiments
+    rows = FakeQuestClient.experiments + [
+        {"research_question_id": "rq_ctx", "kind": "default", "status": "open",
+         "question": "What will it take to run a marathon?",
+         "context": "sleep sleep sleep outcome current state"}]
+    ids = lambda q: [r["research_question_id"] for r in search_experiments(rows, q)]
+    assert ids("find the experiment about") == []
+    assert ids("sleeping showers") == ["rq_sleep"]  # stemmed; the default's context is not searched
+    assert set(ids("marathon")) == {"rq_default", "rq_ctx"}
+    assert ids("current state outcome") == []  # only the default question text counts, not its context
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("show me the experiments on this quest", "find_quest_experiments"),
+    ("find my sleep experiment", "find_quest_experiments"),
+    ("what did my diet experiment conclude", "find_quest_experiments"),
+    ("start an experiment on cold showers and sleep", "create_quest_experiment"),
+    ("set up a new experiment to test oats before long runs", "create_quest_experiment"),
+    ("add a trial to see if stretching helps", "create_quest_experiment"),
+    ("conclude my sleep experiment", "update_quest_experiment"),
+    ("rename the diet experiment and change its status", "update_quest_experiment"),
+    ("update the hypothesis on my experiment", "update_quest_experiment"),
+])
+def test_experiment_phrasings_select_a_right_tool_offline(message, expected):
+    """Cheap tool-surface routing check: no model call, the catalog's own selection."""
+    names = [s.name for s in build_tool_registry(CREDS).select(message, k=3)]
+    assert expected in names, names
