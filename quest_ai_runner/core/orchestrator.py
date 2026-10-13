@@ -363,6 +363,12 @@ DEFAULT_CARD_MERGE_SIMILARITY = 0.85
 # Keep it SHORT and keep it FIRST. Everything under it refines these rules, it never reorders them.
 PLANNER_DECISION_RUBRIC: str = """\
 DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below only refines it.
+  0. NAMED ROUTE. The user asks for the work to run as a deep run, a task, or in the background
+     ("use deep run", "run this as a task", "hand this to my AI")? That names the route and is a
+     command: choose "deep" (or answer + deferred_deep) for the work they were talking about, even
+     if you could write an answer now, and never say you cannot start one. A follow-up saying they
+     do not see it ("I don't see any deep run") repeats the command when CONTEXT shows no such run
+     in flight; if CONTEXT shows it running, report that run instead (rule 3).
   1. CURRENT FACTS ABOUT THE WORLD. A question about news, prices, weather, a score, a public
      fact or anything else happening in the world right now is NOT work for a machine and NOT a
      read of your own sources. Answer it: say what you reliably know, and say plainly that you
@@ -523,6 +529,15 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   These are NOT answers -- they are unexecuted tasks. If you realize work needs doing, choose
   "deep" immediately and let the runner do it. NEVER describe work in an answer; ALWAYS execute it.
   NEVER say "if you provide the file name I can help" -- find the file yourself via "deep".
+
+  NAMED ROUTE: when the user themselves asks for the work to run as a deep run, as a task, or in
+  the background ("use deep run", "run this as a task", "hand this to my AI"), that is a COMMAND
+  naming the route, so choose "deep" (or answer with deferred_deep) for the work they were
+  talking about, even if you could write an answer now. Never answer in text instead, and never
+  tell them you cannot start one: the route exists in this deployment. A follow-up saying they do
+  not see it ("I don't see any deep run", "where is the task?") repeats that command unless
+  CONTEXT shows that run in flight; hand off the same work again rather than explaining why it
+  is missing.
 
   These verbs often signal a code-change task: "fix", "bug", "break", "implement", "build",
   "refactor", "edit", "update", "change", "add", "remove", "delete", "rewrite", "apply", "make",
