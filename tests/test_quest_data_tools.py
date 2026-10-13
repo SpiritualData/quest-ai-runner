@@ -358,3 +358,36 @@ def test_experiment_phrasings_select_a_right_tool_offline(message, expected):
     """Cheap tool-surface routing check: no model call, the catalog's own selection."""
     names = [s.name for s in build_tool_registry(CREDS).select(message, k=3)]
     assert expected in names, names
+
+
+def test_experiment_purpose_sub_questions_and_assumptions_flow_through_create_update_and_find():
+    framing = {"purpose": "Tie sleep to my energy goal",
+               "sub_questions": [{"question": "Does it shorten time to fall asleep?",
+                                  "answer_method": "compare weekly averages"}, {"question": "Does it help mornings?"}],
+               "assumptions": ["Meditating for a long period without getting lost in thought helps"]}
+    client = FakeQuestClient()
+    create = create_quest_experiment_spec({}, client_factory=factory(client))
+    assert create.handler({"quest_id": "q1", "question": "Does a cold shower help?", **framing,
+                           "user_asked_for_this_field": True}, ToolContext()).ok
+    assert client.calls[-1] == ("create_experiment", "q1", "Does a cold shower help?", framing)
+    assert {"purpose", "sub_questions", "assumptions"} <= set(create.parameters["properties"])
+
+    update = update_quest_experiment_spec({}, client_factory=factory(client))
+    assert update.handler({"quest_id": "q1", "research_question_id": "rq_sleep",
+                           "assumptions": ["Sleep is measured by the tracker"],
+                           "user_asked_for_this_field": True}, ToolContext()).ok
+    assert client.calls[-1] == ("update_experiment", "q1", "rq_sleep",
+                                {"assumptions": ["Sleep is measured by the tracker"]})
+
+    rows = [{"research_question_id": "rq_a", "kind": "custom", "question": "Does X help?", "status": "open",
+             **framing}, {"research_question_id": "rq_b", "kind": "custom", "question": "Other", "status": "open"}]
+    found = find_quest_experiments_spec({}, client_factory=factory(FakeQuestClient()))
+    client2 = FakeQuestClient()
+    client2.experiments = rows
+    found = find_quest_experiments_spec({}, client_factory=factory(client2))
+    hit = found.handler({"quest_id": "q1", "query": "weekly averages"}, ToolContext())
+    assert [r["research_question_id"] for r in hit.data] == ["rq_a"]
+    assert "purpose: Tie sleep" in hit.text and "how: compare weekly averages" in hit.text
+    assert "assumptions: Meditating" in hit.text
+    plain = found.handler({"quest_id": "q1"}, ToolContext())
+    assert "rq_b" in plain.text

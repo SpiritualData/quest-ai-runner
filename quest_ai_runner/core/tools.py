@@ -1030,7 +1030,7 @@ def _experiment_words(text: Any) -> List[str]:
 def search_experiments(rows: Sequence[Mapping[str, Any]], query: str,
                        limit: int = 5) -> List[Mapping[str, Any]]:
     """Rows matching ``query``, best first: distinct query words found in the question, context,
-    hypothesis and conclusion, with a bonus for words in the question itself. The quest's default
+    hypothesis, purpose, sub-questions, assumptions and conclusion, with a bonus for words in the question itself. The quest's default
     question is searched by its question text only, since the listing fills its context with the
     whole quest. A query with no usable word matches nothing (listing is the caller's job)."""
     wanted = set(_experiment_words(query))
@@ -1041,12 +1041,34 @@ def search_experiments(rows: Sequence[Mapping[str, Any]], query: str,
         keys = ("question",) if row.get("kind") == "default" else (
             "question", "context", "hypothesis", "conclusion")
         body = " ".join(str(row.get(k) or "") for k in keys)
+        if row.get("kind") != "default":
+            body += " " + " ".join(
+                [str(row.get("purpose") or "")]
+                + [f"{sq.get('question') or ''} {sq.get('answer_method') or ''}"
+                   for sq in row.get("sub_questions") or [] if isinstance(sq, Mapping)]
+                + [str(a) for a in row.get("assumptions") or []])
         hits = wanted & set(_experiment_words(body))
         if hits:
             scored.append((len(hits) + 0.5 * len(wanted & set(_experiment_words(row.get("question")))),
                            row))
     scored.sort(key=lambda pair: -pair[0])
     return [row for _, row in scored[:limit]]
+
+
+_EXPERIMENT_PURPOSE_PARAM = {
+    "type": "string",
+    "description": "Why they run it: how it ties to the quest. Only if they said."}
+_EXPERIMENT_SUB_QUESTIONS_PARAM = {
+    "type": "array",
+    "description": ("Smaller questions beside the main one, only if they gave any. answer_method "
+                    "(how it will be answered, or what analysis it needs) only if they said."),
+    "items": {"type": "object", "required": ["question"],
+              "properties": {"question": {"type": "string"},
+                             "answer_method": {"type": "string"}}}}
+_EXPERIMENT_ASSUMPTIONS_PARAM = {
+    "type": "array", "items": {"type": "string"},
+    "description": ("Assumptions that ground the experiment or state its constraints, one per "
+                    "item, in their words. Only those they stated.")}
 
 
 def _experiment_line(row: Mapping[str, Any]) -> str:
@@ -1056,6 +1078,16 @@ def _experiment_line(row: Mapping[str, Any]) -> str:
         bits.append("the quest's own question")
     if row.get("hypothesis"):
         bits.append(f"expects: {str(row['hypothesis'])[:160]}")
+    if row.get("purpose"):
+        bits.append(f"purpose: {str(row['purpose'])[:160]}")
+    subs = [sq for sq in row.get("sub_questions") or [] if isinstance(sq, Mapping)]
+    if subs:
+        bits.append("sub-questions: " + " | ".join(
+            str(sq.get("question") or "")[:120]
+            + (f" (how: {str(sq['answer_method'])[:80]})" if sq.get("answer_method") else "")
+            for sq in subs))
+    if row.get("assumptions"):
+        bits.append("assumptions: " + " | ".join(str(a)[:120] for a in row["assumptions"]))
     if row.get("start_date") or row.get("end_date"):
         bits.append(f"{row.get('start_date') or '?'} to {row.get('end_date') or '?'}")
     if row.get("conclusion"):
@@ -1132,7 +1164,8 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
             return ToolResult(ok=False, text=(f"Not created: the user did not ask for the "
                                               f"experiment {question!r}. Suggest it in your "
                                               f"reply instead."))
-        fields = {k: args[k] for k in ("context", "hypothesis", "linked_goal_ids",
+        fields = {k: args[k] for k in ("context", "hypothesis", "purpose", "sub_questions",
+                                       "assumptions", "linked_goal_ids",
                                        "linked_collection_ids", "start_date", "end_date")
                   if args.get(k) not in (None, "", [])}
         try:
@@ -1152,7 +1185,8 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
         handler=handler,
         description=("Create one experiment on a quest: a question the person wants to answer "
                      "by testing it in their own life. Use their words for the question; add a "
-                     "hypothesis only if they stated what they expect, and link goals or "
+                     "hypothesis only if they stated what they expect, a purpose, sub-questions "
+                     "(with an answer method) and assumptions only if they gave them, and link goals or "
                      "habits only by ids you read (never invent one). Check "
                      "find_quest_experiments first so you do not duplicate one."),
         when_to_use=("The user asked to start, set up or add an experiment on their quest. "
@@ -1169,6 +1203,9 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                              "description": "What they want to find out, in their words (max 500 chars)."},
                 "context": {"type": "string", "description": "Why they ask; what bears on it."},
                 "hypothesis": {"type": "string", "description": "What they expect, if they said."},
+                "purpose": _EXPERIMENT_PURPOSE_PARAM,
+                "sub_questions": _EXPERIMENT_SUB_QUESTIONS_PARAM,
+                "assumptions": _EXPERIMENT_ASSUMPTIONS_PARAM,
                 "linked_goal_ids": {"type": "array", "items": {"type": "string"},
                                     "description": "Goal ids that carry it out."},
                 "linked_collection_ids": {"type": "array", "items": {"type": "string"},
@@ -1190,7 +1227,7 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
 def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     """Change an experiment's details through ``PATCH /api/quests/{id}/research-questions/{rid}``."""
     factory = client_factory or (lambda: quest_client_from_env(env))
-    editable = ("question", "context", "hypothesis", "status", "conclusion", "linked_goal_ids",
+    editable = ("question", "context", "hypothesis", "purpose", "sub_questions", "assumptions", "status", "conclusion", "linked_goal_ids",
                 "linked_collection_ids", "start_date", "end_date")
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
@@ -1223,7 +1260,7 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
         name="update_quest_experiment",
         handler=handler,
         description=("Change details of an existing experiment: its question, context, "
-                     "hypothesis, status (open, experimenting, concluded), conclusion, linked "
+                     "hypothesis, purpose, sub-questions, assumptions, status (open, experimenting, concluded), conclusion, linked "
                      "goal or habit ids, start or end date (an empty string clears a date). Send "
                      "ONLY the fields the user asked to change; the others stay as they are. "
                      "Get the id from find_quest_experiments. The quest's own default question keeps "
@@ -1245,6 +1282,11 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                 "question": {"type": "string"},
                 "context": {"type": "string"},
                 "hypothesis": {"type": "string"},
+                "purpose": _EXPERIMENT_PURPOSE_PARAM,
+                "sub_questions": {**_EXPERIMENT_SUB_QUESTIONS_PARAM,
+                                  "description": "The FULL new list of sub-questions."},
+                "assumptions": {**_EXPERIMENT_ASSUMPTIONS_PARAM,
+                                "description": "The FULL new list of assumptions."},
                 "status": {"type": "string", "enum": list(EXPERIMENT_STATUSES)},
                 "conclusion": {"type": "string"},
                 "linked_goal_ids": {"type": "array", "items": {"type": "string"},

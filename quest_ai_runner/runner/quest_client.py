@@ -1655,6 +1655,7 @@ class QuestClient:
         """POST /api/quests/{quest_id}/research-questions: create one experiment.
 
         ``fields`` are the endpoint's optional keys: ``context``, ``hypothesis``,
+        ``purpose``, ``sub_questions`` (``[{question, answer_method?}]``), ``assumptions`` (list of str),
         ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date``,
         ``conditions``. Raises like ``create_habit``.
         """
@@ -1666,7 +1667,8 @@ class QuestClient:
                           **changes: Any) -> Dict[str, Any]:
         """PATCH /api/quests/{quest_id}/research-questions/{id}: change only the keys given.
 
-        Keys: ``question``, ``context``, ``hypothesis``, ``status``, ``conclusion``,
+        Keys: ``question``, ``context``, ``hypothesis``, ``purpose``, ``sub_questions`` and
+        ``assumptions`` (each replaces the whole list), ``status``, ``conclusion``,
         ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date`` (``""`` clears
         a date), ``conditions``. Raises like ``create_habit``.
         """
