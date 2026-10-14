@@ -30,6 +30,7 @@ construction.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -38,7 +39,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.file_modes import match_umask
 
@@ -129,6 +130,43 @@ def identity_of(prior_meta: Dict[str, Any], *, root: Optional[str] = None) -> Di
     if root and not out.get("root"):
         out["root"] = str(root)
     return out
+
+
+# --------------------------------------------------------------------------------------------
+# Writer origin
+# --------------------------------------------------------------------------------------------
+
+ORIGIN_FIELD = "origin"
+
+
+def derived_origin(env_id: str, root: Optional[str]) -> str:
+    """A deterministic origin id for a corpus with no recorded store identity.
+
+    Derived from (runner environment id, resolved corpus root), so the same lane gets the same id on
+    every start and two lanes on one host with different roots get different ids.
+    """
+    resolved = ""
+    if root:
+        try:
+            resolved = str(Path(root).resolve())
+        except OSError:
+            resolved = str(root)
+    digest = hashlib.sha256(f"{env_id}\0{resolved}".encode("utf-8")).hexdigest()[:16]
+    return "env_" + digest
+
+
+def writer_origins(cards_dir: Optional[str], *, env_id: str, root: Optional[str]) -> Tuple[str, Set[str]]:
+    """``(primary, accepted)`` origin ids for the corpus whose cards live in ``cards_dir``.
+
+    ``primary`` is what a card written now is stamped with: the local store identity's ``store_id``
+    when the lane has one, else the derived id. ``accepted`` is every id this corpus has ever
+    legitimately written under (the store_id AND the derived id), so a store that is given an
+    identity after it already wrote cards keeps ownership of them.
+    """
+    derived = derived_origin(env_id, root)
+    store_id = str(read_meta(cards_dir).get("store_id") or "") if cards_dir else ""
+    primary = store_id or derived
+    return primary, {primary, derived} | ({store_id} if store_id else set())
 
 
 def ensure_store_id(cards_dir: str) -> Optional[str]:

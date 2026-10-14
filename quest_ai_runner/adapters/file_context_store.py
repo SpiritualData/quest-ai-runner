@@ -78,10 +78,12 @@ from .card_content_render import (
 from .bootstrap_reporter import mark_bootstrap_completed
 from .card_repository import CardRepository, FilesystemCardRepository, card_embed_text
 from .card_store_identity import (
+    ORIGIN_FIELD,
     SCHEME_QUALIFIED,
     identity_of,
     is_merged as is_merged_store,
     read_meta as read_store_meta,
+    writer_origins,
 )
 from .card_store_mounts import (
     MODE_MOUNT,
@@ -2467,6 +2469,11 @@ class FileContextStore(ContextAssemblerBase):
         # Card PERSISTENCE is pluggable behind a CardRepository. Default: per-card JSON files under
         # cards_dir (byte-for-byte the prior behavior). A consumer may inject a database-backed repo.
         self._repo: CardRepository = card_repository or FilesystemCardRepository(cards_dir)
+        # An INJECTED repository may be SHARED (the Quest card backend lists every card the lane can
+        # read, other lanes' and other team members' included). Only then does card ownership matter:
+        # see ``_is_own_card``. With the default per-store filesystem repository every card is ours.
+        self._injected_repo: bool = card_repository is not None
+        self._origin_cache: Optional[Tuple[str, Set[str]]] = None
         self._repo_root = Path(repo_root).resolve() if repo_root else None
         # STORE MOUNTING (see card_store_mounts). In ``mount`` mode a corpus reads the bootstrapped
         # stores around it IN PLACE and read-only, instead of copying their cards under new ids.
@@ -2640,12 +2647,88 @@ class FileContextStore(ContextAssemblerBase):
         """Whether ``card_id`` names a card of a mounted store (read-only here)."""
         return self._mounted_repo is not None and self._mounted_repo.is_mounted(str(card_id))
 
+    # ------------------------------------------------------------------
+    # Writer origin: which cards in a (possibly shared) repository are THIS store's to mutate
+    # ------------------------------------------------------------------
+
+    def _origins(self) -> Tuple[str, Set[str]]:
+        """``(primary, accepted)`` writer-origin ids of this store (see ``writer_origins``). Cached."""
+        if self._origin_cache is None:
+            from .quest_api_card_repository import runner_env_id
+            self._origin_cache = writer_origins(
+                str(self._cards_dir), env_id=runner_env_id(), root=self._effective_root())
+        return self._origin_cache
+
+    def origin_id(self) -> str:
+        """The id stamped in the ``origin`` field of every card this store writes."""
+        return self._origins()[0]
+
+    def _is_own_card(self, card: Dict[str, Any]) -> bool:
+        """Whether ``card`` is this store's to rewrite or delete during bootstrap/refresh/prune.
+
+        * Default filesystem repository: always True (the store holds only its own cards).
+        * Injected repository: True iff ``card["origin"]`` is one of this store's origin ids. A card
+          with NO origin (written before origins existed) is own only if it carries this
+          environment's ``runner_env_id`` AND it pins at least one file AND every pinned path is a
+          relative path that resolves to an existing file under this lane's root; anything else is
+          read-only here (it may belong to another lane or team member).
+        """
+        if not self._injected_repo:
+            return True
+        origin = str(card.get(ORIGIN_FIELD) or "")
+        if origin:
+            return origin in self._origins()[1]
+        return self._legacy_card_is_own(card)
+
+    def _legacy_card_is_own(self, card: Dict[str, Any]) -> bool:
+        from .quest_api_card_repository import runner_env_id
+        if str(card.get("runner_env_id") or "") != runner_env_id():
+            return False
+        root = self._effective_root()
+        paths = _card_file_paths(card)
+        if not root or not paths:
+            return False
+        base = Path(root).resolve()
+        for rel in paths:
+            try:
+                target = (base / rel).resolve()
+                target.relative_to(base)
+            except (ValueError, OSError):
+                return False
+            if not target.exists():
+                return False
+        return True
+
+    def _stamp_origin(self, card_id: str, card: Dict[str, Any]) -> None:
+        """Stamp this store's origin on ``card`` unless it already has one.
+
+        A card that already carries an origin keeps it (a usage-stat or content edit of another
+        lane's card must not take ownership of it). An origin-less card that the repository already
+        holds and that is not ours (legacy, foreign) is left as it is for the same reason.
+        """
+        if card.get(ORIGIN_FIELD):
+            return
+        if self._injected_repo:
+            prior = (self._cache or {}).get(card_id)
+            if isinstance(prior, dict) and not self._is_own_card(prior):
+                return
+        card[ORIGIN_FIELD] = self.origin_id()
+
+    def _store_write(self, card_id: str, card: Dict[str, Any]) -> bool:
+        """The ONE place this store persists a card: stamp the writer origin, then write."""
+        self._stamp_origin(card_id, card)
+        return self._repo.write(card_id, card)
+
     def _own_cards(self) -> Dict[str, Dict[str, Any]]:
-        """The cards THIS store owns: ``_load_all()`` minus any mounted views."""
+        """The cards THIS store owns: ``_load_all()`` minus any mounted views and, with an injected
+        (shared) repository, minus every card another origin wrote. Everything that rewrites or
+        deletes cards works from this; reading and assembly use ``_load_all()``."""
         cards = self._load_all()
-        if self._mounted_repo is None:
-            return cards
-        return {cid: c for cid, c in cards.items() if not self._mounted_repo.is_mounted(cid)}
+        if self._mounted_repo is not None:
+            cards = {cid: c for cid, c in cards.items() if not self._mounted_repo.is_mounted(cid)}
+        if self._injected_repo:
+            cards = {cid: c for cid, c in cards.items() if self._is_own_card(c)}
+        return cards
 
     def register_reference_resolver(
         self, ref_type: str, resolver: Any, *, override: bool = False
@@ -2903,7 +2986,15 @@ class FileContextStore(ContextAssemblerBase):
             if not (text or "").strip():
                 return None
             result = finder(text, user_id=user_id, min_score=min_score)
-            return result if isinstance(result, str) and result.strip() else None
+            if not (isinstance(result, str) and result.strip()):
+                return None
+            if self._injected_repo:
+                # A near-duplicate is MERGED INTO (its content edited), so on a shared repository it
+                # must be one of this store's own cards, never another origin's.
+                match = self._load_all().get(result)
+                if not isinstance(match, dict) or not self._is_own_card(match):
+                    return None
+            return result
         except Exception:  # noqa: BLE001 — semantic dedup is best-effort
             return None
 
@@ -3040,7 +3131,7 @@ class FileContextStore(ContextAssemblerBase):
             return
         # Only bootstrap when there are no existing cards. Ask the repository (not the filesystem)
         # so a non-filesystem repo with cards already in it does NOT re-bootstrap.
-        if self._own_repo.load_all():
+        if self._own_cards():
             return
         try:
             self._bootstrap_inner(root=str(root))
@@ -3086,7 +3177,7 @@ class FileContextStore(ContextAssemblerBase):
                     card["keywords"] = kws[:_MAX_MERGED_KEYWORDS]
                     if not self._dry_run:
                         try:
-                            self._repo.write(cid, card)
+                            self._store_write(cid, card)
                             healed += 1
                         except Exception:  # noqa: BLE001
                             pass
@@ -3097,7 +3188,7 @@ class FileContextStore(ContextAssemblerBase):
                         card["summary"] = replacement[:200]
                         if not self._dry_run:
                             try:
-                                self._repo.write(cid, card)
+                                self._store_write(cid, card)
                                 healed += 1
                             except Exception:  # noqa: BLE001
                                 pass
@@ -3750,7 +3841,7 @@ class FileContextStore(ContextAssemblerBase):
                 cid = card.get("id")
                 if cid and not self._dry_run:
                     try:
-                        self._repo.write(cid, card)
+                        self._store_write(cid, card)
                         healed += 1
                     except Exception:  # noqa: BLE001
                         pass
@@ -4099,6 +4190,12 @@ class FileContextStore(ContextAssemblerBase):
 
             # Load existing card so we preserve usage_count / last_outcome if present.
             loaded_existing = self._repo.read(card_id)
+            if (self._injected_repo and isinstance(loaded_existing, dict)
+                    and not self._is_own_card(loaded_existing)):
+                # The id is taken by another origin's card in the shared repository. Never replace it:
+                # this lane's card gets its own, deterministic id instead.
+                card_id = f"{card_id}-{hashlib.sha1(self.origin_id().encode()).hexdigest()[:6]}"
+                loaded_existing = self._repo.read(card_id)
             existing: Dict[str, Any] = loaded_existing if isinstance(loaded_existing, dict) else {}
 
             # Incremental refresh: skip a topic only if every file's sha256 is unchanged AND
@@ -4139,7 +4236,7 @@ class FileContextStore(ContextAssemblerBase):
 
             # Persist via the repository (skip if dry-run mode).
             if not self._dry_run:
-                if self._repo.write(card_id, card):
+                if self._store_write(card_id, card):
                     cards_written += 1
             else:
                 # In dry-run mode, count the card but don't write it.
@@ -5022,7 +5119,7 @@ class FileContextStore(ContextAssemblerBase):
         """
         if self._dry_run:
             return
-        if not self._repo.write(card_id, card):
+        if not self._store_write(card_id, card):
             raise OSError(f"card repository write failed for {card_id!r}")
         self._cache_dirty = True
 
@@ -5232,7 +5329,7 @@ class FileContextStore(ContextAssemblerBase):
         # Persist via the repository (skip if dry-run mode). Re-raise on failure so the outer
         # try/except in record() catches it; the cache is invalidated so assemble() sees the card.
         if not self._dry_run:
-            if not self._repo.write(card_id, card):
+            if not self._store_write(card_id, card):
                 raise OSError(f"card repository write failed for {card_id!r}")
             self._cache_dirty = True
 

@@ -10,11 +10,15 @@ re-embedding anything. Pure planning plus a thin apply step over ``QuestApiCardR
 * A vector is offered only when the store's embedder id equals the backend's and the dimension
   matches; otherwise the card is uploaded without one and the BACKEND embeds it. Nothing is ever
   embedded here.
+* Every uploaded card is stamped with the uploading store's writer ``origin`` (its ``store_id``, else
+  an id derived from the runner environment and corpus root), so the lane that owns the store is the
+  one that manages these cards on the shared backend afterwards (see docs/context-card-stores.md).
 * Idempotent: ids are kept, so a re-run upserts the same cards.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
@@ -82,6 +86,8 @@ def plan_upload(
     plan.mounts = len([m for m in meta.get("mounts") or [] if isinstance(m, dict)])
     cards = FilesystemCardRepository(cards_dir).load_all()
     plan.total = len(cards)
+    root = str(meta.get("root") or Path(cards_dir).resolve().parent)
+    origin, _accepted = ident.writer_origins(cards_dir, env_id=runner_env_id(), root=root)
     for card_id in sorted(cards):
         card = cards[card_id]
         prov = card.get("provenance")
@@ -95,6 +101,7 @@ def plan_upload(
         body["id"] = str(card.get("id") or card_id)
         body.pop("team_id", None)          # the request's scope decides, never a stale field
         body.setdefault("runner_env_id", runner_env_id())
+        body[ident.ORIGIN_FIELD] = origin
         plan.uploads.append((str(card_id), body))
 
     if vector_store is None:

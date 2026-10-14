@@ -2233,6 +2233,7 @@ def _resolve_context_assembler_base(
             turns_dir=turns_dir,
             provider=cfg.model_provider,
             model=_registry.resolve_tier("balanced"),
+            origin=keyword.origin_id(),
         )
 
         # Resolve the vector store: explicit instance > qdrant-cards query-only arm > auto-build

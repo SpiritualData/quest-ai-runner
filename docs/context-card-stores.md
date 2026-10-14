@@ -421,6 +421,37 @@ Mounting is off (cards are remote; nothing to mount), logged at info. Cards a la
 - Team and `runner_env_id` on a card are provenance as well as scope; the access decision is the key's
   team membership.
 
+### Writer origin: a lane only mutates the cards it wrote
+
+The listing a lane reads on the Quest backend is every card its key can read, which includes other
+lanes' cards and other team members' cards, written against THEIR corpus roots. Reading and assembly
+use all of them. Anything that REWRITES or DELETES cards does not.
+
+- Every card a store writes carries an `origin` field (existing fields are kept): the store identity's
+  `store_id` when the lane has a local `cards_dir` identity, else a deterministic id derived from
+  (runner env id, resolved corpus root), `env_<hash>`. Turn cards, conversation cards, file-derived
+  cards, `write_card`, `record` and `update_card` all stamp it. A card that already has an origin
+  keeps it (a usage-stat write on a teammate's card never takes ownership of it).
+- `FileContextStore._own_cards()` is the single gate. With an injected repository it returns only the
+  cards whose `origin` is this store's (its `store_id` or its derived id; a store that gains an
+  identity after it wrote cards keeps those). Every mutating path works from it: the bootstrap/refresh
+  pass (dead-card prune, imported-copy prune, summary heal, stale detection and regeneration, tfdfidf
+  migration, dedup/folding into existing cards, card ceilings), `prune_only` (keyword cap, summary
+  heal, dead and degenerate removal), `find_similar_card` (a near-duplicate is merged INTO, so only an
+  own card qualifies) and the "store is empty, bootstrap" check. A new card whose id is already taken
+  by another origin's card is written under a suffixed id; it never replaces it.
+- Usage-stat writes (`mark_sources_used`) may touch any readable card because they change no content
+  and never change its origin.
+- Legacy cards with NO `origin`: in local file mode (no injected repository) every card is own, as
+  before. With an injected repository such a card is own only if its `runner_env_id` equals this
+  runner's AND it pins at least one file AND every pinned path is a relative path that resolves to an
+  existing file under this lane's root; otherwise it is read-only here. A legacy card that qualifies
+  is stamped the next time this store writes it. A fully dead legacy card (its files gone) is not
+  provably ours and so is left alone; remove those by hand.
+- `quest-ai-runner context upload` stamps the uploading store's origin on every card it sends, so the
+  lane that owns that store manages them afterwards.
+- Residual: two lanes with the same env id AND the same resolved root are one origin by definition.
+
 ### Protocol the repository speaks
 
 `PUT/GET/DELETE /api/cards/{id}[?team_id=]`, `GET /api/cards` (paged with `limit`/`cursor`, delta with
@@ -474,7 +505,8 @@ backend's per-batch counts; it exits non-zero if any card failed. Re-running ups
   withholds vectors that cannot match, so the backend embeds those cards itself. The embedder id is
   `--embedder-id`, else the store's recorded `vector_location` embedder, else `QAR_EMBEDDER_BACKEND`.
   Nothing is ever embedded locally by this command.
-- A card is sent as stored (minus server-owned fields and any stale `team_id`) with `runner_env_id`;
+- A card is sent as stored (minus server-owned fields and any stale `team_id`) with `runner_env_id` and the
+  uploading store's `origin`;
   it does not get the `local_fetch` preview, because the uploaded store may no longer be served by a
   lane.
 

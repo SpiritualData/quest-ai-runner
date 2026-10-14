@@ -86,6 +86,7 @@ class TurnContextStore:
         provider: Optional[Any] = None,
         model: Optional[str] = None,
         max_user_chars: int = MAX_USER_CHARS,
+        origin: Optional[str] = None,
     ):
         self._dir = Path(turns_dir)
         self._max_turns = max_turns
@@ -94,6 +95,9 @@ class TurnContextStore:
         self._max_user_chars = max_user_chars
         self._provider = provider
         self._model = model
+        # Writer origin stamped on every turn card (the writing corpus's id; see
+        # ``adapters.card_store_identity.writer_origins``). None leaves cards unstamped.
+        self._origin = origin or ""
 
     def _ensure_dir(self) -> None:
         self._dir.mkdir(parents=True, exist_ok=True)
@@ -258,6 +262,8 @@ class TurnContextStore:
                 "keywords": all_kw,         # combined set for backward-compat reads
                 "files_consulted": outcome.get("files") or [],
             }
+            if self._origin:
+                card["origin"] = self._origin
             path = self._dir / f"{card_id}.json"
             try:
                 path.write_text(json.dumps(card, indent=2))
