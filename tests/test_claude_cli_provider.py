@@ -452,7 +452,9 @@ def _envs_for_plan_and_answer(monkeypatch, **provider_kwargs):
         return _Proc()
 
     ccp._supported_flags.cache_clear()
-    monkeypatch.delenv("MAX_THINKING_TOKENS", raising=False)
+    # A deployment shell may export the QAR_CLI_*_THINKING_TOKENS defaults; these tests assert the library default.
+    for var in ("MAX_THINKING_TOKENS", "QAR_CLI_PLAN_THINKING_TOKENS", "QAR_CLI_HAIKU_THINKING_TOKENS"):
+        monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(ccp.subprocess, "run", fake_run)
     provider = ClaudeCliProvider(claude_path="/nonexistent/claude", **provider_kwargs)
     provider.plan("decide", model="haiku", tool_schema={"input_schema": {"type": "object"}})

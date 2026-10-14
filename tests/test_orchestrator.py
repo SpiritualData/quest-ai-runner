@@ -77,14 +77,17 @@ def test_deep_runs_goal():
         {"met": True, "reason": "one-pager written"},  # goal verification
     ])
     runner = StubDeepRunner(met=True, output="one-pager written")
-    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("write the one-pager")
+    orch = _orch(provider, StubRetrieval(), deep_runner=runner)
+    res = orch.run("write the one-pager")
     assert res.kind == "deep"
     assert len(res.deep_results) == 1
     assert res.deep_results[0].met is True
     assert runner.calls[0]["goal"] == "Write the one-pager"
-    # The runner gets a concrete model id. The starting model is chosen by task difficulty (see
-    # resolve_deep_ladder), so the planner's "opus" tier is a hint, not a pin.
-    assert runner.calls[0]["model"] and "claude" in runner.calls[0]["model"]
+    # The planner's "opus" tier is a hint, not a pin: the worker starts on the FIRST rung of the
+    # ladder resolve_deep_ladder returns (an exact model, not just "some claude id").
+    ladder, pinned = orch.resolve_deep_ladder(None, None, None, log_ladder=False)
+    assert not pinned
+    assert runner.calls[0]["model"] == ladder[0]
 
 
 def test_deep_fanout_runs_subtasks_in_parallel():

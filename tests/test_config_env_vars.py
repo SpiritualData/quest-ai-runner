@@ -163,6 +163,7 @@ def test_context_preamble_reaches_the_auto_built_deep_runner(monkeypatch, tmp_pa
     binary.chmod(0o755)
     monkeypatch.setenv("QAR_CLAUDE_PATH", str(binary))
     _base_env(monkeypatch)
+    monkeypatch.delenv("QAR_CONTEXT_PREAMBLE_FILE", raising=False)  # a deployment shell may point it at a file
     monkeypatch.setenv("QAR_CONTEXT_PREAMBLE", "Ground on the corpus.")
     cfg = cli._config_from_env()
     runner = resolve_deep_runner(cfg)

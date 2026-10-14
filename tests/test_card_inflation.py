@@ -394,14 +394,16 @@ class TestCardCeilings:
             "refusing a refresh leaves the store stale without making it any smaller"
         )
 
-    def test_truncation_is_logged_at_warning_and_never_silent(self, caplog):
+    def test_truncation_is_logged_with_the_numbers_and_never_silent(self, caplog):
+        # DEBUG, not WARNING: dropping a second card for a folder is the expected outcome (fca3b8d).
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
-        with caplog.at_level(logging.WARNING, logger="quest-ai-runner.context"):
+        with caplog.at_level(logging.DEBUG, logger="quest-ai-runner.context"):
             apply_card_ceilings(cards, [])
-        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
-        assert warnings, "a ceiling nobody is told about is indistinguishable from a bug"
-        assert "folder" in warnings[0].getMessage()
+        logged = [r for r in caplog.records if r.name == "quest-ai-runner.context"]
+        assert logged, "a ceiling nobody can see is indistinguishable from a bug"
+        assert "folder" in logged[0].getMessage()
+        assert not [r for r in logged if r.levelno >= logging.WARNING], "expected behavior is not warning noise"
 
     def test_the_per_folder_knob_raises_or_removes_the_limit(self, monkeypatch):
         cards = [make_card(f"c{i}", [f"app/one{i}.py", f"app/two{i}.py"]) for i in range(7)]

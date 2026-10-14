@@ -385,8 +385,9 @@ def test_list_quest_goals_survives_a_second_team_move(monkeypatch):
     assert client.list_quest_goals("q1").get("period_groups")
     tail = urls[before:]
     assert not any("/api/quests/me" in u for u in tail), "second team is now the cached team"
-    assert tail == [f"http://quest.example/api/teams/team-configured/quests/q1/goals",
-                    f"http://quest.example/api/teams/team-second/quests/q1/goals"]
+    # Cache-first (see list_quest_goals): the known owning team is used straight away, so the
+    # configured team that would 404 is not asked first.
+    assert tail == ["http://quest.example/api/teams/team-second/quests/q1/goals"]
 
 
 def test_list_quest_goals_re_resolves_at_most_once_per_call(monkeypatch):
@@ -431,8 +432,8 @@ def test_list_quest_goals_re_resolves_at_most_once_per_call(monkeypatch):
     assert client.list_quest_goals("q1") == {}
     tail = urls[before:]
     assert sum(1 for u in tail if "/api/quests/me" in u) == 1, "one fresh listing, no loop"
-    assert sum(1 for u in tail if "/api/teams/" in u) == 3, \
-        "configured, cached, freshly resolved: three attempts and out"
+    assert sum(1 for u in tail if "/api/teams/" in u) == 2, \
+        "cached (tried first, cache-first), freshly resolved: two attempts and out"
 
     # And the bad answer was NOT left behind as the cached team forever: the next scan lists again.
     before = len(urls)

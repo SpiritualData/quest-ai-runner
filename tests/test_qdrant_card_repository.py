@@ -223,12 +223,14 @@ def test_embed_text_helper_matches_export(tmp_path):
         "topic", "A Topic", "A description of the topic.", ["alpha", "beta"],
         content=[{"type": "note", "locator": {"text": "an important note"}, "why": "because"}],
     )
-    repo.write("topic", card)
 
     store = FileContextStore(
         str(tmp_path / "unused2"), repo_root=None, auto_bootstrap=False,
         card_repository=repo, confidence_threshold=0.0,
     )
+    # Written through the store so it carries this lane's origin: a lane exports only its own cards,
+    # and a card put straight into a shared repository is another lane's (cbd3304).
+    assert store.write_card("topic", card)
     exported = store.export_for_embedding()
     item = next(it for it in exported if it["id"] == "card:topic")
     # The store's export text is exactly what the shared helper produces for the same card.

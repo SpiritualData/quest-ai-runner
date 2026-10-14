@@ -171,9 +171,9 @@ def test_each_goal_gets_its_own_context():
     assert "EXPORT_CONTEXT" in export_pre and "PARSER_CONTEXT" not in export_pre
 
 
-def test_not_met_need_more_context_iterates_with_more_context_on_a_claude_model():
+def test_not_met_need_more_context_iterates_with_more_context_on_a_ladder_rung():
     """A not-met + need_more_context verdict triggers a 2nd iteration that has MORE context than the
-    first, run on a concrete Claude model (the verifier's "opus" is a hint, not a pin; see resolve_deep_ladder)."""
+    first, on a rung of the configured ladder (the verifier's "opus" is a hint, not a pin)."""
     plan = {"action": "deep", "goal": "Do the work",
             "deep_subtasks": [{"goal": "Implement feature X", "brief": "implement X"}],
             "rationale": "deep"}
@@ -190,7 +190,8 @@ def test_not_met_need_more_context_iterates_with_more_context_on_a_claude_model(
                                   "Implement feature X": "BASE_CONTEXT"})
     retrieval = WideningRetrieval()
 
-    res = _orch(provider, runner, context_assembler=assembler, retrieval=retrieval).run("build X")
+    orch = _orch(provider, runner, context_assembler=assembler, retrieval=retrieval)
+    res = orch.run("build X")
 
     assert res.kind == "deep"
     assert len(runner.calls) == 2, "should have iterated a second time"
@@ -202,9 +203,10 @@ def test_not_met_need_more_context_iterates_with_more_context_on_a_claude_model(
     assert len(second_pre) > len(first_pre)
     # The widened query was used to grep the corpus.
     assert any("config schema" in q for q in retrieval.grep_queries)
-    # The second attempt ran on a concrete Claude model id (the starting model is chosen by task
-    # difficulty, so the requested "opus" tier is a hint, not a pin).
-    assert "claude" in (runner.calls[1]["model"] or "")
+    # The second attempt ran on a rung of the configured ladder haiku, sonnet, opus (resolved to
+    # model ids), not an arbitrary claude id; the requested "opus" tier does not pin it.
+    ladder, _ = orch.resolve_deep_ladder(None, None, None, log_ladder=False)
+    assert any(rung in runner.calls[1]["model"] for rung in ladder), (runner.calls[1]["model"], ladder)
 
 
 def test_met_on_first_try_does_not_iterate():

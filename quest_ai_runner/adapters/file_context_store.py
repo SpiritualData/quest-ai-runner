@@ -2257,8 +2257,8 @@ def apply_card_ceilings(
     FILE-DERIVED ones do: a conversation or run card has no files, occupies no folder, and arrives
     from being used rather than from the corpus.
 
-    Truncation is always logged at WARNING with the numbers. A ceiling nobody is told about is
-    indistinguishable from a bug, which this file has already learned once (see
+    Truncation is always logged, at DEBUG because it is the expected outcome, with the numbers.
+    A ceiling nobody can see is indistinguishable from a bug, which this file has already learned once (see
     ``QAR_BOOTSTRAP_MAX_FILES``).
     """
     per_folder = max_cards_per_folder()
@@ -2293,9 +2293,18 @@ def apply_card_ceilings(
             folder_counts[folder] = folder_counts.get(folder, 0) + 1
 
     if any(dropped.values()):
-        # Expected behavior: folders get one card, and max_cards ceiling applies.
-        # Only log at debug level when verbose logging is enabled, never at warning.
-        pass
+        # Expected behavior (one card per folder, the operator's max_cards), so DEBUG, not WARNING
+        # (fca3b8d silenced the noise); still logged with the numbers so it is never invisible.
+        parts = []
+        if dropped["folder"]:
+            parts.append(f"{dropped['folder']} (folder already has a card)")
+        if dropped["max_cards"]:
+            parts.append(f"{dropped['max_cards']} (over max_cards)")
+        _log.debug(
+            "context index: skipped %d card(s) during ceiling application (normal): %s. "
+            "One topic card describes each folder; raise QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER if needed.",
+            sum(dropped.values()), "; ".join(parts),
+        )
     return kept
 
 
