@@ -15,12 +15,23 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
   Prompt text is split out by definition: the planner prompt (rubric, full/compact variants, mode
   notes, profile table) is `core/planner_prompt.py`; `orchestrator.py` holds the loop and re-exports
   those names. A new prompt variant is an entry in `PLANNER_PROFILES`; add prompt text there, not to
-  the 11K-line loop.
+  the loop.
   The other prompt text and tool schemas (goal verification, intent and mode-release directives,
   future-context asks, card updater, reply voice, post-work synthesis) are `core/auxiliary_prompts.py`;
   how gathered observations, links and past escalations are rendered into the planner's view is
   `core/planner_context.py`. Both are re-exported from `orchestrator.py`; put new prompt text or
   rendering helpers in those modules, not in the loop.
+  The `Orchestrator` class itself is split by role into mixins (`orchestrator_reads`, `_planning`,
+  `_answering`, `_judges`, `_deep_models`, `_deep_context`, `_deep_run`, `_cards`, `_oversee`,
+  `_understanding`, `_run`, `_recipes`); `orchestrator.py` keeps `__init__` and re-exports every
+  moved name, and the module-level pieces live in `orchestrator_constants`, `_types`,
+  `_decide_tool`, `_decisions`, `_text`, `_events`, `_capabilities` and `_turn`. Add a method to
+  the mixin that owns that role, not to `orchestrator.py`. The same pattern applies to
+  `adapters/file_context_store.py` (`context_*` modules), `runner/quest_client.py`
+  (`quest_client_*`), `runner/context_updates.py` (`context_update_*`, `context_sources_*`),
+  `runner/autopilot.py` (`autopilot_*`), `runner/poller.py` (`poller_*`), `runner/executor.py`
+  (`executor_*`) and `config.py` (`config_*`). A test that monkeypatches a module global patches the
+  module whose code looks the name up, so patch the module that now holds the function.
 - `runner/` — the executor: poll → claim → run → escalate → report.
 - `adapters/` — reference *implementations* of the interfaces (`FilesAdapter`, `CachedDbAdapter`,
   `AnthropicProvider`).
