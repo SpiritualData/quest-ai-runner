@@ -519,7 +519,9 @@ def test_one_consistent_link_rule_across_the_prompt():
     assert "Never say you cannot open Google links" in block
     # The two older rules now defer to it instead of contradicting it.
     import inspect
-    src = inspect.getsource(orch)
+    # The prompt text lives in planner_prompt.py; the loop in orchestrator.py.
+    from quest_ai_runner.core import planner_prompt
+    src = inspect.getsource(orch) + inspect.getsource(planner_prompt)
     assert "A bare pasted file or quoted text with no" in src
     assert "A bare pasted link, file" not in src
     assert "this hand-off rule never overrides it" in src.lower().replace("\n", " ").replace("  ", " ")

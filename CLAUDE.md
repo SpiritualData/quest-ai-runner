@@ -12,6 +12,10 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
 - `core/` — the brain: a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
   nothing about Quest, any database, any org, or any user. Depends only on the four adapter
   *interfaces* it defines in `core/adapters.py`.
+  Prompt text is split out by definition: the planner prompt (rubric, full/compact variants, mode
+  notes, profile table) is `core/planner_prompt.py`; `orchestrator.py` holds the loop and re-exports
+  those names. A new prompt variant is an entry in `PLANNER_PROFILES`; add prompt text there, not to
+  the 12K-line loop.
 - `runner/` — the executor: poll → claim → run → escalate → report.
 - `adapters/` — reference *implementations* of the interfaces (`FilesAdapter`, `CachedDbAdapter`,
   `AnthropicProvider`).
