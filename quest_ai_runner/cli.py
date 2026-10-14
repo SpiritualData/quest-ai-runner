@@ -1406,7 +1406,7 @@ def main(argv=None) -> int:
         "context",
         help="show a quest's current context updates (a read: safe, repeatable, no side effects). "
              "Card-store maintenance lives under the same word: `context move-root`, "
-             "`context migrate-imports`, `context store-info` (each a dry run unless --apply).")
+             "`context migrate-imports`, `context merge-into`, `context store-info` (each a dry run unless --apply).")
     ctx_p.add_argument("quest_id", help="the quest to read (e.g. quest_1625d9f47a06)")
     ctx_p.add_argument("--days", type=float, default=None, metavar="N",
                        help="look back N days instead of from the stored 'last looked' stamp")

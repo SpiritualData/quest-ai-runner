@@ -1,8 +1,8 @@
-"""``quest-ai-runner context <move-root|migrate-imports|store-info>``: card-store maintenance.
+"""``quest-ai-runner context <move-root|migrate-imports|merge-into|store-info>``: card-store maintenance.
 
 Every command here is a DRY RUN unless ``--apply`` is given, and prints what it would change.
-None of them embeds anything: they touch ``bootstrap_meta.json`` and (migrate-imports) the card
-files and orphan vector points of the store you point them at. See ``docs/context-card-stores.md``.
+None of them embeds anything: they touch ``bootstrap_meta.json`` and (migrate-imports, merge-into) the
+card files and vector points of the stores you point them at. See ``docs/context-card-stores.md``.
 """
 from __future__ import annotations
 
@@ -11,20 +11,34 @@ import json
 import sys
 from typing import List, Optional
 
-STORE_COMMANDS = ("move-root", "migrate-imports", "store-info")
+STORE_COMMANDS = ("move-root", "migrate-imports", "merge-into", "store-info")
 
 
 def is_store_command(argv: Optional[List[str]]) -> bool:
     return bool(argv) and len(argv) > 1 and argv[0] == "context" and argv[1] in STORE_COMMANDS
 
 
-def open_vector_store(url: Optional[str], path: Optional[str], prefix: str):
-    """A QdrantVectorStore used only to list/delete points (no embedding happens)."""
+def open_vector_store(url: Optional[str], path: Optional[str], prefix: str,
+                      vector_size: Optional[int] = None):
+    """A QdrantVectorStore used only to list, relabel and delete points (no embedding happens).
+
+    The collection is ``<prefix>_default_<size>``, so the size has to be right: it is ``vector_size``
+    when given, else the one size the prefix has on that backend. Several sizes means the caller
+    must say which (``SystemExit``).
+    """
     if not url and not path:
         return None
     from .adapters.qdrant_vector_store import QdrantVectorStore
-    return QdrantVectorStore(url=url or None, path=path or None, collection_prefix=prefix,
-                             embedder=lambda texts: [[0.0] for _ in texts], vector_size=1)
+    store = QdrantVectorStore(url=url or None, path=path or None, collection_prefix=prefix,
+                              embedder=lambda texts: [[0.0] for _ in texts], vector_size=vector_size or 1)
+    if not vector_size:
+        sizes = store.existing_sizes()
+        if len(sizes) == 1:
+            store.use_vector_size(sizes[0])
+        elif len(sizes) > 1:
+            raise SystemExit(f"several vector sizes exist under prefix {prefix!r} ({sorted(sizes)}); "
+                             "pass --vector-size")
+    return store
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,15 +61,71 @@ def build_parser() -> argparse.ArgumentParser:
     mi.add_argument("--qdrant-url", default=None)
     mi.add_argument("--qdrant-path", default=None)
     mi.add_argument("--collection-prefix", default="qar_ctx")
+    mi.add_argument("--vector-size", type=int, default=None,
+                    help="vector size of the collection (default: detected)")
+
+    mg = sub.add_parser("merge-into",
+                        help="merge a store into a wider store, moving cards and vectors (no re-embedding)")
+    mg.add_argument("--cards-dir", required=True, help="the narrow store to merge (the source)")
+    mg.add_argument("--into", required=True, help="the wide store's card directory (the target)")
+    mg.add_argument("--apply", action="store_true", help="write the change (default: dry run)")
+    mg.add_argument("--prune-source", action="store_true",
+                    help="with --apply: remove the moved cards from the source and mark it merged "
+                         "(default: leave the source untouched)")
+    mg.add_argument("--qdrant-url", default=None)
+    mg.add_argument("--qdrant-path", default=None)
+    mg.add_argument("--collection-prefix", default="qar_ctx")
+    mg.add_argument("--vector-size", type=int, default=None,
+                    help="vector size of the collection (default: detected)")
 
     si = sub.add_parser("store-info", help="show a store's identity, root, mounts and readability")
     si.add_argument("--cards-dir", required=True)
     si.add_argument("--init", action="store_true", help="give the store a store_id if it has none")
     si.add_argument("--vector-space", default=None,
                     help="declare which vector server/collection holds this store's points")
-    si.add_argument("--apply", action="store_true", help="write --init / --vector-space (default: dry run)")
+    si.add_argument("--vector-location", default=None, metavar="URL|embedded",
+                    help="publish where this store's card points live (a Qdrant server URL, or "
+                         "'embedded'); readers on other backends query them read-only from there")
+    si.add_argument("--vector-collection-prefix", default="qar_ctx")
+    si.add_argument("--vector-size", type=int, default=None,
+                    help="size of the vectors at that location (default: detected on a server)")
+    si.add_argument("--embedder-id", default=None,
+                    help="embedder family that produced the vectors (default: from QAR_EMBEDDER_BACKEND)")
+    si.add_argument("--vector-path", default=None,
+                    help="for 'embedded': the Qdrant directory (default: <cards-dir>/qdrant)")
+    si.add_argument("--apply", action="store_true",
+                    help="write --init / --vector-space / --vector-location (default: dry run)")
     si.add_argument("--json", action="store_true", dest="as_json")
     return parser
+
+
+def vector_location_from_args(args):
+    """``(record, problem)`` for ``store-info --vector-location``; the size is detected on a server."""
+    from .adapters import card_store_identity as ident
+    from .adapters.qdrant_vector_store import embedder_id_from_env
+    location = (args.vector_location or "").strip()
+    if not location:
+        return None, "--vector-location needs a server URL or 'embedded'"
+    size = args.vector_size
+    record = ident.vector_location_record(
+        location, collection_prefix=args.vector_collection_prefix, vector_size=size,
+        embedder=args.embedder_id if args.embedder_id is not None else embedder_id_from_env())
+    if record["location"] == ident.EMBEDDED:
+        import os
+        record["path"] = os.path.abspath(args.vector_path or os.path.join(args.cards_dir, "qdrant"))
+    elif not size:
+        from qdrant_client import QdrantClient
+        from .adapters.card_store_vectors import ReadOnlyVectorReader
+        try:
+            sizes = ReadOnlyVectorReader(QdrantClient(url=location, timeout=5),
+                                         collection_prefix=args.vector_collection_prefix).detect_sizes()
+        except Exception as exc:  # noqa: BLE001
+            return None, f"could not reach {location} to detect the vector size ({exc.__class__.__name__}); pass --vector-size"
+        if len(sizes) != 1:
+            return None, (f"found vector sizes {sorted(sizes) or 'none'} under prefix "
+                          f"{args.vector_collection_prefix!r}; pass --vector-size")
+        record["vector_size"] = sizes[0]
+    return record, ""
 
 
 def run(argv: List[str]) -> int:
@@ -71,7 +141,8 @@ def run(argv: List[str]) -> int:
         return 0 if plan.ok or (args.apply and args.force) else 1
 
     if args.op == "migrate-imports":
-        vector = open_vector_store(args.qdrant_url, args.qdrant_path, args.collection_prefix)
+        vector = open_vector_store(args.qdrant_url, args.qdrant_path, args.collection_prefix,
+                                   args.vector_size)
         plan = mounts.plan_migrate_imports(args.cards_dir, args.root, vector_store=vector)
         if args.apply and not plan.problems:
             plan = mounts.apply_migrate_imports(plan, prune_points=args.prune_points,
@@ -80,6 +151,19 @@ def run(argv: List[str]) -> int:
         if plan.pruned_points:
             print(f"  pruned {plan.pruned_points} orphan vector point(s)")
         return 0 if not plan.problems else 1
+
+    if args.op == "merge-into":
+        from .adapters import card_store_merge as merge
+        vector = open_vector_store(args.qdrant_url, args.qdrant_path, args.collection_prefix,
+                                   args.vector_size)
+        if args.apply:
+            plan = merge.apply_merge(args.cards_dir, args.into, vector_store=vector,
+                                     prune_source_after=args.prune_source)
+        else:
+            plan = merge.plan_merge(args.cards_dir, args.into, vector_store=vector,
+                                    prune_source=args.prune_source)
+        print(plan.render())
+        return 0 if plan.ok else 1
 
     if args.op == "store-info":
         meta = ident.read_meta(args.cards_dir)
@@ -92,16 +176,28 @@ def run(argv: List[str]) -> int:
             changes["store_id"] = "(new)"
         if args.vector_space is not None:
             changes["vector_space"] = args.vector_space
+        location_record = None
+        if args.vector_location is not None:
+            location_record, problem = vector_location_from_args(args)
+            if problem:
+                print(problem, file=sys.stderr)
+                return 1
+            changes["vector_location"] = location_record
         if args.apply and changes:
             ident.ensure_store_id(args.cards_dir)
             if args.vector_space is not None:
                 ident.update_identity(args.cards_dir, vector_space=args.vector_space)
+            if location_record is not None:
+                ident.update_identity(args.cards_dir, vector_location=location_record)
             meta = ident.read_meta(args.cards_dir)
         info = {
             "store_id": meta.get("store_id"),
             "root": meta.get("root"),
             "vector_id_scheme": meta.get("vector_id_scheme"),
             "vector_space": meta.get("vector_space"),
+            "vector_location": meta.get("vector_location"),
+            "merged_from": meta.get("merged_from"),
+            "merged_into": meta.get("merged_into"),
             "readable_by_this_user": ident.check_readable(args.cards_dir).reason,
             "mounts": [{**m, "readable": ident.check_readable(m.get("cards_dir", "")).reason}
                        for m in meta.get("mounts") or [] if isinstance(m, dict)],

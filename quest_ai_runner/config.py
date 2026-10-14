@@ -2306,7 +2306,7 @@ def _resolve_context_assembler_base(
 
                     if backend == "voyage":
                         try:
-                            from .adapters.qdrant_vector_store import make_voyage_embedder
+                            from .adapters.qdrant_vector_store import make_voyage_embedder, voyage_embedder_id
                             # Declare the REAL dimension up front. _open_qdrant used to omit
                             # vector_size here, so this always fell through to the constructor's
                             # 384 default and _adopt_embedding_dim logged a mismatch-and-adopt
@@ -2322,6 +2322,7 @@ def _resolve_context_assembler_base(
                                 vector_size=_voyage_vsize,
                                 embedder=make_voyage_embedder(input_type="document"),
                                 query_embedder=make_voyage_embedder(input_type="query"),
+                                embedder_id=voyage_embedder_id(),
                             )
                         except Exception:  # noqa: BLE001 — voyageai missing/misconfigured
                             _log.warning(
@@ -2332,7 +2333,7 @@ def _resolve_context_assembler_base(
                             vector_store = _open_qdrant()
                     elif backend == "openai":
                         try:
-                            from .adapters.qdrant_vector_store import make_openai_embedder
+                            from .adapters.qdrant_vector_store import make_openai_embedder, openai_embedder_id
                             embedder = make_openai_embedder()
                             # Same fix as the voyage branch above: declare the real (fixed) OpenAI
                             # embedding dimension up front instead of relying on the 384 default
@@ -2341,6 +2342,7 @@ def _resolve_context_assembler_base(
                                 vector_size=1536,
                                 embedder=embedder,
                                 query_embedder=embedder,
+                                embedder_id=openai_embedder_id(),
                             )
                         except Exception:  # noqa: BLE001 — openai missing/misconfigured
                             _log.warning(

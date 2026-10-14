@@ -80,6 +80,7 @@ from .card_repository import CardRepository, FilesystemCardRepository, card_embe
 from .card_store_identity import (
     SCHEME_QUALIFIED,
     identity_of,
+    is_merged as is_merged_store,
     read_meta as read_store_meta,
 )
 from .card_store_mounts import (
@@ -3225,7 +3226,8 @@ class FileContextStore(ContextAssemblerBase):
                 if current_dir == cards_dir_resolved:
                     dirnames[:] = []
                     continue
-                if (current_dir / ".quest-context" / _BOOTSTRAP_META_FILE).is_file():
+                if (current_dir / ".quest-context" / _BOOTSTRAP_META_FILE).is_file() \
+                        and not is_merged_store(str(current_dir / ".quest-context")):
                     found.append(current_dir)
                     dirnames[:] = []  # trust it transitively; don't look for nested-within-nested
                     continue
@@ -3361,7 +3363,8 @@ class FileContextStore(ContextAssemblerBase):
         try:
             current = walk_root.resolve().parent
             for _ in range(_MAX_ANCESTOR_WALK_LEVELS):
-                if (current / ".quest-context" / _BOOTSTRAP_META_FILE).is_file():
+                if (current / ".quest-context" / _BOOTSTRAP_META_FILE).is_file() \
+                        and not is_merged_store(str(current / ".quest-context")):
                     return current
                 parent = current.parent
                 if parent == current:  # reached filesystem root

@@ -49,7 +49,8 @@ BOOTSTRAP_META_FILE = "bootstrap_meta.json"
 # Keys of bootstrap_meta.json that describe the store's identity rather than one bootstrap pass.
 # ``_write_bootstrap_meta`` rewrites the pass keys every time and must carry these through.
 IDENTITY_KEYS = ("store_id", "created_at", "root", "root_history", "mounts",
-                 "vector_id_scheme", "vector_space")
+                 "vector_id_scheme", "vector_space", "vector_location",
+                 "merged_from", "merged_into")
 
 # How a store's cards are keyed in the shared vector collection:
 #   "legacy"    -- ``card:<card_id>``; what every store embedded before it had an identity. Kept for
@@ -153,6 +154,59 @@ def store_id_of(cards_dir: str) -> Optional[str]:
     return str(sid) if sid else None
 
 
+def merged_target(meta: Dict[str, Any]) -> str:
+    """The store id a merged store's cards now live in ("" when ``meta`` is not a merged store)."""
+    target = meta.get("merged_into")
+    if isinstance(target, dict):
+        return str(target.get("store_id") or "")
+    return str(target or "")
+
+
+def is_merged(cards_dir: str) -> bool:
+    """Whether this store was merged into a wider one (``context merge-into --prune-source``).
+
+    A merged store is not a store any more: discovery skips it, so the wider store is the only
+    owner of the subtree and no reader sees two stores for the same files.
+    """
+    return bool(read_meta(cards_dir).get("merged_into"))
+
+
+# --------------------------------------------------------------------------------------------
+# Where a store's vectors live
+# --------------------------------------------------------------------------------------------
+
+EMBEDDED = "embedded"
+
+
+def vector_location_record(location: str, *, collection_prefix: str = "qar_ctx",
+                           vector_size: Optional[int] = None, embedder: str = "") -> Dict[str, Any]:
+    """The ``vector_location`` identity value: where this store's card points are published.
+
+    ``location`` is a Qdrant server URL, or ``"embedded"`` for a Qdrant living in a directory of
+    the owner's (which only the owner's process can open). ``collection_prefix`` and
+    ``vector_size`` name the collection (``<prefix>_default_<size>``); ``embedder`` is the model
+    family that produced the vectors, so a reader can tell whether its own query embedder is
+    compatible. Set by the OWNER; readers only read it from the mount.
+    """
+    loc = (location or "").strip()
+    if loc.lower() == EMBEDDED:
+        loc = EMBEDDED
+    rec: Dict[str, Any] = {"location": loc, "collection_prefix": collection_prefix or "qar_ctx"}
+    if vector_size:
+        rec["vector_size"] = int(vector_size)
+    if embedder:
+        rec["embedder"] = embedder
+    return rec
+
+
+def vector_location_of(meta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The recorded ``vector_location`` of a store's meta, or None when absent or malformed."""
+    rec = meta.get("vector_location")
+    if isinstance(rec, dict) and str(rec.get("location") or "").strip():
+        return rec
+    return None
+
+
 # --------------------------------------------------------------------------------------------
 # Readability: the only access rule
 # --------------------------------------------------------------------------------------------
@@ -179,6 +233,9 @@ def check_readable(cards_dir: str) -> AccessDecision:
             next(it, None)
         with open(os.path.join(cards_dir, BOOTSTRAP_META_FILE), "r", encoding="utf-8") as fh:
             data = json.load(fh)
+        if isinstance(data, dict) and data.get("merged_into"):
+            return AccessDecision(False, "the store was merged into a wider store "
+                                         f"({merged_target(data)}); mount that one instead")
         if not isinstance(data, dict) or not data.get("store_id"):
             return AccessDecision(False, "the store has no store_id yet (its owner must initialise it: "
                                          "`context store-info --init`)")

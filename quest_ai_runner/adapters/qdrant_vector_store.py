@@ -99,7 +99,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ..core.adapters import VectorHit, VectorStoreBase
 from ..core.vector_scopes import CARD_SEED_SCOPE
@@ -246,6 +247,36 @@ _EMBED_BATCH_DEFAULT = 16
 _EMBED_MAX_CHARS_DEFAULT = 8000
 
 
+FASTEMBED_EMBEDDER_ID = "fastembed:BAAI/bge-small-en-v1.5"
+
+
+def voyage_embedder_id(model: Optional[str] = None) -> str:
+    return f"voyage:{model or os.getenv('VOYAGE_MODEL', 'voyage-3-lite')}"
+
+
+def openai_embedder_id(model: Optional[str] = None) -> str:
+    return f"openai:{model or os.getenv('QAR_OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small')}"
+
+
+def embedder_id_from_env() -> str:
+    """The embedder family the environment selects (``QAR_EMBEDDER_BACKEND``), as an id string."""
+    backend = (os.getenv("QAR_EMBEDDER_BACKEND") or "").strip().lower()
+    if backend == "voyage":
+        return voyage_embedder_id()
+    if backend == "openai":
+        return openai_embedder_id()
+    return FASTEMBED_EMBEDDER_ID
+
+
+@dataclass(frozen=True)
+class PointMove:
+    """One card point to relabel for a store merge (see ``relabel_points``)."""
+    old_item_id: str
+    new_item_id: str
+    store_id: str
+    paths: Tuple[str, ...]
+
+
 def _positive_int_env(name: str, default: int) -> int:
     """A positive integer from the environment, or ``default``. Never raises."""
     raw = os.getenv(name, "").strip()
@@ -336,6 +367,7 @@ class QdrantVectorStore(VectorStoreBase):
         embedder: Optional[Callable[[List[str]], List[List[float]]]] = None,
         query_embedder: Optional[Callable[[List[str]], List[List[float]]]] = None,
         vector_size: int = 384,
+        embedder_id: Optional[str] = None,
     ) -> None:
         # --- Lazy imports with a clear install hint --------------------------
         try:
@@ -353,6 +385,13 @@ class QdrantVectorStore(VectorStoreBase):
 
         self._prefix = collection_prefix
         self._vector_size = vector_size
+        # Where this store's points live and which model made them, as recorded in a store's
+        # ``vector_location`` identity (card_store_identity). ``embedder_id`` names the model
+        # family; "" means unknown (a caller-supplied embedder that did not say).
+        self.location = url or "embedded"
+        self.collection_prefix = collection_prefix
+        self.embedder_id = embedder_id if embedder_id is not None else ("" if embedder is not None
+                                                                          else FASTEMBED_EMBEDDER_ID)
         # Resolved shared-collection name (see _resolve_collection).  None until
         # first resolved; reset whenever the effective vector size changes.
         self._resolved_collection: Optional[str] = None
@@ -362,10 +401,12 @@ class QdrantVectorStore(VectorStoreBase):
         if url:
             self._client = QdrantClient(url=url)
             self._server_mode = True
+            self.path = None
         else:
             _path = path or ".quest-context/qdrant"
             self._client = QdrantClient(path=_path)
             self._server_mode = False
+            self.path = os.path.realpath(_path)
 
         # Resolve the document embedder (used by upsert/sync).
         if embedder is not None:
@@ -608,9 +649,20 @@ class QdrantVectorStore(VectorStoreBase):
             return None
 
     def _query_embed_safe(self, texts: List[str]) -> Optional[List[List[float]]]:
-        """Embed a list of query texts; return None on any error."""
+        """Embed a list of query texts; return None on any error.
+
+        The most recent result is remembered: a mount-aware reader asks for the same query's
+        embedding once for this store and once for each mount on another backend, and an embedding
+        call can be a paid network request.
+        """
+        key = tuple(texts)
+        memo = getattr(self, "query_memo", None)
+        if memo is not None and memo[0] == key:
+            return memo[1]
         try:
-            return self._query_embed(texts)
+            vecs = self._query_embed(texts)
+            self.query_memo = (key, vecs)
+            return vecs
         except Exception:
             logger.debug("QdrantVectorStore: query embedding failed", exc_info=True)
             return None
@@ -817,6 +869,107 @@ class QdrantVectorStore(VectorStoreBase):
         except Exception:
             logger.debug("QdrantVectorStore.sync failed", exc_info=True)
             return 0
+
+    def embed_query(self, text: str) -> Optional[List[float]]:
+        """The QUERY embedding of ``text`` with this store's query embedder, or None. Never raises."""
+        vecs = self._query_embed_safe([text])
+        return list(vecs[0]) if vecs else None
+
+    @property
+    def vector_dim(self) -> int:
+        return int(self._vector_size)
+
+    def existing_sizes(self) -> List[int]:
+        """Vector sizes of this prefix's collections that exist on the backend (reads only)."""
+        sizes: List[int] = []
+        try:
+            for coll in self._client.get_collections().collections:
+                name = str(coll.name)
+                if name == f"{self._prefix}_default" or name.startswith(f"{self._prefix}_default_"):
+                    size = self._collection_vector_size(name)
+                    if size and size not in sizes:
+                        sizes.append(size)
+        except Exception:  # noqa: BLE001
+            logger.debug("QdrantVectorStore.existing_sizes failed", exc_info=True)
+        return sizes
+
+    def use_vector_size(self, size: int) -> None:
+        """Point this store at the ``size``-dimensional collection (maintenance commands)."""
+        self._vector_size = int(size)
+        self._resolved_collection = None
+
+    def relabel_points(self, moves: Sequence[PointMove], *, scope: Optional[Dict[str, Any]] = None,
+                       delete_old: bool = False, apply: bool = True) -> Dict[str, int]:
+        """Re-key and re-label existing points WITHOUT embedding anything (store merges).
+
+        Each move takes the point stored for ``old_item_id``, re-uses its STORED vector, and writes
+        it under ``new_item_id`` with ``store_id`` and ``paths`` replaced. When the point id does
+        not change (legacy scheme, same card id) this overwrites the point in place; otherwise it
+        is a copy, and the old point is deleted only when ``delete_old``. The embedder is never
+        called. Idempotent: a point already at its target (right store, right paths) is counted as
+        ``done``. With ``apply=False`` nothing is written and the counts say what would happen.
+
+        Returns counts: ``relabelled`` (same point id, rewritten), ``copied`` (new id), ``done``
+        (already at target), ``missing`` (no source point), ``deleted`` (old points removed).
+        """
+        out = {"relabelled": 0, "copied": 0, "done": 0, "missing": 0, "deleted": 0}
+        try:
+            if not moves:
+                return out
+            from qdrant_client.models import PointIdsList, PointStruct
+            digest = _scope_hash(scope)
+            coll = self._collection_name()
+            if not self._client.collection_exists(coll):
+                out["missing"] = len(moves)
+                return out
+            batch = 64
+            for start in range(0, len(moves), batch):
+                chunk = list(moves[start:start + batch])
+                old_ids = {_point_id(m.old_item_id, digest): m for m in chunk}
+                new_ids = {_point_id(m.new_item_id, digest) for m in chunk}
+                old_found = {p.id: p for p in self._client.retrieve(
+                    collection_name=coll, ids=list(old_ids), with_payload=True, with_vectors=True)}
+                new_found = {p.id: p for p in self._client.retrieve(
+                    collection_name=coll, ids=list(new_ids), with_payload=True, with_vectors=False)}
+                points: List[Any] = []
+                to_delete: List[int] = []
+                for m in chunk:
+                    old_pid = _point_id(m.old_item_id, digest)
+                    new_pid = _point_id(m.new_item_id, digest)
+                    target = new_found.get(new_pid)
+                    at_target = (target is not None
+                                 and (target.payload or {}).get(_STORE_KEY) == m.store_id
+                                 and list((target.payload or {}).get("paths") or []) == list(m.paths))
+                    src = old_found.get(old_pid)
+                    if at_target:
+                        out["done"] += 1
+                        if old_pid != new_pid and src is not None and delete_old:
+                            to_delete.append(old_pid)
+                        continue
+                    if src is None or src.vector is None:
+                        out["missing"] += 1
+                        continue
+                    out["relabelled" if old_pid == new_pid else "copied"] += 1
+                    if old_pid != new_pid and delete_old:
+                        to_delete.append(old_pid)
+                    payload = dict(src.payload or {})
+                    payload[_STORE_KEY] = m.store_id
+                    payload["paths"] = list(m.paths)
+                    payload["_id"] = m.new_item_id
+                    vec = src.vector
+                    if isinstance(vec, dict):  # named vectors are not used by this store
+                        vec = next(iter(vec.values()))
+                    points.append(PointStruct(id=new_pid, vector=list(vec), payload=payload))
+                if apply:
+                    if points:
+                        self._client.upsert(collection_name=coll, points=points)
+                    if to_delete:
+                        self._client.delete(collection_name=coll,
+                                            points_selector=PointIdsList(points=to_delete))
+                out["deleted"] += len(to_delete) if apply else 0
+        except Exception:
+            logger.debug("QdrantVectorStore.relabel_points failed", exc_info=True)
+        return out
 
     def existing_item_ids(self, item_ids: Sequence[str], *,
                           scope: Optional[Dict[str, Any]] = None) -> List[str]:

@@ -8,6 +8,8 @@ that replaced it.
 Contents: [Where this came from](#where-this-came-from) · [Phase 1: how access works today](#phase-1-how-card-visibility-and-scoping-work-before-this-change) ·
 [Containment audit](#containment-audit-defects-found-in-the-copy-import-path) · [The model](#the-model) ·
 [Access](#access-what-the-process-can-read) · [Vectors](#vectors) · [Commands](#commands) ·
+[Widening a corpus root](#widening-a-corpus-root-merge-into) ·
+[A private reader of a shared vector server](#a-private-reader-of-a-shared-vector-server) ·
 [Config keys](#config-keys) · [A person who also belongs to an org](#a-person-who-belongs-to-an-org-and-also-runs-a-personal-lane) ·
 [QuestApiCardRepository](#questapicardrepository-and-the-other-repositories) · [Measured guarantees](#measured-guarantees) ·
 [Migrating a deployment](#migrating-a-deployment)
@@ -125,7 +127,9 @@ The cards themselves are not.
 (`card_store_identity.py`), generated randomly and never derived from a path. Card identity is
 `(store_id, card_id)`. A card's file paths are relative to ITS store's root and are never rewritten.
 The meta also records the store's `root` (where those paths resolve from), a `root_history`,
-the `mounts` it reads, a `vector_id_scheme` and an optional `vector_space`. A bootstrap pass rewrites
+the `mounts` it reads, a `vector_id_scheme`, an optional `vector_space`, an optional
+`vector_location` (where its points are published, see [below](#a-private-reader-of-a-shared-vector-server))
+and, after a merge, `merged_from` (on the wide store) or `merged_into` (on the source). A bootstrap pass rewrites
 only the bootstrap keys and carries these through; it never moves a recorded root.
 
 **Mount instead of copy.** With `QAR_CARD_MOUNT=mount` a corpus that contains (or sits inside) other
@@ -190,8 +194,13 @@ In mount mode `StoreFencedVectorStore` wraps the lane's vector store:
   store's points.
 - `QAR_VECTOR_SPACE` / `context store-info --vector-space` declare which server/collection holds a
   store's points; the vector arm skips a mount only when both sides declare a space and they differ.
-  Such a mount is served by the keyword arm alone. A reader whose stores live on a different Qdrant
-  server should stay on `QAR_CARD_MOUNT=copy`.
+  Such a mount is served by the keyword arm alone.
+- A mount whose owner recorded a `vector_location` on a DIFFERENT backend than the reader's own is
+  not served through the reader's store at all: the reader queries those points read-only on that
+  backend, never writes to it, and never copies or embeds the mount's cards locally. See
+  [A private reader of a shared vector server](#a-private-reader-of-a-shared-vector-server). A
+  reader whose stores live on another Qdrant server no longer has to stay on
+  `QAR_CARD_MOUNT=copy`.
 
 ## Commands
 
@@ -202,10 +211,20 @@ quest-ai-runner context store-info --cards-dir DIR [--init] [--vector-space NAME
 quest-ai-runner context move-root --cards-dir DIR --new-root PATH [--apply] [--force]
 quest-ai-runner context migrate-imports --cards-dir DIR [--root PATH] [--apply]
         [--prune-points] [--qdrant-url URL | --qdrant-path PATH] [--collection-prefix PREFIX]
+        [--vector-size N]
+quest-ai-runner context merge-into --cards-dir NARROW --into WIDE [--apply] [--prune-source]
+        [--qdrant-url URL | --qdrant-path PATH] [--collection-prefix PREFIX] [--vector-size N]
+quest-ai-runner context store-info --cards-dir DIR --vector-location URL|embedded
+        [--vector-collection-prefix P] [--vector-size N] [--embedder-id ID] [--vector-path DIR] --apply
 ```
 
-- `store-info` shows the id, root, mounts and whether each is readable by this user; `--init` gives a
-  store without an id one (it needs an existing `bootstrap_meta.json`; it never invents one).
+- `store-info` shows the id, root, mounts, vector location, merge records and whether each mount is
+  readable by this user; `--init` gives a store without an id one (it needs an existing
+  `bootstrap_meta.json`; it never invents one). `--vector-location` is set by a store's OWNER (see
+  below). Without `--vector-size`, a server location is probed read-only for the one vector size its
+  prefix has.
+- `merge-into` moves a store into a wider one with no re-embedding. See
+  [Widening a corpus root](#widening-a-corpus-root-merge-into).
 - `move-root` records a new root. Ids, vectors and relative paths are unchanged, so re-embeds are 0.
   The plan reports how many file references exist under the new root and refuses a missing target
   unless `--force`. The previous root is kept in `root_history`. Readers follow the move on their next
@@ -215,6 +234,115 @@ quest-ai-runner context migrate-imports --cards-dir DIR [--root PATH] [--apply]
   converted copies, so a failure leaves a duplicate and never a gap. A copy whose source store is not
   mountable is kept and reported. With `--qdrant-url`/`--qdrant-path` it lists the orphan points the
   copies left, and with `--apply --prune-points` deletes them.
+
+## Widening a corpus root: merge-into
+
+A lane widens its corpus root from `X/sub` to its parent `X`. Its store `X/sub/.quest-context` has to
+become part of the wider store `X/.quest-context` (which may already exist with its own cards and
+identity): a mounted store needs an owner lane to stay fresh, and re-indexing `X/sub` would re-card
+and re-embed everything.
+
+`context merge-into --cards-dir X/sub/.quest-context --into X/.quest-context` is a dry run that
+prints the cards to move, the id collisions, the files missing under the wide root, the state files
+to copy, and the points to relabel. `--apply` does it. What it does, in order (a failure leaves a
+duplicate, never a gap):
+
+1. **Cards.** Each narrow card is written into the wide store with its id unchanged and every file
+   path prefixed with the narrow root's position under the wide root (`a.py` becomes `sub/a.py`; the
+   same for `content[].locator.path`). `provenance.merged_from` records the source store and card.
+   Cards that are themselves copy-imports are not moved (mount the original). A wide store that does
+   not exist yet is created, with an identity and the source's bootstrap bookkeeping.
+2. **Vectors, with the embedder never called.** Each moved card's stored vector is re-used.
+   - Both stores on the legacy scheme (point id derived from the card id): the point id does not
+     change, so the point is rewritten in place with the wide store's `store_id` and the prefixed
+     `paths`. This is the zero-copy case.
+   - Any other combination (a qualified source, whose ids are `card:<store_id>:<card_id>`, or a
+     renamed card): the point is read with its vector and written under the new point id with the new
+     `store_id` and `paths`; the old point is deleted only with `--prune-source`. The wide store's
+     `export_for_embedding` then yields the same ids and fingerprints, so its next seed pass re-embeds
+     0 cards.
+   - A card with no point in the source is simply not embedded here; the wide lane's seed pass does it
+     as for any card. A renamed card in a legacy-scheme store is skipped when the source's point is
+     really the wide store's own card's point (same point id); the wide lane embeds that one card.
+3. **State.** Non-card state directories the narrow store holds (turns, per-rep notes, anything but
+   vector directories, `index-state` and `_quarantine`) are copied to the same relative place in the
+   wide store, never over an existing file. A file that exists in both with different content is
+   reported as a collision and the wide file is kept; the source's copy stays in the source.
+   Derived sidecars (`folder_review.json`, `discovered_files.json`) are not moved.
+4. **Identity.** The wide store records `merged_from` (source store id, date, path prefix, counts).
+
+**Id collisions never overwrite.** For a narrow card whose id exists in the wide store: if the wide
+card carries `provenance.merged_from` for this source card, or has the same name and the same set of
+file paths, it is the same card and the wide one is kept ("already present"). Otherwise the incoming
+card is renamed to `<id>--m<first 8 hex of the source store id>` and moved. If that id is itself taken
+by a different card the card is reported as unresolved and stays in the source. Re-running the command
+therefore changes nothing (it does not even rewrite the meta file).
+
+**The source.** Without `--prune-source` the source is left untouched and the command says so: it
+still claims its subtree, and a reader (or a copy-mode wide lane) still sees two stores for the same
+files. With `--prune-source`, the moved cards (and the state files that were copied) are removed from
+the source, its `bootstrap_meta.json` records `merged_into`, and every discovery path (mount
+discovery, `claims_subtree`, copy-mode nested and ancestor discovery, `check_readable`) treats it as
+not a store. A wide store that held copy-imports of the source (copy mode) has them and their points
+removed too, since the moved cards supersede them. Run the prune once the wide lane is verified; the
+second run only prunes.
+
+**Freshness afterwards.** The wide store's normal refresh treats the moved cards as its own: their
+stored `sha256`/`mtime` are compared at the prefixed path, so an unchanged file is not re-carded
+(`refresh_stale` with a provider that must not be called), and a changed one is stale at its new path.
+
+**Operational requirements.** Stop the lanes that own the narrow and the wide store (and, for an
+embedded Qdrant, any process holding it) before `--apply`: the relabel of an in-place point is not
+atomic with the owner's own sync, and an embedded Qdrant allows one process. `--qdrant-url` reaches a
+server (the vector size is detected, or `--vector-size`); `--qdrant-path` opens an embedded one.
+
+Recipe, as commands (dry runs first):
+
+```
+quest-ai-runner context store-info --cards-dir X/sub/.quest-context --init --apply   # if it has no id
+quest-ai-runner context merge-into --cards-dir X/sub/.quest-context --into X/.quest-context \
+    --qdrant-url http://HOST:6333
+quest-ai-runner context merge-into ... --apply                    # source untouched
+# point the lane's corpus root at X, restart it, check its first seed pass embeds 0 cards
+quest-ai-runner context merge-into ... --apply --prune-source     # now the narrow store is gone
+```
+
+## A private reader of a shared vector server
+
+A reader lane keeps its OWN vectors in a private embedded Qdrant that only its OS user can read. A
+store it mounts has its points on a Qdrant server that both the reader and the owner can reach. The
+reader must query the mounted store's points there, and must never write anything (its own cards,
+turns, associations) to that server, because other users can reach it.
+
+- **The owner records where its vectors live**, once, in the store's identity:
+  `context store-info --cards-dir DIR --vector-location http://HOST:6333 --apply` (or `embedded`).
+  The record is `vector_location`: `location`, `collection_prefix`, `vector_size`, `embedder` (the
+  model family, default from `QAR_EMBEDDER_BACKEND`) and, for `embedded`, the Qdrant `path`. A reader
+  reads it from the mount; there is no reader-side copy of that configuration and nothing for the
+  reader's operator to keep in step. The record is the lane's published location: it should name the
+  backend the owner's lane actually syncs to.
+- **The reader's vector arm** queries its own store through its own vector store, as before, and each
+  mounted store whose recorded location differs from the reader's own backend (or collection prefix)
+  through a read-only client to that location, filtered by `_scope` (the card partition) and by that
+  `store_id`, which is the existing store fence. Results are merged into one ranking by score. A
+  mount whose owner recorded no location, or the reader's own backend, is served exactly as before.
+- **No write, structurally.** `ReadOnlyVectorReader` (`adapters/card_store_vectors.py`) is the only
+  handle on that backend and has no upsert, delete, set_payload or create method; it calls only
+  `collection_exists`, `get_collection(s)` and `query_points`. The reader's own `sync`/`upsert` go to
+  its own store, and items attributed to another store are dropped as before.
+- **Query embeddings must be compatible.** The reader embeds its QUERY with its own query embedder
+  and sends the vector. Before any request it checks the vector length against the recorded
+  `vector_size` and, when both sides name an embedder family, that they are equal. Incompatible or no
+  embedder available: that mount's vector arm is skipped with one log line
+  (`mounted store ...: vector arm skipped, ...`) and its cards are still served by the keyword arm.
+- **Unreachable or embedded elsewhere.** A server that does not answer is logged once and left alone
+  for 60 seconds at a time (no timeout on every turn). An `embedded` location in a directory that is
+  not the reader's own is never opened (an embedded Qdrant takes a write lock on its directory, so it
+  cannot be read without writing); the log says whether that directory is even readable by the
+  reader. In every such case the mount's cards are served by the keyword arm only, and are never
+  copied or embedded locally.
+- **One embedding per query.** The query embedding is computed once and re-used for the reader's own
+  store and every remote mount.
 
 ## Config keys
 
@@ -274,6 +402,22 @@ Asserted in `tests/test_card_store_mounts.py`:
 | An owner change is visible to the reader with zero reader writes | `TestFreshness` |
 | The vector arm returns only points of the stores actually mounted | `test_reader_cannot_get_points_of_a_store_it_did_not_mount`, `test_task_associations_are_attributed_to_their_lane_and_not_served_to_others` |
 
+Asserted in `tests/test_card_store_merge_and_remote.py`:
+
+| Guarantee | Test |
+|---|---|
+| Re-embeds on a merge, legacy or qualified scheme = 0 (the embedder is called 0 times) | `TestMergeVectors::test_legacy_scheme_points_keep_their_ids_and_only_the_label_changes`, `test_qualified_scheme_points_are_copied_with_their_stored_vector_then_the_old_ones_go` |
+| The wide store's next seed pass after a merge re-embeds 0 cards | same two tests |
+| Points per card after a merge = 1 (old points removed with `--prune-source`) | `test_qualified_scheme_points_are_copied_...` |
+| Merge dry run writes nothing; the source is untouched without `--prune-source` | `TestMergeCards::test_dry_run_reports_counts_and_writes_nothing`, `test_apply_moves_cards_with_ids_unchanged_and_paths_prefixed` |
+| Id collisions overwrite nothing; a re-run changes nothing (cards, points, meta) | `test_id_collision_keeps_the_wide_card_renames_the_incoming_and_rerun_is_a_noop`, `test_rerun_with_vectors_is_idempotent` |
+| A merged store is not a store to any discovery path | `test_prune_source_removes_moved_cards_marks_it_merged_and_discovery_ignores_it`, `test_copy_mode_discovery_also_treats_a_merged_store_as_not_a_store` |
+| Moved cards are fresh at the wide store with 0 re-cards | `TestMergeFreshness` |
+| Writes by a reader to a mounted store's other-backend location = 0 | `TestRemoteMountVectors::test_reader_queries_the_mounted_points_on_the_other_backend_and_writes_nothing`, `test_the_readers_own_writes_never_reach_the_mounted_location` |
+| Cards embedded locally for a remote mount = 0 (only the query is embedded) | the first of those |
+| Incompatible embedder, wrong dimension, unreachable server, embedded elsewhere: keyword arm still works | the remaining `TestRemoteMountVectors` tests |
+| Default behaviour (copy mode, no recorded location) unchanged | `TestDefaultsUnchanged`, `test_a_mount_with_no_recorded_location_or_the_same_backend_is_unchanged` |
+
 ## Migrating a deployment
 
 Nothing changes until a lane sets `QAR_CARD_MOUNT=mount`. To migrate, owners first, readers after, one
@@ -288,6 +432,9 @@ lane at a time:
    this before step 4, because a fenced reader does not serve unattributed card points.
 3. **Optional:** declare the vector space on owners and readers that share a server:
    `context store-info --cards-dir DIR --vector-space NAME --apply` and `QAR_VECTOR_SPACE=NAME`.
+   Owners whose points are on a server a reader with a PRIVATE vector store must query: publish the
+   location instead (`--vector-location URL --apply`), see
+   [A private reader of a shared vector server](#a-private-reader-of-a-shared-vector-server).
 4. **Convert each reading lane.** For a lane whose store holds copies:
    `context migrate-imports --cards-dir DIR` (review), then `--apply`, adding
    `--qdrant-url`/`--qdrant-path` and `--prune-points` to delete the orphan points. Then set
@@ -295,7 +442,9 @@ lane at a time:
 5. **Order across lanes:** owners (steps 1-2) before any reader; within the readers, the narrowest
    corpora first (their mounts are leaves), then wider ones. A reader whose nested store has no
    identity yet mounts nothing from it and indexes nothing under it, so do not skip step 1.
-6. **To move a store's root:** `context move-root --cards-dir DIR --new-root PATH` (review the missing
+6. **To widen a corpus root** (a lane moves from `X/sub` to `X`): `context merge-into`, see
+   [Widening a corpus root](#widening-a-corpus-root-merge-into).
+7. **To move a store's root:** `context move-root --cards-dir DIR --new-root PATH` (review the missing
    file count), then `--apply`, then point the lane's corpus root at the new path. Readers follow
    without any change of their own.
 
