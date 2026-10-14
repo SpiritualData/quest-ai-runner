@@ -2,7 +2,7 @@
 
 ``_verify_goal`` is the run's risk gate: its verdict decides done vs needs_you/failed and whether a
 reply's completion claims are honest. It now runs at ``OrchestratorConfig.verify_tier`` (default
-"best" — spend the strong model on judgment), and if the strong-tier call fails or returns an
+"balanced", same as the planner; set "best" to spend the strong model on judgment), and if the strong-tier call fails or returns an
 unusable verdict it retries ONCE at ``planner_tier`` (the previous judge) instead of silently
 degrading to "no verification". The answer goal loop also verifies against the turn's DERIVED GOAL
 CONDITION (the checkable done-standard from Step 1 / Fix 13), not just the plan's goal restatement.
@@ -52,14 +52,15 @@ def _orch(provider, **kw):
                         registry=ModelRegistry(provider), **kw)
 
 
-def test_verify_goal_runs_at_best_tier_by_default():
+def test_verify_goal_runs_at_balanced_tier_by_default():
     provider = _PlanRecordingProvider(decisions=[{"met": True, "reason": "done"}])
     orch = _orch(provider)
     verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is True
     assert error is None
     registry = ModelRegistry(provider)
-    assert provider.plan_models == [registry.resolve_tier("best")]
+    # verify_tier defaults to planner_tier ("balanced"): one call, no duplicate fallback.
+    assert provider.plan_models == [registry.resolve_tier("balanced")]
 
 
 def test_verify_goal_falls_back_to_planner_tier_when_best_fails():
@@ -70,7 +71,7 @@ def test_verify_goal_falls_back_to_planner_tier_when_best_fails():
     provider = _PlanRecordingProvider(
         decisions=[{"met": False, "reason": "still missing the summary"}],
         raise_for_models=[best])
-    orch = _orch(provider)
+    orch = _orch(provider, config=OrchestratorConfig(verify_tier="best"))
     verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is False
     assert error is None
@@ -84,7 +85,7 @@ def test_verify_goal_falls_back_on_unusable_verdict_too():
         {"unexpected": "shape"},                 # best-tier reply: unusable
         {"met": True, "reason": "fine"},         # planner-tier retry: usable
     ])
-    orch = _orch(provider)
+    orch = _orch(provider, config=OrchestratorConfig(verify_tier="best"))
     verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is True
     assert error is None
@@ -159,7 +160,7 @@ def test_env_wiring_for_overseer_and_verify_tier(monkeypatch):
         monkeypatch.delenv(var, raising=False)
     cfg = _config_from_env()
     assert cfg.orchestrator.overseer is True           # library default: ON (the run's safety net)
-    assert cfg.orchestrator.verify_tier == "best"      # library default: strong judge
+    assert cfg.orchestrator.verify_tier == "balanced"  # library default: same tier as the planner
 
     monkeypatch.setenv("QAR_OVERSEER", "true")
     monkeypatch.setenv("QAR_OVERSEER_TIER", "quality")

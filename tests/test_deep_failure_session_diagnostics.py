@@ -369,10 +369,11 @@ def test_pinned_and_alias_claude_ids_still_reach_the_cli(monkeypatch):
 
 
 def test_non_claude_models_still_omit_the_flag(monkeypatch):
-    """Unchanged behaviour: the worker only runs Claude, so a foreign id means no --model at all."""
-    assert spawn_model_arg(monkeypatch, "gemini-3.5-flash") is None
-    assert spawn_model_arg(monkeypatch, "gpt-4o") is None
-    assert spawn_model_arg(monkeypatch, None) is None
+    """The worker only runs Claude, so a foreign id never reaches it: the run takes the balanced tier."""
+    from quest_ai_runner.core.goal_runner import BALANCED_CLI_MODEL
+    assert spawn_model_arg(monkeypatch, "gemini-3.5-flash") == BALANCED_CLI_MODEL
+    assert spawn_model_arg(monkeypatch, "gpt-4o") == BALANCED_CLI_MODEL
+    assert spawn_model_arg(monkeypatch, None) == BALANCED_CLI_MODEL
 
 
 def test_cli_safe_model_matches_the_adapter_translator():

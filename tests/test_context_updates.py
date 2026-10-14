@@ -918,7 +918,9 @@ def test_a_habit_is_never_put_to_a_relevance_judgment():
     """A collection reaches a card only because the card NAMED it: card-scoped by construction."""
     from quest_ai_runner.runner.context_updates import UpdateEngine
 
-    client = _CollectionClient([_habit_entry("e1", "2026-09-09", "started", 600, 1)])
+    from datetime import datetime, timedelta, timezone
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()  # inside the window
+    client = _CollectionClient([_habit_entry("e1", yesterday, "started", 600, 1)])
     bundle = UpdateEngine(client, always=(),
                           relevance_judge=lambda *a: set()).collect(
         {"quest_id": "q1", "context_sources": [{"source": "collection", "collection_id": "coll_1"}]},
@@ -1040,7 +1042,7 @@ def test_a_read_takes_a_time_period_instead_of_the_stored_stamp(tmp_path):
         context_updates_judge_relevance = False
 
     narrow = collect_quest_context("q1", cfg=Cfg(), client=_ReadClient())
-    wide = collect_quest_context("q1", cfg=Cfg(), client=_ReadClient(), days=30)
+    wide = collect_quest_context("q1", cfg=Cfg(), client=_ReadClient(), days=3650)  # far wider than NOW is old
 
     assert [r.since for r in narrow.reports if r.source == "quest_notes"] == [NOW]
     wide_since = [r.since for r in wide.reports if r.source == "quest_notes"][0]

@@ -826,7 +826,9 @@ def test_subprocess_runner_drops_non_claude_model(monkeypatch):
     (latest of family) and a bucket LABEL can never reach the binary raw. See
     tests/test_deep_failure_session_diagnostics.py for the label case."""
     import subprocess as _sp
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.core.goal_runner import (
+        BALANCED_CLI_MODEL, SubprocessConfig, SubprocessGoalRunner,
+    )
 
     captured = {}
 
@@ -844,12 +846,15 @@ def test_subprocess_runner_drops_non_claude_model(monkeypatch):
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
 
     runner.run_goal(goal="g", brief="b", model="gemini-3.5-flash", max_turns=2)
-    assert "--model" not in captured["cmd"], "non-Claude model must not reach Claude Code"
+    cmd = captured["cmd"]
+    # The foreign id never reaches Claude Code; the run takes the balanced tier instead.
+    assert "gemini-3.5-flash" not in cmd, "non-Claude model must not reach Claude Code"
+    assert cmd[cmd.index("--model") + 1] == BALANCED_CLI_MODEL
 
     captured.clear()
     runner.run_goal(goal="g", brief="b", model="claude-opus-4-8", max_turns=2)
     cmd = captured["cmd"]
-    assert "--model" in cmd and cmd[cmd.index("--model") + 1] == "opus"
+    assert "--model" in cmd and "opus" in cmd[cmd.index("--model") + 1]
 
 
 def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):

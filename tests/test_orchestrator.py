@@ -37,9 +37,9 @@ def test_plan_read_then_answer():
     assert res.kind == "answer"
     assert retrieval.read_calls == ["README.md"]      # it actually read before answering
     # plan_calls = 2 loop steps + the post-answer verification (answer_goal_max_iterations): the
-    # stub's exhausted-queue reply has no "met" key, so the verifier makes its verify_tier call and
-    # then ONE planner-tier fallback retry (see _verify_goal's tier ladder) = 2 verify calls.
-    assert provider.plan_calls == 4
+    # stub's exhausted-queue reply has no "met" key, but verify_tier and planner_tier both default
+    # to "balanced", so _verify_goal's tier ladder holds ONE model and makes 1 verify call.
+    assert provider.plan_calls == 3
     # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer.
     assert provider.answer_calls == 2
     # The README content was injected into the grounding the answer saw.
@@ -82,8 +82,9 @@ def test_deep_runs_goal():
     assert len(res.deep_results) == 1
     assert res.deep_results[0].met is True
     assert runner.calls[0]["goal"] == "Write the one-pager"
-    # opus tier resolved to a concrete model id passed to the runner.
-    assert "opus" in runner.calls[0]["model"]
+    # The runner gets a concrete model id. The starting model is chosen by task difficulty (see
+    # resolve_deep_ladder), so the planner's "opus" tier is a hint, not a pin.
+    assert runner.calls[0]["model"] and "claude" in runner.calls[0]["model"]
 
 
 def test_deep_fanout_runs_subtasks_in_parallel():
@@ -1148,9 +1149,10 @@ def test_repeat_context_off_resends_full_on_replan():
     res = _orch(provider, retrieval, config=cfg).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
-    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2..3] are the post-answer verification
-    # calls (verify_tier + planner-tier fallback on the stub's unusable verdict) — not checked here.
-    assert len(provider.plan_prompts) == 4
+    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the post-answer verification call
+    # (verify_tier == planner_tier by default, so the fallback retry is deduplicated away) — not
+    # checked here.
+    assert len(provider.plan_prompts) == 3
     for p in provider.plan_prompts[:2]:
         assert _CONTEXT in p
         assert "TRANSCRIPT-TAIL-MARKER" in p             # full transcript present each step
@@ -1167,9 +1169,10 @@ def test_repeat_context_on_step1_full_replan_abbreviated():
     res = _orch(provider, retrieval, config=cfg).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
-    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2..3] are the post-answer verification
-    # calls (verify_tier + planner-tier fallback on the stub's unusable verdict) — not checked here.
-    assert len(provider.plan_prompts) == 4
+    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the post-answer verification call
+    # (verify_tier == planner_tier by default, so the fallback retry is deduplicated away) — not
+    # checked here.
+    assert len(provider.plan_prompts) == 3
     step1, replan = provider.plan_prompts[0], provider.plan_prompts[1]
     # Step 1: full context + transcript.
     assert _CONTEXT in step1
@@ -1557,7 +1560,7 @@ def test_cancel_check_false_never_affects_a_normal_run():
     assert retrieval.read_calls == ["README.md"]
     # Same call counts test_plan_read_then_answer asserts for the identical scripted plan (a
     # cancel_check that is always False changes nothing about the loop's own behavior).
-    assert provider.plan_calls == 4
+    assert provider.plan_calls == 3
     assert provider.answer_calls == 2
 
 

@@ -89,11 +89,11 @@ def test_a_failed_verification_costs_one_extra_call_not_a_retry_storm():
     provider = StubProvider(decisions=[
         {"action": "answer", "rationale": "have it"},
         {"garbage": True},          # verify attempt 1: no "met" key
-        {"garbage": True},          # verify attempt 2 (planner-tier fallback)
     ])
     res = _run_one_step_turn(provider)
     assert res.kind == "answer"
-    assert provider.plan_calls == 3   # 1 planner + 2 verify attempts, then it proceeds unverified
+    assert provider.plan_calls == 2   # 1 planner + 1 verify attempt (verify_tier == planner_tier, so no
+    # fallback retry), then it proceeds unverified
 
 
 def test_the_on_by_default_overseer_costs_exactly_one_extra_call_on_a_simple_turn():

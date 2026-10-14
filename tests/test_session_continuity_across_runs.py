@@ -59,6 +59,10 @@ class SessionAwareClient(MockQuestClient):
         self.report_sessions.append(session_id)
         self.reports.append((task_id, "failed", result, None))
 
+    def report_incomplete(self, task_id, result, session_id=None):
+        self.report_sessions.append(session_id)
+        self.reports.append((task_id, "incomplete", result, None))
+
 
 class ResumeCapturingRunner:
     """A DeepRunner that accepts a resume id and records what each call was handed."""
@@ -113,7 +117,7 @@ def test_a_failed_run_reports_its_session_too():
 
     ex.execute({"id": "t2", "text": "do the work"})
 
-    assert client.reports[-1][1] == "failed"
+    assert client.reports[-1][1] == "incomplete"   # worked, did not reach the goal
     assert client.report_sessions[-1] == "sess-partial"
 
 

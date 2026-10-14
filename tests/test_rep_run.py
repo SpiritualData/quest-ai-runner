@@ -273,8 +273,9 @@ def test_task_supplied_rep_preamble_is_used_when_no_rep_resolves():
     assert deep.calls and deep.calls[0]["context_preamble"] == persona
     # 2) the fold-back done report was composed in the same voice, and is what was reported
     assert seen["rep_preamble"] == persona
-    assert client.reports[0][:3] == ("chat-task", "done",
-                                     "Done. Here is what I found, in Ada's voice.")
+    assert client.reports[0][:2] == ("chat-task", "done")
+    # The report is the persona's text, followed by the "(Completed with model: ...)" note.
+    assert client.reports[0][2].startswith("Done. Here is what I found, in Ada's voice.")
 
 
 def test_resolved_rep_wins_over_a_task_supplied_rep_preamble():

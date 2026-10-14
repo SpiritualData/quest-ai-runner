@@ -16,6 +16,11 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
   notes, profile table) is `core/planner_prompt.py`; `orchestrator.py` holds the loop and re-exports
   those names. A new prompt variant is an entry in `PLANNER_PROFILES`; add prompt text there, not to
   the 12K-line loop.
+  The other prompt text and tool schemas (goal verification, intent and mode-release directives,
+  future-context asks, card updater, reply voice, post-work synthesis) are `core/auxiliary_prompts.py`;
+  how gathered observations, links and past escalations are rendered into the planner's view is
+  `core/planner_context.py`. Both are re-exported from `orchestrator.py`; put new prompt text or
+  rendering helpers in those modules, not in the loop.
 - `runner/` — the executor: poll → claim → run → escalate → report.
 - `adapters/` — reference *implementations* of the interfaces (`FilesAdapter`, `CachedDbAdapter`,
   `AnthropicProvider`).

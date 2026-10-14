@@ -179,10 +179,14 @@ def test_build_review_digest_is_byte_for_byte_unchanged_when_web_is_not_configur
     decision = PlanDecision(action="answer", rationale="ok")
     default = build_review_digest("restart the deploy pipeline please", decision,
                                   PLANNER_DECISION_RUBRIC)
-    assert default == _PRE_CHANGE_REVIEW_DIGEST_NO_WEB
+    # The rubric text evolves on its own (it is the planner prompt's tunable), so the pin covers
+    # everything AROUND it: the framing before the rubric and the review instructions after it.
+    before, after = default.split(PLANNER_DECISION_RUBRIC)
+    assert _PRE_CHANGE_REVIEW_DIGEST_NO_WEB.startswith(before)
+    assert _PRE_CHANGE_REVIEW_DIGEST_NO_WEB.endswith(after)
     explicit_false = build_review_digest("restart the deploy pipeline please", decision,
                                          PLANNER_DECISION_RUBRIC, web_configured=False)
-    assert explicit_false == _PRE_CHANGE_REVIEW_DIGEST_NO_WEB
+    assert explicit_false == default
     assert WEB_REVIEW_NOTE not in default
 
 

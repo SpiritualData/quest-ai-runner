@@ -230,7 +230,7 @@ def test_fast_lane_long_poll_dispatches_delivered_task():
     client = MockQuestClient([])
     calls = {"n": 0}
 
-    def _wait_for_interactive(*, team_id=None, env_id=None, timeout=25.0):
+    def _wait_for_interactive(*, team_id=None, team_ids=None, env_id=None, timeout=25.0):
         calls["n"] += 1
         if calls["n"] == 1:
             return delivered
@@ -255,7 +255,7 @@ def test_fast_lane_falls_back_to_short_poll_when_wait_channel_disabled():
     client = MockQuestClient([])
     calls = {"n": 0}
 
-    def _list_interactive_due(*, team_id=None, env_id=None):
+    def _list_interactive_due(*, team_id=None, team_ids=None, env_id=None):
         calls["n"] += 1
         if calls["n"] == 1:
             return [delivered]
@@ -503,8 +503,8 @@ def test_fast_lane_wait_uses_discovery_team_id_not_team_id():
     """
     seen: Dict[str, Any] = {}
 
-    def _wait_for_interactive(*, team_id=None, env_id=None, timeout=25.0):
-        seen["team_id"] = team_id
+    def _wait_for_interactive(*, team_id=None, team_ids=None, env_id=None, timeout=25.0):
+        seen["team_ids"] = team_ids
         seen["env_id"] = env_id
         stop_event.set()
         return None
@@ -517,7 +517,7 @@ def test_fast_lane_wait_uses_discovery_team_id_not_team_id():
     stop_event = threading.Event()
     poller._fast_lane_loop(stop_event)
 
-    assert seen["team_id"] == ""          # owner-scoped: the client sends no team filter
+    assert seen["team_ids"] == [""]        # owner-scoped: the client sends no team filter
     assert seen["env_id"] == "env-personal"
 
 
@@ -525,8 +525,8 @@ def test_fast_lane_short_poll_uses_discovery_team_id_not_team_id():
     """Same scoping fix on the wait-channel-disabled fallback path."""
     seen: Dict[str, Any] = {}
 
-    def _list_interactive_due(*, team_id=None, env_id=None):
-        seen["team_id"] = team_id
+    def _list_interactive_due(*, team_id=None, team_ids=None, env_id=None):
+        seen["team_ids"] = team_ids
         stop_event.set()
         return []
 
@@ -538,15 +538,15 @@ def test_fast_lane_short_poll_uses_discovery_team_id_not_team_id():
     stop_event = threading.Event()
     poller._fast_lane_loop(stop_event)
 
-    assert seen["team_id"] == ""
+    assert seen["team_ids"] == [""]
 
 
 def test_fast_lane_still_scopes_by_team_when_no_discovery_override():
     """A team-bound lane keeps its per-team isolation: no override means scope by team_id."""
     seen: Dict[str, Any] = {}
 
-    def _wait_for_interactive(*, team_id=None, env_id=None, timeout=25.0):
-        seen["team_id"] = team_id
+    def _wait_for_interactive(*, team_id=None, team_ids=None, env_id=None, timeout=25.0):
+        seen["team_ids"] = team_ids
         stop_event.set()
         return None
 
@@ -557,14 +557,14 @@ def test_fast_lane_still_scopes_by_team_when_no_discovery_override():
     stop_event = threading.Event()
     poller._fast_lane_loop(stop_event)
 
-    assert seen["team_id"] == "team1"
+    assert seen["team_ids"] == ["team1"]
 
 
 def test_fast_lane_attaches_for_a_teamless_owner_scoped_lane():
     """team_id="" but discovery_team_id="" set: owner-scoped discovery is intended, so attach."""
     seen = {"n": 0}
 
-    def _wait_for_interactive(*, team_id=None, env_id=None, timeout=25.0):
+    def _wait_for_interactive(*, team_id=None, team_ids=None, env_id=None, timeout=25.0):
         seen["n"] += 1
         stop_event.set()
         return None

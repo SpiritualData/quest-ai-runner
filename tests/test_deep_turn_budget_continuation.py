@@ -302,7 +302,8 @@ def test_a_run_that_falls_short_still_reports_what_it_did():
                          config=OrchestratorConfig(deep_goal_max_iterations=2))
     out = TaskExecutor(client, brain).execute({"id": "t9", "text": "build X"})
 
-    assert out.status == "failed"
+    # The run worked but fell short: "incomplete" (a technical error would be "failed").
+    assert out.status == "incomplete"
     reported = client.reports[0][2]
     assert "Wrote engine.py and wired the poller." in reported
     assert "unfinished" in reported            # never presented as done work
