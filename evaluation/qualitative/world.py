@@ -863,7 +863,10 @@ def experiments_of(qid):
     rows = body.get("research_questions") if status == 200 and isinstance(body, dict) else []
     return {str(r.get("research_question_id") or r.get("id")): {
         "question": r.get("question"), "status": r.get("status"), "context": r.get("context"),
-        "hypothesis": r.get("hypothesis"),
+        "hypothesis": r.get("hypothesis"), "expectation": r.get("expectation"),
+        "hypotheses": " | ".join(str(h.get("statement") or h.get("text") or h) if isinstance(h, dict) else str(h)
+                                 for h in (r.get("hypotheses") or [])) or None,
+        "purpose": r.get("purpose") or None,
         "conclusion": r.get("conclusion"), "start_date": r.get("start_date"),
         "end_date": r.get("end_date"), "kind": r.get("kind"),
         "linked_goal_ids": sorted(r.get("linked_goal_ids") or []),
