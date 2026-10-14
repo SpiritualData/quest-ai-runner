@@ -42,7 +42,9 @@ from ..core.file_modes import match_umask
 from .web_cache import WebCache, normalize_query
 from .web_link_access import (
     FOLDER_MESSAGE,
+    FORM_MESSAGE,
     KIND_DRIVE_FOLDER,
+    KIND_FORM,
     LinkReadError,
     LinkTarget,
     REASON_BLOCKED,
@@ -754,6 +756,10 @@ class WebResearchAdapter:
                 return Observation(
                     kind="error", rel_path=url,
                     error=link_not_read_error(url, REASON_UNSUPPORTED_TYPE, FOLDER_MESSAGE))
+            if target.kind == KIND_FORM:
+                return Observation(
+                    kind="error", rel_path=url,
+                    error=link_not_read_error(url, REASON_UNSUPPORTED_TYPE, FORM_MESSAGE))
             fetch_url = target.export_url
             safety_error = check_url_is_safe(fetch_url)
             if safety_error:

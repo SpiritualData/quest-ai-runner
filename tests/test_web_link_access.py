@@ -84,7 +84,6 @@ def test_rewrite_kinds_and_formats():
 
 @pytest.mark.parametrize("url", [
     "https://example.com/page",
-    "https://docs.google.com/forms/d/e/abc/viewform",
     f"https://docs.google.com/document/d/e/2PACX-{ID}/pub",   # published page, ordinary HTML
     "https://docs.google.com/document/d/short/edit",            # not a real id
     f"https://evil.example/document/d/{ID}/edit",
@@ -94,6 +93,11 @@ def test_rewrite_kinds_and_formats():
 ])
 def test_rewrite_ignores_everything_else(url):
     assert rewrite_for_export(url) is None
+
+
+def test_google_form_is_recognised_but_has_no_export():
+    target = rewrite_for_export("https://docs.google.com/forms/d/e/abc/viewform")
+    assert target is not None and target.kind == "google_form" and target.export_url == ""
 
 
 def test_drive_folder_is_recognised_but_has_no_export():

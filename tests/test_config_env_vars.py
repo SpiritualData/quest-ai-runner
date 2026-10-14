@@ -220,3 +220,10 @@ def test_team_ids_does_not_touch_the_home_team(monkeypatch):
     cfg = cli._config_from_env()
     assert cfg.team_id == "team_1"
     assert cfg.team_ids == ["team_2", "team_3"]
+
+
+def test_claim_teams_from_env(monkeypatch):
+    monkeypatch.delenv("QUEST_CLAIM_TEAMS", raising=False)
+    assert cli._config_from_env().claim_teams == []
+    monkeypatch.setenv("QUEST_CLAIM_TEAMS", "a, b ,,a")
+    assert cli._config_from_env().claim_teams == ["a", "b"]

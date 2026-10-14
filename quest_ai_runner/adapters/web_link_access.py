@@ -93,6 +93,11 @@ PDF_NO_TEXT_MESSAGE = (
     "This PDF has no selectable text (it is probably a scan or a set of images), so I cannot read "
     "it. Please paste the text here."
 )
+FORM_MESSAGE = (
+    "This is a Google Form, which I cannot open or read. Please paste the questions or the "
+    "responses here, or share them as a Doc, Sheet or PDF."
+)
+
 FOLDER_MESSAGE = (
     "This is a folder link, and I can only read one file at a time. Please share the link to the "
     "file itself."
@@ -126,6 +131,7 @@ _GOOGLE_ID = r"([A-Za-z0-9_-]{10,})"
 _DOC_RE = re.compile(r"^/(?:a/[^/]+/)?document/(?:u/\d+/)?d/" + _GOOGLE_ID)
 _SHEET_RE = re.compile(r"^/(?:a/[^/]+/)?spreadsheets/(?:u/\d+/)?d/" + _GOOGLE_ID)
 _SLIDES_RE = re.compile(r"^/(?:a/[^/]+/)?presentation/(?:u/\d+/)?d/" + _GOOGLE_ID)
+_FORMS_RE = re.compile(r"^/(?:a/[^/]+/)?forms/")
 _DRIVE_FILE_RE = re.compile(r"^/(?:u/\d+/)?file/d/" + _GOOGLE_ID)
 _DRIVE_FOLDER_RE = re.compile(r"^/(?:u/\d+/)?(?:drive/)?folders/")
 _GID_RE = re.compile(r"(?:^|[#&?])gid=(\d+)")
@@ -135,6 +141,7 @@ KIND_SHEET = "google_sheet"
 KIND_SLIDES = "google_slides"
 KIND_DRIVE_FILE = "drive_file"
 KIND_DRIVE_FOLDER = "drive_folder"
+KIND_FORM = "google_form"
 
 
 @dataclass(frozen=True)
@@ -186,6 +193,8 @@ def rewrite_for_export(url: str) -> Optional[LinkTarget]:
             fid = m.group(1)
             return LinkTarget(
                 KIND_SLIDES, fid, f"https://docs.google.com/presentation/d/{fid}/export?format=txt", "text")
+        if _FORMS_RE.match(path):
+            return LinkTarget(KIND_FORM, "", "", "file")
         return None
 
     if host == "drive.google.com":

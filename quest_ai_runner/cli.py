@@ -53,6 +53,8 @@ Env it reads:
                                                    Unset = fall back to QUEST_TEAM_ID; set to "" for
                                                    OWNER-scoped discovery (a personal/single-user
                                                    lane whose tasks are created with no team_id).
+  QUEST_CLAIM_TEAMS (optional)                   — comma-separated team ids an owner-scoped lane may
+                                                   claim (plus teamless tasks); unset = no restriction
   QUEST_TEAM_IDS (optional)                      — comma-separated team ids this ONE lane
                                                    discovers work from (e.g. "team_a,team_b").
                                                    Unset/empty = single-team mode, unchanged.
@@ -697,6 +699,9 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         # also what lets a config file's own ``team_ids`` win here (apply_file_defaults only
         # fills fields no env var moved off their default).
         team_ids=_team_ids_from_env(os.getenv("QUEST_TEAM_IDS")),
+        # Claim allowlist for an owner-scoped lane (same comma-separated shape as QUEST_TEAM_IDS);
+        # unset leaves the default [] (no restriction) so a config file's own ``claim_teams`` wins.
+        claim_teams=_team_ids_from_env(os.getenv("QUEST_CLAIM_TEAMS")),
         retrieval=retrieval,
         model_provider=_model_provider_from_env(),
         model_fallback=model_fallback or None,
