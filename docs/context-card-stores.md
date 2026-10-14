@@ -445,9 +445,13 @@ use all of them. Anything that REWRITES or DELETES cards does not.
 - Legacy cards with NO `origin`: in local file mode (no injected repository) every card is own, as
   before. With an injected repository such a card is own only if its `runner_env_id` equals this
   runner's AND it pins at least one file AND every pinned path is a relative path that resolves to an
-  existing file under this lane's root; otherwise it is read-only here. A legacy card that qualifies
-  is stamped the next time this store writes it. A fully dead legacy card (its files gone) is not
-  provably ours and so is left alone; remove those by hand.
+  existing file under this lane's root; otherwise it is read-only here.
+- Legacy cards are corrected once, not judged forever: every refresh stamps this store's origin on
+  each own card that has none (`_backfill_origins`), so after one local refresh (or a `context
+  upload`, which stamps too) a store has no origin-less cards left and a later move to a shared
+  backend needs no second backfill. `origin` is not part of the embedded text, so the stamp never
+  re-embeds. On a shared repository only provably own legacy cards are stamped; a fully dead legacy
+  card there (its files gone) is not provably ours and is left for its owner or for removal by hand.
 - `quest-ai-runner context upload` stamps the uploading store's origin on every card it sends, so the
   lane that owns that store manages them afterwards.
 - Residual: two lanes with the same env id AND the same resolved root are one origin by definition.

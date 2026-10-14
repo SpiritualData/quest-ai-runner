@@ -2714,6 +2714,30 @@ class FileContextStore(ContextAssemblerBase):
                 return
         card[ORIGIN_FIELD] = self.origin_id()
 
+    def _backfill_origins(self, own: Dict[str, Dict[str, Any]]) -> int:
+        """Correct legacy cards once: stamp this store's origin on every OWN card that has none.
+
+        Cards written before origins existed would otherwise stay origin-less forever, and in a shared
+        repository an origin-less card is only conditionally ours (``_legacy_card_is_own``), so a
+        later move to a shared backend would have to judge them all again. ``origin`` is not part of
+        the embedded text (``card_embed_text``), so the rewrite never re-embeds. Only cards
+        ``_own_cards`` already returned are touched, so a foreign card is never claimed. Skipped in
+        a dry run. Returns how many were stamped."""
+        if self._dry_run:
+            return 0
+        stamped = 0
+        for cid, card in own.items():
+            if card.get(ORIGIN_FIELD) or not isinstance(card, dict):
+                continue
+            try:
+                if self._store_write(cid, card):
+                    stamped += 1
+            except Exception:  # noqa: BLE001 -- one unwritable card never stops the pass
+                _log.warning("context index: could not stamp the writer origin on card %s", cid)
+        if stamped:
+            _log.info("context index: stamped this store's writer origin on %d legacy card(s)", stamped)
+        return stamped
+
     def _store_write(self, card_id: str, card: Dict[str, Any]) -> bool:
         """The ONE place this store persists a card: stamp the writer origin, then write."""
         self._stamp_origin(card_id, card)
@@ -3743,6 +3767,7 @@ class FileContextStore(ContextAssemblerBase):
 
         existing = self._own_cards()
         existing_cards = list(existing.values())
+        self._backfill_origins(existing)
 
         # --- Nested-store reuse: a sub-corpus already bootstrapped by its OWN QAR instance is
         # reused wholesale instead of re-discovered here. Pure filesystem reuse (no LLM call, no

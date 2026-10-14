@@ -269,3 +269,49 @@ def test_context_upload_stamps_the_uploading_stores_origin(tmp_path):
     lane = FileContextStore(str(bare), repo_root=str(tmp_path / "bare"), auto_bootstrap=False,
                             card_repository=SharedRepo())
     assert lane.origin_id() == plan.uploads[0][1]["origin"]
+
+
+# --- legacy cards are corrected once, never left for a later backfill ---------------------------
+
+def test_local_refresh_stamps_the_origin_on_legacy_cards_once_without_changing_embed_text(tmp_path):
+    from quest_ai_runner.adapters.card_repository import card_embed_text
+    root = tmp_path / "local"
+    root.mkdir()
+    (root / "keep.md").write_text("# keep\n")
+    cards_dir = tmp_path / "local-cards"
+    repo = FilesystemCardRepository(str(cards_dir))
+    legacy = _card("legacy", "keep.md")
+    repo.write("legacy", legacy)
+    before_text = card_embed_text(repo.read("legacy"))
+    store = FileContextStore(str(cards_dir), repo_root=str(root), auto_bootstrap=False)
+
+    store.refresh_stale(root=str(root), provider=StubProvider())
+
+    stamped = FilesystemCardRepository(str(cards_dir)).read("legacy")
+    assert stamped["origin"] == store.origin_id()
+    assert card_embed_text(stamped) == before_text, "the stamp must never change what is embedded"
+
+
+def test_shared_refresh_corrects_provably_own_legacy_cards_and_never_claims_foreign_ones(tmp_path):
+    repo = SharedRepo()
+    root_a, a = _lane(tmp_path, "a", repo)
+    repo.write("mine-legacy", _card("mine-legacy", "keep.md"))                    # this env, file present
+    repo.write("other-host", _card("other-host", "keep.md", env="host-2"))        # another machine
+    repo.write("not-here", _card("not-here", "elsewhere/missing.md"))             # file not on A's root
+    repo.writes.clear()
+
+    a.refresh_stale(root=str(root_a), provider=StubProvider())
+
+    assert repo.cards["mine-legacy"]["origin"] == a.origin_id()
+    assert "origin" not in repo.cards["other-host"]
+    assert "origin" not in repo.cards["not-here"]
+    assert {"other-host", "not-here"}.isdisjoint(repo.writes)
+
+
+def test_a_dry_run_stamps_nothing(tmp_path):
+    repo = SharedRepo()
+    root_a, a = _lane(tmp_path, "a", repo)
+    a._dry_run = True
+    repo.write("mine-legacy", _card("mine-legacy", "keep.md"))
+    assert a._backfill_origins(a._own_cards()) == 0
+    assert "origin" not in repo.cards["mine-legacy"]
