@@ -144,11 +144,11 @@
       "quest_key": "research",
       "expected_routing": "deep",
       "rubric": [
-        "Treats this as substantial research work and routes it to a deep run rather than answering from memory",
+        "Treats this as work on the dev server and routes it to a deep run on the attached runner rather than answering from memory",
         "Does not create an experiment"
       ],
-      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
-      "message": "Write a full literature review of recent papers on replication failures in social psychology, with citations, and save it as a document.",
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions. Deep controls name work the eval user's live runner (sd-dev-server: dev server, Quest development, websites) handles; a literature review or a local CSV script is outside that runner, so the classifier correctly answers those inline.",
+      "message": "Check what is running on the Spiritual Data dev server right now and tell me which services are down.",
       "precheck": {
         "code_not_contains": [
           "create_research_question",
@@ -166,11 +166,11 @@
       "quest_key": "fitness",
       "expected_routing": "deep",
       "rubric": [
-        "Treats this as code work and routes it to a deep run",
+        "Treats this as code work in the Quest repo and routes it to a deep run",
         "Does not create an experiment"
       ],
-      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
-      "message": "Write a Python script that parses my watch CSV exports and charts weekly mileage, then run it.",
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions. Deep controls name work the eval user's live runner (sd-dev-server: dev server, Quest development, websites) handles; a literature review or a local CSV script is outside that runner, so the classifier correctly answers those inline.",
+      "message": "In the Quest development repo, find where the calendar page picks its timezone and fix it if it falls back to UTC.",
       "precheck": {
         "code_not_contains": [
           "create_research_question",

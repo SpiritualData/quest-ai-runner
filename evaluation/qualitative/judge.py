@@ -502,6 +502,28 @@ quest, and say which quest each write landed on.
 """
 
 
+def period_dates_note():
+    """The calendar dates a seeded goal's period implies, as ground truth.
+
+    A goal is stored with a period (``2026_W42``, ``2026_10``), not a date. A reply that says the
+    section is due "18 October" is reading the week's Sunday off that period, which is real. Without
+    this the judge saw only the period string and zeroed such replies as an invented fact.
+    """
+    import datetime
+    today = datetime.date.today()
+    monday = today - datetime.timedelta(days=today.weekday())
+    sunday = monday + datetime.timedelta(days=6)
+    iso = monday.isocalendar()
+    nxt = (today.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
+    last = nxt - datetime.timedelta(days=1)
+    return ("\n# CALENDAR FACTS DERIVED FROM GOAL PERIODS (real, not invented)\n"
+            f"- today is {today.isoformat()} ({today.strftime('%A')}).\n"
+            f"- a goal in period {iso[0]}_W{iso[1]:02d} runs Monday {monday.isoformat()} to Sunday "
+            f"{sunday.isoformat()}; a reply that says it is due or ends on {sunday.day} "
+            f"{sunday.strftime('%B')} (or 'in {(sunday - today).days} days') is correct.\n"
+            f"- a goal in period {today.year}_{today.month:02d} runs to {last.isoformat()}.\n")
+
+
 def numbered(items):
     return "\n".join(f"{i}. {item}" for i, item in enumerate(items, 1)) or "(none)"
 
@@ -569,7 +591,7 @@ def build_prompt(case, evidence, changes, pre, truth, pivots):
         forbidden=case.get("forbidden_side_effects") or "(none stated)",
         steps=json.dumps(case.get("steps") or [], indent=1)[:3000],
         evidence_notes=case.get("evidence_notes") or "(none)",
-        ground_truth=truth[:24000],
+        ground_truth=truth[:24000] + period_dates_note(),
         evidence=json.dumps({k: v for k, v in evidence.items() if k != "code_text"},
                             indent=1, default=str)[:20000],
         changes="\n".join(f"- {c}" for c in changes) or "(no changes at all)",
