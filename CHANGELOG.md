@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Links the user pastes are read, and an unreadable link fails honestly. `WebResearchAdapter.fetch` reads Google Docs, Sheets (with the tab's `gid`), Slides and Drive files shared with a link anyone can open through Google's public export URLs, and extracts text from PDFs (optional `pypdf`; without it the reply says PDF reading is not installed). Failures are typed (`not_shared`, `not_found`, `too_large`, `unsupported_type`, `js_shell`, `blocked`, `unreachable`) and arrive as `LINK NOT READ [reason] ...` with one user-facing sentence each, never "cannot open Google links". The SSRF guard runs on the rewritten URL and on every redirect hop; a redirect to a sign-in host is `not_shared`. New: `adapters/web_link_access.py`, `core/link_detect.py` (URLs are extracted by regex and listed to the planner as LINKS IN THIS MESSAGE), and one consistent links rule replacing three conflicting prompt lines. Tests: `tests/test_web_link_access.py`; 9 cases in `evaluation/qualitative/datasets/web.json`.
+
 ### Security
 - Workflow step actions are fenced to this runner. The poller does not claim a `requested_action` task from another publisher or pinned to another environment (a runner without `env_id` never claims a pinned one). Running one rebuilds the runner's own published list and requires `action_id`/`kind`/`name` to match, keeps only arguments in the published form (so a smuggled `quest_id` is dropped), and requires the task's author to own the task's quest. `send_quest_email` no longer publishes `to` or `rep_id` (outside mail is `file_email_draft`, the Approval Queue). Custom tools publish only with `workflow_step = true`; the goal, strategy, habit and experiment tools are withheld; `user_asked_for_this_field` is hidden from published forms (`ToolSpec.workflow_hidden_params`). Tests: `tests/test_action_catalog.py`.
 

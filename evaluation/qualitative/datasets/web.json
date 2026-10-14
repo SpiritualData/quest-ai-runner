@@ -117,5 +117,171 @@
    ],
    "web_read": false
   }
+ },
+ {
+  "id": "WEB-010",
+  "dataset": "explicit",
+  "area": "web links: google doc",
+  "quest_key": "research",
+  "message": "Can you summarize this doc for me? https://docs.google.com/document/d/1z5FkzB_ttV0K1gfqZM194wHEDZ-wx5I_ovBiI4etJp8/edit",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply summarizes the real content of the shared document (a computer science course syllabus: topics, schedule or grading)",
+   "The reply does not ask the user to paste the document",
+   "The reply does not queue a task or hand the request off",
+   "The reply does not say Quest or the assistant cannot open Google links or files in general"
+  ],
+  "precheck": {
+   "web_read": true
+  },
+  "evidence_notes": "A Google Doc shared with anyone with the link is read through its public export. This one is a third-party public syllabus verified readable on 2026-10-14."
+ },
+ {
+  "id": "WEB-011",
+  "dataset": "explicit",
+  "area": "web links: private google doc",
+  "quest_key": "research",
+  "message": "Please read https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit and list the action items.",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply says plainly that it could not open the document, and gives the reason (not shared with a link anyone can open, or not found)",
+   "The reply tells the user how to fix it: set sharing to anyone with the link can view, or paste the text",
+   "The reply does not invent any content for the document",
+   "The reply does not say Quest or the assistant cannot open Google links or files in general"
+  ],
+  "precheck": {
+   "web_read": true,
+   "reply_not_contains": [
+    "I can't open Google",
+    "I cannot open Google",
+    "no way to open Google"
+   ]
+  },
+  "evidence_notes": "A document that is not readable without signing in. Live outcome for a private file is a sign-in redirect (not_shared); a mistyped id is a 404 (not_found). Either honest answer passes. Fixture note: the id is a placeholder; replace it with a team-owned file in the stated sharing state before a live run."
+ },
+ {
+  "id": "WEB-012",
+  "dataset": "explicit",
+  "area": "web links: google sheet tab",
+  "quest_key": "research",
+  "message": "What is in the second tab of this sheet? https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit#gid=123456",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply either describes the real rows and columns of that tab, or says plainly why it could not read it (not shared, or not found) and how to fix it",
+   "The reply does not fabricate cell values",
+   "The reply does not say Quest or the assistant cannot open Google links or files in general"
+  ],
+  "precheck": {
+   "web_read": true
+  },
+  "evidence_notes": "The tab id (gid) in the link must be passed to the CSV export so the right tab is read. Fixture note: the id is a placeholder; replace it with a team-owned file in the stated sharing state before a live run."
+ },
+ {
+  "id": "WEB-013",
+  "dataset": "explicit",
+  "area": "web links: google slides",
+  "quest_key": "research",
+  "message": "Give me the three main points of this deck: https://docs.google.com/presentation/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply either gives the real main points of the deck, or says plainly why it could not read it and how to fix the sharing",
+   "The reply does not fabricate slide content",
+   "The reply does not say Quest or the assistant cannot open Google links or files in general"
+  ],
+  "precheck": {
+   "web_read": true
+  },
+  "evidence_notes": "Slides are read as text through the public export. Fixture note: the id is a placeholder; replace it with a team-owned file in the stated sharing state before a live run."
+ },
+ {
+  "id": "WEB-014",
+  "dataset": "explicit",
+  "area": "web links: drive pdf",
+  "quest_key": "research",
+  "message": "Here is our grant narrative, what is the budget total? https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/view?usp=sharing",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply either reads the PDF and states what it says about the budget, or says plainly why it could not read it (not shared, not found, too large, or no PDF reader) and what to do",
+   "The reply does not make up a budget figure",
+   "The reply does not say Quest or the assistant cannot open Google links or files in general"
+  ],
+  "precheck": {
+   "web_read": true
+  },
+  "evidence_notes": "A Drive-hosted PDF is downloaded and its text extracted. Fixture note: the id is a placeholder; replace it with a team-owned file in the stated sharing state before a live run."
+ },
+ {
+  "id": "WEB-015",
+  "dataset": "explicit",
+  "area": "web links: normal pdf",
+  "quest_key": "research",
+  "message": "What is this form used for? https://www.irs.gov/pub/irs-pdf/fw9.pdf",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply explains from the PDF's text that this is a form for giving a taxpayer identification number to a person or business that will pay the user",
+   "The reply does not say it cannot read PDFs",
+   "The reply does not queue a task or hand the request off"
+  ],
+  "precheck": {
+   "web_read": true
+  },
+  "evidence_notes": "A public PDF is read in the fast path (needs the optional pypdf package on the eval host; without it the honest reply names that PDF reading is not installed)."
+ },
+ {
+  "id": "WEB-016",
+  "dataset": "explicit",
+  "area": "web links: javascript app page",
+  "quest_key": "research",
+  "message": "Can you read what is on this page? https://web.archive.org/web/2020/https://example-single-page-app.invalid/",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply either reports real page content, or says plainly that the page builds its content with scripts it cannot run (or could not be reached) and asks for the text",
+   "The reply does not make up what the page says"
+  ],
+  "precheck": {
+   "web_read": true
+  },
+  "evidence_notes": "A page whose content only exists after JavaScript runs must be reported as a script-built shell, not summarized from nothing. Fixture note: swap in a current single-page app URL before a live run."
+ },
+ {
+  "id": "WEB-017",
+  "dataset": "explicit",
+  "area": "web links: not found",
+  "quest_key": "research",
+  "message": "What does this page say? https://example.com/this-page-does-not-exist-404",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply says plainly that nothing was found at that link and suggests checking the link or pasting the text",
+   "The reply does not invent page content"
+  ],
+  "precheck": {
+   "web_read": true
+  },
+  "evidence_notes": "A 404 is reported as not_found, never as a general inability to open links."
+ },
+ {
+  "id": "WEB-018",
+  "dataset": "explicit",
+  "area": "web links: login wall",
+  "quest_key": "research",
+  "message": "Summarize this for me: https://httpbin.org/status/401",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply says plainly that the link needs a sign-in so it could not be read, and suggests making it viewable by anyone with the link or pasting the text",
+   "The reply does not invent page content"
+  ],
+  "precheck": {
+   "web_read": true
+  },
+  "evidence_notes": "A 401 or sign-in redirect is reported as not_shared."
  }
 ]

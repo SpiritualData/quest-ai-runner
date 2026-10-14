@@ -40,6 +40,27 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from ..core.adapters import Observation
 from ..core.file_modes import match_umask
 from .web_cache import WebCache, normalize_query
+from .web_link_access import (
+    FOLDER_MESSAGE,
+    KIND_DRIVE_FOLDER,
+    LinkReadError,
+    LinkTarget,
+    REASON_BLOCKED,
+    REASON_JS_SHELL,
+    REASON_MESSAGES,
+    REASON_NOT_FOUND,
+    REASON_NOT_SHARED,
+    REASON_TOO_LARGE,
+    REASON_UNREACHABLE,
+    REASON_UNSUPPORTED_TYPE,
+    classify_thin_page,
+    drive_download_is_too_big,
+    extract_pdf_text,
+    is_login_host,
+    link_not_read_error,
+    looks_like_pdf,
+    rewrite_for_export,
+)
 from .web_page_extract import (
     check_url_is_safe,
     estimate_tokens,
@@ -64,7 +85,6 @@ _DEFAULT_PAGE_TTL = 604800
 _FETCH_TIMEOUT = 8.0
 _MAX_PAGE_BYTES = 2 * 1024 * 1024
 _MAX_REDIRECTS = 5
-_ALLOWED_CONTENT_TYPES = ("text/html", "text/plain", "application/xhtml")
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
@@ -123,16 +143,48 @@ class FetchedPage:
     html: str
     content_type: str
     status_code: int
+    #: Raw bytes, kept only for binary bodies (a PDF) that ``html`` cannot represent.
+    data: bytes = b""
+    #: True when the body was cut at the size cap (text bodies only; a cut PDF is ``too_large``).
+    truncated: bool = False
+    #: The URL the body came from after redirects.
+    final_url: str = ""
 
 
 class PageFetchError(Exception):
     """The page could not be retrieved at all (network/timeout/HTTP error). Retryable via a
-    ``url_fetch_fallback``."""
+    ``url_fetch_fallback`` unless ``reason`` is one a fallback cannot change (see
+    ``HARD_FAILURE_REASONS``).
+
+    ``reason`` is one of ``web_link_access.ALL_REASONS`` (``unreachable`` when not set) and
+    ``user_message`` optionally replaces that reason's standard sentence.
+    """
+
+    def __init__(self, message: str, reason: str = REASON_UNREACHABLE,
+                 user_message: Optional[str] = None) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.user_message = user_message
 
 
 class UnsupportedContentTypeError(PageFetchError):
-    """The content-type is one we deliberately don't extract (e.g. a PDF). NOT retried via
-    ``url_fetch_fallback`` -- a fallback fetch would hit the same PDF."""
+    """The content-type is one we deliberately don't extract (e.g. a video). NOT retried via
+    ``url_fetch_fallback`` -- a fallback fetch would hit the same file."""
+
+    def __init__(self, message: str, reason: str = REASON_UNSUPPORTED_TYPE,
+                 user_message: Optional[str] = None) -> None:
+        super().__init__(message, reason, user_message)
+
+
+#: Failures a paid ``url_fetch_fallback`` cannot fix: the file is private, missing, too big or the
+#: wrong kind. ``blocked``, ``unreachable`` and a thin page still get the fallback.
+HARD_FAILURE_REASONS = frozenset({
+    REASON_NOT_SHARED, REASON_NOT_FOUND, REASON_TOO_LARGE, REASON_UNSUPPORTED_TYPE,
+})
+
+#: Types read as text. ``text/*`` covers html, plain, csv and markdown.
+_TEXT_CONTENT_PREFIXES = ("text/", "application/xhtml", "application/json", "application/xml")
+_UNREADABLE_PREFIXES = ("video/", "audio/", "image/", "font/")
 
 
 def _charset_from_content_type(header: str) -> str:
@@ -178,14 +230,32 @@ def _decode_page(raw: bytes, content_type_header: str) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def _status_failure(status_code: int, current: str) -> PageFetchError:
+    """The typed failure for an HTTP error status. A Google host answering 401/403 means the file
+    is not shared with everyone; the same status from another site is a bot wall or a login."""
+    host = (urlsplit(current).hostname or "").lower()
+    google = host.endswith("google.com") or host.endswith("googleusercontent.com")
+    msg = f"web fetch: HTTP {status_code} for {current}"
+    if status_code == 401 or (status_code == 403 and google):
+        return PageFetchError(msg, REASON_NOT_SHARED)
+    if status_code in (404, 410):
+        return PageFetchError(msg, REASON_NOT_FOUND)
+    if status_code in (403, 429, 451):
+        return PageFetchError(msg, REASON_BLOCKED)
+    return PageFetchError(msg, REASON_UNREACHABLE)
+
+
 def _default_page_fetcher(url: str) -> FetchedPage:
-    """GET ``url`` with bounded size/time/content-type. Raises ``PageFetchError`` on failure.
+    """GET ``url`` with bounded size/time/content-type. Raises ``PageFetchError`` on failure, with
+    a typed ``reason`` (see ``web_link_access``).
 
     Redirects are followed BY HAND, re-running ``check_url_is_safe`` on every hop, because
     ``follow_redirects=True`` would have walked straight past the SSRF guard: the guard only ever
     saw the URL the planner asked for, so any public URL that 302s to ``http://127.0.0.1:9000/``
     or ``http://169.254.169.254/latest/meta-data/`` was fetched anyway, and the guard's promise
-    (checked "before we ever open a socket") held only for the first hop.
+    (checked "before we ever open a socket") held only for the first hop. The same loop is what
+    makes a private Google file visible: its export URL answers with a redirect to a sign-in host,
+    which is reported as ``not_shared`` instead of being followed.
     """
     import httpx
 
@@ -206,38 +276,64 @@ def _default_page_fetcher(url: str) -> FetchedPage:
                     current = str(httpx.URL(current).join(location))
                     safety_error = check_url_is_safe(current)
                     if safety_error:
-                        raise PageFetchError(f"web fetch: redirect to {current} {safety_error}")
+                        raise PageFetchError(f"web fetch: redirect to {current} {safety_error}",
+                                             REASON_BLOCKED)
+                    if is_login_host(urlsplit(current).hostname or ""):
+                        raise PageFetchError(
+                            f"web fetch: {url} redirects to a sign-in page ({current})",
+                            REASON_NOT_SHARED)
                     continue
                 content_type = content_type_header.split(";")[0].strip().lower()
                 if status_code >= 400:
-                    raise PageFetchError(f"web fetch: HTTP {status_code} for {current}")
-                if content_type and not any(
-                    content_type.startswith(ct) for ct in _ALLOWED_CONTENT_TYPES
-                ):
-                    if "pdf" in content_type:
-                        raise UnsupportedContentTypeError(
-                            f"web fetch: {url} is a PDF (content-type {content_type}); "
-                            "request a deep run to read PDFs"
-                        )
+                    raise _status_failure(status_code, current)
+                if any(content_type.startswith(p) for p in _UNREADABLE_PREFIXES):
                     raise UnsupportedContentTypeError(
-                        f"web fetch: unsupported content-type {content_type!r} for {url}"
-                    )
+                        f"web fetch: unsupported content-type {content_type!r} for {url}")
+                is_text = any(content_type.startswith(p) for p in _TEXT_CONTENT_PREFIXES)
+                is_pdf = "pdf" in content_type
+                sniff = not content_type or content_type == "application/octet-stream"
+                if not (is_text or is_pdf or sniff):
+                    raise UnsupportedContentTypeError(
+                        f"web fetch: unsupported content-type {content_type!r} for {url}")
+                declared = resp.headers.get("content-length") or ""
+                if (is_pdf or sniff) and declared.isdigit() and int(declared) > _MAX_PAGE_BYTES:
+                    raise PageFetchError(
+                        f"web fetch: {url} is {declared} bytes, over the {_MAX_PAGE_BYTES} byte cap",
+                        REASON_TOO_LARGE)
                 chunks: List[bytes] = []
                 total = 0
+                truncated = False
                 for chunk in resp.iter_bytes():
                     total += len(chunk)
                     if total > _MAX_PAGE_BYTES:
+                        truncated = True
                         break
                     chunks.append(chunk)
                 raw = b"".join(chunks)
+            if is_pdf or (sniff and looks_like_pdf(raw)):
+                if truncated:
+                    raise PageFetchError(
+                        f"web fetch: {url} is over the {_MAX_PAGE_BYTES} byte cap", REASON_TOO_LARGE)
+                return FetchedPage(html="", content_type="application/pdf", status_code=status_code,
+                                   data=raw, final_url=current)
+            if sniff and (b"\x00" in raw[:2048]):
+                if truncated:
+                    raise PageFetchError(
+                        f"web fetch: {url} is over the {_MAX_PAGE_BYTES} byte cap", REASON_TOO_LARGE)
+                raise UnsupportedContentTypeError(
+                    f"web fetch: {url} is a binary file ({content_type or 'unknown type'})")
             return FetchedPage(
                 html=_decode_page(raw, content_type_header),
-                content_type=content_type,
+                content_type=content_type or "text/plain",
                 status_code=status_code,
+                truncated=truncated,
+                final_url=current,
             )
         raise PageFetchError(f"web fetch: too many redirects for {url}")
     except (PageFetchError, UnsupportedContentTypeError):
         raise
+    except httpx.TimeoutException as exc:
+        raise PageFetchError(f"web fetch: request timed out for {current}: {exc}") from exc
     except httpx.HTTPError as exc:
         raise PageFetchError(f"web fetch: request failed for {current}: {exc}") from exc
 
@@ -647,14 +743,30 @@ class WebResearchAdapter:
         if safety_error:
             return Observation(kind="error", rel_path=url, error=safety_error)
 
-        canonical = canonicalize_url(url)
+        # A Google Docs / Sheets / Slides / Drive link is read through its public export URL (it
+        # works when the file is shared with a link anyone can open). The rewritten URL is a
+        # different address than the one the planner asked for, so it gets its own SSRF check and
+        # its own cache key (the export URL carries the sheet tab's gid).
+        target = rewrite_for_export(url)
+        fetch_url = url
+        if target is not None:
+            if target.kind == KIND_DRIVE_FOLDER:
+                return Observation(
+                    kind="error", rel_path=url,
+                    error=link_not_read_error(url, REASON_UNSUPPORTED_TYPE, FOLDER_MESSAGE))
+            fetch_url = target.export_url
+            safety_error = check_url_is_safe(fetch_url)
+            if safety_error:
+                return Observation(kind="error", rel_path=url, error=safety_error)
+
+        canonical = canonicalize_url(fetch_url)
         cached_page = None if fresh else self._cache.get("web_page", canonical)
 
         if cached_page is not None:
             title = cached_page.get("title", "")
             full_text = cached_page.get("text", "")
         else:
-            title, full_text, hard_error, cause = self._fetch_and_extract(url)
+            title, full_text, hard_error, cause, reason = self._fetch_and_extract(fetch_url, target, shown_url=url)
             if hard_error:
                 return Observation(kind="error", rel_path=url, error=hard_error)
 
@@ -681,11 +793,15 @@ class WebResearchAdapter:
                 # Name WHY, not just that it failed: "no extractable content" alone sent the
                 # planner off to retry other reads when the real cause was an HTTP 403, a
                 # connection timeout, or a refusal from the fallback fetcher. A status line or an
-                # error the planner acts on has to be honest about the cause.
+                # error the planner acts on has to be honest about the cause, and the typed
+                # reason is what the user is told.
                 detail = f" ({cause})" if cause else ""
                 return Observation(
                     kind="error", rel_path=url,
-                    error=f"web fetch: no extractable content from {url}{detail}",
+                    error=link_not_read_error(
+                        url, reason or REASON_JS_SHELL,
+                        f"{REASON_MESSAGES.get(reason or REASON_JS_SHELL, '')} "
+                        f"[detail: no extractable content from {url}{detail}]"),
                 )
 
             self._cache.set(
@@ -704,25 +820,79 @@ class WebResearchAdapter:
         text = "\n".join(header) + "\n\n" + body
         return Observation(kind="read", rel_path=url, locator=f"web extract: {url}", text=text)
 
-    def _fetch_and_extract(self, url: str) -> Any:
-        """Returns ``(title, text, hard_error, cause)``. ``hard_error`` is set only for a
-        content-type we deliberately refuse (e.g. PDF); any other fetch failure returns empty text
-        plus a short ``cause`` string, so the caller can still try ``url_fetch_fallback`` and can
-        still say WHY if nothing worked."""
+    def _fetch_and_extract(self, url: str, target: Optional[LinkTarget] = None,
+                           shown_url: Optional[str] = None) -> Any:
+        """Returns ``(title, text, hard_error, cause, reason)``.
+
+        ``hard_error`` is a ready ``LINK NOT READ [...]`` string for a failure no fallback can
+        fix (private, missing, too large, wrong kind of file). Any other fetch failure returns
+        empty text plus a short ``cause`` and its typed ``reason``, so the caller can still try
+        ``url_fetch_fallback`` and can still say WHY if nothing worked.
+        """
+        shown = shown_url or url
         try:
             page = self._page_fetcher(url)
-        except UnsupportedContentTypeError as exc:
-            return "", "", str(exc), None
+        except PageFetchError as exc:
+            reason = getattr(exc, "reason", REASON_UNREACHABLE)
+            if reason in HARD_FAILURE_REASONS:
+                message = exc.user_message or REASON_MESSAGES.get(reason, "")
+                return "", "", link_not_read_error(shown, reason, f"{message} [detail: {exc}]"), None, reason
+            logger.debug("page fetch failed for %r: %s", url, exc)
+            return "", "", None, str(exc), reason
         except Exception as exc:  # noqa: BLE001
             logger.debug("page fetch failed for %r: %s", url, exc)
-            return "", "", None, str(exc)
+            return "", "", None, str(exc), REASON_UNREACHABLE
+
+        content_type = (getattr(page, "content_type", "") or "").lower()
+        data = getattr(page, "data", b"") or b""
+        html = getattr(page, "html", "") or ""
+        if "pdf" in content_type or (data and looks_like_pdf(data)):
+            try:
+                text = extract_pdf_text(data)
+            except LinkReadError as exc:
+                return "", "", link_not_read_error(shown, exc.reason, f"{exc.user_message} [detail: {exc}]"), None, exc.reason
+            return "", text, None, None, None
+
+        if target is not None and target.kind == "drive_file" and drive_download_is_too_big(html):
+            return "", "", link_not_read_error(shown, REASON_TOO_LARGE), None, REASON_TOO_LARGE
+
+        if target is not None and target.text_format in ("text", "csv"):
+            # A document / presentation / sheet export is already plain text or CSV: no HTML
+            # extraction (which would drop short lines), just strip the byte-order mark.
+            text = html.lstrip("\ufeff").strip()
+            if (html.lstrip().lower().startswith(("<!doctype html", "<html"))
+                    and not text.lower().startswith("<?xml")):
+                # Google answered with an HTML page (sign-in or error) instead of the export.
+                return "", "", link_not_read_error(shown, REASON_NOT_SHARED), None, REASON_NOT_SHARED
+            title = ""
+            return title, _with_truncation_note(text, page), None, None, None
+
+        if content_type.startswith("text/plain") or content_type.startswith("text/csv"):
+            return "", _with_truncation_note(html.lstrip("\ufeff").strip(), page), None, None, None
 
         try:
-            title, text = extract_main_text(page.html)
+            title, text = extract_main_text(html)
         except Exception:  # noqa: BLE001
             logger.debug("extract_main_text failed for %r", url, exc_info=True)
             title, text = "", ""
-        return title, text, None, None
+        reason = None
+        if len(text.strip()) < _MIN_EXTRACTED_CHARS:
+            reason = classify_thin_page(html, text)
+            if reason == REASON_TOO_LARGE or reason == REASON_NOT_SHARED:
+                # A Drive "too large to scan" page or a login wall: a fallback fetch sees the
+                # same wall, so say so now instead of spending a paid call.
+                return "", "", link_not_read_error(shown, reason), None, reason
+            if reason == REASON_BLOCKED:
+                # A bot check is not content. A paid fallback fetch may still get past it.
+                return "", "", None, "the page is a bot check, not content", reason
+        return title, _with_truncation_note(text, page), None, None, reason
+
+
+def _with_truncation_note(text: str, page: Any) -> str:
+    """Say so when the body was cut at the size cap, so a partial read is never silent."""
+    if getattr(page, "truncated", False) and text:
+        return text + f"\n\n[Note: this file is larger than {_MAX_PAGE_BYTES // (1024 * 1024)} MB; only the start was read.]"
+    return text
 
 
 # ---------------------------------------------------------------------------
