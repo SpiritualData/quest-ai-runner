@@ -454,6 +454,7 @@ class Poller:
         # local to the RUNNER for an ordinary task, local to the QUEST's own run_timezone for a
         # per-quest autopilot pass (``_pass_timezone_for``; the schedule snapshot it reads was
         # already refreshed above, by ``_ensure_autopilot_pass``, before this call).
+        due = [t for t in due if self._claimable_team(t)]
         due, deferred = _due_now_locally(due, tz_for=self._pass_timezone_for)
         if deferred:
             held = ", ".join(self._deferred_task_desc(t) for t in deferred)
@@ -2035,6 +2036,17 @@ class Poller:
 
     # --- fast lane: real-time tasks, served faster than the background scan ----------------------
 
+    def _claimable_team(self, task: Dict[str, Any]) -> bool:
+        """False for a task on a team outside ``cfg.claim_teams`` (see that field). Teamless tasks
+        and an empty allowlist always pass."""
+        allowed = self.cfg.claim_teams
+        team = task.get("team_id")
+        if not allowed or not team or team in allowed:
+            return True
+        log.debug("skipping task %s: team %s is not in this lane's claim_teams",
+                  task.get("task_id") or task.get("id"), team)
+        return False
+
     def _dispatch_fast_task(self, task: Dict[str, Any]) -> None:
         """Claim-and-run ONE task delivered by the fast lane (wait channel or fallback poll).
 
@@ -2049,7 +2061,7 @@ class Poller:
         signature store and guarded against the background scan claiming the SAME task concurrently
         (see ``_claim_slot``)."""
         task_id = str(task.get("id") or task.get("task_id") or "")
-        if not task_id or self.state.seen(_task_signature(task)):
+        if not task_id or self.state.seen(_task_signature(task)) or not self._claimable_team(task):
             return
         if not self._claim_slot(task_id):
             return  # the background scan already has this one in flight

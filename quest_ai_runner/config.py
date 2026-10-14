@@ -99,7 +99,7 @@ class ConfigFileError(ValueError):
 # deep inside whatever first calls that field. ``RunnerConfig.from_file`` rejects those BY NAME,
 # loudly, instead. Keep this in sync when a new plain-data field is added to ``RunnerConfig``.
 _FILE_SCALAR_FIELDS = {
-    "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "team_ids", "org_id",
+    "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "team_ids", "claim_teams", "org_id",
     "runner_label", "env_id", "lane_user_id",
     "model_fallback", "model_provider_overrides",
     "context_cards_dir",
@@ -159,6 +159,12 @@ class RunnerConfig:
     # explicit ``""`` (owner-scoped discovery). Setting both is a contradiction; the narrower,
     # older, more explicit knob is honoured so no existing deployment changes behaviour.
     team_ids: List[str] = field(default_factory=list)
+    # CLAIM ALLOWLIST for an owner-scoped lane. Owner-scoped discovery (``discovery_team_id = ""``,
+    # needed so a personal lane also sees teamless tasks) has NO team filter, so it lists every task
+    # its account owns, on EVERY team, and races the team lanes for them. When non-empty, this lane
+    # claims only tasks whose ``team_id`` is in this list, plus teamless tasks; a task on any other
+    # team is left queued for the lane that serves that team. Empty (default) = no restriction.
+    claim_teams: List[str] = field(default_factory=list)
     # Optional org-scoped registration for the environment heartbeat, loaded from QUEST_ORG_ID.
     # When set, the poller's heartbeat POSTs to /api/orgs/{org_id}/environment/heartbeat instead
     # of the team-scoped endpoint, registering this runner as available to EVERY team in that

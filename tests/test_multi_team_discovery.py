@@ -186,3 +186,20 @@ def test_rep_sync_uses_the_tasks_own_team_not_the_lanes_home_team(monkeypatch):
     poller._push_rep_for({"id": "y"}, ("user_7", "/tmp/skill"))   # no team on the task
 
     assert pushed == ["team2", "team1"]   # the task's own team; the lane's team only as fallback
+
+
+# --- claim_teams: an owner-scoped lane must not claim other teams' tasks --------------------
+
+def test_claim_teams_skips_other_teams_but_keeps_own_and_teamless():
+    """Owner-scoped discovery lists every task the account owns, on every team. ``claim_teams``
+    keeps a personal lane off the SD teams' tasks while still serving its own and teamless ones."""
+    lane = _lane(MockQuestClient([]), team_id="mine", discovery_team_id="", claim_teams=["mine", "pj"])
+    assert lane._claimable_team({"task_id": "a", "team_id": "mine"})
+    assert lane._claimable_team({"task_id": "b", "team_id": "pj"})
+    assert lane._claimable_team({"task_id": "c", "team_id": None})
+    assert not lane._claimable_team({"task_id": "d", "team_id": "sd"})
+
+
+def test_empty_claim_teams_restricts_nothing():
+    lane = _lane(MockQuestClient([]), team_id="mine", discovery_team_id="")
+    assert lane._claimable_team({"task_id": "d", "team_id": "sd"})
