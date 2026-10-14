@@ -2476,8 +2476,12 @@ class FileContextStore(ContextAssemblerBase):
         self._own_repo: CardRepository = self._repo
         self._mount_mode = (mount_mode or mount_mode_from_env()).strip().lower()
         if self._mount_mode == MODE_MOUNT and card_repository is not None:
-            _log.warning("card mounting needs the default filesystem card repository; a custom "
-                         "card_repository was injected, so mounting is OFF for this store")
+            # Expected under the Quest card backend (cards are remote, there is nothing to mount):
+            # info there, a warning for any other injected repository.
+            (_log.info if type(card_repository).__name__ == "QuestApiCardRepository" else _log.warning)(
+                "card mounting needs the default filesystem card repository; an injected "
+                "card_repository (%s) owns card storage, so mounting is OFF for this store",
+                type(card_repository).__name__)
             self._mount_mode = "copy"
         self._mounts: List[Mount] = []
         self._mounts_stamp: Any = "unset"
@@ -2726,9 +2730,32 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             pass
         try:
-            return self._assemble_inner(task_text, meta=meta)
+            result = self._assemble_inner(task_text, meta=meta)
         except Exception:  # noqa: BLE001
-            return AssembledContext()
+            result = AssembledContext()
+        return self._with_backend_health(result)
+
+    def _with_backend_health(self, result: AssembledContext) -> AssembledContext:
+        """Make a failing card backend VISIBLE in the run: when the repository reports itself degraded
+        (a repository exposing ``health()``, e.g. ``QuestApiCardRepository``), add a source entry that
+        the orchestrator emits as a status event, so "no cards" is never silently a backend outage.
+        Never raises."""
+        try:
+            health = getattr(self._repo, "health", None)
+            report = health() if callable(health) else None
+            if isinstance(report, dict) and report.get("degraded"):
+                last = report.get("last_error") or {}
+                reason = f"{last.get('method', '')} {last.get('path', '')} status {last.get('status', '')}: " \
+                         f"{last.get('detail', '')}".strip()
+                result.sources.append({
+                    "adapter": "card_backend",
+                    "label": f"CARD BACKEND ERROR ({report.get('error_count', 0)} failure(s); "
+                             f"cards may be missing or stale): {reason}",
+                    "items": [],
+                })
+        except Exception:  # noqa: BLE001
+            _log.debug("card backend health check failed", exc_info=True)
+        return result
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
         """Upsert a card for this task and write it atomically. Never raises.

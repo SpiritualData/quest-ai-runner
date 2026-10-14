@@ -971,6 +971,36 @@ class QdrantVectorStore(VectorStoreBase):
             logger.debug("QdrantVectorStore.relabel_points failed", exc_info=True)
         return out
 
+    def read_vectors(self, item_ids: Sequence[str], *,
+                     scope: Optional[Dict[str, Any]] = None) -> Dict[str, List[float]]:
+        """The STORED vectors of ``item_ids`` as ``{item_id: vector}`` (reads only, embeds nothing).
+
+        Items without a stored point are simply absent. Used by ``context upload`` to hand existing
+        vectors to another backend. Never raises (returns what could be read).
+        """
+        out: Dict[str, List[float]] = {}
+        try:
+            ids = list(item_ids)
+            if not ids:
+                return out
+            digest = _scope_hash(scope)
+            coll = self._collection_name()
+            if not self._client.collection_exists(coll):
+                return out
+            for start in range(0, len(ids), 64):
+                chunk = ids[start:start + 64]
+                by_point = {_point_id(i, digest): i for i in chunk}
+                for point in self._client.retrieve(collection_name=coll, ids=list(by_point),
+                                                   with_payload=False, with_vectors=True):
+                    vec = point.vector
+                    if isinstance(vec, dict):
+                        vec = next(iter(vec.values()), None)
+                    if vec:
+                        out[by_point[point.id]] = [float(x) for x in vec]
+        except Exception:
+            logger.debug("QdrantVectorStore.read_vectors failed", exc_info=True)
+        return out
+
     def existing_item_ids(self, item_ids: Sequence[str], *,
                           scope: Optional[Dict[str, Any]] = None) -> List[str]:
         """Which of ``item_ids`` currently have a point in ``scope``. Reads only; never creates."""

@@ -2422,6 +2422,7 @@ class TestVectorBackendEnvSwitch:
 
     CLEAR_ENV = (
         "QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QAR_USER_ID",
+        "QUEST_BASE_URL", "QUEST_API_KEY", "QUEST_TEAM_ID", "QAR_TEAM_ID",
         "QAR_CARDS_BACKEND", "QAR_QDRANT_URL", "QAR_VECTOR_QDRANT_URL",
         "QDRANT_URL", "QAR_EMBEDDER_BACKEND",
     )
@@ -2557,6 +2558,7 @@ class TestAutoBuiltQdrantDeclaresRealVectorSize:
         from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
 
         for var in ("QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QAR_USER_ID",
+                    "QUEST_BASE_URL", "QUEST_API_KEY", "QUEST_TEAM_ID", "QAR_TEAM_ID",
                     "QAR_CARDS_BACKEND", "QAR_QDRANT_URL", "QAR_VECTOR_QDRANT_URL",
                     "QDRANT_URL", "QAR_VECTOR_BACKEND", "VOYAGE_EMBEDDING_SIZE"):
             monkeypatch.delenv(var, raising=False)

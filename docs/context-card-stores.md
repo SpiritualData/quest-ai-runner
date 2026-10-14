@@ -1,5 +1,13 @@
 # Context card stores: identity, mounting, moving, access
 
+> **The Quest backend is now the default card and vector store.** A lane with Quest credentials
+> (`QAR_QUEST_API_URL`|`QUEST_BASE_URL` and `QAR_QUEST_API_KEY`|`QUEST_API_KEY`) keeps its cards in
+> quest-backend, which embeds each card once and searches server-side; the lane embeds and indexes
+> nothing locally. **`QAR_CARDS_BACKEND=local` (alias `file`) is the opt-out.** Everything below about
+> store identity, mounts, `merge-into`, `move-root` and read-only remote vectors describes the LOCAL
+> backend and works exactly as written when a lane opts out. See
+> [The Quest backend](#the-quest-backend-default) and [Uploading a local store](#uploading-a-local-store-context-upload).
+
 How one card is stored, found, embedded and read when several corpora (lanes) overlap on disk. This
 page is the design of record for store identity, read-only mounting, `context move-root` and
 `context migrate-imports`, and it records the access model that was found in the code and the one
@@ -11,7 +19,7 @@ Contents: [Where this came from](#where-this-came-from) · [Phase 1: how access 
 [Widening a corpus root](#widening-a-corpus-root-merge-into) ·
 [A private reader of a shared vector server](#a-private-reader-of-a-shared-vector-server) ·
 [Config keys](#config-keys) · [A person who also belongs to an org](#a-person-who-belongs-to-an-org-and-also-runs-a-personal-lane) ·
-[QuestApiCardRepository](#questapicardrepository-and-the-other-repositories) · [Measured guarantees](#measured-guarantees) ·
+[The Quest backend](#the-quest-backend-default) · [Uploading a local store](#uploading-a-local-store-context-upload) · [Measured guarantees](#measured-guarantees) ·
 [Migrating a deployment](#migrating-a-deployment)
 
 ## Where this came from
@@ -216,7 +224,10 @@ quest-ai-runner context merge-into --cards-dir NARROW --into WIDE [--apply] [--p
         [--qdrant-url URL | --qdrant-path PATH] [--collection-prefix PREFIX] [--vector-size N]
 quest-ai-runner context store-info --cards-dir DIR --vector-location URL|embedded
         [--vector-collection-prefix P] [--vector-size N] [--embedder-id ID] [--vector-path DIR] --apply
+quest-ai-runner context upload --cards-dir DIR (--team-id ID | --private) [--apply] [...]
 ```
+
+`upload` is described in [Uploading a local store](#uploading-a-local-store-context-upload).
 
 - `store-info` shows the id, root, mounts, vector location, merge records and whether each mount is
   readable by this user; `--init` gives a store without an id one (it needs an existing
@@ -370,23 +381,102 @@ The personal lane's corpus root sits above the org's folder, so the org's store 
   can read it. A personal store outside the org's tree is not discovered at all; one inside it that
   the org's user cannot read is skipped and logged.
 
-## QuestApiCardRepository and the other repositories
+## The Quest backend (default)
 
-`QuestApiCardRepository` has an optional `store_id` (its identity; a remote repository is not mounted).
-What a given identity may read there is enforced SERVER-SIDE by quest-backend. QAR expects from the
-backend:
+### Selection
 
-1. `GET /api/cards`, `/api/cards/search` and `/api/cards/{id}` return only cards the authenticated
-   `X-User-Id` may read (their own, plus anything their team or org shares by the backend's own rules),
-   never another org's.
-2. `PUT`/`DELETE /api/cards/{id}` succeed only for cards the caller may write.
-3. Card ids are unique within the store the backend presents to that identity; if the backend merges
-   several owners' cards into one listing it should namespace them itself rather than rely on QAR.
-4. `team_id` and `runner_env_id` on write are advisory provenance, not an access grant.
+| Setting | Meaning |
+|---|---|
+| `QAR_QUEST_API_URL`, else `QUEST_BASE_URL` | backend base URL |
+| `QAR_QUEST_API_KEY`, else `QUEST_API_KEY` | Bearer key; its user is the acting user |
+| `QAR_TEAM_ID`, else `QUEST_TEAM_ID` | the team a lane writes cards to; unset means private cards |
+| `QAR_RUNNER_ENV_ID`, else `QAR_ENV_ID`, else hostname | this runner environment's id |
+| `QAR_USER_ID` | optional hint only; the key's identity (`GET /api/teams/whoami`) always wins and a difference is logged as a warning |
+| `QAR_CARDS_BACKEND` | unset or `auto`: Quest when credentials exist, otherwise local. `local` (alias `file`): the opt-out. `qdrant`: one Qdrant collection (unchanged). `quest`: require Quest; without credentials it logs an ERROR, notifies, and runs local, so the ERROR is the flag that cards are not on the backend |
 
-`QdrantCardRepository` keeps its consumer-chosen payload `scope` as the isolation boundary (scope by
-user for private cards, by team for shared ones). Mounting applies to the filesystem repository; a
-custom `card_repository` turns mounting off for that store with a warning.
+The `QAR_*` name wins when both names are set. Only the environment is read (a lane's `qar.toml`
+`[env]` table is the usual source); `RunnerConfig.quest_base_url` is not consulted for cards.
+
+Under the Quest backend a lane does NOT embed or index cards: the auto-built local vector store and its
+seeding are skipped, and the vector arm is `QuestApiCardVectorStore`, which calls the backend's search
+and hands its ranking to the assembler. A `cfg.vector_store` a consumer sets explicitly is left alone.
+Mounting is off (cards are remote; nothing to mount), logged at info. Cards a lane writes carry its
+`team_id`, `runner_env_id` and the `local_fetch` preview.
+
+### Access model (enforced by the backend)
+
+- A card has an owner user and an optional team. No team means private to its owner.
+- Readable by its owner and by members of its team. Writable and deletable by the owner, or by a
+  member writing the team's card.
+- Listing, search and assembly default to everything the key's user can read: their private cards plus
+  the cards of every team they belong to. A person's personal lane therefore reaches an org team's
+  cards only through that person's own team membership. `read_team_ids` narrows a repository to chosen
+  teams.
+- Card identity is `(scope, card_id)`, scope being the owner (private) or the team. The same id may
+  exist privately and in a team. The repository presents a `{card_id: card}` mapping, so on an id
+  collision the card in the lane's own write scope wins, then the private card; updating a card writes
+  it back to the scope it was listed from, never into a different one.
+- A service account (a key whose user has no interactive identity) may act only for users it shares a
+  team with, and only on those teams' cards.
+- Team and `runner_env_id` on a card are provenance as well as scope; the access decision is the key's
+  team membership.
+
+### Protocol the repository speaks
+
+`PUT/GET/DELETE /api/cards/{id}[?team_id=]`, `GET /api/cards` (paged with `limit`/`cursor`, delta with
+`updated_after`), `GET /api/cards/stamp` (count, newest `updated_at`), `GET /api/cards/search`,
+`GET /api/cards/embedder`, `POST /api/cards/bulk` (at most 100 cards per request, optional vectors).
+Server-owned fields (`updated_at`, `revision`, `owner_user_id`, `user_id`, `card_id`) are never sent
+on write. `revision()` is the stamp, so an unchanged store costs one small request per check; a
+change is fetched as a delta, and one full refresh follows only if the count shows a deletion.
+
+### Failures are loud
+
+A backend or transport error is logged at ERROR with the method, path, status and the backend's
+reason, counted (`error_count`), kept (`last_error`), passed to the lane's notify callback, and exposed
+by `health()`. While degraded, every assembly adds a `CARD BACKEND ERROR` source to the run's context
+sources, which the orchestrator emits as a status event. A failed listing serves the last good listing
+(or none if there never was one) and never reads as a silent "no cards"; a missing card (404) is not
+an error. If whoami fails the repository is still the Quest backend (a lane does not quietly split
+into local cards), the error is logged, and the identity is retried on the next call.
+
+### Offline cache: a seam only
+
+`CardCache` (`adapters/quest_api_card_repository.py`) is the interface an offline listing cache and
+write outbox would implement (`load_listing`, `store_listing`, `enqueue_write`, `pending_writes`).
+The default `NullCardCache` stores nothing. Nothing else is implemented; failed writes are reported and
+dropped.
+
+### Opting out
+
+`QAR_CARDS_BACKEND=local`. Cards are per-card JSON under `cards_dir`; mounts, `merge-into`, `move-root`,
+remote-vector readers and the local vector arm behave exactly as documented above.
+
+## Uploading a local store (`context upload`)
+
+```
+quest-ai-runner context upload --cards-dir DIR (--team-id ID | --private) [--apply]
+        [--qdrant-url URL | --qdrant-path PATH] [--collection-prefix PREFIX] [--vector-size N]
+        [--embedder-id ID] [--base-url URL] [--api-key KEY]
+```
+
+Dry run by default: it prints how many cards would upload, in how many batches of 100, what is
+skipped and why, and how many vectors are usable, and sends nothing. `--apply` uploads and prints the
+backend's per-batch counts; it exits non-zero if any card failed. Re-running upserts the same ids.
+
+- Exactly one scope is required: `--team-id` assigns every card to that team, `--private` leaves them
+  private to the key's user.
+- Skipped: namespaced copy-imports (provenance `imported_from`; "the source store uploads them") and
+  mounted stores (read-only views that are not files in this store).
+- Vectors: with `--qdrant-url` or `--qdrant-path` the store's existing card vectors are read
+  (read-only) and sent with the store's embedder id and dimension. The backend accepts a vector only
+  when both equal its own embedder (`GET /api/cards/embedder`); the command also checks this first and
+  withholds vectors that cannot match, so the backend embeds those cards itself. The embedder id is
+  `--embedder-id`, else the store's recorded `vector_location` embedder, else `QAR_EMBEDDER_BACKEND`.
+  Nothing is ever embedded locally by this command.
+- A card is sent as stored (minus server-owned fields and any stale `team_id`) with `runner_env_id`;
+  it does not get the `local_fetch` preview, because the uploaded store may no longer be served by a
+  lane.
 
 ## Measured guarantees
 
@@ -420,7 +510,10 @@ Asserted in `tests/test_card_store_merge_and_remote.py`:
 
 ## Migrating a deployment
 
-Nothing changes until a lane sets `QAR_CARD_MOUNT=mount`. To migrate, owners first, readers after, one
+This section is for the LOCAL backend (`QAR_CARDS_BACKEND=local`). To move a deployment onto the Quest
+backend, upload each owner store with `context upload` (owners before readers; skip copies, since
+the source store uploads the original), then remove the opt-out. Nothing about a local store changes
+until a lane sets `QAR_CARD_MOUNT=mount`. To migrate, owners first, readers after, one
 lane at a time:
 
 1. **Give every owner store an identity.** For each `.quest-context` that other corpora might mount

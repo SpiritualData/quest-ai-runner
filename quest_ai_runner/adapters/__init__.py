@@ -190,7 +190,12 @@ from .guidance_card_manager import GuidanceCard, GuidanceCardManager
 from .hybrid_context_assembler import HybridContextAssembler
 from .quest_guidance_loader import QuestGuidanceLoader
 from .quest_retrieval_adapter import QuestRetrievalAdapter
-from .quest_api_card_repository import QuestApiCardRepository
+from .quest_api_card_repository import (
+    NullCardCache,
+    QuestApiCardRepository,
+    QuestApiCardVectorStore,
+    QuestCardApiError,
+)
 from .reference_resolver import (
     ReferenceResolver,
     NoteResolver,
@@ -353,4 +358,7 @@ __all__ = [
     "QuestContextAdapter",
     "build_quest_resolvers",
     "QuestApiCardRepository",
+    "QuestApiCardVectorStore",
+    "QuestCardApiError",
+    "NullCardCache",
 ]

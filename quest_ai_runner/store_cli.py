@@ -1,8 +1,10 @@
-"""``quest-ai-runner context <move-root|migrate-imports|merge-into|store-info>``: card-store maintenance.
+"""``quest-ai-runner context <move-root|migrate-imports|merge-into|store-info|upload>``: card-store maintenance.
 
 Every command here is a DRY RUN unless ``--apply`` is given, and prints what it would change.
 None of them embeds anything: they touch ``bootstrap_meta.json`` and (migrate-imports, merge-into) the
-card files and vector points of the stores you point them at. See ``docs/context-card-stores.md``.
+card files and vector points of the stores you point them at; ``upload`` copies a local store's cards
+and existing vectors to the Quest backend (read-only on the local store). See
+``docs/context-card-stores.md``.
 """
 from __future__ import annotations
 
@@ -11,7 +13,7 @@ import json
 import sys
 from typing import List, Optional
 
-STORE_COMMANDS = ("move-root", "migrate-imports", "merge-into", "store-info")
+STORE_COMMANDS = ("move-root", "migrate-imports", "merge-into", "store-info", "upload")
 
 
 def is_store_command(argv: Optional[List[str]]) -> bool:
@@ -96,7 +98,87 @@ def build_parser() -> argparse.ArgumentParser:
     si.add_argument("--apply", action="store_true",
                     help="write --init / --vector-space / --vector-location (default: dry run)")
     si.add_argument("--json", action="store_true", dest="as_json")
+
+    up = sub.add_parser("upload",
+                        help="upload a local store's cards (and existing vectors) to the Quest backend")
+    up.add_argument("--cards-dir", required=True, help="the local store to upload")
+    scope = up.add_mutually_exclusive_group(required=True)
+    scope.add_argument("--team-id", default=None, help="assign every uploaded card to this team")
+    scope.add_argument("--private", action="store_true",
+                       help="upload as private cards of the key's user (no team)")
+    up.add_argument("--base-url", default=None,
+                    help="Quest backend (default: QAR_QUEST_API_URL, else QUEST_BASE_URL)")
+    up.add_argument("--api-key", default=None,
+                    help="Quest key (default: QAR_QUEST_API_KEY, else QUEST_API_KEY); never printed")
+    up.add_argument("--qdrant-url", default=None, help="the store's Qdrant server, to reuse its vectors")
+    up.add_argument("--qdrant-path", default=None, help="the store's embedded Qdrant directory")
+    up.add_argument("--collection-prefix", default="qar_ctx")
+    up.add_argument("--vector-size", type=int, default=None,
+                    help="vector size of the store's collection (default: detected)")
+    up.add_argument("--embedder-id", default=None,
+                    help="embedder that produced the store's vectors (default: the store's recorded "
+                         "vector_location embedder, else QAR_EMBEDDER_BACKEND)")
+    up.add_argument("--apply", action="store_true", help="upload (default: dry run)")
     return parser
+
+
+def run_upload(args) -> int:
+    """``context upload``: plan, then (with ``--apply``) send. Exit 1 on any problem or failed card."""
+    from .adapters import card_store_identity as ident
+    from .adapters.card_store_upload import apply_upload, plan_upload
+    from .adapters.qdrant_vector_store import embedder_id_from_env
+    from .adapters.quest_api_card_repository import (
+        QuestApiCardRepository, QuestCardApiError, quest_card_settings_from_env)
+
+    settings = quest_card_settings_from_env()
+    base_url = args.base_url or settings["base_url"]
+    api_key = args.api_key or settings["api_key"]
+    if not base_url or not api_key:
+        print("no Quest credentials: pass --base-url/--api-key or set QAR_QUEST_API_URL|QUEST_BASE_URL "
+              "and QAR_QUEST_API_KEY|QUEST_API_KEY", file=sys.stderr)
+        return 1
+    team_id = "" if args.private else (args.team_id or "").strip()
+    repo = QuestApiCardRepository(base_url=base_url, api_key=api_key, team_id=team_id)
+    try:
+        user = repo.resolve_user_id()
+    except Exception as exc:  # noqa: BLE001
+        print(f"could not identify the key's user: {exc}", file=sys.stderr)
+        return 1
+    if not user:
+        print("the Quest backend did not identify the key's user (whoami failed); see the error above",
+              file=sys.stderr)
+        return 1
+    try:
+        backend_embedder = repo.embedder_info()
+    except QuestCardApiError:
+        backend_embedder = None
+    vector = open_vector_store(args.qdrant_url, args.qdrant_path, args.collection_prefix, args.vector_size)
+    meta = ident.read_meta(args.cards_dir)
+    recorded = ident.vector_location_of(meta) or {}
+    local_embedder = args.embedder_id if args.embedder_id is not None else (
+        str(recorded.get("embedder") or "") or embedder_id_from_env())
+    plan = plan_upload(args.cards_dir, team_id=team_id, backend_embedder=backend_embedder,
+                       vector_store=vector, local_embedder_id=local_embedder)
+    print(plan.render())
+    if plan.problems:
+        return 1
+    if not args.apply:
+        print("dry run: nothing was uploaded; pass --apply to upload")
+        return 0
+
+    def show(number: int, reply: dict) -> None:
+        if "error" in reply:
+            print(f"  batch {number}: FAILED {reply['error']}")
+        else:
+            print(f"  batch {number}: {reply.get('counts')}")
+
+    result = apply_upload(plan, repo, on_batch=show)
+    print(f"uploaded in {result['batches']} batch(es): {result['counts']}")
+    if result["failed"]:
+        print(f"FAILED cards ({len(result['failed'])}): {', '.join(result['failed'][:20])}", file=sys.stderr)
+        return 1
+    print("APPLIED")
+    return 0
 
 
 def vector_location_from_args(args):
@@ -132,6 +214,9 @@ def run(argv: List[str]) -> int:
     args = build_parser().parse_args(argv[1:])
     from .adapters import card_store_identity as ident
     from .adapters import card_store_mounts as mounts
+
+    if args.op == "upload":
+        return run_upload(args)
 
     if args.op == "move-root":
         plan = (ident.apply_move_root(args.cards_dir, args.new_root, force=args.force)
