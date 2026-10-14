@@ -168,6 +168,10 @@ permissions, ACLs and a mount that went away are what they are, and the failure 
 and in `context store-info`. A policy in a file the reader can open would only pretend to restrict
 what the disk allows. Reads from a mount are still subject to the usual quest fences (`scope_tags`).
 
+A store ABOVE the corpus root that the process cannot read is invisible to it, not a block: the
+lane indexes its own root as usual. This is the normal shape when a person's wider corpus sits above
+an org's: the org's lanes cannot read the person's store, and the person's lane mounts the org's.
+
 The vector server is the exception: it answers anyone who can reach it. Mount mode therefore fences
 the vector arm (below).
 

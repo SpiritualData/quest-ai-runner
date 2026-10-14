@@ -3462,11 +3462,12 @@ class FileContextStore(ContextAssemblerBase):
 
         Mounting is decided here, once per pass, and then the indexing walk runs with every mounted
         store's subtree skipped outright (no walk, no cards, no staleness check, no embedding: its
-        owner's lane keeps it fresh). A store around this corpus that cannot be mounted (not readable
+        owner's lane keeps it fresh). A store BELOW this corpus that cannot be mounted (not readable
         by this process, no identity yet) is skipped just the same and logged: the reader has no
         cards for it and does NOT index those files itself, which would recreate the duplicate. A
-        store ABOVE this corpus that cannot be mounted claims everything under this root, so the pass
-        indexes nothing. ``copy`` mode (the default) is the legacy behaviour, unchanged.
+        store ABOVE this corpus that this process cannot read is invisible to it and ignored: this
+        corpus indexes its own root as usual. ``copy`` mode (the default) is the legacy behaviour,
+        unchanged.
         """
         if self._mount_mode != MODE_MOUNT:
             return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
@@ -3490,11 +3491,6 @@ class FileContextStore(ContextAssemblerBase):
         if outcome.mounts:
             _log.info("context index: mounting %d store(s) read-only and in place; their subtrees "
                       "are not indexed here", len(outcome.mounts))
-        if outcome.ancestor_blocked:
-            _log.error("context index: a store above this corpus root is not readable, so it is not "
-                       "mounted and this corpus indexes NOTHING under it (it would duplicate that "
-                       "store). Fix its permissions or move this corpus.")
-            return 0
         with skip_subtrees(outcome.claimed_roots):
             return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
                                         max_cards=max_cards, skip_unchanged=skip_unchanged)

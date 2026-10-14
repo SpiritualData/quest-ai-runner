@@ -267,7 +267,10 @@ class TestReaderDoesNotIndexMountedSubtree:
         finally:
             os.chmod(locked, 0o755)
 
-    def test_unreadable_ancestor_blocks_all_indexing_under_it(self, tmp_path, caplog):
+    def test_unreadable_ancestor_is_invisible_and_the_reader_indexes_its_own_root(self, tmp_path):
+        # A narrower lane under a wider store it cannot read (a different OS user's store above it)
+        # must keep indexing its own files: the wider store is not its to mount, and its owner is
+        # the one that mounts this lane's store, not the other way round.
         if os.geteuid() == 0:
             pytest.skip("root can read everything")
         top = tmp_path / "top"
@@ -278,8 +281,9 @@ class TestReaderDoesNotIndexMountedSubtree:
         os.chmod(top / ".quest-context", 0o000)
         try:
             reader = reader_store(top / "lane")
-            assert reader.bootstrap(root=str(top / "lane"), provider=provider) == 0
-            assert provider.answer.call_count == 0
+            reader.bootstrap(root=str(top / "lane"), provider=provider)
+            assert reader.live_mounts() == []
+            assert provider.answer.call_count > 0, "the reader still indexes its own root"
         finally:
             os.chmod(top / ".quest-context", 0o755)
 

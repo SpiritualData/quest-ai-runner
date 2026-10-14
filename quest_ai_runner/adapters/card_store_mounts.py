@@ -113,9 +113,6 @@ class MountOutcome:
     refused: List[Tuple[str, str]] = field(default_factory=list)       # (cards_dir, reason)
     # Roots whose subtree the reader must not index, whether or not the mount was granted.
     claimed_roots: List[Path] = field(default_factory=list)
-    # True when a store ABOVE the reader's root was refused or unavailable: nothing under the
-    # reader's root may then be indexed by the reader, because the ancestor claims all of it.
-    ancestor_blocked: bool = False
     # Every store found around the reader, mounted or not, as (cards_dir, kind).
     found: List[Tuple[str, str]] = field(default_factory=list)
 
@@ -202,7 +199,13 @@ def resolve_mounts(own_cards_dir: str, walk_root: Path,
             if not decision.allowed:
                 out.refused.append((str(cards_dir), decision.reason))
                 if kind == "ancestor":
-                    out.ancestor_blocked = True
+                    # Access is what this process can read. A store above the root that it cannot
+                    # read is invisible to it, not a claim on its files: the files under this root
+                    # are this corpus's own, and the wider store (whose owner CAN read them) is the
+                    # one that mounts or indexes them, never the other way round.
+                    log.info("context index: the store above this corpus at %s is not readable by "
+                             "this process (%s); ignoring it.", str(store_root), decision.reason)
+                    continue
                 log.warning("card mount NOT SERVED for the %s store at %s: %s. This corpus will have "
                             "no cards for that subtree and will not index it itself.",
                             kind, store_root.name or str(store_root), decision.reason)
