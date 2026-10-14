@@ -69,30 +69,144 @@ def test_ensure_preserves_existing_claude_md_prose(folder):
     assert HUMAN_CONTEXT_DIR in text
 
 
+def _rows_below_header(ledger_text):
+    """Table lines after the managed rules header, i.e. the rows part of the ledger."""
+    below = ledger_text.split("QAR:MANAGED:ledger_rules END -->", 1)[1]
+    return [ln for ln in below.splitlines() if ln.strip().startswith("|")]
+
+
 def test_ledger_scaffold_is_empty_of_rows(folder):
     """A scaffolded row would be the library inventing a decision."""
     ensure_folder_zones(folder)
     ledger = (Path(folder) / AI_DRIVEN_DIR / LEDGER_NAME).read_text()
-    lines = [ln for ln in ledger.splitlines() if ln.strip().startswith("|")]
+    lines = _rows_below_header(ledger)
     assert len(lines) == 2                         # a header row and its separator...
     assert "Item" in lines[0] and "Status" in lines[0]
     assert set(lines[1].replace("|", "").split()) == {"---"}   # ...and nothing under them
 
 
-def test_guide_states_only_approved_is_settled(folder):
+def test_ledger_header_holds_the_statuses_and_rules(folder):
     ensure_folder_zones(folder)
-    guide = (Path(folder) / GUIDE_FILE).read_text()
+    ledger = (Path(folder) / AI_DRIVEN_DIR / LEDGER_NAME).read_text()
     for status in LEDGER_STATUSES:
-        assert status in guide
-    assert "Only `approved` is settled." in guide
+        assert f"`{status}`" in ledger
+    assert "Only `approved` is settled." in ledger
+    assert "Add a row when you propose" in ledger
+    assert "only when you can quote them" in ledger
 
 
-def test_guide_describes_the_source_of_truth_convention(folder):
+def test_guide_is_a_short_map_without_the_detail(folder):
+    ensure_folder_zones(folder, quest_id="quest_demo", quest_name="Demo quest")
+    guide = (Path(folder) / GUIDE_FILE).read_text()
+    assert len(guide.splitlines()) <= 20  # markers included
+    assert 'working folder of quest `quest_demo` ("Demo quest").' in guide
+    assert "quest-ai-runner sync-quest-folder quest_demo . --direction both" in guide
+    for item in ("QUEST_SYNC.md", f"{HUMAN_CONTEXT_DIR}/", f"{AI_DRIVEN_DIR}/",
+                 f"{AI_DRIVEN_DIR}/{SOURCE_OF_TRUTH_DIR}/", f"{AI_DRIVEN_DIR}/{LEDGER_NAME}",
+                 "everything else"):
+        assert item in guide
+    assert "Notes to push to Quest" in guide
+    assert "|" not in guide                      # the status table lives in the ledger now
+    assert "\u2014" not in guide
+
+
+def test_guide_without_quest_info_omits_the_opening_line(folder):
     ensure_folder_zones(folder)
     guide = (Path(folder) / GUIDE_FILE).read_text()
-    assert SOURCE_OF_TRUTH_DIR in guide
-    assert "No date in the filename" in guide or "No date" in guide
-    assert "check here first" in guide
+    assert "working folder of quest" not in guide
+    assert "sync-quest-folder <quest_id> ." in guide
+
+
+def test_quest_name_cannot_inject_markers_or_newlines(folder):
+    ensure_folder_zones(folder, quest_id="q1",
+                        quest_name='Bad\nname <!-- QAR:MANAGED:x START --> tail')
+    guide = (Path(folder) / GUIDE_FILE).read_text()
+    assert "QAR:MANAGED:x" not in guide
+    assert guide.splitlines()[1].startswith("This folder is the working folder of quest `q1`")
+    assert guide.splitlines()[1].endswith('tail").')
+
+
+def test_source_of_truth_readme_is_created_with_the_rules(folder):
+    ensure_folder_zones(folder)
+    readme = (Path(folder) / AI_DRIVEN_DIR / SOURCE_OF_TRUTH_DIR / "README.md").read_text()
+    assert "No date in the filename" in readme
+    assert "Check here before researching" in readme
+    assert "named headings, not numbered" in readme
+
+
+def test_source_of_truth_readme_keeps_existing_prose(folder):
+    sot = Path(folder) / AI_DRIVEN_DIR / SOURCE_OF_TRUTH_DIR
+    sot.mkdir(parents=True)
+    (sot / "README.md").write_text("# Mine\n\nHand-written intro.\n")
+    ensure_folder_zones(folder)
+    text = (sot / "README.md").read_text()
+    assert text.startswith("# Mine\n\nHand-written intro.\n")
+    assert "No date in the filename" in text
+
+
+def test_source_of_truth_readme_block_is_replaced_in_place(folder):
+    ensure_folder_zones(folder)
+    readme = Path(folder) / AI_DRIVEN_DIR / SOURCE_OF_TRUTH_DIR / "README.md"
+    stale = readme.read_text().replace("No date in the filename", "STALE RULE")
+    readme.write_text(stale + "\nTrailing human note.\n")
+    ensure_folder_zones(folder)
+    text = readme.read_text()
+    assert "STALE RULE" not in text and "No date in the filename" in text
+    assert text.endswith("Trailing human note.\n")
+
+
+LEGACY_LEDGER = (
+    "# Provenance ledger\n\nOld hand-written intro.\n\n"
+    "| Item | Raised | Origin | Status | Their words, and where | Where it lives |\n"
+    "| --- | --- | --- | --- | --- | --- |\n"
+    "| gap list | 2026-08-01 | AI | approved | \"go ahead\" (note n1) | notes.md |\n"
+)
+
+
+def test_header_is_inserted_into_an_existing_ledger_keeping_every_row(folder):
+    ledger = Path(folder) / AI_DRIVEN_DIR / LEDGER_NAME
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text(LEGACY_LEDGER)
+    ensure_folder_zones(folder)
+    text = ledger.read_text()
+    assert text.startswith("# Provenance ledger\n")
+    assert text.index("QAR:MANAGED:ledger_rules START") < text.index("Old hand-written intro.")
+    assert "| gap list | 2026-08-01 | AI | approved | \"go ahead\" (note n1) | notes.md |" in text
+    # everything the file said before is still there, in order, byte for byte
+    after_title = LEGACY_LEDGER.split("\n", 1)[1].lstrip("\n")
+    assert text.endswith(after_title)
+
+
+def test_header_is_replaced_in_place_and_rows_are_untouched(folder):
+    ensure_folder_zones(folder)
+    ledger = Path(folder) / AI_DRIVEN_DIR / LEDGER_NAME
+    row = "| plan | 2026-09-01 | AI | surfaced | | plan.md |\n"
+    ledger.write_text(ledger.read_text().replace("May you build on it?", "STALE") + row)
+    ensure_folder_zones(folder)
+    text = ledger.read_text()
+    assert "STALE" not in text and "May you build on it?" in text
+    assert text.endswith(row)
+
+
+def test_ledger_without_a_title_gets_the_header_on_top(folder):
+    ledger = Path(folder) / AI_DRIVEN_DIR / LEDGER_NAME
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text("| a | b |\n| --- | --- |\n| x | y |\n")
+    ensure_folder_zones(folder)
+    text = ledger.read_text()
+    assert text.startswith("<!-- QAR:MANAGED:ledger_rules START -->")
+    assert text.endswith("| a | b |\n| --- | --- |\n| x | y |\n")
+
+
+def test_ensure_twice_yields_identical_files_including_with_legacy_input(folder):
+    ledger = Path(folder) / AI_DRIVEN_DIR / LEDGER_NAME
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text(LEGACY_LEDGER)
+    ensure_folder_zones(folder, quest_id="q1", quest_name="N")
+    snap = {p: p.read_text() for p in Path(folder).rglob("*.md")}
+    second = ensure_folder_zones(folder, quest_id="q1", quest_name="N")
+    assert second.created == []
+    assert {p: p.read_text() for p in Path(folder).rglob("*.md")} == snap
 
 
 def test_ensure_survives_an_unwritable_folder():
@@ -189,3 +303,14 @@ def test_contract_names_the_zones_and_the_ledger():
     assert LEDGER_NAME in text
     assert "/some/folder" in text
     assert "ai_proposed" in text and "approved" in text
+
+
+def test_contract_shares_wording_with_the_rendered_files(folder):
+    from quest_ai_runner.runner import quest_folder_zones as z
+    text = folder_zones_contract()
+    ensure_folder_zones(folder)
+    guide = (Path(folder) / GUIDE_FILE).read_text()
+    for shared in (z.MAP_HUMAN, z.MAP_AI, z.MAP_SOT, z.MAP_OTHER):
+        assert shared in text and shared in guide
+    assert z.RULE_APPROVE_ROW in text
+    assert "\u2014" not in text

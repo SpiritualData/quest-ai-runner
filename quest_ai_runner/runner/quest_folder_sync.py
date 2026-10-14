@@ -507,7 +507,8 @@ def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
     zones_created: List[str] = []
     captured: List[str] = []
     if zones:
-        zones_created = ensure_folder_zones(folder).created
+        zones_created = ensure_folder_zones(
+            folder, quest_id=quest_id, quest_name=str(quest_state.get("outcome") or "")).created
         captured = capture_human_input(folder, notes)
     log.info("pulled quest %s -> %s (%d notes, %d captured)",
              quest_id, path, len(notes), len(captured))

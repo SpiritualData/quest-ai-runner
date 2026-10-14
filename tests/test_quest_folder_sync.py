@@ -126,6 +126,15 @@ def test_pull_writes_sync_file_with_quest_data():
     assert "Unaccepted idea" not in content  # only accepted strategies render
 
 
+def test_pull_puts_the_quest_id_and_name_in_the_folder_map():
+    client = MockQuestFolderClient()
+    with tempfile.TemporaryDirectory() as d:
+        pull_quest_to_folder(client, QUEST_ID, d)
+        guide = Path(d, "CLAUDE.md").read_text()
+    assert f'working folder of quest `{QUEST_ID}` ("The Super Psychic Academy reaches 100' in guide
+    assert f"sync-quest-folder {QUEST_ID} ." in guide
+
+
 def test_pull_is_idempotent_no_rewrite_when_unchanged():
     client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:

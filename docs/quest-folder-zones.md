@@ -17,23 +17,40 @@ The failure that follows is not dramatic, which is why it survives so long:
 
 Nothing malfunctioned. The record simply never distinguished a proposal from an instruction.
 
-## The three zones
+## A short map, with the detail in the files it governs
 
-`ensure_folder_zones(folder)` scaffolds them on every pull and writes the rule into the folder's
-own `CLAUDE.md` as a managed section, so it reaches any process that opens the folder — including
-ones that never went through this library.
+`ensure_folder_zones(folder, quest_id=None, quest_name=None)` runs on every pull. The folder's
+always-loaded `CLAUDE.md` gets a short managed block (about a dozen lines): an opening line naming
+the quest when the caller knows it (the pull passes the quest id and its outcome as the name; with
+no id the line is omitted), then `## What's here`, one bullet per item with what it is plus its
+single rule or a "read when" clause:
 
-| Zone | Holds | Who may write |
-| --- | --- | --- |
-| `human_context/` | The person's own words and materials | AI may write **only** to record human input verbatim, or when explicitly asked |
-| `ai_driven/` | AI self-documentation, analyses it chose to run, scratch, designs nobody asked for | AI writes freely; everything here is a **proposal** |
-| everything else | The collaborative work product — the document, the code, the plan | Both, jointly |
+| Item | Rule in the map |
+| --- | --- |
+| `QUEST_SYNC.md` | the quest's live state; `QAR:MANAGED` blocks are overwritten on every pull; add bullets under "Notes to push to Quest" to send findings up; the `quest-ai-runner sync-quest-folder <quest_id> . --direction both` command |
+| `human_context/` | the person's own words, verbatim only; their Quest notes arrive under `human_context/from_quest/` |
+| `ai_driven/` | the AI's workspace; everything is a proposal until the ledger says otherwise |
+| `ai_driven/source_of_truth/` | the current answer per topic, updated in place; read its README before researching |
+| `ai_driven/provenance_ledger.md` | read before building on anything an AI proposed; only `approved` rows are settled |
+| everything else | joint work product; say what you changed and why |
+
+The detail lives in the file each rule governs, each under its own managed markers so a re-render
+updates it in place and never touches human or row content:
+
+- the status table and the add-a-row / approve-only-with-a-quote rules: a `ledger_rules` block at
+  the top of `ai_driven/provenance_ledger.md`. An existing ledger gets the block inserted under its
+  title line (or replaced if present); every row and any prose below stays byte for byte.
+- the source-of-truth rules: a `source_of_truth_rules` block in
+  `ai_driven/source_of_truth/README.md` (created if absent; only the block is replaced if the file
+  exists).
 
 None of this is enforced by the filesystem, and it is not meant to be. A run can always write
 anywhere. What the module guarantees is that the rule is **scaffolded** (the directories exist, so
-where to put a file is a real choice), **stated** (in the folder's `CLAUDE.md` and in the run
+where to put a file is a real choice), **stated** (the map, the governed files and the run
 context), and **pre-populated** with the one class of human material a run should never have to
-transcribe by hand.
+transcribe by hand. The wording of each rule exists once, in constants in
+`runner/quest_folder_zones.py`; the map, the ledger header, the README block and the run-context
+contract all derive from them.
 
 ## Capturing their words
 
@@ -57,45 +74,22 @@ display name, because the API key is theirs.
 
 ## Source of truth documents
 
-A different failure from the one above: nobody consolidates. A run researches a topic and writes a
-dated file. Months later a later run researches the same topic again — because nothing told it the
-earlier file existed, or a new dated file just felt like the safe default — and writes a second one.
-Repeat long enough and the working answer to "what does X actually say" is spread across a dozen
-files, none of them current, none of them canonical.
-
-`ai_driven/` otherwise has no way to say "this is the current answer" as opposed to "a research
-artifact from a point in time." `ai_driven/source_of_truth/` is that distinction, scaffolded by the
-same `ensure_folder_zones` call. Everything about the `ai_driven/` zone still applies here — it's AI
-workspace, still a proposal until the ledger says otherwise — this is a nested convention, not a
-fourth top-level zone.
-
-- **No date in the filename.** That absence is the signal a document belongs here: it's meant to be
-  refined in place as understanding changes, not superseded by the next dated snapshot.
-- **Check here before researching.** Before writing a new file on a topic, a run should look here
-  first. If a document already covers it, update that file (and any doc it mirrors elsewhere, e.g.
-  a synced Google Doc) instead of starting a new one.
-- **Named headings, not numbered ones.** A document meant to be refined over time outlives whatever
-  numbering scheme fit it on day one. Heading size (`##`, `###`, `####`) carries the hierarchy, so
-  sections can be reordered, split, or renamed without renumbering everything under them.
+A different failure: nobody consolidates. A run researches a topic and writes a dated file; a later
+run researches it again and writes another, until the working answer to "what does X say" is spread
+across a dozen files, none canonical. `ai_driven/source_of_truth/` is the current answer per topic,
+refined in place (no date in the filename, check here before researching, named rather than
+numbered headings). Its README carries those rules. It is a nested convention inside `ai_driven/`,
+not a fourth top-level zone.
 
 ## The ledger
 
 `ai_driven/provenance_ledger.md` answers the question the zones alone cannot. A folder can tell you
 a file is AI-authored. Only a ledger can tell you the person *read* it, when, and what they said.
-
-| Status | Meaning | Safe to build on? |
-| --- | --- | --- |
-| `ai_proposed` | An AI run came up with it. They have not seen it. | No — surface it and ask |
-| `surfaced` | Put in front of them. No answer yet. | No — silence is not agreement |
-| `approved` | They asked for it or said go, quoted in the row | Yes |
-| `rejected` | They said no | No |
-| `superseded` | Overtaken by a later decision | No — follow the row that replaced it |
-
-It is scaffolded empty-but-headed. A pre-filled row would be the library inventing a decision,
-which is the thing this exists to prevent.
-
-Runs are told to move a row to `approved` **only when they can quote the person**, with where they
-said it. Their own confidence is not evidence, and neither is silence.
+Its managed header holds the statuses (`ai_proposed`, `surfaced`, `approved`, `rejected`,
+`superseded`, each with "may you build on it?") and the rules: add a row when you propose something
+they did not ask for, and move it to `approved` only when you can quote them, with where they said
+it. It is scaffolded empty-but-headed, because a pre-filled row would be the library inventing a
+decision.
 
 ## Configuration
 
@@ -117,12 +111,6 @@ not exist — and a run that cannot find what the prompt promised starts inventi
 
 ## What a run is told
 
-Short, because the full rules are in the folder's `CLAUDE.md` and the run reads them when it gets
-there. The prompt's job is to make it look, and to name the one failure worth interrupting a run
-over:
-
-> Before you build on any analysis, gap list, plan or initiative that came from an AI run, check
-> `ai_driven/provenance_ledger.md` for its status. Only `approved` rows are settled, and an
-> approved row quotes the person saying so. If what you are about to build on is `ai_proposed` or
-> `surfaced`, it is a suggestion they have not agreed to: say so in your result and ask, rather
-> than treating it as the brief.
+Short, and built from the same wording as the files above. The prompt's job is to make the run
+look at the folder's map and the ledger, and to name the one failure worth interrupting a run over:
+building on an `ai_proposed` or `surfaced` row as if it were the brief.

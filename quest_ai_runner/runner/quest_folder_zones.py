@@ -1,57 +1,31 @@
-"""quest_folder_zones — make "who decided this?" legible inside a quest's working folder.
+"""quest_folder_zones -- make "who decided this?" legible inside a quest's working folder.
 
-A folder synced to a quest accumulates two very different kinds of material: what the PERSON
-said, and what the AI came up with. Six months in they are indistinguishable. Every file is
-markdown, every file is confident, and nothing on the page records which of the two it is.
+WHY. A folder synced to a quest accumulates what the PERSON said and what the AI came up with, and
+six months in they look identical: every file is markdown, every file is confident. The failure is
+specific: a run produces a gap list, the next run treats it as the brief, the run after builds on
+it, and ten runs later the plan rests on a premise the person never agreed to. Nothing
+malfunctioned; the record never distinguished a proposal from an instruction. A second failure is
+that nobody consolidates: the same topic is researched again and again into new dated files, and no
+file is the current answer.
 
-The failure that follows is specific and it is not hypothetical. An AI run analyses the work and
-produces, say, a list of gaps. The next run reads that list, treats it as the brief, and resolves
-them. The run after that builds on the resolutions. Ten runs later the whole plan rests on a
-premise the person never agreed to -- and when they finally read it they say, correctly, "all of
-that is from AI, you should be confirming every point with me". Nothing malfunctioned. The record
-simply never distinguished a proposal from an instruction.
+SHAPE. The folder's ``CLAUDE.md`` is always loaded, so it carries only a SHORT MAP (one line per
+item: what it is, plus its single rule or a "read when" clause). The detail lives in the file each
+rule governs, each under its own managed markers so a re-render never touches human or row content:
 
-THREE ZONES, one rule each. ``ensure_folder_zones`` scaffolds them and writes the rule into the
-folder's own ``CLAUDE.md``, so it is in front of every future run whether or not that run went
-through this library:
+* ``human_context/`` -- the person's own words, verbatim only. Inbound Quest notes are captured
+  under ``human_context/from_quest/`` by :func:`capture_human_input` on every pull.
+* ``ai_driven/`` -- the AI's workspace; everything in it is a proposal until the ledger says so.
+* ``ai_driven/provenance_ledger.md`` -- what the person has actually reviewed. Its managed header
+  holds the status table and the add/approve rules; the rows below it are never touched.
+* ``ai_driven/source_of_truth/`` -- the current answer per topic, refined in place. Its README
+  holds the rules (no date in the filename, check here before researching, named headings).
+* everything else -- joint work product.
 
-* ``human_context/`` -- the person's own words and their own materials. An AI run may write here
-  in exactly two cases: it is recording human input VERBATIM (a prompt, an email reply, feedback,
-  quoted exactly, not summarised), or it was explicitly asked to. Never its own interpretation,
-  never a tidied-up version.
-* ``ai_driven/`` -- the AI's own workspace: self-documentation, analyses it decided to run,
-  scratch files, designs nobody asked for yet. Everything here is a PROPOSAL until the record says
-  otherwise. A run may write here freely.
-* everything else -- collaborative work product, the thing the two are actually making together.
-
-THE LEDGER (``ai_driven/provenance_ledger.md``) is the fourth piece, and the one that answers the
-question the zones alone cannot: of the things the AI proposed, which has the person actually
-seen? A folder can tell you a file is AI-authored; only a ledger can tell you the person read it,
-on what date, and what they said back. Its statuses are deliberately ordered by how much weight a
-run may put on a row: ``ai_proposed`` (they have not seen it) -> ``surfaced`` (put in front of
-them, no answer yet) -> ``approved`` / ``rejected`` / ``superseded``. Only ``approved`` is
-settled. A run that builds on anything else is doing what the failure above describes.
-
-A FIFTH piece, ``ai_driven/source_of_truth/``, answers a different recurring failure: nobody
-consolidates. A run researches a topic, writes a dated file. A later run researches the same topic
-again -- because nothing told it the earlier file existed, or because it did but a new dated file
-felt like the safe default -- and writes a second one. Repeat for months and the working answer to
-"what does X actually say" is spread across a dozen files, none of them current, none of them
-canonical. ``ai_driven/`` otherwise has no concept of "the current answer" as opposed to "a research
-artifact from a point in time"; this subfolder is that concept. A file placed here carries no date
-in its name -- that absence IS the signal that it is meant to be refined in place, not superseded.
-Everything else about the zone still applies: it is AI workspace, still a PROPOSAL until the ledger
-says otherwise, headings inside it should be named rather than numbered so sections can be
-reordered without renumbering. Before starting new research on a topic, a run should check this
-subfolder for an existing document to refine rather than writing a new dated one that fragments the
-picture again.
-
-Nothing here is enforced by the filesystem, and that is on purpose: a run can always write
-anywhere. What this module guarantees is that the rule is SCAFFOLDED (the directories exist, so
-the choice of where to put a file is a real one), STATED (in the folder's CLAUDE.md, and in the
-run context via :func:`folder_zones_contract`), and PRE-POPULATED with the one class of human
-material a run should never have to transcribe by hand -- the person's own Quest notes, captured
-verbatim by :func:`capture_human_input` on every pull.
+Nothing is enforced by the filesystem, on purpose: a run can always write anywhere. This module
+guarantees the rules are SCAFFOLDED (the directories exist), STATED (the map in ``CLAUDE.md``, the
+detail in the governed files, a short reminder in the run context via
+:func:`folder_zones_contract`), and that the person's own Quest notes are captured verbatim. The
+wording of each rule exists once, in the constants below, and every rendering derives from it.
 """
 from __future__ import annotations
 
@@ -61,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from ._managed_sections import replace_between
+from ._managed_sections import replace_between, strip_managed_blocks
 
 log = logging.getLogger("quest-ai-runner.quest_folder_zones")
 
@@ -70,7 +44,7 @@ HUMAN_CONTEXT_DIR = "human_context"
 
 # Nested inside ai_driven/, not a fourth top-level zone: the subset of AI workspace meant to be
 # THE current answer on a topic, refined in place, rather than a point-in-time research artifact.
-# See the module docstring's "A FIFTH piece" paragraph for why this exists.
+# See the module docstring for why this exists.
 SOURCE_OF_TRUTH_DIR = "source_of_truth"
 
 # Inbound human material captured from Quest lands in its own subfolder rather than loose in
@@ -81,11 +55,210 @@ INBOUND_DIR = "from_quest"
 LEDGER_NAME = "provenance_ledger.md"
 GUIDE_FILE = "CLAUDE.md"
 
+
 _ZONES_START = "<!-- QAR:MANAGED:folder_zones START -->"
 _ZONES_END = "<!-- QAR:MANAGED:folder_zones END -->"
+_LEDGER_START = "<!-- QAR:MANAGED:ledger_rules START -->"
+_LEDGER_END = "<!-- QAR:MANAGED:ledger_rules END -->"
+_SOT_START = "<!-- QAR:MANAGED:source_of_truth_rules START -->"
+_SOT_END = "<!-- QAR:MANAGED:source_of_truth_rules END -->"
+
+SOURCE_OF_TRUTH_README = "README.md"
 
 #: Ordered by how much weight a run may place on the row. Only ``approved`` is settled.
 LEDGER_STATUSES = ("ai_proposed", "surfaced", "approved", "rejected", "superseded")
+
+# --- the wording, once -------------------------------------------------------------------------
+# Every rendering (CLAUDE.md map, ledger header, README block, run-context contract) is built from
+# these, so a rule changed here changes everywhere.
+
+# (status, what it means, may you build on it?) -- rows of the ledger header's table.
+_STATUS_TABLE = (
+    ("ai_proposed", "An AI came up with it. They have not seen it.", "No. Surface it and ask."),
+    ("surfaced", "Put in front of them. No answer yet.", "No. Silence is not agreement."),
+    ("approved", "They asked for it or said go. Their words are in the row.", "Yes."),
+    ("rejected", "They said no.", "No, and do not re-propose without a new reason."),
+    ("superseded", "Overtaken by a later decision.", "No. Follow the row that replaced it."),
+)
+assert tuple(r[0] for r in _STATUS_TABLE) == LEDGER_STATUSES
+
+RULE_ONLY_APPROVED = "Only `approved` is settled."
+RULE_ADD_ROW = ("Add a row when you propose something the person has not asked for, at "
+                "`ai_proposed`.")
+RULE_APPROVE_ROW = ("Move a row to `approved` only when you can quote them, in the row, with where "
+                    "they said it (a Quest note id, an email date, a task id). Your own confidence "
+                    "is not evidence, and neither is their silence.")
+
+_SOT_RULES = (
+    "No date in the filename. A dated name marks a snapshot; a file here is the current answer and "
+    "is refined in place, not superseded.",
+    "Check here before researching a topic. If a file covers it, update that file (and any "
+    "document it mirrors) instead of writing a new one.",
+    "Use named headings, not numbered ones, so sections can be reordered or split without "
+    "renumbering.",
+    "Everything here is still a proposal until the ledger says otherwise.",
+)
+
+_AI_LOC = f"{AI_DRIVEN_DIR}/"
+_LEDGER_LOC = f"{AI_DRIVEN_DIR}/{LEDGER_NAME}"
+_SOT_LOC = f"{AI_DRIVEN_DIR}/{SOURCE_OF_TRUTH_DIR}/"
+
+# One line per folder item: what it is, then its single rule or "read when" clause.
+MAP_HUMAN = (f"the person's own words, verbatim only. Write here only to record their input "
+             f"exactly or when asked. Their Quest notes and replies arrive under "
+             f"`{HUMAN_CONTEXT_DIR}/{INBOUND_DIR}/`.")
+MAP_AI = "your workspace. Everything here is a proposal until the ledger says otherwise."
+MAP_SOT = ("the current answer per topic, updated in place. Read its README before starting "
+           "research on a topic.")
+MAP_LEDGER = "read before building on anything an AI proposed. Only `approved` rows are settled."
+MAP_OTHER = "joint work product. Say what you changed and why."
+
+_SYNC_FILE = "QUEST_SYNC.md"
+_SYNC_CLI = "quest-ai-runner sync-quest-folder"
+
+
+def _clean_inline(value: Optional[str], limit: int = 120) -> str:
+    """One line of caller-supplied text, safe to embed in a managed block."""
+    text = " ".join(strip_managed_blocks(str(value or "")).split())
+    return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
+
+
+def _render_zones_guide(quest_id: Optional[str] = None, quest_name: Optional[str] = None) -> str:
+    """The managed block written into the folder's ``CLAUDE.md``: a short map, not the rules.
+
+    The always-loaded file stays small; each rule's detail lives in the file it governs. The quest
+    line appears only when the caller supplied an id (and the name when it supplied one).
+    """
+    qid = _clean_inline(quest_id, 80)
+    name = _clean_inline(quest_name)
+    lines: List[str] = []
+    if qid:
+        lines.append(f"This folder is the working folder of quest `{qid}`"
+                     + (f' ("{name}").' if name else "."))
+        lines.append("")
+    lines.append("## What's here")
+    lines.append("")
+    lines.append(
+        f"- `{_SYNC_FILE}`: the quest's live state. Blocks marked `QAR:MANAGED` are overwritten on "
+        "every pull, so never hand-edit inside them. Add bullets under \"Notes to push to Quest\" "
+        f"to send findings up. Pull and push with `{_SYNC_CLI} {qid or '<quest_id>'} . "
+        "--direction both`.")
+    lines.append(f"- `{HUMAN_CONTEXT_DIR}/`: {MAP_HUMAN}")
+    lines.append(f"- `{_AI_LOC}`: {MAP_AI}")
+    lines.append(f"- `{_SOT_LOC}`: {MAP_SOT}")
+    lines.append(f"- `{_LEDGER_LOC}`: {MAP_LEDGER}")
+    lines.append(f"- everything else: {MAP_OTHER}")
+    return "\n".join(lines)
+
+
+def _render_ledger_rules() -> str:
+    """The managed header of the ledger: the status table and the add/approve rules."""
+    rows = "\n".join(f"| `{s}` | {m} | {b} |" for s, m, b in _STATUS_TABLE)
+    return (
+        "What the person has actually reviewed, and what is still only an AI's idea. Each row "
+        "below is one proposal, decision, or initiative.\n\n"
+        "| Status | What it means | May you build on it? |\n| --- | --- | --- |\n"
+        f"{rows}\n\n"
+        f"{RULE_ONLY_APPROVED} Anything else is a suggestion, however finished it looks.\n\n"
+        f"{RULE_ADD_ROW}\n{RULE_APPROVE_ROW}"
+    )
+
+
+def _render_source_of_truth_rules() -> str:
+    """The managed block of ``ai_driven/source_of_truth/README.md``."""
+    return ("The current answer per topic, refined in place.\n\n"
+            + "\n".join(f"- {r}" for r in _SOT_RULES))
+
+
+def _render_ledger_scaffold() -> str:
+    """The initial ledger: the managed rules header, then an empty table for the rows."""
+    return (f"# Provenance ledger\n\n{_LEDGER_START}\n{_render_ledger_rules()}\n{_LEDGER_END}\n\n"
+            "| Item | Raised | Origin | Status | Their words, and where | Where it lives |\n"
+            "| --- | --- | --- | --- | --- | --- |\n")
+
+
+def _with_ledger_header(existing: str) -> str:
+    """Insert or replace ONLY the managed header; every other byte of an existing ledger stays.
+
+    With no markers yet, the header goes right under a leading ``# `` title line (or at the very
+    top when there is none), so rows and any hand-written prose below it are left exactly as found.
+    """
+    body = _render_ledger_rules()
+    if _LEDGER_START in existing and _LEDGER_END in existing:
+        return replace_between(existing, _LEDGER_START, _LEDGER_END, body)
+    block = f"{_LEDGER_START}\n{body}\n{_LEDGER_END}\n"
+    if existing.startswith("# "):
+        title, _, rest = existing.partition("\n")
+        return f"{title}\n\n{block}\n{rest.lstrip(chr(10))}"
+    return f"{block}\n{existing}"
+
+
+def _with_source_of_truth_rules(existing: str) -> str:
+    """Create or update the README's managed block; text outside the markers is untouched."""
+    if not existing:
+        existing = "# Source of truth\n"
+    return replace_between(existing, _SOT_START, _SOT_END, _render_source_of_truth_rules())
+
+
+def ensure_folder_zones(folder: str, quest_id: Optional[str] = None,
+                        quest_name: Optional[str] = None) -> FolderZones:
+    """Scaffold the zone convention in ``folder``. Idempotent.
+
+    Creates the zone directories if missing, then refreshes three managed blocks in place: the
+    short map in the folder's ``CLAUDE.md`` (created if absent), the rules header of
+    ``ai_driven/provenance_ledger.md`` (rows below it are never touched), and the rules block of
+    ``ai_driven/source_of_truth/README.md``. Prose outside each marker pair is untouched.
+
+    ``quest_id`` and ``quest_name`` are optional runtime data for the map's opening line and its
+    sync command; with no id the line is omitted and the command shows a placeholder.
+
+    The ledger is created EMPTY-BUT-HEADED rather than filled in: a scaffolded row would be the
+    library inventing a decision, and this module's entire purpose is that decisions have to come
+    from somewhere real.
+
+    Never raises on a filesystem failure -- a folder that cannot be scaffolded is a degraded
+    convention, not a reason to fail the run that triggered it. The failure is logged and the
+    returned ``created`` list says what actually happened.
+    """
+    base = Path(folder).expanduser()
+    created: List[str] = []
+    ai_dir = base / AI_DRIVEN_DIR
+    human_dir = base / HUMAN_CONTEXT_DIR
+    source_of_truth_dir = ai_dir / SOURCE_OF_TRUTH_DIR
+    ledger = ai_dir / LEDGER_NAME
+    readme = source_of_truth_dir / SOURCE_OF_TRUTH_README
+    guide = base / GUIDE_FILE
+
+    def refresh(path: Path, render) -> None:
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        rendered = render(existing)
+        if rendered != existing:
+            path.write_text(rendered, encoding="utf-8")
+            created.append(str(path))
+
+    try:
+        for path in (ai_dir, human_dir, human_dir / INBOUND_DIR, source_of_truth_dir):
+            if not path.exists():
+                path.mkdir(parents=True, exist_ok=True)
+                created.append(str(path))
+        if not ledger.exists():
+            ledger.write_text(_render_ledger_scaffold(), encoding="utf-8")
+            created.append(str(ledger))
+        else:
+            refresh(ledger, _with_ledger_header)
+        refresh(readme, _with_source_of_truth_rules)
+        refresh(guide, lambda text: replace_between(
+            text, _ZONES_START, _ZONES_END, _render_zones_guide(quest_id, quest_name)))
+    except OSError as e:
+        log.warning("could not scaffold folder zones in %s: %s", folder, e)
+
+    if created:
+        log.info("folder zones scaffolded in %s (%d path(s))", folder, len(created))
+    return FolderZones(
+        folder=str(base), ai_driven=str(ai_dir), human_context=str(human_dir),
+        source_of_truth=str(source_of_truth_dir), ledger=str(ledger), guide=str(guide),
+        created=created,
+    )
 
 # Author kinds that mean "a person wrote this". Matched against a note's ``author_kind``.
 #
@@ -121,137 +294,6 @@ class FolderZones:
         """Whether this call created anything (vs. finding an already-conforming folder)."""
         return bool(self.created)
 
-
-def _render_zones_guide() -> str:
-    """The managed block written into the folder's ``CLAUDE.md``.
-
-    Addressed to whoever reads the folder next, human or AI, and phrased as rules rather than
-    description: a future run acts on what this says, so an ambiguous sentence here becomes an
-    ambiguous decision there.
-    """
-    return f"""## How this folder is organised (three zones)
-
-Work here is a collaboration, and the record has to say which half of it came from whom. Three
-zones, one rule each. They are not enforced by the filesystem — they are enforced by whoever is
-writing, which includes you.
-
-**`{HUMAN_CONTEXT_DIR}/` — the person's own words and materials.**
-Write here in exactly two cases: you are recording human input VERBATIM (a prompt, an email
-reply, feedback — quoted exactly, not summarised, not tidied), or you were explicitly asked to
-put something here. Never your own interpretation of what they meant. Never a condensed version
-"for convenience". If you find yourself editing a sentence in this zone, stop: the thing that
-makes it useful is that it is unaltered. Their Quest notes and email replies are captured here
-automatically under `{HUMAN_CONTEXT_DIR}/{INBOUND_DIR}/`.
-
-**`{AI_DRIVEN_DIR}/` — your workspace.**
-Self-documentation, analyses you decided to run, scratch and temporary files, designs nobody has
-asked for yet. Write here freely. Everything in this zone is a PROPOSAL until
-`{AI_DRIVEN_DIR}/{LEDGER_NAME}` records otherwise — including work that is finished, verified,
-and obviously correct. Finished is not the same as agreed.
-
-**`{AI_DRIVEN_DIR}/{SOURCE_OF_TRUTH_DIR}/` — the current answer, not a dated snapshot.**
-Still `{AI_DRIVEN_DIR}/`, still a proposal zone, but for one specific kind of file: a document
-meant to be THE place to look for something, refined in place as understanding changes, instead of
-superseded by a new dated file each time the same topic gets researched again. No date in the
-filename — that absence is the signal it's running, not a point-in-time artifact. Before starting
-new research on a topic, check here first; if a document already covers it, update that file (and
-any doc it mirrors) rather than writing a new one that fragments the picture again. Headings inside
-these documents should be named, not numbered, so sections can be reordered, split, or renamed
-without renumbering everything under them.
-
-**Everything else — the collaborative work product.**
-The document, the code, the plan: the thing the two of you are actually making. Files here carry
-joint authorship, so changing one means changing something the person may consider theirs. Say
-what you changed and why, in your result.
-
-### Before you build on anything, check the ledger
-
-`{AI_DRIVEN_DIR}/{LEDGER_NAME}` records what the person has actually reviewed. Its statuses:
-
-| Status | What it means | May you build on it? |
-| --- | --- | --- |
-| `ai_proposed` | You (or an earlier run) came up with it. They have not seen it. | **No.** Surface it and ask. |
-| `surfaced` | Put in front of them. No answer yet. | **No.** Silence is not agreement. |
-| `approved` | They asked for it, or said go. Their words are in the row. | Yes. |
-| `rejected` | They said no. | No, and do not re-propose without new reason. |
-| `superseded` | Overtaken by a later decision. | No — follow the row that replaced it. |
-
-Only `approved` is settled. This matters most for the things that feel most like facts: a gap
-analysis, a list of risks, a proposed re-sequencing, a new initiative. Those are the rows that
-get treated as the brief three runs later, when nobody remembers they were a suggestion.
-
-**Add a row whenever you propose something the person has not asked for**, at `ai_proposed`.
-**Move a row to `approved` only when you can quote them**, in the row, with where they said it.
-Your own confidence is not evidence. Neither is their silence.
-"""
-
-
-def _render_ledger_scaffold() -> str:
-    """The initial ledger: the instructions, then an empty table for the rows."""
-    statuses = " → ".join(f"`{s}`" for s in LEDGER_STATUSES[:2])
-    return f"""# Provenance ledger
-
-What the person has actually reviewed, and what is still only the AI's idea.
-
-Every row is one proposal, decision, or initiative. Add a row the moment you propose something
-they did not ask for, at `ai_proposed`. Move it along ({statuses} → `approved` / `rejected` /
-`superseded`) only on evidence, and put the evidence IN the row: their own words, quoted, and
-where they said them (a Quest note id, an email date, a task id).
-
-Only `approved` is settled. Anything else is a suggestion, however finished it looks, and
-building on it is how a plan ends up resting on a premise nobody agreed to.
-
-| Item | Raised | Origin | Status | Their words, and where | Where it lives |
-| --- | --- | --- | --- | --- | --- |
-"""
-
-
-def ensure_folder_zones(folder: str) -> FolderZones:
-    """Scaffold the three-zone convention in ``folder``. Idempotent.
-
-    Creates the two zone directories and the ledger if missing, and refreshes the managed block in
-    the folder's ``CLAUDE.md`` (creating that file if it does not exist). Prose outside the markers
-    is untouched, so a folder with its own CLAUDE.md keeps everything it already said.
-
-    The ledger is created EMPTY-BUT-HEADED rather than filled in: a scaffolded row would be the
-    library inventing a decision, and this module's entire purpose is that decisions have to come
-    from somewhere real.
-
-    Never raises on a filesystem failure -- a folder that cannot be scaffolded is a degraded
-    convention, not a reason to fail the run that triggered it. The failure is logged and the
-    returned ``created`` list says what actually happened.
-    """
-    base = Path(folder).expanduser()
-    created: List[str] = []
-    ai_dir = base / AI_DRIVEN_DIR
-    human_dir = base / HUMAN_CONTEXT_DIR
-    source_of_truth_dir = ai_dir / SOURCE_OF_TRUTH_DIR
-    ledger = ai_dir / LEDGER_NAME
-    guide = base / GUIDE_FILE
-
-    try:
-        for path in (ai_dir, human_dir, human_dir / INBOUND_DIR, source_of_truth_dir):
-            if not path.exists():
-                path.mkdir(parents=True, exist_ok=True)
-                created.append(str(path))
-        if not ledger.exists():
-            ledger.write_text(_render_ledger_scaffold(), encoding="utf-8")
-            created.append(str(ledger))
-        existing = guide.read_text(encoding="utf-8") if guide.exists() else ""
-        rendered = replace_between(existing, _ZONES_START, _ZONES_END, _render_zones_guide())
-        if rendered != existing:
-            guide.write_text(rendered, encoding="utf-8")
-            created.append(str(guide))
-    except OSError as e:
-        log.warning("could not scaffold folder zones in %s: %s", folder, e)
-
-    if created:
-        log.info("folder zones scaffolded in %s (%d path(s))", folder, len(created))
-    return FolderZones(
-        folder=str(base), ai_driven=str(ai_dir), human_context=str(human_dir),
-        source_of_truth=str(source_of_truth_dir), ledger=str(ledger), guide=str(guide),
-        created=created,
-    )
 
 
 def is_human_note(note: Dict[str, Any]) -> bool:
@@ -360,21 +402,21 @@ def capture_human_input(folder: str, notes: Iterable[Dict[str, Any]]) -> List[st
 def folder_zones_contract(folder: Optional[str] = None) -> str:
     """Told to a run whose quest has a working folder, alongside the result/email contracts.
 
-    Short on purpose. The full rules live in the folder's own ``CLAUDE.md``, which the run reads
-    when it gets there; repeating them in the prompt would spend context on something already
-    written down. What this has to do is make the run LOOK -- and name the one failure mode worth
+    Short on purpose, and built from the same constants as the folder's ``CLAUDE.md`` map, the
+    ledger header and the source-of-truth README, so the wording exists once. The details live in
+    those files; what this has to do is make the run LOOK, and name the one failure mode worth
     interrupting a run over.
     """
     where = f" ({folder})" if folder else ""
     return (
-        f"This quest has a working folder{where} organised in three zones, described in its "
-        f"CLAUDE.md: `{HUMAN_CONTEXT_DIR}/` holds the person's own words (write there only to "
-        f"record their input verbatim, or when asked), `{AI_DRIVEN_DIR}/` is your workspace and "
-        "everything in it is a proposal, and everything else is collaborative work product.\n"
+        f"This quest has a working folder{where}; its CLAUDE.md is a short map:\n"
+        f"- `{HUMAN_CONTEXT_DIR}/`: {MAP_HUMAN}\n"
+        f"- `{_AI_LOC}`: {MAP_AI}\n"
+        f"- `{_SOT_LOC}`: {MAP_SOT}\n"
+        f"- everything else: {MAP_OTHER}\n"
         f"Before you build on any analysis, gap list, plan or initiative that came from an AI run, "
-        f"check `{AI_DRIVEN_DIR}/{LEDGER_NAME}` for its status. Only `approved` rows are settled, "
-        "and an approved row quotes the person saying so. If what you are about to build on is "
-        "`ai_proposed` or `surfaced`, it is a suggestion they have not agreed to: say so in your "
-        "result and ask, rather than treating it as the brief. Add a row at `ai_proposed` for "
-        "anything you propose that they did not ask for."
+        f"read `{_LEDGER_LOC}` for its status. {RULE_ONLY_APPROVED} If what you are about to build "
+        "on is `ai_proposed` or `surfaced`, it is a suggestion they have not agreed to: say so in "
+        "your result and ask, rather than treating it as the brief. "
+        f"{RULE_ADD_ROW} {RULE_APPROVE_ROW}"
     )
