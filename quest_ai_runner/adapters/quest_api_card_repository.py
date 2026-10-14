@@ -184,10 +184,15 @@ class QuestApiCardRepository:
     degrades gracefully on network failures.
     """
 
-    def __init__(self, base_url: str, api_key: str, user_id: str) -> None:
+    def __init__(self, base_url: str, api_key: str, user_id: str, store_id: str = "") -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.user_id = user_id
+        # This repository's STORE IDENTITY (card identity is ``(store_id, card_id)``), an opaque id the
+        # deployment chooses; "" when it has none. Unlike a filesystem store this one is remote, so
+        # nothing is mounted from it: what it returns is decided SERVER-SIDE from the authenticated
+        # identity (see docs/context-card-stores.md, "What QAR expects from the backend").
+        self.store_id = store_id
         # Bumped on every write/delete by THIS process, so our own change is visible
         # to the context store immediately rather than after the listing TTL.
         self._local_rev = 0

@@ -59,7 +59,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ..core.scope_tags import scope_tags_allow, union_scope_tags
-from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
+from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames, skip_subtrees
 from .card_content_render import (
     MAX_CARD_CONTENT_ITEMS as _MAX_CARD_CONTENT_ITEMS,
     MAX_CARD_REF_CHARS as _MAX_CARD_REF_CHARS,
@@ -77,6 +77,18 @@ from .card_content_render import (
 )
 from .bootstrap_reporter import mark_bootstrap_completed
 from .card_repository import CardRepository, FilesystemCardRepository, card_embed_text
+from .card_store_identity import (
+    SCHEME_QUALIFIED,
+    identity_of,
+    read_meta as read_store_meta,
+)
+from .card_store_mounts import (
+    MODE_MOUNT,
+    Mount,
+    MountedCardRepository,
+    mount_mode_from_env,
+    resolve_mounts,
+)
 from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
 from ..core.file_modes import match_umask
 
@@ -177,8 +189,14 @@ def _write_bootstrap_meta(
     count: int,
     *,
     feature_versions: Optional[Dict[str, int]] = None,
+    root: Optional[str] = None,
 ) -> None:
     """Write ``bootstrap_meta.json`` atomically (temp file + replace). Never raises.
+
+    The store's IDENTITY keys (``store_id``, recorded ``root``, ``access``, ``mounts``, ...) are
+    carried through from the previous file untouched; a store with no id is given one here
+    (``card_store_identity.identity_of``). ``root`` is recorded only when none is recorded yet: a
+    bootstrap never moves a store's root, ``context move-root`` does.
 
     Records the global algorithm ``version``, per-feature versions (``feature_versions`` dict —
     only features fully migrated across ALL cards are included), the ``card_count``, and a UTC
@@ -193,6 +211,7 @@ def _write_bootstrap_meta(
             "card_count": int(count),
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }
+        payload.update(identity_of(_read_bootstrap_meta(cards_dir), root=root))
         tmp_fd, tmp_path = tempfile.mkstemp(dir=str(cards_dir), prefix=".tmp_meta_", suffix=".json")
         match_umask(tmp_fd)  # mkstemp makes 0600; another account sharing the corpus must read it
         try:
@@ -2441,12 +2460,34 @@ class FileContextStore(ContextAssemblerBase):
         recency_boost_max: float = _RECENCY_BOOST_MAX_DEFAULT,
         quest_folder_map: Optional[Dict[str, str]] = None,
         reuse_nested_cards: Optional[bool] = None,
+        mount_mode: Optional[str] = None,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         # Card PERSISTENCE is pluggable behind a CardRepository. Default: per-card JSON files under
         # cards_dir (byte-for-byte the prior behavior). A consumer may inject a database-backed repo.
         self._repo: CardRepository = card_repository or FilesystemCardRepository(cards_dir)
         self._repo_root = Path(repo_root).resolve() if repo_root else None
+        # STORE MOUNTING (see card_store_mounts). In ``mount`` mode a corpus reads the bootstrapped
+        # stores around it IN PLACE and read-only, instead of copying their cards under new ids.
+        # ``copy`` (the default, QAR_CARD_MOUNT) is the legacy copy-import, so a deployment changes
+        # nothing until it opts in. ``_own_repo`` is the only thing this store ever writes to;
+        # ``_repo`` additionally serves the mounted views (and refuses writes addressed to them).
+        self._own_repo: CardRepository = self._repo
+        self._mount_mode = (mount_mode or mount_mode_from_env()).strip().lower()
+        if self._mount_mode == MODE_MOUNT and card_repository is not None:
+            _log.warning("card mounting needs the default filesystem card repository; a custom "
+                         "card_repository was injected, so mounting is OFF for this store")
+            self._mount_mode = "copy"
+        self._mounts: List[Mount] = []
+        self._mounts_stamp: Any = "unset"
+        self._mounted_repo: Optional[MountedCardRepository] = None
+        if self._mount_mode == MODE_MOUNT:
+            self._mounted_repo = MountedCardRepository(
+                self._own_repo, str(self._cards_dir),
+                own_root=self._effective_root,
+                mounts=self.current_mounts,
+            )
+            self._repo = self._mounted_repo
         # Precompute {quest_id: repo-root-relative POSIX prefix} once, so per-assemble() lookup is
         # a plain dict get. A folder outside repo_root can't be matched against card file paths
         # (which are stored relative to repo_root), so such entries are dropped with a warning.
@@ -2537,6 +2578,69 @@ class FileContextStore(ContextAssemblerBase):
         # whatever opaque change-stamp that repo returns. _load_all() reloads when it changes. The
         # initial sentinel never matches a real revision, so the first _load_all() always loads.
         self._cache_dir_stamp: Any = (0.0, 0)
+
+    # ------------------------------------------------------------------
+    # Store identity and mounts (see card_store_identity / card_store_mounts)
+    # ------------------------------------------------------------------
+
+    @property
+    def mounts_enabled(self) -> bool:
+        """True when this store reads allowed neighbouring stores in place instead of copying."""
+        return self._mount_mode == MODE_MOUNT
+
+    def own_store_id(self) -> str:
+        """This store's recorded ``store_id``, or "" when it has none yet (never creates one)."""
+        return str(read_store_meta(str(self._cards_dir)).get("store_id") or "")
+
+    def vector_id_scheme(self) -> str:
+        return str(read_store_meta(str(self._cards_dir)).get("vector_id_scheme") or "")
+
+    def _effective_root(self) -> Optional[str]:
+        """The corpus root the cards' relative paths resolve from: the configured one, else recorded."""
+        if self._repo_root is not None:
+            return str(self._repo_root)
+        recorded = read_store_meta(str(self._cards_dir)).get("root")
+        return str(recorded) if recorded else None
+
+    def current_mounts(self) -> List[Mount]:
+        """The mounts recorded in this store's meta, re-read whenever that file changes (so a
+        ``migrate-imports --apply`` run beside a live lane takes effect without a restart)."""
+        try:
+            stamp = (self._cards_dir / "bootstrap_meta.json").stat().st_mtime_ns
+        except OSError:
+            stamp = None
+        if stamp != self._mounts_stamp:
+            self._mounts = self.recorded_mounts()
+            self._mounts_stamp = stamp
+        return self._mounts
+
+    def recorded_mounts(self) -> List[Mount]:
+        out: List[Mount] = []
+        for rec in read_store_meta(str(self._cards_dir)).get("mounts") or []:
+            if isinstance(rec, dict) and rec.get("store_id") and rec.get("cards_dir"):
+                out.append(Mount(store_id=str(rec["store_id"]), cards_dir=str(rec["cards_dir"]),
+                                 root=str(rec.get("root") or "")))
+        return out
+
+    def live_mounts(self) -> List[Tuple[Mount, Any]]:
+        """``[(mount, rebase)]`` for the mounts that are readable by this process right now."""
+        if self._mounted_repo is None:
+            return []
+        try:
+            return self._mounted_repo.live_mounts()
+        except Exception:  # noqa: BLE001
+            return []
+
+    def is_mounted_card(self, card_id: str) -> bool:
+        """Whether ``card_id`` names a card of a mounted store (read-only here)."""
+        return self._mounted_repo is not None and self._mounted_repo.is_mounted(str(card_id))
+
+    def _own_cards(self) -> Dict[str, Dict[str, Any]]:
+        """The cards THIS store owns: ``_load_all()`` minus any mounted views."""
+        cards = self._load_all()
+        if self._mounted_repo is None:
+            return cards
+        return {cid: c for cid, c in cards.items() if not self._mounted_repo.is_mounted(cid)}
 
     def register_reference_resolver(
         self, ref_type: str, resolver: Any, *, override: bool = False
@@ -2724,6 +2828,9 @@ class FileContextStore(ContextAssemblerBase):
         through ``record``/``update_card`` instead, which merge rather than replace.
         """
         try:
+            if self.is_mounted_card(card_id):
+                _log.warning("write_card refused: %s belongs to a mounted store (read-only)", card_id)
+                return False
             self._write_card_atomic(card_id, card)
             return True
         except Exception:  # noqa: BLE001
@@ -2785,7 +2892,7 @@ class FileContextStore(ContextAssemblerBase):
         """
         try:
             card_ids: Set[str] = set()
-            for card in self._load_all().values():
+            for card in self._own_cards().values():
                 for fe in card.get("files", []):
                     if fe.get("path") == path:
                         cur = self._current_sha(path, fe)
@@ -2851,6 +2958,7 @@ class FileContextStore(ContextAssemblerBase):
                 str(self._cards_dir),
                 self._count_cards_on_disk(),
                 feature_versions=self._completed_feature_versions(),
+                root=str(Path(root).resolve() if root else self._repo_root or ""),
             )
             mark_bootstrap_completed(str(self._cards_dir))
         return n
@@ -2863,7 +2971,7 @@ class FileContextStore(ContextAssemblerBase):
         progress — the feature is omitted so the next startup retries it.  Never raises.
         """
         try:
-            all_cards = self._load_all()
+            all_cards = self._own_cards()
             tfdfidf_done = all(
                 fe.get("tfdfidf_v", 0) >= _TFDFIDF_VERSION
                 for card in all_cards.values()
@@ -2904,7 +3012,7 @@ class FileContextStore(ContextAssemblerBase):
             return
         # Only bootstrap when there are no existing cards. Ask the repository (not the filesystem)
         # so a non-filesystem repo with cards already in it does NOT re-bootstrap.
-        if self._repo.load_all():
+        if self._own_repo.load_all():
             return
         try:
             self._bootstrap_inner(root=str(root))
@@ -2939,7 +3047,7 @@ class FileContextStore(ContextAssemblerBase):
                             walked_files.add((Path(dirpath) / fn).relative_to(walk_root).as_posix())
                         except ValueError:
                             pass
-            for card in list((self._load_all() or {}).values()):
+            for card in list((self._own_cards() or {}).values()):
                 cid = card.get("id")
                 if not cid:
                     continue
@@ -3350,6 +3458,57 @@ class FileContextStore(ContextAssemblerBase):
         max_cards: Optional[int] = None,
         skip_unchanged: bool = False,
     ) -> int:
+        """Index this corpus; in ``mount`` mode, first settle which neighbouring stores it MOUNTS.
+
+        Mounting is decided here, once per pass, and then the indexing walk runs with every mounted
+        store's subtree skipped outright (no walk, no cards, no staleness check, no embedding: its
+        owner's lane keeps it fresh). A store around this corpus that cannot be mounted (not readable
+        by this process, no identity yet) is skipped just the same and logged: the reader has no
+        cards for it and does NOT index those files itself, which would recreate the duplicate. A
+        store ABOVE this corpus that cannot be mounted claims everything under this root, so the pass
+        indexes nothing. ``copy`` mode (the default) is the legacy behaviour, unchanged.
+        """
+        if self._mount_mode != MODE_MOUNT:
+            return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
+                                        max_cards=max_cards, skip_unchanged=skip_unchanged)
+        if self._closed.is_set():
+            return 0
+        walk_root = Path(root).resolve() if root else self._repo_root
+        if walk_root is None or not walk_root.is_dir():
+            return 0
+        outcome = resolve_mounts(str(self._cards_dir), walk_root, effective_skip_dirs(walk_root))
+        if not self._dry_run and outcome.mounts and not read_store_meta(str(self._cards_dir)):
+            # A corpus that mounts stores is itself a store with an identity, even before it has a
+            # card of its own: record it, so its mounts (and its own cards, later) have a home.
+            _write_bootstrap_meta(str(self._cards_dir), 0, root=str(walk_root))
+        if not self._dry_run and read_store_meta(str(self._cards_dir)):
+            from .card_store_identity import update_identity
+            update_identity(str(self._cards_dir),
+                            mounts=[m.as_record() for m in outcome.mounts])
+        self._mounts = list(outcome.mounts)
+        self._mounts_stamp = "unset"
+        if outcome.mounts:
+            _log.info("context index: mounting %d store(s) read-only and in place; their subtrees "
+                      "are not indexed here", len(outcome.mounts))
+        if outcome.ancestor_blocked:
+            _log.error("context index: a store above this corpus root is not readable, so it is not "
+                       "mounted and this corpus indexes NOTHING under it (it would duplicate that "
+                       "store). Fix its permissions or move this corpus.")
+            return 0
+        with skip_subtrees(outcome.claimed_roots):
+            return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
+                                        max_cards=max_cards, skip_unchanged=skip_unchanged)
+
+    def _bootstrap_walk(
+        self,
+        root: Optional[str] = None,
+        *,
+        provider=None,
+        model: Optional[str] = None,
+        max_files: Optional[int] = None,
+        max_cards: Optional[int] = None,
+        skip_unchanged: bool = False,
+    ) -> int:
         """Actual bootstrap logic. May raise; callers wrap in try/except.
 
         Topic cards are semantic: the LLM (``provider``) decides what the topics are and which
@@ -3465,7 +3624,7 @@ class FileContextStore(ContextAssemblerBase):
         if not file_paths or self._closed.is_set():
             return 0
 
-        existing = self._load_all()
+        existing = self._own_cards()
         existing_cards = list(existing.values())
 
         # --- Nested-store reuse: a sub-corpus already bootstrapped by its OWN QAR instance is
@@ -3475,7 +3634,23 @@ class FileContextStore(ContextAssemblerBase):
         # is pruned so imports never drift from their source.
         imported_cards: List[Dict[str, Any]] = []
         imported_covered: Set[str] = set()
-        if self._reuse_nested_cards:
+        if self._mount_mode == MODE_MOUNT:
+            # Mounted stores are read in place: nothing is copied or pruned here. Files a mounted
+            # store already covers (an ancestor's cards over this root) are not this corpus's to card.
+            for mounted_view in self._mounted_repo.load_all().values() if self._mounted_repo else []:
+                if self._mounted_repo and self._mounted_repo.is_mounted(str(mounted_view.get("id", ""))):
+                    imported_covered.update(
+                        (fe.get("path") if isinstance(fe, dict) else fe) or ""
+                        for fe in mounted_view.get("files", []))
+            imported_covered.discard("")
+            stale_copies = [c for c in existing_cards
+                             if self._card_imported_from(c)]
+            if stale_copies:
+                _log.warning(
+                    "context index: %d namespaced copy card(s) from the old copy-import remain in "
+                    "this store alongside the mounts. Run `quest-ai-runner context migrate-imports` "
+                    "to convert them; nothing is deleted automatically.", len(stale_copies))
+        elif self._reuse_nested_cards:
             for nested_root in self._discover_nested_card_dirs(walk_root, skip_dirs):
                 # A store inside a folder the review excluded is not a shortcut, it is the same
                 # dead weight arriving by another door. Backup snapshots are the clearest case:
@@ -4756,6 +4931,8 @@ class FileContextStore(ContextAssemblerBase):
         actually changed. A card whose sources predate the fields simply gains them here: no
         migration pass, no rewrite storm (a card is only ever touched when it is USED).
         """
+        if self.is_mounted_card(card_id):
+            return False  # usage heat on a mounted card would be a write into the owner's store
         loaded = self._repo.read(card_id)
         if not isinstance(loaded, dict):
             return False
@@ -4860,6 +5037,11 @@ class FileContextStore(ContextAssemblerBase):
         ``scope_tags`` -- a pure addition, so it is safe even for a managed card (nothing is ever
         removed): a card touched from a turn scoped to a new quest becomes visible to that quest too.
         """
+        if self.is_mounted_card(card_id):
+            # A mounted store is read-only here: its owner keeps its cards. Never an error for the
+            # caller (the post-deep updater may have been shown a mounted card), just not written.
+            _log.info("card update skipped: %s belongs to a mounted store (read-only)", card_id)
+            return False
         loaded = self._repo.read(card_id)
         card: Dict[str, Any] = loaded if isinstance(loaded, dict) else {}
         card.setdefault("id", card_id)
@@ -5174,7 +5356,7 @@ class FileContextStore(ContextAssemblerBase):
         the right count. Never raises.
         """
         try:
-            return len(self._repo.load_all())
+            return len(self._own_repo.load_all())
         except Exception:  # noqa: BLE001
             return 0
 
@@ -5211,7 +5393,12 @@ class FileContextStore(ContextAssemblerBase):
             # arm of a HybridContextAssembler) before the keyword arm has had a chance
             # to call assemble() and trigger its own auto-bootstrap.
             self._maybe_auto_bootstrap()
-            cards = self._load_all()
+            # OWN cards only. A mounted store's cards are embedded by their owner; a reader that
+            # exported them would embed every card once per corpus that mounts it.
+            cards = self._own_cards()
+            meta = read_store_meta(str(self._cards_dir))
+            store_id = str(meta.get("store_id") or "")
+            qualified = store_id and meta.get("vector_id_scheme") == SCHEME_QUALIFIED
             result: List[Dict[str, Any]] = []
             for card_id, card in cards.items():
                 try:
@@ -5246,6 +5433,11 @@ class FileContextStore(ContextAssemblerBase):
                         "summary": card.get("summary", ""),
                         "kind": "bootstrap",
                     }
+                    if store_id:
+                        # The point is attributed to its store, so readers that mount this store
+                        # can query it by id. Not part of the fingerprint: stamping an existing
+                        # point is a payload write, never a re-embedding.
+                        payload["store_id"] = store_id
 
                     # --- Fingerprint: hash of all stored file sha256 values AND the embedded text.
                     # Including the text means the card re-embeds when EITHER its files change OR its
@@ -5260,7 +5452,7 @@ class FileContextStore(ContextAssemblerBase):
                     fingerprint = _hl.sha256(fp_basis.encode("utf-8")).hexdigest()[:16]
 
                     result.append({
-                        "id": f"card:{card_id}",
+                        "id": f"card:{store_id}:{card_id}" if qualified else f"card:{card_id}",
                         "text": text,
                         "payload": payload,
                         "fingerprint": fingerprint,

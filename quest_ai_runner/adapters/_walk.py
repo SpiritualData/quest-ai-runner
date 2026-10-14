@@ -16,9 +16,11 @@ uncommon as directory-skip hints and are left to the hardcoded baseline.
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import os
 from pathlib import Path
-from typing import Set
+from typing import Iterable, Iterator, Set
 
 
 # Baseline directories that are never source code, regardless of what a
@@ -106,6 +108,27 @@ def effective_skip_dirs(root: Path) -> Set[str]:
     return _BASE_SKIP_DIRS | parse_gitignore_names(root) | extra
 
 
+# Directories (resolved paths) the current walk must not descend into, whatever their name. Set by
+# ``skip_subtrees`` for the duration of one indexing pass. It exists for MOUNTED card stores: a
+# subtree whose own store is read in place is that store's owner's to keep fresh, so the reading
+# corpus's bootstrap/refresh must not walk, card, fingerprint, or embed a single file in it. A
+# ContextVar (not a parameter) because the walks are spread over many helpers that all end in
+# ``prune_dirnames``; this is the one choke point they share.
+_SKIPPED_SUBTREES: "contextvars.ContextVar[frozenset]" = contextvars.ContextVar(
+    "qar_skipped_subtrees", default=frozenset())
+
+
+@contextlib.contextmanager
+def skip_subtrees(paths: Iterable[Path]) -> Iterator[None]:
+    """For the duration of the ``with`` block, every ``prune_dirnames`` walk skips ``paths``."""
+    resolved = frozenset(os.path.realpath(str(p)) for p in paths)
+    token = _SKIPPED_SUBTREES.set(_SKIPPED_SUBTREES.get() | resolved)
+    try:
+        yield
+    finally:
+        _SKIPPED_SUBTREES.reset(token)
+
+
 def prune_dirnames(dirnames: list, *, current: Path, base_skip: Set[str]) -> None:
     """Prune *dirnames* in-place for one ``os.walk`` step.
 
@@ -124,6 +147,10 @@ def prune_dirnames(dirnames: list, *, current: Path, base_skip: Set[str]) -> Non
         and d not in local
         and not d.startswith(".")
     ]
+    skipped = _SKIPPED_SUBTREES.get()
+    if skipped:
+        dirnames[:] = [d for d in dirnames
+                       if os.path.realpath(os.path.join(str(current), d)) not in skipped]
 
 
 def is_claude_state_file(name: str) -> bool:

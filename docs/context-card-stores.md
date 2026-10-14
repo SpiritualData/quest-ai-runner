@@ -1,0 +1,299 @@
+# Context card stores: identity, mounting, moving, access
+
+How one card is stored, found, embedded and read when several corpora (lanes) overlap on disk. This
+page is the design of record for store identity, read-only mounting, `context move-root` and
+`context migrate-imports`, and it records the access model that was found in the code and the one
+that replaced it.
+
+Contents: [Where this came from](#where-this-came-from) · [Phase 1: how access works today](#phase-1-how-card-visibility-and-scoping-work-before-this-change) ·
+[Containment audit](#containment-audit-defects-found-in-the-copy-import-path) · [The model](#the-model) ·
+[Access](#access-what-the-process-can-read) · [Vectors](#vectors) · [Commands](#commands) ·
+[Config keys](#config-keys) · [A person who also belongs to an org](#a-person-who-belongs-to-an-org-and-also-runs-a-personal-lane) ·
+[QuestApiCardRepository](#questapicardrepository-and-the-other-repositories) · [Measured guarantees](#measured-guarantees) ·
+[Migrating a deployment](#migrating-a-deployment)
+
+## Where this came from
+
+A corpus that contained (or sat inside) another bootstrapped store used to COPY that store's cards
+under new namespaced ids (`<prefix>--<card id>`, with an `imported_from` provenance) and rewrite every
+file path relative to the importing root (`FileContextStore._import_nested_cards`,
+`_import_ancestor_cards`). Consequences:
+
+- One card existed once per importing corpus and was fingerprinted, embedded and kept fresh by every
+  one of them. The vector point id is `hash(scope digest | item id)` (`qdrant_vector_store._point_id`),
+  so each re-namespaced copy was a NEW point, embedded again, and the old points were orphaned.
+- Chained imports produced ids such as `<root>--<mid>--<name>` that grew a prefix per hop.
+- A store's corpus root could not move: moving it meant new ids and new embeddings. There was no move
+  operation.
+
+## Phase 1: how card visibility and scoping work (before this change)
+
+References are to the code as it stood before this change.
+
+**The quest fence.** `executor.task_scope_tags` (`runner/executor.py:427`) tags every run with
+`quest:<id>` for its `goal_id` and `quest_id`, and `executor.py:914` puts the tags into the run's
+context meta. `scope_tags_allow` (`core/scope_tags.py:57`) is the one predicate: an item with no tags
+is visible everywhere, a turn with no tags sees everything, otherwise the tag sets must intersect. It
+is a post-filter applied by each arm: the keyword arm to its candidate pool
+(`file_context_store.py`, "Cross-quest fence", `turn_scope_tags`), the vector arm to hits
+(`vector_context_assembler.py:872`), past turns (`turn_context_store.py:131`), recent context
+(`recent_context.py`), recipes and anticipation. Cards gain tags by UNION when a run touches them
+(`update_card(scope_tags=...)`, `record()`), never by overwrite.
+
+**The vector scope.** One collection per vector size; scope is a payload filter, not a collection
+(`qdrant_vector_store._scope_hash` `:270`, `_visibility_filter` `:530`, `_exact_scope_filter` `:562`).
+Visibility is "this scope OR unscoped OR the seeded-card partition". `CARD_SEED_SCOPE`
+(`core/vector_scopes.py`) puts embedded cards in a partition that is visible under every scope. Two
+findings here:
+
+1. `VectorContextAssembler._assemble_inner` passes the WHOLE context meta as the scope
+   (`vector_context_assembler.py:858`, `scope = meta or None`), whose digest matches nothing a writer
+   stored, so in practice the arm sees only unscoped and seeded points.
+2. `record()` writes task associations with `scope = outcome.get("scope")` (`:464`); no caller in this
+   repository sets it, so associations are written UNSCOPED, i.e. visible to every search on that
+   collection, and the association payload carries no `scope_tags` (`:520-527`), so the quest fence
+   in step 1 above never applies to them.
+
+**Writer / owner fields and the vector floor.** A card's `provenance` records who wrote it
+(`created_by_task`, `task_id`); the keyword arm drops a card recorded from the run's own thread
+(`own_task`). Cards a consumer manages declare `managed_fields` / `managed_items`. The vector arm has
+a per-hit confidence floor (`_hit_min_score`).
+
+**Per-rep context.** `Poller._rep_context_dirs` (`runner/poller.py:953`) puts a rep's notes and turns
+under `<cards_dir>/reps/<user id>/`; the rep's learned `context_prefs` live on the rep's Quest
+profile (`adapters/rep_context_assembler.py`, keyed by `personas.current_rep`). These are per rep.
+The cards themselves are not.
+
+**Repositories.**
+- `FilesystemCardRepository` (`card_repository.py`): one directory, no notion of user or team. Whoever
+  can read the directory reads every card.
+- `QdrantCardRepository` (`qdrant_card_repository.py`): hard-scoped by a consumer-chosen payload dict
+  (`_scope_filter` `:230`, `_in_scope` `:252`). Scope by user and members are isolated; scope by team
+  and they share.
+- `QuestApiCardRepository` (`quest_api_card_repository.py`): `X-User-Id` header (`:205`) and the
+  listing `/api/cards` (`load_all` `:292`); writes are enriched with `team_id` and `runner_env_id`
+  (`_enrich_card`). What a user sees is decided by quest-backend, not here.
+
+**Concrete answers.**
+
+- *Can context for team member B use cards created during member A's run on the same team?* Yes when
+  both run in the same lane with a filesystem or team-scoped Qdrant store: cards are written to the
+  lane's one store (`record()`, the post-deep updater) with the run's quest tags, and any later run
+  whose tags intersect (or that has none) can select them. There is no per-member partition of cards;
+  only the per-rep notes, turns and prefs above are per member. With `QuestApiCardRepository` it
+  depends on quest-backend (the listing is per `X-User-Id`). With a user-scoped `QdrantCardRepository`
+  B does not see A's cards.
+- *Within one org, across teams?* The same store is shared by every run in a lane; the boundary
+  between teams is the lane (its `cards_dir`, and `claim_teams` limiting which tasks it runs), not
+  anything in the store. Inside a lane the only fence is the quest tag.
+- *What stops a run for one quest seeing another quest's cards?* Only `scope_tags`, applied as a
+  post-filter, and only where the item carries tags. Untagged cards and task associations pass.
+- *How does a lane of a different org or team (a personal lane whose corpus root contains an org's
+  folder) get that org's cards today?* By COPY: `_discover_nested_card_dirs` finds the org's
+  `.quest-context` under the root and `_import_nested_cards` reads its JSON files directly. The only
+  enforcement is the operating system's: if the lane's user can read the directory, it gets the cards.
+  The store's contents are then re-owned by the importer (its own cards, its own embeddings), so the
+  org can neither see nor revoke them. Nothing in the library checks who the importer is.
+- *Over a shared Qdrant server?* Seeded cards are visible under every scope and associations are
+  unscoped, so any lane that can reach the same server and collection can retrieve every other lane's
+  card embeddings and task memory. The filesystem enforces nothing there, and neither did the store.
+
+## Containment audit: defects found in the copy-import path
+
+`file_context_store.py` unless noted. Lines are as of this change.
+
+| # | Defect | Where | Status |
+|---|---|---|---|
+| 1 | Imported ids are `<prefix>--<card id>` truncated to 200 characters; in a chain the prefixes stack and a truncation can make two different cards collide | `:3333`, `:3439` | Replaced by mounts (identity is `(store_id, card_id)`, ids are never rewritten). Remains in `copy` mode |
+| 2 | Same-direction chains are deliberately kept, so a copy of a copy is re-imported under another prefix, re-fingerprinted and re-embedded | `:3325`, `:3431` | Replaced by flat mounting: every store around the corpus is mounted directly, copies are skipped (`view_card`) |
+| 3 | Discovery stops at the first nested store (`dirnames[:] = []`), so a store beneath it is reachable only through the nested store's own copies, which may be stale | `:3230` | Replaced: mount discovery is flat (`discover_nested_stores`) |
+| 4 | **Permission errors are swallowed.** `(dir / ".quest-context" / bootstrap_meta.json).is_file()` is False when the directory is unreadable, so an unreadable store is not recognised as a store at all and its files are walked and re-carded by the importer; `except Exception: pass` hides the rest | `:3228`, `:3233`, `:3364`, `:3370` | Fixed for mounting: `claims_subtree` counts an unreadable card directory as a store, `check_readable` returns the reason, and the mount layer logs it. Remains in `copy` mode |
+| 5 | **A transient read failure deletes the imported cards.** `FilesystemCardRepository.load_all` returns `{}` on error and skips unreadable files (`card_repository.py:230`); `_import_*` then yields nothing and the prune loop deletes every previous copy whose id is not in the new set, so a permission flip or torn read wipes a lane's context, and the next good read re-imports and re-embeds all of it | `:3679-3700` | Replaced: a mount holds no copy to wipe. Remains in `copy` mode |
+| 6 | Stale imports are only pruned when a bootstrap pass runs; between passes a copy outlives the card it was copied from. `_imported_card_unchanged` only avoids rewrites, it does not detect a source change until the next pass | `:3237`, `:3679` | Replaced: a mount reads the owner's current cards (`MountedCardRepository.revision`) |
+| 7 | Excluded folders are honoured for a NESTED store (`:3663`) but not for an ANCESTOR import, whose files are only filtered to lie under the root. Files in excluded or skipped folders re-enter through the ancestor and undo the prune | `_import_ancestor_cards` `:3374-3440` | Replaced for mounts (the mounted view is read, not merged into this corpus's coverage). Remains in `copy` mode |
+| 8 | An imported card carries paths but not fingerprints, so every importing corpus re-hashes (`git hash-object`) every file of every imported card | `:3891` onward | Replaced: the owner's cards are read as they are |
+| 9 | `_folder_review` decides "this nested repository has its own store" with `.exists()` on a path inside the store, which is False for an unreadable store, so it logs "bootstrap them separately" for a store that exists | `:762` | Remains in `copy` mode (in `mount` mode the walk is skipped by `skip_subtrees` before the review runs) |
+| 10 | `bootstrap_report_state.json` was enumerated as a card (it was missing from the sidecar list), counted in `card_count` and scored for keyword matches | `card_repository.py:47` | **Fixed** |
+| 11 | Task associations carry no `scope_tags` and are written unscoped, so the quest fence never applies to them and they are served to every search on the collection | `vector_context_assembler.py:464`, `:520` | Fenced by store in `mount` mode (they are attributed to the writing lane's store and visible to nobody else). The quest fence gap itself remains: a follow-up should stamp `scope_tags` on the association payload |
+| 12 | The vector arm's `scope` argument is the whole context meta, which matches no stored digest | `vector_context_assembler.py:858` | Not changed; the store fence does not depend on it. Worth a follow-up |
+| 13 | A vector point is keyed by item id alone within a scope, so two stores that share a collection and share a card id overwrite each other's point | `qdrant_vector_store._point_id` `:283` | Fixed for new stores (`vector_id_scheme: qualified` keys points `card:<store_id>:<card_id>`); stores that already have points keep their ids (`legacy`) so nothing is re-embedded |
+| 14 | Locks, refresh stamps, reps, turns, recent, predictions and the embedded Qdrant all live under the lane's own `cards_dir` (`config.py:1677` `index-state/last_refresh`, the `.bootstrap.lock` beside it), so a lane writes into another store only when two lanes are configured with the SAME `cards_dir`. None of the import paths write into the source store | `config.py:1677-1760` | Verified; no defect in the import paths. Two lanes sharing a `cards_dir` share all of it, which the mount model makes unnecessary |
+
+## The model
+
+**Store identity.** Every store has a `store_id` recorded once in its `bootstrap_meta.json`
+(`card_store_identity.py`), generated randomly and never derived from a path. Card identity is
+`(store_id, card_id)`. A card's file paths are relative to ITS store's root and are never rewritten.
+The meta also records the store's `root` (where those paths resolve from), a `root_history`,
+the `mounts` it reads, a `vector_id_scheme` and an optional `vector_space`. A bootstrap pass rewrites
+only the bootstrap keys and carries these through; it never moves a recorded root.
+
+**Mount instead of copy.** With `QAR_CARD_MOUNT=mount` a corpus that contains (or sits inside) other
+stores reads them in place and read-only (`card_store_mounts.py`):
+
+- A mounted card appears as `"<store_id>:<card_id>"`. Its paths are resolved against the two real
+  roots at read time (`rebase_path`), so an ancestor's `lane/a.py` is the reader's `a.py`, and a path
+  outside the reader's root is dropped. Nothing is written.
+- The reader's bootstrap/refresh skips the mounted subtree entirely: `skip_subtrees` makes every
+  directory walk in the pass (folder review, nested-repo detection, the file walk) stop at it. No file
+  walked, no card made, no staleness check, no fingerprint, no embedding.
+- The reader never keeps a snapshot. `MountedCardRepository.revision()` includes the owner's own
+  change marker (its directory stamp and its meta file), so the owner's next write is the reader's
+  next read. Freshness of a mounted store is solely its owner's job. (The marker is a directory
+  timestamp, with the repository's existing 30 second full re-scan as a backstop for two writes inside
+  one timestamp tick.)
+- If a mount is not readable or has no identity yet, the reader logs it and simply has no cards for
+  that subtree. It does NOT index those files itself (that would recreate the duplicate). A store
+  ABOVE the reader that cannot be mounted claims everything under the reader's root, so the pass
+  indexes nothing and logs an error.
+- Copies left by the old behaviour stay until `context migrate-imports` converts them; a mount-mode
+  pass never deletes or silently skips them, it logs how many remain. Copy-import is opt-in only
+  (`QAR_CARD_MOUNT=copy`, the default until a deployment migrates), and is never used as a fallback for
+  a mount that is allowed.
+
+**Write isolation.** The store only ever writes to its own directory. A write, delete, usage stamp or
+card update addressed to a mounted card is refused (`MountedCardRepository.write/delete`,
+`FileContextStore.write_card`, `_update_card_inner`, `_mark_sources_used_inner`). Everything a reading
+lane produces (cards, turns, rep notes and prefs, locks, stamps, embeddings, task associations) goes
+under its own `cards_dir` or its own `store_id`.
+
+**move-root.** The recorded `root` is the only thing that changes. See [Commands](#commands).
+
+## Access: what the process can read
+
+There is no access list and no policy field. What a lane may mount is what its OS user can read: the
+store must be within the corpus (nested) or an ancestor of the corpus root, AND `check_readable`
+must succeed. It is a real read (list the directory, open and parse `bootstrap_meta.json`), so
+permissions, ACLs and a mount that went away are what they are, and the failure is named in the log
+and in `context store-info`. A policy in a file the reader can open would only pretend to restrict
+what the disk allows. Reads from a mount are still subject to the usual quest fences (`scope_tags`).
+
+The vector server is the exception: it answers anyone who can reach it. Mount mode therefore fences
+the vector arm (below).
+
+## Vectors
+
+In mount mode `StoreFencedVectorStore` wraps the lane's vector store:
+
+- Card points are returned only for the reader's own `store_id` plus the stores it has actually
+  mounted; a card point with no `store_id` is not served; the task associations a lane records are
+  attributed to its own store and served to nobody else. Unattributed non-card points (associations
+  from before the fence) are served only if `QAR_VECTOR_UNATTRIBUTED=1`, for a single-tenant store.
+- The reader embeds nothing for a mounted store (`export_for_embedding` exports own cards only), so a
+  card has one point however many corpora mount it. The owner's seed pass stamps `store_id` onto
+  points embedded before the store had an identity with a payload write, never a re-embedding.
+- `sync`/`upsert` drop any item attributed to another store, so a reader cannot write into a mounted
+  store's points.
+- `QAR_VECTOR_SPACE` / `context store-info --vector-space` declare which server/collection holds a
+  store's points; the vector arm skips a mount only when both sides declare a space and they differ.
+  Such a mount is served by the keyword arm alone. A reader whose stores live on a different Qdrant
+  server should stay on `QAR_CARD_MOUNT=copy`.
+
+## Commands
+
+Every command is a dry run unless `--apply` is given, prints what it would change, and embeds nothing.
+
+```
+quest-ai-runner context store-info --cards-dir DIR [--init] [--vector-space NAME] [--apply] [--json]
+quest-ai-runner context move-root --cards-dir DIR --new-root PATH [--apply] [--force]
+quest-ai-runner context migrate-imports --cards-dir DIR [--root PATH] [--apply]
+        [--prune-points] [--qdrant-url URL | --qdrant-path PATH] [--collection-prefix PREFIX]
+```
+
+- `store-info` shows the id, root, mounts and whether each is readable by this user; `--init` gives a
+  store without an id one (it needs an existing `bootstrap_meta.json`; it never invents one).
+- `move-root` records a new root. Ids, vectors and relative paths are unchanged, so re-embeds are 0.
+  The plan reports how many file references exist under the new root and refuses a missing target
+  unless `--force`. The previous root is kept in `root_history`. Readers follow the move on their next
+  read, because they derive the mount prefix from the owner's recorded root.
+- `migrate-imports` finds the namespaced copies in a store, mounts the stores they came from (and every
+  other readable store around it), records the mounts in `bootstrap_meta.json` FIRST, then deletes the
+  converted copies, so a failure leaves a duplicate and never a gap. A copy whose source store is not
+  mountable is kept and reported. With `--qdrant-url`/`--qdrant-path` it lists the orphan points the
+  copies left, and with `--apply --prune-points` deletes them.
+
+## Config keys
+
+All environment variables (in a lane's `qar.toml` `[env]` table or its unit environment):
+
+| Key | Meaning | Default |
+|---|---|---|
+| `QAR_CARD_MOUNT` | `mount` reads readable neighbouring stores in place; `copy` is the legacy copy-import | `copy` |
+| `QAR_VECTOR_SPACE` | name of the vector server/collection this lane uses (must match the owners' `vector_space` to query their points) | unset |
+| `QAR_VECTOR_UNATTRIBUTED` | `1` serves pre-fence task associations that carry no `store_id` | off |
+| `QAR_REUSE_NESTED_CARDS` | `0` turns off copy-import in `copy` mode (unchanged) | on |
+
+## A person who belongs to an org and also runs a personal lane
+
+The personal lane's corpus root sits above the org's folder, so the org's store is nested inside it.
+
+- If the personal lane's OS user can read the org store's directory, the personal lane mounts it
+  read-only. It indexes nothing under that folder and holds no copy; when the org's lanes update their
+  cards the personal lane reads the update.
+- Nothing the personal lane produces is written to the org store or to a space the org can read. Its
+  cards, turns, rep prefs, locks and stamps are under its own `cards_dir`. Its embeddings and task
+  associations carry the personal store's `store_id`, and the org's lanes only ever query their own
+  store and the stores they mount, so they cannot retrieve them even on a shared Qdrant server.
+- The org's lanes never mount the personal store unless it sits within their corpus and their OS user
+  can read it. A personal store outside the org's tree is not discovered at all; one inside it that
+  the org's user cannot read is skipped and logged.
+
+## QuestApiCardRepository and the other repositories
+
+`QuestApiCardRepository` has an optional `store_id` (its identity; a remote repository is not mounted).
+What a given identity may read there is enforced SERVER-SIDE by quest-backend. QAR expects from the
+backend:
+
+1. `GET /api/cards`, `/api/cards/search` and `/api/cards/{id}` return only cards the authenticated
+   `X-User-Id` may read (their own, plus anything their team or org shares by the backend's own rules),
+   never another org's.
+2. `PUT`/`DELETE /api/cards/{id}` succeed only for cards the caller may write.
+3. Card ids are unique within the store the backend presents to that identity; if the backend merges
+   several owners' cards into one listing it should namespace them itself rather than rely on QAR.
+4. `team_id` and `runner_env_id` on write are advisory provenance, not an access grant.
+
+`QdrantCardRepository` keeps its consumer-chosen payload `scope` as the isolation boundary (scope by
+user for private cards, by team for shared ones). Mounting applies to the filesystem repository; a
+custom `card_repository` turns mounting off for that store with a warning.
+
+## Measured guarantees
+
+Asserted in `tests/test_card_store_mounts.py`:
+
+| Guarantee | Test |
+|---|---|
+| Re-embeds on a root move = 0 | `TestVectorMounting::test_move_root_re_embeds_nothing` |
+| Points per distinct card across all mounting corpora = 1 | `test_a_card_is_embedded_once_however_many_corpora_mount_it` |
+| Cards copied between stores in mount mode = 0 | `TestMountRead::test_nested_store_is_read_in_place_with_prefix_and_zero_copies` |
+| An unreadable or uninitialised store is not mounted and not indexed by the reader | `TestReaderDoesNotIndexMountedSubtree` |
+| A reading lane never writes into a mounted store (cards, usage stamps, vectors) | `TestWriteIsolation`, `test_a_reader_cannot_write_vector_items_for_a_mounted_store` |
+| An owner change is visible to the reader with zero reader writes | `TestFreshness` |
+| The vector arm returns only points of the stores actually mounted | `test_reader_cannot_get_points_of_a_store_it_did_not_mount`, `test_task_associations_are_attributed_to_their_lane_and_not_served_to_others` |
+
+## Migrating a deployment
+
+Nothing changes until a lane sets `QAR_CARD_MOUNT=mount`. To migrate, owners first, readers after, one
+lane at a time:
+
+1. **Give every owner store an identity.** For each `.quest-context` that other corpora might mount
+   (and for each reading lane's own store): `context store-info --cards-dir DIR --init` (dry run),
+   then with `--apply`. A store that completes a bootstrap with this version also gets one.
+   Stores that already hold embedded points are marked `legacy`, so their point ids do not change.
+2. **Stamp the owners' existing vector points with their store id.** Restart the owner lanes (or let
+   their next seed pass run): `sync` writes `store_id` onto existing points without re-embedding. Do
+   this before step 4, because a fenced reader does not serve unattributed card points.
+3. **Optional:** declare the vector space on owners and readers that share a server:
+   `context store-info --cards-dir DIR --vector-space NAME --apply` and `QAR_VECTOR_SPACE=NAME`.
+4. **Convert each reading lane.** For a lane whose store holds copies:
+   `context migrate-imports --cards-dir DIR` (review), then `--apply`, adding
+   `--qdrant-url`/`--qdrant-path` and `--prune-points` to delete the orphan points. Then set
+   `QAR_CARD_MOUNT=mount` in that lane's config and restart it.
+5. **Order across lanes:** owners (steps 1-2) before any reader; within the readers, the narrowest
+   corpora first (their mounts are leaves), then wider ones. A reader whose nested store has no
+   identity yet mounts nothing from it and indexes nothing under it, so do not skip step 1.
+6. **To move a store's root:** `context move-root --cards-dir DIR --new-root PATH` (review the missing
+   file count), then `--apply`, then point the lane's corpus root at the new path. Readers follow
+   without any change of their own.
+
+To roll back a lane, set `QAR_CARD_MOUNT=copy` and run a bootstrap; the copy-import resumes. Mount
+records in `bootstrap_meta.json` are ignored in `copy` mode.

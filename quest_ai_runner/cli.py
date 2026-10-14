@@ -231,6 +231,15 @@ Env it reads:
                                                    an error when it is unavailable (still
                                                    degrades to keyword-only). Never overrides
                                                    an explicitly configured vector store.
+  QAR_CARD_MOUNT (optional)                      — "mount" reads the readable card stores nested in
+                                                   or above the corpus IN PLACE and read-only (no copy,
+                                                   no re-embedding, the reader indexes nothing under
+                                                   them); "copy" (default) is the legacy copy-import.
+                                                   See docs/context-card-stores.md.
+  QAR_VECTOR_SPACE (optional)                    — names the vector server/collection this lane uses,
+                                                   to match the owners' declared space (mount mode).
+  QAR_VECTOR_UNATTRIBUTED (optional)             — "1" also serves pre-fence task associations that
+                                                   carry no store id (single-tenant stores only).
   QAR_EMBEDDER_BACKEND (optional)                — embedding backend for the auto-built context
                                                    vector store: "voyage" (Voyage AI, needs voyageai
                                                    package + VOYAGE_API_KEY / VOYAGE_MODEL),
@@ -1240,6 +1249,13 @@ def _run_quest_command(args) -> int:
 
 
 def main(argv=None) -> int:
+    # `context move-root|migrate-imports|store-info` maintain card stores; `context <quest_id>` (below)
+    # reads a quest. They share the word "context", so the store commands are routed first.
+    from .store_cli import is_store_command, run as run_store_command
+    import sys as sys_module
+    raw_argv = list(sys_module.argv[1:] if argv is None else argv)
+    if is_store_command(raw_argv):
+        return run_store_command(raw_argv)
     parser = argparse.ArgumentParser(prog="quest-ai-runner",
                                      description="Poll Quest for due AI tasks and execute them.")
     parser.add_argument("-v", "--verbose", action="count", default=0,
@@ -1388,7 +1404,9 @@ def main(argv=None) -> int:
     # --- context subcommand: what is the context for this quest right now --------
     ctx_p = sub.add_parser(
         "context",
-        help="show a quest's current context updates (a read: safe, repeatable, no side effects)")
+        help="show a quest's current context updates (a read: safe, repeatable, no side effects). "
+             "Card-store maintenance lives under the same word: `context move-root`, "
+             "`context migrate-imports`, `context store-info` (each a dry run unless --apply).")
     ctx_p.add_argument("quest_id", help="the quest to read (e.g. quest_1625d9f47a06)")
     ctx_p.add_argument("--days", type=float, default=None, metavar="N",
                        help="look back N days instead of from the stored 'last looked' stamp")

@@ -57,6 +57,9 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Deployment](deployment.md)** — run the poller under cron or systemd.
 - **[Corpus playbooks](corpus-playbooks.md)** — distill a corpus's history into playbook files the
   shallow loop (context cards) and Claude Code deep runs both pick up automatically.
+- **[Context card stores](context-card-stores.md)**: store identity, read-only mounting instead of
+  copy-import, `context move-root` / `migrate-imports` / `store-info`, the access model (what the
+  process can read, plus the vector fence), the containment audit and the migration order.
 - **[Guidance cards](guidance-cards.md)** — standing rules that are retrieved per message instead
   of pasted into one always-on prompt: the card format and tag vocabulary, how selection scores and
   scopes them (rep, team, org, global), serving one rules base to many machines from a host

@@ -99,7 +99,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from ..core.adapters import VectorHit, VectorStoreBase
 from ..core.vector_scopes import CARD_SEED_SCOPE
@@ -217,6 +217,12 @@ def make_openai_embedder(
 # points.  Matches the underscore-prefixed reserved-field style of ``_text`` /
 # ``_fingerprint`` below.
 _SCOPE_KEY = "_scope"
+
+# Payload field naming the card store a point was embedded for (see card_store_identity). Card
+# points carry it so a reader can query a mounted store's EXISTING points by id instead of
+# embedding its own copy. Points without it (task associations, points not yet tagged) are
+# store-agnostic and stay visible to every search.
+_STORE_KEY = "store_id"
 
 
 # How many texts may be in the embedder at once. This is a MEMORY bound, not a throughput one.
@@ -496,6 +502,50 @@ class QdrantVectorStore(VectorStoreBase):
                 )
             except Exception:  # noqa: BLE001
                 logger.debug("QdrantVectorStore: payload index creation skipped", exc_info=True)
+            try:
+                self._client.create_payload_index(
+                    collection_name=name,
+                    field_name=_STORE_KEY,
+                    field_schema="keyword",
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug("QdrantVectorStore: store index creation skipped", exc_info=True)
+
+    def _store_filter(self, store_ids: Sequence[str], own_store_id: Optional[str],
+                      include_unattributed: bool) -> Any:
+        """The store fence: which attributed points a mount-aware reader may see.
+
+        * CARD points (the seeded-card partition) are admitted for exactly ``store_ids``: the
+          reader's own store plus the stores it mounts.
+        * Everything else (task associations the reader's own runs recorded) is admitted for the
+          reader's OWN store only. A mounted store's associations are its owner's task memory and
+          are not part of what a mount shares.
+        * A point with no ``store_id`` is attributed to nobody and is NOT served, unless the caller
+          opts in with ``include_unattributed`` for NON-card points (a single-tenant store whose
+          pre-fence associations are all the reader's own). Cards are never served unattributed.
+
+        This filter is the only fence the vector arm has: the server answers anyone who can reach it.
+        """
+        from qdrant_client.models import (
+            FieldCondition,
+            Filter,
+            IsEmptyCondition,
+            MatchAny,
+            MatchValue,
+            PayloadField,
+        )
+
+        seed_in = FieldCondition(key=_SCOPE_KEY, match=MatchValue(value=_scope_hash(CARD_SEED_SCOPE)))
+        branches: List[Any] = [
+            Filter(must=[seed_in,
+                         FieldCondition(key=_STORE_KEY, match=MatchAny(any=[str(i) for i in store_ids]))]),
+            Filter(must=[FieldCondition(key=_STORE_KEY, match=MatchValue(value=str(own_store_id or "")))],
+                   must_not=[seed_in]),
+        ]
+        if include_unattributed:
+            branches.append(Filter(must=[IsEmptyCondition(is_empty=PayloadField(key=_STORE_KEY))],
+                                   must_not=[seed_in]))
+        return Filter(should=branches)
 
     def _visibility_filter(self, scope: Optional[Dict[str, Any]]) -> Any:
         """Filter for SEARCH visibility under ``scope``.
@@ -575,8 +625,16 @@ class QdrantVectorStore(VectorStoreBase):
         *,
         scope: Optional[Dict[str, Any]] = None,
         top_k: int = 8,
+        store_ids: Optional[Sequence[str]] = None,
+        own_store_id: Optional[str] = None,
+        include_unattributed: bool = False,
     ) -> List[VectorHit]:
         """Embed ``query`` and return the top-``top_k`` nearest hits.  Never raises.
+
+        ``store_ids`` (optional) switches on the STORE FENCE (see ``_store_filter``): card points
+        are admitted only for the named stores (the reader's own plus any it mounts) and other
+        points only for ``own_store_id``. ``None`` is the unfiltered behaviour every existing
+        caller has.
 
         Never creates a collection: when nothing has been written yet the
         search simply returns ``[]``.
@@ -587,11 +645,16 @@ class QdrantVectorStore(VectorStoreBase):
                 return []
             self._adopt_embedding_dim(len(vecs[0]))
             coll = self._collection_name()
+            from qdrant_client.models import Filter as _Filter
+            visible = self._visibility_filter(scope)
+            if store_ids:
+                visible = _Filter(must=[visible, self._store_filter(
+                    store_ids, own_store_id, include_unattributed)])
             # Use query_points (the current Qdrant API; the old .search() was removed).
             response = self._client.query_points(
                 collection_name=coll,
                 query=vecs[0],
-                query_filter=self._visibility_filter(scope),
+                query_filter=visible,
                 limit=top_k,
                 with_payload=True,
             )
@@ -717,18 +780,34 @@ class QdrantVectorStore(VectorStoreBase):
 
             # Map numeric_id -> stored fingerprint.
             stored_fps: Dict[int, Any] = {}
+            stored_stores: Dict[int, Any] = {}
             for sp in stored_points:
                 fp_val = (sp.payload or {}).get("_fingerprint")
                 stored_fps[sp.id] = fp_val
+                stored_stores[sp.id] = (sp.payload or {}).get(_STORE_KEY)
 
             # Determine which items need re-embedding.
             to_upsert: List[Dict[str, Any]] = []
+            retag: Dict[str, List[int]] = {}
             for item in items:
                 nid = _point_id(item["id"], digest)
                 new_fp = item.get("fingerprint")
                 old_fp = stored_fps.get(nid)
                 if nid not in stored_fps or new_fp != old_fp:
                     to_upsert.append(item)
+                else:
+                    # Same content, so NO re-embedding. But a point embedded before its store had
+                    # an identity carries no store id; stamp it (a payload write, not an embedding)
+                    # so mounting readers can find it by store.
+                    want = (item.get("payload") or {}).get(_STORE_KEY)
+                    if want and stored_stores.get(nid) != want:
+                        retag.setdefault(str(want), []).append(nid)
+            for store_value, point_ids in retag.items():
+                try:
+                    self._client.set_payload(collection_name=coll, payload={_STORE_KEY: store_value},
+                                             points=point_ids)
+                except Exception:  # noqa: BLE001
+                    logger.debug("QdrantVectorStore: store tagging failed", exc_info=True)
 
             if not to_upsert:
                 return 0
@@ -737,6 +816,38 @@ class QdrantVectorStore(VectorStoreBase):
             return len(to_upsert)
         except Exception:
             logger.debug("QdrantVectorStore.sync failed", exc_info=True)
+            return 0
+
+    def existing_item_ids(self, item_ids: Sequence[str], *,
+                          scope: Optional[Dict[str, Any]] = None) -> List[str]:
+        """Which of ``item_ids`` currently have a point in ``scope``. Reads only; never creates."""
+        try:
+            digest = _scope_hash(scope)
+            by_point = {_point_id(i, digest): str(i) for i in item_ids}
+            if not by_point:
+                return []
+            found = self._client.retrieve(collection_name=self._collection_name(),
+                                          ids=list(by_point), with_payload=False)
+            return [by_point[p.id] for p in found if p.id in by_point]
+        except Exception:
+            logger.debug("QdrantVectorStore.existing_item_ids failed", exc_info=True)
+            return []
+
+    def delete_items(self, item_ids: Sequence[str], *,
+                     scope: Optional[Dict[str, Any]] = None) -> int:
+        """Delete the points for ``item_ids`` in ``scope``; returns how many existed. Never raises."""
+        try:
+            present = self.existing_item_ids(item_ids, scope=scope)
+            if not present:
+                return 0
+            from qdrant_client.models import PointIdsList
+            digest = _scope_hash(scope)
+            self._client.delete(collection_name=self._collection_name(),
+                                points_selector=PointIdsList(points=[_point_id(i, digest)
+                                                                     for i in present]))
+            return len(present)
+        except Exception:
+            logger.debug("QdrantVectorStore.delete_items failed", exc_info=True)
             return 0
 
     def count(self, *, scope: Optional[Dict[str, Any]] = None) -> int:

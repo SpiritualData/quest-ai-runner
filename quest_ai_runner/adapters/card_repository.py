@@ -44,6 +44,7 @@ _SIDECAR_FILES = frozenset({
     _BOOTSTRAP_META_FILE,
     "folder_review.json",
     "discovered_files.json",
+    "bootstrap_report_state.json",
 })
 
 # Where the maintenance tool (``scripts/quarantine_cards.py``) MOVES cards it takes out of the
