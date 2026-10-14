@@ -1,0 +1,297 @@
+[
+ {
+  "id": "CLS-001",
+  "area": "goal",
+  "message": "Add a goal for this week: finish three 5K training runs.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_goal"
+  ]
+ },
+ {
+  "id": "CLS-002",
+  "area": "goal",
+  "message": "Create a monthly goal to hit 40 km total in October.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_goal"
+  ]
+ },
+ {
+  "id": "CLS-003",
+  "area": "field",
+  "message": "Update my current state: I can run 10K in 58 minutes and train three times a week.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "update_quest_current_state"
+  ]
+ },
+ {
+  "id": "CLS-004",
+  "area": "outcome",
+  "message": "Add a measurable outcome: 10K time under 55 minutes.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "add_quest_measurable_outcome"
+  ]
+ },
+ {
+  "id": "CLS-005",
+  "area": "habit",
+  "message": "Add a daily habit: stretch for ten minutes before bed.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_habit"
+  ]
+ },
+ {
+  "id": "CLS-006",
+  "area": "experiment",
+  "message": "Start an experiment on this quest: does stretching before bed improve my sleep?",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_experiment"
+  ]
+ },
+ {
+  "id": "CLS-007",
+  "area": "experiment",
+  "message": "Conclude my sleep experiment: yes, it helped.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "update_quest_experiment",
+   "find_quest_experiments"
+  ]
+ },
+ {
+  "id": "CLS-008",
+  "area": "experiment",
+  "message": "Which experiments am I running on this quest?",
+  "expect": [
+   "tool",
+   "answer"
+  ],
+  "tools": [
+   "find_quest_experiments"
+  ]
+ },
+ {
+  "id": "CLS-009",
+  "area": "experiment",
+  "message": "Find the experiment about sleep.",
+  "expect": [
+   "tool",
+   "answer"
+  ],
+  "tools": [
+   "find_quest_experiments"
+  ]
+ },
+ {
+  "id": "CLS-010",
+  "area": "experiment",
+  "message": "Rename my caffeine experiment to 'Does cutting caffeine after noon help me sleep?'",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "update_quest_experiment",
+   "find_quest_experiments"
+  ]
+ },
+ {
+  "id": "CLS-011",
+  "area": "answer",
+  "message": "What is a measurable outcome in Quest?",
+  "expect": [
+   "answer"
+  ]
+ },
+ {
+  "id": "CLS-012",
+  "area": "answer",
+  "message": "Thanks, that helps.",
+  "expect": [
+   "answer"
+  ]
+ },
+ {
+  "id": "CLS-013",
+  "area": "answer",
+  "message": "How should I think about pacing for a 10K?",
+  "expect": [
+   "answer"
+  ]
+ },
+ {
+  "id": "CLS-014",
+  "area": "answer",
+  "message": "What is my current outcome on this quest?",
+  "expect": [
+   "answer"
+  ]
+ },
+ {
+  "id": "CLS-015",
+  "area": "answer",
+  "message": "Give me three ideas for stretches to try, no need to save anything.",
+  "expect": [
+   "answer"
+  ]
+ },
+ {
+  "id": "CLS-016",
+  "area": "answer",
+  "message": "Don't create anything yet, just tell me whether a weekly or monthly goal suits a 10K plan.",
+  "expect": [
+   "answer"
+  ]
+ },
+ {
+  "id": "CLS-017",
+  "area": "deep",
+  "message": "Refactor the login module in my repo and run the test suite.",
+  "expect": [
+   "deep"
+  ]
+ },
+ {
+  "id": "CLS-018",
+  "area": "deep",
+  "message": "Write a Python script that parses my training CSV files in ~/runs and plots the pace.",
+  "expect": [
+   "deep"
+  ]
+ },
+ {
+  "id": "CLS-019",
+  "area": "deep",
+  "message": "Do a literature review of 20 papers on interval training and write a report file.",
+  "expect": [
+   "deep"
+  ]
+ },
+ {
+  "id": "CLS-020",
+  "area": "deep",
+  "message": "Deploy the latest build of my website to the server and check the logs.",
+  "expect": [
+   "deep"
+  ]
+ },
+ {
+  "id": "CLS-021",
+  "area": "deep",
+  "message": "Edit the README in my project folder to add install steps.",
+  "expect": [
+   "deep"
+  ]
+ },
+ {
+  "id": "CLS-022",
+  "area": "deep",
+  "message": "Run the data export on my machine and email me the resulting file.",
+  "expect": [
+   "deep"
+  ]
+ },
+ {
+  "id": "CLS-023",
+  "area": "goal paraphrase",
+  "message": "I want to commit to four long runs before the end of the month, put that on my plan.",
+  "expect": [
+   "tool"
+  ],
+  "heldout": true,
+  "tools": [
+   "create_quest_goal"
+  ]
+ },
+ {
+  "id": "CLS-024",
+  "area": "field paraphrase",
+  "message": "Where I am right now: 59 minutes for 10K, runs on Tuesdays and Saturdays. Save that as my starting point.",
+  "expect": [
+   "tool"
+  ],
+  "heldout": true,
+  "tools": [
+   "update_quest_current_state"
+  ]
+ },
+ {
+  "id": "CLS-025",
+  "area": "experiment paraphrase",
+  "message": "I'd like to test whether morning coffee changes my pace. Set that up as a test.",
+  "expect": [
+   "tool"
+  ],
+  "heldout": true,
+  "tools": [
+   "create_quest_experiment"
+  ]
+ },
+ {
+  "id": "CLS-026",
+  "area": "experiment read paraphrase",
+  "message": "Did my sleep test ever reach a conclusion?",
+  "expect": [
+   "tool",
+   "answer"
+  ],
+  "heldout": true,
+  "tools": [
+   "find_quest_experiments"
+  ]
+ },
+ {
+  "id": "CLS-027",
+  "area": "answer tricky",
+  "message": "Should I make an experiment out of this, or is a habit better? Just thinking out loud.",
+  "expect": [
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-028",
+  "area": "answer tricky",
+  "message": "What does 'create_quest_goal' do?",
+  "expect": [
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-029",
+  "area": "deep paraphrase",
+  "message": "Go through the PDFs in my downloads folder and build me a spreadsheet of the race times.",
+  "expect": [
+   "deep"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-030",
+  "area": "deep paraphrase",
+  "message": "Spin up a small web page for my training log and host it somewhere.",
+  "expect": [
+   "deep"
+  ],
+  "heldout": true
+ }
+]

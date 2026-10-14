@@ -1,0 +1,161 @@
+[
+ {
+  "id": "OPS-001",
+  "area": "goal",
+  "message": "Add a goal for this week: finish three 5K training runs.",
+  "expect": [
+   {
+    "tool": "create_quest_goal",
+    "args_contain": {
+     "title": "5K"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-002",
+  "area": "goal",
+  "message": "Create a month goal for October: run 40 km total.",
+  "expect": [
+   {
+    "tool": "create_quest_goal",
+    "args_contain": {
+     "title": "40"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-003",
+  "area": "current state",
+  "message": "Update my current state: I can now run 10K in 56 minutes.",
+  "expect": [
+   {
+    "tool": "update_quest_current_state",
+    "args_contain": {
+     "value": "56"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-004",
+  "area": "current state merge",
+  "message": "Add to my current state that my left knee is sore after runs over 12 km.",
+  "expect": [
+   {
+    "tool": "update_quest_current_state",
+    "args_contain": {
+     "value": "knee"
+    }
+   },
+   {
+    "state_contains": {
+     "current_state": "58"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-005",
+  "area": "outcome",
+  "message": "Add a measurable outcome: 10K time under 55 minutes, currently 58.",
+  "expect": [
+   {
+    "tool": "add_quest_measurable_outcome",
+    "args_contain": {
+     "text": "55"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-006",
+  "area": "habit",
+  "message": "Add a daily habit: stretch for ten minutes before bed.",
+  "expect": [
+   {
+    "tool": "create_quest_habit",
+    "args_contain": {
+     "name": "stretch"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-007",
+  "area": "experiment create",
+  "message": "Start an experiment on this quest: does morning coffee change my 5K pace?",
+  "expect": [
+   {
+    "tool": "create_quest_experiment",
+    "args_contain": {
+     "question": "coffee"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-008",
+  "area": "experiment edit",
+  "message": "Conclude my sleep experiment: yes, stretching helped me fall asleep faster.",
+  "expect": [
+   {
+    "tool": "update_quest_experiment",
+    "args_contain": {
+     "research_question_id": "rq_sleep",
+     "conclusion": "helped"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-009",
+  "area": "read",
+  "message": "Which experiments am I running on this quest?",
+  "expect": [
+   {
+    "no_writes": true
+   }
+  ]
+ },
+ {
+  "id": "OPS-010",
+  "area": "no change",
+  "message": "Don't change anything, just tell me whether a weekly or monthly goal suits a 10K plan.",
+  "expect": [
+   {
+    "no_writes": true
+   }
+  ]
+ },
+ {
+  "id": "OPS-011",
+  "area": "no change",
+  "message": "What is my current state on this quest?",
+  "expect": [
+   {
+    "no_writes": true
+   }
+  ]
+ },
+ {
+  "id": "OPS-012",
+  "area": "two changes",
+  "message": "Add a goal for this week: three 5K runs. Also add a daily habit: stretching.",
+  "expect": [
+   {
+    "tool": "create_quest_goal",
+    "args_contain": {
+     "title": "5K"
+    }
+   },
+   {
+    "tool": "create_quest_habit",
+    "args_contain": {
+     "name": "stretch"
+    }
+   }
+  ]
+ }
+]
