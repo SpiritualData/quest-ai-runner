@@ -175,7 +175,7 @@ _PRE_CHANGE_REVIEW_DIGEST_NO_WEB = (
 )
 
 
-def test_build_review_digest_is_byte_for_byte_unchanged_when_web_is_not_configured():
+def test_build_review_digest_framing_around_the_rubric_is_unchanged_when_web_is_not_configured():
     decision = PlanDecision(action="answer", rationale="ok")
     default = build_review_digest("restart the deploy pipeline please", decision,
                                   PLANNER_DECISION_RUBRIC)

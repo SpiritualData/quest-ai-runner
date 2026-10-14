@@ -171,9 +171,9 @@ def test_each_goal_gets_its_own_context():
     assert "EXPORT_CONTEXT" in export_pre and "PARSER_CONTEXT" not in export_pre
 
 
-def test_not_met_need_more_context_iterates_with_more_context_at_requested_tier():
+def test_not_met_need_more_context_iterates_with_more_context_on_a_claude_model():
     """A not-met + need_more_context verdict triggers a 2nd iteration that has MORE context than the
-    first, run at the verifier's requested tier."""
+    first, run on a concrete Claude model (the verifier's "opus" is a hint, not a pin; see resolve_deep_ladder)."""
     plan = {"action": "deep", "goal": "Do the work",
             "deep_subtasks": [{"goal": "Implement feature X", "brief": "implement X"}],
             "rationale": "deep"}

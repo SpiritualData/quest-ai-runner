@@ -3,7 +3,7 @@
 Pure definitions, no behaviour: the decision rubric, the full and compact prompt variants, the
 mode/brainstorm/hold-off notes and the profile table. It lives apart from ``orchestrator.py`` so a
 prompt change is reviewed as a prompt change and a new profile is one entry in ``PLANNER_PROFILES``
-without opening the 12K-line loop. ``orchestrator`` re-exports every name here, so existing imports
+without opening the 11K-line loop. ``orchestrator`` re-exports every name here, so existing imports
 (``from quest_ai_runner.core.orchestrator import PLANNER_PROMPT``) keep working. The functions that
 render these templates against ``OrchestratorConfig`` stay in ``orchestrator.py``.
 """
