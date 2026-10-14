@@ -10,21 +10,16 @@ from __future__ import annotations
 from .core.recipes import build_recipe_store_from_env
 
 import dataclasses
-import fcntl
 import json
-import logging
 import os
 import threading
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
-_log = logging.getLogger("quest-ai-runner.context")
+
 
 from .core.adapters import (
-    ContextAssembler,
-    DeepRunner,
     EscalationSink,
     FileWriter,
     GuidanceProvider,
@@ -33,12 +28,6 @@ from .core.adapters import (
 )
 # Bootstrap algorithm version + meta reader. file_context_store imports only from .core and
 # ._walk (never from .config), so this top-level import carries no circular-import risk.
-from .adapters.file_context_store import (
-    _BOOTSTRAP_META_FILE,
-    _BOOTSTRAP_VERSION,
-    _TFDFIDF_VERSION,
-    _read_bootstrap_meta,
-)
 # MCPServerSpec is a plain dataclass with no dependency on .core or .config, so this top-level
 # import (needed for the RunnerConfig.mcp_servers field type) carries no circular-import risk,
 # same discipline as the file_context_store import above. It does NOT require the optional [mcp]
@@ -48,6 +37,36 @@ from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
 
+from .config_support import (  # noqa: F401
+    _AUTO_CONTEXT,
+    _AUTO_DEEP_RUNNER,
+    _log,
+)
+from .config_source_builders import (  # noqa: F401
+    _build_drive_comments,
+    _build_google_chat,
+    _build_inbound_mail,
+    _build_notion,
+    _load_json_mapping,
+)
+from .config_context_index import (
+    _bootstrap_if_needed,
+    _build_qdrant_card_repo_from_env,
+    _register_index_thread,
+    shutdown_background_index,
+)
+from .config_resolvers import (
+    register_deepseek,
+    resolve_anticipator,
+    resolve_deep_runner,
+    resolve_deep_runner_ladder,
+    resolve_mcp_write_runners,
+    resolve_recent_context_store,
+    resolve_rep_sync_resolver,
+    resolve_tool_registry,
+)
+
+
 if TYPE_CHECKING:
     # Type-checking only: importing runner.personas for real at module level would be circular
     # (quest_ai_runner.runner's __init__ imports .poller, which imports RunnerConfig from THIS
@@ -55,19 +74,6 @@ if TYPE_CHECKING:
     # defers its other runner/adapter imports (e.g. QuestClient inside build_orchestrator).
     from .runner.personas import PersonaResolverConfig
 
-# Sentinel default for RunnerConfig.context_assembler: "build the default FileContextStore".
-# Distinct from None (which means context handling is explicitly disabled) and from an instance
-# (use that one). Lets context handling be ON BY DEFAULT while staying overridable and disableable.
-_AUTO_CONTEXT = object()
-
-# Sentinel default for RunnerConfig.deep_runner: "build the default SubprocessGoalRunner (Claude
-# Code)". Exactly the ``_AUTO_CONTEXT`` tri-state, for exactly the same reason: execution is core
-# to running well, so leaving the field unset must mean "give me the working default", not "run
-# with no executor at all". Before this existed the field defaulted to ``None``, which made
-# "the consumer never wired one" indistinguishable from "the consumer deliberately disabled
-# execution" — so a consumer that simply forgot silently lost every deep/execution turn (the turn
-# still announced work, then nothing ran).
-_AUTO_DEEP_RUNNER = object()
 
 # Per-attachment size cap for chat/file uploads and panel context-docs. Large by design so any
 # reasonable document or image is accepted; anything over this is rejected by the multimodal
@@ -126,6 +132,8 @@ _FILE_SCALAR_FIELDS = {
     "state_path", "lane_label", "env_files", "env_aliases", "env",
     "extra",
 }
+
+
 # Special-cased NESTED tables: the TOML value is itself a table and becomes a specific dataclass
 # (``PersonaResolverConfig``) rather than being assigned to the field as-is.
 _FILE_SPECIAL_FIELDS = {"personas"}
@@ -837,7 +845,6 @@ def apply_config_environment(file_cfg: Optional[RunnerConfig]) -> None:
             os.environ[str(key)] = str(value)
 
 
-
 def _load_env_file_truthy(path: str) -> None:
     """Load ``KEY=VALUE`` lines into ``os.environ``, treating a BLANK value as not set.
 
@@ -950,7 +957,6 @@ def resolve_context_assembler_stack(base_or_cfg: Any, cfg: Optional[RunnerConfig
         except Exception as e:  # noqa: BLE001 -- an optional layer never blocks a lane
             _log.warning("rep_context_prefs unavailable (%s); continuing without it", e)
     return base
-
 
 
 def quest_client_from_config(cfg: RunnerConfig, *, timeout: float = 30.0) -> Any:
@@ -1113,209 +1119,6 @@ def _add_drive_mcp_server(cfg: RunnerConfig) -> None:
         _log.info("Drive MCP wired (alias %s, read-only)", alias)
     except Exception as e:  # noqa: BLE001 -- optional wiring never breaks the lane
         _log.warning("Drive MCP wiring skipped (%s), continuing", e)
-
-
-def _load_json_mapping(path: str, what: str) -> Dict[str, Any]:
-    """A ``{key: value}`` JSON file, or {} when it is absent or unusable. Never raises."""
-    p = Path(path)
-    if not p.exists():
-        _log.info("config %s: %s does not exist yet", what, path)
-        return {}
-    try:
-        data = json.loads(p.read_text())
-    except (OSError, ValueError) as e:
-        _log.warning("config %s: %s is not readable JSON (%s)", what, path, e)
-        return {}
-    if not isinstance(data, dict):
-        _log.warning("config %s: %s must hold a JSON object", what, path)
-        return {}
-    return data
-
-
-def _build_drive_comments(auth: Dict[str, Any]) -> Any:
-    """A ``DriveComments`` client from ``{service_account_file, subject, scopes}``, or None.
-
-    Read+write scope by default (``COMMENT_WRITE_SCOPES``): reading a person's question without
-    being able to answer it in the document is what makes them stop asking there.
-    """
-    try:
-        from .adapters.drive_comments import COMMENT_WRITE_SCOPES, DriveComments
-        from .adapters.google_chat_adapter import service_account_token_provider
-    except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
-        _log.warning("drive_comments_auth: channel unavailable (%s)", e)
-        return None
-
-    sa_file = str(auth.get("service_account_file") or "").strip()
-    if not sa_file:
-        _log.warning("drive_comments_auth: needs a service_account_file; channel off")
-        return None
-    if not Path(sa_file).exists():
-        _log.warning("drive_comments_auth: %s does not exist; channel off", sa_file)
-        return None
-    scopes = [str(x) for x in (auth.get("scopes") or COMMENT_WRITE_SCOPES)]
-    subject = str(auth.get("subject") or "").strip() or None
-    try:
-        return DriveComments(token_provider=service_account_token_provider(
-            service_account_file=sa_file, subject=subject, scopes=scopes))
-    except Exception as e:  # noqa: BLE001
-        _log.warning("drive_comments_auth: could not build the client (%s); channel off", e)
-        return None
-
-
-def _build_inbound_mail(auth: Dict[str, Any]) -> Any:
-    """An ``InboundMail`` client from ``{service_account_file, subject, allowed_addresses,
-    scopes}``, or None.
-
-    Read-only scope by default (``INBOUND_MAIL_READ_SCOPES``): this channel only ever needs to SEE
-    what arrived, never to act on the mailbox, so a leaked key is bounded to reading, not sending
-    or deleting. ``allowed_addresses`` defaults to just ``[subject]`` when the deployment names a
-    subject but no explicit list -- domain-wide delegation can impersonate ANY mailbox in the
-    domain, so an unconfigured allowlist means "read nothing" (fail closed), never "read whatever a
-    card's spec happens to name."
-    """
-    try:
-        from .adapters.inbound_mail import INBOUND_MAIL_READ_SCOPES, InboundMail
-    except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
-        _log.warning("inbound_mail_auth: channel unavailable (%s)", e)
-        return None
-
-    sa_file = str(auth.get("service_account_file") or "").strip()
-    if not sa_file:
-        _log.warning("inbound_mail_auth: needs a service_account_file; channel off")
-        return None
-    if not Path(sa_file).exists():
-        _log.warning("inbound_mail_auth: %s does not exist; channel off", sa_file)
-        return None
-    scopes = [str(x) for x in (auth.get("scopes") or INBOUND_MAIL_READ_SCOPES)]
-    subject = str(auth.get("subject") or "").strip() or None
-    allowed = [str(a).strip().lower() for a in (auth.get("allowed_addresses") or [])
-              if str(a).strip()]
-    if not allowed and subject:
-        allowed = [subject.lower()]
-    if not allowed:
-        _log.warning(
-            "inbound_mail_auth: no allowed_addresses (and no subject to default from); channel "
-            "off -- domain-wide delegation can impersonate any mailbox, so a deployment must name "
-            "which ones this credential may actually read")
-        return None
-    try:
-        return InboundMail(
-            service_account_file=sa_file, scopes=scopes, allowed_addresses=allowed)
-    except Exception as e:  # noqa: BLE001
-        _log.warning("inbound_mail_auth: could not build the client (%s); channel off", e)
-        return None
-
-
-def _build_notion(block: Dict[str, Any]) -> Any:
-    """A read-only ``NotionAdapter`` from ``{token_env | token_file, database_ids, ...}``, or None.
-
-    Built only when a token is actually available (the named environment variable is set and
-    non-empty, or the named file holds one) and at least one database id is given. The token is
-    read lazily on every request (so a rotated one is picked up) and never logged.
-    """
-    try:
-        from .adapters.notion_adapter import (
-            NotionAdapter, env_token_provider, file_token_provider, normalize_id)
-    except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
-        _log.warning("notion: channel unavailable (%s)", e)
-        return None
-
-    databases = block.get("database_ids")
-    clean = {str(alias).strip(): str(ident).strip() for alias, ident in (databases or {}).items()
-             if str(alias).strip() and normalize_id(ident)} if isinstance(databases, dict) else {}
-    if not clean:
-        _log.warning("notion: no database_ids (alias -> database id); channel off. Nothing is read "
-                     "unless a database is named")
-        return None
-    token_env = str(block.get("token_env") or "").strip()
-    token_file = str(block.get("token_file") or "").strip()
-    providers = []
-    if token_env:
-        providers.append(env_token_provider(token_env))
-    if token_file:
-        providers.append(file_token_provider(token_file))
-    if not providers:
-        _log.warning("notion: needs token_env (the NAME of an environment variable) or token_file; "
-                     "channel off")
-        return None
-
-    def token() -> Optional[str]:
-        for provider in providers:
-            value = provider()
-            if value:
-                return value
-        return None
-
-    if not token():
-        _log.warning("notion: no token available from %s; channel off",
-                     " or ".join(x for x in (f"env {token_env}" if token_env else "",
-                                             f"file {token_file}" if token_file else "") if x))
-        return None
-    try:
-        kwargs: Dict[str, Any] = {}
-        if block.get("max_rows_per_database"):
-            kwargs["max_rows_per_database"] = int(block["max_rows_per_database"])
-        if block.get("cache_ttl_seconds") is not None:
-            kwargs["cache_ttl_seconds"] = float(block["cache_ttl_seconds"])
-        adapter = NotionAdapter(token_provider=token, database_ids=clean, **kwargs)
-    except Exception as e:  # noqa: BLE001
-        _log.warning("notion: could not build the adapter (%s); channel off", e)
-        return None
-    _log.info("Notion wired (read-only, databases: %s)", sorted(clean))
-    return adapter
-
-
-def _build_google_chat(block: Dict[str, Any]) -> Any:
-    """A read-only ``GoogleChatAdapter`` from ``{service_account_file, subject, space_names, ...}``.
-
-    FAILS CLOSED on the allowlist: with no ``space_names`` nothing is wired and the log says why,
-    since domain-wide delegation can otherwise read every space the subject is in. Scopes default
-    to the read-only pair. Built only when the key file exists.
-    """
-    try:
-        from .adapters.google_chat_adapter import (
-            DEFAULT_CHAT_SCOPES, GoogleChatAdapter, service_account_token_provider)
-    except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
-        _log.warning("google_chat: channel unavailable (%s)", e)
-        return None
-
-    spaces = [str(x).strip() for x in (block.get("space_names") or []) if str(x).strip()]
-    raw_all = block.get("all_spaces", False)
-    if isinstance(raw_all, str):
-        raw_all = raw_all.strip().lower() in ("1", "true", "yes", "on")
-    all_spaces = bool(raw_all)
-    if not spaces and not all_spaces:
-        _log.warning("google_chat: no space_names; channel off -- domain-wide delegation can read "
-                     "every space the subject is in, so a deployment must name which ones this "
-                     "credential may read (or opt in to all of them with all_spaces = true)")
-        return None
-    sa_file = str(block.get("service_account_file") or "").strip()
-    if not sa_file:
-        _log.warning("google_chat: needs a service_account_file; channel off")
-        return None
-    if not Path(sa_file).exists():
-        _log.warning("google_chat: %s does not exist; channel off", sa_file)
-        return None
-    scopes = [str(x) for x in (block.get("scopes") or DEFAULT_CHAT_SCOPES)]
-    subject = str(block.get("subject") or "").strip() or None
-    try:
-        lookback = block.get("lookback_days")
-        adapter = GoogleChatAdapter(
-            token_provider=service_account_token_provider(
-                service_account_file=sa_file, subject=subject, scopes=scopes),
-            space_names=spaces,
-            all_spaces=all_spaces,
-            lookback_days=30 if lookback is None else int(lookback),
-            assistant_senders=[str(x) for x in (block.get("assistant_senders") or [])],
-        )
-    except Exception as e:  # noqa: BLE001
-        _log.warning("google_chat: could not build the adapter (%s); channel off", e)
-        return None
-    if all_spaces:
-        _log.info("Google Chat wired (read-only, ALL spaces the subject belongs to)")
-    else:
-        _log.info("Google Chat wired (read-only, %d allowlisted space(s))", len(spaces))
-    return adapter
 
 
 def fold_into_retrieval(cfg: RunnerConfig, adapters: List[Any]) -> None:
@@ -1531,563 +1334,6 @@ def build_registry(cfg: RunnerConfig) -> ModelRegistry:
         providers=cfg.model_providers or None,
         provider_overrides=cfg.model_provider_overrides or None,
     )
-
-
-def _cards_exist(cards_dir: str) -> bool:
-    """True if the cards directory already holds at least one card file.
-
-    Excludes the ``bootstrap_meta.json`` sidecar (algorithm metadata, not a card).
-    """
-    try:
-        p = Path(cards_dir)
-        return p.is_dir() and any(
-            e.suffix == ".json" and not e.name.startswith(".")
-            and e.name != _BOOTSTRAP_META_FILE
-            for e in p.iterdir()
-        )
-    except OSError:
-        return False
-
-
-# --- Background context-index threads: OWNED, not fire-and-forget ---------------------------------
-# ``_bootstrap_if_needed`` starts the index build/refresh on a daemon thread so chat is usable
-# immediately. Daemon alone is not ownership: the thread can (and did) outlive whatever started it,
-# still walking a corpus and shelling out ``git hash-object`` per file long after nobody will read
-# the result. Every thread started here is registered with the store it is indexing, so
-# ``shutdown_background_index()`` can close the store (stopping it at its next checkpoint) and join
-# the thread. Entries are dropped once the thread is finished, so this never grows without bound.
-_INDEX_THREADS: "List[Tuple[threading.Thread, Any]]" = []
-_INDEX_THREADS_LOCK = threading.Lock()
-
-
-def _register_index_thread(thread: threading.Thread, store: Any) -> None:
-    """Record a background index thread and the store it is writing, and forget finished ones."""
-    with _INDEX_THREADS_LOCK:
-        _INDEX_THREADS[:] = [(t, s) for (t, s) in _INDEX_THREADS if t.is_alive()]
-        _INDEX_THREADS.append((thread, store))
-
-
-def shutdown_background_index(timeout: float = 10.0) -> None:
-    """Stop every background context-index thread this process started, and wait for them to exit.
-
-    Calls ``close()`` on each store being indexed (bootstrap/refresh then stop at their next
-    checkpoint and spawn no further ``git`` subprocess) and joins each thread, up to ``timeout``
-    seconds in total. Cards already written are kept; indexing is incremental and resumes on the
-    next start.
-
-    Call this whenever the owner of an orchestrator goes away: a consumer rebuilding its wiring, a
-    long-lived service shutting a tenant down, a CLI about to exit, a test finishing. Without it, an
-    index pass belongs to nobody and its stray subprocesses land in whatever the process does next.
-    Idempotent and never raises.
-    """
-    deadline = time.monotonic() + max(0.0, timeout)
-    with _INDEX_THREADS_LOCK:
-        pending = list(_INDEX_THREADS)
-        _INDEX_THREADS.clear()
-    for _, store in pending:
-        try:
-            close = getattr(store, "close", None)
-            if callable(close):
-                close()
-        except Exception:  # noqa: BLE001 — shutdown is best-effort, never raises
-            _log.debug("context index: closing store during shutdown failed", exc_info=True)
-    for thread, _ in pending:
-        try:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                remaining = 0.1  # always give a closed thread a moment to notice and unwind
-            thread.join(timeout=remaining)
-            if thread.is_alive():
-                _log.warning("context index: background thread %s did not stop within the timeout",
-                             thread.name)
-        except Exception:  # noqa: BLE001
-            _log.debug("context index: joining background thread failed", exc_info=True)
-
-
-def _refresh_min_interval_seconds() -> float:
-    """``QAR_REFRESH_MIN_INTERVAL_SECONDS`` (default 1800): the shortest gap between two startup
-    index refreshes of one store, across every process sharing it. 0 refreshes on every start."""
-    try:
-        return max(0.0, float(os.getenv("QAR_REFRESH_MIN_INTERVAL_SECONDS", "1800")))
-    except ValueError:
-        return 1800.0
-
-
-def _bootstrap_if_needed(
-    keyword, *, root: str, cards_dir: str, provider=None, model: Optional[str] = None,
-    notify: Optional[Callable[[str], None]] = None, card_repository=None,
-) -> None:
-    """Bootstrap or refresh the keyword store at startup. Always runs in the background.
-
-    * **Cards exist**: launch a background thread calling ``refresh_stale()`` — re-indexes
-      only changed/new files and skips everything unchanged.
-
-    * **No cards** (first run): bootstrap the full tree in a background thread. The LLM
-      identifies semantic topic cards; the user can chat immediately against whatever cards
-      exist so far (even none). The vector arm seeds lazily on first assemble() call.
-
-    ``notify`` (optional): a callable that receives a user-visible status string. Callers
-    that have a console (e.g. the interactive CLI) pass ``console.dim`` so bootstrap events
-    appear as system messages; background-only callers leave it ``None`` and events are
-    logged instead.
-
-    ``card_repository`` with a ``health()`` (the Quest backend): the cards live THERE, so the local
-    ``cards_dir`` says nothing about whether this corpus is indexed. Such a lane never runs a full
-    first-time bootstrap (which would re-card and re-embed every file on the server just because the
-    local folder is empty); it always takes the refresh path, which cards only files the backend's
-    cards do not already cover or that changed. While the backend is unreachable it indexes nothing.
-    """
-
-    def _tell(msg: str) -> None:
-        """Emit msg to the notify callback when set, else to the log."""
-        if notify is not None:
-            notify(msg)
-        else:
-            _log.info(msg)
-
-    repository_backed = card_repository is not None and callable(getattr(card_repository, "health", None))
-    if repository_backed and card_repository.health().get("degraded"):
-        _log.error("context index: the card backend is unreachable (%s); not indexing this corpus "
-                   "until it is back, so nothing is re-carded locally or pushed twice",
-                   card_repository.health().get("last_error"))
-        return
-
-    if repository_backed or _cards_exist(cards_dir):
-        # Check the global version and per-feature versions independently.
-        # Global version bump → full LLM re-index for uncovered/stale files.
-        # Per-feature version behind → cheap targeted migration (no LLM) until all cards updated.
-        # Each is detected and handled separately so an unrelated feature never forces extra work.
-        meta = _read_bootstrap_meta(cards_dir)
-        stored_version = meta.get("version", 0)
-        stored_features = meta.get("feature_versions", {})
-
-        # A repository-backed lane's version markers live with the cards on the backend, not in a
-        # local meta file it may never have had, so it never forces a full re-index from here.
-        needs_full = not repository_backed and stored_version < _BOOTSTRAP_VERSION
-        needs_tfdfidf = not repository_backed and stored_features.get("tfdfidf", 0) < _TFDFIDF_VERSION
-
-        if needs_full:
-            _tell(
-                f"Context index: algorithm updated (v{stored_version} -> v{_BOOTSTRAP_VERSION}),"
-                " re-indexing in background. Chat is ready now."
-            )
-        elif needs_tfdfidf:
-            _tell(
-                "Context index: computing tfdfidf signatures in background. Chat is ready now."
-            )
-
-        if needs_full or needs_tfdfidf:
-            # Fall through to the background bootstrap path below. The bootstrap detects which
-            # cards need tfdfidf migration and processes only those; per-entry "tfdfidf_v" is the
-            # checkpoint so an interrupted run resumes from where it left off next startup.
-            pass
-        else:
-            # Everything up to date: just refresh cards whose source files changed -- unless any
-            # process sharing this store already did so recently. A refresh walks the whole
-            # corpus several times over (nested-repo detection, folder review, the file walk,
-            # nested-store discovery): ~40s of in-process CPU on a large corpus, competing with
-            # the first turns of every chat session for the GIL. A session restarted minutes
-            # later gains nothing from it: each turn's own freshness check already flags a card
-            # whose files changed since it was written.
-            stamp = Path(cards_dir) / "index-state" / "last_refresh"
-            min_interval = _refresh_min_interval_seconds()
-            try:
-                age = time.time() - stamp.stat().st_mtime
-            except OSError:
-                age = None
-            if age is not None and 0 <= age < min_interval:
-                _log.debug("context index: refreshed %.0fs ago (< %.0fs); skipping startup refresh",
-                           age, min_interval)
-                return
-            _log.debug("context index: scanning %s for changes (background)", root)
-
-            def _bg_refresh() -> None:
-                # ONE refresh per folder at a time, across every process sharing this store (both
-                # SD lanes and the terminal start together on the daily restart). The stamp above
-                # is only written when a refresh FINISHES, so without this lock two processes both
-                # saw "stale", both found the same new files, and each asked the model for cards
-                # for them: duplicate backfill and duplicate cards. A process that loses the race
-                # skips: the winner's result lands in the shared card files it reads anyway.
-                lock_fd = None
-                try:
-                    Path(cards_dir).mkdir(parents=True, exist_ok=True)
-                    lock_fd = open(os.path.join(cards_dir, ".bootstrap.lock"), "w")  # noqa: WPS515
-                    try:
-                        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    except OSError:
-                        _log.debug("context index: another process is refreshing %s; skipping",
-                                   cards_dir)
-                        return
-                    # Re-check under the lock: a process that held it a moment ago may have just
-                    # finished and stamped, in which case there is nothing left to do.
-                    try:
-                        recent = 0 <= time.time() - stamp.stat().st_mtime < min_interval
-                    except OSError:
-                        recent = False
-                    if recent:
-                        return
-                    n = keyword.refresh_stale(root=root, provider=provider, model=model)
-                    try:
-                        stamp.parent.mkdir(parents=True, exist_ok=True)
-                        stamp.touch()
-                    except OSError:
-                        pass
-                    if n > 0:
-                        _log.info("context index: refreshed %d card(s)", n)
-                        _tell(f"Context index updated: {n} card(s) refreshed.")
-                    else:
-                        _log.debug("context index: all cards up to date")
-                except Exception:  # noqa: BLE001
-                    _log.debug("context index: refresh failed", exc_info=True)
-                finally:
-                    if lock_fd is not None:
-                        try:
-                            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                            lock_fd.close()
-                        except OSError:
-                            pass
-
-            _refresh_thread = threading.Thread(target=_bg_refresh, daemon=True, name="qar-refresh")
-            _register_index_thread(_refresh_thread, keyword)
-            _refresh_thread.start()
-            return
-
-    else:
-        # First run — no cards yet.
-        _tell(
-            "Context index: building for the first time in background."
-            " Chat is ready now; context improves as indexing completes."
-        )
-
-    # A lock file prevents duplicate bootstraps when multiple sessions start simultaneously.
-    lock_path = os.path.join(cards_dir, ".bootstrap.lock")
-
-    def _bg() -> None:
-        try:
-            Path(cards_dir).mkdir(parents=True, exist_ok=True)
-            lock_fd = open(lock_path, "w")  # noqa: WPS515 — intentional file-descriptor lifetime
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
-                _tell("Context index: another session is already building the index, skipping.")
-                lock_fd.close()
-                return
-            try:
-                n = keyword.bootstrap(root=root, provider=provider, model=model)
-                _log.info("context index: ready — %d cards written to %s", n, cards_dir)
-                if n > 0:
-                    calls = getattr(provider, 'call_count', 0)
-                    msg = f"Context index ready: {n} card(s) indexed"
-                    if calls > 0:
-                        msg += f" ({calls} LLM calls)"
-                    msg += "."
-                    _tell(msg)
-            finally:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-        except Exception:  # noqa: BLE001
-            _log.debug("context index: bootstrap failed", exc_info=True)
-
-    _bootstrap_thread = threading.Thread(target=_bg, daemon=True, name="qar-bootstrap")
-    _register_index_thread(_bootstrap_thread, keyword)
-    _bootstrap_thread.start()
-
-
-# --- Env vars the CARD-PERSISTENCE backend reads (documented here so config is discoverable) -------
-# QAR_CARDS_BACKEND      — "file" (DEFAULT) or "qdrant". "file" keeps today's per-card-JSON behavior
-#                          byte-for-byte. "qdrant" persists cards as points in ONE Qdrant collection
-#                          via the generic ``QdrantCardRepository`` (no cards_dir), with a query-only
-#                          ``QdrantCardVectorStore`` as the vector arm (each card embedded once).
-# QAR_CARDS_COLLECTION   — (qdrant) the Qdrant collection cards live in (default "quest_ai_cards").
-# QAR_QDRANT_URL         — (qdrant) the Qdrant server url; falls back to QAR_VECTOR_QDRANT_URL. When
-#                          unset, an EMBEDDED local Qdrant under ``<cards_dir>/cards-qdrant`` is used.
-# QAR_QDRANT_API_KEY     — (qdrant) the Qdrant api key; falls back to QAR_VECTOR_QDRANT_API_KEY.
-# QAR_EMBEDDER_BACKEND   — (qdrant) "voyage" | "openai" | (unset/fastembed); selects the card embedder
-#                          (same selector the auto vector store uses). Voyage uses asymmetric
-#                          document/query embedders matching a backend's production setup.
-# VOYAGE_EMBEDDING_SIZE  — (qdrant, voyage) the embedding dimension (default 1024).
-
-
-def _qar_embedders(backend: str) -> tuple:
-    """Resolve (doc_embedder, query_embedder, vector_size) for ``QAR_EMBEDDER_BACKEND``.
-
-    "voyage" → asymmetric Voyage document/query embedders (dim from VOYAGE_EMBEDDING_SIZE, default
-    1024); "openai" → one symmetric OpenAI embedder for both roles (dim 1536); anything else (unset
-    or "fastembed") → the local fastembed default (one symmetric callable, dim 384). Returns
-    ``(None, None, 0)`` on any failure so the caller can degrade. Never raises.
-    """
-    try:
-        if backend == "voyage":
-            from .adapters.qdrant_vector_store import make_voyage_embedder
-            try:
-                vsize = int(os.getenv("VOYAGE_EMBEDDING_SIZE") or 1024)
-            except (TypeError, ValueError):
-                vsize = 1024
-            return (
-                make_voyage_embedder(input_type="document"),
-                make_voyage_embedder(input_type="query"),
-                vsize,
-            )
-        if backend == "openai":
-            from .adapters.qdrant_vector_store import make_openai_embedder
-            emb = make_openai_embedder()
-            return (emb, emb, 1536)
-        # Local fastembed default (symmetric).
-        from fastembed import TextEmbedding
-        _model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-
-        def _fastembed(texts):
-            return [list(v) for v in _model.embed(texts)]
-
-        return (_fastembed, _fastembed, 384)
-    except Exception:  # noqa: BLE001
-        return (None, None, 0)
-
-
-def _build_qdrant_card_repo_from_env(cards_dir: str) -> tuple:
-    """Build a ``(QdrantCardRepository, QdrantCardVectorStore)`` pair from env, or ``(None, None)``.
-
-    Reads ``QAR_CARDS_COLLECTION`` / ``QAR_QDRANT_URL`` / ``QAR_QDRANT_API_KEY`` and the
-    ``QAR_EMBEDDER_BACKEND`` embedder. When no url is set, an EMBEDDED local Qdrant under
-    ``<cards_dir>/cards-qdrant`` is used. Returns ``(None, None)`` on any failure (caller degrades to
-    the filesystem backend). Never raises. NOTE: this default wiring is UNSCOPED (single-tenant) —
-    a multi-tenant consumer wires its own scoped ``QdrantCardRepository`` per tenant instead.
-    """
-    try:
-        from .adapters import QdrantCardRepository, QdrantCardVectorStore
-        if QdrantCardRepository is None:  # [qdrant] extra not installed
-            return (None, None)
-        collection = (os.getenv("QAR_CARDS_COLLECTION") or "").strip() or "quest_ai_cards"
-        url = (os.getenv("QAR_QDRANT_URL") or os.getenv("QAR_VECTOR_QDRANT_URL") or "").strip() or None
-        api_key = (
-            os.getenv("QAR_QDRANT_API_KEY") or os.getenv("QAR_VECTOR_QDRANT_API_KEY") or ""
-        ).strip() or None
-        path = None if url else os.path.join(cards_dir, "cards-qdrant")
-        backend = (os.getenv("QAR_EMBEDDER_BACKEND") or "").strip().lower()
-        doc_emb, qry_emb, vsize = _qar_embedders(backend)
-        if doc_emb is None or qry_emb is None:
-            _log.warning("context index: QAR_CARDS_BACKEND=qdrant but no embedder could be built; "
-                         "falling back to the file backend")
-            return (None, None)
-        repo = QdrantCardRepository(
-            collection=collection, embedder=doc_emb, vector_size=vsize,
-            client=None, url=url, api_key=api_key, path=path,
-        )
-        vstore = QdrantCardVectorStore(
-            collection=collection, query_embedder=qry_emb,
-            client=None, url=url, api_key=api_key, path=path,
-        )
-        return (repo, vstore)
-    except Exception:  # noqa: BLE001
-        _log.warning("context index: QAR_CARDS_BACKEND=qdrant repo build failed; falling back to "
-                     "the file backend", exc_info=True)
-        return (None, None)
-
-
-def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
-    """Resolve the deep (execution) worker from config — ON BY DEFAULT.
-
-    Tri-state on ``cfg.deep_runner``, mirroring ``resolve_context_assembler``:
-      * ``_AUTO_DEEP_RUNNER`` (the field default, i.e. the consumer left it unset) → build the
-        default ``SubprocessGoalRunner`` (Claude Code headless) so execution works out of the box.
-      * an INSTANCE → use it as-is (``AcpDeepRunner``, a queue worker, a test double, …).
-      * ``None`` → deep execution is explicitly DISABLED. No warning: that is a deliberate choice.
-
-    The auto-built runner reuses EXACTLY the env vars the rest of the repo already documents for
-    the deep worker, so there is one set of knobs, not two:
-      * ``QAR_DEEP_WORKING_DIR`` → the subprocess cwd, falling back to ``cfg.corpus_root`` and then
-        the process cwd (same precedence the CLI has always used).
-      * ``QAR_CLAUDE_PATH`` → the worker binary (default ``claude``, looked up on PATH).
-      * ``QAR_DEEP_TIMEOUT_SECONDS`` → applied inside the runner itself
-        (``goal_runner.resolve_deep_timeout_seconds``); nothing to pass here.
-      * ``QAR_DEEP_MODELS`` → the goal loop's model ladder, which lives on ``OrchestratorConfig``,
-        not on the runner.
-
-    ``cfg.context_preamble``, when set, becomes the auto-built worker's ``context_preamble`` — the
-    one field a consumer most often wants to change is now reachable without building a
-    ``SubprocessConfig`` by hand (see the field's own docstring on ``RunnerConfig``).
-
-    Degrades gracefully and NEVER raises. If the worker binary is not on PATH we return ``None``
-    (no runner) after logging a loud warning: building a runner that would fail on every spawn
-    would be worse than reporting honestly that execution is unavailable. ``warn=False`` silences
-    that warning for callers that are only probing capability (``derive_capabilities``) rather than
-    actually wiring the brain.
-    """
-    chosen = getattr(cfg, "deep_runner", None)
-    if chosen is not _AUTO_DEEP_RUNNER:
-        return chosen  # an explicit instance, or None to disable
-    try:
-        import shutil
-
-        from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-
-        claude_path = os.getenv("QAR_CLAUDE_PATH", "claude") or "claude"
-        # A bare name has to be findable on PATH; an explicit path has to exist and be executable.
-        if os.path.sep in claude_path:
-            found = claude_path if os.access(claude_path, os.X_OK) else None
-        else:
-            found = shutil.which(claude_path)
-        if not found:
-            if warn:
-                _log.warning(
-                    "deep runner: no %r binary found on PATH, so DEEP/EXECUTION work is "
-                    "UNAVAILABLE for this process (requests that need real work will be planned "
-                    "but not carried out). Install Claude Code, set QAR_CLAUDE_PATH to the "
-                    "binary, or wire RunnerConfig.deep_runner explicitly. Pass "
-                    "deep_runner=None to disable execution deliberately and silence this.",
-                    claude_path,
-                )
-            return None
-        working_dir = (os.getenv("QAR_DEEP_WORKING_DIR")
-                       or cfg.corpus_root
-                       or os.getcwd())
-        runner = SubprocessGoalRunner(SubprocessConfig(
-            working_dir=working_dir,
-            claude_path=claude_path,
-            context_preamble=cfg.context_preamble or "",
-        ))
-        _log.info("deep runner: using the default SubprocessGoalRunner (%s, cwd=%s)",
-                  found, working_dir)
-        return runner
-    except Exception:  # noqa: BLE001 — a failed default must never stop the runner from starting
-        if warn:
-            _log.warning("deep runner: building the default SubprocessGoalRunner failed; deep/"
-                         "execution work will be unavailable for this process", exc_info=True)
-        return None
-
-
-def resolve_rep_sync_resolver(cfg: RunnerConfig, *, quest_client: Any = None):
-    """Resolve ``cfg.rep_sync_resolver``, composing one from ``cfg.personas`` when the consumer
-    left the callable itself unset — the ``RunnerConfig.personas`` field's build path.
-
-    Tri-state-flavored, but simpler than the deep-runner/context-assembler sentinels because there
-    is no "auto-build a default" case here (an unset persona policy is a perfectly normal lane that
-    runs every task as the plain assistant):
-      * ``rep_sync_resolver`` already set (any consumer that wired one by hand, before ``personas``
-        existed, or one that wants to fully replace the declarative policy) → returned UNCHANGED.
-        An explicit callable always wins.
-      * ``rep_sync_resolver`` unset AND ``personas`` set → ``runner.personas.build_persona_resolver``
-        composes the equivalent callable from the declarative config.
-      * neither set → ``None`` (unchanged): no persona routing, exactly today's behavior.
-
-    Like ``resolve_deep_runner``, this does not mutate ``cfg`` itself — the caller (``Poller``)
-    writes the result back, the same in-place style ``build_orchestrator`` uses for ``deep_runner``.
-    ``runner.personas`` is imported LAZILY, only when ``cfg.personas`` is actually set, so building
-    a RunnerConfig with no persona policy never pays for (or requires) that import — see the
-    ``TYPE_CHECKING`` import note near the top of this module for why it can't be a top-level import.
-    """
-    if cfg.rep_sync_resolver is not None or getattr(cfg, "personas", None) is None:
-        return cfg.rep_sync_resolver
-    from .runner.personas import build_persona_resolver
-
-    return build_persona_resolver(
-        cfg.personas,
-        provider=cfg.model_provider,
-        quest_client=quest_client,
-        team_id=cfg.team_id or "",
-    )
-
-
-def resolve_fast_edit_runner(cfg: RunnerConfig):
-    """Build the in-process fast editor, or return None. OFF unless a ``file_writer`` is wired.
-
-    This is the whole opt-in gate for quest-ai-runner's write capability, and it is deliberately a
-    single condition with no env-var escape hatch and no "auto" tri-state: a consumer either handed
-    the library a ``FileWriter`` or it did not. Nothing here can talk itself into write access.
-
-    Returns None (silently — an absent writer is the normal case, not a misconfiguration) when no
-    writer is wired, and also when there is no model provider to make the one call with. Never
-    raises: a failure to build the optional cheap rung must never cost a consumer its runner.
-    """
-    writer = getattr(cfg, "file_writer", None)
-    if writer is None or cfg.model_provider is None:
-        return None
-    try:
-        from .adapters.fast_edit_runner import FastEditRunner
-
-        # ``cfg.model_provider`` is the MultiProvider-wrapped provider by the time this is called
-        # from build_orchestrator (the wrap happens in place, earlier in that function), so the
-        # model id this runner resolves routes to whichever backend owns it.
-        return FastEditRunner(
-            provider=cfg.model_provider,
-            writer=writer,
-            registry=ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None),
-        )
-    except Exception:  # noqa: BLE001
-        _log.warning("fast edit: could not build the FastEditRunner; deep work will use the "
-                     "full deep runner only", exc_info=True)
-        return None
-
-
-def resolve_mcp_write_runners(cfg: RunnerConfig) -> List[Any]:
-    """Build one ``MCPOperationRunner`` per configured ``MCPServerSpec`` that has non-empty
-    ``writable_tools``, or ``[]``. OFF unless a spec's ``writable_tools`` is wired.
-
-    Same opt-in shape as ``resolve_fast_edit_runner``: a single condition, no env-var escape
-    hatch, no "auto" tri-state. ``RunnerConfig.mcp_servers`` already carries connection specs for
-    the read-only ``MCPRetrievalAdapter`` side (Phase 1); a spec's ``writable_tools`` is a
-    SEPARATE, additional allowlist a consumer sets explicitly to also grant writes through that
-    same server -- being read-allowlisted (``allowed_tools``) grants nothing here. Each qualifying
-    spec becomes its own namespaced ``MCPWriteAdapter`` wrapped in its own ``MCPOperationRunner``,
-    the same "one spec, its own adapter" pattern the read side uses.
-
-    Returns ``[]`` (silently -- no writable spec is the normal case) when ``mcp_servers`` is empty,
-    no spec has ``writable_tools``, or there is no model provider to make the one call with. Never
-    raises: a failure to build an optional cheap rung must never cost a consumer its runner.
-    """
-    if not cfg.mcp_servers or cfg.model_provider is None:
-        return []
-    runners: List[Any] = []
-    try:
-        from .adapters.mcp_write_adapter import MCPWriteAdapter
-        from .adapters.mcp_write_runner import MCPOperationRunner
-
-        registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
-        for spec in cfg.mcp_servers:
-            if not getattr(spec, "writable_tools", None):
-                continue
-            writer = MCPWriteAdapter(alias=spec.alias, spec=spec, writable_tools=spec.writable_tools)
-            runners.append(MCPOperationRunner(
-                provider=cfg.model_provider, writer=writer, registry=registry,
-            ))
-        if runners:
-            _log.info("MCP write runners wired for: %s",
-                      [s.alias for s in cfg.mcp_servers if getattr(s, "writable_tools", None)])
-    except Exception:  # noqa: BLE001
-        _log.warning("mcp write: could not build MCPOperationRunner(s); deep work will use the "
-                     "remaining ladder only", exc_info=True)
-    return runners
-
-
-def resolve_deep_runner_ladder(cfg: RunnerConfig, *, warn: bool = True) -> List[Any]:
-    """The ORDERED runners one deep goal may be tried with, cheapest rung first.
-
-    Today this is at most three groups of rungs:
-
-      1. ``FastEditRunner`` — present ONLY when the consumer wired a ``file_writer``. One model
-         call, applied in process, against files already in the turn's context.
-      2. one ``MCPOperationRunner`` per ``MCPServerSpec`` with non-empty ``writable_tools`` —
-         present ONLY when a consumer configured a write allowlist for that server. One model
-         call, executed in process through that server's own ``MCPWriteAdapter``.
-      3. the resolved ``deep_runner`` — the full worker (``SubprocessGoalRunner`` by default).
-
-    A consumer that changed nothing gets ``[SubprocessGoalRunner]``: a one-rung ladder, which the
-    goal loop treats exactly as it treated a single runner before ladders existed. That equivalence
-    is the point — this is additive, never a silent change to what already ships.
-
-    All the cheap rungs may be absent (no writer, no writable MCP spec, and no worker because
-    ``claude`` is not installed or execution was explicitly disabled), in which case this returns
-    ``[]`` and the orchestrator reports honestly that nothing can execute.
-    """
-    ladder: List[Any] = []
-    fast = resolve_fast_edit_runner(cfg)
-    if fast is not None:
-        ladder.append(fast)
-    ladder.extend(resolve_mcp_write_runners(cfg))
-    deep = resolve_deep_runner(cfg, warn=warn)
-    if deep is not None:
-        ladder.append(deep)
-    return ladder
 
 
 def resolve_context_assembler(
@@ -2490,126 +1736,6 @@ def _resolve_context_assembler_base(
         return CompositeContextAssembler(assemblers)
     except Exception:  # noqa: BLE001 — never let context wiring break runner construction
         return None
-
-
-def resolve_recent_context_store(cfg: RunnerConfig):
-    """Resolve the WARM recent-turn context store from config -- ON BY DEFAULT.
-
-    Mirrors ``resolve_context_assembler``'s ``cards_dir`` resolution (same root, so recent-turn
-    records live alongside the card store, under ``<cards_dir>/recent``) but is wired
-    INDEPENDENTLY of which ``ContextAssembler`` ended up chosen: even a consumer that passed its
-    own explicit ``context_assembler`` (or disabled it with ``None``) still gets the recent-turn
-    fallback, since it is keyed purely by ``conv_id``/``quest_id`` and reads/writes its own small
-    per-conversation JSON files under ``.quest-context/recent``. Disabled entirely when
-    ``cfg.orchestrator.recent_context_enabled`` is False (env ``QAR_RECENT_CONTEXT``, read in
-    ``cli.py``'s ``_config_from_env``). Construction never raises -- a bad path just yields
-    ``None`` (the orchestrator behaves exactly as if no store were wired).
-    """
-    if not cfg.orchestrator.recent_context_enabled:
-        return None
-    try:
-        from .core.recent_context import FileRecentContextStore
-        root = cfg.corpus_root or os.getcwd()
-        cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
-        return FileRecentContextStore(cards_dir)
-    except Exception:  # noqa: BLE001 -- never let this wiring break runner construction
-        return None
-
-
-def resolve_anticipator(cfg: RunnerConfig, context_assembler: Any = None):
-    """Resolve the ANTICIPATION engine from config -- OFF BY DEFAULT.
-
-    Only when ``cfg.orchestrator.anticipation_enabled`` is True (env ``QAR_ANTICIPATION``, read in
-    ``cli.py``'s ``_config_from_env``) does this build an ``Anticipator`` over a
-    ``FilePredictionStore`` rooted at the same ``cards_dir`` the card/recent-context stores use
-    (predictions live under ``<cards_dir>/predictions``). ``context_assembler`` is the ALREADY
-    RESOLVED assembler build_orchestrator wired (passed in so the assembler is never constructed
-    twice); it powers per-prediction context precompute and may be None (predictions then carry no
-    precomputed bundle, matching still works). Construction never raises -- any failure yields
-    ``None`` (the orchestrator behaves exactly as if no engine were wired).
-    """
-    if not cfg.orchestrator.anticipation_enabled:
-        return None
-    try:
-        from .core.anticipation import Anticipator, FilePredictionStore
-        root = cfg.corpus_root or os.getcwd()
-        cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
-        refiner = _resolve_anticipation_refiner(cfg)
-        return Anticipator(FilePredictionStore(cards_dir), assembler=context_assembler,
-                           refiner=refiner)
-    except Exception:  # noqa: BLE001 -- never let this wiring break runner construction
-        return None
-
-
-def _resolve_anticipation_refiner(cfg: RunnerConfig):
-    """Build the OPTIONAL one-LLM-call anticipation refiner from config, or None.
-
-    Only when ``cfg.orchestrator.anticipation_llm_enabled`` is True (env ``QAR_ANTICIPATION_LLM``,
-    default OFF -- the lane stays zero-LLM by default) AND a ``model_provider`` is configured. The
-    provider is ``cfg.model_provider`` (already wrapped with ``MultiProvider`` by
-    ``build_orchestrator`` before this runs, per the repo's MultiProvider rule), and the model is
-    resolved via ``ModelRegistry.resolve_tier("balanced")`` -- never a hardcoded model id. Returns
-    the callable ``Anticipator`` expects: ``(candidates, recent_texts) -> (refinements, drops,
-    followups)``. None (so the engine stays model-free) on any failure or when disabled."""
-    if not getattr(cfg.orchestrator, "anticipation_llm_enabled", False):
-        return None
-    if cfg.model_provider is None:
-        return None
-    try:
-        from .core.anticipation import (
-            REFRESH_SYSTEM_PROMPT,
-            build_refresh_prompt,
-            parse_refresh_response,
-        )
-        from .core.model_registry import ModelRegistry
-        provider = cfg.model_provider
-        registry = ModelRegistry(provider, fallback=cfg.model_fallback or None)
-
-        def refiner(candidates, recent_texts):
-            model = registry.resolve_tier("balanced")
-            prompt = build_refresh_prompt(candidates, recent_texts)
-            raw = provider.answer(
-                [{"role": "user", "content": prompt}], model=model,
-                system=REFRESH_SYSTEM_PROMPT)
-            return parse_refresh_response(raw, candidates)
-
-        return refiner
-    except Exception:  # noqa: BLE001 -- never let refiner wiring break runner construction
-        return None
-
-
-def resolve_tool_registry(cfg: RunnerConfig):
-    """The tool catalog for this runner: ``cfg.tool_registry`` if the consumer wired one, else the
-    standard tools + ``QAR_TOOLS_FILE`` custom tools from env. The Quest credentials the standard
-    tools use fall back to the config's own ``quest_base_url``/``quest_api_key``/``team_id`` so a
-    lane configured by file (not env) still gets them. Never raises: no tools on any failure."""
-    if cfg.tool_registry is not None:
-        return cfg.tool_registry
-    try:
-        from .core.tools import build_tool_registry
-        env = dict(os.environ)
-        if cfg.quest_base_url and not (env.get("QUEST_BASE_URL") or env.get("QUEST_API_URL")):
-            env["QUEST_BASE_URL"] = cfg.quest_base_url
-        if cfg.quest_api_key and not env.get("QUEST_API_KEY"):
-            env["QUEST_API_KEY"] = cfg.quest_api_key
-        if cfg.team_id and not env.get("QUEST_TEAM_ID"):
-            env["QUEST_TEAM_ID"] = cfg.team_id
-        return build_tool_registry(env)
-    except Exception:  # noqa: BLE001 -- never let tool wiring break runner construction
-        _log.warning("tool registry not built", exc_info=True)
-        return None
-
-
-def register_deepseek(providers: dict) -> None:
-    """Add the DeepSeek provider to ``providers`` only when DEEPSEEK_API_KEY is set."""
-    if not (os.getenv("DEEPSEEK_API_KEY") or "").strip():
-        return
-    try:
-        from .adapters import DeepSeekProvider
-        if DeepSeekProvider is not None:
-            providers["deepseek"] = DeepSeekProvider()
-    except Exception as e:  # noqa: BLE001
-        _log.debug(f"DeepSeek provider unavailable: {type(e).__name__}")
 
 
 def build_orchestrator(
