@@ -404,8 +404,14 @@ def compose_goal_prompt_fitted(goal: str, brief: str, *, preamble: str = "",
     once and reports concretely what it changed; the done-standard is given as context, not as a
     self-policed directive."""
     from . import prompt_budget
+    from .standing_instructions import load_standing_instructions
     goal_text = " ".join((goal or "").split())
     body_parts: List[str] = []
+    # Standing instructions are a REQUIRED body part, not a preamble block: a rep's persona
+    # replaces the preamble and the budget cuts preamble blocks, but these govern every run.
+    standing = load_standing_instructions()
+    if standing:
+        body_parts.append(standing)
     body_parts.append(f"TASK:\n{brief.strip()}")
     if goal_text:
         body_parts.append("GOAL (the done-standard your work must satisfy):\n" + goal_text)

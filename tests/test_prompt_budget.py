@@ -127,7 +127,10 @@ def test_an_earlier_output_never_carries_its_block_into_the_next_brief():
     assert BLOCK_START not in rendered and "the plan" in rendered
 
 
-def test_under_budget_the_deep_prompt_is_byte_identical():
+def test_under_budget_the_deep_prompt_is_byte_identical(monkeypatch):
+    # Byte identity of the budgeted composition; the standing-instruction layer is tested on its own
+    # (tests/test_standing_instructions.py), so it is switched off here.
+    monkeypatch.setenv("QAR_DEEP_INSTRUCTIONS_FILES", "")
     preamble = "Org context.\n\n--- RELEVANT PAST CONVERSATIONS ---\n[2026-10-01] User: hi"
     prompt = compose_goal_prompt("the goal", "the brief", preamble=preamble)
     assert prompt.startswith(preamble + "\n\nTASK:\nthe brief\n\nGOAL (the done-standard")

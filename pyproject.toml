@@ -94,6 +94,9 @@ quest-ai-runner = "quest_ai_runner.cli:main"
 where = ["."]
 include = ["quest_ai_runner*"]
 
+[tool.setuptools.package-data]
+quest_ai_runner = ["prompts/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Async TUI tests (textual's run_test harness) are marked @pytest.mark.asyncio explicitly,

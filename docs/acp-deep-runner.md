@@ -205,3 +205,14 @@ the human reading the failed task.
 `tests/test_acp_deep_runner.py` runs fully offline: the whole SDK/subprocess surface is behind one
 module-level seam (`open_agent_connection`), which the tests replace with a scripted fake
 connection. No package import, no process, no auth, no network.
+
+## Standing instructions
+
+Every deep prompt carries a standing-instruction layer ahead of the task: principles that govern all
+work, whoever the run acts as. It is a required part of the prompt, so a rep's persona (which
+replaces the preamble) never removes it and the prompt budget never cuts it. The library ships the
+adaptable-structure principles (`quest_ai_runner/prompts/adaptable_structure.md`) as the default for
+every deployment. `QAR_DEEP_INSTRUCTIONS_FILES` changes it: unset uses the default, empty turns the
+layer off, and a path list (`os.pathsep`-separated, with `default` standing for the shipped file)
+replaces it, for example `default:/srv/org/rules.md`. Files are read on every run, so an edit applies
+to the next deep run without a restart. See `quest_ai_runner/core/standing_instructions.py`.
