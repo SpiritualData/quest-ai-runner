@@ -585,6 +585,10 @@ def main():
     parser.add_argument("--approve-own-asks", action="store_true",
                         help="setup, DEV ONLY: approve the world's own quest-creation asks through "
                              "quest-backend's resolve path (refuses on a non-dev backend)")
+    parser.add_argument("--isolate-cards", action="store_true",
+                        help="run: stash the account's learned cards first (to /tmp/qualeval/"
+                             "cards_stash.json) and restore them afterwards, so old-run memory "
+                             "cannot leak into replies")
     parser.add_argument("--keep-quests", action="store_true")
     parser.add_argument("--decline-asks", action="store_true")
     parser.add_argument("--apply", action="store_true",
@@ -617,7 +621,14 @@ def run_command(args):
             cases = [c for c in cases if c["id"] in only]
         if not cases:
             raise SystemExit("no cases matched")
-        run_cases(cases, use_judge=not args.no_judge, workers=args.workers)
+        stash = WORK_DIR / "cards_stash.json"
+        if args.isolate_cards:
+            print(f"isolated: stashed {W.stash_learned_cards(stash)} learned cards -> {stash}")
+        try:
+            run_cases(cases, use_judge=not args.no_judge, workers=args.workers)
+        finally:
+            if args.isolate_cards:
+                print(f"restored {W.unstash_learned_cards(stash)} learned cards")
         write_report()
 
 

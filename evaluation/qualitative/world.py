@@ -1166,6 +1166,37 @@ def restore_cards(before, *, settle=True):
         return {"deleted": 0, "restored": 0, "changed_ids": [], "error": True}
 
 
+def stash_learned_cards(path):
+    """Isolate a run from old-run memory: write every non-managed learned card on the account to
+    ``path`` (JSON, full dicts) and delete them from the account. ``unstash_learned_cards`` puts
+    them back. The file is written and re-read BEFORE any delete, so a failure leaves the account
+    untouched. Managed cards (the world quests' own) stay. Returns the number stashed."""
+    status, body = api("GET", "/api/cards")
+    cards = body.get("cards") if status == 200 and isinstance(body, dict) else None
+    if cards is None:
+        raise RuntimeError("cannot read /api/cards; not isolating")
+    cards = [c for c in cards if isinstance(c, dict) and c.get("id")]
+    with open(path, "w") as fh:
+        json.dump(cards, fh)
+    if len(json.load(open(path))) != len(cards):
+        raise RuntimeError("stash file did not round-trip; not deleting anything")
+    for c in cards:
+        api("DELETE", f"/api/cards/{c['id']}")
+    return len(cards)
+
+
+def unstash_learned_cards(path):
+    """Undo ``stash_learned_cards``: delete whatever learned cards exist now (the run's own),
+    then write each stashed card back (PUT, the upsert). Returns the number restored."""
+    for cid in card_ids():
+        api("DELETE", f"/api/cards/{cid}")
+    n = 0
+    for c in json.load(open(path)):
+        status, _ = api("PUT", f"/api/cards/{c['id']}", c)
+        n += status < 300
+    return n
+
+
 def world_quest_card_id(qid):
     """The deterministic id quest-backend's ``quest_ai_quest_cards.card_id_for`` writes for a
     quest's own auto-maintained card."""
