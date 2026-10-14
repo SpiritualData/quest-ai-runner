@@ -46,8 +46,9 @@ Each is a JSON list of cases (or `{"cases": [...]}`). Files starting with `_` ar
   Never assert a week period on a goal the AI created
 * `entity` `entry`: `match {collection_key, where?}`, `field` is a collection field id (see `world.COLLECTIONS[...]["fields"]`; habit rows use `completed`, `entry_date`)
 * `entity` `task`: a task queued on a world quest or carrying the tag, `field` `text`
+* `entity` `experiment`: `match {quest_key}`, `field` one of `question`, `context`, `hypothesis`, `status`, `conclusion`, `start_date`, `end_date` (omit `field` to match anywhere in the row). Must be new or changed in the diff.
 * `op`: `contains` (default, case-insensitive), `equals`, `number_close` (5 percent), `gte`, `lte`, `regex`, `exists`, `not_contains`
-* `only_new` (default true for entry, quest_note, goal, task): the matched value must also appear in the before/after diff, so a seeded value cannot satisfy a write the AI never made
+* `only_new` (default true for entry, quest_note, goal, task, experiment): the matched value must also appear in the before/after diff, so a seeded value cannot satisfy a write the AI never made
 
 ## precheck
 

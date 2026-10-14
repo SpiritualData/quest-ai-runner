@@ -837,6 +837,23 @@ def conversation_tasks(conv_id):
     return [t for t in all_tasks() if t.get("conv_id") == conv_id]
 
 
+def delete_conversation_tasks(conv_id):
+    """Delete every task row a chat conversation left behind, INCLUDING the finished ``quest_op``
+    row an inline Quest write files (kind quest_op, result "Added the experiment ...").
+    ``all_tasks`` never lists those (the API hides them unless ``include_quest_ops``), so the
+    per-case cleanup missed them and every later turn on that quest was shown the earlier case's
+    write as history (quest_activity_context's task-output channel). Returns how many it deleted."""
+    status, body = api("GET", "/api/assistant-tasks",
+                       params={"conv_id": conv_id, "include_quest_ops": "true", "limit": 200})
+    tasks = body.get("tasks") if status == 200 and isinstance(body, dict) else []
+    deleted = 0
+    for task in tasks or []:
+        tid = task_id_of(task)
+        if tid and task.get("conv_id") in (None, conv_id):
+            deleted += api("DELETE", f"/api/assistant-tasks/{tid}")[0] == 200
+    return deleted
+
+
 def experiments_of(qid):
     """The quest's Experiments section rows (research questions), keyed by id. The chat's
     create/update helpers write here, not to quest fields, so without this the diff reported

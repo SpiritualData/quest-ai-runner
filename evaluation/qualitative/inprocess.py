@@ -96,6 +96,15 @@ def client():
         sys.path.insert(0, str(BACKEND_DIR))
         from dotenv import load_dotenv
         load_dotenv(BACKEND_DIR / ".env", override=True)
+        # Cases must not see each other. QAR keeps a file-backed "recent turns" memory of the cards
+        # earlier turns selected (quest and global scopes cross conversations), so EXPT-014's reply
+        # ("I added the 90-minute experiment") was quoted back as fact in EXPT-019 and EXPT-023.
+        # Off for the whole in-process run; QUAL_KEEP_RECENT_CONTEXT=1 puts it back.
+        # The anticipation engine keeps the same kind of memory per quest (quest_ai_anticipation,
+        # scope quest:<id>): it held the eval cases' own wording ("thank-you card", "handwritten").
+        if not os.environ.get("QUAL_KEEP_RECENT_CONTEXT"):
+            os.environ["QUEST_AI_RECENT_CONTEXT_DISABLED"] = "1"
+            os.environ["QUEST_AI_ANTICIPATION"] = "off"
         if (os.environ.get("ENVIRONMENT") or "").strip().lower() not in ("development", "dev"):
             raise SystemExit("QUAL_INPROCESS: backend ENVIRONMENT is not development; refusing")
         mongo = os.environ.get("MONGODB_URL") or os.environ.get("MONGODB_URI") or ""

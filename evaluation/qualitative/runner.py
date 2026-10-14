@@ -16,6 +16,7 @@ the assistant must find the right quest itself. See README.md and datasets/schem
 """
 import argparse
 import json
+import os
 import re
 import sys
 import threading
@@ -50,7 +51,7 @@ PRECHECK_KEYS = frozenset({
     "reply_contains_all", "reply_contains_any", "reply_not_contains", "reply_regex",
     "reply_regex_forbidden", "code_contains_all", "code_contains_any", "code_not_contains",
     "tools_called", "tools_not_called", "pivot_values_in_reply", "web_read"})
-WRITE_ENTITIES = frozenset({"quest_field", "quest_note", "goal", "entry", "task"})
+WRITE_ENTITIES = frozenset({"quest_field", "quest_note", "goal", "entry", "task", "experiment"})
 OPTIONAL_RUBRIC = re.compile(r"\(bonus|\bbonus:|\boptionally\b|\bmay (?:mention|note|say|add)\b", re.I)
 WRITE_OPS = frozenset({"contains", "equals", "number_close", "gte", "lte", "regex", "exists",
                        "not_contains"})
@@ -277,6 +278,16 @@ def run_case(case, world, use_judge=True, parallel=False):
         record["score"], record["passed"] = None, False
     finally:
         if conv:
+            # An inline chat write leaves a finished task row behind (source chat, result "Added
+            # the experiment ...") a moment AFTER the turn returns, and every later turn on that
+            # quest is shown it as "what actually happened" (core quest_activity_context). Left in
+            # place it made EXPT-019/023 answer about an experiment EXPT-014 had created and the
+            # revert had deleted. Wait for it to land, then remove this conversation's rows.
+            try:
+                time.sleep(3.0)
+                W.delete_conversation_tasks(conv)
+            except Exception:  # noqa: BLE001 -- cleanup must not mask the case's own result
+                pass
             delete_conversation(conv)
         # RESTORE CARD CONTENT this case changed on an already-existing card (the id-only sweep
         # above never sees this: the id was already in the baseline). Runs in `finally` so a case
@@ -356,6 +367,15 @@ def merge_results(records):
     RESULTS_JSON.write_text(json.dumps(existing, indent=1, default=str))
 
 
+INFRA_RETRIES = int(os.environ.get("QUAL_INFRA_RETRIES", "2"))
+
+
+def infra_errored(record):
+    """True when any turn's reply is the chat's own "the AI service errored" fallback."""
+    turns = (record.get("evidence") or {}).get("turns") or []
+    return any("the AI service errored" in (t.get("reply") or "") for t in turns)
+
+
 def run_cases(cases, use_judge=True, workers=1):
     world = W.load()
     print(f"Quest backend : {QUEST_BASE} (in-app Quest AI chat, auto_run on)")
@@ -385,15 +405,23 @@ def run_cases(cases, use_judge=True, workers=1):
     for case in mutating:
         # Right before this case starts: catch anything the previous case's updater wrote late.
         W.sweep_new_cards(world.get("cards_baseline"))
-        r = run_case(case, world, use_judge)
-        try:
-            world = restore_world(r, world)
-        except SystemExit as stop:  # reset aborted: keep this case's record, then stop the run
-            r["world_reset_failed"] = str(stop)
-            save_result(r)
-            print_row(r)
-            merge_results(records + [r])
-            raise
+        for attempt in range(1 + INFRA_RETRIES):
+            r = run_case(case, world, use_judge)
+            try:
+                world = restore_world(r, world)
+            except SystemExit as stop:  # reset aborted: keep this case's record, then stop the run
+                r["world_reset_failed"] = str(stop)
+                save_result(r)
+                print_row(r)
+                merge_results(records + [r])
+                raise
+            if not infra_errored(r) or attempt == INFRA_RETRIES:
+                break
+            # The model proxy shared with other agents answered 429 or empty: the chat said "the AI
+            # service errored" and did nothing. That is the environment, not the code under test, so
+            # run the case again (world already restored) instead of scoring it as a failure.
+            print(f"  {case['id']}: model service errored, retrying ({attempt + 1}/{INFRA_RETRIES})")
+        r["infra_retries"] = attempt
         W.sweep_new_cards(world.get("cards_baseline"))
         records.append(r)
         save_result(r)

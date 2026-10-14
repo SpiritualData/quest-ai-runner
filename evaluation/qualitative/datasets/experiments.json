@@ -342,7 +342,18 @@
         "reply_regex_forbidden": [
           "(?i)\\bhypothesis:\\s*\\S"
         ]
-      }
+      },
+      "expect_writes": [
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "research"
+          },
+          "field": "question",
+          "expected": "writing blocks",
+          "op": "contains"
+        }
+      ]
     },
     {
       "id": "EXPT-015",
@@ -367,7 +378,18 @@
           "insert(",
           "update_one("
         ]
-      }
+      },
+      "expect_writes": [
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "business"
+          },
+          "field": "question",
+          "expected": "scent samples",
+          "op": "contains"
+        }
+      ]
     },
     {
       "id": "EXPT-016",
@@ -392,7 +414,18 @@
           "insert(",
           "update_one("
         ]
-      }
+      },
+      "expect_writes": [
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "language"
+          },
+          "field": "question",
+          "expected": "shadowing",
+          "op": "contains"
+        }
+      ]
     },
     {
       "id": "EXPT-017",
@@ -419,7 +452,18 @@
           "update_quest_fields",
           "insert("
         ]
-      }
+      },
+      "expect_writes": [
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "fitness"
+          },
+          "field": "question",
+          "expected": "coffee",
+          "op": "contains"
+        }
+      ]
     },
     {
       "id": "EXPT-018",
@@ -440,14 +484,35 @@
       "mutates": true,
       "precheck": {
         "code_contains_any": [
-          "search_research_questions"
+          "search_research_questions",
+          "get_research_questions"
         ],
         "code_not_contains": [
           "update_quest_fields",
           "insert(",
           "update_one("
         ]
-      }
+      },
+      "expect_writes": [
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "business"
+          },
+          "field": "question",
+          "expected": "free shipping",
+          "op": "contains"
+        },
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "business"
+          },
+          "field": "question",
+          "expected": "thank-you card",
+          "op": "contains"
+        }
+      ]
     },
     {
       "id": "EXPT-019",
@@ -496,7 +561,17 @@
           "insert(",
           "update_one("
         ]
-      }
+      },
+      "expect_writes": [
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "language"
+          },
+          "expected": "10 points",
+          "op": "contains"
+        }
+      ]
     },
     {
       "id": "EXPT-021",
@@ -524,7 +599,18 @@
           "insert(",
           "update_one("
         ]
-      }
+      },
+      "expect_writes": [
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "fitness"
+          },
+          "field": "question",
+          "expected": "knee soreness",
+          "op": "contains"
+        }
+      ]
     },
     {
       "id": "EXPT-022",
@@ -552,7 +638,18 @@
           "insert(",
           "update_one("
         ]
-      }
+      },
+      "expect_writes": [
+        {
+          "entity": "experiment",
+          "match": {
+            "quest_key": "business"
+          },
+          "field": "conclusion",
+          "expected": "4 percent",
+          "op": "contains"
+        }
+      ]
     },
     {
       "id": "EXPT-023",

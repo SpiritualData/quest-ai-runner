@@ -224,6 +224,11 @@ def resolve_rows(entity, match, world, after):
                             goal.get("name")):
                         continue
                     rows.append((f"goal {goal.get('name')!r} on {key}", goal))
+    elif entity == "experiment":
+        for key, q in after["quests"].items():
+            if match.get("quest_key") in (None, key):
+                for rid, row in (q.get("experiments") or {}).items():
+                    rows.append((f"experiment {rid} on {key}", row))
     elif entity == "entry":
         for key, entries in after["collections"].items():
             if match.get("collection_key") in (None, key):
@@ -250,7 +255,7 @@ def check_expect_write(spec, world, after, changes):
         actual = row.get(field) if field else json.dumps(row, default=str)
         if not compare(actual, expected, op):
             continue
-        if spec.get("only_new", True) and entity in ("entry", "quest_note", "goal", "task"):
+        if spec.get("only_new", True) and entity in ("entry", "quest_note", "goal", "task", "experiment"):
             probe = norm(expected if op in ("contains", "equals") else actual)[:60]
             if probe and probe not in changed_text:
                 continue
