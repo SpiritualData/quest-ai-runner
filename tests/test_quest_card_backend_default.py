@@ -163,3 +163,63 @@ def test_cards_written_through_the_store_carry_the_lane_team(tmp_path, monkeypat
     repo = card_store(resolve(tmp_path))._repo
     repo.write("note-1", {"name": "Note", "summary": "s"})
     assert ("team_a", "note-1") in backend.cards
+
+
+# --- bootstrap decision for a Quest-backed lane ---------------------------------------------------
+
+class RecordingKeyword:
+    """Records which indexing pass the bootstrap decision chose."""
+
+    def __init__(self):
+        self.calls = []
+
+    def bootstrap(self, **kw):
+        self.calls.append(("bootstrap", kw.get("skip_unchanged", False)))
+        return 0
+
+    def refresh_stale(self, **kw):
+        self.calls.append(("refresh", True))
+        return 0
+
+
+class FakeRepository:
+    def __init__(self, degraded=False):
+        self.degraded = degraded
+
+    def health(self):
+        return {"ok": not self.degraded, "degraded": self.degraded, "error_count": int(self.degraded),
+                "last_error": "unreachable" if self.degraded else None}
+
+
+def run_decision(tmp_path, monkeypatch, repository):
+    import threading
+    started = []
+    real_thread = threading.Thread
+
+    def run_inline(*a, target=None, **k):
+        t = real_thread(*a, target=target, **k)
+        started.append(t)
+        return t
+
+    monkeypatch.setattr(config_mod.threading, "Thread", run_inline)
+    keyword = RecordingKeyword()
+    empty_cards = tmp_path / "empty-cards"
+    config_mod._bootstrap_if_needed(keyword, root=str(tmp_path), cards_dir=str(empty_cards),
+                                    card_repository=repository)
+    for t in started:
+        t.join(timeout=10)
+    return keyword.calls
+
+
+def test_quest_backed_lane_with_empty_local_folder_refreshes_not_full_bootstrap(tmp_path, monkeypatch):
+    calls = run_decision(tmp_path, monkeypatch, FakeRepository())
+    assert calls == [("refresh", True)]
+
+
+def test_quest_backed_lane_indexes_nothing_while_backend_unreachable(tmp_path, monkeypatch):
+    assert run_decision(tmp_path, monkeypatch, FakeRepository(degraded=True)) == []
+
+
+def test_local_lane_with_empty_folder_still_does_a_first_bootstrap(tmp_path, monkeypatch):
+    calls = run_decision(tmp_path, monkeypatch, None)
+    assert calls and calls[0][0] == "bootstrap"

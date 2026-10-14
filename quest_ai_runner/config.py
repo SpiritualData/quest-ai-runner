@@ -1615,7 +1615,7 @@ def _refresh_min_interval_seconds() -> float:
 
 def _bootstrap_if_needed(
     keyword, *, root: str, cards_dir: str, provider=None, model: Optional[str] = None,
-    notify: Optional[Callable[[str], None]] = None,
+    notify: Optional[Callable[[str], None]] = None, card_repository=None,
 ) -> None:
     """Bootstrap or refresh the keyword store at startup. Always runs in the background.
 
@@ -1630,6 +1630,12 @@ def _bootstrap_if_needed(
     that have a console (e.g. the interactive CLI) pass ``console.dim`` so bootstrap events
     appear as system messages; background-only callers leave it ``None`` and events are
     logged instead.
+
+    ``card_repository`` with a ``health()`` (the Quest backend): the cards live THERE, so the local
+    ``cards_dir`` says nothing about whether this corpus is indexed. Such a lane never runs a full
+    first-time bootstrap (which would re-card and re-embed every file on the server just because the
+    local folder is empty); it always takes the refresh path, which cards only files the backend's
+    cards do not already cover or that changed. While the backend is unreachable it indexes nothing.
     """
 
     def _tell(msg: str) -> None:
@@ -1639,7 +1645,14 @@ def _bootstrap_if_needed(
         else:
             _log.info(msg)
 
-    if _cards_exist(cards_dir):
+    repository_backed = card_repository is not None and callable(getattr(card_repository, "health", None))
+    if repository_backed and card_repository.health().get("degraded"):
+        _log.error("context index: the card backend is unreachable (%s); not indexing this corpus "
+                   "until it is back, so nothing is re-carded locally or pushed twice",
+                   card_repository.health().get("last_error"))
+        return
+
+    if repository_backed or _cards_exist(cards_dir):
         # Check the global version and per-feature versions independently.
         # Global version bump → full LLM re-index for uncovered/stale files.
         # Per-feature version behind → cheap targeted migration (no LLM) until all cards updated.
@@ -1648,8 +1661,10 @@ def _bootstrap_if_needed(
         stored_version = meta.get("version", 0)
         stored_features = meta.get("feature_versions", {})
 
-        needs_full = stored_version < _BOOTSTRAP_VERSION
-        needs_tfdfidf = stored_features.get("tfdfidf", 0) < _TFDFIDF_VERSION
+        # A repository-backed lane's version markers live with the cards on the backend, not in a
+        # local meta file it may never have had, so it never forces a full re-index from here.
+        needs_full = not repository_backed and stored_version < _BOOTSTRAP_VERSION
+        needs_tfdfidf = not repository_backed and stored_features.get("tfdfidf", 0) < _TFDFIDF_VERSION
 
         if needs_full:
             _tell(
@@ -2383,7 +2398,8 @@ def _resolve_context_assembler_base(
         registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
         bootstrap_model = registry.resolve_tier("balanced")
         _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir,
-                             provider=cfg.model_provider, model=bootstrap_model, notify=notify)
+                             provider=cfg.model_provider, model=bootstrap_model, notify=notify,
+                             card_repository=_card_repository)
         # Warm the card cache and scoring index while the session waits for its first message,
         # so the first turn's context budget is not spent parsing and weighting every card.
         if callable(getattr(keyword, "prewarm", None)):
