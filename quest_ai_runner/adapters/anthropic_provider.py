@@ -12,6 +12,7 @@ is testable with a stub provider) even where the SDK isn't installed.
 """
 from __future__ import annotations
 
+import inspect
 import os
 import time
 from typing import Any, Dict, List, Optional
@@ -44,6 +45,30 @@ def build_cached_system(system: Optional[str], layers: List[Dict[str, Any]]) -> 
             entry["cache_control"] = {"type": "ephemeral"}
         system_array.append(entry)
     return system_array, tail_text
+
+
+def _thinking_enabled() -> bool:
+    """True only when ``QAR_ANTHROPIC_THINKING`` opts back in (on/1/true/yes). Default is off."""
+    return (os.getenv("QAR_ANTHROPIC_THINKING") or "").strip().lower() in ("on", "1", "true", "yes")
+
+
+def _thinking_kwargs(create) -> Dict[str, Any]:
+    """Request kwargs that turn extended thinking off for one ``messages.create`` call.
+
+    Reasoning models (e.g. Haiku 5.x) spend ``max_tokens`` on a thinking block before any text, so
+    a planner or short-answer call can exhaust its budget and return no text, and a call that
+    should take ~2s takes 6-26s. Every call here is a structured decision or a bounded answer, so
+    thinking is pure latency. Returns ``{}`` when the consumer opted back in
+    (``QAR_ANTHROPIC_THINKING=on``) or when the installed SDK's ``create`` has no ``thinking``
+    parameter (an older SDK would reject the unknown kwarg).
+    """
+    if _thinking_enabled():
+        return {}
+    try:
+        params = inspect.signature(create).parameters
+    except (TypeError, ValueError):
+        return {}
+    return {"thinking": {"type": "disabled"}} if "thinking" in params else {}
 
 
 class AnthropicProvider(ModelProviderBase):
@@ -91,6 +116,9 @@ class AnthropicProvider(ModelProviderBase):
             "max_tokens": self.max_plan_tokens,
             "tools": [tool_schema],
             "tool_choice": {"type": "tool", "name": tool_schema["name"]},
+            # Forced tool use cannot be combined with ENABLED thinking, so disabling it is the
+            # only setting compatible with this call.
+            **_thinking_kwargs(client.messages.create),
         }
         if layers:
             system_array, tail_text = build_cached_system(None, layers)
@@ -122,6 +150,7 @@ class AnthropicProvider(ModelProviderBase):
                 "model": self.resolve_model(model),
                 "max_tokens": self.max_answer_tokens,
                 "messages": [{"role": "user", "content": tail_text}],
+                **_thinking_kwargs(client.messages.create),
             }
             if system_array:
                 create_kwargs["system"] = system_array
@@ -143,6 +172,7 @@ class AnthropicProvider(ModelProviderBase):
             "model": self.resolve_model(model),
             "max_tokens": self.max_answer_tokens,
             "messages": messages,
+            **_thinking_kwargs(client.messages.create),
         }
         if system:
             kwargs["system"] = system
@@ -173,6 +203,7 @@ class AnthropicProvider(ModelProviderBase):
             max_tokens=self.max_answer_tokens,
             tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}],
             messages=[{"role": "user", "content": query}],
+            **_thinking_kwargs(client.messages.create),
         )
         if hasattr(resp, "usage"):
             self.tokens_in += getattr(resp.usage, "input_tokens", 0) or 0
