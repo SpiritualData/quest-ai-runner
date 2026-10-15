@@ -8,6 +8,14 @@ Consumers supply everything specific via ``quest_ai_runner.config.RunnerConfig``
 from typing import TYPE_CHECKING, Optional
 
 from . import adapters, config, core, resources, runner
+from .adapters.claude_cli_provider import cli_model as _cli_model
+from .runner.quest_client import quest_client_from_env as _quest_client_from_env
+
+# ``core`` may not import ``adapters`` or ``runner``, so the one place that sees all of them wires in
+# what core needs: the Claude Code model translator for the deep worker's model gate
+# (``core.goal_runner.cli_safe_model``) and the Quest client factory for the standard tools.
+core.goal_runner.set_cli_model_translator(_cli_model)
+core.tools.set_quest_client_factory(_quest_client_from_env)
 
 if TYPE_CHECKING:  # pragma: no cover — typing only
     from .config import RunnerConfig

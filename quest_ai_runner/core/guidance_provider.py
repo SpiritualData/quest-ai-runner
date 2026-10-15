@@ -45,6 +45,7 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
         vector_store: Optional[Any] = None,
         provider: Optional[Any] = None,
         model: Optional[str] = None,
+        manager_factory: Optional[Callable[..., Any]] = None,
     ):
         """Initialize with file-based and optional dynamic guidance sources.
 
@@ -58,10 +59,17 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
             provider: ModelProvider (MultiProvider) for LLM relevance filtering of
                       candidate guidance cards after tag/keyword/semantic scoring.
             model: Resolved model ID to use for filtering (e.g. balanced tier).
+            manager_factory: Builds the file-backed card store: called as
+                             ``manager_factory(cards_dir=cards_dir)``. Injected so ``core`` does
+                             not import the adapter; ``build_orchestrator`` passes
+                             ``adapters.guidance_card_manager.GuidanceCardManager``.
         """
-        from quest_ai_runner.adapters.guidance_card_manager import GuidanceCardManager
-
-        self.manager = GuidanceCardManager(cards_dir=cards_dir)
+        if manager_factory is None:
+            raise ValueError(
+                "UniversalGuidanceProvider needs manager_factory (e.g. "
+                "adapters.guidance_card_manager.GuidanceCardManager)"
+            )
+        self.manager = manager_factory(cards_dir=cards_dir)
         self.dynamic_loader = dynamic_guidance_loader
         self.vector_store = vector_store
         self._provider = provider

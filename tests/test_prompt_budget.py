@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.core import goal_runner, prompt_budget
+from quest_ai_runner.core import goal_runner, goal_runner_session, prompt_budget
 from quest_ai_runner.core.adapters import DeepResult
 from quest_ai_runner.core.goal_runner import (SubprocessConfig, SubprocessGoalRunner,
                                               compose_goal_prompt)
@@ -223,7 +223,7 @@ def test_a_transcript_too_large_to_replay_is_not_resumed(monkeypatch, tmp_path):
     with open(session, "w") as fh:
         for _ in range(60):
             fh.write(json.dumps({"type": "user", "message": {"content": "p" * 20_000}}) + "\n")
-    monkeypatch.setattr(goal_runner, "resolve_session_file", lambda wd, sid: session)
+    monkeypatch.setattr(goal_runner_session, "resolve_session_file", lambda wd, sid: session)
     calls = fake_worker(monkeypatch, [(0, envelope("done"))])
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path),
                                                    claude_path="/usr/bin/claude"))
@@ -237,7 +237,7 @@ def test_a_transcript_too_large_to_replay_is_not_resumed(monkeypatch, tmp_path):
 def test_a_small_transcript_is_still_resumed(monkeypatch, tmp_path):
     session = tmp_path / "sess-small.jsonl"
     session.write_text(json.dumps({"type": "user", "message": {"content": "hello"}}) + "\n")
-    monkeypatch.setattr(goal_runner, "resolve_session_file", lambda wd, sid: session)
+    monkeypatch.setattr(goal_runner_session, "resolve_session_file", lambda wd, sid: session)
     calls = fake_worker(monkeypatch, [(0, envelope("done"))])
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path),
                                                    claude_path="/usr/bin/claude"))
@@ -248,7 +248,7 @@ def test_a_small_transcript_is_still_resumed(monkeypatch, tmp_path):
 
 
 def test_prompt_too_long_retries_fresh_then_tighter_then_says_why(monkeypatch, tmp_path):
-    monkeypatch.setattr(goal_runner, "resolve_session_file", lambda wd, sid: None)
+    monkeypatch.setattr(goal_runner_session, "resolve_session_file", lambda wd, sid: None)
     too_long = (1, envelope("Prompt is too long", is_error=True, tokens=0))
     calls = fake_worker(monkeypatch, [too_long])
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path),

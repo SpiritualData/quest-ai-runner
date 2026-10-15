@@ -21,8 +21,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
-from quest_ai_runner.runner.quest_client import QuestClient
-from quest_ai_runner.runner.reflections import DEFAULT_PERIODS, collect_reflections
+from quest_ai_runner.core.reflections import DEFAULT_PERIODS, collect_reflections
 
 
 class QuestRetrievalAdapter(RetrievalAdapter):
@@ -38,7 +37,7 @@ class QuestRetrievalAdapter(RetrievalAdapter):
     - Never raises; returns Observation(kind="error") on API failures
     """
 
-    def __init__(self, quest_client: QuestClient):
+    def __init__(self, quest_client: Any):  # a runner.quest_client.QuestClient (duck-typed)
         """Initialize with a configured QuestClient.
 
         Args:

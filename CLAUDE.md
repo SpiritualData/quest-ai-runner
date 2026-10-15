@@ -26,11 +26,19 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
   `_understanding`, `_run`, `_recipes`); `orchestrator.py` keeps `__init__` and re-exports every
   moved name, and the module-level pieces live in `orchestrator_constants`, `_types`,
   `_decide_tool`, `_decisions`, `_text`, `_events`, `_capabilities` and `_turn`. Add a method to
-  the mixin that owns that role, not to `orchestrator.py`. The same pattern applies to
+  the mixin that owns that role, not to `orchestrator.py`. `RunMixin.run` is a short dispatcher: its
+  turn is a chain of phase methods (`_run_begin`, `_run_plan_loop`, ...) held in `orchestrator_run_begin`,
+  `_loop`, `_answer` and `_close`, which share one run-local namespace `rs`. `core/adapters.py` and
+  `core/goal_runner.py` are split the same way (`adapters_*`, `goal_runner_*`). `core` never imports
+  outward: what it needs from `adapters`/`runner` is injected, and `quest_ai_runner/__init__.py`
+  registers `cli_model` (`goal_runner.set_cli_model_translator`) and the Quest client factory
+  (`tools.set_quest_client_factory`). The same pattern applies to
   `adapters/file_context_store.py` (`context_*` modules), `runner/quest_client.py`
   (`quest_client_*`), `runner/context_updates.py` (`context_update_*`, `context_sources_*`),
   `runner/autopilot.py` (`autopilot_*`), `runner/poller.py` (`poller_*`), `runner/executor.py`
-  (`executor_*`) and `config.py` (`config_*`). A test that monkeypatches a module global patches the
+  (`executor_*`), `config.py` (`config_*`), `cli.py` (`cli_*`: one module per subcommand family, `cli.py` keeps `main()`),
+  `textual_ui.py` (`textual_ui_*`: widgets plus `QuestAITerminal` mixins) and `interactive_session.py`
+  (`interactive_session_*`). A test that monkeypatches a module global patches the
   module whose code looks the name up, so patch the module that now holds the function.
 - `runner/` — the executor: poll → claim → run → escalate → report.
 - `adapters/` — reference *implementations* of the interfaces (`FilesAdapter`, `CachedDbAdapter`,
@@ -42,6 +50,23 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
 Module names describe **architectural role**, not domain. "core" is the stable center everything
 depends on; "runner" is the executor; "adapters" are the swappable implementations. See
 `docs/ARCHITECTURE_STANDARDS.md` for the full architecture and the standards code here must follow.
+
+## Adaptable structure: the registry and the check
+
+The repo's structure is data, not folklore. `docs/structure/` holds `components.csv` (every functional
+component: where it lives, its role, interface, metric, docs, tests, gap and status), `solutions.csv`
+(each swappable solution: problem, ideal, port, implementations, the selected one, its metric command)
+and `waivers.csv` (justified exceptions that can only shrink). Read `docs/structure/README.md` first.
+
+- **Before you commit:** `.venv/bin/python3 scripts/check_structure.py` (it also runs as `tests/test_structure_registry.py`).
+  It fails when a file belongs to no component, a module passes 1,500 lines, a module has no docstring,
+  `core/` imports outward, a port has no `solutions.csv` row, a selected implementation is beaten in `results.csv` without a waiver, a `done` component has no metric kind, or `COMPONENTS.md` is stale
+  (`--write-docs` regenerates it).
+- **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
+  `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
+  when its metric wins on the same cases.
+- **Split rule:** split by role, keep the old module as the stable import path that re-exports every moved
+  name, and patch tests at the module whose code looks the name up.
 
 ## 🔒 Hard rule #1 — NOTHING consumer-specific or secret goes in the repo
 

@@ -392,3 +392,42 @@ Keep responses terse and accurate.
     except Exception as e:
         log.error(f"LLM categorization failed: {type(e).__name__}: {e}", exc_info=True)
         return {}
+
+
+def update_cards_from_deep_edits(
+    deep_result: Any,
+    context_meta: Dict[str, Any],
+    *,
+    project_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    model_provider: Any = None,
+    registry: Any = None,
+) -> None:
+    """Discover the files a deep run edited, categorize them into the cards used, update the cards.
+
+    The composed pipeline the orchestrator's ``edited_files_card_updater`` hook runs in the
+    background (wired by ``config.build_orchestrator``). Silent no-op when nothing was edited or
+    categorized. May raise; the caller's background wrapper swallows it.
+    """
+    edited_files = extract_edited_files(
+        deep_result,
+        project_path=project_path,
+        session_id=session_id,
+    )
+    if not edited_files:
+        return
+    categorization = categorize_files_with_llm(
+        edited_files,
+        context_meta["cards"],
+        model_provider=model_provider,
+        registry=registry,
+    )
+    if not categorization:
+        return
+    card_store_dir = context_meta.get("card_store_dir", ".quest-context")
+    update_context_cards(
+        context_meta["cards"],
+        categorization,
+        card_store_dir,
+    )
+    log.debug(f"Updated context cards with {len(edited_files)} edited files")

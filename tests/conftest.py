@@ -3,6 +3,7 @@
 These are the minimal implementations of the four core interfaces that let us drive the brain
 and the runner deterministically.
 """
+import os
 import time
 from typing import Any, Dict, List
 
@@ -17,7 +18,19 @@ from quest_ai_runner.core.adapters import (
 
 
 @pytest.fixture(autouse=True)
-def deep_runner_default_is_inert_in_tests(monkeypatch):
+def hermetic_qar_environment(monkeypatch):
+    """No test inherits a QAR_* setting from the host shell or a lane's service environment.
+
+    A deployed lane exports dozens of QAR_* variables (cards scope, model tiers, state paths).
+    Any test that reads one without setting it itself would pass or fail depending on whose
+    machine runs the suite. Tests that need a value set it with ``monkeypatch.setenv``.
+    """
+    for name in [n for n in os.environ if n.startswith("QAR_")]:
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def deep_runner_default_is_inert_in_tests(monkeypatch, hermetic_qar_environment):
     """The auto-built default deep runner must never resolve to a REAL worker during the suite.
 
     ``RunnerConfig.deep_runner`` left unset means "build the default SubprocessGoalRunner pointed
@@ -36,13 +49,13 @@ def deep_runner_default_is_inert_in_tests(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def claude_live_model_lookup_is_off_in_tests(monkeypatch):
+def claude_live_model_lookup_is_off_in_tests(monkeypatch, hermetic_qar_environment):
     """No test reads the developer's Claude login or hits the network for the live model list."""
     monkeypatch.setenv("QAR_CLAUDE_LIVE_MODELS", "0")
 
 
 @pytest.fixture(autouse=True)
-def tool_catalog_is_empty_unless_a_test_says_otherwise(monkeypatch):
+def tool_catalog_is_empty_unless_a_test_says_otherwise(monkeypatch, hermetic_qar_environment):
     """No test inherits the developer's tool catalog.
 
     ``build_orchestrator`` adds the standard tools whenever Quest credentials are in the env (a
@@ -65,7 +78,7 @@ _WEB_BACKEND_ENV_VARS = (
 
 
 @pytest.fixture(autouse=True)
-def no_web_research_backend_unless_a_test_says_otherwise(monkeypatch):
+def no_web_research_backend_unless_a_test_says_otherwise(monkeypatch, hermetic_qar_environment):
     """No test inherits the developer's/host's live-web backend keys.
 
     ``build_orchestrator`` auto-wires ``cfg.web_research`` from the environment whenever ANY
@@ -200,7 +213,7 @@ class StubEscalation:
 
 
 @pytest.fixture(autouse=True)
-def runner_clock_is_utc_unless_a_test_says_otherwise(monkeypatch):
+def runner_clock_is_utc_unless_a_test_says_otherwise(monkeypatch, hermetic_qar_environment):
     """Pin the RUNNER'S OWN local clock to UTC for the suite.
 
     ``local_time`` degrades to the runner's local clock (never UTC) whenever a zone is missing or

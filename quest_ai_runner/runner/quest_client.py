@@ -65,7 +65,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, FrozenSet, Optional, Sequence
+from typing import Any, Dict, FrozenSet, Mapping, Optional, Sequence
 
 from ..core.adapters import Escalation, EscalationSinkBase
 
@@ -363,3 +363,15 @@ class QuestDecisionSink(EscalationSinkBase):
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("escalate failed: %s", e)
             return ""
+
+
+def quest_client_from_env(env: Mapping[str, str]) -> QuestClient:
+    """A ``QuestClient`` from ``QUEST_BASE_URL`` (or ``QUEST_API_URL``), ``QUEST_API_KEY`` and ``QUEST_TEAM_ID``.
+
+    This is the factory the standard tools in ``core.tools`` build their client with: ``core`` may
+    not import the runner, so ``quest_ai_runner/__init__.py`` registers it with
+    ``core.tools.set_quest_client_factory``.
+    """
+    base = env.get("QUEST_BASE_URL") or env.get("QUEST_API_URL") or ""
+    return QuestClient(base_url=base, api_key=env.get("QUEST_API_KEY") or "",
+                       team_id=env.get("QUEST_TEAM_ID") or None)

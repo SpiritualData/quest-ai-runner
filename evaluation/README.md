@@ -1,10 +1,30 @@
 # Evaluation: FileContextStore vs SOTA baseline
 
 This document covers the methodology, dataset, honest limitations, and measured results
-for the FileContextStore context layer evaluation. Two complementary scripts measure
-different dimensions:
+for the FileContextStore context layer evaluation. The zero-model checks now run as
+components behind a fixed interface (swap a solution by name, results comparable):
 
-- **`eval_deterministic.py`** — zero-LLM, zero-token, free to run.
+```
+PY=.venv/bin/python3        # from the quest-ai-runner repo root
+$PY evaluation/components/run.py context_selection --impl idf_docstrings   # also: idf_paths_only, blind_grep,
+                                                                           #       vector_bge_small, hybrid_union
+$PY evaluation/components/run.py staleness --impl store_sha256            # also: mtime_size
+$PY evaluation/components/run.py recipe_fast_path --impl recipe_replay     # also: planner_only (real model)
+$PY evaluation/eval_deterministic.py [--all]                               # wrapper: cold start + both zero-model components
+```
+
+See `components/README.md` for the interface of each. Script status:
+
+- **Now components** (the old commands remain as thin wrappers): `eval_deterministic.py` ->
+  `context_selection/` + `staleness/`; `recipe_fast_path_eval.py` -> `recipe_fast_path/`
+  (its dataset is `components/recipe_fast_path/cases.json`).
+- **Still legacy scripts, not behind the component interface:** `eval_vs_claude_code.py`,
+  `card_quality_eval.py`, `chat_quest_ops_routing_eval.py`, `deep_review_eval.py`,
+  `overseer_signals_eval.py`.
+
+Two scripts' worth of methodology is described below:
+
+- **`eval_deterministic.py`** (now `context_selection/` and `staleness/`) — zero-LLM, zero-token, free to run.
 - **`eval_vs_claude_code.py`** — A/B harness comparing Claude Code alone vs Claude Code
   + context, using the `claude` CLI (spends a small amount of Haiku tokens; opt-in only).
 
@@ -34,17 +54,20 @@ Grep does not use tools and does not pay a round-trip cost; it cannot serve as t
 cold arm in an A/B that measures tool-call rounds. Claude Code alone is the correct cold
 arm because it represents actual production behavior with no context pre-loading.
 
-### Deterministic script (`eval_deterministic.py`)
+### Deterministic checks (`context_selection/`, `staleness/`; wrapper `eval_deterministic.py`)
 
-1. Copies the repo to a `tempfile.mkdtemp()` directory, excluding `.git`, `.venv`,
-   `__pycache__`, `.quest-context`, and similar dirs. Nothing in the live tree is touched.
-2. Bootstraps a `FileContextStore` over the copy (one card per source file).
-   Reports: card count, cold-start time (wall ms), files pinned, symbols indexed, LLM calls.
-3. Runs the 15-item routing dataset (see below) and reports top-1 / top-3 accuracy for
-   the IDF-based context service and a blind-grep baseline.
-4. Mutates 3 files in the copy (appends a comment line), then calls `stale_cards_for(path)`
-   for each mutated path and one unmutated witness path. Reports precision / recall of
-   stale detection. The temp dir is discarded afterward.
+1. `context_selection/corpus.py` walks the checkout (read-only, nothing is copied or modified) and
+   builds one card per `.py` file with the store's own extractors: symbols, module and class/function
+   docstring first lines, path, test-file weight. The production `bootstrap()` needs a model to build
+   topic cards (it is a no-op without a provider), so a zero-call evaluation builds these per-file
+   cards itself. Reports: file cards, symbols, build time.
+2. Runs the 15-item routing dataset (`context_selection/cases.json`) through each solution and reports
+   top-1 / top-3: IDF over those cards (`FileContextStore.assemble`, confidence gate off), the same
+   without docstring text, a blind-grep baseline, the local `bge-small-en-v1.5` vector arm, and the
+   hybrid union of IDF and vector.
+3. `staleness/` builds small synthetic trees and mutates them (edit, no-op, touch only, same-size edit
+   with the mtime restored, deletion), then reports precision / recall of `stale_cards_for` against a
+   plain (mtime, size) baseline.
 
 ### A/B script (`eval_vs_claude_code.py`)
 
@@ -201,6 +224,32 @@ target tasks, and runs on at least one external repo of moderate size.
 - Multiple repeated A/B runs to reduce variance on turn counts and tokens.
 
 ## Results (measured)
+
+**Re-measured 2026-10-15 on the current tree (575 `.py` files)** with the component commands above
+(0 model calls; the targets in `cases.json` are unchanged). The tables further down are the original
+run on a 93-file tree and are kept as history; they are NOT reproducible any more, because the tree
+grew 6x (more competing files) and the store no longer bootstraps without a model.
+
+| Solution (`context_selection`) | top-1 | top-3 |
+|---|---|---|
+| `idf_docstrings` (production IDF, docstring cards) | 40% (6/15) | 60% (9/15) |
+| `idf_paths_only` (same, docstring text removed) | 33% (5/15) | 53% (8/15) |
+| `vector_bge_small` (local embedder, offline) | 67% (10/15) | 73% (11/15) |
+| `hybrid_union` (IDF + vector, RRF order, up to 6 files) | 73% (11/15) | 73% (11/15); recall within 6 files 73% |
+| `blind_grep` (zero-model floor) | 33% (5/15) | 53% (8/15) |
+
+| Solution (`staleness`, 6 synthetic cases) | precision | recall |
+|---|---|---|
+| `store_sha256` (production) | 1.00 | 0.67 (misses a same-size edit with the mtime restored, and a deletion) |
+| `mtime_size` (baseline) | 0.83 | 0.83 (flags a touch-only file, misses the same-size edit) |
+
+How this differs from the old numbers: the tree is 570 files instead of 93 and is being split into
+many small modules while this is written, so rankings move between runs of the same day; the
+`evaluation/` folder is excluded from the corpus (the old script indexed itself, task strings
+included), which is also why blind grep is no longer 0% top-1. The old 53% / 93% for IDF with
+docstrings and 80% for vector are not reproduced; the vector arm now beats IDF here, and the claim that
+the hybrid union recovers IDF's misses does not hold on this tree. Compare solutions with each other on
+one checkout, not against the historical table.
 
 All numbers below come from an actual run of the scripts on this machine. They are presented
 honestly; they are NOT cherry-picked or adjusted.

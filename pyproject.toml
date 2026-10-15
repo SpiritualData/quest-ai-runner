@@ -98,7 +98,7 @@ include = ["quest_ai_runner*"]
 quest_ai_runner = ["prompts/*.md"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "evaluation/components"]
 # Async TUI tests (textual's run_test harness) are marked @pytest.mark.asyncio explicitly,
 # so keep strict mode — only marked coroutines run on the event loop.
 asyncio_mode = "strict"

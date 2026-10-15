@@ -430,5 +430,5 @@ def test_the_turn_completion_path_actually_calls_it():
     """The first half of this feature shipped with its attended trigger left unwired, which is the
     whole reason it needed a second pass. Read as source rather than imported so the check holds
     without a terminal or the optional UI dependencies."""
-    ui = (Path(quest_ai_runner.__file__).parent / "textual_ui.py").read_text(encoding="utf-8")
+    ui = (Path(quest_ai_runner.__file__).parent / "textual_ui_turn.py").read_text(encoding="utf-8")
     assert "_maybe_refresh_next_steps(final)" in ui

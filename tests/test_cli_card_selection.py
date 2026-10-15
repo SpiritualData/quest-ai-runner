@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from quest_ai_runner import cli
+from quest_ai_runner import cli, cli_context
 from quest_ai_runner.core.adapters import AssembledContext
 
 
@@ -22,7 +22,7 @@ def test_default_use_llm_is_false_and_skips_provider_setup(tmp_path, monkeypatch
     def _boom():
         raise AssertionError("_config_from_env must not be called when use_llm defaults off")
 
-    monkeypatch.setattr(cli, "_config_from_env", _boom)
+    monkeypatch.setattr(cli_context, "_config_from_env", _boom)
 
     result = cli.select_card_ids_for_text("anything", corpus=str(tmp_path))
 
@@ -37,7 +37,7 @@ def test_explicit_use_llm_true_still_attempts_provider_setup(tmp_path, monkeypat
         calls.append(True)
         raise RuntimeError("no provider configured")
 
-    monkeypatch.setattr(cli, "_config_from_env", _boom)
+    monkeypatch.setattr(cli_context, "_config_from_env", _boom)
 
     result = cli.select_card_ids_for_text("anything", corpus=str(tmp_path), use_llm=True)
 
@@ -50,7 +50,7 @@ def test_llm_provider_setup_failure_is_logged_not_silent(tmp_path, monkeypatch, 
     def _boom():
         raise RuntimeError("no provider configured")
 
-    monkeypatch.setattr(cli, "_config_from_env", _boom)
+    monkeypatch.setattr(cli_context, "_config_from_env", _boom)
 
     with caplog.at_level(logging.WARNING, logger="quest-ai-runner"):
         cli.select_card_ids_for_text("anything", corpus=str(tmp_path), use_llm=True)

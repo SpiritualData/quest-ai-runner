@@ -12,7 +12,7 @@ DESIGN CONTRACT (shared with any consumer that imports this module):
     own storage (e.g. an async database) reuses the pure functions with its own persistence; the
     runner lane uses ``FilePredictionStore`` + ``Anticipator`` below. No ported duplicates.
   * The pure functions do NO file or LLM I/O. Keywords come from
-    ``adapters.tfdfidf_sampling.keywords_from_text`` (stdlib tokenization, no model call).
+    ``core.text_sampling.keywords_from_text`` (stdlib tokenization, no model call).
   * A prediction miss is a LEARNING SIGNAL, never user-visible breakage: the normal path is
     always the fallback, and a served bundle is only ever a cheap, discardable hint.
   * Matching is numeric scoring with thresholds. Nothing here gates control flow on keywords in
@@ -126,7 +126,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
+from .text_sampling import keywords_from_text
 
 from .adapters import AssembledContext
 from .scope_tags import scope_tags_allow, scope_tags_from_keys, union_scope_tags

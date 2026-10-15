@@ -1,0 +1,13 @@
+rule,path,reason
+S4,tests/test_anticipation.py,Test file grouped by subject; splits with anticipation.py when that module is next restructured
+S4,tests/test_autopilot.py,"Test file grouped by subject; autopilot behaviour already has per-topic test_autopilot_*.py files, migrate cases there as they are touched"
+S4,tests/test_context_assembler.py,Test file grouped by subject; split by assembler when the store is next touched
+S4,tests/test_orchestrator.py,"Test file grouped by subject; per-role files (test_orchestrator_*.py) exist, move cases there as they are touched"
+S4,tests/test_runner.py,Test file grouped by subject; split by poller/executor role when next touched
+S4,tests/test_vector_context.py,"Test file grouped by subject; split by arm (vector, hybrid, seed source) when next touched"
+S4,evaluation/chat_quest_ops_routing_eval.py,"Legacy end-to-end script; superseded by evaluation/components/quest_ops, delete once that component covers its cases"
+S4,evaluation/qualitative/world.py,"Fixture world for the dev-Quest qualitative harness; split by entity (quests, goals, notes, experiments) when next extended"
+S6,quest_ai_runner/runner/channel_session.py:interactive_session,Channel sessions reuse the interactive session's turn handling; extract the shared turn code into a neutral module when channel_session is next changed
+S10,route-a-message:single_prompt,Pending decision by the Director of AI Platform: single_prompt scores 30/30 at about $0.001 against qar_planner 26/30; switching changes live routing so it needs a held-out re-run and sign-off
+S10,operate-a-quest:direct_tool_call,Pending decision by the Director of AI Platform: direct_tool_call passes the same 12/12 at about 2% of the cost; needs held-out ambiguous and multi-step cases first (see solutions.csv action)
+S10,replay-known-operations:unmeasured,recipe_replay needs the claude CLI to record a live result; run with --record on a host that has it

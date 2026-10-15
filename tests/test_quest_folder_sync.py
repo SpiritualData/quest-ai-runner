@@ -180,6 +180,28 @@ def test_push_posts_unsynced_bullet_and_marks_it():
     assert "<!-- id:note_1 --> leads.csv now has 12 signups" in content
 
 
+def test_push_never_posts_the_runners_own_managed_blocks_as_notes():
+    """Prod incident 2026-10-02..15: the goal block sat UNDER the 'Notes to push' heading, so its
+    accepted-strategy bullets were posted as notes on every push; the next pull re-rendered them
+    without ids and the next push posted them again (11,519 times each)."""
+    client = MockQuestFolderClient()
+    with tempfile.TemporaryDirectory() as d:
+        pull_quest_to_folder(client, QUEST_ID, d)
+        path = Path(d, "QUEST_SYNC.md")
+        text = path.read_text()
+        # Reproduce the prod layout: managed goal + notes blocks AFTER the push heading.
+        head, _, tail = text.partition("## Notes to push to Quest")
+        goal = text[text.index("<!-- QAR:MANAGED:goal START -->"):
+                    text.index("<!-- QAR:MANAGED:goal END -->") + len("<!-- QAR:MANAGED:goal END -->")]
+        path.write_text(text.replace(goal, "").rstrip("\n") + "\n\n" + goal + "\n")
+        for _ in range(3):  # pull then push, as the poller does each cycle
+            pull_quest_to_folder(client, QUEST_ID, d)
+            res = push_folder_to_quest(client, QUEST_ID, d)
+            assert res.notes_pushed == 0
+        assert "- Run paid ads on Reddit and Meta" in path.read_text()
+    assert client.add_note_calls == []
+
+
 def test_push_skips_already_synced_bullets():
     client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
@@ -451,7 +473,8 @@ def test_quest_client_account_quest_endpoints_shape_requests():
 
     assert calls[0] == ("GET", "/api/quests/me", None, None)
     assert calls[1] == ("GET", f"/api/quests/{QUEST_ID}/state", None, None)
-    assert calls[2] == ("GET", f"/api/quests/{QUEST_ID}/notes", None, None)
+    # Notes are paged, newest first, never asked for as one unbounded list.
+    assert calls[2] == ("GET", f"/api/quests/{QUEST_ID}/notes", {"limit": 100, "before": None}, None)
     assert calls[3] == ("POST", f"/api/quests/{QUEST_ID}/notes", None, {"text": "a note"})
 
 
@@ -821,3 +844,33 @@ def test_render_names_what_a_reflection_note_is_from_and_leaves_plain_notes_alon
     text = render_sync_file("", QUEST_ID, state, notes)
     assert "<!-- id:note_r --> [2026-10-14] (Joshua) (from Joshua's Daily Reflection) Booked the venue." in text
     assert "<!-- id:note_p --> [2026-10-15] (Joshua) Plain note." in text
+
+
+# --- bounded notes (prod incident: 34,616 notes pulled and rendered into a 3 MB file) ----------
+
+def _many_notes(n):
+    return [{"note_id": f"note_{i}", "text": f"note body {i}", "author_kind": "user",
+             "created_at": f"2026-09-01T00:00:{i % 60:02d}"} for i in range(n)]
+
+
+def test_render_caps_the_notes_block_at_the_newest_and_says_how_many_were_left_out():
+    from quest_ai_runner.runner.quest_folder_sync import NOTES_BLOCK_LIMIT
+    out = render_sync_file("", QUEST_ID, MockQuestFolderClient()._state, _many_notes(NOTES_BLOCK_LIMIT + 30),
+                           notes_total=5000)
+    assert f"_{5000 - NOTES_BLOCK_LIMIT} older notes not shown, total 5000._" in out
+    assert out.count("<!-- id:note_") == NOTES_BLOCK_LIMIT
+    assert f"note body {NOTES_BLOCK_LIMIT + 29}" in out and "note body 29\n" not in out
+
+
+def test_render_below_the_cap_is_unchanged_and_has_no_hidden_line():
+    out = render_sync_file("", QUEST_ID, MockQuestFolderClient()._state, _many_notes(3))
+    assert "older notes not shown" not in out
+
+
+def test_pull_passes_the_clients_total_through():
+    from quest_ai_runner.runner.quest_client_quests import NotesList
+    client = MockQuestFolderClient()
+    client.list_quest_notes = lambda qid: NotesList(_many_notes(5), total=34616)
+    with tempfile.TemporaryDirectory() as d:
+        pull_quest_to_folder(client, QUEST_ID, d)
+        assert "_34611 older notes not shown, total 34616._" in Path(d, "QUEST_SYNC.md").read_text()

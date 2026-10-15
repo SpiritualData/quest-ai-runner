@@ -8,6 +8,24 @@ from typing import Any, Dict, List, Optional
 
 from .quest_client_support import QuestApiError, QuestNotConfigured, QuestPendingApproval, log
 
+#: Newest notes a pull fetches by default, and the page size it asks the server for (the server
+#: caps a page at 100 whatever is asked).
+DEFAULT_NOTES_LIMIT = 200
+NOTES_PAGE_SIZE = 100
+
+
+class NotesList(list):
+    """A list of notes (oldest -> newest) that also knows how many the quest has in all.
+
+    Behaves exactly like the plain list ``list_quest_notes`` always returned; ``total`` lets a
+    renderer say "N older notes not shown, total T" when the list is the newest slice.
+    """
+
+    def __init__(self, items=(), total: Optional[int] = None):
+        super().__init__(items)
+        self.total = len(self) if total is None else total
+
+
 
 class QuestsMixin:
     """Quests: teams, fields, lifecycle, notes, events, habits, experiments and autopilot settings."""
@@ -376,19 +394,43 @@ class QuestsMixin:
             log.warning("unarchive_quest failed for quest %s: %s", quest_id, e)
             return False
 
-    def list_quest_notes(self, quest_id: str) -> List[Dict[str, Any]]:
+    def list_quest_notes(self, quest_id: str, limit: int = DEFAULT_NOTES_LIMIT) -> List[Dict[str, Any]]:
         """GET /api/quests/{quest_id}/notes — the goal's freeform notes, oldest -> newest.
+
+        Returns at most the NEWEST ``limit`` notes (default 200), fetched a page at a time with
+        the paging contract (``limit``/``before``, newest first), so a pull never downloads or
+        renders an unbounded list: one prod quest once held 34,616 notes. The result is a
+        :class:`NotesList` (a plain ``list``) whose ``.total`` is how many notes the quest has in
+        all, so a caller can say "N older notes not shown". Against a backend that predates paging
+        the bare list it answers is kept as-is (newest ``limit`` of it) and ``.total`` is its length.
 
         The "goal is the hub" surface: any owner or active-share holder can read them. Returns []
         if not found or inaccessible.
         """
         try:
             self._require()
-            resp = self._request("GET", f"/api/quests/{quest_id}/notes") or []
-            return resp if isinstance(resp, list) else []
+            collected: List[Dict[str, Any]] = []  # newest first
+            total: Optional[int] = None
+            cursor: Optional[str] = None
+            while len(collected) < limit:
+                resp = self._request("GET", f"/api/quests/{quest_id}/notes", params={
+                    "limit": min(NOTES_PAGE_SIZE, limit - len(collected)), "before": cursor})
+                if isinstance(resp, list):  # a backend without paging answers the whole list
+                    legacy = [n for n in resp if isinstance(n, dict)]
+                    return NotesList(legacy[-limit:], total=len(legacy))
+                if not isinstance(resp, dict):
+                    break
+                page = [n for n in (resp.get("notes") or []) if isinstance(n, dict)]
+                collected.extend(page)
+                total = resp.get("unfiltered_total", resp.get("total", total))
+                cursor = resp.get("next_cursor")
+                if not cursor or not page:
+                    break
+            collected.reverse()
+            return NotesList(collected, total=total if total is not None else len(collected))
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_quest_notes failed for quest %s: %s", quest_id, e)
-            return []
+            return NotesList([], total=0)
 
     def update_outcome_progress(self, quest_id: str, outcome_id: str, progress_pct: Any,
                                 note: str, current_value: Any = None) -> Dict[str, Any]:

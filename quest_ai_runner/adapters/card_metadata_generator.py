@@ -11,17 +11,9 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional
 
-
-class ModelProvider(Protocol):
-    """Minimal interface for LLM calls."""
-
-    def answer(
-        self, messages: List[Dict[str, str]], *, model: str, system: Optional[str] = None
-    ) -> str:
-        """Generate text from messages."""
-        ...
+from ..core.adapters import ModelProvider
 
 
 class CardMetadataGenerator:

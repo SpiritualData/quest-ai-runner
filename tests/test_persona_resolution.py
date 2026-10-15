@@ -139,8 +139,8 @@ def test_provider_error_returns_none_not_raises(tmp_path):
 
 
 def test_slow_provider_call_times_out_and_returns_none(tmp_path, monkeypatch):
-    import quest_ai_runner.interactive_session as interactive_mod
-    monkeypatch.setattr(interactive_mod, "_PERSONA_RESOLUTION_TIMEOUT_SECONDS", 0.05)
+    import quest_ai_runner.interactive_session_persona as interactive_mod_persona
+    monkeypatch.setattr(interactive_mod_persona, "_PERSONA_RESOLUTION_TIMEOUT_SECONDS", 0.05)
     (tmp_path / "CLAUDE.md").write_text("# Corpus\nSome text.")
     provider = _FakeProvider(response='{"name": "River", "persona_file": null}', delay=1.0)
     assert _resolve_persona_from_corpus(_cfg(str(tmp_path), provider)) is None

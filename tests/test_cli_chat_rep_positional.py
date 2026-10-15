@@ -6,7 +6,7 @@ rep_name/rep_specified the same as --rep, an explicit --rep must still win over 
 """
 from __future__ import annotations
 
-from quest_ai_runner import cli
+from quest_ai_runner import cli, cli_chat
 from quest_ai_runner.config import RunnerConfig
 
 
@@ -23,7 +23,7 @@ def _valid_cfg(corpus_root=None):
 
 
 def _run_chat(argv, monkeypatch, corpus_root=None):
-    monkeypatch.setattr(cli, "_config_from_env", _valid_cfg(corpus_root))
+    monkeypatch.setattr(cli_chat, "_config_from_env", _valid_cfg(corpus_root))
 
     import quest_ai_runner.textual_session as textual_session
     monkeypatch.setattr(textual_session, "is_textual_available", lambda: True)

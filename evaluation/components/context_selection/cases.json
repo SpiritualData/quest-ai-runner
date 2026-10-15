@@ -1,0 +1,92 @@
+[
+ {
+  "id": "CTX-001",
+  "area": "core",
+  "task": "The planner loop runs plan then gathers reads then replans \u2014 where is that loop?",
+  "target": "quest_ai_runner/core/orchestrator.py"
+ },
+ {
+  "id": "CTX-002",
+  "area": "core",
+  "task": "Where are the RetrievalAdapter and ModelProvider Protocol interfaces defined?",
+  "target": "quest_ai_runner/core/adapters.py"
+ },
+ {
+  "id": "CTX-003",
+  "area": "core",
+  "task": "How does the model registry bucket model ids into haiku sonnet opus tiers?",
+  "target": "quest_ai_runner/core/model_registry.py"
+ },
+ {
+  "id": "CTX-004",
+  "area": "core",
+  "task": "SubprocessGoalRunner spawns a bounded goal-driven run \u2014 which file implements it?",
+  "target": "quest_ai_runner/core/goal_runner.py"
+ },
+ {
+  "id": "CTX-005",
+  "area": "core",
+  "task": "prepare_attachments handles uploaded files and images in the context \u2014 where?",
+  "target": "quest_ai_runner/core/attachments.py"
+ },
+ {
+  "id": "CTX-006",
+  "area": "adapters",
+  "task": "FilesAdapter greps over a configured root and reads sections \u2014 which file?",
+  "target": "quest_ai_runner/adapters/files_adapter.py"
+ },
+ {
+  "id": "CTX-007",
+  "area": "adapters",
+  "task": "FileContextStore bootstraps one card per source file with IDF keyword scoring",
+  "target": "quest_ai_runner/adapters/file_context_store.py"
+ },
+ {
+  "id": "CTX-008",
+  "area": "adapters",
+  "task": "AnthropicProvider wraps the Anthropic SDK for plan and answer calls",
+  "target": "quest_ai_runner/adapters/anthropic_provider.py"
+ },
+ {
+  "id": "CTX-009",
+  "area": "adapters",
+  "task": "The claude CLI headless provider calls the claude command as a subprocess",
+  "target": "quest_ai_runner/adapters/claude_cli_provider.py"
+ },
+ {
+  "id": "CTX-010",
+  "area": "runner",
+  "task": "The poller discovers due tasks and claims them with bounded concurrency",
+  "target": "quest_ai_runner/runner/poller.py"
+ },
+ {
+  "id": "CTX-011",
+  "area": "runner",
+  "task": "The executor runs one claimed assistant task through the brain and reports result",
+  "target": "quest_ai_runner/runner/executor.py"
+ },
+ {
+  "id": "CTX-012",
+  "area": "runner",
+  "task": "QuestClient sends PATCH requests to mark tasks done or needs_you in the Quest API",
+  "target": "quest_ai_runner/runner/quest_client.py"
+ },
+ {
+  "id": "CTX-013",
+  "area": "package",
+  "task": "RunnerConfig is the single place a consumer supplies the Quest API key and adapters",
+  "target": "quest_ai_runner/config.py"
+ },
+ {
+  "id": "CTX-014",
+  "area": "package",
+  "task": "The quest-ai-runner console entry parses --once and --check flags from the command line",
+  "target": "quest_ai_runner/cli.py"
+ },
+ {
+  "id": "CTX-015",
+  "area": "package",
+  "task": "Where are bundled resource files like prompt templates loaded from package data?",
+  "target": "quest_ai_runner/resources.py"
+ }
+]

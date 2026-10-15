@@ -41,6 +41,7 @@ from .config_support import (  # noqa: F401
     _AUTO_DEEP_RUNNER,
     _log,
 )
+from .adapters.context_card_updater import update_cards_from_deep_edits
 from .config_context_index import (
     _bootstrap_if_needed,
     _build_qdrant_card_repo_from_env,
@@ -1401,6 +1402,7 @@ def build_orchestrator(
     guidance = cfg.guidance_provider
     if guidance is None:
         from quest_ai_runner.core.guidance_provider import UniversalGuidanceProvider
+        from quest_ai_runner.adapters.guidance_card_manager import GuidanceCardManager
         from quest_ai_runner.adapters.quest_guidance_loader import QuestGuidanceLoader
         from quest_ai_runner.runner.quest_client import QuestClient
 
@@ -1423,6 +1425,7 @@ def build_orchestrator(
             dynamic_guidance_loader=dynamic_loader,
             provider=cfg.model_provider,
             model=_g_registry.resolve_tier("balanced"),
+            manager_factory=GuidanceCardManager,
         )
 
     # A default in-process inbox for mid-run user messages, so any interface (chat, Quest frontend,
@@ -1464,4 +1467,6 @@ def build_orchestrator(
         tools=resolve_tool_registry(cfg),
         web=cfg.web_research,
         recipes=cfg.recipe_store or build_recipe_store_from_env(),
+        edited_files_card_updater=update_cards_from_deep_edits,
+        background_thread_registrar=_register_index_thread,
     )

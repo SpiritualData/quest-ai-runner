@@ -228,6 +228,8 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         tools: Optional[ToolRegistry] = None,
         web: Optional[Any] = None,
         recipes: Optional[RecipeStore] = None,
+        edited_files_card_updater: Optional[Callable[..., None]] = None,
+        background_thread_registrar: Optional[Callable[[threading.Thread, Any], None]] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -323,6 +325,13 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         self.web: Optional[Any] = web
         # Operations learned from earlier turns, replayed before any context search (core/recipes.py).
         self.recipes: Optional[RecipeStore] = recipes
+        # Injected by ``config.build_orchestrator`` (core imports neither adapters nor config).
+        # ``edited_files_card_updater(deep_result, context_meta, *, project_path, session_id,
+        # model_provider, registry)`` folds a deep run's edited files into the cards it used; None
+        # = that update is skipped. ``background_thread_registrar(thread, owner)`` hands an owned
+        # background thread to the shutdown registry; None = the thread is simply not registered.
+        self.edited_files_card_updater = edited_files_card_updater
+        self.background_thread_registrar = background_thread_registrar
         # The single-flight handle for the turn-end anticipation learn/plan thread (see
         # _kickoff_anticipation): while it is alive, further kickoffs are skipped, not queued.
         self._anticipation_thread: Optional[threading.Thread] = None

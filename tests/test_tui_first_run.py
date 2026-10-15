@@ -99,7 +99,7 @@ def test_build_session_worker_fails_fast_when_no_provider(monkeypatch):
     app._finish_startup = lambda session: calls.__setitem__("finish_startup_called", True)
 
     monkeypatch.setattr(
-        "quest_ai_runner.textual_ui._missing_model_provider_message",
+        "quest_ai_runner.textual_ui_startup._missing_model_provider_message",
         lambda: "No AI provider is configured. Set ANTHROPIC_API_KEY...",
     )
 
@@ -126,7 +126,7 @@ def test_build_session_worker_proceeds_when_provider_available(monkeypatch):
     app._finish_startup = lambda session: calls.__setitem__("finish_startup_called", True)
 
     monkeypatch.setattr(
-        "quest_ai_runner.textual_ui._missing_model_provider_message",
+        "quest_ai_runner.textual_ui_startup._missing_model_provider_message",
         lambda: None,
     )
     # Stub out InteractiveSession construction so this stays offline/fast.

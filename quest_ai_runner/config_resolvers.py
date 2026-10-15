@@ -49,6 +49,7 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
     try:
         import shutil
 
+        from .adapters.claude_cli_provider import cli_model
         from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
         claude_path = os.getenv("QAR_CLAUDE_PATH", "claude") or "claude"
@@ -75,7 +76,7 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
             working_dir=working_dir,
             claude_path=claude_path,
             context_preamble=cfg.context_preamble or "",
-        ))
+        ), model_translator=cli_model)   # core cannot import the adapter, so config injects it
         _log.info("deep runner: using the default SubprocessGoalRunner (%s, cwd=%s)",
                   found, working_dir)
         return runner

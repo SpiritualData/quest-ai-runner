@@ -26,7 +26,7 @@ sys.path.insert(0, str(HERE))
 OFFLINE_QUEST_URL = "http://quest.invalid"  # never resolves: nothing can reach a Quest server
 SCRUB = ("QAR_TOOLS_FILE", "QAR_CONFIG_FILE", "QAR_CONTEXT_PREAMBLE_FILE", "QAR_LINK_POLICY_FILE",
          "QAR_MODEL_FAST", "QAR_MODEL_BALANCED", "QAR_MODEL_QUALITY", "QAR_MODEL_BEST",
-         "QAR_OVERSEER_TIER", "QAR_VERIFY_TIER", "QAR_OVERSEER", "QUEST_TEAM_ID")
+         "QAR_OVERSEER_TIER", "QAR_VERIFY_TIER", "QAR_OVERSEER", "QUEST_TEAM_ID", "QAR_RECIPES")
 
 
 class BudgetExceeded(RuntimeError):
@@ -72,8 +72,9 @@ class CallMeter:
         return provider
 
 
-def build_offline_orchestrator(meter, registry=None, planner_tier="haiku"):
-    """Real Orchestrator, deep runner disabled, no Quest server. Refuses to return if a deep runner is wired."""
+def build_offline_orchestrator(meter, registry=None, planner_tier="haiku", recipe_store=None):
+    """Real Orchestrator, deep runner disabled, no Quest server. Refuses to return if a deep runner is wired.
+    ``recipe_store`` wires a RecipeStore; None leaves recipes off (QAR_RECIPES is scrubbed)."""
     scratch = tempfile.mkdtemp(prefix="qar_comp_")
     os.environ.update(QUEST_BASE_URL=OFFLINE_QUEST_URL, QUEST_API_KEY="offline-eval",
                       QAR_STANDARD_TOOLS="1", QAR_CORPUS_ROOT=scratch, QAR_CONVERSATION_SEARCH="false",
@@ -88,6 +89,8 @@ def build_offline_orchestrator(meter, registry=None, planner_tier="haiku"):
     cfg.deep_runner = None  # THE LATCH: explicit None = execution disabled (config.resolve_deep_runner)
     if registry is not None:
         cfg.tool_registry = registry
+    if recipe_store is not None:
+        cfg.recipe_store = recipe_store
     orch = build_orchestrator(cfg)
     if getattr(orch, "deep_runner", None):
         raise SystemExit("deep runner is wired; refusing to run")
@@ -95,6 +98,36 @@ def build_offline_orchestrator(meter, registry=None, planner_tier="haiku"):
     for p in getattr(orch, "providers", {}).values() if isinstance(getattr(orch, "providers", None), dict) else []:
         meter.wrap(p)
     return orch
+
+
+RESULTS_CSV = HERE / "results.csv"
+RESULT_COLUMNS = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls",
+                  "tokens_in", "tokens_out", "cost_usd", "seconds", "git_sha", "cases_sha"]
+
+
+def record_result(summary, date=None, path=RESULTS_CSV):
+    """Append one run's summary to the committed results.csv (the source of truth for metrics)."""
+    import csv
+    import datetime
+    import hashlib
+    import subprocess
+    comp = summary.get("component", "")
+    cases = HERE / comp / "cases.json"
+    sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=HERE, capture_output=True, text=True).stdout.strip()
+    row = dict(summary, date=date or datetime.date.today().isoformat(),
+               cost_usd=summary.get("cli_reported_cost_usd", 0.0), git_sha=sha,
+               cases_sha=hashlib.sha256(cases.read_bytes()).hexdigest()[:8] if cases.exists() else "")
+    new = not Path(path).exists()
+    with open(path, "a", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=RESULT_COLUMNS, extrasaction="ignore")
+        if new:
+            w.writeheader()
+        w.writerow(row)
+
+
+def discover_components():
+    """A component is any folder here with a score.py: adding one needs no edit to run.py."""
+    return sorted(p.name for p in HERE.iterdir() if (p / "score.py").is_file())
 
 
 def load_impl(spec, component):
@@ -114,6 +147,8 @@ def run_component(component, fn_scorer, argv):
     ap.add_argument("--only", default=None, help="comma-separated case ids")
     ap.add_argument("--max-calls", type=int, default=None, help="abort when model calls exceed this")
     ap.add_argument("--out", default=None, help="results json path")
+    ap.add_argument("--record", action="store_true",
+                    help="append the summary to results.csv (the committed record leaderboard.py reads)")
     args = ap.parse_args(argv)
     cases = json.loads((HERE / component / "cases.json").read_text())
     if args.only:
@@ -149,4 +184,6 @@ def run_component(component, fn_scorer, argv):
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(dict(summary=summary, rows=rows), indent=1))
     print(f"results: {out}")
+    if args.record:
+        record_result(summary)
     return summary, rows

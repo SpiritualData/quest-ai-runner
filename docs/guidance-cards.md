@@ -195,6 +195,7 @@ To control it, supply your own:
 
 ```python
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.adapters.guidance_card_manager import GuidanceCardManager
 from quest_ai_runner.core.guidance_provider import UniversalGuidanceProvider
 
 cfg = RunnerConfig(
@@ -204,6 +205,7 @@ cfg = RunnerConfig(
         cards_dir="/srv/rules/guidance",          # pin the directory
         dynamic_guidance_loader=my_loader,        # any callable returning card dicts
         vector_store=my_vector_store,             # enables the semantic factor
+        manager_factory=GuidanceCardManager,      # the file store (core never imports adapters)
     ),
     guidance_topk=3,
 )

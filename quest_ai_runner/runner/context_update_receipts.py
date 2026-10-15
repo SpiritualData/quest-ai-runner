@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from ..core.managed_blocks import RECEIPT_RULES, block_spans  # noqa: F401  (block_spans re-exported)
 from .context_update_types import BLOCK_END, BLOCK_START, USAGE_HEADING, _REF_RE
 
 
@@ -51,17 +52,8 @@ def _disposition_rules() -> str:
     )
 
 
-# The receipt protocol, stated to the run that will produce the work. Kept here rather than in
-# ``core/context_doctrine`` because it is not a doctrine about how to think: it is the contract for
-# one specific block, and it is meaningless without the refs that block carries.
-_RECEIPT_RULES = (
-    'Write what you ACTUALLY did with it ("cited in the method section", "answered in the doc", '
-    '"contradicts the plan, flagged"), not what it was about. "not used" is a fine and common '
-    'answer -- say it plainly rather than inventing a use, because the person reads these lines to '
-    'find out whether what they wrote reached you, and a made-up one is worse than an honest no. '
-    "This is your own account of your own run: nothing else writes it for you, and no second pass "
-    "goes back and guesses."
-)
+# The receipt protocol, stated to the run that will produce the work (text in core.managed_blocks).
+_RECEIPT_RULES = RECEIPT_RULES  # defined in core.managed_blocks (block_spans needs it)
 
 
 def usage_receipt_gate(refs: Sequence[str] = ()) -> str:
@@ -89,41 +81,6 @@ def usage_receipt_gate(refs: Sequence[str] = ()) -> str:
 # ---------------------------------------------------------------------------------------------
 # Receipt parsing and rendering
 # ---------------------------------------------------------------------------------------------
-
-def block_spans(text: str) -> List[Tuple[int, int]]:
-    """``(start, stop)`` of every context-updates block in ``text``, receipt gate included.
-
-    A block runs from ``BLOCK_START`` to ``BLOCK_END``, and the receipt gate written right after
-    the end marker (``usage_receipt_gate``) belongs to it: a gate whose block is gone asks the run
-    to account for refs it was never shown. The gate ends with ``_RECEIPT_RULES``; a gate written
-    in some older wording is left in place rather than guessed at.
-
-    The prompt budget (``core.prompt_budget``) reads this to keep exactly one block per prompt, so
-    the format and the code that finds it live in one module.
-    """
-    body = str(text or "")
-    spans: List[Tuple[int, int]] = []
-    pos = 0
-    gate_head = "BEFORE YOU FINISH, account for the context updates"
-    while True:
-        start = body.find(BLOCK_START, pos)
-        if start < 0:
-            break
-        end = body.find(BLOCK_END, start + len(BLOCK_START))
-        if end < 0:
-            stop = len(body)
-        else:
-            stop = end + len(BLOCK_END)
-            gate = body.find(gate_head, stop)
-            if 0 <= gate <= stop + 4:
-                rules = body.find(_RECEIPT_RULES, gate)
-                nxt = body.find(BLOCK_START, gate)
-                if rules >= 0 and (nxt < 0 or rules < nxt):
-                    stop = rules + len(_RECEIPT_RULES)
-        spans.append((start, stop))
-        pos = stop
-    return spans
-
 
 def parse_manifest(text: str) -> List[str]:
     """Recover the offered manifest lines from a composed task text.

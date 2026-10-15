@@ -25,11 +25,18 @@ needs. `adapters/` (a package) provides the **concrete implementations**. Depend
 `config` depend on `core`. That's the classic ports-and-adapters shape, and why `core` stays the same
 no matter who uses it.
 
-**Rule:** never import from `core/` into `adapters/`, `runner/`, or `config.py`. If the brain seems
-to need something concrete, add a new *interface* on `core/adapters.py`, put the fill-in under
-`adapters/`, and wire it via `RunnerConfig`.
+**Rule:** `core/` never imports from `adapters/`, `runner/`, `config.py`, the CLI or the tools package, and
+`adapters/` never imports from `runner/`, `config.py` or the CLI. A lazy (in-function) import counts. If
+the brain seems to need something concrete, add a new *interface* in `core/adapters*.py`, put the fill-in
+under `adapters/`, and wire it via `RunnerConfig`; if it needs a helper that lives outward, move the helper
+inward and let the outer module re-export it. `scripts/check_structure.py` enforces this (rule S6); the
+justified exceptions are in `docs/structure/waivers.csv`.
 
 ## Module map
+
+The authoritative, checked inventory is `docs/structure/components.csv` (rendered in
+`docs/structure/COMPONENTS.md`), and the swappable solutions with their metrics are in
+`docs/structure/solutions.csv`. The table below is the short orientation.
 
 | Module | Role |
 |---|---|

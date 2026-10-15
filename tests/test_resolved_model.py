@@ -1,7 +1,7 @@
 """A deep run reports the full model id its alias resolved to, not just the alias."""
 import json
 
-from quest_ai_runner.core import goal_runner
+from quest_ai_runner.core import goal_runner, goal_runner_session
 from quest_ai_runner.core.adapters import DeepResult
 from quest_ai_runner.interactive_session import _model_display
 from quest_ai_runner.runner.executor import _model_used_note
@@ -19,12 +19,12 @@ def test_resolved_model_reads_last_real_assistant_model(tmp_path, monkeypatch):
         {"type": "assistant", "message": {"model": "claude-sonnet-4-5-20250929"}},
         {"type": "assistant", "message": {"model": "<synthetic>"}},
     ])
-    monkeypatch.setattr(goal_runner, "resolve_session_file", lambda wd, sid: path)
+    monkeypatch.setattr(goal_runner_session, "resolve_session_file", lambda wd, sid: path)
     assert goal_runner.resolved_model_from_session("/wd", "abc") == "claude-sonnet-4-5-20250929"
 
 
 def test_resolved_model_none_without_session(monkeypatch):
-    monkeypatch.setattr(goal_runner, "resolve_session_file", lambda wd, sid: None)
+    monkeypatch.setattr(goal_runner_session, "resolve_session_file", lambda wd, sid: None)
     assert goal_runner.resolved_model_from_session("/wd", "abc") is None
 
 

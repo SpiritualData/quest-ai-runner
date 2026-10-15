@@ -56,6 +56,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from ..core.card_filter import _extract_json
+from ..core.current_rep import _CURRENT_REP, current_rep  # noqa: F401  (re-exported; defined in core)
 
 log = logging.getLogger("quest-ai-runner.personas")
 
@@ -595,25 +596,6 @@ def card_activation(registry: PersonaRegistry, text: str, cards_dir: Path,
 
 
 # --- the resolver ---------------------------------------------------------------
-
-
-# WHICH persona the task on THIS worker thread resolved to, or None.
-#
-# Thread-local because the executor runs tasks on a pool and the resolver fires once per task, on
-# the same thread that then runs it. It is written on EVERY resolution attempt, including the
-# failures, so a task that resolves to nobody clears whatever the previous task on this thread
-# left behind -- without that, one task's persona leaks into the next one's context.
-_CURRENT_REP = threading.local()
-
-
-def current_rep() -> Optional[Dict[str, Any]]:
-    """The persona this thread's current task resolved to (``{task, user_id, skill_dir}``), or None.
-
-    The read side of what ``build_persona_resolver`` stashes. Anything that runs inside a task and
-    needs to know who it is running as reads it here rather than requiring the consumer to thread
-    an ``on_resolved`` callback into a thread-local of its own.
-    """
-    return getattr(_CURRENT_REP, "value", None)
 
 
 def build_persona_resolver(cfg: PersonaResolverConfig, *, provider: Any = None,

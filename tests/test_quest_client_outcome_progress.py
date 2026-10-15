@@ -6,7 +6,7 @@ against that fake to prove the --write gate and that the refusal text reaches st
 """
 import pytest
 
-from quest_ai_runner import cli
+from quest_ai_runner import cli, cli_quest
 from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
 
 REFUSAL = ("A progress note must name concrete evidence (a goal, file, metric or result), "
@@ -97,7 +97,7 @@ def test_cli_needs_write_and_prints_the_refusal_to_stderr(monkeypatch, capsys):
     def handler(method, path, *, params=None, body=None, timeout_override=None):
         raise QuestApiError(f'Quest API {method} {path} -> 400: {{"detail":"{REFUSAL}"}}', status=400)
 
-    monkeypatch.setattr(cli, "load_quest_client", lambda config=None: client_with(handler))
+    monkeypatch.setattr(cli_quest, "load_quest_client", lambda config=None: client_with(handler))
     argv = ["quest", "update_outcome_progress", "q1", "o1", "10", "making progress"]
 
     assert cli.main(argv) == 2  # a write method without --write is refused

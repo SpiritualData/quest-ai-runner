@@ -362,41 +362,17 @@ class CardsMixin:
 
         def background_update():
             try:
-                from ..adapters.context_card_updater import (
-                    categorize_files_with_llm,
-                    extract_edited_files,
-                    update_context_cards,
-                )
-
-                # Discover edited files using multi-strategy extraction
-                edited_files = extract_edited_files(
+                updater = self.edited_files_card_updater
+                if updater is None:
+                    return
+                updater(
                     deep_result,
+                    context_meta,
                     project_path=project_path,
                     session_id=session_id,
-                )
-
-                if not edited_files:
-                    return
-
-                # Categorize edited files into the context cards that were used
-                categorization = categorize_files_with_llm(
-                    edited_files,
-                    context_meta["cards"],
                     model_provider=self.provider,
                     registry=self.registry,
                 )
-
-                if not categorization:
-                    return
-
-                # Update the cards
-                card_store_dir = context_meta.get("card_store_dir", ".quest-context")
-                update_context_cards(
-                    context_meta["cards"],
-                    categorization,
-                    card_store_dir,
-                )
-                log.debug(f"Updated context cards with {len(edited_files)} edited files")
             except Exception as e:
                 log.debug(f"Background context card update failed (non-blocking): {e}")
 
@@ -493,11 +469,11 @@ class CardsMixin:
             self._anticipation_thread = thread
             thread.start()
             try:
-                # Register with the owned-background-thread registry (lazy import: core must not
-                # import config at module load). shutdown_background_index() will close() the
-                # anticipator and join this thread, the same ownership contract index threads have.
-                from ..config import _register_index_thread
-                _register_index_thread(thread, anticipator)
+                # Register with the owned-background-thread registry (injected by config, since core
+                # must not import it). shutdown_background_index() will close() the anticipator and
+                # join this thread, the same ownership contract index threads have.
+                if self.background_thread_registrar is not None:
+                    self.background_thread_registrar(thread, anticipator)
             except Exception:  # noqa: BLE001
                 pass
         except Exception:  # noqa: BLE001 -- kicking off anticipation must never break the turn

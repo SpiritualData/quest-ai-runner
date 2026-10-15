@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from quest_ai_runner import cli
+from quest_ai_runner import cli, cli_chat
 from quest_ai_runner.chat_conversations import (
     list_conversations, read_conversation, resolve_conversation,
 )
@@ -79,7 +79,7 @@ def test_nothing_to_resume(tmp_path):
 
 def run_chat(argv, monkeypatch, tmp_path):
     monkeypatch.setenv("QAR_CHAT_HISTORY_DIR", str(tmp_path))
-    monkeypatch.setattr(cli, "_config_from_env", lambda config_path=None: RunnerConfig(
+    monkeypatch.setattr(cli_chat, "_config_from_env", lambda config_path=None: RunnerConfig(
         quest_base_url="http://example.invalid", quest_api_key="qsk_test",
         retrieval=object(), model_provider=object(), corpus_root=None))
     import quest_ai_runner.textual_session as textual_session
@@ -288,7 +288,7 @@ def test_resumed_history_shows_before_session_is_ready(tmp_path):
 
 def run_chat_returning(argv, monkeypatch, tmp_path, conv_id):
     monkeypatch.setenv("QAR_CHAT_HISTORY_DIR", str(tmp_path))
-    monkeypatch.setattr(cli, "_config_from_env", lambda config_path=None: RunnerConfig(
+    monkeypatch.setattr(cli_chat, "_config_from_env", lambda config_path=None: RunnerConfig(
         quest_base_url="http://example.invalid", quest_api_key="qsk_test",
         retrieval=object(), model_provider=object(), corpus_root=None))
     import quest_ai_runner.textual_session as textual_session

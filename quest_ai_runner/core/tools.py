@@ -484,11 +484,24 @@ def make_command_handler(command: Sequence[str], parameters: Dict[str, Any],
 # Standard tools (every QAR user with Quest credentials gets these)
 # ---------------------------------------------------------------------------------------------
 
+# The standard tools talk to Quest through a client built from the environment. ``core`` may not
+# import the runner that owns ``QuestClient``, so the factory (``env -> client``) is injected: the
+# composition root registers ``runner.quest_client.quest_client_from_env`` here, and every tool
+# spec also takes its own ``client_factory`` (what the tests pass).
+_quest_client_factory: Optional[Callable[[Mapping[str, str]], Any]] = None
+
+
+def set_quest_client_factory(factory: Optional[Callable[[Mapping[str, str]], Any]]) -> None:
+    """Register the ``env -> Quest client`` factory the standard tools use by default (None clears it)."""
+    global _quest_client_factory
+    _quest_client_factory = factory
+
+
 def quest_client_from_env(env: Mapping[str, str]):
-    from ..runner.quest_client import QuestClient
-    base = env.get("QUEST_BASE_URL") or env.get("QUEST_API_URL") or ""
-    return QuestClient(base_url=base, api_key=env.get("QUEST_API_KEY") or "",
-                       team_id=env.get("QUEST_TEAM_ID") or None)
+    if _quest_client_factory is None:
+        raise RuntimeError("no Quest client factory is registered; import quest_ai_runner (it "
+                           "registers one) or call core.tools.set_quest_client_factory")
+    return _quest_client_factory(env)
 
 
 def quest_credentials_present(env: Mapping[str, str]) -> bool:

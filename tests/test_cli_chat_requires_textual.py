@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from quest_ai_runner import cli
+from quest_ai_runner import cli, cli_chat
 from quest_ai_runner.config import RunnerConfig
 
 
@@ -24,7 +24,7 @@ def _valid_cfg(config_path=None) -> RunnerConfig:
 
 def test_chat_starts_the_textual_ui(monkeypatch):
     """The happy path: chat goes straight to Textual, with no availability branch to fall off."""
-    monkeypatch.setattr(cli, "_config_from_env", _valid_cfg)
+    monkeypatch.setattr(cli_chat, "_config_from_env", _valid_cfg)
     import quest_ai_runner.textual_session as textual_session
     monkeypatch.setattr(textual_session, "is_textual_available", lambda: True)
 
@@ -40,7 +40,7 @@ def test_chat_starts_the_textual_ui(monkeypatch):
 
 def test_chat_without_textual_exits_nonzero_with_actionable_error(monkeypatch, caplog):
     """No fallback UI: an unimportable `textual` must fail loudly and tell the user how to fix it."""
-    monkeypatch.setattr(cli, "_config_from_env", _valid_cfg)
+    monkeypatch.setattr(cli_chat, "_config_from_env", _valid_cfg)
     import quest_ai_runner.textual_session as textual_session
     monkeypatch.setattr(textual_session, "is_textual_available", lambda: False)
 

@@ -37,7 +37,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
-from ..runner.personas import current_rep
+from ..core.current_rep import current_rep
 
 log = logging.getLogger("quest-ai-runner.rep-context")
 

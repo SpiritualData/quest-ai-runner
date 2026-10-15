@@ -48,6 +48,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from .managed_blocks import BLOCK_END, BLOCK_START, block_spans  # noqa: F401  (block_spans: public name)
+
 log = logging.getLogger("quest-ai-runner.prompt_budget")
 
 # Characters per token for the estimate. English prose runs near 4; the material here is dense
@@ -251,11 +253,7 @@ def fit_sections(sections: List[Section], budget_tokens: int) -> FitResult:
 
 def updates_markers() -> Tuple[str, str]:
     """The context-updates block's delimiters, from the module that owns them."""
-    try:
-        from ..runner.context_updates import BLOCK_END, BLOCK_START
-        return BLOCK_START, BLOCK_END
-    except Exception:  # noqa: BLE001 - the strings are stable; never fail a prompt over an import
-        return "=== CONTEXT UPDATES ===", "=== END CONTEXT UPDATES ==="
+    return BLOCK_START, BLOCK_END
 
 
 SUPERSEDED_UPDATES_NOTE = ("[An earlier context-updates block stood here. It was removed because "
@@ -268,16 +266,6 @@ def count_blocks(text: Optional[str]) -> int:
     """How many context-updates blocks ``text`` holds."""
     start, _end = updates_markers()
     return (text or "").count(start)
-
-
-def block_spans(text: str) -> List[Tuple[int, int]]:
-    """Every context-updates block in ``text``, gate included (``runner.context_updates`` owns
-    the format, so it owns the parsing; this only delegates)."""
-    try:
-        from ..runner.context_updates import block_spans as owner_spans
-    except Exception:  # noqa: BLE001 - never fail a prompt over an import
-        return []
-    return owner_spans(text or "")
 
 
 def keep_last_block(text: Optional[str], *, note: str = SUPERSEDED_UPDATES_NOTE) -> str:

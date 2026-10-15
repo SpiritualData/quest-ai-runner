@@ -102,6 +102,8 @@ _TO_PUSH_PLACEHOLDER = (
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n?", re.DOTALL)
 _FRONTMATTER_QUEST_ID_RE = re.compile(r"^quest_id:\s*(\S+)\s*$", re.MULTILINE)
 # A synced-or-unsynced bullet: "- <!-- id:note_1 --> text" or plain "- text".
+_MANAGED_MARKER_LINE_RE = re.compile(
+    r"<!--\s*QAR:MANAGED:(?P<name>[A-Za-z0-9_.-]+)\s+(?P<kind>START|END)\s*-->")
 _BULLET_RE = re.compile(r"^-\s*(?:<!--\s*id:(?P<id>[^\s>]+)\s*-->\s*)?(?P<text>.*)$")
 
 
@@ -155,8 +157,21 @@ def _render_goal_block(quest_state: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _render_notes_block(notes: List[Dict[str, Any]]) -> str:
+#: Most notes the Notes block renders, newest. A pull must never render an unbounded list (a prod
+#: quest once held 34,616 notes and the file reached 3 MB); older ones are summarised in one line.
+NOTES_BLOCK_LIMIT = 200
+
+
+def _render_notes_block(notes: List[Dict[str, Any]], total: Optional[int] = None) -> str:
+    """``notes`` is oldest -> newest; ``total`` is how many the quest has in all (default: len)."""
     lines = ["## Notes from Quest"]
+    total = len(notes) if total is None else max(total, len(notes))
+    if len(notes) > NOTES_BLOCK_LIMIT:
+        notes = notes[-NOTES_BLOCK_LIMIT:]
+    hidden = total - len(notes)
+    if hidden > 0:
+        lines.append("")
+        lines.append(f"_{hidden} older notes not shown, total {total}._")
     if not notes:
         lines.append("")
         lines.append("_(no notes yet)_")
@@ -213,7 +228,8 @@ def _replace_before_to_push(text: str, start: str, end: str, body: str) -> str:
 
 def render_sync_file(existing: str, quest_id: str, quest_state: Dict[str, Any],
                      notes: List[Dict[str, Any]],
-                     experiments: Optional[List[Dict[str, Any]]] = None) -> str:
+                     experiments: Optional[List[Dict[str, Any]]] = None,
+                     notes_total: Optional[int] = None) -> str:
     """Render the managed sections of a quest-folder sync file, preserving everything else.
 
     ``experiments`` is :func:`fetch_experiments`'s answer. ``None`` (could not be read) leaves the
@@ -221,7 +237,8 @@ def render_sync_file(existing: str, quest_id: str, quest_state: Dict[str, Any],
     """
     out = _ensure_frontmatter(existing or "", quest_id)
     out = replace_between(out, _GOAL_START, _GOAL_END, _render_goal_block(quest_state))
-    out = replace_between(out, _NOTES_START, _NOTES_END, _render_notes_block(notes))
+    out = replace_between(out, _NOTES_START, _NOTES_END,
+                          _render_notes_block(notes, notes_total))
     if experiments is not None:
         out = _replace_before_to_push(out, EXPERIMENTS_START, EXPERIMENTS_END,
                                       render_experiments_block(experiments))
@@ -229,6 +246,28 @@ def render_sync_file(existing: str, quest_id: str, quest_state: Dict[str, Any],
 
 
 # --- push helpers (parse the human-owned "Notes to push" section) --------------
+
+def _managed_line_indexes(lines: List[str]) -> set:
+    """Indexes of every line inside (or on the marker lines of) a ``QAR:MANAGED`` block.
+
+    Those blocks are the RUNNER's rendering of Quest state (goal, notes, experiments, ...). A line
+    in one is never a human-queued note, wherever the block sits in the file. Without this, a goal
+    block that landed under the "Notes to push" heading had its accepted-strategy bullets posted
+    as Quest notes on every push; the next pull re-rendered them without ids and the next push
+    posted them again (11,519 times on a prod quest, 2026-10-02 to 2026-10-15).
+    """
+    inside: set = set()
+    open_name = None
+    for i, ln in enumerate(lines):
+        m = _MANAGED_MARKER_LINE_RE.search(ln)
+        if m:
+            inside.add(i)
+            open_name = m.group("name") if m.group("kind") == "START" else None
+            continue
+        if open_name is not None:
+            inside.add(i)
+    return inside
+
 
 def _to_push_bounds(lines: List[str]) -> Optional[Tuple[int, int]]:
     start = None
@@ -240,7 +279,10 @@ def _to_push_bounds(lines: List[str]) -> Optional[Tuple[int, int]]:
         return None
     end = len(lines)
     for j in range(start, len(lines)):
-        if lines[j].startswith("#"):
+        # A heading ends the section, and so does any managed block: its bullets (the goal block's
+        # accepted strategies) are rendered by the pull, carry no id, and would otherwise be read as
+        # un-synced notes and re-posted on every push. That flood posted ~34,000 notes in 13 days.
+        if lines[j].startswith("#") or lines[j].lstrip().startswith("<!-- QAR:MANAGED:"):
             end = j
             break
     return start, end
@@ -529,11 +571,14 @@ def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
     quest_state = quest_resp.get("state") or {}
     if not quest_state:
         raise QuestFolderSyncError(f"quest {quest_id} not found or inaccessible")
-    notes = list(client.list_quest_notes(quest_id) or [])
+    fetched = client.list_quest_notes(quest_id) or []
+    notes_total = getattr(fetched, "total", None)  # how many the quest has; `fetched` is the newest slice
+    notes = list(fetched)
     experiments = fetch_experiments(client, quest_id)
     path = _sync_path(folder, filename)
     existing = _read_existing(path)
-    rendered = render_sync_file(existing, quest_id, quest_state, notes, experiments)
+    rendered = render_sync_file(existing, quest_id, quest_state, notes, experiments,
+                                notes_total=notes_total)
     if rendered != existing:
         _write(path, rendered)
     # After the sync file, never before: the scaffold is best-effort and must not be able to stop
@@ -571,7 +616,10 @@ def push_folder_to_quest(client: Any, quest_id: str, folder: str,
     pushed = 0
     if bounds is not None:
         start, end = bounds
+        managed = _managed_line_indexes(lines)
         for i in range(start, end):
+            if i in managed:
+                continue  # the runner's own rendering of Quest state, never a queued note
             stripped = lines[i].strip()
             if not stripped.startswith("-"):
                 continue

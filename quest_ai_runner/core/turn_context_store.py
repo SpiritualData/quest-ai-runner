@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text, select_representatives
+from .text_sampling import keywords_from_text, select_representatives
 
 
 def scope_tags_for(meta: Optional[Dict[str, Any]]) -> List[str]:

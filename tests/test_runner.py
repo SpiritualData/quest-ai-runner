@@ -1124,8 +1124,9 @@ def test_monitor_heartbeats_and_never_gives_up_early_while_waiting(monkeypatch):
     import threading as _threading
     import time as _time
     from quest_ai_runner.core import goal_runner as gr
+    from quest_ai_runner.core import goal_runner_session as gr_session
 
-    monkeypatch.setattr(gr, "_find_claude_project_dir", lambda working_dir: None)
+    monkeypatch.setattr(gr_session, "_find_claude_project_dir", lambda working_dir: None)
 
     real_time = _time.time
     state = {"t": real_time()}

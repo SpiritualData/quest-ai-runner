@@ -81,8 +81,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
-from quest_ai_runner.adapters.conversation_format import parse_date_bound, timestamp_in_range
-from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
+from .date_bounds import parse_date_bound, timestamp_in_range
+from .text_sampling import keywords_from_text
 from quest_ai_runner.core.scope_tags import scope_tags_allow, scope_tags_from_keys
 from .file_modes import match_umask
 
@@ -181,7 +181,7 @@ def ts_in_time_range(ts: str, time_range: Optional[Dict[str, Any]]) -> bool:
 
     ``time_range`` is the same ``{"start": "YYYY-MM-DD"|None, "end": "YYYY-MM-DD"|None}`` shape
     ``parse_goal_condition_reply`` emits (see ``core/orchestrator.py``), parsed with the shared
-    ``parse_date_bound``/``timestamp_in_range`` helpers from ``adapters.conversation_format``.
+    ``parse_date_bound``/``timestamp_in_range`` helpers from ``core.date_bounds``.
     A missing/unparseable ``ts`` is ALWAYS in range (absence of a timestamp must never hide
     content), and a falsy range or one with no parseable bound is a no-op (True for everything).
     Never raises.

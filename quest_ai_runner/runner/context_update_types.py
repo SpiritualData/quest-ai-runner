@@ -122,13 +122,8 @@ PERSON_BODY_BUDGET = 24000
 CACHE_TTL_SECONDS = 120
 
 
-# The block delimiters. They are parsed back out of a composed task text (see ``parse_manifest``),
-# which is what lets a consumer render the receipt from the task it just ran without threading a
-# bundle object through the queue.
-BLOCK_START = "=== CONTEXT UPDATES ==="
-
-
-BLOCK_END = "=== END CONTEXT UPDATES ==="
+# The block delimiters (defined in core.managed_blocks, re-exported here).
+from ..core.managed_blocks import BLOCK_END, BLOCK_START  # noqa: E402,F401
 
 
 # The heading a run writes its usage lines under, and the line shape it uses. Both are stated in

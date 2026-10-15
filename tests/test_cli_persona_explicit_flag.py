@@ -6,7 +6,7 @@ boolean computed in cli.py's chat branch, which is threaded through as `rep_spec
 """
 from __future__ import annotations
 
-from quest_ai_runner import cli
+from quest_ai_runner import cli, cli_chat
 from quest_ai_runner.config import RunnerConfig
 
 
@@ -22,7 +22,7 @@ def _valid_cfg(config_path=None) -> RunnerConfig:
 def _run_chat(argv, monkeypatch):
     """Drive cli.main() down the chat path and capture what start_textual_interactive
     (the only chat UI) was called with."""
-    monkeypatch.setattr(cli, "_config_from_env", _valid_cfg)
+    monkeypatch.setattr(cli_chat, "_config_from_env", _valid_cfg)
 
     import quest_ai_runner.textual_session as textual_session
     monkeypatch.setattr(textual_session, "is_textual_available", lambda: True)
