@@ -130,7 +130,9 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                      "thinking: the link to open, the command to paste, the message to send and to "
                      "whom, and the options when it is a choice."),
         when_not_to_use=("A change to a quest field (its own tool files the ask). Something already "
-                         "open: it is recognised and not raised twice. A report of finished work."),
+                         "open: it is recognised and not raised twice. A report of finished work. A "
+                         "question about one of the person's asks in What You Asked (that is "
+                         "update_ask with awaiting_answer and question, which links the two)."),
         parameters={
             "type": "object",
             "required": ["summary"],
@@ -299,6 +301,13 @@ def update_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                 f"Not updated: state must be one of {', '.join(RUN_ASK_STATES)} "
                 f"('accepted' is only ever a person's). done means you finished it and the person "
                 f"can now accept it."))
+        question = str(args.get("question") or "").strip()
+        if state == "awaiting_answer" and not question:
+            return ToolResult(ok=False, text=(
+                "Not updated: awaiting_answer needs the question, because it is raised to the person "
+                "in their Asks for You. Call update_ask again with ask, state=awaiting_answer and "
+                "question=what you need to know, in one or two plain sentences (with the options "
+                "when it is a choice)."))
         client = factory()
         if not hasattr(client, "update_ask"):
             return ToolResult(ok=False, text="This Quest client cannot update asks yet; say where "
@@ -313,27 +322,40 @@ def update_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
             if row is None:
                 return ToolResult(ok=False, text=f"Not updated: {problem}")
             ask = ask_key(row)
+        extra = {"question": question} if question else {}
         row = client.update_ask(ask, state or None, note=str(args.get("note") or ""),
-                                kind=kind or None)
+                                kind=kind or None, **extra)
         if not row:
             return ToolResult(ok=False, text="Quest did not update the ask (the runner log has the "
                                              "reason). Do not report it as done.")
         shown = ask_state(row) if row.get("state") else state
         sorted_as = f", sorted as {row.get('kind') or kind}" if kind else ""
+        follow = ""
+        if shown == "awaiting_acceptance":
+            follow = " The person can accept it."
+        elif shown == "awaiting_answer":
+            follow = (f" Your question is now in the person's Asks for You"
+                      f"{' (decision ' + str(row['decision_id']) + ')' if row.get('decision_id') else ''}"
+                      f". Do not work this ask or ask again until they answer; their answer will be "
+                      f"on the ask in your next brief.")
         return ToolResult(ok=True, data=row, text=(
-            f"Ask {ask_key(row) or ask} is now {shown.replace('_', ' ')}{sorted_as}."
-            + (" The person can accept it." if shown == "awaiting_acceptance" else "")))
+            f"Ask {ask_key(row) or ask} is now {shown.replace('_', ' ')}{sorted_as}.{follow}"))
 
     return ToolSpec(
         name="update_ask",
         handler=handler,
         description=("Record where one of the person's asks stands, as the run's claim: in_progress, "
-                     "done, blocked, declined, noted or awaiting_answer. A done ask waits for the "
-                     "person to accept it; you never accept one. Also sorts an ask that is not "
-                     "sorted yet (kind)."),
+                     "done, blocked, declined or noted. A done ask waits for the person to accept "
+                     "it; you never accept one. awaiting_answer, with the question, is how you ask "
+                     "the person to clarify an ask: it raises the question in their Asks for You "
+                     "and parks the ask until they answer. Also sorts an ask that is not sorted "
+                     "yet (kind)."),
         when_to_use=("You started, finished or could not finish an open ask (say what you did, or "
-                     "why not, in note), or an ask shows NOT SORTED and you can tell what it is."),
-        when_not_to_use="Marking a goal done (goals stay the person's). Asks you have not worked.",
+                     "why not, in note), an ask shows NOT SORTED and you can tell what it is, or you "
+                     "cannot finish an ask without the person clarifying it (state awaiting_answer "
+                     "plus question; their answer comes back on the ask in your next brief)."),
+        when_not_to_use=("Marking a goal done (goals stay the person's). Asks you have not worked. "
+                         "A question that is not about one of their asks (that is create_decision)."),
         parameters={
             "type": "object", "required": ["ask"],
             "properties": {
@@ -346,10 +368,14 @@ def update_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                                         "sorted yet, without changing its state."},
                 "note": {"type": "string",
                          "description": "One line of evidence: what you did, or what blocks it."},
+                "question": {"type": "string",
+                             "description": "Required with state awaiting_answer: what you need the "
+                                            "person to answer, in plain sentences, no em dashes."},
             },
         },
         mutates=True, workflow_step=False, origin="standard",
-        keywords=("ask", "asked", "done", "finished", "claim", "ledger", "accept", "progress", "blocked"),
+        keywords=("ask", "asked", "done", "finished", "claim", "ledger", "accept", "progress", "blocked",
+                  "clarify", "clarification", "question"),
         context_args={"quest_id": "quest_id"}, timeout_seconds=45.0)
 
 

@@ -748,8 +748,10 @@ class FeedbackLedger:
             if item is None:
                 return None
             state = NEEDS_REAPPLYING if item.is_standing else OPEN
-            item.set_by_person = False     # they reopened it; a run may now close it again
             item.record(state=state, note=note, by="person", at=at)
+            # They reopened it, so a run may work it again. Cleared AFTER record(), which marks any
+            # person-authored entry as a person's held state and would otherwise lock the run out.
+            item.set_by_person = False
             self._save()
             return item
 

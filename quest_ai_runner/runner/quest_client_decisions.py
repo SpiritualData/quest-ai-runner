@@ -277,7 +277,7 @@ class DecisionsMixin:
             return {}
 
     def update_ask(self, item_key: str, state: Optional[str] = None, note: str = "", *,
-                   kind: Optional[str] = None) -> Dict[str, Any]:
+                   kind: Optional[str] = None, question: str = "") -> Dict[str, Any]:
         """PATCH /api/asks/{item_key} as a RUN's claim (``by_run``), never a person's decision.
 
         ``state`` is one of in progress, done, blocked, declined, noted, awaiting answer
@@ -285,6 +285,10 @@ class DecisionsMixin:
         it, and ``accepted`` is refused. ``kind`` (request, standing, context, question) sorts an
         ask without changing its state, and never overrides a kind a person set. Pass a state, a
         kind, or both. Returns the updated ask row, or ``{}`` on any failure (logged).
+
+        ``awaiting answer`` needs ``question``: Quest raises it to the person as a decision-request
+        (Asks for You) and sets the state in the same step; the returned row carries that
+        ``decision_id``. Without a question Quest refuses (logged, ``{}``).
         """
         body: Dict[str, Any] = {"by_run": True}
         if state:
@@ -293,6 +297,8 @@ class DecisionsMixin:
             body["kind"] = kind
         if note:
             body["note"] = note
+        if question:
+            body["question"] = question
         try:
             self._require()
             return self._request("PATCH", f"/api/asks/{item_key}", body=body) or {}

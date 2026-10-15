@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from .autopilot_periods import _parse_dt
-from .feedback_ledger import (AWAITING_ACCEPTANCE, IN_FORCE, KIND_STANDING, KIND_UNKNOWN,
-                              OPEN_STATES)
+from .feedback_ledger import (AWAITING_ACCEPTANCE, AWAITING_ANSWER, BLOCKED, IN_FORCE,
+                              IN_PROGRESS, KIND_STANDING, KIND_UNKNOWN, OPEN_STATES)
 
 log = logging.getLogger("quest-ai-runner.quest_asks_brief")
 
@@ -32,6 +32,16 @@ MAX_RULES = 6
 MAX_WAITING = 8
 #: Characters of a person's words shown per ask.
 ASK_TEXT_LIMIT = 260
+#: What a person said back, and what it answers. The answer is the most valuable line in the
+#: section (it is what the last run was waiting for), so it gets its own, larger budget, spent
+#: before the run's own notes; once a budget is used up, later asks show no more of that kind.
+ANSWER_LIMIT = 320
+QUESTION_LIMIT = 160
+RUN_NOTE_LIMIT = 160
+ANSWERS_BUDGET = 1500
+RUN_NOTES_BUDGET = 600
+#: Below this many characters left in a budget a note is dropped rather than cut to a stub.
+MIN_NOTE_ROOM = 60
 
 HEADER = ("WHAT YOU ASKED. What people asked of you on this quest, and what is already waiting on "
           "them. Work the open asks first; the key in front of each is what update_ask needs.")
@@ -88,6 +98,73 @@ def ask_entry(row: Dict[str, Any], now: datetime) -> str:
             + one_line(row.get("text"), ASK_TEXT_LIMIT))
 
 
+def history_of(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [h for h in (row.get("history") or []) if isinstance(h, dict)]
+
+
+def last_person_note(row: Dict[str, Any]) -> Optional[int]:
+    """Index in the ask's history of the latest entry a PERSON wrote words on, or ``None``."""
+    entries = history_of(row)
+    for index in range(len(entries) - 1, -1, -1):
+        if entries[index].get("by") == "person" and str(entries[index].get("note") or "").strip():
+            return index
+    return None
+
+
+def question_before(row: Dict[str, Any], index: int) -> str:
+    """The question a person's entry at ``index`` answers: the run's entry just before it, when
+    that entry was an awaiting-answer one. Empty when the person was not answering a question."""
+    entries = history_of(row)
+    for earlier in range(index - 1, -1, -1):
+        if entries[earlier].get("by") != "person":
+            if entries[earlier].get("state") == AWAITING_ANSWER:
+                return str(entries[earlier].get("note") or "")
+            return ""
+    return ""
+
+
+def last_run_note(row: Dict[str, Any]) -> str:
+    for entry in reversed(history_of(row)):
+        if entry.get("by") != "person" and str(entry.get("note") or "").strip():
+            return str(entry["note"])
+    return str(row.get("last_note") or "")
+
+
+def spend(budget: List[int], text: str, limit: int) -> str:
+    """``text`` cut to ``limit`` and to what is left of ``budget`` (a one-item list, decremented),
+    or ``""`` when too little is left to be worth showing."""
+    room = min(limit, budget[0])
+    if room < MIN_NOTE_ROOM:
+        return ""
+    shown = one_line(text, room)
+    budget[0] -= len(shown)
+    return shown
+
+
+def note_lines(row: Dict[str, Any], answers: List[int], run_notes: List[int]) -> List[str]:
+    """The indented lines under an open ask: what the person said back (and the question it
+    answered), the question still waiting on them, and the run's own last note when it is mid-way."""
+    lines: List[str] = []
+    state = str(row.get("state") or "open")
+    person = last_person_note(row)
+    if person is not None:
+        said = spend(answers, history_of(row)[person]["note"], ANSWER_LIMIT)
+        asked = question_before(row, person)
+        if said and asked:
+            question = one_line(asked, QUESTION_LIMIT)
+            lines += [f"    You asked: {question}", f"    Their answer: {said}"]
+        elif said:
+            lines.append(f"    Their note: {said}")
+    elif state == AWAITING_ANSWER and str(row.get("last_note") or "").strip():
+        lines.append(f"    You asked: {one_line(row.get('last_note'), QUESTION_LIMIT)} "
+                     f"(still waiting on their answer)")
+    if state in (IN_PROGRESS, BLOCKED):
+        note = spend(run_notes, last_run_note(row), RUN_NOTE_LIMIT)
+        if note:
+            lines.append(f"    Your last note: {note}")
+    return lines
+
+
 def rule_entry(row: Dict[str, Any]) -> str:
     return f"- {row.get('key')} {one_line(row.get('text'), ASK_TEXT_LIMIT)}"
 
@@ -120,7 +197,17 @@ def asks_brief_section(asks: Optional[List[Dict[str, Any]]],
         return ""
     lines = [HEADER]
     if owed:
-        lines += ["", "Open asks:"] + capped((ask_entry(r, when) for r in owed), MAX_OPEN_ASKS)
+        answers, run_notes = [ANSWERS_BUDGET], [RUN_NOTES_BUDGET]
+        shown = owed[:MAX_OPEN_ASKS]
+        entries = ["\n".join([ask_entry(r, when)] + note_lines(r, answers, run_notes)) for r in shown]
+        if len(owed) > MAX_OPEN_ASKS:
+            entries.append(f"- +{len(owed) - MAX_OPEN_ASKS} more")
+        lines += ["", "Open asks:"] + entries
+        if any(str(r.get("state") or "") == AWAITING_ANSWER for r in owed):
+            lines.append("Awaiting answer means your question is open in the person's Asks for You: "
+                         "do not work that ask or ask again until it is answered.")
+        if any(last_person_note(r) is not None for r in shown):
+            lines.append("Their answer or note is the latest word on that ask: act on it first.")
         if any(str(r.get("kind") or KIND_UNKNOWN) == KIND_UNKNOWN for r in owed):
             lines.append("NOT SORTED means nobody has said whether it is a request, a standing "
                          "rule, background or a question: sort it with update_ask (kind).")

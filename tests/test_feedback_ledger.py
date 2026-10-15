@@ -500,3 +500,20 @@ def test_a_persons_own_diary_is_never_something_they_owe_an_answer_to(tmp_path):
     tracked = {i.source for i in ledger.for_card("q1")}
     assert tracked == {"quest_notes"}, f"only asks are tracked, got {tracked}"
     assert not [i for i in ledger.for_card("q1") if i.source == "reflections"]
+
+
+def test_a_reopened_item_can_be_worked_by_a_run_again(tmp_path):
+    """Reopening (or answering a question) is a person's word, but it hands the item back: a run's
+    next claim must land, not be held by the very reopen that asked for it."""
+    ledger = _ledger(tmp_path)
+    _observe(ledger)
+    ledger.set_state(card_id="q1", source="quest_notes", item_id="note_1", state=DONE,
+                     by="person", at=NOW)
+    reopened = ledger.reopen(card_id="q1", source="quest_notes", item_id="note_1",
+                             note="US only", at=NOW + timedelta(days=1))
+    assert reopened.state == OPEN and reopened.set_by_person is False
+    assert reopened.history[-1]["by"] == "person" and reopened.history[-1]["note"] == "US only"
+
+    claimed = ledger.apply_disposition(card_id="q1", source="quest_notes", item_id="note_1",
+                                       disposition="partial", note="started", at=NOW)
+    assert claimed.state == IN_PROGRESS
