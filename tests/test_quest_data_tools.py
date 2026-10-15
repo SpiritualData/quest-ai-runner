@@ -61,7 +61,8 @@ class FakeQuestClient:
         {"research_question_id": "rq_default", "kind": "default", "status": "open",
          "question": "What will it take to run a marathon?"},
         {"research_question_id": "rq_sleep", "kind": "custom", "status": "experimenting",
-         "question": "Does a cold shower help my sleep?", "hypothesis": "Yes",
+         "question": "Does a cold shower help my sleep?",
+         "hypotheses": [{"statement": "Yes, I will fall asleep faster by week 3"}],
          "context": "Evenings after training"},
         {"research_question_id": "rq_diet", "kind": "custom", "status": "open",
          "question": "Which diet best supports my long runs?"},
@@ -71,11 +72,19 @@ class FakeQuestClient:
         self.calls.append(("list_experiments", quest_id))
         return list(self.experiments)
 
+    # The backend's request fields (quest-backend app/api/endpoints/quests/research.py). The
+    # backend drops unknown keys silently, so this fake refuses them: a renamed field fails here.
+    CREATE_KEYS = {"context", "hypotheses", "purpose", "sub_questions", "assumptions",
+                   "linked_goal_ids", "linked_collection_ids", "start_date", "end_date", "conditions"}
+    UPDATE_KEYS = CREATE_KEYS | {"question", "status", "conclusion"}
+
     def create_experiment(self, quest_id, question, **kw):
+        assert set(kw) <= self.CREATE_KEYS, set(kw) - self.CREATE_KEYS
         self.calls.append(("create_experiment", quest_id, question, kw))
         return {"research_question_id": "rq_new", "status": "open", "question": question}
 
     def update_experiment(self, quest_id, rid, **changes):
+        assert set(changes) <= self.UPDATE_KEYS, set(changes) - self.UPDATE_KEYS
         self.calls.append(("update_experiment", quest_id, rid, changes))
         return {"research_question_id": rid, "status": changes.get("status", "open")}
 
@@ -279,7 +288,7 @@ def test_find_experiments_lists_and_searches_by_text_without_writing():
     assert found.ok and found.data[0]["research_question_id"] == "rq_sleep" and len(found.data) == 1
     none = spec.handler({"quest_id": "q1", "query": "meditation"}, ToolContext())
     assert none.ok and none.data == [] and "No experiment" in none.text
-    assert spec.handler({"quest_id": "q1", "query": "the"}, ToolContext()).data == []  # no usable word
+    assert len(spec.handler({"quest_id": "q1", "query": "the"}, ToolContext()).data) == 3  # no usable word: list
     assert all(c[0] == "list_experiments" for c in client.calls)
 
 
@@ -315,8 +324,48 @@ def test_update_experiment_sends_only_changed_keys_and_validates_status():
     ok = spec.handler({**base, "status": "concluded", "conclusion": "Slept better",
                        "user_asked_for_this_field": True}, ToolContext())
     assert ok.ok
-    assert client.calls == [("update_experiment", "q1", "rq_sleep",
-                             {"status": "concluded", "conclusion": "Slept better"})]
+    assert [c for c in client.calls if c[0] == "update_experiment"] == [
+        ("update_experiment", "q1", "rq_sleep",
+         {"status": "concluded", "conclusion": "Slept better"})]
+    assert "Previously" in ok.text
+
+
+def test_hypotheses_use_the_backend_shape_and_a_legacy_string_is_converted():
+    client = FakeQuestClient()
+    create = create_quest_experiment_spec({}, client_factory=factory(client))
+    create.handler({"quest_id": "q1", "question": "Does tea help?", "hypothesis": "It helps",
+                    "user_asked_for_this_field": True}, ToolContext())
+    assert client.calls[-1][3] == {"hypotheses": [{"statement": "It helps"}]}
+    update = update_quest_experiment_spec({}, client_factory=factory(client))
+    res = update.handler({"quest_id": "q1", "research_question_id": "rq_sleep",
+                          "hypotheses": [{"statement": "Better sleep"}],
+                          "user_asked_for_this_field": True}, ToolContext())
+    assert res.ok and client.calls[-1][3] == {"hypotheses": [{"statement": "Better sleep"}]}
+
+
+def test_update_refuses_the_default_question_and_unknown_ids_unless_confirmed():
+    client = FakeQuestClient()
+    spec = update_quest_experiment_spec({}, client_factory=factory(client))
+    asked = {"quest_id": "q1", "status": "concluded", "user_asked_for_this_field": True}
+    refused = spec.handler({**asked, "research_question_id": "rq_default"}, ToolContext())
+    assert not refused.ok and "default question" in refused.text
+    assert not spec.handler({**asked, "research_question_id": "nope"}, ToolContext()).ok
+    assert not [c for c in client.calls if c[0] == "update_experiment"]
+    assert spec.handler({**asked, "research_question_id": "rq_default", "confirm_default": True},
+                        ToolContext()).ok
+
+
+def test_search_finds_word_forms_digits_expectations_and_lists_on_filler_queries():
+    client = FakeQuestClient()
+    spec = find_quest_experiments_spec({}, client_factory=factory(client))
+    ids = lambda q: [r["research_question_id"] for r in spec.handler(
+        {"quest_id": "q1", "query": q}, ToolContext()).data]
+    assert ids("sleeping better") == ["rq_sleep"]
+    assert ids("faster by week 3") == ["rq_sleep"]      # found in the expectation
+    assert ids("diets") == ["rq_diet"]
+    assert ids("show my experiments") == ["rq_default", "rq_sleep", "rq_diet"]  # filler only: list
+    assert "Showing 1 of 3" in spec.handler({"quest_id": "q1", "limit": 1}, ToolContext()).text
+    assert spec.handler({"quest_id": "q1", "limit": "lots"}, ToolContext()).ok
 
 
 def test_experiment_tools_are_standard_and_selected_by_their_words():

@@ -10,7 +10,7 @@ INITIAL = {
     "outcomes": [],
     "habits": [],
     "experiments": [{"id": "rq_sleep", "question": "Does stretching before bed improve my sleep?",
-                     "status": "experimenting", "conclusion": "", "hypothesis": ""}],
+                     "status": "experimenting", "conclusion": "", "hypotheses": []}],
 }
 
 

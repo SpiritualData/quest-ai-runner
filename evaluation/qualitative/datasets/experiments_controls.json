@@ -85,9 +85,10 @@
       "quest_key": "language",
       "expected_routing": "inline",
       "rubric": [
-        "Answers from real notes or says there are none, without inventing"
+        "Answers from real notes or says there are none, without inventing note content",
+        "Does not fail the reply for attributing the seeded notes to the AI or for a UTC-vs-local one-day date offset"
       ],
-      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
+      "evidence_notes": "Negative control for the experiments work: must not touch experiment functions. Ground truth the judge needs (2026-10-15 review): the eval world seeds these notes through an API key, which the backend records as author_kind 'ai', so a reply that says the AI recorded them is accurate, not a fabrication. Note created_at values are UTC with no timezone marker, so a date one day ahead of the user's local date is not an invention. Fail only for notes or facts that are not in the quest.",
       "message": "What did I write in my notes on this quest recently?",
       "forbid_writes": true,
       "precheck": {
