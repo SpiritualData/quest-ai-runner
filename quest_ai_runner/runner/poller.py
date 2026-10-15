@@ -168,6 +168,7 @@ class Poller(PassesMixin, SyncMixin):
             # Same map the folder sync uses, so a quest whose folder is already synced also gets
             # its canonical next-steps artifact read and refreshed by each pass.
             quest_folder_map=config.quest_folder_map,
+            pending_work=config.autopilot_pending_work,
             # What has changed on each quest since a run last looked at it, on every channel the
             # quest itself asks for. None when the consumer switched it off.
             update_engine=self._update_engine,

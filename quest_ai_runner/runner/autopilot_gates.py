@@ -16,7 +16,8 @@ from .autopilot_defaults import (
     TASK_STATUSES_FOR_COUNT,
     log,
 )
-from .autopilot_periods import _parse_dt, cadence_due, has_new_ask_since, run_requested
+from .autopilot_periods import _parse_dt, has_new_ask_since, run_requested
+from .autopilot_pending import PendingWork, pass_due, pending_work_for
 from .autopilot_result import AutopilotResult
 
 
@@ -118,8 +119,19 @@ class GatesMixin:
         """
         return now_in_zone(autopilot_cfg.get("run_timezone"), self._now())
 
-    def _gate_quest(self, quest: Dict[str, Any], quest_id: str) -> Optional[str]:
-        """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes."""
+    def _pending_work(self, quest_id: str) -> Optional[PendingWork]:
+        """The quest's configured pending work (``RunnerConfig.autopilot_pending_work``), if any."""
+        return pending_work_for(quest_id, self._pending_work_specs, self._quest_folder_map)
+
+    def _gate_quest(self, quest: Dict[str, Any], quest_id: str,
+                    pending: Optional[PendingWork] = None) -> Optional[str]:
+        """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes.
+
+        ``pending`` is the quest's pending work as the caller read it (``_pending_work``). Pending
+        items make the quest due once per day (``pass_due``) and, like a "Run now", stand in for
+        REACTIVE mode's new-ask test: they are something to check in about.
+        """
+        pending_count = pending.count if pending else 0
         autopilot_cfg = quest.get("autopilot") or {}
         # tz= the quest's own run_timezone; absent one, cadence_due falls back to the runner's
         # local clock (never UTC). This is the SAME predicate the poller's schedule-correction
@@ -130,7 +142,8 @@ class GatesMixin:
         # button would be a no-op on exactly the day someone is most likely to press it (the quest
         # already ran and they want another pass), and a no-op that reports success is the silent
         # failure this codebase bans.
-        if (not cadence_due(autopilot_cfg, self._now(), tz=autopilot_cfg.get("run_timezone"))
+        if (not pass_due(autopilot_cfg, self._now(), autopilot_cfg.get("run_timezone"),
+                         pending_count)
                 and not run_requested(autopilot_cfg)):
             return "cadence not due yet"
         # REACTIVE mode's own gate: the cadence/run_time above says WHEN this quest is allowed to
@@ -140,7 +153,7 @@ class GatesMixin:
         # is new. See ``has_new_ask_since`` for why this reads the asks ledger rather than notes
         # directly: an ask can arrive through any touchpoint the ledger captures, not only a note.
         if (str(autopilot_cfg.get("mode") or "off") == "reactive"
-                and not run_requested(autopilot_cfg)):
+                and not run_requested(autopilot_cfg) and pending_count == 0):
             asks = self._client.list_asks(quest_id=quest_id)
             # ``None`` means the READ failed (see ``QuestClient.list_asks``), not that nothing is
             # new -- a transient backend blip or an expired key must never be read as "no new ask

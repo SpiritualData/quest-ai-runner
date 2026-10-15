@@ -183,6 +183,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                  backpressure: bool = False,
                  adopt_recurring_default: Optional[bool] = None,
                  quest_folder_map: Optional[Dict[str, str]] = None,
+                 pending_work: Optional[Dict[str, Any]] = None,
                  update_engine: Optional[UpdateEngine] = None,
                  lane_user_id: Optional[str] = None,
                  judge: Optional[Callable[[str], str]] = None,
@@ -223,6 +224,9 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # next-steps artifact read and refreshed; one without is unaffected.
         self._quest_folder_map: Dict[str, str] = {
             str(k): str(v) for k, v in (quest_folder_map or {}).items() if v}
+        # ``{quest_id: {"file", "label"}}`` (RunnerConfig.autopilot_pending_work): work waiting on a
+        # quest that makes it due even when its cadence is not (see ``runner/autopilot_pending.py``).
+        self._pending_work_specs: Dict[str, Any] = dict(pending_work or {})
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._persona_names: Dict[str, str] = {}   # rep_id -> display name, resolved once per pass
         # Reflections are USER-scoped, not per quest, so every quest in a pass would otherwise
@@ -287,10 +291,15 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                     self._skip(result, quest_id, label,
                               f"today's budget of {self._daily_budget} autopilot task(s) is used up")
                     continue
-                gate_reason = self._gate_quest(quest, quest_id)
+                pending = self._pending_work(quest_id)
+                gate_reason = self._gate_quest(quest, quest_id, pending)
                 if gate_reason:
                     self._skip(result, quest_id, label, gate_reason)
                     continue
+                if pending and pending.count > 0:
+                    result.pending_work.append({
+                        "quest_id": quest_id, "quest_label": label,
+                        "count": pending.count, "label": pending.label})
                 budget_used = self._run_one_quest(quest, quest_id, dry_run, budget_used, result)
                 budget_by_team[team] = budget_used
             except Exception as e:  # noqa: BLE001 -- one quest's failure never aborts the pass

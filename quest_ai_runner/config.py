@@ -111,6 +111,7 @@ _FILE_SCALAR_FIELDS = {
     "quest_goal_updates_per_goal",
     "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring",
+    "autopilot_pending_work",
     "context_updates", "context_updates_state_path", "context_updates_first_look_days",
     "context_updates_judge_relevance", "context_updates_relevance_tier",
     "context_updates_judge_admission", "context_updates_admission_tier",
@@ -519,6 +520,11 @@ class RunnerConfig:
     # only consulted when the quest does not state one, which includes deployments whose backend
     # predates that field. ``None`` means "no consumer opinion", i.e. off.
     autopilot_adopt_recurring: Optional[bool] = None
+    # {quest_id: {"file": path, "label": "what the items are"}}: a file (relative paths are under
+    # the quest's ``quest_folder_map`` folder) holding a Markdown table of work waiting on the
+    # quest. While it has rows the quest's pass is due at least once a day even if its cadence is
+    # not, and the pass result reports the count. See ``runner/autopilot_pending.py``.
+    autopilot_pending_work: Optional[Dict[str, Any]] = None
     # The FALLBACK persona resolver (step 4 of the persona-routing chain, after a goal's own
     # ``assignee_rep_id`` and a day-matched/unrestricted quest ``autopilot.personas`` entry): a
     # consumer-supplied callable, given a goal dict, returning a rep_id or None. This is where a

@@ -9,7 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 from datetime import date, timedelta
 
-from .autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, cadence_due, run_requested
+from .autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, run_requested
+from .autopilot_pending import pass_due, pending_work_for
 from .quest_client import QuestApiError
 from ..adapters.bootstrap_reporter import (
     check_should_send_monthly_report,
@@ -201,6 +202,11 @@ class PassesMixin:
                 # The roster, so the schedule can skip days the day rule would gate anyway (see
                 # ``_quest_pass_days``). Not read anywhere else in the snapshot today.
                 "personas": autopilot_cfg.get("personas") or [],
+                # Pending work the lane's config names for this quest (0 when none): the schedule
+                # reads it through the same ``pass_due`` the pass's own gate does.
+                "pending_work": (lambda p: p.count if p else 0)(pending_work_for(
+                    quest_id, getattr(self.cfg, "autopilot_pending_work", None),
+                    self.cfg.quest_folder_map)),
             }
             if mode in ("suggest", "act"):
                 opted_in += 1
@@ -285,7 +291,8 @@ class PassesMixin:
         today = today_in_zone(zone, now)
         if honour_run_request and run_requested(entry):
             return today.isoformat(), min(run_time, now_in_zone(zone, now).strftime("%H:%M"))
-        expected_date = today if cadence_due(entry, now, tz=zone) else today + timedelta(days=1)
+        expected_date = (today if pass_due(entry, now, zone, int(entry.get("pending_work") or 0))
+                         else today + timedelta(days=1))
         allowed_days = _quest_pass_days(entry, expected_date)
         if allowed_days:
             expected_date = _next_allowed_date(expected_date, allowed_days)

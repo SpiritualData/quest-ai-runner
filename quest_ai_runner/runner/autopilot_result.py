@@ -35,6 +35,9 @@ class AutopilotResult:
     bookkeeping_warnings: List[Dict[str, Any]] = field(default_factory=list)  # {quest_id, detail}
     # Quests whose canonical next-steps artifact this pass rewrote: {quest_id, path, quest_target}.
     next_steps_refreshed: List[Dict[str, Any]] = field(default_factory=list)
+    # Pending work counted on a quest this pass ran: {quest_id, quest_label, count, label}. The
+    # backlog's size is the metric to watch, so a pass says it every time it is non-zero.
+    pending_work: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def created_task_ids(self) -> List[str]:
@@ -80,6 +83,12 @@ class AutopilotResult:
                                      "A goal proposed for you to accept or reject:",
                                      "{n} goals proposed for you to accept or reject:"))
             lines.extend(_describe_created(c) for c in proposals)
+        if self.pending_work:
+            if lines:
+                lines.append("")
+            for p in self.pending_work:
+                lines.append(f"{p.get('quest_label') or p.get('quest_id')}: "
+                             f"{p.get('count')} {p.get('label')}.")
         if self.next_steps_refreshed:
             if lines:
                 lines.append("")
