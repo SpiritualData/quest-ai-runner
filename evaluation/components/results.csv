@@ -12,3 +12,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-15,staleness,mtime_size,6,4,4/6,0/0,0,0,0,0.0,0.0,,,
 2026-10-15,staleness,store_sha256,6,4,4/6,0/0,0,0,0,0.0,0.1,,,
 2026-10-15,prompt_size,live,8,7,7/8,0/0,0,0,0,0.0,0.1,bc4fca5-dirty,8934ae26,none
+2026-10-15,prompt_size,live,8,8,8/8,0/0,0,0,0,0.0,0.1,6936694-dirty,8934ae26,none
