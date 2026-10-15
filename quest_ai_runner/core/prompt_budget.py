@@ -43,11 +43,11 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import re
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from .runtime_settings import core_settings
 from .managed_blocks import BLOCK_END, BLOCK_START, block_spans  # noqa: F401  (block_spans: public name)
 
 log = logging.getLogger("quest-ai-runner.prompt_budget")
@@ -330,13 +330,7 @@ def resolve_deep_prompt_budget(configured: Optional[int] = None, *,
     """
     budget: Optional[int] = configured if configured and configured > 0 else None
     if budget is None:
-        raw = (os.environ.get(DEEP_PROMPT_BUDGET_ENV) or "").strip()
-        if raw:
-            try:
-                budget = int(raw)
-            except ValueError:
-                log.warning("%s=%r is not an integer; using the default %d", DEEP_PROMPT_BUDGET_ENV,
-                            raw, DEFAULT_DEEP_PROMPT_TOKEN_BUDGET)
+        budget = core_settings().deep_prompt_token_budget
     if not budget or budget <= 0:
         budget = DEFAULT_DEEP_PROMPT_TOKEN_BUDGET
     return max(MIN_DEEP_PROMPT_TOKEN_BUDGET, min(budget, max_prompt_tokens_for(model)))

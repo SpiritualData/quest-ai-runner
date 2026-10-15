@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import inspect
 import json
-import os
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 from .adapters import Observation
+from .runtime_settings import core_settings
 
 
 # ---------------------------------------------------------------------------
@@ -200,24 +200,13 @@ def read_op_timeout_seconds() -> float:
     restart. Before this existed, one slow retrieval adapter could wedge the whole turn with no
     signal at all; a timeout now reports plainly which operation stalled and for how long instead
     of silently looking like an empty "nothing found" result."""
-    raw = os.getenv("QAR_READ_OP_TIMEOUT_SECONDS")
-    if raw is None or not raw.strip():
-        return 60.0
-    try:
-        value = float(raw)
-    except ValueError:
-        return 60.0
-    return value if value > 0 else 60.0
+    return core_settings().read_op_timeout_seconds
 
 
 def quest_judge_timeout_seconds() -> float:
     """Wall-clock budget for the quest-selection judgment. Env ``QAR_QUEST_JUDGE_TIMEOUT_SECONDS``
     (default 8). On a timeout the turn simply goes without a guessed quest."""
-    try:
-        value = float(os.getenv("QAR_QUEST_JUDGE_TIMEOUT_SECONDS", "8"))
-    except ValueError:
-        return 8.0
-    return value if value > 0 else 8.0
+    return core_settings().quest_judge_timeout_seconds
 
 
 def intent_judge_timeout_seconds() -> float:
@@ -226,14 +215,7 @@ def intent_judge_timeout_seconds() -> float:
     8, accepts a float); read fresh on every call, not cached. A short cap is deliberate: this call
     only runs when the planner gave no ``user_intent`` verdict, and must never be the reason a turn
     feels slow -- a timeout falls back to "no directive" instead of blocking."""
-    raw = os.getenv("QAR_INTENT_JUDGE_TIMEOUT_SECONDS")
-    if raw is None or not raw.strip():
-        return 8.0
-    try:
-        value = float(raw)
-    except ValueError:
-        return 8.0
-    return value if value > 0 else 8.0
+    return core_settings().intent_judge_timeout_seconds
 
 
 def mode_release_timeout_seconds() -> float:
@@ -242,14 +224,7 @@ def mode_release_timeout_seconds() -> float:
     accepts a float); read fresh on every call, not cached. A timeout HOLDS the latch (the fail-safe
     direction), so a slow provider can delay a brainstorm turn by at most this budget and can never
     cause work to run in a conversation the user put on hold."""
-    raw = os.getenv("QAR_MODE_RELEASE_TIMEOUT_SECONDS")
-    if raw is None or not raw.strip():
-        return 8.0
-    try:
-        value = float(raw)
-    except ValueError:
-        return 8.0
-    return value if value > 0 else 8.0
+    return core_settings().mode_release_timeout_seconds
 
 
 def describe_read_spec(spec: Dict[str, Any]) -> str:
@@ -379,14 +354,7 @@ def context_assembly_timeout_seconds() -> float:
     context costs far more than waiting a few more seconds for it, and the instant ack already
     tells the user the turn has started. Typical assembly is well inside it (1-11s measured on a
     5,800-card store after the 2026-09-26 turn-start cost fixes); a timeout still warns loudly."""
-    raw = os.getenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS")
-    if raw is None or not raw.strip():
-        return 30.0
-    try:
-        value = float(raw)
-    except ValueError:
-        return 30.0
-    return value if value > 0 else 30.0
+    return core_settings().context_assembly_timeout_seconds
 
 
 def guidance_selection_timeout_seconds() -> float:
@@ -403,14 +371,7 @@ def guidance_selection_timeout_seconds() -> float:
     but not actually protected by its timeout (context assembly runs in its own background thread
     collected with ``context_assembly_timeout_seconds()``; guidance selection was being called
     directly, synchronously, in the main turn thread, un-timed). See the call site in ``run()``."""
-    raw = os.getenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS")
-    if raw is None or not raw.strip():
-        return 15.0
-    try:
-        value = float(raw)
-    except ValueError:
-        return 15.0
-    return value if value > 0 else 15.0
+    return core_settings().guidance_selection_timeout_seconds
 
 
 def verify_context_max_chars() -> int:
@@ -423,14 +384,7 @@ def verify_context_max_chars() -> int:
     itself huge (a card layer with no upstream cap), not a normal-path limiter. Env
     ``QAR_VERIFY_CONTEXT_MAX_CHARS`` (default 24000, accepts an int); read fresh on every call so it
     can be tuned without a restart. A non-positive value disables the cap entirely."""
-    raw = os.getenv("QAR_VERIFY_CONTEXT_MAX_CHARS")
-    if raw is None or not raw.strip():
-        return 24000
-    try:
-        value = int(raw)
-    except ValueError:
-        return 24000
-    return value if value > 0 else 24000
+    return core_settings().verify_context_max_chars
 
 
 def truncate_verify_context(text: str, max_chars: Optional[int] = None) -> str:

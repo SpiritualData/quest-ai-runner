@@ -34,6 +34,8 @@ from .core.adapters import (
 # package -- mcp_client.py only imports that lazily, inside its own connection seam.
 from .adapters.mcp_client import MCPServerSpec
 from .core.orchestrator import Orchestrator, OrchestratorConfig
+from .core.runtime_settings import CoreSettings
+from .config_core_settings import install_for_config
 from .resources import ResourceLimits
 
 from .config_support import (  # noqa: F401
@@ -682,6 +684,11 @@ class RunnerConfig:
     notion_adapter: Any = None
     google_chat_adapter: Any = None
 
+    # The tunables ``core`` reads (timeouts, caps, floors; see ``core.runtime_settings``). None keeps the
+    # QAR_* environment variables as the source, re-read on every use. Set a ``CoreSettings`` to pin
+    # them: ``build_orchestrator`` then installs it for the process.
+    core_settings: Optional[CoreSettings] = None
+
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def validate(self) -> List[str]:
@@ -1234,6 +1241,7 @@ def build_orchestrator(
     console-print callback so bootstrap events appear as visible system messages
     rather than silent log entries.
     """
+    install_for_config(cfg.core_settings)
     _skip = {"quest", "retrieval adapter"}
     problems = [p for p in cfg.validate()
                 if not any(kw in p for kw in _skip)]
@@ -1466,7 +1474,7 @@ def build_orchestrator(
         anticipator=resolve_anticipator(cfg, context_assembler),
         tools=resolve_tool_registry(cfg),
         web=cfg.web_research,
-        recipes=cfg.recipe_store or build_recipe_store_from_env(),
+        recipes=cfg.recipe_store or build_recipe_store_from_env(os.environ),
         edited_files_card_updater=update_cards_from_deep_edits,
         background_thread_registrar=_register_index_thread,
     )

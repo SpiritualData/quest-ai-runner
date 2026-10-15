@@ -5,7 +5,6 @@ A mixin of ``Orchestrator`` (see ``orchestrator.py``): methods only, state lives
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
@@ -18,6 +17,7 @@ from .answer_explanation import (
     render_record_for_prompt,
 )
 from .guard import ExecutionRecord
+from .runtime_settings import core_settings
 from .auxiliary_prompts import (
     INTENT_DIRECTIVE_PROMPT,
     INTENT_DIRECTIVE_TOOL,
@@ -331,7 +331,7 @@ class JudgesMixin:
             self.link_guard_built = True
             try:
                 self.link_guard_instance = build_link_guard(
-                    self.cfg.link_policy_file or os.getenv("QAR_LINK_POLICY_FILE", ""),
+                    self.cfg.link_policy_file or core_settings().link_policy_file,
                     enabled=self.cfg.link_guard)
             except Exception as e:  # noqa: BLE001 -- a bad policy must not break every turn
                 log.warning("Link guard could not be built: %s: %s", type(e).__name__, e)

@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, Callable, List, Optional, Set, Tuple
 
 from . import usage_limit
+from .runtime_settings import process_environment
 from .adapters import DeepResult, DeepRunner, EVENT_EXEC, ProgressEvent
 
 from .goal_runner_contract import (  # noqa: F401
@@ -119,7 +120,7 @@ class SubprocessGoalRunner(DeepRunner):
         self._model_translator = model_translator
 
     def _build_env(self) -> dict:
-        env = os.environ.copy()
+        env = dict(process_environment())
         env["PYTHONUNBUFFERED"] = "1"
         # Don't let a spawned headless run reuse our own session / API billing.
         env.pop("CLAUDECODE", None)

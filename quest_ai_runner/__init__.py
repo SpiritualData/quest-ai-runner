@@ -16,6 +16,11 @@ from .runner.quest_client import quest_client_from_env as _quest_client_from_env
 # (``core.goal_runner.cli_safe_model``) and the Quest client factory for the standard tools.
 core.goal_runner.set_cli_model_translator(_cli_model)
 core.tools.set_quest_client_factory(_quest_client_from_env)
+# core reads no environment variable (S13): its tunables arrive as ``core.runtime_settings`` values,
+# resolved by the config layer from the live environment unless a RunnerConfig pins its own.
+from .config_core_settings import install_environment_backed_core as _install_core_env  # noqa: E402
+
+_install_core_env()
 
 if TYPE_CHECKING:  # pragma: no cover — typing only
     from .config import RunnerConfig

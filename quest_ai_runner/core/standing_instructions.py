@@ -24,6 +24,8 @@ import os
 from pathlib import Path
 from typing import List
 
+from .runtime_settings import core_settings
+
 log = logging.getLogger("quest-ai-runner.standing_instructions")
 
 DEEP_INSTRUCTIONS_ENV = "QAR_DEEP_INSTRUCTIONS_FILES"
@@ -33,7 +35,7 @@ DEFAULT_INSTRUCTIONS_FILE = Path(__file__).resolve().parent.parent / "prompts" /
 
 def instruction_files() -> List[Path]:
     """The files the standing-instruction layer is read from, in order (see module docstring)."""
-    raw = os.environ.get(DEEP_INSTRUCTIONS_ENV)
+    raw = core_settings().deep_instructions_files
     if raw is None:
         return [DEFAULT_INSTRUCTIONS_FILE]
     files: List[Path] = []

@@ -71,6 +71,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from .runtime_settings import process_environment
+
 log = logging.getLogger(__name__)
 
 # At or below this many tools the planner simply sees them all: selection only earns its keep when
@@ -464,8 +466,23 @@ class ToolRegistry:
 # Command-backed tools (the custom-tool path for anything that is not Python)
 # ---------------------------------------------------------------------------------------------
 
+_ENV_REF = re.compile(r"\$(?:(\w+)|\{([^}]*)\})")
+
+
+def _expand_env_vars(token: str) -> str:
+    """``os.path.expandvars`` semantics over the injected environment: ``$VAR`` and ``${VAR}``
+    expand when defined and are left as written when not."""
+    env = process_environment()
+
+    def one(m: "re.Match[str]") -> str:
+        name = m.group(1) or m.group(2)
+        return env[name] if name in env else m.group(0)
+
+    return _ENV_REF.sub(one, token)
+
+
 def expand_placeholders(token: str) -> str:
-    return os.path.expandvars(token.replace("{python}", sys.executable))
+    return _expand_env_vars(token.replace("{python}", sys.executable))
 
 
 def command_args_as_flags(spec_params: Dict[str, Any], args: Mapping[str, Any]) -> List[str]:
@@ -509,7 +526,7 @@ def make_command_handler(command: Sequence[str], parameters: Dict[str, Any],
             argv += command_args_as_flags(parameters, args)
         else:
             stdin = json.dumps(args)
-        run_env = dict(os.environ)
+        run_env = dict(process_environment())
         run_env.update({k: expand_placeholders(str(v)) for k, v in (env or {}).items()})
         if ctx.quest_id:
             run_env.setdefault("QAR_TOOL_QUEST_ID", ctx.quest_id)
@@ -1183,7 +1200,7 @@ def build_tool_registry(env: Optional[Mapping[str, str]] = None) -> ToolRegistry
     ``QAR_STANDARD_TOOLS``  default on; ``0`` disables the standard tools.
     ``QAR_TOOLS_FILE``      ``:``-separated TOML files of custom tools and standard overrides.
     """
-    env = os.environ if env is None else env
+    env = process_environment() if env is None else env
     registry = ToolRegistry()
     if env_flag(env.get("QAR_STANDARD_TOOLS"), default=True):
         for name, builder in STANDARD_TOOL_BUILDERS.items():

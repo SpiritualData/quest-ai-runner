@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import threading
 import time
@@ -14,6 +13,7 @@ from typing import Callable, List, Optional
 from pathlib import Path
 
 from .adapters import EVENT_EXEC, ProgressEvent
+from .runtime_settings import core_settings
 from .goal_runner_contract import DEFAULT_MONITOR_HEARTBEAT_SECONDS, _log
 
 
@@ -25,7 +25,7 @@ def _claude_project_bases(working_dir: Optional[str] = None) -> List[Path]:
     follow for lanes that run Claude Code with a different config dir than the runner's.
     """
     bases: List[Path] = []
-    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    config_dir = core_settings().claude_config_dir
     if config_dir:
         bases.append(Path(config_dir) / "projects")
     if working_dir:

@@ -17,10 +17,11 @@ import datetime
 import hashlib
 import json
 import logging
-import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from .runtime_settings import core_settings
 
 log = logging.getLogger("quest-ai-runner.note_context_store")
 
@@ -81,10 +82,7 @@ def _floor_relevance_gated() -> bool:
     without a restart.  Set to ``0`` / ``false`` / ``no`` / ``off`` to restore the old
     unconditional floor (the 2 most recent notes ride along on every turn regardless of
     relevance)."""
-    raw = os.getenv("QAR_NOTE_FLOOR_RELEVANCE_GATED")
-    if raw is None or not raw.strip():
-        return True
-    return raw.strip().lower() not in ("0", "false", "no", "off")
+    return core_settings().note_floor_relevance_gated
 
 
 def _floor_fresh_minutes() -> float:
@@ -99,13 +97,7 @@ def _floor_fresh_minutes() -> float:
     rides into an unrelated request).  Env ``QAR_NOTE_FLOOR_FRESH_MINUTES`` (default 5, accepts
     a float); read fresh on every call so it can be tuned without a restart.  A non-positive
     value disables the freshness bypass."""
-    raw = os.getenv("QAR_NOTE_FLOOR_FRESH_MINUTES")
-    if raw is None or not raw.strip():
-        return 5.0
-    try:
-        return float(raw)
-    except ValueError:
-        return 5.0
+    return core_settings().note_floor_fresh_minutes
 
 
 def _card_id_for_note(note: Dict[str, Any]) -> str:

@@ -53,6 +53,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from .runtime_settings import process_environment
 from .scope_tags import as_tag_list, scope_tags_allow
 
 log = logging.getLogger(__name__)
@@ -491,14 +492,14 @@ class RecipeRunner:
 
 
 def recipes_enabled_from_env(env: Optional[Dict[str, str]] = None) -> bool:
-    env = os.environ if env is None else env
+    env = process_environment() if env is None else env
     return (env.get("QAR_RECIPES") or "").strip().lower() in ("1", "true", "on", "yes")
 
 
 def build_recipe_store_from_env(env: Optional[Dict[str, str]] = None) -> Optional[RecipeStore]:
     """A file-backed store under ``QAR_RECIPES_DIR`` (default ``<QAR_CORPUS_ROOT>/.quest-context``)
     when ``QAR_RECIPES`` is on, else None."""
-    env = os.environ if env is None else env
+    env = process_environment() if env is None else env
     if not recipes_enabled_from_env(env):
         return None
     base = env.get("QAR_RECIPES_DIR") or os.path.join(

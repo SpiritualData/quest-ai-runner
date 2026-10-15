@@ -1,0 +1,110 @@
+"""Resolve the tunables ``core`` uses (``core.runtime_settings.CoreSettings``) from the environment.
+
+This is the config layer's half of the S13 rule: ``core`` never reads ``os.environ``, so the QAR_*
+variables it used to read are parsed here, with the same defaults and the same tolerance for bad
+values, into one ``CoreSettings``. ``RunnerConfig.core_settings`` pins a fixed value; left None, the
+package installs ``core_settings_from_env`` as the provider, which re-reads the environment on every
+call so a running process can be retuned without a restart, exactly as before.
+"""
+from __future__ import annotations
+
+import os
+from typing import Callable, Mapping, Optional
+
+from .config_support import _log
+from .core.runtime_settings import (
+    DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS,
+    CoreSettings,
+    install_core_settings,
+    install_process_environment,
+)
+
+
+def _float_or(raw: Optional[str], default: float, *, positive: bool = True) -> float:
+    """A float from ``raw``; blank, malformed (and, when ``positive``, non-positive) give ``default``."""
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if (value > 0 or not positive) else default
+
+
+def _optional_positive(raw: Optional[str], name: str) -> Optional[float]:
+    """A positive float, or None for unset, malformed (logged) or non-positive."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        _log.warning("%s=%r is not a valid number, ignoring it", name, raw)
+        return None
+    return value if value > 0 else None
+
+
+def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSettings:
+    """The ``CoreSettings`` the environment (default: the process environment) asks for."""
+    env = os.environ if env is None else env
+    d = CoreSettings()
+
+    budget: Optional[int] = None
+    raw_budget = (env.get("QAR_DEEP_PROMPT_TOKEN_BUDGET") or "").strip()
+    if raw_budget:
+        try:
+            budget = int(raw_budget)
+        except ValueError:
+            _log.warning("QAR_DEEP_PROMPT_TOKEN_BUDGET=%r is not an integer; using the default", raw_budget)
+
+    review_raw = (env.get("QAR_DEEP_REVIEW_INTERVAL_SECONDS") or "").strip()
+    review = (_optional_positive(review_raw, "QAR_DEEP_REVIEW_INTERVAL_SECONDS")
+              if review_raw else DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS)
+
+    gate_raw = env.get("QAR_NOTE_FLOOR_RELEVANCE_GATED")
+    gated = d.note_floor_relevance_gated if gate_raw is None or not gate_raw.strip() else \
+        gate_raw.strip().lower() not in ("0", "false", "no", "off")
+
+    verify_raw = env.get("QAR_VERIFY_CONTEXT_MAX_CHARS")
+    verify = d.verify_context_max_chars
+    if verify_raw is not None and verify_raw.strip():
+        try:
+            verify = int(verify_raw) if int(verify_raw) > 0 else d.verify_context_max_chars
+        except ValueError:
+            pass
+
+    return CoreSettings(
+        read_op_timeout_seconds=_float_or(env.get("QAR_READ_OP_TIMEOUT_SECONDS"), d.read_op_timeout_seconds),
+        quest_judge_timeout_seconds=_float_or(
+            env.get("QAR_QUEST_JUDGE_TIMEOUT_SECONDS"), d.quest_judge_timeout_seconds),
+        intent_judge_timeout_seconds=_float_or(
+            env.get("QAR_INTENT_JUDGE_TIMEOUT_SECONDS"), d.intent_judge_timeout_seconds),
+        mode_release_timeout_seconds=_float_or(
+            env.get("QAR_MODE_RELEASE_TIMEOUT_SECONDS"), d.mode_release_timeout_seconds),
+        context_assembly_timeout_seconds=_float_or(
+            env.get("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS"), d.context_assembly_timeout_seconds),
+        guidance_selection_timeout_seconds=_float_or(
+            env.get("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS"), d.guidance_selection_timeout_seconds),
+        verify_context_max_chars=verify,
+        note_floor_relevance_gated=gated,
+        note_floor_fresh_minutes=_float_or(
+            env.get("QAR_NOTE_FLOOR_FRESH_MINUTES"), d.note_floor_fresh_minutes, positive=False),
+        deep_prompt_token_budget=budget,
+        deep_timeout_seconds=_optional_positive(env.get("QAR_DEEP_TIMEOUT_SECONDS"), "QAR_DEEP_TIMEOUT_SECONDS"),
+        deep_review_interval_seconds=review,
+        deep_instructions_files=env.get("QAR_DEEP_INSTRUCTIONS_FILES"),
+        link_policy_file=env.get("QAR_LINK_POLICY_FILE", ""),
+        claude_config_dir=env.get("CLAUDE_CONFIG_DIR"),
+    )
+
+
+def install_environment_backed_core() -> None:
+    """Make core read the live process environment through this layer (what a plain import does)."""
+    install_core_settings(core_settings_from_env)
+    install_process_environment(lambda: dict(os.environ))
+
+
+def install_for_config(core_settings: Optional[CoreSettings]) -> None:
+    """Pin ``RunnerConfig.core_settings`` into core when the consumer set one."""
+    if core_settings is not None:
+        install_core_settings(core_settings)

@@ -16,13 +16,3 @@ S6,quest_ai_runner/runner/lane.py:config,Runner reads RunnerConfig and the confi
 S6,quest_ai_runner/runner/poller.py:config,Runner reads RunnerConfig and the config resolvers directly. Inject the resolved values or move the shared helpers into core/runner; until then config sits above runner and this import points outward. Known cycle: config also imports runner.
 S6,quest_ai_runner/runner/poller.py:resources,Poller loads shipped resources through the top-level resources module (config layer); move resource lookup below runner or inject it
 S6,quest_ai_runner/runner/poller.py:usage,Poller records token usage through the top-level usage tracker (config layer); inject a usage sink via RunnerConfig instead
-S13,quest_ai_runner/core/goal_runner.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/goal_runner_contract.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/goal_runner_session.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/note_context_store.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/orchestrator_capabilities.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/orchestrator_judges.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/prompt_budget.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/recipes.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/standing_instructions.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
-S13,quest_ai_runner/core/tools.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config

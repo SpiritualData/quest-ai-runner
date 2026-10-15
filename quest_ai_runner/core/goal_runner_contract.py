@@ -7,13 +7,13 @@ from __future__ import annotations
 import inspect
 import json
 import logging
-import os
 import re
 import signal
 from typing import Any, Callable, List, Optional, Tuple
 from dataclasses import dataclass
 
 from .adapters import DeepResult, DeepRunner
+from .runtime_settings import DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS as _DEFAULT_REVIEW_INTERVAL, core_settings
 
 
 _log = logging.getLogger("quest-ai-runner.goal_runner")
@@ -30,7 +30,7 @@ DEFAULT_DEEP_MAX_TURNS = 30
 # the one-sentence reason it was left alone goes to the log. Knobs:
 #   QAR_DEEP_REVIEW_INTERVAL_SECONDS  seconds between reviews (default 300; 0 turns reviews off)
 #   QAR_DEEP_TIMEOUT_SECONDS          OPTIONAL hard wall-clock cap; unset or 0 means no cap
-DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS = 300.0
+DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS = _DEFAULT_REVIEW_INTERVAL
 
 
 QAR_DEEP_REVIEW_INTERVAL_SECONDS_ENV_VAR = "QAR_DEEP_REVIEW_INTERVAL_SECONDS"
@@ -77,17 +77,14 @@ def resolve_deep_timeout_seconds(configured: Optional[float]) -> Optional[float]
     """
     if configured is not None:
         return float(configured) if float(configured) > 0 else None
-    return _positive_float(os.getenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR), QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR)
+    return core_settings().deep_timeout_seconds
 
 
 def resolve_deep_review_interval_seconds(configured: Optional[float]) -> Optional[float]:
     """Seconds between liveness reviews, or None when reviews are off (interval 0)."""
     if configured is not None:
         return float(configured) if float(configured) > 0 else None
-    raw = (os.getenv(QAR_DEEP_REVIEW_INTERVAL_SECONDS_ENV_VAR) or "").strip()
-    if raw:
-        return _positive_float(raw, QAR_DEEP_REVIEW_INTERVAL_SECONDS_ENV_VAR)
-    return DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS
+    return core_settings().deep_review_interval_seconds
 
 
 DEEP_REVIEW_PROMPT = """You are a watchdog for an AI worker running a long task. Below is the tail of its live session log. Decide whether the worker should STILL be running.
