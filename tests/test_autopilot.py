@@ -430,7 +430,8 @@ def test_reactive_gate_is_bypassed_by_an_explicit_run_now():
     passer = AutopilotPass(client, team_id="team1", now=_now)
     result = passer.run({"text": "pass"})
     assert len(result.created_task_ids) == 1
-    assert client.list_asks_calls == []  # never even asked -- the override short-circuits it
+    # The override short-circuits the gate, so the only read is the batch's What You Asked section.
+    assert client.list_asks_calls == ["q1"]
 
 
 def test_reactive_gate_fails_open_when_the_asks_read_fails():
@@ -447,13 +448,13 @@ def test_reactive_gate_fails_open_when_the_asks_read_fails():
     assert client.list_asks_calls == ["q1"]
 
 
-def test_non_reactive_modes_never_call_list_asks():
+def test_non_reactive_modes_read_the_asks_once_for_the_brief_and_never_for_a_gate():
     q1 = _quest("q1", mode="act")
     goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
     client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
-    assert client.list_asks_calls == []
+    assert client.list_asks_calls == ["q1"]
 
 
 # --- gate: backpressure ---------------------------------------------------------------------
@@ -697,7 +698,7 @@ def test_default_quest_instructions_tell_a_run_to_iterate_rather_than_fragment()
     than writing a new one-off, and file scratch/dated updates in their own subfolder. See
     ``ai_driven/source_of_truth/`` in quest_folder_zones.py for the convention this reinforces."""
     assert "source_of_truth" in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
-    assert "rather than writing a new one" in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    assert "instead of writing another" in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
     assert "subfolder" in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
     assert "—" not in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS  # no em dashes, matches the file's own rule
 

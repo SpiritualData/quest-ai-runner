@@ -249,3 +249,53 @@ class DecisionsMixin:
         """PATCH /api/asks/{item_key} with ``kind`` and/or ``assignee_id`` (an empty string clears
         the assignee). Raises ``QuestApiError`` on refusal; the caller decides whether to retry."""
         return self._request("PATCH", f"/api/asks/{item_key}", body=fields) or {}
+
+    def record_ask(self, quest_id: str, text: str, *, author_id: Optional[str] = None,
+                   kind: Optional[str] = None, source: str = "ai_recorded",
+                   item_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/asks: file a request a person made of the AI on this quest (What You Asked).
+
+        ``text`` is the person's exact words; ``author_id`` the person who asked (their email,
+        default: the account this client runs as); ``kind`` is ``request`` (the server's default),
+        ``standing``, ``context`` or ``question``. Recording the same words twice is the same ask
+        (the server derives the id from them unless ``item_id`` is given), so a retry is safe.
+        Returns the ask row (its ``key`` is what ``update_ask`` takes), or ``{}`` on any failure
+        (logged), so a caller can tell the person was not heard rather than assume they were.
+        """
+        body: Dict[str, Any] = {"quest_id": quest_id, "text": text, "source": source}
+        if author_id:
+            body["author_id"] = author_id
+        if kind:
+            body["kind"] = kind
+        if item_id:
+            body["item_id"] = item_id
+        try:
+            self._require()
+            return self._request("POST", "/api/asks", body=body) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("record_ask failed for quest %s: %s", quest_id, e)
+            return {}
+
+    def update_ask(self, item_key: str, state: Optional[str] = None, note: str = "", *,
+                   kind: Optional[str] = None) -> Dict[str, Any]:
+        """PATCH /api/asks/{item_key} as a RUN's claim (``by_run``), never a person's decision.
+
+        ``state`` is one of in progress, done, blocked, declined, noted, awaiting answer
+        (underscores are accepted): ``done`` lands as "awaiting acceptance" until a person accepts
+        it, and ``accepted`` is refused. ``kind`` (request, standing, context, question) sorts an
+        ask without changing its state, and never overrides a kind a person set. Pass a state, a
+        kind, or both. Returns the updated ask row, or ``{}`` on any failure (logged).
+        """
+        body: Dict[str, Any] = {"by_run": True}
+        if state:
+            body["state"] = state
+        if kind:
+            body["kind"] = kind
+        if note:
+            body["note"] = note
+        try:
+            self._require()
+            return self._request("PATCH", f"/api/asks/{item_key}", body=body) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("update_ask failed for ask %s: %s", item_key, e)
+            return {}

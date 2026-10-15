@@ -19,6 +19,7 @@ from .autopilot_defaults import (
 from .autopilot_periods import _parse_dt, has_new_ask_since, run_requested
 from .autopilot_pending import PendingWork, pass_due, pending_work_for
 from .autopilot_result import AutopilotResult
+from .quest_asks_brief import fetch_asks
 
 
 class GatesMixin:
@@ -123,6 +124,15 @@ class GatesMixin:
         """The quest's configured pending work (``RunnerConfig.autopilot_pending_work``), if any."""
         return pending_work_for(quest_id, self._pending_work_specs, self._quest_folder_map)
 
+    def quest_asks(self, quest_id: str) -> Optional[List[Dict[str, Any]]]:
+        """The quest's ask rows, read ONCE per pass however many readers want them (the reactive
+        gate and the What You Asked section of each batch). ``None`` = the read failed, kept apart
+        from ``[]`` and cached too, so a failing backend is asked once, not once per reader."""
+        cache = self.__dict__.setdefault("asks_cache", {})
+        if quest_id not in cache:
+            cache[quest_id] = fetch_asks(self._client, quest_id)
+        return cache[quest_id]
+
     def _gate_quest(self, quest: Dict[str, Any], quest_id: str,
                     pending: Optional[PendingWork] = None) -> Optional[str]:
         """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes.
@@ -154,7 +164,7 @@ class GatesMixin:
         # directly: an ask can arrive through any touchpoint the ledger captures, not only a note.
         if (str(autopilot_cfg.get("mode") or "off") == "reactive"
                 and not run_requested(autopilot_cfg) and pending_count == 0):
-            asks = self._client.list_asks(quest_id=quest_id)
+            asks = self.quest_asks(quest_id)
             # ``None`` means the READ failed (see ``QuestClient.list_asks``), not that nothing is
             # new -- a transient backend blip or an expired key must never be read as "no new ask
             # since the last pass", or this gate quietly wedges a reactive quest shut forever.

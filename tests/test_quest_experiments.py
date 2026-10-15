@@ -191,7 +191,7 @@ def test_section_carries_running_experiments_forward_whatever_the_planning_setti
 
 def test_section_proposes_when_none_exist_and_the_quest_may_plan():
     out = experiments_brief_section([DEFAULT_ROW], quest_id="q1", planning="plan_and_work")
-    assert f"kind={EXPERIMENT_PROPOSAL_KIND}" in out and "quest_id=q1" in out
+    assert EXPERIMENT_PROPOSAL_KIND in out and "create_decision" in out
     assert "hypothesis" in out and "minimal design" in out and "Never create or start" in out
 
 
@@ -252,12 +252,12 @@ def test_the_pass_proposes_on_a_quest_with_none_that_may_plan():
 def test_the_pass_does_not_propose_while_one_is_open():
     text = run_pass([DEFAULT_ROW], "plan_and_work",
                     decisions=[{"id": "d1", "status": "open", "kind": EXPERIMENT_PROPOSAL_KIND}])
-    assert "Do not raise another" in text and "create_decision" not in text
+    assert "Do not raise another" in text and "Propose ONE experiment" not in text
 
 
 def test_the_pass_does_not_propose_on_a_work_only_quest():
     text = run_pass([DEFAULT_ROW], "work_only")
-    assert "create_decision" not in text and "Experiments on this quest" not in text
+    assert "Propose ONE experiment" not in text and "Experiments on this quest" not in text
 
 
 def test_an_unreadable_experiment_list_adds_nothing_to_the_batch():
@@ -268,7 +268,7 @@ def test_an_unreadable_experiment_list_adds_nothing_to_the_batch():
     client = Broken([], quests=[q], goals_by_quest={})
     AutopilotPass(client, team_id="team1", daily_budget=3, now=_now).run({"text": "pass"})
     text = client.created_tasks[0]["text"]
-    assert "create_decision" not in text and "Experiments on this quest" not in text
+    assert "Propose ONE experiment" not in text and "Experiments on this quest" not in text
     assert "no experiment of its own" not in text
 
 
@@ -296,9 +296,9 @@ def test_fetch_and_proposal_helpers_distinguish_failure_from_empty():
 
 def test_the_default_quest_brief_names_experiments_as_a_core_concern():
     text = BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
-    assert text.count("Experiments are a core part of every quest") == 1
-    for needle in ("carry them forward", "Never start, change, conclude or spend money",
-                   "hypothesis", "metric", "minimal design", "cost", "at most one open",
+    assert text.count("Carry each running experiment forward") == 1
+    for needle in ("Never start, change, conclude or spend money",
+                   "hypothesis", "metric", "minimal design", "cost", "single ask",
                    "your brief says you may plan"):
         assert needle in text, needle
     assert "—" not in text  # no em dashes
@@ -315,7 +315,7 @@ def test_the_default_brief_reaches_a_defaulted_batch_with_the_experiments_sectio
     client = PassClient([DEFAULT_ROW], quests=[q], goals_by_quest={})
     AutopilotPass(client, team_id="team1", daily_budget=3, now=_now).run({"text": "pass"})
     text = client.created_tasks[0]["text"]
-    assert "Experiments are a core part of every quest" in text   # the standing brief
+    assert "Carry each running experiment forward" in text   # the standing brief
     assert "Propose ONE experiment" in text   # the brief's own experiments section
 
 

@@ -352,7 +352,8 @@ def compose_batch_text(quest_outcome: str,
                        default_quest_instructions: Optional[str] = None,
                        default_persona_instructions: Optional[str] = None,
                        goal_ladder: Optional[List[Dict[str, Any]]] = None,
-                       experiments: Optional[str] = None) -> str:
+                       experiments: Optional[str] = None,
+                       asked: Optional[str] = None) -> str:
     """The batch task's text: what this run is asked to produce, the period and goals it serves,
     what the person themselves last said about the work, and what the previous period produced.
 
@@ -456,6 +457,11 @@ def compose_batch_text(quest_outcome: str,
     history when the brief has to be cut. Absent or empty, this emits nothing and the composed text
     is byte-identical to before this parameter existed.
 
+    ``asked`` (from ``quest_asks_brief.asks_brief_section``) is the What You Asked section: the
+    quest's open asks with their keys, its standing rules, and what is already waiting on a person.
+    The standing instructions tell a run to work these first, so it rides in whole or not at all at
+    the same tier as the experiments. Absent or empty, the composed text is unchanged.
+
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
     because some consumers resolve the persona from the request text.
@@ -511,6 +517,8 @@ def compose_batch_text(quest_outcome: str,
         # here is some more work", which is the misreading the framing above spends its words
         # preventing.
         add("goal frame", _render_goal_ladder(goal_ladder), prompt_budget.PRIORITY_GOALS)
+    if asked:
+        add("what you asked", asked, prompt_budget.PRIORITY_STANDING, whole=True)
     if experiments:
         add("experiments", experiments, prompt_budget.PRIORITY_STANDING, whole=True)
     if adopted_tasks:

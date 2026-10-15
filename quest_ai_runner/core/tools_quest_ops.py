@@ -37,6 +37,9 @@ CLOSED_ASK_STATES = frozenset({"done", "accepted", "declined", "noted", "superse
 #: The states an AI run may record on an ask (the backend refuses ``accepted``: only a person accepts).
 RUN_ASK_STATES = ("in_progress", "done", "blocked", "declined", "noted", "awaiting_answer")
 
+#: The kinds an AI run may sort an ask into (a person's own sorting always wins).
+RUN_ASK_KINDS = ("request", "standing", "context", "question")
+
 QUEST_ID_PARAM = {"type": "string", "description": "The quest (defaults to the quest this run is on)."}
 NO_QUEST = ToolResult(ok=False, text="No quest is open in this run, so pass quest_id.")
 
@@ -60,6 +63,11 @@ def same_words(first: Any, second: Any, threshold: float = 0.8) -> bool:
     return bool(a and b) and len(a & b) / len(a | b) >= threshold
 
 
+def ask_state(row: Mapping[str, Any]) -> str:
+    """A row's state in the underscore spelling this module uses ("awaiting acceptance" -> "awaiting_acceptance")."""
+    return str(row.get("state") or "open").strip().lower().replace(" ", "_")
+
+
 def ask_key(row: Mapping[str, Any]) -> str:
     return str(row.get("key") or "")
 
@@ -74,7 +82,8 @@ def open_asks(client, quest_id: str, include_closed: bool = False) -> Optional[L
     rows = client.list_asks(quest_id=quest_id, limit=200)
     if rows is None:
         return None
-    return [r for r in rows if include_closed or str(r.get("state") or "open") not in CLOSED_ASK_STATES]
+    return [r for r in rows
+            if include_closed or ask_state(r) not in CLOSED_ASK_STATES]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -250,7 +259,7 @@ def record_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                            "description": "Who asked (their email); defaults to the account's owner."},
                 "kind": {"type": "string",
                          "description": "request (default), standing (a rule that stays in force) or "
-                                        "question."},
+                                        "question or context (background)."},
             },
         },
         mutates=True, workflow_step=False, origin="standard",
@@ -279,7 +288,13 @@ def update_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         quest_id = quest_id_of(args, ctx)
         state = str(args.get("state") or "").strip().lower().replace(" ", "_")
-        if state not in RUN_ASK_STATES:
+        kind = str(args.get("kind") or "").strip().lower()
+        if kind and kind not in RUN_ASK_KINDS:
+            return ToolResult(ok=False, text=f"Not updated: kind must be one of "
+                                             f"{', '.join(RUN_ASK_KINDS)}.")
+        if not state and not kind:
+            return ToolResult(ok=False, text="Not updated: pass a state, a kind, or both.")
+        if state and state not in RUN_ASK_STATES:
             return ToolResult(ok=False, text=(
                 f"Not updated: state must be one of {', '.join(RUN_ASK_STATES)} "
                 f"('accepted' is only ever a person's). done means you finished it and the person "
@@ -298,13 +313,15 @@ def update_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
             if row is None:
                 return ToolResult(ok=False, text=f"Not updated: {problem}")
             ask = ask_key(row)
-        row = client.update_ask(ask, state, note=str(args.get("note") or ""))
+        row = client.update_ask(ask, state or None, note=str(args.get("note") or ""),
+                                kind=kind or None)
         if not row:
             return ToolResult(ok=False, text="Quest did not update the ask (the runner log has the "
                                              "reason). Do not report it as done.")
-        shown = row.get("state") or state
+        shown = ask_state(row) if row.get("state") else state
+        sorted_as = f", sorted as {row.get('kind') or kind}" if kind else ""
         return ToolResult(ok=True, data=row, text=(
-            f"Ask {ask_key(row) or ask} is now {shown}."
+            f"Ask {ask_key(row) or ask} is now {shown.replace('_', ' ')}{sorted_as}."
             + (" The person can accept it." if shown == "awaiting_acceptance" else "")))
 
     return ToolSpec(
@@ -312,17 +329,21 @@ def update_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         handler=handler,
         description=("Record where one of the person's asks stands, as the run's claim: in_progress, "
                      "done, blocked, declined, noted or awaiting_answer. A done ask waits for the "
-                     "person to accept it; you never accept one."),
-        when_to_use=("You started, finished or could not finish an open ask. Say what you did, or why "
-                     "not, in note."),
+                     "person to accept it; you never accept one. Also sorts an ask that is not "
+                     "sorted yet (kind)."),
+        when_to_use=("You started, finished or could not finish an open ask (say what you did, or "
+                     "why not, in note), or an ask shows NOT SORTED and you can tell what it is."),
         when_not_to_use="Marking a goal done (goals stay the person's). Asks you have not worked.",
         parameters={
-            "type": "object", "required": ["ask", "state"],
+            "type": "object", "required": ["ask"],
             "properties": {
                 "quest_id": QUEST_ID_PARAM,
                 "ask": {"type": "string",
                         "description": "The ask's key (from list_asks) or a phrase of its words."},
                 "state": {"type": "string", "description": " | ".join(RUN_ASK_STATES)},
+                "kind": {"type": "string",
+                         "description": " | ".join(RUN_ASK_KINDS) + ". Sorts an ask that is not "
+                                        "sorted yet, without changing its state."},
                 "note": {"type": "string",
                          "description": "One line of evidence: what you did, or what blocks it."},
             },

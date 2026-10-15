@@ -47,8 +47,8 @@ class FakeClient:
         self.calls.append(("record_ask", quest_id, text, kw))
         return {"key": "k_new", "state": "open", "text": text}
 
-    def update_ask(self, item_key, state, note=""):
-        self.calls.append(("update_ask", item_key, state, note))
+    def update_ask(self, item_key, state=None, note="", kind=None):
+        self.calls.append(("update_ask", item_key, state, note, kind))
         return {"key": item_key, "state": "awaiting_acceptance" if state == "done" else state}
 
     def update_outcome_progress(self, quest_id, outcome_id, progress_pct, note, current_value=None):
@@ -121,7 +121,16 @@ def test_update_ask_finds_the_ask_by_a_phrase_of_its_words_and_claims_done():
     result = run(ops.update_ask_spec, client, {"ask": "grant letter", "state": "done",
                                                "note": "Draft saved in the quest folder"})
     assert result.ok and "can accept it" in result.text
-    assert client.calls == [("update_ask", "k3", "done", "Draft saved in the quest folder")]
+    assert client.calls == [("update_ask", "k3", "done", "Draft saved in the quest folder", None)]
+
+
+def test_update_ask_sorts_an_unsorted_ask_by_kind_without_a_state():
+    client = FakeClient(asks=[{"key": "k4", "state": "open", "kind": "unknown", "text": "Always cc Dana"}])
+    result = run(ops.update_ask_spec, client, {"ask": "k4", "kind": "standing"})
+    assert result.ok and "sorted as standing" in result.text
+    assert client.calls == [("update_ask", "k4", None, "", "standing")]
+    assert not run(ops.update_ask_spec, client, {"ask": "k4", "kind": "unknown"}).ok
+    assert not run(ops.update_ask_spec, client, {"ask": "k4"}).ok
 
 
 def test_update_ask_lists_the_keys_when_the_phrase_matches_nothing_or_two():

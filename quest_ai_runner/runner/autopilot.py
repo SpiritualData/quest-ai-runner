@@ -135,6 +135,7 @@ from .autopilot_briefs import (
 from .autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
 from .autopilot_gates import GatesMixin
 from .autopilot_work import WorkMixin
+from .quest_asks_brief import asks_brief_section, fetch_open_decisions
 from .quest_experiments import (
     experiments_brief_section, fetch_experiments, has_experiment, proposal_is_open,
 )
@@ -260,6 +261,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # the pass row that made it. Without it, the two rows are unrelated as far as the data is
         # concerned, and the pass can only ever report its own bookkeeping.
         self._pass_task_id = str(task.get("id") or task.get("task_id") or "") or None
+        self.asks_cache = {}  # quest_id -> ask rows, read once per pass (see ``quest_asks``)
         # A per-quest pass (the hybrid schedule, quest_autopilot_design.md's autopilot spec
         # section A) carries its quest's id in ``goal_id`` -- the team pass carries none. Scope
         # this run to exactly that one quest instead of scanning the whole team.
@@ -419,6 +421,10 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # One batch per pass may be the one that proposes; a second character's batch is told a
         # proposal is already being handled instead of raising a duplicate.
         experiment_proposal_offered = False
+        # What people asked of the AI on this quest (and what already waits on a person), read ONCE
+        # per quest and rendered per batch. An unreadable ledger renders as no section.
+        asked_text = asks_brief_section(self.quest_asks(quest_id),
+                                        fetch_open_decisions(self._client, quest_id)) or None
         quest_label = _quest_label(quest, quest_id)
         context_bundle: Optional[ContextUpdates] = None
         context_updates_text: Optional[str] = None
@@ -534,7 +540,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                   default_persona_instructions=(
                                                       default_persona_instructions),
                                                   goal_ladder=goal_ladder,
-                                                  experiments=experiments_text)
+                                                  experiments=experiments_text,
+                                                  asked=asked_text)
                 if task_id:
                     experiment_proposal_offered = True
                     result.created.append({
