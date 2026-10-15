@@ -24,11 +24,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
-from ..config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_rep_sync_resolver
+from .config_wiring import build_orchestrator, derive_capabilities, resolve_rep_sync_resolver, resolve_tool_registry
 from ..core import usage_limit
 from ..resources import ResourceGuard, ResourceLimits
+if TYPE_CHECKING:  # typing only: the runner takes its builders from .config_wiring, never from config
+    from ..config import RunnerConfig
+
 from .goal_handoff import make_judge
 from .autopilot import AutopilotPass, _parse_dt
 from .context_updates import build_update_engine
@@ -432,7 +435,6 @@ class Poller(PassesMixin, SyncMixin):
 
     def _run_requested_action(self, task: Dict[str, Any], task_id: str) -> Optional[str]:
         """Run the single tool or connector operation a workflow step asked for and report the outcome."""
-        from ..config import resolve_tool_registry
         from .requested_action import run_requested_action
         try:
             outcome = run_requested_action(task, resolve_tool_registry(self.cfg), self.cfg.mcp_servers, self.client)
@@ -451,7 +453,6 @@ class Poller(PassesMixin, SyncMixin):
     def publish_action_catalog(self) -> None:
         """Offer this runner's tools and connectors to Quest Workflows (see runner/action_catalog.py).
         Runs on the heartbeat; the publisher itself skips unchanged, recently sent catalogs."""
-        from ..config import resolve_tool_registry
         from .action_catalog import CatalogPublisher, build_actions
         publisher = getattr(self, "catalog_publisher", None)
         if publisher is None:
@@ -474,7 +475,6 @@ class Poller(PassesMixin, SyncMixin):
             return
         self.tool_listing_attached = True
         try:
-            from ..config import resolve_tool_registry
             registry = resolve_tool_registry(self.cfg)
             if registry is not None:
                 self.client.available_tools = registry.public_listing()

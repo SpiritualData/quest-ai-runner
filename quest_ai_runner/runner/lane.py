@@ -24,9 +24,10 @@ import argparse
 import logging
 import os
 from pathlib import Path
-from typing import Callable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Callable, Optional, Sequence, Union
 
-from ..config import RunnerConfig
+if TYPE_CHECKING:  # typing only: the lane never imports the config layer at runtime
+    from ..config import RunnerConfig
 
 __all__ = ["run_lane", "load_env_file", "install_local_time_due_gate", "build_arg_parser"]
 

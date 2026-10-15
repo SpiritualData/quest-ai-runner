@@ -114,7 +114,13 @@ def module_imports(path: Path, dotted: str) -> list[tuple[int, str]]:
     parts = dotted.split(".")
     pkg_parts = parts if path.name == "__init__.py" else parts[:-1]
     found = []
+    # Imports under ``if TYPE_CHECKING:`` exist only for annotations and create no runtime dependency.
+    typing_only = {id(n) for blk in ast.walk(tree) if isinstance(blk, ast.If)
+                   and getattr(blk.test, "id", getattr(blk.test, "attr", "")) == "TYPE_CHECKING"
+                   for stmt in blk.body for n in ast.walk(stmt)}
     for node in ast.walk(tree):
+        if id(node) in typing_only:
+            continue
         if isinstance(node, ast.ImportFrom):
             if node.level:
                 base = pkg_parts[: len(pkg_parts) - (node.level - 1)]

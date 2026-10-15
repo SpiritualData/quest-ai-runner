@@ -28,9 +28,12 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from ..config import RunnerConfig, build_orchestrator
+from .config_wiring import build_orchestrator
+
+if TYPE_CHECKING:  # typing only: the runner takes its builders from .config_wiring, never from config
+    from ..config import RunnerConfig
 from ..core.adapters import ChannelTransport, InboundBatch, InboundMessage
 from ..core.inbox import InMemoryInbox
 from .channel_session import ChannelSessionStore, ChannelSink

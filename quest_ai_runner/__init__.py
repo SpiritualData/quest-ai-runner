@@ -22,6 +22,17 @@ from .config_core_settings import install_environment_backed_core as _install_co
 
 _install_core_env()
 
+from .runner.config_wiring import install_config_builders as _install_config_builders  # noqa: E402
+
+
+def _config_builder(name):
+    """Late-bound lookup in ``config`` so patching ``config.<name>`` still takes effect."""
+    return lambda *a, **k: getattr(config, name)(*a, **k)
+
+
+_install_config_builders(**{n: _config_builder(n) for n in (
+    "build_orchestrator", "derive_capabilities", "resolve_rep_sync_resolver", "resolve_tool_registry")})
+
 if TYPE_CHECKING:  # pragma: no cover — typing only
     from .config import RunnerConfig
 
