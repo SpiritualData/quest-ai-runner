@@ -44,6 +44,7 @@ Edit the CSV, never this file. Rules are the numbered ideals in `docs/structure/
 | `tests` | tests | Offline test suite and shared fakes | pytest per file | the offline suite itself (run tests per file,  see CLAUDE.md) | CLAUDE.md | done |
 | `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | python scripts/check_structure.py | check exits 0 | docs/structure/README.md | done |
 | `docs-and-meta` | docs | Documentation and repo-level project files | docs/README.md index | exempt: prose,  checked for existence by S2 | docs/README.md | done |
+| `core-selection` | core | Selection as data: resolve(solution_id, name) turns a name into the implementation from the selection table, so switching an implementation is a data or config change | resolve / resolve_config / chosen_name / register,  SELECTION table keyed by solutions.csv solution_id | tests/test_resolve.py (every table entry imports,  precedence name, override, default,  unknown names fail loudly) | docs/structure/README.md, docs/adapters.md | done |
 
 ## Open gaps
 

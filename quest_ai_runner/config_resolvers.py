@@ -49,15 +49,28 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
     try:
         import shutil
 
-        from .adapters.claude_cli_provider import cli_model
-        from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+        import dataclasses
+        import inspect
 
+        from .adapters.claude_cli_provider import cli_model
+        from .core.resolve import chosen_name, resolve, resolve_config
+
+        # Which runner and its config class come from the selection table (core/selection_table.py),
+        # by ``cfg.selections["run-deep-work"]``; the default is the SubprocessGoalRunner.
+        sel = getattr(cfg, "selections", None)
+        name = chosen_name("run-deep-work", overrides=sel)
+        runner_cls, config_cls = resolve("run-deep-work", overrides=sel), resolve_config("run-deep-work", overrides=sel)
+        if config_cls is None:
+            raise ValueError(f"run-deep-work implementation {name!r} is a ladder rung, not a standalone deep worker")
         claude_path = os.getenv("QAR_CLAUDE_PATH", "claude") or "claude"
-        # A bare name has to be findable on PATH; an explicit path has to exist and be executable.
-        if os.path.sep in claude_path:
-            found = claude_path if os.access(claude_path, os.X_OK) else None
-        else:
-            found = shutil.which(claude_path)
+        field_names = {f.name for f in dataclasses.fields(config_cls)}
+        found = claude_path
+        if "claude_path" in field_names:
+            # A bare name has to be findable on PATH; an explicit path has to exist and be executable.
+            if os.path.sep in claude_path:
+                found = claude_path if os.access(claude_path, os.X_OK) else None
+            else:
+                found = shutil.which(claude_path)
         if not found:
             if warn:
                 _log.warning(
@@ -72,13 +85,13 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
         working_dir = (os.getenv("QAR_DEEP_WORKING_DIR")
                        or cfg.corpus_root
                        or os.getcwd())
-        runner = SubprocessGoalRunner(SubprocessConfig(
-            working_dir=working_dir,
-            claude_path=claude_path,
-            context_preamble=cfg.context_preamble or "",
-        ), model_translator=cli_model)   # core cannot import the adapter, so config injects it
-        _log.info("deep runner: using the default SubprocessGoalRunner (%s, cwd=%s)",
-                  found, working_dir)
+        wanted = dict(working_dir=working_dir, claude_path=claude_path, context_preamble=cfg.context_preamble or "")
+        config = config_cls(**{k: v for k, v in wanted.items() if k in field_names})
+        extra = {}
+        if "model_translator" in inspect.signature(runner_cls.__init__).parameters:
+            extra["model_translator"] = cli_model   # core cannot import the adapter, so config injects it
+        runner = runner_cls(config, **extra)
+        _log.info("deep runner: using the default %s (%s) (%s, cwd=%s)", runner_cls.__name__, name, found, working_dir)
         return runner
     except Exception:  # noqa: BLE001 — a failed default must never stop the runner from starting
         if warn:

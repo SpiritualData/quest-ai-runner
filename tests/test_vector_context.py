@@ -2429,7 +2429,7 @@ class TestVectorBackendEnvSwitch:
 
     def resolve(self, tmp_path, monkeypatch, backend_value, qdrant_cls):
         """Run resolve_context_assembler with a patched QdrantVectorStore class."""
-        import quest_ai_runner.adapters as adapters_mod
+        import quest_ai_runner.adapters.qdrant_vector_store as adapters_mod  # the module the selection table resolves from
         from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
 
         for var in self.CLEAR_ENV:
@@ -2554,7 +2554,7 @@ class TestAutoBuiltQdrantDeclaresRealVectorSize:
 
     def _resolve_with_embedder_backend(self, tmp_path, monkeypatch, embedder_backend,
                                        qdrant_cls, *, voyage_size_env=None):
-        import quest_ai_runner.adapters as adapters_mod
+        import quest_ai_runner.adapters.qdrant_vector_store as adapters_mod  # the module the selection table resolves from
         from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
 
         for var in ("QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QAR_USER_ID",

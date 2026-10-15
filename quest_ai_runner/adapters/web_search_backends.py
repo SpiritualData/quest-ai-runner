@@ -33,6 +33,8 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol
 
 import httpx
 
+from ..core.resolve import resolve
+
 logger = logging.getLogger("quest-ai-runner.web-search-backends")
 
 _DEFAULT_TIMEOUT = 8.0
@@ -621,22 +623,25 @@ def select_search_backend(
     model = env.get("QAR_WEB_SEARCH_MODEL") or _DEFAULT_GEMINI_MODEL
     provider_model = env.get("QAR_WEB_SEARCH_PROVIDER_MODEL") or ""
 
-    def build(name: str) -> Optional[Any]:
+    def constructor_args(name: str) -> Optional[Dict[str, Any]]:
+        """The keyword arguments a backend is built with from this environment, or None when its
+        key/config is missing (then the backend is unavailable). Which class a name means is the
+        selection table's (``core/selection_table.py``), not decided here."""
         if name == "serper":
             key = env.get("SERPER_API_KEY", "")
-            return SerperBackend(api_key=key) if key else None
+            return {"api_key": key} if key else None
         if name == "brave":
             key = env.get("BRAVE_SEARCH_API_KEY", "") or env.get("BRAVE_API_KEY", "")
-            return BraveBackend(api_key=key) if key else None
+            return {"api_key": key} if key else None
         if name == "tavily":
             key = env.get("TAVILY_API_KEY", "") or env.get("WEB_SEARCH_API_KEY", "")
-            return TavilyBackend(api_key=key) if key else None
+            return {"api_key": key} if key else None
         if name == "searxng":
             base_url = env.get("SEARXNG_URL", "")
-            return SearxngBackend(base_url=base_url) if base_url else None
+            return {"base_url": base_url} if base_url else None
         if name == "gemini":
             key = _gemini_api_key_from_env(env)
-            return GeminiGroundingBackend(api_key=key, model=model) if key else None
+            return {"api_key": key, "model": model} if key else None
         if name == "provider":
             if provider is None or not provider_model:
                 return None
@@ -646,8 +651,18 @@ def select_search_backend(
                     return None
             except Exception:  # noqa: BLE001
                 return None
-            return ProviderNativeBackend(provider, provider_model)
+            return {"provider": provider, "model": provider_model}
         return None
+
+    def build(name: str) -> Optional[Any]:
+        args = constructor_args(name)
+        if args is None:
+            return None
+        try:
+            backend_cls = resolve("search-backends", name)
+        except ValueError:
+            return None
+        return backend_cls(**args)
 
     explicit = (env.get("QAR_WEB_SEARCH_BACKEND", "") or "").strip().lower()
     if explicit:

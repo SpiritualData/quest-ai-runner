@@ -31,6 +31,13 @@ Rules checked:
                  component and implementation; every component solution id exists; an invariant
                  component states in `invariant_reason` why "best" cannot vary; every solution
                  is linked from some component's `solutions` column (or waived as S11 solution:<id>)
+  S12 measured   every evaluation/components/*/impls/*.py wraps live quest_ai_runner code, or declares itself
+                 an alternative (module-level ALTERNATIVE = True, or a docstring opening ALTERNATIVE,
+                 BASELINE, ABLATION or FLOOR); a solution's selected harness implementation must be
+                 a live one, or carry an `S12 <solution_id>:<impl>` waiver
+  S14 selection table   every solutions.csv row with a port has an entry in core/selection_table.py
+                 (and no entry is for an unknown row); each default is one of its implementations;
+                 each implementation's module is listed in the row's `implementations`
   S13 config     no os.environ / os.getenv in quest_ai_runner/core (waiver per file until the
                  read migrates into RunnerConfig)
 """
@@ -182,6 +189,44 @@ def render_docs(components: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+ALTERNATIVE_MARKERS = ("ALTERNATIVE", "BASELINE", "ABLATION", "FLOOR")
+
+
+def impl_kind(path: Path) -> str:
+    """Classify an evaluation implementation file: ``alternative`` (declares itself a baseline or
+    alternative), ``live`` (imports or drives quest_ai_runner code) or ``unclear`` (neither)."""
+    try:
+        tree = ast.parse(path.read_text())
+    except (SyntaxError, OSError):
+        return "unclear"
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "ALTERNATIVE" for t in node.targets):
+            if isinstance(node.value, ast.Constant) and node.value.value is True:
+                return "alternative"
+    doc = (ast.get_docstring(tree) or "").lstrip().upper()
+    if any(doc.startswith(m) for m in ALTERNATIVE_MARKERS):
+        return "alternative"
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == PKG:
+            return "live"
+        if isinstance(node, ast.Import) and any(a.name.split(".")[0] == PKG for a in node.names):
+            return "live"
+        if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "common"
+                and node.attr == "build_offline_orchestrator"):
+            return "live"   # drives the real Orchestrator through the shared offline builder
+    return "unclear"
+
+
+def load_selection_table() -> dict:
+    """core/selection_table.py is pure data, so it is loaded on its own (no package import)."""
+    import importlib.util
+    path = ROOT / PKG / "core" / "selection_table.py"
+    spec = importlib.util.spec_from_file_location("qar_selection_table", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.SELECTION
+
+
 def check() -> list[str]:
     bad: list[str] = []
     components = read_csv(STRUCT / "components.csv")
@@ -319,6 +364,49 @@ def check() -> list[str]:
             bad.append(f"S7 {sid}: no metric, so gap and action are required")
     for p in sorted(ports - covered):
         bad.append(f"S7 {p}: port in core/adapters*.py has no solutions.csv row")
+
+    # S12 evaluation implementations measure live code (or say they are alternatives)
+    kinds: dict[str, str] = {}
+    for impl_path in sorted((ROOT / "evaluation" / "components").glob("*/impls/*.py")):
+        if impl_path.name == "__init__.py":
+            continue
+        rel = str(impl_path.relative_to(ROOT))
+        kinds[rel] = impl_kind(impl_path)
+        if kinds[rel] == "unclear" and not waived("S12", rel):
+            bad.append(f"S12 {rel}: neither wraps a live {PKG} class or function nor declares itself an "
+                       "alternative (set ALTERNATIVE = True, or open the docstring with ALTERNATIVE/BASELINE/"
+                       "ABLATION/FLOOR): the number would not measure the live code")
+    for r in solutions:
+        sel = r["selected"].split("::")[0]
+        if sel in kinds and kinds[sel] == "alternative" and not waived("S12", f"{r['solution_id']}:{Path(sel).stem}"):
+            bad.append(f"S12 {r['solution_id']}: selected {sel} is an alternative, not live code; select the live "
+                       "implementation or add a waiver naming the decision")
+
+    # S14 selection table: switching an implementation is data
+    try:
+        table = load_selection_table()
+    except Exception as e:  # noqa: BLE001
+        table = {}
+        bad.append(f"S14 {PKG}/core/selection_table.py: cannot load ({type(e).__name__}: {e})")
+    port_rows = {r["solution_id"]: r for r in solutions if r["port"].strip()}
+    for sid in sorted(set(port_rows) - set(table)):
+        bad.append(f"S14 {sid}: solutions.csv row has port {port_rows[sid]['port']} but no entry in "
+                   f"{PKG}/core/selection_table.py (add one so resolve({sid!r}) works)")
+    for sid in sorted(set(table) - set(port_rows)):
+        bad.append(f"S14 {sid}: selection table entry has no solutions.csv row with a port")
+    for sid, entry in table.items():
+        impls = entry.get("implementations", {})
+        if entry.get("default") not in impls:
+            bad.append(f"S14 {sid}: default {entry.get('default')!r} is not among its implementations")
+        listed = {i.split("::")[0] for i in patterns(port_rows[sid]["implementations"])} if sid in port_rows else set()
+        for name, ref in impls.items():
+            target = ref["target"] if isinstance(ref, dict) else ref
+            module = target.partition(":")[0]
+            mod_path = module.replace(".", "/") + ".py"
+            if not (ROOT / mod_path).exists():
+                bad.append(f"S14 {sid}: implementation {name!r} points at {module}, which does not exist")
+            elif sid in port_rows and mod_path not in listed:
+                bad.append(f"S14 {sid}: implementation {name!r} lives in {mod_path}, which solutions.csv does not list")
 
     # S10 selection follows the measurements
     results = latest_results()

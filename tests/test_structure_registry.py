@@ -54,3 +54,55 @@ def test_done_component_without_a_metric_kind_is_reported(monkeypatch):
         return rows
     monkeypatch.setattr(mod, "read_csv", fake)
     assert any(p.startswith("S11 core-ports") for p in mod.check())
+
+
+def test_impl_kind_tells_live_code_from_alternatives_and_unclear(tmp_path):
+    kind = _load_checker().impl_kind
+
+    def make(name, text):
+        p = tmp_path / name
+        p.write_text(text)
+        return p
+    assert kind(make("live.py", '"""CURRENT."""\ndef build(m):\n    from quest_ai_runner.core.tools import ToolContext\n')) == "live"
+    assert kind(make("viacommon.py", '"""x"""\nimport common\norch = common.build_offline_orchestrator\n')) == "live"
+    assert kind(make("flag.py", '"""x"""\nALTERNATIVE = True\n')) == "alternative"
+    assert kind(make("doc.py", '"""BASELINE: a floor."""\n')) == "alternative"
+    assert kind(make("unclear.py", '"""CURRENT: reimplements fusion."""\nimport json\n')) == "unclear"
+
+
+def test_an_unclear_evaluation_implementation_is_reported(monkeypatch):
+    mod = _load_checker()
+    monkeypatch.setattr(mod, "impl_kind", lambda p: "unclear")
+    problems = mod.check()
+    assert any(p.startswith("S12 evaluation/components/") and "alternative" in p for p in problems)
+
+
+def test_selecting_an_alternative_implementation_needs_a_waiver(monkeypatch):
+    mod = _load_checker()
+    real = mod.read_csv
+
+    def fake(p):
+        rows = real(p)
+        if p.name == "solutions.csv":
+            for r in rows:
+                if r["solution_id"] == "select-context":
+                    r["selected"] = "evaluation/components/context_selection/impls/vector_bge_small.py"
+        return rows
+    monkeypatch.setattr(mod, "read_csv", fake)
+    assert any(p.startswith("S12 select-context: selected") for p in mod.check())
+
+
+def test_a_port_row_missing_from_the_selection_table_is_reported(monkeypatch):
+    mod = _load_checker()
+    table = dict(mod.load_selection_table())
+    table.pop("call-a-model")
+    monkeypatch.setattr(mod, "load_selection_table", lambda: table)
+    assert any(p.startswith("S14 call-a-model: solutions.csv row has port") for p in mod.check())
+
+
+def test_a_table_implementation_outside_the_row_is_reported(monkeypatch):
+    mod = _load_checker()
+    table = {k: dict(v, implementations=dict(v["implementations"])) for k, v in mod.load_selection_table().items()}
+    table["write-files"]["implementations"]["x"] = "quest_ai_runner.adapters.anthropic_provider:AnthropicProvider"
+    monkeypatch.setattr(mod, "load_selection_table", lambda: table)
+    assert any(p.startswith("S14 write-files:") and "does not list" in p for p in mod.check())

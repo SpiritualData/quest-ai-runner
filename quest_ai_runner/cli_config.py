@@ -10,15 +10,12 @@ import os
 from pathlib import Path
 
 from .adapters import (
-    AnthropicProvider,
-    ClaudeCliProvider,
     ClaudeConversationsAdapter,
     CompositeRetrievalAdapter,
     FilesAdapter,
-    GeminiProvider,
-    OpenAIProvider,
 )
 from .core.adapters import ModelProvider
+from .core.resolve import resolve
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import (
     RunnerConfig,
@@ -48,12 +45,13 @@ def _model_provider_from_env() -> ModelProvider:
         else:
             backend = "claude_cli"
 
-    if backend == "openai":
-        return OpenAIProvider()
-    elif backend == "gemini":
-        return GeminiProvider()
-    elif backend == "claude_cli":
-        kwargs = {"claude_path": os.getenv("QAR_CLAUDE_PATH", "claude")}
+    try:
+        provider_cls = resolve("call-a-model", backend)   # the selection table, core/selection_table.py
+    except ValueError as e:
+        raise ValueError(f"Unknown QAR_MODEL_BACKEND: {backend}. {e}") from e
+    kwargs = {}
+    if backend == "claude_cli":
+        kwargs["claude_path"] = os.getenv("QAR_CLAUDE_PATH", "claude")
         # Headless completions over a large corpus can take a while; let the consumer raise the
         # per-call wall-clock cap above the conservative default rather than failing the run.
         if os.getenv("QAR_ANSWER_TIMEOUT"):
@@ -63,11 +61,7 @@ def _model_provider_from_env() -> ModelProvider:
         # same accuracy. Unset leaves the CLI default.
         if (os.getenv("QAR_CLI_PLAN_THINKING_TOKENS") or "").strip().isdigit():
             kwargs["plan_thinking_tokens"] = int(os.environ["QAR_CLI_PLAN_THINKING_TOKENS"].strip())
-        return ClaudeCliProvider(**kwargs)
-    elif backend == "anthropic":
-        return AnthropicProvider()
-    else:
-        raise ValueError(f"Unknown QAR_MODEL_BACKEND: {backend}. Use: openai, gemini, anthropic, or claude_cli")
+    return provider_cls(**kwargs)
 
 
 def _channel_transport_from_env():
