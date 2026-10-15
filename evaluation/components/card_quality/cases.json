@@ -1,0 +1,41 @@
+[
+ {
+  "id": "CRD-001",
+  "area": "select_and_resolve",
+  "query": "what keeps showing up in my dreams lately?",
+  "expect_id": "col_dreams_8821",
+  "allowed_extra": [
+   "col_mood_4410"
+  ]
+ },
+ {
+  "id": "CRD-002",
+  "area": "select_and_resolve",
+  "query": "how has my mood been trending day to day?",
+  "expect_id": "col_mood_4410",
+  "allowed_extra": [
+   "col_dreams_8821"
+  ]
+ },
+ {
+  "id": "CRD-003",
+  "area": "select_and_resolve",
+  "query": "any pull requests i should look at?",
+  "expect_id": "col_rev_5512",
+  "allowed_extra": []
+ },
+ {
+  "id": "CRD-004",
+  "area": "select_and_resolve",
+  "query": "remind me about my travel itinerary",
+  "expect_id": "col_trip_3300",
+  "allowed_extra": []
+ },
+ {
+  "id": "CRD-005",
+  "area": "no_leak",
+  "query": "what's a good recipe for banana bread?",
+  "expect_id": null,
+  "allowed_extra": []
+ }
+]

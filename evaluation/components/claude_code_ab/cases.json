@@ -1,0 +1,58 @@
+[
+ {
+  "id": "CAB-001",
+  "area": "locate",
+  "label": "orchestrator loop",
+  "task": "Locate the file that implements the plan-gather-replan loop (the orchestrator).",
+  "target": "quest_ai_runner/core/orchestrator.py",
+  "wrong_hint": null
+ },
+ {
+  "id": "CAB-002",
+  "area": "locate",
+  "label": "poller / executor",
+  "task": "Find the file that polls for due tasks and claims them with bounded concurrency.",
+  "target": "quest_ai_runner/runner/poller.py",
+  "wrong_hint": null
+ },
+ {
+  "id": "CAB-003",
+  "area": "locate",
+  "label": "model registry",
+  "task": "Which file buckets live model ids into haiku / sonnet / opus tiers?",
+  "target": "quest_ai_runner/core/model_registry.py",
+  "wrong_hint": null
+ },
+ {
+  "id": "CAB-004",
+  "area": "locate",
+  "label": "file context store",
+  "task": "Find the file that bootstraps one card per source file and scores them with IDF.",
+  "target": "quest_ai_runner/adapters/file_context_store.py",
+  "wrong_hint": null
+ },
+ {
+  "id": "CAB-005",
+  "area": "locate",
+  "label": "quest client",
+  "task": "Where is the QuestClient that sends PATCH requests to mark tasks done?",
+  "target": "quest_ai_runner/runner/quest_client.py",
+  "wrong_hint": null
+ },
+ {
+  "id": "CAB-006",
+  "area": "locate",
+  "label": "runner config",
+  "task": "Which file defines RunnerConfig, the single place a consumer supplies their Quest API key?",
+  "target": "quest_ai_runner/config.py",
+  "wrong_hint": null
+ },
+ {
+  "id": "CAB-007",
+  "area": "adversarial",
+  "label": "ADVERSARIAL (wrong hint -> correct file)",
+  "task": "Which file defines RunnerConfig, the single place a consumer supplies their Quest API key?",
+  "target": "quest_ai_runner/config.py",
+  "wrong_hint": "quest_ai_runner/runner/poller.py"
+ }
+]

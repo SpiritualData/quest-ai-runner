@@ -18,9 +18,11 @@ See `components/README.md` for the interface of each. Script status:
 - **Now components** (the old commands remain as thin wrappers): `eval_deterministic.py` ->
   `context_selection/` + `staleness/`; `recipe_fast_path_eval.py` -> `recipe_fast_path/`
   (its dataset is `components/recipe_fast_path/cases.json`).
-- **Still legacy scripts, not behind the component interface:** `eval_vs_claude_code.py`,
-  `card_quality_eval.py`, `chat_quest_ops_routing_eval.py`, `deep_review_eval.py`,
-  `overseer_signals_eval.py`.
+- **Also now components** (thin wrappers): `overseer_signals_eval.py` -> `overseer_signals/`,
+  `deep_review_eval.py` -> `deep_review/`, `card_quality_eval.py` -> `card_quality/`.
+  `eval_vs_claude_code.py` stays as the live engine of `claude_code_ab/` (which fixes its always-empty warm hint).
+- **Still a legacy script:** `chat_quest_ops_routing_eval.py` (needs the dev Quest backend; see
+  `components/README.md`).
 
 Two scripts' worth of methodology is described below:
 

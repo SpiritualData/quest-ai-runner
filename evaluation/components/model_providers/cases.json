@@ -1,0 +1,1166 @@
+[
+ {
+  "id": "MPR-001",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "claude-opus-4-8",
+   "providers": [
+    "anthropic",
+    "gemini",
+    "openai",
+    "deepseek"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "anthropic"
+   }
+  }
+ },
+ {
+  "id": "MPR-002",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "gemini-3.5-flash",
+   "providers": [
+    "anthropic",
+    "gemini",
+    "openai",
+    "deepseek"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "gemini"
+   }
+  }
+ },
+ {
+  "id": "MPR-003",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "models/gemini-pro",
+   "providers": [
+    "anthropic",
+    "gemini",
+    "openai",
+    "deepseek"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "gemini"
+   }
+  }
+ },
+ {
+  "id": "MPR-004",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "gpt-4o",
+   "providers": [
+    "anthropic",
+    "gemini",
+    "openai",
+    "deepseek"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "openai"
+   }
+  }
+ },
+ {
+  "id": "MPR-005",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "deepseek-chat",
+   "providers": [
+    "anthropic",
+    "gemini",
+    "openai",
+    "deepseek"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "deepseek"
+   }
+  }
+ },
+ {
+  "id": "MPR-006",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "llama-3-70b",
+   "providers": [
+    "anthropic",
+    "gemini",
+    "openai",
+    "deepseek"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "primary"
+   }
+  }
+ },
+ {
+  "id": "MPR-007",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "",
+   "providers": [
+    "anthropic",
+    "gemini",
+    "openai",
+    "deepseek"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "primary"
+   }
+  }
+ },
+ {
+  "id": "MPR-008",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "claude-haiku-4-5",
+   "providers": [
+    "gemini"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "primary"
+   }
+  }
+ },
+ {
+  "id": "MPR-009",
+  "kind": "route_model",
+  "area": "routing",
+  "args": {
+   "model": "Claude-Haiku-4-5",
+   "providers": [
+    "anthropic",
+    "gemini",
+    "openai",
+    "deepseek"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "served": "anthropic"
+   }
+  }
+ },
+ {
+  "id": "MPR-020",
+  "kind": "tier_fallback",
+  "area": "fallback",
+  "args": {
+   "top": {
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.1-flash-lite-2",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8"
+   },
+   "fail": {
+    "gemini-3.5-flash": "quota"
+   },
+   "model": "gemini-3.5-flash",
+   "calls": 1
+  },
+  "expect": {
+   "eq": {
+    "served": [
+     "answered by gemini-3.1-flash-lite-2"
+    ],
+    "tried": [
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite-2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-021",
+  "kind": "tier_fallback",
+  "area": "fallback",
+  "args": {
+   "top": {
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.1-flash-lite-2",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8"
+   },
+   "fail": {
+    "claude-opus-4-8": "quota",
+    "gemini-3.5-flash": "quota"
+   },
+   "model": "claude-opus-4-8",
+   "calls": 1
+  },
+  "expect": {
+   "eq": {
+    "served": [
+     "answered by gemini-3.1-flash-lite-2"
+    ],
+    "tried": [
+     "claude-opus-4-8",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite-2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-022",
+  "kind": "tier_fallback",
+  "area": "fallback",
+  "args": {
+   "top": {
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.1-flash-lite-2",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8"
+   },
+   "fail": {
+    "gemini-3.5-flash": "other"
+   },
+   "model": "gemini-3.5-flash",
+   "calls": 1
+  },
+  "expect": {
+   "eq": {
+    "served": [
+     "ValueError"
+    ],
+    "tried": [
+     "gemini-3.5-flash"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-023",
+  "kind": "tier_fallback",
+  "area": "fallback",
+  "args": {
+   "top": {
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.1-flash-lite-2",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8"
+   },
+   "fail": {
+    "gemini-3.1-flash-lite": "quota"
+   },
+   "model": "gemini-3.1-flash-lite",
+   "calls": 1
+  },
+  "expect": {
+   "eq": {
+    "served": [
+     "Exception"
+    ],
+    "tried": [
+     "gemini-3.1-flash-lite"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-024",
+  "kind": "tier_fallback",
+  "area": "cooldown",
+  "args": {
+   "top": {
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.1-flash-lite-2",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8"
+   },
+   "fail": {
+    "gemini-3.5-flash": "quota"
+   },
+   "model": "gemini-3.5-flash",
+   "calls": 2
+  },
+  "expect": {
+   "eq": {
+    "served": [
+     "answered by gemini-3.1-flash-lite-2",
+     "answered by gemini-3.1-flash-lite-2"
+    ],
+    "tried": [
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite-2",
+     "gemini-3.1-flash-lite-2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-025",
+  "kind": "tier_fallback",
+  "area": "fallback",
+  "args": {
+   "top": {
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.1-flash-lite-2",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8"
+   },
+   "fail": {
+    "some-pinned-model": "quota"
+   },
+   "model": "some-pinned-model",
+   "calls": 1
+  },
+  "expect": {
+   "eq": {
+    "served": [
+     "Exception"
+    ],
+    "tried": [
+     "some-pinned-model"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-026",
+  "kind": "tier_fallback",
+  "area": "fallback",
+  "args": {
+   "top": {
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.1-flash-lite-2",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8"
+   },
+   "fail": {
+    "gemini-3.5-flash": "quota"
+   },
+   "model": "gemini-3.5-flash",
+   "calls": 1,
+   "registry": false
+  },
+  "expect": {
+   "eq": {
+    "served": [
+     "Exception"
+    ],
+    "tried": [
+     "gemini-3.5-flash"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-027",
+  "kind": "tier_fallback",
+  "area": "fallback",
+  "args": {
+   "top": {
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.1-flash-lite-2",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8"
+   },
+   "fail": {},
+   "model": "gemini-3.5-flash",
+   "calls": 2
+  },
+  "expect": {
+   "eq": {
+    "served": [
+     "answered by gemini-3.5-flash",
+     "answered by gemini-3.5-flash"
+    ],
+    "tried": [
+     "gemini-3.5-flash",
+     "gemini-3.5-flash"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-040",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "ServerError",
+     "msg": "503 overloaded"
+    },
+    {
+     "cls": "ServerError",
+     "msg": "503 overloaded"
+    },
+    "ok"
+   ],
+   "max_retries": 3
+  },
+  "expect": {
+   "eq": {
+    "attempts": 3,
+    "ok": true,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MPR-041",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "ServerError",
+     "msg": "503 overloaded"
+    },
+    {
+     "cls": "ServerError",
+     "msg": "503 overloaded"
+    },
+    {
+     "cls": "ServerError",
+     "msg": "503 overloaded"
+    },
+    {
+     "cls": "ServerError",
+     "msg": "503 overloaded"
+    },
+    {
+     "cls": "ServerError",
+     "msg": "503 overloaded"
+    }
+   ],
+   "max_retries": 2
+  },
+  "expect": {
+   "eq": {
+    "attempts": 3,
+    "ok": false,
+    "error": "ServerError"
+   }
+  }
+ },
+ {
+  "id": "MPR-042",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "ValueError",
+     "msg": "bad input"
+    },
+    "ok"
+   ],
+   "max_retries": 3
+  },
+  "expect": {
+   "eq": {
+    "attempts": 1,
+    "ok": false,
+    "error": "ValueError"
+   }
+  }
+ },
+ {
+  "id": "MPR-043",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "RateLimitError",
+     "msg": "429 too many requests"
+    },
+    "ok"
+   ],
+   "max_retries": 3
+  },
+  "expect": {
+   "eq": {
+    "attempts": 2,
+    "ok": true,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MPR-044",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "ReadError",
+     "msg": "connection reset",
+     "module": "httpx._exceptions"
+    },
+    "ok"
+   ],
+   "max_retries": 3
+  },
+  "expect": {
+   "eq": {
+    "attempts": 2,
+    "ok": true,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MPR-045",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "FileNotFoundError",
+     "msg": "claude"
+    },
+    "ok"
+   ],
+   "max_retries": 3
+  },
+  "expect": {
+   "eq": {
+    "attempts": 2,
+    "ok": true,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MPR-046",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "ServerError",
+     "msg": "400 bad request"
+    },
+    "ok"
+   ],
+   "max_retries": 3
+  },
+  "expect": {
+   "eq": {
+    "attempts": 1,
+    "ok": false,
+    "error": "ServerError"
+   }
+  }
+ },
+ {
+  "id": "MPR-047",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "ReadTimeout",
+     "msg": "timed out"
+    },
+    "ok"
+   ],
+   "max_retries": 3
+  },
+  "expect": {
+   "eq": {
+    "attempts": 2,
+    "ok": true,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MPR-048",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    {
+     "cls": "ServerError",
+     "msg": "503 overloaded"
+    },
+    "ok"
+   ],
+   "max_retries": 0
+  },
+  "expect": {
+   "eq": {
+    "attempts": 1,
+    "ok": false,
+    "error": "ServerError"
+   }
+  }
+ },
+ {
+  "id": "MPR-049",
+  "kind": "retry",
+  "area": "retry",
+  "args": {
+   "errors": [
+    "ok"
+   ],
+   "max_retries": 3
+  },
+  "expect": {
+   "eq": {
+    "attempts": 1,
+    "ok": true,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MPR-050",
+  "kind": "error_text",
+  "area": "errors",
+  "args": {
+   "type": "ClientError",
+   "message": "403 PERMISSION_DENIED dunning"
+  },
+  "expect": {
+   "contains": [
+    "billing issue",
+    "console.cloud.google.com/billing"
+   ]
+  }
+ },
+ {
+  "id": "MPR-051",
+  "kind": "error_text",
+  "area": "errors",
+  "args": {
+   "type": "RateLimitError",
+   "message": "429 slow down"
+  },
+  "expect": {
+   "contains": [
+    "Rate limit or quota exceeded"
+   ]
+  }
+ },
+ {
+  "id": "MPR-052",
+  "kind": "error_text",
+  "area": "errors",
+  "args": {
+   "type": "ValueError",
+   "message": "plain failure"
+  },
+  "expect": {
+   "eq": {
+    "text": "plain failure"
+   }
+  }
+ },
+ {
+  "id": "MPR-053",
+  "kind": "error_text",
+  "area": "errors",
+  "args": {
+   "type": "Exception",
+   "message": "403 PERMISSION_DENIED for key"
+  },
+  "expect": {
+   "contains": [
+    "Permission denied by the AI provider"
+   ]
+  }
+ },
+ {
+  "id": "MPR-060",
+  "kind": "dryrun_tokens",
+  "area": "cost",
+  "args": {
+   "call": "plan",
+   "chars": 8000
+  },
+  "expect": {
+   "eq": {
+    "tokens_in": 2000,
+    "tokens_out": 200
+   }
+  }
+ },
+ {
+  "id": "MPR-061",
+  "kind": "dryrun_tokens",
+  "area": "cost",
+  "args": {
+   "call": "answer",
+   "chars": 4000
+  },
+  "expect": {
+   "eq": {
+    "tokens_in": 1000,
+    "tokens_out": 500
+   }
+  }
+ },
+ {
+  "id": "MPR-062",
+  "kind": "dryrun_tokens",
+  "area": "cost",
+  "args": {
+   "call": "answer",
+   "chars": 4000,
+   "json": true
+  },
+  "expect": {
+   "eq": {
+    "tokens_in": 1000,
+    "tokens_out": 800
+   }
+  }
+ },
+ {
+  "id": "MPR-063",
+  "kind": "dryrun_tokens",
+  "area": "cost",
+  "args": {
+   "call": "plan",
+   "chars": 0
+  },
+  "expect": {
+   "eq": {
+    "tokens_in": 1,
+    "tokens_out": 200
+   }
+  }
+ },
+ {
+  "id": "MPR-070",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "anthropic",
+   "model": "claude-haiku-4-5"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     0.8,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-071",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "anthropic",
+   "model": "claude-sonnet-4-6"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     3.0,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-072",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "anthropic",
+   "model": "opus"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     15.0,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-073",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "anthropic",
+   "model": "haiku"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     0.8,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-074",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "openai",
+   "model": "gpt-4o"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     2.5,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-075",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "openai",
+   "model": "gpt-4o-2024-11-20"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     2.5,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-076",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "gemini",
+   "model": "gemini-2.0-flash"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     0.075,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-077",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "claude_cli",
+   "model": "sonnet"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     0.0167,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-078",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "anthropic",
+   "model": "brand-new-sonnet-9"
+  },
+  "expect": {
+   "approx": {
+    "usd_per_mtok": [
+     3.0,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "MPR-079",
+  "kind": "price",
+  "area": "pricing",
+  "args": {
+   "provider": "mystery",
+   "model": "x"
+  },
+  "expect": {
+   "eq": {
+    "usd_per_mtok": null
+   }
+  }
+ },
+ {
+  "id": "MPR-080",
+  "kind": "price_family",
+  "area": "pricing_known_gap",
+  "args": {
+   "provider": "anthropic",
+   "models": [
+    "opus",
+    "claude-opus-4",
+    "claude-opus-4-8"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "distinct": 1
+   }
+  }
+ },
+ {
+  "id": "MPR-081",
+  "kind": "price_family",
+  "area": "pricing",
+  "args": {
+   "provider": "anthropic",
+   "models": [
+    "haiku",
+    "claude-haiku-4",
+    "claude-haiku-4-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "distinct": 1
+   }
+  }
+ },
+ {
+  "id": "MPR-090",
+  "kind": "estimate",
+  "area": "pricing",
+  "args": {
+   "tokens": 2000000,
+   "env": {
+    "QAR_MODEL_BACKEND": "anthropic",
+    "QAR_PLANNER_TIER": "haiku",
+    "ANTHROPIC_API_KEY": "k"
+   }
+  },
+  "expect": {
+   "approx": {
+    "usd": [
+     1.6,
+     1e-09
+    ]
+   },
+   "eq": {
+    "provider": "anthropic",
+    "model": "haiku"
+   }
+  }
+ },
+ {
+  "id": "MPR-091",
+  "kind": "estimate",
+  "area": "pricing",
+  "args": {
+   "tokens": 2000000,
+   "env": {
+    "QAR_MODEL_BACKEND": "anthropic",
+    "QAR_PLANNER_TIER": "balanced"
+   }
+  },
+  "expect": {
+   "approx": {
+    "usd": [
+     6.0,
+     1e-09
+    ]
+   },
+   "eq": {
+    "provider": "anthropic",
+    "model": "sonnet"
+   }
+  }
+ },
+ {
+  "id": "MPR-092",
+  "kind": "estimate",
+  "area": "pricing",
+  "args": {
+   "tokens": 1000000,
+   "env": {
+    "QAR_MODEL_BACKEND": "openai",
+    "OPENAI_API_KEY": "k"
+   }
+  },
+  "expect": {
+   "approx": {
+    "usd": [
+     2.5,
+     1e-09
+    ]
+   },
+   "eq": {
+    "provider": "openai",
+    "model": "gpt-4o"
+   }
+  }
+ },
+ {
+  "id": "MPR-093",
+  "kind": "estimate",
+  "area": "pricing",
+  "args": {
+   "tokens": 1000000,
+   "env": {
+    "QAR_MODEL_BACKEND": "gemini"
+   }
+  },
+  "expect": {
+   "approx": {
+    "usd": [
+     0.075,
+     1e-09
+    ]
+   },
+   "eq": {
+    "provider": "gemini",
+    "model": "gemini-2.0-flash"
+   }
+  }
+ },
+ {
+  "id": "MPR-094",
+  "kind": "estimate",
+  "area": "pricing",
+  "args": {
+   "tokens": 3000000,
+   "env": {}
+  },
+  "expect": {
+   "approx": {
+    "usd": [
+     0.0501,
+     1e-09
+    ]
+   },
+   "eq": {
+    "provider": "claude_cli",
+    "model": "sonnet"
+   }
+  }
+ },
+ {
+  "id": "MPR-095",
+  "kind": "estimate",
+  "area": "pricing",
+  "args": {
+   "tokens": 1000000,
+   "env": {
+    "ANTHROPIC_API_KEY": "k"
+   }
+  },
+  "expect": {
+   "approx": {
+    "usd": [
+     0.8,
+     1e-09
+    ]
+   },
+   "eq": {
+    "provider": "anthropic",
+    "model": "haiku"
+   }
+  }
+ },
+ {
+  "id": "MPR-096",
+  "kind": "estimate",
+  "area": "pricing",
+  "args": {
+   "tokens": 0,
+   "env": {
+    "QAR_MODEL_BACKEND": "anthropic"
+   }
+  },
+  "expect": {
+   "approx": {
+    "usd": [
+     0.0,
+     1e-09
+    ]
+   },
+   "eq": {
+    "provider": "anthropic",
+    "model": "haiku"
+   }
+  }
+ },
+ {
+  "id": "MPR-100",
+  "kind": "tier_cost",
+  "area": "tier_cost",
+  "args": {
+   "models": {
+    "fast": "claude-haiku-4-5",
+    "balanced": "claude-sonnet-4-6"
+   },
+   "chars": 8000
+  },
+  "expect": {
+   "eq": {
+    "order": [
+     "fast",
+     "balanced"
+    ]
+   },
+   "approx": {}
+  }
+ },
+ {
+  "id": "MPR-101",
+  "kind": "tier_cost",
+  "area": "tier_cost_known_gap",
+  "args": {
+   "models": {
+    "fast": "claude-haiku-4-5",
+    "balanced": "claude-sonnet-4-6",
+    "quality": "claude-opus-4-8"
+   },
+   "chars": 8000
+  },
+  "expect": {
+   "eq": {
+    "order": [
+     "fast",
+     "balanced",
+     "quality"
+    ],
+    "strict": true
+   }
+  }
+ }
+]

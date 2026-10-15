@@ -1,0 +1,1885 @@
+[
+ {
+  "id": "WEB-001",
+  "area": "fact",
+  "query": "capital of Mongolia",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "link": "https://blog-one.example.net/1a",
+       "snippet": "A roundup of tips that mentions the topic only in passing.",
+       "date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "link": "https://reference.example.net/1b",
+       "snippet": "Ulaanbaatar is the capital and largest city of Mongolia, home to about 1.6 million people.",
+       "date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "link": "https://forum.example.net/1c",
+       "snippet": "Someone asked this a while ago and replies disagree.",
+       "date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "link": "https://docs.example.net/1d",
+       "snippet": "The official documentation covers this in a short section with examples.",
+       "date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "link": "https://wiki.example.net/1e",
+       "snippet": "A long general entry that covers history and background.",
+       "date": ""
+      },
+      {
+       "title": "News item",
+       "link": "https://news.example.net/1f",
+       "snippet": "A news item loosely related to the query.",
+       "date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Unrelated listicle: ten tips",
+        "url": "https://blog-one.example.net/1a",
+        "description": "A roundup of tips that mentions the topic only in passing.",
+        "age": "2026-01-02"
+       },
+       {
+        "title": "Authoritative reference page",
+        "url": "https://reference.example.net/1b",
+        "description": "Ulaanbaatar is the capital and largest city of Mongolia, home to about 1.6 million people.",
+        "age": "2026-09-30"
+       },
+       {
+        "title": "Forum thread with partial answers",
+        "url": "https://forum.example.net/1c",
+        "description": "Someone asked this a while ago and replies disagree.",
+        "age": "2025-11-11"
+       },
+       {
+        "title": "Official documentation",
+        "url": "https://docs.example.net/1d",
+        "description": "The official documentation covers this in a short section with examples.",
+        "age": ""
+       },
+       {
+        "title": "Encyclopedia entry",
+        "url": "https://wiki.example.net/1e",
+        "description": "A long general entry that covers history and background.",
+        "age": ""
+       },
+       {
+        "title": "News item",
+        "url": "https://news.example.net/1f",
+        "description": "A news item loosely related to the query.",
+        "age": "2026-10-01"
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/1a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "published_date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/1b",
+       "content": "Ulaanbaatar is the capital and largest city of Mongolia, home to about 1.6 million people.",
+       "published_date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/1c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "published_date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/1d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "published_date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/1e",
+       "content": "A long general entry that covers history and background.",
+       "published_date": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/1f",
+       "content": "A news item loosely related to the query.",
+       "published_date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/1a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "publishedDate": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/1b",
+       "content": "Ulaanbaatar is the capital and largest city of Mongolia, home to about 1.6 million people.",
+       "publishedDate": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/1c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "publishedDate": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/1d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/1e",
+       "content": "A long general entry that covers history and background.",
+       "publishedDate": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/1f",
+       "content": "A news item loosely related to the query.",
+       "publishedDate": "2026-10-01"
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "gold": [
+    "https://reference.example.net/1b",
+    3
+   ],
+   "unique_urls": true
+  }
+ },
+ {
+  "id": "WEB-002",
+  "area": "fact",
+  "query": "latest stable Python release",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "link": "https://blog-one.example.net/2a",
+       "snippet": "A roundup of tips that mentions the topic only in passing.",
+       "date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "link": "https://reference.example.net/2b",
+       "snippet": "The latest stable Python release is announced on the downloads page with its release date and notes.",
+       "date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "link": "https://forum.example.net/2c",
+       "snippet": "Someone asked this a while ago and replies disagree.",
+       "date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "link": "https://docs.example.net/2d",
+       "snippet": "The official documentation covers this in a short section with examples.",
+       "date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "link": "https://wiki.example.net/2e",
+       "snippet": "A long general entry that covers history and background.",
+       "date": ""
+      },
+      {
+       "title": "News item",
+       "link": "https://news.example.net/2f",
+       "snippet": "A news item loosely related to the query.",
+       "date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Unrelated listicle: ten tips",
+        "url": "https://blog-one.example.net/2a",
+        "description": "A roundup of tips that mentions the topic only in passing.",
+        "age": "2026-01-02"
+       },
+       {
+        "title": "Authoritative reference page",
+        "url": "https://reference.example.net/2b",
+        "description": "The latest stable Python release is announced on the downloads page with its release date and notes.",
+        "age": "2026-09-30"
+       },
+       {
+        "title": "Forum thread with partial answers",
+        "url": "https://forum.example.net/2c",
+        "description": "Someone asked this a while ago and replies disagree.",
+        "age": "2025-11-11"
+       },
+       {
+        "title": "Official documentation",
+        "url": "https://docs.example.net/2d",
+        "description": "The official documentation covers this in a short section with examples.",
+        "age": ""
+       },
+       {
+        "title": "Encyclopedia entry",
+        "url": "https://wiki.example.net/2e",
+        "description": "A long general entry that covers history and background.",
+        "age": ""
+       },
+       {
+        "title": "News item",
+        "url": "https://news.example.net/2f",
+        "description": "A news item loosely related to the query.",
+        "age": "2026-10-01"
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/2a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "published_date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/2b",
+       "content": "The latest stable Python release is announced on the downloads page with its release date and notes.",
+       "published_date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/2c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "published_date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/2d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "published_date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/2e",
+       "content": "A long general entry that covers history and background.",
+       "published_date": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/2f",
+       "content": "A news item loosely related to the query.",
+       "published_date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/2a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "publishedDate": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/2b",
+       "content": "The latest stable Python release is announced on the downloads page with its release date and notes.",
+       "publishedDate": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/2c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "publishedDate": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/2d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/2e",
+       "content": "A long general entry that covers history and background.",
+       "publishedDate": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/2f",
+       "content": "A news item loosely related to the query.",
+       "publishedDate": "2026-10-01"
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "gold": [
+    "https://reference.example.net/2b",
+    3
+   ],
+   "unique_urls": true
+  }
+ },
+ {
+  "id": "WEB-003",
+  "area": "howto",
+  "query": "how to rotate a Postgres password",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "link": "https://blog-one.example.net/3a",
+       "snippet": "A roundup of tips that mentions the topic only in passing.",
+       "date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "link": "https://reference.example.net/3b",
+       "snippet": "To rotate a Postgres role password run ALTER ROLE name PASSWORD and update dependent services.",
+       "date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "link": "https://forum.example.net/3c",
+       "snippet": "Someone asked this a while ago and replies disagree.",
+       "date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "link": "https://docs.example.net/3d",
+       "snippet": "The official documentation covers this in a short section with examples.",
+       "date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "link": "https://wiki.example.net/3e",
+       "snippet": "A long general entry that covers history and background.",
+       "date": ""
+      },
+      {
+       "title": "News item",
+       "link": "https://news.example.net/3f",
+       "snippet": "A news item loosely related to the query.",
+       "date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Unrelated listicle: ten tips",
+        "url": "https://blog-one.example.net/3a",
+        "description": "A roundup of tips that mentions the topic only in passing.",
+        "age": "2026-01-02"
+       },
+       {
+        "title": "Authoritative reference page",
+        "url": "https://reference.example.net/3b",
+        "description": "To rotate a Postgres role password run ALTER ROLE name PASSWORD and update dependent services.",
+        "age": "2026-09-30"
+       },
+       {
+        "title": "Forum thread with partial answers",
+        "url": "https://forum.example.net/3c",
+        "description": "Someone asked this a while ago and replies disagree.",
+        "age": "2025-11-11"
+       },
+       {
+        "title": "Official documentation",
+        "url": "https://docs.example.net/3d",
+        "description": "The official documentation covers this in a short section with examples.",
+        "age": ""
+       },
+       {
+        "title": "Encyclopedia entry",
+        "url": "https://wiki.example.net/3e",
+        "description": "A long general entry that covers history and background.",
+        "age": ""
+       },
+       {
+        "title": "News item",
+        "url": "https://news.example.net/3f",
+        "description": "A news item loosely related to the query.",
+        "age": "2026-10-01"
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/3a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "published_date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/3b",
+       "content": "To rotate a Postgres role password run ALTER ROLE name PASSWORD and update dependent services.",
+       "published_date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/3c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "published_date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/3d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "published_date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/3e",
+       "content": "A long general entry that covers history and background.",
+       "published_date": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/3f",
+       "content": "A news item loosely related to the query.",
+       "published_date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/3a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "publishedDate": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/3b",
+       "content": "To rotate a Postgres role password run ALTER ROLE name PASSWORD and update dependent services.",
+       "publishedDate": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/3c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "publishedDate": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/3d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/3e",
+       "content": "A long general entry that covers history and background.",
+       "publishedDate": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/3f",
+       "content": "A news item loosely related to the query.",
+       "publishedDate": "2026-10-01"
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "gold": [
+    "https://reference.example.net/3b",
+    3
+   ],
+   "unique_urls": true
+  }
+ },
+ {
+  "id": "WEB-004",
+  "area": "news",
+  "query": "current Expo SDK version",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "link": "https://blog-one.example.net/4a",
+       "snippet": "A roundup of tips that mentions the topic only in passing.",
+       "date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "link": "https://reference.example.net/4b",
+       "snippet": "Expo SDK releases follow a roughly quarterly schedule; the changelog lists the current SDK.",
+       "date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "link": "https://forum.example.net/4c",
+       "snippet": "Someone asked this a while ago and replies disagree.",
+       "date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "link": "https://docs.example.net/4d",
+       "snippet": "The official documentation covers this in a short section with examples.",
+       "date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "link": "https://wiki.example.net/4e",
+       "snippet": "A long general entry that covers history and background.",
+       "date": ""
+      },
+      {
+       "title": "News item",
+       "link": "https://news.example.net/4f",
+       "snippet": "A news item loosely related to the query.",
+       "date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Unrelated listicle: ten tips",
+        "url": "https://blog-one.example.net/4a",
+        "description": "A roundup of tips that mentions the topic only in passing.",
+        "age": "2026-01-02"
+       },
+       {
+        "title": "Authoritative reference page",
+        "url": "https://reference.example.net/4b",
+        "description": "Expo SDK releases follow a roughly quarterly schedule; the changelog lists the current SDK.",
+        "age": "2026-09-30"
+       },
+       {
+        "title": "Forum thread with partial answers",
+        "url": "https://forum.example.net/4c",
+        "description": "Someone asked this a while ago and replies disagree.",
+        "age": "2025-11-11"
+       },
+       {
+        "title": "Official documentation",
+        "url": "https://docs.example.net/4d",
+        "description": "The official documentation covers this in a short section with examples.",
+        "age": ""
+       },
+       {
+        "title": "Encyclopedia entry",
+        "url": "https://wiki.example.net/4e",
+        "description": "A long general entry that covers history and background.",
+        "age": ""
+       },
+       {
+        "title": "News item",
+        "url": "https://news.example.net/4f",
+        "description": "A news item loosely related to the query.",
+        "age": "2026-10-01"
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/4a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "published_date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/4b",
+       "content": "Expo SDK releases follow a roughly quarterly schedule; the changelog lists the current SDK.",
+       "published_date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/4c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "published_date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/4d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "published_date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/4e",
+       "content": "A long general entry that covers history and background.",
+       "published_date": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/4f",
+       "content": "A news item loosely related to the query.",
+       "published_date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/4a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "publishedDate": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/4b",
+       "content": "Expo SDK releases follow a roughly quarterly schedule; the changelog lists the current SDK.",
+       "publishedDate": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/4c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "publishedDate": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/4d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/4e",
+       "content": "A long general entry that covers history and background.",
+       "publishedDate": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/4f",
+       "content": "A news item loosely related to the query.",
+       "publishedDate": "2026-10-01"
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "gold": [
+    "https://reference.example.net/4b",
+    3
+   ],
+   "unique_urls": true
+  }
+ },
+ {
+  "id": "WEB-005",
+  "area": "howto",
+  "query": "fix CORS error FastAPI",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "link": "https://blog-one.example.net/5a",
+       "snippet": "A roundup of tips that mentions the topic only in passing.",
+       "date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "link": "https://reference.example.net/5b",
+       "snippet": "Add CORSMiddleware with the allowed origins to the FastAPI application to fix CORS errors.",
+       "date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "link": "https://forum.example.net/5c",
+       "snippet": "Someone asked this a while ago and replies disagree.",
+       "date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "link": "https://docs.example.net/5d",
+       "snippet": "The official documentation covers this in a short section with examples.",
+       "date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "link": "https://wiki.example.net/5e",
+       "snippet": "A long general entry that covers history and background.",
+       "date": ""
+      },
+      {
+       "title": "News item",
+       "link": "https://news.example.net/5f",
+       "snippet": "A news item loosely related to the query.",
+       "date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Unrelated listicle: ten tips",
+        "url": "https://blog-one.example.net/5a",
+        "description": "A roundup of tips that mentions the topic only in passing.",
+        "age": "2026-01-02"
+       },
+       {
+        "title": "Authoritative reference page",
+        "url": "https://reference.example.net/5b",
+        "description": "Add CORSMiddleware with the allowed origins to the FastAPI application to fix CORS errors.",
+        "age": "2026-09-30"
+       },
+       {
+        "title": "Forum thread with partial answers",
+        "url": "https://forum.example.net/5c",
+        "description": "Someone asked this a while ago and replies disagree.",
+        "age": "2025-11-11"
+       },
+       {
+        "title": "Official documentation",
+        "url": "https://docs.example.net/5d",
+        "description": "The official documentation covers this in a short section with examples.",
+        "age": ""
+       },
+       {
+        "title": "Encyclopedia entry",
+        "url": "https://wiki.example.net/5e",
+        "description": "A long general entry that covers history and background.",
+        "age": ""
+       },
+       {
+        "title": "News item",
+        "url": "https://news.example.net/5f",
+        "description": "A news item loosely related to the query.",
+        "age": "2026-10-01"
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/5a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "published_date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/5b",
+       "content": "Add CORSMiddleware with the allowed origins to the FastAPI application to fix CORS errors.",
+       "published_date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/5c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "published_date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/5d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "published_date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/5e",
+       "content": "A long general entry that covers history and background.",
+       "published_date": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/5f",
+       "content": "A news item loosely related to the query.",
+       "published_date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/5a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "publishedDate": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/5b",
+       "content": "Add CORSMiddleware with the allowed origins to the FastAPI application to fix CORS errors.",
+       "publishedDate": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/5c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "publishedDate": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/5d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/5e",
+       "content": "A long general entry that covers history and background.",
+       "publishedDate": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/5f",
+       "content": "A news item loosely related to the query.",
+       "publishedDate": "2026-10-01"
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "gold": [
+    "https://reference.example.net/5b",
+    3
+   ],
+   "unique_urls": true
+  }
+ },
+ {
+  "id": "WEB-006",
+  "area": "fact",
+  "query": "boiling point of water at altitude",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "link": "https://blog-one.example.net/6a",
+       "snippet": "A roundup of tips that mentions the topic only in passing.",
+       "date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "link": "https://reference.example.net/6b",
+       "snippet": "Water boils at a lower temperature as altitude increases because atmospheric pressure drops.",
+       "date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "link": "https://forum.example.net/6c",
+       "snippet": "Someone asked this a while ago and replies disagree.",
+       "date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "link": "https://docs.example.net/6d",
+       "snippet": "The official documentation covers this in a short section with examples.",
+       "date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "link": "https://wiki.example.net/6e",
+       "snippet": "A long general entry that covers history and background.",
+       "date": ""
+      },
+      {
+       "title": "News item",
+       "link": "https://news.example.net/6f",
+       "snippet": "A news item loosely related to the query.",
+       "date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Unrelated listicle: ten tips",
+        "url": "https://blog-one.example.net/6a",
+        "description": "A roundup of tips that mentions the topic only in passing.",
+        "age": "2026-01-02"
+       },
+       {
+        "title": "Authoritative reference page",
+        "url": "https://reference.example.net/6b",
+        "description": "Water boils at a lower temperature as altitude increases because atmospheric pressure drops.",
+        "age": "2026-09-30"
+       },
+       {
+        "title": "Forum thread with partial answers",
+        "url": "https://forum.example.net/6c",
+        "description": "Someone asked this a while ago and replies disagree.",
+        "age": "2025-11-11"
+       },
+       {
+        "title": "Official documentation",
+        "url": "https://docs.example.net/6d",
+        "description": "The official documentation covers this in a short section with examples.",
+        "age": ""
+       },
+       {
+        "title": "Encyclopedia entry",
+        "url": "https://wiki.example.net/6e",
+        "description": "A long general entry that covers history and background.",
+        "age": ""
+       },
+       {
+        "title": "News item",
+        "url": "https://news.example.net/6f",
+        "description": "A news item loosely related to the query.",
+        "age": "2026-10-01"
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/6a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "published_date": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/6b",
+       "content": "Water boils at a lower temperature as altitude increases because atmospheric pressure drops.",
+       "published_date": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/6c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "published_date": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/6d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "published_date": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/6e",
+       "content": "A long general entry that covers history and background.",
+       "published_date": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/6f",
+       "content": "A news item loosely related to the query.",
+       "published_date": "2026-10-01"
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Unrelated listicle: ten tips",
+       "url": "https://blog-one.example.net/6a",
+       "content": "A roundup of tips that mentions the topic only in passing.",
+       "publishedDate": "2026-01-02"
+      },
+      {
+       "title": "Authoritative reference page",
+       "url": "https://reference.example.net/6b",
+       "content": "Water boils at a lower temperature as altitude increases because atmospheric pressure drops.",
+       "publishedDate": "2026-09-30"
+      },
+      {
+       "title": "Forum thread with partial answers",
+       "url": "https://forum.example.net/6c",
+       "content": "Someone asked this a while ago and replies disagree.",
+       "publishedDate": "2025-11-11"
+      },
+      {
+       "title": "Official documentation",
+       "url": "https://docs.example.net/6d",
+       "content": "The official documentation covers this in a short section with examples.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Encyclopedia entry",
+       "url": "https://wiki.example.net/6e",
+       "content": "A long general entry that covers history and background.",
+       "publishedDate": ""
+      },
+      {
+       "title": "News item",
+       "url": "https://news.example.net/6f",
+       "content": "A news item loosely related to the query.",
+       "publishedDate": "2026-10-01"
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "gold": [
+    "https://reference.example.net/6b",
+    3
+   ],
+   "unique_urls": true
+  }
+ },
+ {
+  "id": "WEB-010",
+  "area": "cap",
+  "query": "a query with many results",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Result 0",
+       "link": "https://site0.example.net/m0",
+       "snippet": "Snippet number 0 about the capped query.",
+       "date": ""
+      },
+      {
+       "title": "Result 1",
+       "link": "https://site1.example.net/m1",
+       "snippet": "Snippet number 1 about the capped query.",
+       "date": ""
+      },
+      {
+       "title": "Result 2",
+       "link": "https://site2.example.net/m2",
+       "snippet": "Snippet number 2 about the capped query.",
+       "date": ""
+      },
+      {
+       "title": "Result 3",
+       "link": "https://site3.example.net/m3",
+       "snippet": "Snippet number 3 about the capped query.",
+       "date": ""
+      },
+      {
+       "title": "Result 4",
+       "link": "https://site4.example.net/m4",
+       "snippet": "Snippet number 4 about the capped query.",
+       "date": ""
+      },
+      {
+       "title": "Result 5",
+       "link": "https://site5.example.net/m5",
+       "snippet": "Snippet number 5 about the capped query.",
+       "date": ""
+      },
+      {
+       "title": "Result 6",
+       "link": "https://site6.example.net/m6",
+       "snippet": "Snippet number 6 about the capped query.",
+       "date": ""
+      },
+      {
+       "title": "Result 7",
+       "link": "https://site7.example.net/m7",
+       "snippet": "Snippet number 7 about the capped query.",
+       "date": ""
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Result 0",
+        "url": "https://site0.example.net/m0",
+        "description": "Snippet number 0 about the capped query.",
+        "age": ""
+       },
+       {
+        "title": "Result 1",
+        "url": "https://site1.example.net/m1",
+        "description": "Snippet number 1 about the capped query.",
+        "age": ""
+       },
+       {
+        "title": "Result 2",
+        "url": "https://site2.example.net/m2",
+        "description": "Snippet number 2 about the capped query.",
+        "age": ""
+       },
+       {
+        "title": "Result 3",
+        "url": "https://site3.example.net/m3",
+        "description": "Snippet number 3 about the capped query.",
+        "age": ""
+       },
+       {
+        "title": "Result 4",
+        "url": "https://site4.example.net/m4",
+        "description": "Snippet number 4 about the capped query.",
+        "age": ""
+       },
+       {
+        "title": "Result 5",
+        "url": "https://site5.example.net/m5",
+        "description": "Snippet number 5 about the capped query.",
+        "age": ""
+       },
+       {
+        "title": "Result 6",
+        "url": "https://site6.example.net/m6",
+        "description": "Snippet number 6 about the capped query.",
+        "age": ""
+       },
+       {
+        "title": "Result 7",
+        "url": "https://site7.example.net/m7",
+        "description": "Snippet number 7 about the capped query.",
+        "age": ""
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Result 0",
+       "url": "https://site0.example.net/m0",
+       "content": "Snippet number 0 about the capped query.",
+       "published_date": ""
+      },
+      {
+       "title": "Result 1",
+       "url": "https://site1.example.net/m1",
+       "content": "Snippet number 1 about the capped query.",
+       "published_date": ""
+      },
+      {
+       "title": "Result 2",
+       "url": "https://site2.example.net/m2",
+       "content": "Snippet number 2 about the capped query.",
+       "published_date": ""
+      },
+      {
+       "title": "Result 3",
+       "url": "https://site3.example.net/m3",
+       "content": "Snippet number 3 about the capped query.",
+       "published_date": ""
+      },
+      {
+       "title": "Result 4",
+       "url": "https://site4.example.net/m4",
+       "content": "Snippet number 4 about the capped query.",
+       "published_date": ""
+      },
+      {
+       "title": "Result 5",
+       "url": "https://site5.example.net/m5",
+       "content": "Snippet number 5 about the capped query.",
+       "published_date": ""
+      },
+      {
+       "title": "Result 6",
+       "url": "https://site6.example.net/m6",
+       "content": "Snippet number 6 about the capped query.",
+       "published_date": ""
+      },
+      {
+       "title": "Result 7",
+       "url": "https://site7.example.net/m7",
+       "content": "Snippet number 7 about the capped query.",
+       "published_date": ""
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Result 0",
+       "url": "https://site0.example.net/m0",
+       "content": "Snippet number 0 about the capped query.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Result 1",
+       "url": "https://site1.example.net/m1",
+       "content": "Snippet number 1 about the capped query.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Result 2",
+       "url": "https://site2.example.net/m2",
+       "content": "Snippet number 2 about the capped query.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Result 3",
+       "url": "https://site3.example.net/m3",
+       "content": "Snippet number 3 about the capped query.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Result 4",
+       "url": "https://site4.example.net/m4",
+       "content": "Snippet number 4 about the capped query.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Result 5",
+       "url": "https://site5.example.net/m5",
+       "content": "Snippet number 5 about the capped query.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Result 6",
+       "url": "https://site6.example.net/m6",
+       "content": "Snippet number 6 about the capped query.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Result 7",
+       "url": "https://site7.example.net/m7",
+       "content": "Snippet number 7 about the capped query.",
+       "publishedDate": ""
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "max_urls": 3,
+   "gold": [
+    "https://site0.example.net/m0",
+    1
+   ]
+  },
+  "max_results": 3
+ },
+ {
+  "id": "WEB-011",
+  "area": "html",
+  "query": "what is a webhook",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Webhooks explained",
+       "link": "https://guide.example.net/h1",
+       "snippet": "A webhook is an HTTP callback that one service sends to another when an event happens.",
+       "date": ""
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Webhooks explained",
+        "url": "https://guide.example.net/h1",
+        "description": "<strong>A</strong> webhook is an HTTP callback that one service sends to another when an event happens.",
+        "age": ""
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Webhooks explained",
+       "url": "https://guide.example.net/h1",
+       "content": "A webhook is an HTTP callback that one service sends to another when an event happens.",
+       "published_date": ""
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Webhooks explained",
+       "url": "https://guide.example.net/h1",
+       "content": "A webhook is an HTTP callback that one service sends to another when an event happens.",
+       "publishedDate": ""
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "no_tags": true,
+   "gold": [
+    "https://guide.example.net/h1",
+    1
+   ]
+  }
+ },
+ {
+  "id": "WEB-012",
+  "area": "dedupe",
+  "query": "duplicate result urls",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "First",
+       "link": "https://dupe.example.net/d1",
+       "snippet": "One snippet about duplicates.",
+       "date": ""
+      },
+      {
+       "title": "First again",
+       "link": "https://dupe.example.net/d1?utm_source=x#top",
+       "snippet": "Same page with tracking.",
+       "date": ""
+      },
+      {
+       "title": "Second",
+       "link": "https://other.example.net/d2",
+       "snippet": "A different page.",
+       "date": ""
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "First",
+        "url": "https://dupe.example.net/d1",
+        "description": "One snippet about duplicates.",
+        "age": ""
+       },
+       {
+        "title": "First again",
+        "url": "https://dupe.example.net/d1?utm_source=x#top",
+        "description": "Same page with tracking.",
+        "age": ""
+       },
+       {
+        "title": "Second",
+        "url": "https://other.example.net/d2",
+        "description": "A different page.",
+        "age": ""
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "First",
+       "url": "https://dupe.example.net/d1",
+       "content": "One snippet about duplicates.",
+       "published_date": ""
+      },
+      {
+       "title": "First again",
+       "url": "https://dupe.example.net/d1?utm_source=x#top",
+       "content": "Same page with tracking.",
+       "published_date": ""
+      },
+      {
+       "title": "Second",
+       "url": "https://other.example.net/d2",
+       "content": "A different page.",
+       "published_date": ""
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "First",
+       "url": "https://dupe.example.net/d1",
+       "content": "One snippet about duplicates.",
+       "publishedDate": ""
+      },
+      {
+       "title": "First again",
+       "url": "https://dupe.example.net/d1?utm_source=x#top",
+       "content": "Same page with tracking.",
+       "publishedDate": ""
+      },
+      {
+       "title": "Second",
+       "url": "https://other.example.net/d2",
+       "content": "A different page.",
+       "publishedDate": ""
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "max_urls": 2,
+   "gold": [
+    "https://other.example.net/d2",
+    2
+   ]
+  }
+ },
+ {
+  "id": "WEB-013",
+  "area": "summary",
+  "query": "population of Iceland",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Iceland population",
+       "link": "https://stats.example.net/s1",
+       "snippet": "Iceland has a population of roughly 390,000 people.",
+       "date": ""
+      }
+     ],
+     "answerBox": {
+      "answer": "Iceland has roughly 390,000 residents."
+     }
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Iceland population",
+        "url": "https://stats.example.net/s1",
+        "description": "Iceland has a population of roughly 390,000 people.",
+        "age": ""
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Iceland population",
+       "url": "https://stats.example.net/s1",
+       "content": "Iceland has a population of roughly 390,000 people.",
+       "published_date": ""
+      }
+     ],
+     "answer": "Iceland has roughly 390,000 residents."
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Iceland population",
+       "url": "https://stats.example.net/s1",
+       "content": "Iceland has a population of roughly 390,000 people.",
+       "publishedDate": ""
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "summary": true,
+   "gold": [
+    "https://stats.example.net/s1",
+    1
+   ]
+  },
+  "summary_vendors": [
+   "serper",
+   "tavily"
+  ]
+ },
+ {
+  "id": "WEB-014",
+  "area": "failure",
+  "query": "query nobody has an answer to",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": []
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": []
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": []
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": []
+    }
+   }
+  },
+  "expect": {
+   "error": true,
+   "error_contains": "no results"
+  }
+ },
+ {
+  "id": "WEB-015",
+  "area": "failure",
+  "query": "rate limited query",
+  "payloads": {
+   "serper": {
+    "status": 429,
+    "json": {}
+   },
+   "brave": {
+    "status": 429,
+    "json": {}
+   },
+   "tavily": {
+    "status": 429,
+    "json": {}
+   },
+   "searxng": {
+    "status": 429,
+    "json": {}
+   }
+  },
+  "expect": {
+   "error": true,
+   "error_contains": "429"
+  }
+ },
+ {
+  "id": "WEB-016",
+  "area": "failover",
+  "query": "failover query",
+  "payloads": {
+   "serper": {
+    "status": 429,
+    "json": {}
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "The answer page",
+        "url": "https://answer.example.net/f1",
+        "description": "The page that answers the failover query.",
+        "age": ""
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 429,
+    "json": {}
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "The answer page",
+       "url": "https://answer.example.net/f1",
+       "content": "The page that answers the failover query.",
+       "publishedDate": ""
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "gold": [
+    "https://answer.example.net/f1",
+    1
+   ]
+  },
+  "expect_by_impl": {
+   "serper": {
+    "error": true,
+    "error_contains": "429"
+   },
+   "tavily": {
+    "error": true,
+    "error_contains": "429"
+   }
+  }
+ },
+ {
+  "id": "WEB-017",
+  "area": "failover",
+  "query": "empty-first query",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": []
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "The answer page",
+        "url": "https://answer.example.net/f1",
+        "description": "The page that answers the failover query.",
+        "age": ""
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "The answer page",
+       "url": "https://answer.example.net/f1",
+       "content": "The page that answers the failover query.",
+       "published_date": ""
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "The answer page",
+       "url": "https://answer.example.net/f1",
+       "content": "The page that answers the failover query.",
+       "publishedDate": ""
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "gold": [
+    "https://answer.example.net/f1",
+    1
+   ]
+  },
+  "expect_by_impl": {
+   "serper": {
+    "error": true,
+    "error_contains": "no results"
+   }
+  }
+ },
+ {
+  "id": "WEB-018",
+  "area": "cache",
+  "query": "repeated query",
+  "payloads": {
+   "serper": {
+    "status": 200,
+    "json": {
+     "organic": [
+      {
+       "title": "Cached page",
+       "link": "https://cache.example.net/c1",
+       "snippet": "A page returned once and cached.",
+       "date": ""
+      }
+     ]
+    }
+   },
+   "brave": {
+    "status": 200,
+    "json": {
+     "web": {
+      "results": [
+       {
+        "title": "Cached page",
+        "url": "https://cache.example.net/c1",
+        "description": "A page returned once and cached.",
+        "age": ""
+       }
+      ]
+     }
+    }
+   },
+   "tavily": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Cached page",
+       "url": "https://cache.example.net/c1",
+       "content": "A page returned once and cached.",
+       "published_date": ""
+      }
+     ]
+    }
+   },
+   "searxng": {
+    "status": 200,
+    "json": {
+     "results": [
+      {
+       "title": "Cached page",
+       "url": "https://cache.example.net/c1",
+       "content": "A page returned once and cached.",
+       "publishedDate": ""
+      }
+     ]
+    }
+   }
+  },
+  "expect": {
+   "cache_hit": true,
+   "gold": [
+    "https://cache.example.net/c1",
+    1
+   ]
+  },
+  "repeat": true
+ }
+]

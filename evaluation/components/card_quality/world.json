@@ -1,0 +1,25 @@
+{
+ "learn": [
+  {
+   "request": "Analyze my recent dreams and any stress link.",
+   "executed": "Summarized the user's dream journal: water/falling motifs in high-stress weeks.",
+   "future_context": "- Dream journal is the collection 'Dream Journal' (id col_dreams_8821).\n- Daily stress is tracked in collection 'Daily Mood' (id col_mood_4410)."
+  },
+  {
+   "request": "Review the open pull requests on my backend repo.",
+   "executed": "Listed open PRs and flagged two with failing tests.",
+   "future_context": "- The user's code review notes live in the collection 'Code Reviews' (id col_rev_5512)."
+  },
+  {
+   "request": "Plan my upcoming trip itinerary.",
+   "executed": "Drafted a 5-day itinerary and flagged booking gaps.",
+   "future_context": "- The user's trip plans are in the collection 'Trip Plans' (id col_trip_3300)."
+  }
+ ],
+ "collections": [
+  "col_dreams_8821",
+  "col_mood_4410",
+  "col_rev_5512",
+  "col_trip_3300"
+ ]
+}

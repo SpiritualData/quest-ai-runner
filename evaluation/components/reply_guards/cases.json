@@ -1,0 +1,2085 @@
+[
+ {
+  "id": "GRD-001",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "See [your tasks](/profile/ai-tasks) and [the dashboard](/profile/dashboard).",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "[your tasks](/profile/ai-tasks)",
+    "the dashboard (link removed: that address does not exist)"
+   ],
+   "not_contains": [
+    "/profile/dashboard"
+   ],
+   "eq": {
+    "verdicts": {
+     "/profile/ai-tasks": "ok",
+     "/profile/dashboard": "dead"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-002",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Read https://real.example.com/page for details.",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "Read https://real.example.com/page for details."
+   ],
+   "eq": {
+    "verdicts": {
+     "https://real.example.com/page": "ok"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-003",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Old post: [post](https://gone.example.com/old).",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "post (link removed: that address does not exist)"
+   ],
+   "not_contains": [
+    "gone.example.com"
+   ],
+   "eq": {
+    "verdicts": {
+     "https://gone.example.com/old": "dead"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-004",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Try https://nohost.invalid/x now",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "(link removed: that address does not exist)",
+    "now"
+   ],
+   "not_contains": [
+    "nohost.invalid"
+   ],
+   "eq": {
+    "verdicts": {
+     "https://nohost.invalid/x": "dead"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-005",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Members only: https://gated.example.com/x",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "https://gated.example.com/x"
+   ],
+   "eq": {
+    "verdicts": {
+     "https://gated.example.com/x": "ok"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-006",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Status page: https://slow.example.com/y",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "(link removed: could not verify it)"
+   ],
+   "not_contains": [
+    "slow.example.com"
+   ],
+   "eq": {
+    "verdicts": {
+     "https://slow.example.com/y": "unknown"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-007",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "See https://never-answers.example.com/z",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "(link removed: could not verify it)"
+   ],
+   "not_contains": [
+    "never-answers"
+   ],
+   "eq": {
+    "verdicts": {
+     "https://never-answers.example.com/z": "unknown"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-008",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Guide: https://docs.example.org/guide",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "https://docs.example.org/guide"
+   ],
+   "eq": {
+    "verdicts": {
+     "https://docs.example.org/guide": "ok"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-009",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "[open task](app-task:t1)",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "[open task](app-task:t1)"
+   ],
+   "eq": {
+    "verdicts": {
+     "app-task:t1": "ok"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-010",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Track it: [task](https://api.example.org/api/tasks/t123)",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "[task](app-task:t123)"
+   ],
+   "not_contains": [
+    "api.example.org"
+   ],
+   "eq": {
+    "verdicts": {
+     "https://api.example.org/api/tasks/t123": "ok"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-011",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Go to https://app.example.org/profile/fake or https://app.example.org/quest/abc/chat",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "(link removed: that address does not exist)",
+    "https://app.example.org/quest/abc/chat"
+   ],
+   "not_contains": [
+    "/profile/fake"
+   ],
+   "eq": {
+    "verdicts": {
+     "https://app.example.org/profile/fake": "dead",
+     "https://app.example.org/quest/abc/chat": "ok"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-012",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Shown, not offered:\n```\nhttps://gone.example.com/old\n```",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "https://gone.example.com/old"
+   ],
+   "eq": {
+    "verdicts": {}
+   }
+  }
+ },
+ {
+  "id": "GRD-013",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Nothing to check here, just words.",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "Nothing to check here, just words."
+   ],
+   "eq": {
+    "verdicts": {}
+   }
+  }
+ },
+ {
+  "id": "GRD-014",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "[https://gone.example.com/old](https://gone.example.com/old)",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "(link removed: that address does not exist)"
+   ],
+   "not_contains": [
+    "gone.example.com"
+   ]
+  }
+ },
+ {
+  "id": "GRD-015",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "[mail us](mailto:hi@example.com)",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "[mail us](mailto:hi@example.com)"
+   ],
+   "eq": {
+    "verdicts": {
+     "mailto:hi@example.com": "ok"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-016",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Real: https://real.example.com/page. Made up: [report](https://gone.example.com/old). Yours: [tasks](/profile/ai-tasks).",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "Real: https://real.example.com/page.",
+    "report (link removed: that address does not exist)",
+    "[tasks](/profile/ai-tasks)"
+   ],
+   "not_contains": [
+    "gone.example.com"
+   ]
+  }
+ },
+ {
+  "id": "GRD-017",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "See https://real.example.com/page.",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "See https://real.example.com/page."
+   ]
+  }
+ },
+ {
+  "id": "GRD-018",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Look <https://gone.example.com/old> now",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "(link removed: that address does not exist)"
+   ],
+   "not_contains": [
+    "gone.example.com"
+   ]
+  }
+ },
+ {
+  "id": "GRD-019",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "[x](notalink)",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "x (link removed: could not verify it)"
+   ],
+   "not_contains": [
+    "(notalink)"
+   ]
+  }
+ },
+ {
+  "id": "GRD-020",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "Read https://real.example.com/page",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ],
+    "check_external": false
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "(link removed: could not verify it)"
+   ],
+   "not_contains": [
+    "real.example.com"
+   ]
+  }
+ },
+ {
+  "id": "GRD-021",
+  "kind": "link_sanitize",
+  "area": "links",
+  "args": {
+   "text": "[goals](/quest?tab=goals)",
+   "policy": {
+    "routes": [
+     "/profile/ai-tasks",
+     "/quest/[questId]/chat",
+     "/quest"
+    ],
+    "origins": [
+     "app.example.org"
+    ],
+    "trusted_hosts": [
+     "docs.example.org"
+    ],
+    "allowed_schemes": [
+     "app-task"
+    ],
+    "rewrites": [
+     {
+      "match": "https://api\\.example\\.org/api/tasks/(\\w+)",
+      "replace": "app-task:\\1"
+     }
+    ]
+   },
+   "fetch": {
+    "https://real.example.com/page": [
+     200,
+     ""
+    ],
+    "https://gated.example.com/x": [
+     403,
+     ""
+    ],
+    "https://gone.example.com/old": [
+     404,
+     ""
+    ],
+    "https://nohost.invalid/x": [
+     null,
+     "dns"
+    ],
+    "https://slow.example.com/y": [
+     503,
+     "server error"
+    ]
+   }
+  },
+  "expect": {
+   "contains": [
+    "[goals](/quest?tab=goals)"
+   ],
+   "eq": {
+    "verdicts": {
+     "/quest?tab=goals": "ok"
+    }
+   }
+  }
+ },
+ {
+  "id": "GRD-030",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "Docs at https://example.com/a."
+  },
+  "expect": {
+   "eq": {
+    "urls": [
+     "https://example.com/a"
+    ]
+   }
+  }
+ },
+ {
+  "id": "GRD-031",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "See [x](https://example.com/b) please"
+  },
+  "expect": {
+   "eq": {
+    "urls": [
+     "https://example.com/b"
+    ]
+   }
+  }
+ },
+ {
+  "id": "GRD-032",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "https://en.wikipedia.org/wiki/Foo_(bar)."
+  },
+  "expect": {
+   "eq": {
+    "urls": [
+     "https://en.wikipedia.org/wiki/Foo_(bar)"
+    ]
+   }
+  }
+ },
+ {
+  "id": "GRD-033",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "(see https://example.com/c)"
+  },
+  "expect": {
+   "eq": {
+    "urls": [
+     "https://example.com/c"
+    ]
+   }
+  }
+ },
+ {
+  "id": "GRD-034",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "https://example.com/d and again https://example.com/d"
+  },
+  "expect": {
+   "eq": {
+    "urls": [
+     "https://example.com/d"
+    ]
+   }
+  }
+ },
+ {
+  "id": "GRD-035",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "https://docs.google.com/document/d/abc/edit"
+  },
+  "expect": {
+   "eq": {
+    "urls": [
+     "https://docs.google.com/document/d/abc/edit"
+    ],
+    "labels": [
+     "Google Doc"
+    ]
+   }
+  }
+ },
+ {
+  "id": "GRD-036",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "https://docs.google.com/spreadsheets/d/s1 https://drive.google.com/drive/folders/f1 https://example.com/r.pdf"
+  },
+  "expect": {
+   "eq": {
+    "urls": [
+     "https://docs.google.com/spreadsheets/d/s1",
+     "https://drive.google.com/drive/folders/f1",
+     "https://example.com/r.pdf"
+    ],
+    "labels": [
+     "Google Sheet",
+     "Google Drive folder",
+     "PDF"
+    ]
+   }
+  }
+ },
+ {
+  "id": "GRD-037",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "No links at all."
+  },
+  "expect": {
+   "eq": {
+    "urls": []
+   }
+  }
+ },
+ {
+  "id": "GRD-038",
+  "kind": "link_extract",
+  "area": "extract",
+  "args": {
+   "text": "ftp://files.example.org/f"
+  },
+  "expect": {
+   "eq": {
+    "urls": []
+   }
+  }
+ },
+ {
+  "id": "GRD-050",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "mark my meditation habit as done"
+  },
+  "expect": {
+   "eq": {
+    "tool": "complete_habit"
+   }
+  }
+ },
+ {
+  "id": "GRD-051",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "mark my yoga habit done please"
+  },
+  "expect": {
+   "eq": {
+    "tool": "complete_habit"
+   }
+  }
+ },
+ {
+  "id": "GRD-052",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "show my yoga habit"
+  },
+  "expect": {
+   "eq": {
+    "tool": null
+   }
+  }
+ },
+ {
+  "id": "GRD-053",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "add a note saying call the dentist"
+  },
+  "expect": {
+   "eq": {
+    "tool": "add_note"
+   }
+  }
+ },
+ {
+  "id": "GRD-054",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "what is the weather today"
+  },
+  "expect": {
+   "eq": {
+    "tool": null
+   }
+  }
+ },
+ {
+  "id": "GRD-055",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "done"
+  },
+  "expect": {
+   "eq": {
+    "tool": null
+   }
+  }
+ },
+ {
+  "id": "GRD-056",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "mark my meditation habit as done",
+   "learn_scope": [
+    "quest:a"
+   ],
+   "scope": [
+    "quest:b"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "tool": null
+   }
+  }
+ },
+ {
+  "id": "GRD-057",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "mark my meditation habit as done",
+   "learn_scope": [
+    "quest:a"
+   ],
+   "scope": [
+    "quest:a"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "tool": "complete_habit"
+   }
+  }
+ },
+ {
+  "id": "GRD-058",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "mark my meditation habit as done",
+   "learn_scope": [
+    "quest:a"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "tool": "complete_habit"
+   }
+  }
+ },
+ {
+  "id": "GRD-059",
+  "kind": "recipe_match",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ],
+   "request": "delete my yoga habit"
+  },
+  "expect": {
+   "eq": {
+    "tool": null
+   }
+  }
+ },
+ {
+  "id": "GRD-060",
+  "kind": "recipe_learn",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "mark my yoga habit done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "recipes": 1
+   }
+  }
+ },
+ {
+  "id": "GRD-061",
+  "kind": "recipe_learn",
+  "area": "recipes",
+  "args": {
+   "learned": [
+    [
+     "mark my yoga habit as done",
+     "complete_habit",
+     {
+      "habit": "yoga"
+     }
+    ],
+    [
+     "add a note saying buy oat milk",
+     "add_note",
+     {
+      "text": "buy oat milk"
+     }
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "recipes": 2
+   }
+  }
+ },
+ {
+  "id": "GRD-070",
+  "kind": "anticipation_chips",
+  "area": "anticipation",
+  "args": {
+   "asks": [
+    [
+     "what is on my plate today",
+     "2026-10-12T08:05:00"
+    ],
+    [
+     "what is on my plate today",
+     "2026-10-13T08:10:00"
+    ],
+    [
+     "what is on my plate today",
+     "2026-10-14T08:00:00"
+    ]
+   ],
+   "now": "2026-10-15T08:10:00"
+  },
+  "expect": {
+   "eq": {
+    "top": "what is on my plate today",
+    "n": 1,
+    "patterns": 1
+   }
+  }
+ },
+ {
+  "id": "GRD-071",
+  "kind": "anticipation_chips",
+  "area": "anticipation",
+  "args": {
+   "asks": [
+    [
+     "what is on my plate today",
+     "2026-10-12T08:05:00"
+    ],
+    [
+     "what is on my plate today",
+     "2026-10-13T08:10:00"
+    ],
+    [
+     "what is on my plate today",
+     "2026-10-14T08:00:00"
+    ],
+    [
+     "summarize my week for the team",
+     "2026-10-02T17:30:00"
+    ],
+    [
+     "summarize my week for the team",
+     "2026-10-09T17:40:00"
+    ]
+   ],
+   "now": "2026-10-15T08:10:00"
+  },
+  "expect": {
+   "eq": {
+    "top": "what is on my plate today"
+   }
+  }
+ },
+ {
+  "id": "GRD-072",
+  "kind": "anticipation_chips",
+  "area": "anticipation",
+  "args": {
+   "asks": [
+    [
+     "book flights to lisbon",
+     "2026-10-12T03:00:00"
+    ]
+   ],
+   "now": "2026-10-12T15:00:00"
+  },
+  "expect": {
+   "eq": {
+    "n": 0
+   }
+  }
+ },
+ {
+  "id": "GRD-073",
+  "kind": "anticipation_chips",
+  "area": "anticipation",
+  "args": {
+   "asks": [],
+   "now": "2026-10-15T08:10:00"
+  },
+  "expect": {
+   "eq": {
+    "n": 0,
+    "top": null
+   }
+  }
+ },
+ {
+  "id": "GRD-074",
+  "kind": "anticipation_chips",
+  "area": "anticipation",
+  "args": {
+   "asks": [
+    [
+     "what is on my plate today",
+     "2026-10-12T08:05:00"
+    ],
+    [
+     "what's on my plate today?",
+     "2026-10-13T08:10:00"
+    ]
+   ],
+   "now": "2026-10-15T08:10:00"
+  },
+  "expect": {
+   "eq": {
+    "patterns": 1
+   }
+  }
+ },
+ {
+  "id": "GRD-075",
+  "kind": "anticipation_chips",
+  "area": "anticipation",
+  "args": {
+   "asks": [
+    [
+     "what is on my plate today",
+     "2026-10-12T08:05:00"
+    ],
+    [
+     "draft the quarterly grant report",
+     "2026-10-13T08:10:00"
+    ]
+   ],
+   "now": "2026-10-15T08:10:00"
+  },
+  "expect": {
+   "eq": {
+    "patterns": 2
+   }
+  }
+ },
+ {
+  "id": "GRD-076",
+  "kind": "anticipation_match",
+  "area": "anticipation",
+  "args": {
+   "predictions": [
+    "what is on my plate today"
+   ],
+   "actual": "what is on my plate today"
+  },
+  "expect": {
+   "eq": {
+    "served": "what is on my plate today"
+   }
+  }
+ },
+ {
+  "id": "GRD-077",
+  "kind": "anticipation_match",
+  "area": "anticipation",
+  "args": {
+   "predictions": [
+    "what is on my plate today"
+   ],
+   "actual": "book flights to lisbon"
+  },
+  "expect": {
+   "eq": {
+    "served": null
+   }
+  }
+ },
+ {
+  "id": "GRD-078",
+  "kind": "anticipation_match",
+  "area": "anticipation",
+  "args": {
+   "predictions": [
+    "summarize my week for the team",
+    "what is on my plate today"
+   ],
+   "actual": "what's on my plate today?"
+  },
+  "expect": {
+   "eq": {
+    "served": "what is on my plate today"
+   }
+  }
+ },
+ {
+  "id": "GRD-079",
+  "kind": "anticipation_weight",
+  "area": "anticipation",
+  "args": {
+   "w": 0.35,
+   "scores": [
+    1,
+    1,
+    1
+   ]
+  },
+  "expect": {
+   "approx": {
+    "w": [
+     0.77705,
+     1e-06
+    ]
+   },
+   "eq": {
+    "pruned": false
+   }
+  }
+ },
+ {
+  "id": "GRD-080",
+  "kind": "anticipation_weight",
+  "area": "anticipation",
+  "args": {
+   "w": 0.35,
+   "scores": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  "expect": {
+   "approx": {
+    "w": [
+     0.02017680349999999,
+     1e-06
+    ]
+   },
+   "eq": {
+    "pruned": true
+   }
+  }
+ },
+ {
+  "id": "GRD-081",
+  "kind": "anticipation_weight",
+  "area": "anticipation",
+  "args": {
+   "w": 0.35,
+   "scores": [
+    0,
+    0
+   ]
+  },
+  "expect": {
+   "approx": {
+    "w": [
+     0.17149999999999999,
+     1e-06
+    ]
+   },
+   "eq": {
+    "pruned": false
+   }
+  }
+ }
+]

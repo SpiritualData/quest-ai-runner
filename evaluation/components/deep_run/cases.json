@@ -1,0 +1,1121 @@
+[
+ {
+  "id": "DRN-001",
+  "kind": "review_parse",
+  "area": "review",
+  "args": {
+   "text": "{\"stop\": true, \"reason\": \"idle for 20 minutes\"}"
+  },
+  "expect": {
+   "eq": {
+    "stop": true,
+    "reason": "idle for 20 minutes"
+   }
+  }
+ },
+ {
+  "id": "DRN-002",
+  "kind": "review_parse",
+  "area": "review",
+  "args": {
+   "text": "Sure. {\"stop\": false, \"reason\": \"building\\n the image\"} done"
+  },
+  "expect": {
+   "eq": {
+    "stop": false,
+    "reason": "building the image"
+   }
+  }
+ },
+ {
+  "id": "DRN-003",
+  "kind": "review_parse",
+  "area": "review",
+  "args": {
+   "text": "{\"stop\": \"yes\", \"reason\": \"x\"}"
+  },
+  "expect": {
+   "eq": {
+    "stop": null
+   }
+  }
+ },
+ {
+  "id": "DRN-004",
+  "kind": "review_parse",
+  "area": "review",
+  "args": {
+   "text": "I would stop it."
+  },
+  "expect": {
+   "eq": {
+    "stop": null
+   }
+  }
+ },
+ {
+  "id": "DRN-005",
+  "kind": "review_parse",
+  "area": "review",
+  "args": {
+   "text": "{\"stop\": true}"
+  },
+  "expect": {
+   "eq": {
+    "stop": true,
+    "reason": "No reason was given."
+   }
+  }
+ },
+ {
+  "id": "DRN-006",
+  "kind": "review_parse",
+  "area": "review",
+  "args": {
+   "text": ""
+  },
+  "expect": {
+   "eq": {
+    "stop": null
+   }
+  }
+ },
+ {
+  "id": "DRN-007",
+  "kind": "review_parse",
+  "area": "review",
+  "args": {
+   "text": "{not json}"
+  },
+  "expect": {
+   "eq": {
+    "stop": null
+   }
+  }
+ },
+ {
+  "id": "DRN-008",
+  "kind": "review_fail_open",
+  "area": "review",
+  "args": {
+   "reply": "{\"stop\": true, \"reason\": \"usage limit hit\"}"
+  },
+  "expect": {
+   "eq": {
+    "stop": true,
+    "reason": "usage limit hit"
+   }
+  }
+ },
+ {
+  "id": "DRN-009",
+  "kind": "review_fail_open",
+  "area": "review",
+  "args": {
+   "reply": "garbage"
+  },
+  "expect": {
+   "eq": {
+    "stop": false,
+    "reason": "The liveness review could not be completed, so the run was left alone."
+   }
+  }
+ },
+ {
+  "id": "DRN-010",
+  "kind": "review_fail_open",
+  "area": "review",
+  "args": {
+   "reply": "__raise__"
+  },
+  "expect": {
+   "eq": {
+    "stop": false
+   }
+  }
+ },
+ {
+  "id": "DRN-011",
+  "kind": "review_fail_open",
+  "area": "review",
+  "args": {
+   "reply": "{\"stop\": false, \"reason\": \"waiting on CI\"}"
+  },
+  "expect": {
+   "eq": {
+    "stop": false,
+    "reason": "waiting on CI"
+   }
+  }
+ },
+ {
+  "id": "DRN-020",
+  "kind": "escalation_id",
+  "area": "escalation",
+  "args": {
+   "output": "Work paused.\nQAR-ESCALATED: dec_8842"
+  },
+  "expect": {
+   "eq": {
+    "id": "dec_8842"
+   }
+  }
+ },
+ {
+  "id": "DRN-021",
+  "kind": "escalation_id",
+  "area": "escalation",
+  "args": {
+   "output": "Note: QAR-ESCALATED: dec_123."
+  },
+  "expect": {
+   "eq": {
+    "id": "dec_123"
+   }
+  }
+ },
+ {
+  "id": "DRN-022",
+  "kind": "escalation_id",
+  "area": "escalation",
+  "args": {
+   "output": "Print QAR-ESCALATED: <decision_id> when you escalate."
+  },
+  "expect": {
+   "eq": {
+    "id": null
+   }
+  }
+ },
+ {
+  "id": "DRN-023",
+  "kind": "escalation_id",
+  "area": "escalation",
+  "args": {
+   "output": "QAR-ESCALATED: dec_1\nlater\nQAR-ESCALATED: dec_2"
+  },
+  "expect": {
+   "eq": {
+    "id": "dec_2"
+   }
+  }
+ },
+ {
+  "id": "DRN-024",
+  "kind": "escalation_id",
+  "area": "escalation",
+  "args": {
+   "output": "- item (QAR-ESCALATED: dec_77)"
+  },
+  "expect": {
+   "eq": {
+    "id": "dec_77"
+   }
+  }
+ },
+ {
+  "id": "DRN-025",
+  "kind": "escalation_id",
+  "area": "escalation",
+  "args": {
+   "output": "finished, nothing to escalate"
+  },
+  "expect": {
+   "eq": {
+    "id": null
+   }
+  }
+ },
+ {
+  "id": "DRN-026",
+  "kind": "escalation_id",
+  "area": "escalation",
+  "args": {
+   "output": "QAR-ESCALATED: id"
+  },
+  "expect": {
+   "eq": {
+    "id": null
+   }
+  }
+ },
+ {
+  "id": "DRN-030",
+  "kind": "resume_missing",
+  "area": "resume",
+  "args": {
+   "returncode": 1,
+   "output": "",
+   "stderr": "No conversation found with session ID: abc"
+  },
+  "expect": {
+   "eq": {
+    "missing": true
+   }
+  }
+ },
+ {
+  "id": "DRN-031",
+  "kind": "resume_missing",
+  "area": "resume",
+  "args": {
+   "returncode": 1,
+   "output": "some result",
+   "stderr": "No conversation found"
+  },
+  "expect": {
+   "eq": {
+    "missing": false
+   }
+  }
+ },
+ {
+  "id": "DRN-032",
+  "kind": "resume_missing",
+  "area": "resume",
+  "args": {
+   "returncode": 0,
+   "output": "",
+   "stderr": "no conversation found"
+  },
+  "expect": {
+   "eq": {
+    "missing": false
+   }
+  }
+ },
+ {
+  "id": "DRN-033",
+  "kind": "resume_missing",
+  "area": "resume",
+  "args": {
+   "returncode": 2,
+   "output": "  ",
+   "stderr": "Error: model not found"
+  },
+  "expect": {
+   "eq": {
+    "missing": false
+   }
+  }
+ },
+ {
+  "id": "DRN-034",
+  "kind": "resume_missing",
+  "area": "resume",
+  "args": {
+   "returncode": 1,
+   "output": "",
+   "stderr": null
+  },
+  "expect": {
+   "eq": {
+    "missing": false
+   }
+  }
+ },
+ {
+  "id": "DRN-040",
+  "kind": "envelope_no_work",
+  "area": "envelope",
+  "args": {
+   "raw": "{\"is_error\": true, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}"
+  },
+  "expect": {
+   "eq": {
+    "no_work": true
+   }
+  }
+ },
+ {
+  "id": "DRN-041",
+  "kind": "envelope_no_work",
+  "area": "envelope",
+  "args": {
+   "raw": "{\"is_error\": true, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"cache_read_input_tokens\": 900}}"
+  },
+  "expect": {
+   "eq": {
+    "no_work": false
+   }
+  }
+ },
+ {
+  "id": "DRN-042",
+  "kind": "envelope_no_work",
+  "area": "envelope",
+  "args": {
+   "raw": "plain text output"
+  },
+  "expect": {
+   "eq": {
+    "no_work": false
+   }
+  }
+ },
+ {
+  "id": "DRN-043",
+  "kind": "envelope_no_work",
+  "area": "envelope",
+  "args": {
+   "raw": "{\"is_error\": true}"
+  },
+  "expect": {
+   "eq": {
+    "no_work": false
+   }
+  }
+ },
+ {
+  "id": "DRN-044",
+  "kind": "envelope_no_work",
+  "area": "envelope",
+  "args": {
+   "raw": "{\"is_error\": false, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}"
+  },
+  "expect": {
+   "eq": {
+    "no_work": false
+   }
+  }
+ },
+ {
+  "id": "DRN-050",
+  "kind": "worker_output",
+  "area": "envelope",
+  "args": {
+   "raw": "{\"result\": \"ok\", \"usage\": {\"input_tokens\": 10, \"output_tokens\": 5}, \"total_cost_usd\": 0.5, \"subtype\": \"success\"}"
+  },
+  "expect": {
+   "eq": {
+    "text": "ok",
+    "tokens": 15,
+    "is_error": false,
+    "subtype": "success"
+   },
+   "approx": {
+    "cost": [
+     0.5,
+     1e-09
+    ]
+   }
+  }
+ },
+ {
+  "id": "DRN-051",
+  "kind": "worker_output",
+  "area": "envelope",
+  "args": {
+   "raw": "plain text worker"
+  },
+  "expect": {
+   "eq": {
+    "text": "plain text worker",
+    "tokens": 0,
+    "subtype": ""
+   }
+  }
+ },
+ {
+  "id": "DRN-052",
+  "kind": "worker_output",
+  "area": "envelope",
+  "args": {
+   "raw": "{\"result\": \"\", \"is_error\": true, \"subtype\": \"error_max_turns\", \"usage\": {\"input_tokens\": 3, \"output_tokens\": 4}}"
+  },
+  "expect": {
+   "eq": {
+    "is_error": true,
+    "subtype": "error_max_turns",
+    "tokens": 7
+   }
+  }
+ },
+ {
+  "id": "DRN-053",
+  "kind": "worker_output",
+  "area": "envelope",
+  "args": {
+   "raw": "{broken json"
+  },
+  "expect": {
+   "eq": {
+    "text": "{broken json",
+    "tokens": 0
+   }
+  }
+ },
+ {
+  "id": "DRN-060",
+  "kind": "goal_prompt",
+  "area": "prompt",
+  "args": {
+   "goal": "README says receive",
+   "brief": "Fix the typo in README.md line 42"
+  },
+  "expect": {
+   "contains": [
+    "TASK:\nFix the typo in README.md line 42",
+    "GOAL (the done-standard your work must satisfy):\nREADME says receive",
+    "HEADLESS RUN CONTRACT",
+    "summarize CONCRETELY"
+   ],
+   "not_contains": [
+    "/goal"
+   ]
+  }
+ },
+ {
+  "id": "DRN-061",
+  "kind": "goal_prompt",
+  "area": "prompt",
+  "args": {
+   "goal": "  spaced   goal\n text ",
+   "brief": "b"
+  },
+  "expect": {
+   "contains": [
+    "GOAL (the done-standard your work must satisfy):\nspaced goal text"
+   ]
+  }
+ },
+ {
+  "id": "DRN-062",
+  "kind": "goal_prompt",
+  "area": "prompt",
+  "args": {
+   "goal": "",
+   "brief": "just do it"
+  },
+  "expect": {
+   "contains": [
+    "TASK:\njust do it"
+   ],
+   "not_contains": [
+    "GOAL (the done-standard"
+   ]
+  }
+ },
+ {
+  "id": "DRN-063",
+  "kind": "goal_prompt",
+  "area": "prompt_budget",
+  "args": {
+   "goal": "Fix typo",
+   "brief": "Edit README",
+   "preamble": "--- BLOCK 0 ---\ncontext line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. \n\n--- BLOCK 1 ---\ncontext line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. \n\n--- BLOCK 2 ---\ncontext line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. \n\n--- BLOCK 3 ---\ncontext line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. \n\n--- BLOCK 4 ---\ncontext line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. \n\n--- BLOCK 5 ---\ncontext line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. context line about things. ",
+   "budget_tokens": 2000
+  },
+  "expect": {
+   "contains": [
+    "TASK:\nEdit README",
+    "GOAL (the done-standard",
+    "HEADLESS RUN CONTRACT",
+    "cut here to fit"
+   ],
+   "max_len": 30000
+  }
+ },
+ {
+  "id": "DRN-064",
+  "kind": "goal_prompt",
+  "area": "prompt",
+  "args": {
+   "goal": "g",
+   "brief": "b",
+   "preamble": "ORG PREAMBLE"
+  },
+  "expect": {
+   "contains": [
+    "ORG PREAMBLE"
+   ]
+  }
+ },
+ {
+  "id": "DRN-070",
+  "kind": "goal_contract",
+  "area": "contract",
+  "args": {
+   "result": {
+    "met": true,
+    "output": "done"
+   }
+  },
+  "expect": {
+   "eq": {
+    "met": true,
+    "error": null,
+    "decision_id": null
+   }
+  }
+ },
+ {
+  "id": "DRN-071",
+  "kind": "goal_contract",
+  "area": "contract",
+  "args": {
+   "result": {
+    "met": true,
+    "output": "x",
+    "error": "timed out"
+   }
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "error": "timed out"
+   }
+  }
+ },
+ {
+  "id": "DRN-072",
+  "kind": "goal_contract",
+  "area": "contract",
+  "args": {
+   "result": {
+    "met": true,
+    "output": "x",
+    "decision_id": "dec_9"
+   }
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "decision_id": "dec_9"
+   }
+  }
+ },
+ {
+  "id": "DRN-073",
+  "kind": "goal_contract",
+  "area": "contract",
+  "args": {
+   "result": "__raise__"
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "error": "deep runner failed: RuntimeError"
+   }
+  }
+ },
+ {
+  "id": "DRN-074",
+  "kind": "goal_contract",
+  "area": "contract",
+  "args": {
+   "result": {
+    "met": false,
+    "output": "partial"
+   }
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "DRN-075",
+  "kind": "goal_kwargs",
+  "area": "contract",
+  "args": {
+   "runner": "plain"
+  },
+  "expect": {
+   "eq": {
+    "forwarded": []
+   }
+  }
+ },
+ {
+  "id": "DRN-076",
+  "kind": "goal_kwargs",
+  "area": "contract",
+  "args": {
+   "runner": "full"
+  },
+  "expect": {
+   "eq": {
+    "forwarded": [
+     "context_preamble",
+     "resume_session_id",
+     "working_dir"
+    ]
+   }
+  }
+ },
+ {
+  "id": "DRN-080",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    {
+     "met": true,
+     "output": "done"
+    }
+   ],
+   "verdicts": [
+    {
+     "met": true
+    }
+   ],
+   "max_iterations": 5
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 1,
+    "verify_calls": 1,
+    "final_met": true
+   }
+  }
+ },
+ {
+  "id": "DRN-081",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    {
+     "met": true,
+     "output": "a"
+    },
+    {
+     "met": true,
+     "output": "b"
+    }
+   ],
+   "verdicts": [
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": true
+    }
+   ],
+   "max_iterations": 5
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 2,
+    "verify_calls": 2,
+    "final_met": true
+   }
+  }
+ },
+ {
+  "id": "DRN-082",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    {
+     "met": false,
+     "output": "x",
+     "exhausted": true
+    }
+   ],
+   "verdicts": [
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    }
+   ],
+   "max_iterations": 8
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 1,
+    "verify_calls": 0,
+    "final_met": false
+   }
+  }
+ },
+ {
+  "id": "DRN-083",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    {
+     "met": true,
+     "output": "x",
+     "exhausted": true
+    },
+    {
+     "met": true,
+     "output": "y"
+    }
+   ],
+   "verdicts": [
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    }
+   ],
+   "max_iterations": 8
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 1,
+    "verify_calls": 1,
+    "final_met": false
+   }
+  }
+ },
+ {
+  "id": "DRN-084",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    {
+     "met": true,
+     "output": "task #5 launched",
+     "deferred": true
+    }
+   ],
+   "verdicts": [
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    }
+   ],
+   "max_iterations": 8
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 1,
+    "verify_calls": 0,
+    "final_met": true
+   }
+  }
+ },
+ {
+  "id": "DRN-085",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    }
+   ],
+   "verdicts": [
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    }
+   ],
+   "max_iterations": 3
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 3,
+    "verify_calls": 3,
+    "final_met": false
+   }
+  }
+ },
+ {
+  "id": "DRN-086",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    {
+     "met": false,
+     "output": "x",
+     "decision_id": "dec_1"
+    }
+   ],
+   "verdicts": [
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    }
+   ],
+   "max_iterations": 5
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 1,
+    "verify_calls": 0,
+    "final_met": false
+   }
+  }
+ },
+ {
+  "id": "DRN-087",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    "__raise__"
+   ],
+   "verdicts": [
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    }
+   ],
+   "max_iterations": 2
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 1,
+    "verify_calls": 0,
+    "final_met": false
+   }
+  }
+ }
+]

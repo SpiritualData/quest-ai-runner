@@ -1,0 +1,353 @@
+[
+ {
+  "id": "DRV-001",
+  "area": "progress",
+  "name": "editing files, fresh log",
+  "want_stop": false,
+  "elapsed": 900,
+  "idle": 4,
+  "tail": "- Read: src/api/users.py\n- Edit: src/api/users.py\n- $ pytest tests/test_users.py -q\n- Tests pass, now updating the docs."
+ },
+ {
+  "id": "DRV-002",
+  "area": "progress",
+  "name": "about to commit",
+  "want_stop": false,
+  "elapsed": 3500,
+  "idle": 6,
+  "tail": "- $ pytest -q\n- 212 passed\n- $ git add -A\n- Everything is green. Committing the change now."
+ },
+ {
+  "id": "DRV-003",
+  "area": "progress",
+  "name": "just started",
+  "want_stop": false,
+  "elapsed": 40,
+  "idle": 2,
+  "tail": "- Read: CLAUDE.md\n- Read: src/app.py"
+ },
+ {
+  "id": "DRV-004",
+  "area": "progress",
+  "name": "long task, steady tool use",
+  "want_stop": false,
+  "elapsed": 7200,
+  "idle": 12,
+  "tail": "- Read: a.py\n- Edit: a.py\n- Read: b.py\n- Edit: b.py\n- $ ruff check .\n- Fixing the 3 lint errors."
+ },
+ {
+  "id": "DRV-005",
+  "area": "progress",
+  "name": "subagents working, recent activity",
+  "want_stop": false,
+  "elapsed": 1800,
+  "idle": 20,
+  "tail": "- Launched 3 research subagents in parallel.\n- Subagent 2 returned its findings.\n- Waiting on the remaining two."
+ },
+ {
+  "id": "DRV-006",
+  "area": "progress",
+  "name": "writing final summary",
+  "want_stop": false,
+  "elapsed": 2600,
+  "idle": 3,
+  "tail": "- $ git commit -m 'Add retry to sync'\n- Committed abc123.\n- Drafting the final report for the user."
+ },
+ {
+  "id": "DRV-007",
+  "area": "progress",
+  "name": "fixed a failure then moved on",
+  "want_stop": false,
+  "elapsed": 1500,
+  "idle": 9,
+  "tail": "- $ pytest -q\n- 1 failed: test_parse\n- Edit: parser.py\n- $ pytest -q\n- 40 passed\n- Moving to the next subtask."
+ },
+ {
+  "id": "DRV-008",
+  "area": "progress",
+  "name": "reading many files, fresh",
+  "want_stop": false,
+  "elapsed": 600,
+  "idle": 15,
+  "tail": "- Read: docs/a.md\n- Read: docs/b.md\n- Read: docs/c.md\n- Grep: 'retry'\n- Read: src/retry.py"
+ },
+ {
+  "id": "DRV-009",
+  "area": "slow_work",
+  "name": "monitoring a deploy, sleeping",
+  "want_stop": false,
+  "elapsed": 4000,
+  "idle": 120,
+  "tail": "- $ gh run watch 991822\n- Workflow 'deploy' is in progress (step 4 of 7)\n- Still in progress; I will keep polling until it finishes as the task asks me to confirm the deploy."
+ },
+ {
+  "id": "DRV-010",
+  "area": "slow_work",
+  "name": "monitoring with periodic polling",
+  "want_stop": false,
+  "elapsed": 5400,
+  "idle": 200,
+  "tail": "- Task: watch the nightly import until it completes and report the row count.\n- $ sleep 180; psql -c 'select count(*) from imported'\n- 41,200 rows so far, import still running."
+ },
+ {
+  "id": "DRV-011",
+  "area": "slow_work",
+  "name": "long test run in progress",
+  "want_stop": false,
+  "elapsed": 3000,
+  "idle": 150,
+  "tail": "- $ pytest tests/integration -x\n- Running the full integration suite, which normally takes about 20 minutes. 620 of ~1400 tests complete."
+ },
+ {
+  "id": "DRV-012",
+  "area": "slow_work",
+  "name": "docker build in progress",
+  "want_stop": false,
+  "elapsed": 2000,
+  "idle": 240,
+  "tail": "- $ docker build -t quest-backend .\n- Step 9/14 : RUN pip install -r requirements.txt\n- The image build is downloading dependencies."
+ },
+ {
+  "id": "DRV-013",
+  "area": "slow_work",
+  "name": "waiting for model training",
+  "want_stop": false,
+  "elapsed": 6000,
+  "idle": 280,
+  "tail": "- Task: train the classifier and report accuracy.\n- $ python train.py --epochs 50\n- epoch 31/50 loss 0.21 (each epoch takes about 4 minutes)"
+ },
+ {
+  "id": "DRV-014",
+  "area": "slow_work",
+  "name": "monitoring task, quiet but by design",
+  "want_stop": false,
+  "elapsed": 9000,
+  "idle": 270,
+  "tail": "- Task: check the queue every few minutes for one hour and summarize anything unusual.\n- Checked at 14:05: 0 stuck items.\n- Sleeping until the next check at 14:10."
+ },
+ {
+  "id": "DRV-015",
+  "area": "slow_work",
+  "name": "large data download",
+  "want_stop": false,
+  "elapsed": 1200,
+  "idle": 100,
+  "tail": "- $ curl -O https://example.org/dataset.tar.gz\n- Downloading 4.2 GB, 61% done."
+ },
+ {
+  "id": "DRV-016",
+  "area": "slow_work",
+  "name": "waiting on CI with explicit task",
+  "want_stop": false,
+  "elapsed": 2400,
+  "idle": 220,
+  "tail": "- Task: open the PR and wait for CI, then merge if green.\n- PR opened.\n- $ gh pr checks 88 --watch\n- 3 of 5 checks passed, 2 pending."
+ },
+ {
+  "id": "DRV-017",
+  "area": "hiccup",
+  "name": "one failed command then retry works",
+  "want_stop": false,
+  "elapsed": 1300,
+  "idle": 8,
+  "tail": "- $ npm test\n- Error: port 3000 in use\n- $ kill 4411\n- $ npm test\n- 58 tests passed."
+ },
+ {
+  "id": "DRV-018",
+  "area": "hiccup",
+  "name": "idle short, under threshold",
+  "want_stop": false,
+  "elapsed": 800,
+  "idle": 45,
+  "tail": "- Read: notes.md\n- Thinking through the migration order before editing."
+ },
+ {
+  "id": "DRV-019",
+  "area": "hiccup",
+  "name": "idle 3 minutes mid-task",
+  "want_stop": false,
+  "elapsed": 1900,
+  "idle": 180,
+  "tail": "- $ pytest tests/test_big.py\n- collecting 900 tests, this suite has a slow start."
+ },
+ {
+  "id": "DRV-020",
+  "area": "hiccup",
+  "name": "progress just after long pause, log fresh",
+  "want_stop": false,
+  "elapsed": 5000,
+  "idle": 10,
+  "tail": "- $ make bundle\n- Bundle finished after 11 minutes.\n- $ ls dist/\n- Copying the bundle into place."
+ },
+ {
+  "id": "DRV-021",
+  "area": "idle",
+  "name": "idle 20 minutes, nothing pending",
+  "want_stop": true,
+  "elapsed": 2500,
+  "idle": 1200,
+  "tail": "- Edit: src/api.py\n- Edit: src/api.py"
+ },
+ {
+  "id": "DRV-022",
+  "area": "idle",
+  "name": "idle 15 minutes after a read",
+  "want_stop": true,
+  "elapsed": 1800,
+  "idle": 900,
+  "tail": "- Read: README.md"
+ },
+ {
+  "id": "DRV-023",
+  "area": "idle",
+  "name": "idle 40 minutes after partial answer",
+  "want_stop": true,
+  "elapsed": 4000,
+  "idle": 2400,
+  "tail": "- Let me look at the failing test.\n- Read: tests/test_sync.py"
+ },
+ {
+  "id": "DRV-024",
+  "area": "idle",
+  "name": "idle 10 minutes, no command running",
+  "want_stop": true,
+  "elapsed": 3700,
+  "idle": 600,
+  "tail": "- $ git status\n- On branch september, nothing to commit\n- I'll now plan the next step."
+ },
+ {
+  "id": "DRV-025",
+  "area": "idle",
+  "name": "idle over an hour",
+  "want_stop": true,
+  "elapsed": 8000,
+  "idle": 4000,
+  "tail": "- Read: config.yaml"
+ },
+ {
+  "id": "DRV-026",
+  "area": "idle",
+  "name": "idle 7 minutes after error",
+  "want_stop": true,
+  "elapsed": 1000,
+  "idle": 420,
+  "tail": "- $ python run.py\n- Traceback (most recent call last): KeyError: 'id'"
+ },
+ {
+  "id": "DRV-027",
+  "area": "limit",
+  "name": "usage limit message",
+  "want_stop": true,
+  "elapsed": 1500,
+  "idle": 30,
+  "tail": "- Edit: app.py\n- You've hit your usage limit. Your limit will reset at 5pm."
+ },
+ {
+  "id": "DRV-028",
+  "area": "limit",
+  "name": "out of credits",
+  "want_stop": true,
+  "elapsed": 900,
+  "idle": 20,
+  "tail": "- $ pytest -q\n- Credit balance is too low to continue. Please add credits."
+ },
+ {
+  "id": "DRV-029",
+  "area": "limit",
+  "name": "rate limit exhausted repeated",
+  "want_stop": true,
+  "elapsed": 1100,
+  "idle": 60,
+  "tail": "- API Error: 429 rate_limit_error. Retrying in 30s\n- API Error: 429 rate_limit_error. Retrying in 30s\n- API Error: 429 rate_limit_error. You have exceeded your quota."
+ },
+ {
+  "id": "DRV-030",
+  "area": "limit",
+  "name": "token budget exhausted",
+  "want_stop": true,
+  "elapsed": 2000,
+  "idle": 25,
+  "tail": "- Read: big.log\n- Error: context window and token budget exhausted; the session cannot continue."
+ },
+ {
+  "id": "DRV-031",
+  "area": "human",
+  "name": "asks user which option",
+  "want_stop": true,
+  "elapsed": 700,
+  "idle": 500,
+  "tail": "- I found two conflicting configs. I cannot proceed without a decision.\n- Which one should I use, prod.yaml or staging.yaml? Waiting for your answer."
+ },
+ {
+  "id": "DRV-032",
+  "area": "human",
+  "name": "needs credentials it cannot get",
+  "want_stop": true,
+  "elapsed": 950,
+  "idle": 400,
+  "tail": "- $ gh auth status\n- Not logged in.\n- I am blocked: I need a token from the user to push, and there is nobody to provide it. Waiting."
+ },
+ {
+  "id": "DRV-033",
+  "area": "human",
+  "name": "requesting approval for irreversible act",
+  "want_stop": true,
+  "elapsed": 1300,
+  "idle": 650,
+  "tail": "- Ready to drop the production table users_old.\n- This is irreversible. Please confirm before I continue. QAR-ESCALATED: dec_8842"
+ },
+ {
+  "id": "DRV-034",
+  "area": "human",
+  "name": "blocked on missing task info",
+  "want_stop": true,
+  "elapsed": 600,
+  "idle": 480,
+  "tail": "- The task says to update 'the usual report' but no report is named anywhere.\n- I cannot continue until someone tells me which report. Stopping here and waiting."
+ },
+ {
+  "id": "DRV-035",
+  "area": "human",
+  "name": "permission denied, cannot proceed",
+  "want_stop": true,
+  "elapsed": 800,
+  "idle": 540,
+  "tail": "- $ cat /etc/secrets/key\n- Permission denied\n- $ sudo cat /etc/secrets/key\n- sudo: a password is required\n- I am blocked without that access and cannot finish the task."
+ },
+ {
+  "id": "DRV-036",
+  "area": "loop",
+  "name": "same failing command loop",
+  "want_stop": true,
+  "elapsed": 2200,
+  "idle": 5,
+  "tail": "- $ pytest tests/test_x.py\n- FAILED test_x: ImportError: no module named foo\n- $ pytest tests/test_x.py\n- FAILED test_x: ImportError: no module named foo\n- $ pytest tests/test_x.py\n- FAILED test_x: ImportError: no module named foo\n- $ pytest tests/test_x.py\n- FAILED test_x: ImportError: no module named foo"
+ },
+ {
+  "id": "DRV-037",
+  "area": "loop",
+  "name": "same edit undone repeatedly",
+  "want_stop": true,
+  "elapsed": 3100,
+  "idle": 4,
+  "tail": "- Edit: a.py (add import)\n- $ ruff check a.py\n- error: unused import\n- Edit: a.py (remove import)\n- $ python a.py\n- NameError: name 'json' is not defined\n- Edit: a.py (add import)\n- $ ruff check a.py\n- error: unused import\n- Edit: a.py (remove import)\n- $ python a.py\n- NameError: name 'json' is not defined"
+ },
+ {
+  "id": "DRV-038",
+  "area": "loop",
+  "name": "curl timing out over and over",
+  "want_stop": true,
+  "elapsed": 1800,
+  "idle": 6,
+  "tail": "- $ curl https://api.internal/health\n- curl: (28) Connection timed out\n- $ curl https://api.internal/health\n- curl: (28) Connection timed out\n- $ curl https://api.internal/health\n- curl: (28) Connection timed out\n- $ curl https://api.internal/health\n- curl: (28) Connection timed out\n- $ curl https://api.internal/health\n- curl: (28) Connection timed out"
+ },
+ {
+  "id": "DRV-039",
+  "area": "empty_log",
+  "name": "empty log, long idle",
+  "want_stop": true,
+  "elapsed": 3000,
+  "idle": 1500,
+  "tail": "(the session log is empty or unreadable)"
+ }
+]

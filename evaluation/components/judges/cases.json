@@ -1,0 +1,1905 @@
+[
+ {
+  "id": "JUD-001",
+  "kind": "overseer_parse",
+  "area": "signal",
+  "args": {
+   "raw": {
+    "signal": "redirect",
+    "hint": "read the refund doc",
+    "reason": "Off topic."
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "redirect",
+    "hint": "read the refund doc",
+    "reason": "Off topic.",
+    "degraded": false
+   }
+  }
+ },
+ {
+  "id": "JUD-002",
+  "kind": "overseer_parse",
+  "area": "signal",
+  "args": {
+   "raw": {
+    "signal": " REDIRECT ",
+    "hint": "narrow it"
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "redirect",
+    "hint": "narrow it"
+   }
+  }
+ },
+ {
+  "id": "JUD-003",
+  "kind": "overseer_parse",
+  "area": "signal",
+  "args": {
+   "raw": {
+    "signal": "proceed",
+    "hint": "ignored hint"
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "proceed",
+    "hint": "",
+    "degraded": false
+   }
+  }
+ },
+ {
+  "id": "JUD-004",
+  "kind": "overseer_parse",
+  "area": "signal",
+  "args": {
+   "raw": {
+    "signal": "redirect",
+    "hint": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "redirect"
+   },
+   "max_len": 200,
+   "min_len": 200
+  }
+ },
+ {
+  "id": "JUD-005",
+  "kind": "overseer_parse",
+  "area": "degrade",
+  "args": {
+   "raw": {
+    "signal": "abort_everything"
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "proceed",
+    "degraded": true
+   }
+  }
+ },
+ {
+  "id": "JUD-006",
+  "kind": "overseer_parse",
+  "area": "degrade",
+  "args": {
+   "raw": "redirect"
+  },
+  "expect": {
+   "eq": {
+    "signal": "proceed",
+    "degraded": true
+   }
+  }
+ },
+ {
+  "id": "JUD-007",
+  "kind": "overseer_parse",
+  "area": "degrade",
+  "args": {
+   "raw": null
+  },
+  "expect": {
+   "eq": {
+    "signal": "proceed",
+    "degraded": true
+   }
+  }
+ },
+ {
+  "id": "JUD-008",
+  "kind": "overseer_parse",
+  "area": "degrade",
+  "args": {
+   "raw": "__raise__"
+  },
+  "expect": {
+   "eq": {
+    "signal": "proceed",
+    "degraded": true
+   }
+  }
+ },
+ {
+  "id": "JUD-009",
+  "kind": "overseer_parse",
+  "area": "signal",
+  "args": {
+   "raw": {
+    "signal": "escalate_human",
+    "reason": "Do you want me to wire the payment?"
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "escalate_human",
+    "reason": "Do you want me to wire the payment?",
+    "degraded": false
+   }
+  }
+ },
+ {
+  "id": "JUD-010",
+  "kind": "overseer_parse",
+  "area": "signal",
+  "args": {
+   "raw": {
+    "signal": "answer_now",
+    "reason": "Enough gathered."
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "answer_now",
+    "degraded": false
+   }
+  }
+ },
+ {
+  "id": "JUD-011",
+  "kind": "overseer_parse",
+  "area": "degrade",
+  "args": {
+   "raw": {
+    "signal": ""
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "proceed",
+    "degraded": true
+   }
+  }
+ },
+ {
+  "id": "JUD-012",
+  "kind": "overseer_parse",
+  "area": "signal",
+  "args": {
+   "raw": {
+    "signal": "escalate_deep",
+    "reason": "A commit was requested."
+   }
+  },
+  "expect": {
+   "eq": {
+    "signal": "escalate_deep",
+    "hint": ""
+   }
+  }
+ },
+ {
+  "id": "JUD-020",
+  "kind": "overseer_digest",
+  "area": "digest",
+  "args": {
+   "user_message": "Please fix the typo 'recieve' in README.md and commit the fix.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "answer",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[grep] 'recieve' in README.md -> 1 hit",
+    "[exec] deep run -> committed 4f2c9ab"
+   ],
+   "operations_total": 2,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": "Fixed: README.md line 42 now reads 'receive'. Committed as 4f2c9ab."
+  },
+  "expect": {
+   "contains": [
+    "CURRENT USER REQUEST: Please fix the typo",
+    "DRAFT ANSWER (first 200 chars): Fixed:",
+    "PASS: 3 of 6",
+    "OPERATIONS THIS TURN (2 so far)"
+   ],
+   "max_len": 1600
+  }
+ },
+ {
+  "id": "JUD-021",
+  "kind": "overseer_digest",
+  "area": "digest_budget",
+  "args": {
+   "user_message": "Please fix the typo 'recieve' in README.md and commit the fix.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "answer",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[read] a -> b",
+    "[read] a -> b",
+    "[read] a -> b",
+    "[read] a -> b",
+    "[read] a -> b",
+    "[read] a -> b",
+    "[read] a -> b",
+    "[read] a -> b"
+   ],
+   "operations_total": 8,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": "Fixed: README.md line 42 now reads 'receive'. Committed as 4f2c9ab.",
+   "recent_conversation": [
+    "user: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+    "user: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+    "user: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+    "user: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+    "user: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+    "user: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word "
+   ],
+   "char_budget": 700
+  },
+  "expect": {
+   "contains": [
+    "CURRENT USER REQUEST",
+    "DRAFT ANSWER",
+    "PASS: 3 of 6",
+    "SPEND:"
+   ],
+   "not_contains": [
+    "OPERATIONS THIS TURN (8"
+   ],
+   "max_len": 700
+  }
+ },
+ {
+  "id": "JUD-022",
+  "kind": "overseer_digest",
+  "area": "digest_budget",
+  "args": {
+   "user_message": "Please fix the typo 'recieve' in README.md and commit the fix.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "answer",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[grep] 'recieve' in README.md -> 1 hit",
+    "[exec] deep run -> committed 4f2c9ab"
+   ],
+   "operations_total": 2,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "char_budget": 120
+  },
+  "expect": {
+   "contains": [
+    "CURRENT USER REQUEST"
+   ],
+   "max_len": 120
+  }
+ },
+ {
+  "id": "JUD-023",
+  "kind": "overseer_digest",
+  "area": "digest",
+  "args": {
+   "user_message": "Please fix the typo 'recieve' in README.md and commit the fix.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "answer",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[grep] 'recieve' in README.md -> 1 hit",
+    "[exec] deep run -> committed 4f2c9ab"
+   ],
+   "operations_total": 2,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": "Fixed: README.md line 42 now reads 'receive'. Committed as 4f2c9ab.",
+   "goal_condition": "Rename old_mode to legacy_mode in every file"
+  },
+  "expect": {
+   "contains": [
+    "RESOLVED AS: Rename old_mode to legacy_mode in every file"
+   ]
+  }
+ },
+ {
+  "id": "JUD-024",
+  "kind": "overseer_digest",
+  "area": "digest",
+  "args": {
+   "user_message": "Open the second workspace.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "confirm",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[grep] 'recieve' in README.md -> 1 hit",
+    "[exec] deep run -> committed 4f2c9ab"
+   ],
+   "operations_total": 2,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": null,
+   "prior_escalations": [
+    "1: escalated to human, outcome: refused, proposed: create four new workspaces"
+   ]
+  },
+  "expect": {
+   "contains": [
+    "PRIOR ESCALATIONS THIS CONVERSATION:",
+    "outcome: refused"
+   ]
+  }
+ },
+ {
+  "id": "JUD-025",
+  "kind": "overseer_digest",
+  "area": "digest",
+  "args": {
+   "user_message": "Please fix the typo 'recieve' in README.md and commit the fix.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "answer",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[grep] 'recieve' in README.md -> 1 hit",
+    "[exec] deep run -> committed 4f2c9ab"
+   ],
+   "operations_total": 2,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": "Fixed: README.md line 42 now reads 'receive'. Committed as 4f2c9ab.",
+   "quality_standards": "Answer the question that was asked before offering anything else."
+  },
+  "expect": {
+   "contains": [
+    "QUALITY BAR: Answer the question that was asked"
+   ]
+  }
+ },
+ {
+  "id": "JUD-026",
+  "kind": "overseer_digest",
+  "area": "digest",
+  "args": {
+   "user_message": "Please fix the typo 'recieve' in README.md and commit the fix.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "answer",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[grep] 'recieve' in README.md -> 1 hit",
+    "[exec] deep run -> committed 4f2c9ab"
+   ],
+   "operations_total": 2,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxZZTAIL"
+  },
+  "expect": {
+   "contains": [
+    "DRAFT ANSWER (first 200 chars): xxxx"
+   ],
+   "not_contains": [
+    "ZZTAIL"
+   ]
+  }
+ },
+ {
+  "id": "JUD-027",
+  "kind": "overseer_digest",
+  "area": "digest",
+  "args": {
+   "user_message": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaENDMARK",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "answer",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[grep] 'recieve' in README.md -> 1 hit",
+    "[exec] deep run -> committed 4f2c9ab"
+   ],
+   "operations_total": 2,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": "Fixed: README.md line 42 now reads 'receive'. Committed as 4f2c9ab."
+  },
+  "expect": {
+   "contains": [
+    "CURRENT USER REQUEST: aaaa"
+   ],
+   "not_contains": [
+    "ENDMARK"
+   ]
+  }
+ },
+ {
+  "id": "JUD-028",
+  "kind": "overseer_digest",
+  "area": "digest",
+  "args": {
+   "user_message": "Please fix the typo 'recieve' in README.md and commit the fix.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "answer",
+   "plan_goal": "Report the completed fix",
+   "operations": [],
+   "operations_total": 0,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": null
+  },
+  "expect": {
+   "contains": [
+    "PRIOR ESCALATIONS THIS CONVERSATION: none yet",
+    "OPERATIONS THIS TURN: none yet"
+   ],
+   "not_contains": [
+    "DRAFT ANSWER"
+   ]
+  }
+ },
+ {
+  "id": "JUD-029",
+  "kind": "overseer_digest",
+  "area": "digest_budget",
+  "args": {
+   "user_message": "Open the second workspace and show me what is left.",
+   "step": 3,
+   "max_steps": 6,
+   "plan_action": "confirm",
+   "plan_goal": "Report the completed fix",
+   "operations": [
+    "[query] workspaces -> 4 existing",
+    "[query] workspaces -> 4 existing",
+    "[query] workspaces -> 4 existing",
+    "[query] workspaces -> 4 existing",
+    "[query] workspaces -> 4 existing",
+    "[query] workspaces -> 4 existing"
+   ],
+   "operations_total": 6,
+   "tokens_in": 6000,
+   "tokens_out": 400,
+   "elapsed_seconds": 90,
+   "max_elapsed_seconds": 600,
+   "gathered_chars": 9000,
+   "max_gathered_chars": 60000,
+   "consecutive_reads": 1,
+   "draft_answer": null,
+   "recent_conversation": [
+    "user: open the second workspace and show me what is still open open the second workspace and show me what is still open open the second workspace and show me what is still open open the second workspace and show me what is still open ",
+    "user: open the second workspace and show me what is still open open the second workspace and show me what is still open open the second workspace and show me what is still open open the second workspace and show me what is still open ",
+    "user: open the second workspace and show me what is still open open the second workspace and show me what is still open open the second workspace and show me what is still open open the second workspace and show me what is still open "
+   ],
+   "prior_escalations": [
+    "1: escalated to human, outcome: refused, proposed: create four new workspaces to organise the outstanding items"
+   ],
+   "char_budget": 900
+  },
+  "expect": {
+   "contains": [
+    "CURRENT USER REQUEST",
+    "outcome: refused"
+   ],
+   "max_len": 900
+  }
+ },
+ {
+  "id": "JUD-040",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": {
+    "reach": "inside"
+   }
+  },
+  "expect": {
+   "eq": {
+    "verdict": {
+     "reach": "inside",
+     "covered_by": null
+    }
+   }
+  }
+ },
+ {
+  "id": "JUD-041",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": {
+    "reach": "outside",
+    "covered_by": "Dev machine"
+   }
+  },
+  "expect": {
+   "eq": {
+    "verdict": {
+     "reach": "outside",
+     "covered_by": "Dev machine"
+    }
+   }
+  }
+ },
+ {
+  "id": "JUD-042",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": "{\"reach\": \"world\"}"
+  },
+  "expect": {
+   "eq": {
+    "verdict": {
+     "reach": "world",
+     "covered_by": null
+    }
+   }
+  }
+ },
+ {
+  "id": "JUD-043",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": "```json\n{\"reach\": \"outside\", \"covered_by\": \"Laptop\"}\n```"
+  },
+  "expect": {
+   "eq": {
+    "verdict": {
+     "reach": "outside",
+     "covered_by": "Laptop"
+    }
+   }
+  }
+ },
+ {
+  "id": "JUD-044",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": {
+    "reach": "maybe"
+   }
+  },
+  "expect": {
+   "eq": {
+    "verdict": null
+   }
+  }
+ },
+ {
+  "id": "JUD-045",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": "I think it is outside."
+  },
+  "expect": {
+   "eq": {
+    "verdict": null
+   }
+  }
+ },
+ {
+  "id": "JUD-046",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": {
+    "reach": "outside",
+    "covered_by": "null"
+   }
+  },
+  "expect": {
+   "eq": {
+    "verdict": {
+     "reach": "outside",
+     "covered_by": null
+    }
+   }
+  }
+ },
+ {
+  "id": "JUD-047",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": {
+    "reach": "OUTSIDE",
+    "covered_by": "  Repo box  "
+   }
+  },
+  "expect": {
+   "eq": {
+    "verdict": {
+     "reach": "outside",
+     "covered_by": "Repo box"
+    }
+   }
+  }
+ },
+ {
+  "id": "JUD-048",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": [
+    "inside"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "verdict": null
+   }
+  }
+ },
+ {
+  "id": "JUD-049",
+  "kind": "reach_parse",
+  "area": "parse",
+  "args": {
+   "raw": {
+    "reach": "outside",
+    "covered_by": "   "
+   }
+  },
+  "expect": {
+   "eq": {
+    "verdict": {
+     "reach": "outside",
+     "covered_by": null
+    }
+   }
+  }
+ },
+ {
+  "id": "JUD-050",
+  "kind": "reach_block",
+  "area": "block",
+  "args": {
+   "verdict": {
+    "reach": "inside",
+    "covered_by": null
+   }
+  },
+  "expect": {
+   "max_len": 0
+  }
+ },
+ {
+  "id": "JUD-051",
+  "kind": "reach_block",
+  "area": "block",
+  "args": {
+   "verdict": null
+  },
+  "expect": {
+   "max_len": 0
+  }
+ },
+ {
+  "id": "JUD-052",
+  "kind": "reach_block",
+  "area": "block",
+  "args": {
+   "verdict": {
+    "reach": "world",
+    "covered_by": null
+   }
+  },
+  "expect": {
+   "contains": [
+    "current public fact",
+    "cannot check a live source"
+   ],
+   "not_contains": [
+    "{\"web\""
+   ]
+  }
+ },
+ {
+  "id": "JUD-053",
+  "kind": "reach_block",
+  "area": "block",
+  "args": {
+   "verdict": {
+    "reach": "world",
+    "covered_by": null
+   },
+   "web": true
+  },
+  "expect": {
+   "contains": [
+    "{\"web\": \"<query>\"}"
+   ],
+   "not_contains": [
+    "cannot check a live source"
+   ]
+  }
+ },
+ {
+  "id": "JUD-054",
+  "kind": "reach_block",
+  "area": "block",
+  "args": {
+   "verdict": {
+    "reach": "outside",
+    "covered_by": "Dev machine"
+   }
+  },
+  "expect": {
+   "contains": [
+    "The attached environment \"Dev machine\" handles that kind of work",
+    "Hand it off"
+   ]
+  }
+ },
+ {
+  "id": "JUD-055",
+  "kind": "reach_block",
+  "area": "block",
+  "args": {
+   "verdict": {
+    "reach": "outside",
+    "covered_by": null
+   }
+  },
+  "expect": {
+   "contains": [
+    "do not hand it off to anything",
+    "cannot reach it from here"
+   ]
+  }
+ },
+ {
+  "id": "JUD-056",
+  "kind": "reach_block",
+  "area": "block",
+  "args": {
+   "verdict": {
+    "reach": "outside",
+    "covered_by": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+   }
+  },
+  "expect": {
+   "contains": [
+    "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+   ],
+   "not_contains": [
+    "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+   ]
+  }
+ },
+ {
+  "id": "JUD-057",
+  "kind": "reach_block",
+  "area": "block",
+  "args": {
+   "verdict": {
+    "reach": "outside",
+    "covered_by": null
+   },
+   "web": true
+  },
+  "expect": {
+   "contains": [
+    "web_page"
+   ],
+   "not_contains": [
+    "Answer, and say plainly"
+   ]
+  }
+ },
+ {
+  "id": "JUD-070",
+  "kind": "quest_rank",
+  "area": "rank",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": "q1",
+   "raw": {
+    "results": [
+     {
+      "item": 1,
+      "quest_id": "q2",
+      "ranking": [
+       "q2",
+       "q1",
+       "q3"
+      ]
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      "q2",
+      [
+       "q2",
+       "q1",
+       "q3"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-071",
+  "kind": "quest_rank",
+  "area": "rank",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": "q1",
+   "raw": {
+    "results": [
+     {
+      "item": 1,
+      "quest_id": "",
+      "ranking": [
+       "q1",
+       "q3",
+       "q2"
+      ]
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      null,
+      [
+       "q1",
+       "q3",
+       "q2"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-072",
+  "kind": "quest_rank",
+  "area": "fallback",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": "q1",
+   "raw": {
+    "results": [
+     {
+      "item": 1,
+      "quest_id": "q9",
+      "ranking": [
+       "q9",
+       "q2"
+      ]
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      "q1",
+      [
+       "q1",
+       "q2",
+       "q3"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-073",
+  "kind": "quest_rank",
+  "area": "fallback",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": null,
+   "fallback": [
+    "q3",
+    "q2",
+    "q1"
+   ],
+   "raw": "__raise__"
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      null,
+      [
+       "q3",
+       "q2",
+       "q1"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-074",
+  "kind": "quest_rank",
+  "area": "rank",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": null,
+   "fallback": [
+    "q3",
+    "q2",
+    "q1"
+   ],
+   "raw": {
+    "results": [
+     {
+      "item": 1,
+      "quest_id": "q2",
+      "ranking": [
+       "q2"
+      ]
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      "q2",
+      [
+       "q2",
+       "q3",
+       "q1"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-075",
+  "kind": "quest_rank",
+  "area": "rank",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": null,
+   "raw": {
+    "results": [
+     {
+      "item": 1,
+      "quest_id": "",
+      "ranking": [
+       "q3",
+       "q9",
+       "q3",
+       "q1",
+       "q2"
+      ]
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      null,
+      [
+       "q3",
+       "q1",
+       "q2"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-076",
+  "kind": "quest_rank",
+  "area": "rank",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": null,
+   "raw": "{\"results\": [{\"item\": 1, \"quest_id\": \"q3\", \"ranking\": [\"q3\", \"q1\", \"q2\"]}]}"
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      "q3",
+      [
+       "q3",
+       "q1",
+       "q2"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-077",
+  "kind": "quest_rank",
+  "area": "fallback",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    },
+    {
+     "text": "and the garden?",
+     "previous": "how is my 5K plan going"
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": "q1",
+   "raw": {
+    "results": [
+     {
+      "item": 1,
+      "quest_id": "q2",
+      "ranking": [
+       "q2",
+       "q1",
+       "q3"
+      ]
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      "q2",
+      [
+       "q2",
+       "q1",
+       "q3"
+      ]
+     ],
+     [
+      "q1",
+      [
+       "q1",
+       "q2",
+       "q3"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-078",
+  "kind": "quest_rank",
+  "area": "rank",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": "q1",
+   "raw": {
+    "results": [
+     {
+      "item": 7,
+      "quest_id": "q2",
+      "ranking": [
+       "q2"
+      ]
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      "q1",
+      [
+       "q1",
+       "q2",
+       "q3"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-079",
+  "kind": "quest_rank",
+  "area": "rank",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [],
+   "home": null,
+   "raw": {
+    "results": [
+     {
+      "item": 1,
+      "quest_id": "q2",
+      "ranking": [
+       "q2"
+      ]
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      null,
+      []
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-080",
+  "kind": "quest_rank",
+  "area": "rank",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": ""
+    }
+   ],
+   "home": "q1",
+   "raw": "not json at all"
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [
+      "q1",
+      [
+       "q1",
+       "q2",
+       "q3"
+      ]
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-090",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-goal one",
+       "type": "note",
+       "why": "goal one",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1",
+          "include_notes": true
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": []
+  },
+  "expect": {
+   "eq": {
+    "pending": [
+     "goal one"
+    ],
+    "notice": true
+   }
+  }
+ },
+ {
+  "id": "JUD-091",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-goal one",
+       "type": "note",
+       "why": "goal one",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1",
+          "include_notes": true
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": [
+    {
+     "query": {
+      "kind": "goal_context",
+      "goal_id": "g1",
+      "include_notes": true
+     }
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "pending": [],
+    "notice": false
+   }
+  }
+ },
+ {
+  "id": "JUD-092",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-goal one",
+       "type": "note",
+       "why": "goal one",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1",
+          "include_notes": true
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": [
+    {
+     "kind": "goal_context",
+     "goal_id": "g1",
+     "include_notes": true
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "pending": []
+   }
+  }
+ },
+ {
+  "id": "JUD-093",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-goal one",
+       "type": "note",
+       "why": "goal one",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1",
+          "include_notes": true
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": [
+    {
+     "query": {
+      "kind": "goal_context",
+      "goal_id": "g1",
+      "include_notes": true,
+      "limit": 5
+     }
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "pending": []
+   }
+  }
+ },
+ {
+  "id": "JUD-094",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-goal one",
+       "type": "note",
+       "why": "goal one",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1",
+          "include_notes": true
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": [
+    {
+     "query": {
+      "kind": "goal_context",
+      "goal_id": "g2"
+     }
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "pending": [
+     "goal one"
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-095",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "n",
+       "type": "note",
+       "why": "plain",
+       "locator": {
+        "text": "full text"
+       }
+      }
+     ]
+    }
+   ],
+   "executed": []
+  },
+  "expect": {
+   "eq": {
+    "pending": [],
+    "notice": false
+   }
+  }
+ },
+ {
+  "id": "JUD-096",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-bad ref",
+       "type": "note",
+       "why": "bad ref",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "foo": "bar"
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": []
+  },
+  "expect": {
+   "eq": {
+    "pending": [],
+    "notice": false
+   }
+  }
+ },
+ {
+  "id": "JUD-097",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-goal one",
+       "type": "note",
+       "why": "goal one",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1",
+          "include_notes": true
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "id": "c2",
+     "items": [
+      {
+       "id": "i-goal one again",
+       "type": "note",
+       "why": "goal one again",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1",
+          "include_notes": true
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": []
+  },
+  "expect": {
+   "eq": {
+    "pending": [
+     "goal one"
+    ]
+   }
+  }
+ },
+ {
+  "id": "JUD-098",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-goal one",
+       "type": "note",
+       "why": "goal one",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1",
+          "include_notes": true
+         }
+        }
+       }
+      },
+      {
+       "id": "i-goal two",
+       "type": "note",
+       "why": "goal two",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g2"
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": [
+    {
+     "query": {
+      "kind": "goal_context",
+      "goal_id": "g1",
+      "include_notes": true
+     }
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "pending": [
+     "goal two"
+    ],
+    "notice": true
+   }
+  }
+ },
+ {
+  "id": "JUD-099",
+  "kind": "sufficiency",
+  "area": "gate",
+  "args": {
+   "cards": [
+    {
+     "id": "c1",
+     "items": [
+      {
+       "id": "i-goal one",
+       "type": "note",
+       "why": "goal one",
+       "locator": {
+        "text": "short summary",
+        "abridged": true,
+        "full_ref": {
+         "query": {
+          "kind": "goal_context",
+          "goal_id": "g1"
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "executed": [
+    {
+     "query": {
+      "kind": "goal_context",
+      "goal_id": "g1",
+      "include_notes": true
+     }
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "pending": []
+   }
+  }
+ }
+]
