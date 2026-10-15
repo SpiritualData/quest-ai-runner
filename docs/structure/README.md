@@ -31,7 +31,7 @@ problems and solutions is `solutions.csv`. A **component** is a place in the tre
 | 4 Principles applied proactively | This folder plus the S rules apply the philosophy to the architecture itself | the check |
 | 5 One source of truth | `solutions.csv` (which implementation) and `components.csv` (where) | S1, S7 |
 | 6 Structure improves over time | `status`, `gap`, `action` columns; waivers can only shrink | S2, S9 |
-| 7 Minimalism | The goal is that configuration enters through `RunnerConfig` only; a lane is a config file. Not yet true: 10 files in `core/` still read the environment, each carried as an S13 waiver ("migrate into RunnerConfig") | CLAUDE.md hard rule 2, S13 |
+| 7 Minimalism | The goal is that configuration enters through `RunnerConfig` only; a lane is a config file. True of `core/` (it reads no environment; its tunables arrive as `CoreSettings`) and checked by S13; every variable the package reads is listed in `docs/configuration.md` (S15) | CLAUDE.md hard rule 2, S13 |
 | 8 Leverage existing structure | Reference adapters, vendored code listed, providers behind `MultiProvider` | S1 (`vendor` is a component) |
 | 9 Humility | Metrics decide, not opinion; unmeasured solutions are flagged rather than assumed good | S7 |
 | 10 Clarity | Module names state a role; every module opens with a docstring; each component lists its docs | S5, S2 |
@@ -54,11 +54,17 @@ problems and solutions is `solutions.csv`. A **component** is a place in the tre
   cli/ui/tools. A module's layer is its package, or for top-level modules the `layer` of its
   `components.csv` row (`config*`, `usage`, `pricing`, `resources` are config; `cli*`,
   `interactive_session*`, `textual_*` are cli). A module may import its own layer or a lower one. Lazy
-  imports count. Known violations (runner reading config, usage and resources; one runner to UI import)
-  are waived with a reason, and `config` still imports `runner`, so a config/runner cycle remains.
-* **S13 config.** No `os.environ` / `os.getenv` in `core/` outside waivers (10 files today, each
-  "migrate into RunnerConfig"); this is the check behind the "configuration enters through
-  `RunnerConfig`" goal.
+  imports count. `TYPE_CHECKING`-only imports are ignored (they create no runtime dependency). The runner takes the
+  config layer's builders through `runner/config_wiring.py`, registered by the package `__init__`, so
+  `runner` no longer imports `config`; `usage`, `pricing` and `resources` are import-free leaves in the
+  `core` layer. The one remaining violation (a runner to UI import) is waived with a reason.
+* **S13 config.** No `os.environ` / `os.getenv` in `core/` (no waivers). Core reads its tunables from
+  `core.runtime_settings.CoreSettings`, which the config layer builds from the environment
+  (`config_core_settings.py`) or a consumer pins with `RunnerConfig.core_settings`.
+* **S15 env docs.** Every environment variable read in `quest_ai_runner/` is a row of
+  `docs/configuration.md`, which `--write-docs` generates from the code (`scripts/env_vars.py`) with
+  descriptions from `docs/structure/env_descriptions.csv`. A variable with no description and no doc that
+  explains it fails; a rare exemption is an `S15,<VARIABLE>` waiver.
 * **S7 solutions.** Every `Protocol` class under `quest_ai_runner/` (and `CardRepository`) has a row; the selected
   implementation is one of the listed ones; implementation paths and metric scripts exist; a solution
   without a metric states its gap and action.

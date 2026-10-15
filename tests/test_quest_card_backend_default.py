@@ -40,7 +40,7 @@ def local_vector(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     store_cls = MagicMock(name="QdrantVectorStore")
     monkeypatch.setattr(adapters_mod, "QdrantVectorStore", store_cls)
-    monkeypatch.setattr(config_mod, "_bootstrap_if_needed", lambda *a, **k: None)
+    monkeypatch.setattr("quest_ai_runner.config_assembler._bootstrap_if_needed", lambda *a, **k: None)
     embedder = MagicMock(name="make_voyage_embedder")
     import quest_ai_runner.adapters.qdrant_vector_store as qvs
     monkeypatch.setattr(qvs, "make_voyage_embedder", embedder)

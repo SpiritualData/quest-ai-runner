@@ -32,7 +32,8 @@ Edit the CSV, never this file. Rules are the numbered ideals in `docs/structure/
 | `adapters-conversations` | adapters | Claude session transcripts as context and ConversationStore | ConversationStore | tests/test_conversation_format.py | docs/claude-conversations-integration.md, docs/conversation-cards.md | done |
 | `config` | config | RunnerConfig and build_orchestrator(): the one seam for consumer specifics | RunnerConfig | tests/test_config_env_vars.py | CLAUDE.md, docs/writing-a-consumer.md | done |
 | `cli-and-ui` | cli | Console entry point, attended chat session and Textual UI, card-store maintenance CLI | quest-ai-runner console script | tests/test_cli_*.py | docs/chat.md, docs/quickstart.md | done |
-| `usage-and-resources` | config | Token usage and pricing, overload guard, bootstrap email, package root | usage tracker | tests/test_usage.py | docs/deployment.md | done |
+| `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | usage tracker | tests/test_usage.py | docs/deployment.md | done |
+| `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | load_config / load_client | tests/test_bootstrap_reporter.py | docs/deployment.md | done |
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | tools CLI | tests/test_tools.py | docs/tools.md | done |
 | `prompts` | prompts | Standing deep-run instructions shipped as data (adaptable_structure.md) | QAR_DEEP_INSTRUCTIONS_FILES | evaluation/components/run.py prompt_size --impl live | docs/acp-deep-runner.md | done |
 | `vendor` | vendor | Vendored third-party code, unmodified | import path | exempt: upstream code, pinned and not edited here | CLAUDE.md | done |
