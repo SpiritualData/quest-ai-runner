@@ -166,3 +166,66 @@ def test_leaderboard_only_compares_rows_scored_on_the_same_cases():
     assert [r["impl"] for r in leaderboard.challengers(rows, "cur")] == ["same"]
     blank = {"cur": mk("cur", 5, ""), "old": mk("old", 9, "")}  # legacy rows compare as one group
     assert [r["impl"] for r in leaderboard.challengers(blank, "cur")] == ["old"]
+
+
+def test_leaderboard_flags_rows_without_provenance(capsys, tmp_path, monkeypatch):
+    import csv
+
+    import leaderboard
+    assert leaderboard.unverified(dict(cases_sha="")) and leaderboard.unverified({})
+    assert not leaderboard.unverified(dict(cases_sha="abcd1234"))
+    # a provenance-free challenger never beats a verified selection (and the reverse)
+    mk = lambda impl, passed, sha: dict(impl=impl, cases="10", passed=str(passed), cost_usd="0", cases_sha=sha)
+    assert leaderboard.challengers({"cur": mk("cur", 5, "aaaa"), "legacy": mk("legacy", 10, "")}, "cur") == []
+    assert leaderboard.challengers({"cur": mk("cur", 5, ""), "new": mk("new", 10, "aaaa")}, "cur") == []
+    path = tmp_path / "results.csv"
+    cols = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls", "tokens_in", "tokens_out",
+            "cost_usd", "seconds", "git_sha", "cases_sha", "model"]
+    with open(path, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        base = dict(date="2026-10-14", component="classification", cases="30", dev="1/1", heldout="0/0", model_calls="0",
+                    tokens_in="0", tokens_out="0", cost_usd="0", seconds="0", git_sha="", model="")
+        w.writerow(dict(base, impl="old_impl", passed="25", cases_sha=""))
+        w.writerow(dict(base, impl="new_impl", passed="26", cases_sha="abcd1234", git_sha="abc", model="haiku"))
+    monkeypatch.setattr(leaderboard, "RESULTS", path)
+    leaderboard.main([])
+    out = capsys.readouterr().out
+    old_line = next(line for line in out.splitlines() if "old_impl" in line)
+    new_line = next(line for line in out.splitlines() if "new_impl" in line)
+    assert "unverified" in old_line and "unverified" not in new_line
+
+
+def test_hybrid_union_wraps_the_live_assembler(tmp_path, monkeypatch):
+    """The impl drives HybridContextAssembler, FileContextStore and VectorContextAssembler (not a re-implementation).
+    A fake bag-of-words embedder stands in for bge-small so this runs offline."""
+    import hashlib
+    import re
+
+    import numpy as np
+    from context_selection.impls import hybrid_union
+
+    def fake_embedder():
+        def embed(texts):
+            out = np.zeros((len(texts), 64))
+            for i, t in enumerate(texts):
+                for w in re.findall(r"[a-z]+", t.lower()):
+                    out[i, int(hashlib.md5(w.encode()).hexdigest(), 16) % 64] += 1
+            return out
+        return embed
+    monkeypatch.setattr(hybrid_union, "embedder", fake_embedder)
+    import quest_ai_runner.adapters.hybrid_context_assembler as live
+    calls = []
+    original = live.HybridContextAssembler.assemble
+    monkeypatch.setattr(live.HybridContextAssembler, "assemble",
+                        lambda self, *a, **k: calls.append(1) or original(self, *a, **k))
+    corpus = _toy_corpus(tmp_path)
+    select = hybrid_union.build(common.CallMeter())
+    ranked = select("which module discovers due tasks and claims them", corpus)
+    assert calls and ranked and ranked[0] == "pkg/poller.py"
+    assert select.budget == 6
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("cs", Path(__file__).resolve().parents[2] / "scripts" / "check_structure.py")
+    cs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cs)
+    assert cs.impl_kind(Path(hybrid_union.__file__)) == "live"

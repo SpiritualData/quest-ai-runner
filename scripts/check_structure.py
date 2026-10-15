@@ -38,6 +38,9 @@ Rules checked:
   S14 selection table   every solutions.csv row with a port has an entry in core/selection_table.py
                  (and no entry is for an unknown row); each default is one of its implementations;
                  each implementation's module is listed in the row's `implementations`
+  S16 provenance the latest results.csv row of every implementation carries a cases_sha, or an
+                 `S16 <component>/<impl>` waiver says why it cannot be re-recorded (the leaderboard
+                 flags such rows as unverified and never treats them as evidence)
   S13 config     no os.environ / os.getenv in quest_ai_runner/core (waiver per file until the
                  read migrates into RunnerConfig)
 """
@@ -407,6 +410,13 @@ def check() -> list[str]:
                 bad.append(f"S14 {sid}: implementation {name!r} points at {module}, which does not exist")
             elif sid in port_rows and mod_path not in listed:
                 bad.append(f"S14 {sid}: implementation {name!r} lives in {mod_path}, which solutions.csv does not list")
+
+    # S16 provenance: results without a cases_sha are unverified
+    for comp, rows in sorted(latest_results().items()):
+        for impl, row in sorted(rows.items()):
+            if leaderboard.unverified(row) and not waived("S16", f"{comp}/{impl}"):
+                bad.append(f"S16 {comp}/{impl}: latest results.csv row has no cases_sha (re-run with --record, "
+                           "or add a waiver saying why it cannot be re-run)")
 
     # S10 selection follows the measurements
     results = latest_results()

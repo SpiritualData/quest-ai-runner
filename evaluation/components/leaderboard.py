@@ -10,7 +10,10 @@ the same pass rate at a lower cost. ``--strict`` exits 1 when one does, so a pip
 ideal 3). The harness only ranks; switching the live implementation stays a deliberate decision.
 
 Only rows with the same ``cases_sha`` as the selected row are compared: a score on a different case
-file is not evidence. Rows recorded before ``cases_sha`` existed have it blank and compare as one group.
+file is not evidence. Rows recorded before ``cases_sha`` existed have it blank and compare as one group,
+and are FLAGGED ``unverified``: no case file or code version is pinned to them, so they are shown but never
+treated as evidence against a verified row (``comparable`` keeps them apart). Re-record them with
+``run.py --record``, or carry an ``S16`` waiver in docs/structure/waivers.csv saying why they cannot be.
 """
 import csv
 import re
@@ -55,6 +58,11 @@ def rank(rows):
     return sorted(rows.values(), key=lambda r: (-pass_rate(r), float(r["cost_usd"] or 0), r["impl"]))
 
 
+def unverified(row):
+    """A row recorded without provenance (no ``cases_sha``): shown, flagged, never trusted as evidence."""
+    return not (row.get("cases_sha") or "").strip()
+
+
 def comparable(a, b):
     """Two rows are comparable only when scored on the same case file (blank == blank: legacy rows)."""
     return (a.get("cases_sha") or "") == (b.get("cases_sha") or "")
@@ -62,7 +70,8 @@ def comparable(a, b):
 
 def challengers(rows, selected):
     """Implementations that beat the selected one on pass rate, or tie it at lower cost.
-    Rows scored on a different ``cases_sha`` than the selected one are skipped."""
+    Rows scored on a different ``cases_sha`` than the selected one are skipped, and so is an unverified
+    challenger against a verified selection (and the reverse): provenance-free numbers are not evidence."""
     cur = rows.get(selected)
     if cur is None:
         return []
@@ -78,15 +87,16 @@ def challengers(rows, selected):
 
 
 def main(argv):
-    results, selected = latest_results(), selected_impls()
+    results, selected = latest_results(RESULTS), selected_impls()
     flagged = 0
     for component, rows in sorted(results.items()):
         sel = selected.get(component)
         print(f"{component} (selected: {sel or 'none recorded'})")
         for r in rank(rows):
             mark = "*" if r["impl"] == sel else " "
+            flag = "  [unverified: no cases_sha, recorded before provenance]" if unverified(r) else ""
             print(f"  {mark} {r['impl']:<20} {r['passed']}/{r['cases']} (held-out {r['heldout']}) "
-                  f"calls={r['model_calls']} cost=${float(r['cost_usd'] or 0):.4f}  {r['date']}")
+                  f"calls={r['model_calls']} cost=${float(r['cost_usd'] or 0):.4f}  {r['date']}{flag}")
         cur = rows.get(sel)
         for r in rows.values():
             if cur is not None and r["impl"] != sel and not comparable(r, cur):

@@ -239,6 +239,26 @@ card already pre-selected this turn returns a short de-dupe note. All three meth
 Leave `guidance_provider` unset for exactly today's behavior (no guidance). `OrchestratorConfig.guidance_topk`
 (default 3) tunes how many cards are pre-selected.
 
+## Choosing which implementation fills a slot
+
+Which class fills a swappable slot (a model provider, a search backend, the vector store, the deep runner,
+and every other port in `docs/structure/solutions.csv`) is data, not an `if`/`elif` at the call site.
+`quest_ai_runner/core/selection_table.py` lists each slot's implementations and default;
+`quest_ai_runner.core.resolve.resolve(solution_id, name=None, overrides=None)` returns the class:
+
+```python
+from quest_ai_runner.core.resolve import resolve, register
+
+resolve("call-a-model", "gemini")                      # an explicit name
+resolve("run-deep-work", overrides=cfg.selections)     # RunnerConfig.selections, else the table default
+register("search-backends", "mine", "my_pkg.search:MyBackend")   # your own implementation, no core edit
+```
+
+In a lane's config file: `[selections]` then `"run-deep-work" = "acp"`. An unknown name raises with the list of
+choices. A new built-in implementation is one line in the table plus its file in the solution's
+`implementations` column; `scripts/check_structure.py` (S14) keeps the two in step. The name is chosen by the
+config layer (environment variables such as `QAR_MODEL_BACKEND` are read there), never inside `core`.
+
 ## Wiring them up
 
 ```python

@@ -98,3 +98,25 @@ problems and solutions is `solutions.csv`. A **component** is a place in the tre
   the model for runs that make model calls. `leaderboard.py` compares rows only when `cases_sha` matches;
   rows from before the column existed have it blank and compare as one group. The committed record is
   `evaluation/components/results.csv`; per-run JSON goes to `/tmp/qar_components/`. `evaluation/components` is in pytest `testpaths`.
+* **S12 measured code.** Every `evaluation/components/*/impls/*.py` either imports or drives live
+  `quest_ai_runner` code, or declares itself an alternative (`ALTERNATIVE = True`, or a docstring that opens
+  with `ALTERNATIVE`, `BASELINE`, `ABLATION` or `FLOOR`). An implementation that does neither would put a
+  re-implementation's number on the leaderboard, not the live code's. A solution's `selected` harness
+  implementation must be a live one, or carry an `S12 <solution_id>:<impl>` waiver. (`context_selection`'s
+  `hybrid_union` wraps the live `HybridContextAssembler`, `FileContextStore` and `VectorContextAssembler`;
+  `vector_bge_small`, `blind_grep` and `idf_paths_only` are declared baselines.)
+* **S14 selection table.** Selection is data. `quest_ai_runner/core/selection_table.py` maps each
+  `solutions.csv` id that has a port to its implementations (`name -> "module:Class"`) and a default;
+  `core/resolve.py` turns `resolve(solution_id, name)` into the class (name, then
+  `RunnerConfig.selections[solution_id]`, then the default; a typo raises with the choices). The check fails
+  when a port row has no table entry, when a default is not one of its implementations, or when an
+  implementation's module is not in the row's `implementations`. Used today by the model provider
+  (`cli_config._model_provider_from_env`), the search backends (`select_search_backend`), the vector store
+  (`config_assembler`) and the deep runner (`resolve_deep_runner`). To switch one, set
+  `[selections] "run-deep-work" = "acp"` in a lane's config file (or edit the table default); to add one, add a
+  table line and list its file in `solutions.csv`. `resolve.py` reads no environment: the config layer decides
+  the name and passes it in.
+* **S16 provenance.** The latest `results.csv` row of every implementation must carry a `cases_sha`, or an
+  `S16 <component>/<impl>` waiver says why it cannot be re-recorded. `leaderboard.py` marks rows without one
+  `unverified` and never treats them as evidence for or against a verified row. The classification and
+  quest_ops rows are waived: recorded before the provenance columns, not re-runnable without the claude CLI.

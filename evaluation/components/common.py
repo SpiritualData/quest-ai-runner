@@ -115,7 +115,8 @@ def record_result(summary, date=None, path=RESULTS_CSV):
     cases = HERE / comp / "cases.json"
     git = lambda *a: subprocess.run(["git", *a], cwd=HERE, capture_output=True, text=True).stdout.strip()
     sha = git("rev-parse", "--short", "HEAD")
-    if sha and git("status", "--porcelain", "--untracked-files=no", "--", str(REPO / "quest_ai_runner"), str(HERE)):
+    if sha and git("status", "--porcelain", "--untracked-files=no", "--", str(REPO / "quest_ai_runner"), str(HERE),
+                    ":(exclude)" + str(RESULTS_CSV)):  # the record itself is not the code under test
         sha += "-dirty"  # the code that produced the number is not exactly that commit
     row = dict(summary, date=date or datetime.date.today().isoformat(),
                cost_usd=summary.get("cli_reported_cost_usd", 0.0), git_sha=sha,

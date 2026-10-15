@@ -14,7 +14,7 @@ $PY evaluation/components/run.py quest_ops --impl direct_tool_call      # altern
 $PY evaluation/components/run.py context_selection --impl hybrid_union    # selected per solutions.csv, zero model calls
 $PY evaluation/components/run.py context_selection --impl blind_grep           # zero-model floor
 $PY evaluation/components/run.py context_selection --impl vector_bge_small     # local embedder, offline, ~90 s
-$PY evaluation/components/run.py context_selection --impl hybrid_union         # IDF + vector union, ~90 s
+$PY evaluation/components/run.py context_selection --impl hybrid_union         # the LIVE HybridContextAssembler (keyword + vector arms), ~10 s with a warm embed cache
 $PY evaluation/components/run.py staleness --impl store_sha256                 # selected per solutions.csv, zero model calls
 $PY evaluation/components/run.py staleness --impl mtime_size                   # baseline
 $PY evaluation/components/run.py recipe_fast_path --impl recipe_replay         # selected per solutions.csv (real model)
@@ -46,8 +46,8 @@ Notes on the three newer components:
 
 * `context_selection/` is zero-model. The corpus (`corpus.py`) is the repo checkout itself, read-only
   (`QAR_EVAL_CORPUS_ROOT` points it elsewhere), with one deterministic card per `.py` file built by the
-  store's own extractors, because the production bootstrap needs a model. `vector_bge_small` and
-  `hybrid_union` need the `BAAI/bge-small-en-v1.5` model in the fastembed cache (`/tmp/fastembed_cache`)
+  store's own extractors, because the production bootstrap needs a model. `vector_bge_small` (a baseline) and
+  `hybrid_union` (which wraps the live `HybridContextAssembler`, `FileContextStore` and `VectorContextAssembler`, with only the embedder and an in-memory cosine store local) need the `BAAI/bge-small-en-v1.5` model in the fastembed cache (`/tmp/fastembed_cache`)
   and run with `HF_HUB_OFFLINE=1`; if it is missing they fail loudly instead of scoring 0%.
 * `staleness/` is zero-model and builds its own tiny trees in `/tmp`. Two of its cases are known gaps of
   the current store, kept on purpose: an edit that restores the mtime is missed (`_current_sha` trusts a
@@ -75,3 +75,8 @@ Scoring is deterministic (no judge), so a run costs exactly the implementation's
 which the harness counts. Cases 23-30 of classification are held out (the keyword baseline was
 written seeing 1-22 only), so a baseline gap between the two groups shows over-fitting.
 The old end-to-end harness (`evaluation/qualitative/`, needs a dev Quest world) stays for system-level checks.
+
+Every implementation measures live code or says it does not (check S12 in `docs/structure/README.md`): it
+imports or drives `quest_ai_runner`, or declares `ALTERNATIVE = True` (or a docstring opening `ALTERNATIVE`,
+`BASELINE`, `ABLATION`, `FLOOR`). A row recorded without `cases_sha` shows as `unverified` in `leaderboard.py`
+and is never compared against a verified one (check S16).
