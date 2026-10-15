@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import copy
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 from collections import OrderedDict
 
@@ -70,7 +70,8 @@ class PlanningMixin:
               already_said: Optional[List[str]] = None,
               brainstorm: bool = False,
               user_vetoed_task: bool = False,
-              card_thread_block: str = "") -> PlanDecision:
+              card_thread_block: str = "",
+              tool_pins: Sequence[str] = ()) -> PlanDecision:
         # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
         # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
         # short reference note — the planner's job there is to react to the NEW gathered
@@ -129,7 +130,7 @@ class PlanningMixin:
         # The TOOLS block: only the tools relevant to THIS request (the registry narrows a large
         # catalog; the rest are searchable with a {"tools": ...} read). Layered in like the
         # brainstorm note so PLANNER_PROMPT keeps its format slots; absent entirely with no tools.
-        tools_block = (PLANNER_TOOLS_HEAD + self.tools.render_planner_block(user_message)
+        tools_block = (PLANNER_TOOLS_HEAD + self.tools.render_planner_block(user_message, pins=tool_pins)
                        if self.tools is not None else "")
         # The WEB block: same AFTER-the-body placement as tools_block above, for the same reason
         # (a block placed before the action list is noticed but not chosen). Empty with no web

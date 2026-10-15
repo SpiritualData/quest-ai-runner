@@ -36,6 +36,54 @@ def _quest_callable_methods() -> List[str]:
                   if not n.startswith("_") and callable(getattr(QuestClient, n, None)))
 
 
+def operation_registry():
+    """The described operations (the same registry a run's brief draws from), built without
+    credentials: only the descriptions are read here, no handler runs."""
+    from .core.tools import build_tool_registry
+
+    env = dict(os.environ)
+    env.setdefault("QUEST_BASE_URL", "describe-only")
+    env.setdefault("QUEST_API_KEY", "describe-only")
+    return build_tool_registry(env)
+
+
+def first_sentence(text: str, limit: int = 110) -> str:
+    one_line = " ".join((text or "").split())
+    cut = one_line.split(". ")[0].rstrip(".")
+    return cut if len(cut) <= limit else cut[:limit - 1].rstrip() + "..."
+
+
+def describe_quest_method(name: str) -> int:
+    """``quest --describe NAME``: how to call one operation, from the one place it is defined.
+
+    A described operation prints its registry entry (purpose, when to use it, arguments) and the
+    shell command; any other client method prints its signature and docstring. An unknown name gets
+    the closest real names back, never a bare failure.
+    """
+    import difflib
+    import inspect
+
+    spec = operation_registry().get(name)
+    if spec is not None:
+        from .core.tools import ToolRegistry
+        print(ToolRegistry.render_one(spec))
+        print(f"Call:  python -m quest_ai_runner.tools call {spec.name} --kw ARG=VALUE ...")
+        return 0
+    from .runner.quest_client import QuestClient
+
+    method = getattr(QuestClient, name, None) if not name.startswith("_") else None
+    if method is None or not callable(method):
+        close = difflib.get_close_matches(name, _quest_callable_methods(), n=4, cutoff=0.5)
+        print(f"no such QuestClient method {name!r}." +
+              (f" Did you mean: {', '.join(close)}?" if close else " Try `quest-ai-runner quest --list`."),
+              file=sys.stderr)
+        return 2
+    kind = "read" if _quest_method_is_read_only(name) else "WRITE (needs --write)"
+    print(f"{name}{inspect.signature(method)}  [{kind}]\n{inspect.getdoc(method) or '(no description)'}"
+          .replace("(self, ", "(").replace("(self)", "()"))
+    return 0
+
+
 def _parse_kw(pairs: List[str]) -> Dict[str, Any]:
     """``NAME=VALUE`` pairs into kwargs, VALUE as JSON when it parses as JSON, else a string.
 
@@ -64,13 +112,22 @@ def _run_quest_command(args) -> int:
     """
     from .runner.quest_client import QuestApiError, QuestNotConfigured
 
+    if getattr(args, "describe", None):
+        return describe_quest_method(args.describe)
     if args.list_methods:
+        from .runner.quest_client import QuestClient
+        described = operation_registry()
         for name in _quest_callable_methods():
-            print(f"{'read ' if _quest_method_is_read_only(name) else 'WRITE'}  {name}")
+            spec = described.get(name)
+            summary = (first_sentence(spec.description) if spec is not None
+                       else first_sentence(getattr(getattr(QuestClient, name), "__doc__", "") or ""))
+            print(f"{'read ' if _quest_method_is_read_only(name) else 'WRITE'}  {name}"
+                  f"{'  - ' + summary if summary else ''}")
         return 0
     if not args.method:
         print("usage: quest-ai-runner quest <method> [args...] [--kw NAME=VALUE]\n"
-              "       quest-ai-runner quest --list", file=sys.stderr)
+              "       quest-ai-runner quest --list\n"
+              "       quest-ai-runner quest --describe <method>", file=sys.stderr)
         return 2
 
     method_name = args.method
@@ -95,21 +152,29 @@ def _run_quest_command(args) -> int:
 
     method = getattr(client, method_name, None)
     if method is None or method_name.startswith("_") or not callable(method):
-        print(f"no such QuestClient method {method_name!r}; "
-              f"try `quest-ai-runner quest --list`", file=sys.stderr)
-        return 2
+        return describe_quest_method(method_name) or 2
 
     try:
         result = method(*args.args, **kwargs)
     except TypeError as e:  # wrong arity/keyword — the method's own signature is the help text
         import inspect
-        print(f"{method_name}{inspect.signature(method)}\n{e}", file=sys.stderr)
+        print(f"{method_name}{inspect.signature(method)}\n{e}\n"
+              f"(`quest-ai-runner quest --describe {method_name}` explains each argument)",
+              file=sys.stderr)
         return 2
     except (QuestApiError, QuestNotConfigured) as e:
         print(str(e), file=sys.stderr)
         return 1
 
     print(json.dumps(result, indent=None if args.compact else 2, default=str))
+    if not result and not _quest_method_is_read_only(method_name):
+        # Most client writes swallow a refusal and hand back {} / [] / False (logging the reason),
+        # which read as success on a shell. An empty answer from a write is a write that did not
+        # happen, so say so and exit non-zero instead of letting a run report it as done.
+        print(f"{method_name} returned nothing: Quest refused it or it failed (the reason is in the "
+              f"log line above). Treat it as NOT done; "
+              f"`quest-ai-runner quest --describe {method_name}` shows its arguments.", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -237,6 +302,7 @@ def _cmd_create_goal(args, log) -> int:
             criteria=args.criteria,
             goal_type=args.goal_type,
             parent_goal_id=args.parent_goal_id,
+            outcome_id=getattr(args, "outcome_id", None),
             ai_help=True if args.ai_help else None,
             assigned_to_user_id=args.assigned_to_user_id,
         )

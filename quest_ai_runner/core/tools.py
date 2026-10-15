@@ -77,6 +77,7 @@ log = logging.getLogger(__name__)
 # the catalog is big enough that listing it every turn would crowd the prompt.
 SHOW_ALL_AT_OR_BELOW = 8
 DEFAULT_SELECT_K = 5
+PINNED_RUN_EXTRAS = 2
 DEFAULT_TIMEOUT_SECONDS = 60.0
 # A tool's result text is observation context, not a document: cap it so one chatty command
 # cannot flood the planner.
@@ -129,6 +130,11 @@ class ToolSpec:
     # requested action's arguments at run time. For values only a live user (or the step's own
     # context) may supply, such as a recipient override or a claim that the user asked.
     workflow_hidden_params: Sequence[str] = ()
+    # An operation that only makes sense when the run's composer asks for it by name (a standing
+    # instruction authorises it, say). It is left out of relevance selection, ``tools list`` and the
+    # "search the catalog" read, so a chat turn cannot drift into it; a run whose context lists it
+    # in ``tool_pins`` is shown it, and it stays callable by name.
+    on_request_only: bool = False
 
     def required(self) -> List[str]:
         return list((self.parameters or {}).get("required") or [])
@@ -166,8 +172,29 @@ class ToolSpec:
 TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
+# Words that say nothing about which tool fits. Without this a request such as "summarize this pdf
+# of grants" matched every tool whose description contains "this" or "of", and a catalog entry with
+# a long how-to was shown for no reason.
+STOPWORDS = frozenset(
+    "a an and are as at be but by do for from has have how i if in into is it its me my no not of "
+    "on or our so that the their them then there these they this to up us was we what when which "
+    "who will with you your".split())
+
+
+def stem(word: str) -> str:
+    """Strip a plural or past-tense ending so "asked", "asks" and "ask" meet (query and tool text alike)."""
+    if len(word) > 5 and word.endswith("ing"):
+        return word[:-3]
+    if len(word) > 4 and word.endswith("ed"):
+        return word[:-2]
+    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
+    return word
+
+
 def tokenize(text: str) -> List[str]:
-    return TOKEN_RE.findall((text or "").lower().replace("_", " "))
+    return [stem(t) for t in TOKEN_RE.findall((text or "").lower().replace("_", " "))
+            if t not in STOPWORDS]
 
 
 def coerce_result(raw: Any) -> ToolResult:
@@ -224,13 +251,21 @@ class ToolRegistry:
         # Name and keywords count twice: they are the tool's own summary of what it is for.
         name_toks = tokenize(spec.name)
         kw_toks = [t for kw in spec.keywords for t in tokenize(kw)]
-        return (name_toks * 2 + kw_toks * 2 + tokenize(spec.description)
+        # Only the description's first paragraph: a field tool appends its whole writing standard
+        # ("HOW TO WRITE IT: ...") after a blank line, and those paragraphs are about how to write,
+        # not what the tool is for.
+        summary = spec.description.split("\n\n", 1)[0]
+        return (name_toks * 2 + kw_toks * 2 + tokenize(summary)
                 + tokenize(spec.when_to_use))
+
+    def offered(self) -> List[ToolSpec]:
+        """The tools relevance may show: everything except ``on_request_only`` operations."""
+        return [s for s in self.all() if not s.on_request_only]
 
     def search(self, query: str, k: int = DEFAULT_SELECT_K) -> List[ToolSpec]:
         """BM25 over the catalog; only tools that share a term with the query are returned."""
         q = set(tokenize(query))
-        specs = self.all()
+        specs = self.offered()
         if not q or not specs:
             return []
         docs = [self.doc_tokens(s) for s in specs]
@@ -241,6 +276,10 @@ class ToolRegistry:
             for t in set(d):
                 df[t] = df.get(t, 0) + 1
         k1, b = 1.5, 0.75
+        # A word that most of the catalog shares ("quest", "update") says nothing about which tool
+        # fits, yet on a quest-heavy brief it matched every field tool and showed five long how-tos
+        # nobody needed. Only words that tell tools apart count.
+        common_above = max(2, n // 3)
         scored = []
         for spec, d in zip(specs, docs):
             tf: Dict[str, int] = {}
@@ -248,7 +287,7 @@ class ToolRegistry:
                 tf[t] = tf.get(t, 0) + 1
             score = 0.0
             for t in q:
-                if t not in tf:
+                if t not in tf or df[t] > common_above:
                     continue
                 idf = math.log(1 + (n - df[t] + 0.5) / (df[t] + 0.5))
                 score += idf * tf[t] * (k1 + 1) / (tf[t] + k1 * (1 - b + b * len(d) / avgdl))
@@ -257,16 +296,24 @@ class ToolRegistry:
         scored.sort(key=lambda x: -x[0])
         return [s for _, s in scored[:k]]
 
-    def select(self, query: str, k: int = DEFAULT_SELECT_K) -> List[ToolSpec]:
+    def select(self, query: str, k: int = DEFAULT_SELECT_K,
+               pins: Sequence[str] = ()) -> List[ToolSpec]:
         """The tools to SHOW the planner for this request.
 
         A small catalog is shown whole (the model is better at relevance than a lexical score, and
         eight entries cost little). A large one is narrowed to the top ``k`` matches; the rest stay
-        reachable through a ``{"tools": "<query>"}`` read.
+        reachable through a ``{"tools": "<query>"}`` read. ``pins`` are tools the run's composer
+        named (``context_meta["tool_pins"]``): shown first whatever the query says, so an operation
+        a kind of run always needs does not depend on a lexical match against a long brief.
         """
-        if len(self._specs) <= SHOW_ALL_AT_OR_BELOW:
-            return self.all()
-        return self.search(query, k)
+        pinned = [s for s in (self.get(n) for n in (pins or ())) if s is not None]
+        offered = self.offered()
+        # A composer that pins has said what the run needs; the query is then a long composed brief
+        # whose words match tools by accident, so relevance only adds a couple of extras.
+        k = min(k, PINNED_RUN_EXTRAS) if pinned else k
+        found = offered if len(offered) <= SHOW_ALL_AT_OR_BELOW else self.search(query, k)
+        seen = {s.name for s in pinned}
+        return pinned + [s for s in found if s.name not in seen]
 
     # -- rendering -------------------------------------------------------------------------------
 
@@ -303,9 +350,10 @@ class ToolRegistry:
     def render_catalog(self, specs: Sequence[ToolSpec]) -> str:
         return "\n".join(self.render_one(s) for s in specs)
 
-    def render_planner_block(self, query: str, k: int = DEFAULT_SELECT_K) -> str:
-        shown = self.select(query, k)
-        hidden = len(self._specs) - len(shown)
+    def render_planner_block(self, query: str, k: int = DEFAULT_SELECT_K,
+                             pins: Sequence[str] = ()) -> str:
+        shown = self.select(query, k, pins)
+        hidden = len(self.offered()) - len([s for s in shown if not s.on_request_only])
         head = ("TOOLS YOU CAN CALL DIRECTLY (action \"tool\"). Each runs in seconds, in-process: "
                 "no deep run. The loop runs your calls, shows you the result, and you then answer "
                 "the user with what happened.")
@@ -328,9 +376,9 @@ class ToolRegistry:
         return f"{head}\n{rules}\n{body}{tail}"
 
     def render_deep_block(self, query: str, k: int = DEFAULT_SELECT_K,
-                          python: Optional[str] = None) -> str:
+                          python: Optional[str] = None, pins: Sequence[str] = ()) -> str:
         """The tool section of a deep brief: relevant tools plus the exact command for each."""
-        shown = self.select(query, k)
+        shown = self.select(query, k, pins)
         if not shown:
             return ""
         py = python or sys.executable
@@ -338,12 +386,13 @@ class ToolRegistry:
         parts = ["TOOLS YOU CAN CALL (use these instead of writing your own script for the same "
                  "job; each prints its result and exits 0 on success, 1 on failure):",
                  self.render_catalog(shown),
-                 f"Call one:   {cmd} call <name> --args '<json object of args>'",
+                 f"Call one:   {cmd} call <name> --kw arg=value [--kw arg=value ...]   "
+                 f"(or --args '<json object>' for nested values)",
                  f"Find more:  {cmd} list --query '<what you need>'"]
         example = shown[0]
-        example_args = {p: f"<{p}>" for p in example.required() if p not in example.auto_filled()}
-        parts.append(f"Example:    {cmd} call {example.name} --args "
-                     f"{shlex.quote(json.dumps(example_args))}")
+        example_kw = " ".join(f"--kw {shlex.quote(f'{p}=<{p}>')}" for p in example.required()
+                              if p not in example.auto_filled())
+        parts.append(f"Example:    {cmd} call {example.name} {example_kw}".rstrip())
         return "\n".join(parts)
 
     # -- invocation ------------------------------------------------------------------------------
@@ -385,6 +434,10 @@ class ToolRegistry:
             if pname in resolved and (prop or {}).get("type") == "array" \
                     and not isinstance(resolved[pname], list):
                 resolved[pname] = [resolved[pname]]
+            # A shell caller's ``--kw summary=2026`` arrives typed as JSON; a text argument is text.
+            if pname in resolved and (prop or {}).get("type") == "string" \
+                    and isinstance(resolved[pname], (bool, int, float)):
+                resolved[pname] = json.dumps(resolved[pname])
 
         box: Dict[str, Any] = {}
 
@@ -1019,322 +1072,6 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
     )
 
 
-# ---------------------------------------------------------------------------------------------
-# Experiments: the quest's Experiments section (research questions), read / search / create / edit
-# ---------------------------------------------------------------------------------------------
-#
-# An experiment is a question the person is testing in their own life, with the goals and habits
-# that gather its data (quest-backend ``research_questions``). It is NOT a quest field, so these
-# tools do not go through the field-update gate; they use the Experiments section's own routes,
-# and so refuse to create or change one the person did not ask for. Searching by text is done here
-# over the listing, so no second endpoint or hand-written database query is ever needed.
-
-EXPERIMENT_STATUSES = ("open", "experimenting", "concluded")
-
-
-_EXPERIMENT_FILLER = frozenset({
-    "the", "and", "for", "that", "this", "with", "from", "about", "does", "did", "how", "what",
-    "which", "when", "why", "can", "are", "was", "were", "has", "have", "into", "than", "then",
-    "them", "they", "you", "your", "his", "her", "its", "our", "any", "all", "not", "but", "out",
-    "off", "too", "find", "show", "search", "look", "get", "list", "experiment", "experiments",
-    "question", "questions", "quest", "mine", "one", "ones", "please", "tell", "help", "helps"})
-
-
-def _experiment_stem(word: str) -> str:
-    for suffix in ("ing", "es", "ed", "s"):
-        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
-            return word[: -len(suffix)]
-    return word
-
-
-def _experiment_words(text: Any) -> List[str]:
-    """Words of 3+ letters minus filler, lightly stemmed so "sleeping" meets "sleep"."""
-    return [_experiment_stem(w) for w in tokenize(str(text or ""))
-            if len(w) > 2 and w not in _EXPERIMENT_FILLER]
-
-
-def search_experiments(rows: Sequence[Mapping[str, Any]], query: str,
-                       limit: int = 5) -> List[Mapping[str, Any]]:
-    """Rows matching ``query``, best first: distinct query words found in the question, context,
-    hypothesis, purpose, sub-questions, assumptions and conclusion, with a bonus for words in the question itself. The quest's default
-    question is searched by its question text only, since the listing fills its context with the
-    whole quest. A query with no usable word matches nothing (listing is the caller's job)."""
-    wanted = set(_experiment_words(query))
-    if not wanted:
-        return []
-    scored = []
-    for row in rows:
-        keys = ("question",) if row.get("kind") == "default" else (
-            "question", "context", "hypothesis", "conclusion")
-        body = " ".join(str(row.get(k) or "") for k in keys)
-        if row.get("kind") != "default":
-            body += " " + " ".join(
-                [str(row.get("purpose") or "")]
-                + [f"{sq.get('question') or ''} {sq.get('answer_method') or ''}"
-                   for sq in row.get("sub_questions") or [] if isinstance(sq, Mapping)]
-                + [str(a) for a in row.get("assumptions") or []])
-        hits = wanted & set(_experiment_words(body))
-        if hits:
-            scored.append((len(hits) + 0.5 * len(wanted & set(_experiment_words(row.get("question")))),
-                           row))
-    scored.sort(key=lambda pair: -pair[0])
-    return [row for _, row in scored[:limit]]
-
-
-_EXPERIMENT_PURPOSE_PARAM = {
-    "type": "string",
-    "description": "Why they run it: how it ties to the quest. Only if they said."}
-_EXPERIMENT_SUB_QUESTIONS_PARAM = {
-    "type": "array",
-    "description": ("Smaller questions beside the main one, only if they gave any. answer_method "
-                    "(how it will be answered, or what analysis it needs) only if they said."),
-    "items": {"type": "object", "required": ["question"],
-              "properties": {"question": {"type": "string"},
-                             "answer_method": {"type": "string"}}}}
-_EXPERIMENT_ASSUMPTIONS_PARAM = {
-    "type": "array", "items": {"type": "string"},
-    "description": ("Assumptions that ground the experiment or state its constraints, one per "
-                    "item, in their words. Only those they stated.")}
-
-
-def _experiment_line(row: Mapping[str, Any]) -> str:
-    bits = [f"[{row.get('research_question_id')}] {row.get('question')}",
-            f"status {row.get('status')}"]
-    if row.get("kind") == "default":
-        bits.append("the quest's own question")
-    if row.get("hypothesis"):
-        bits.append(f"expects: {str(row['hypothesis'])[:160]}")
-    if row.get("purpose"):
-        bits.append(f"purpose: {str(row['purpose'])[:160]}")
-    subs = [sq for sq in row.get("sub_questions") or [] if isinstance(sq, Mapping)]
-    if subs:
-        bits.append("sub-questions: " + " | ".join(
-            str(sq.get("question") or "")[:120]
-            + (f" (how: {str(sq['answer_method'])[:80]})" if sq.get("answer_method") else "")
-            for sq in subs))
-    if row.get("assumptions"):
-        bits.append("assumptions: " + " | ".join(str(a)[:120] for a in row["assumptions"]))
-    if row.get("start_date") or row.get("end_date"):
-        bits.append(f"{row.get('start_date') or '?'} to {row.get('end_date') or '?'}")
-    if row.get("conclusion"):
-        bits.append(f"concluded: {str(row['conclusion'])[:160]}")
-    return "; ".join(bits)
-
-
-def find_quest_experiments_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
-    """Read a quest's experiments, or search them by text, through the Experiments section's API."""
-    factory = client_factory or (lambda: quest_client_from_env(env))
-
-    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        quest_id = _quest_id(args, ctx)
-        if not quest_id:
-            return ToolResult(ok=False, text="No quest was named, so there are no experiments to read.")
-        try:
-            rows = factory().list_experiments(quest_id)
-        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
-            return ToolResult(ok=False, text=f"Could not read the experiments: {e}")
-        query = str(args.get("query") or "").strip()
-        if query:
-            rows = search_experiments(rows, query, int(args.get("limit") or 5))
-            if not rows:
-                return ToolResult(ok=True, data=[], text=f"No experiment on quest {quest_id} "
-                                                         f"matches {query!r}.")
-        else:
-            rows = rows[:int(args.get("limit") or 20)]
-        if not rows:
-            return ToolResult(ok=True, data=[], text=f"Quest {quest_id} has no experiments yet.")
-        return ToolResult(ok=True, data=rows,
-                          text="\n".join(_experiment_line(r) for r in rows))
-
-    return ToolSpec(
-        name="find_quest_experiments",
-        handler=handler,
-        description=("List a quest's experiments (the Experiments section: questions the person "
-                     "is testing, with status, expectation, dates and conclusion), or search "
-                     "them by words. Each line starts with the experiment id to use for an edit."),
-        when_to_use=("Any question about the quest's experiments: what is running, find the "
-                     "sleep experiment, what did it conclude, and before editing one (to get "
-                     "its id) or creating one (to avoid a duplicate)."),
-        when_not_to_use=("Reading the data an experiment collects (that is the tracking habit or "
-                         "collection). Quest goals or habits."),
-        parameters={
-            "type": "object",
-            "properties": {
-                "quest_id": {"type": "string",
-                             "description": "Quest to read (defaults to this chat's quest)."},
-                "query": {"type": "string",
-                          "description": "Words to search for; omit to list every experiment."},
-                "limit": {"type": "integer", "description": "Most rows to return."},
-            },
-        },
-        mutates=False,
-        origin="standard",
-        keywords=("experiment", "experiments", "research", "question", "hypothesis", "test",
-                  "trial", "find", "search", "list", "show"),
-        context_args={"quest_id": "quest_id"},
-        timeout_seconds=45.0,
-    )
-
-
-def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
-    """Create one experiment through ``POST /api/quests/{id}/research-questions``."""
-    factory = client_factory or (lambda: quest_client_from_env(env))
-
-    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        quest_id = _quest_id(args, ctx)
-        question = str(args.get("question") or "").strip()
-        if not quest_id or not question:
-            return ToolResult(ok=False, text="An experiment needs a quest and a question; "
-                                             "nothing was created.")
-        if not args.get("user_asked_for_this_field"):
-            return ToolResult(ok=False, text=(f"Not created: the user did not ask for the "
-                                              f"experiment {question!r}. Suggest it in your "
-                                              f"reply instead."))
-        fields = {k: args[k] for k in ("context", "hypothesis", "purpose", "sub_questions",
-                                       "assumptions", "linked_goal_ids",
-                                       "linked_collection_ids", "start_date", "end_date")
-                  if args.get(k) not in (None, "", [])}
-        try:
-            made = factory().create_experiment(quest_id, question, **fields)
-        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
-            return ToolResult(ok=False, text=f"Nothing was created: {e}")
-        if not made:
-            return ToolResult(ok=False, text=f"Nothing was created: the experiment {question!r} "
-                                             f"was refused.")
-        return ToolResult(ok=True, data=made,
-                          text=(f"Created the experiment {question!r} on quest {quest_id} "
-                                f"(id {made.get('research_question_id')}, status "
-                                f"{made.get('status')})."))
-
-    return ToolSpec(
-        name="create_quest_experiment",
-        handler=handler,
-        description=("Create one experiment on a quest: a question the person wants to answer "
-                     "by testing it in their own life. Use their words for the question; add a "
-                     "hypothesis only if they stated what they expect, a purpose, sub-questions "
-                     "(with an answer method) and assumptions only if they gave them, and link goals or "
-                     "habits only by ids you read (never invent one). Check "
-                     "find_quest_experiments first so you do not duplicate one."),
-        when_to_use=("The user asked to start, set up or add an experiment on their quest. "
-                     + _NEVER_CODE),
-        when_not_to_use=("A goal, habit or task. An experiment the user did not ask for: "
-                         "suggest it instead. Changing an existing experiment (use "
-                         "update_quest_experiment)."),
-        parameters={
-            "type": "object",
-            "required": ["question"],
-            "properties": {
-                "quest_id": _QUEST_ID_PARAM,
-                "question": {"type": "string",
-                             "description": "What they want to find out, in their words (max 500 chars)."},
-                "context": {"type": "string", "description": "Why they ask; what bears on it."},
-                "hypothesis": {"type": "string", "description": "What they expect, if they said."},
-                "purpose": _EXPERIMENT_PURPOSE_PARAM,
-                "sub_questions": _EXPERIMENT_SUB_QUESTIONS_PARAM,
-                "assumptions": _EXPERIMENT_ASSUMPTIONS_PARAM,
-                "linked_goal_ids": {"type": "array", "items": {"type": "string"},
-                                    "description": "Goal ids that carry it out."},
-                "linked_collection_ids": {"type": "array", "items": {"type": "string"},
-                                          "description": "Habit / collection ids that collect its data."},
-                "start_date": {"type": "string", "description": "YYYY-MM-DD, if given."},
-                "end_date": {"type": "string", "description": "YYYY-MM-DD, if given."},
-                "user_asked_for_this_field": _ASKED_PARAM,
-            },
-        },
-        mutates=True,
-        workflow_step=False,  # needs the user's own say-so (user_asked_for_this_field); a scheduled step cannot assert it
-        origin="standard",
-        keywords=("experiment", "experiments", "research", "question", "hypothesis", "test",
-                  "trial", "start", "set up", "create", "add", "new"),
-        context_args={"quest_id": "quest_id"},
-        timeout_seconds=45.0,
-    )
-
-
-def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
-    """Change an experiment's details through ``PATCH /api/quests/{id}/research-questions/{rid}``."""
-    factory = client_factory or (lambda: quest_client_from_env(env))
-    editable = ("question", "context", "hypothesis", "purpose", "sub_questions", "assumptions", "status", "conclusion", "linked_goal_ids",
-                "linked_collection_ids", "start_date", "end_date")
-
-    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        quest_id = _quest_id(args, ctx)
-        rid = str(args.get("research_question_id") or "").strip()
-        if not quest_id or not rid:
-            return ToolResult(ok=False, text="Editing an experiment needs a quest and the "
-                                             "experiment's id (find_quest_experiments); nothing "
-                                             "was changed.")
-        if not args.get("user_asked_for_this_field"):
-            return ToolResult(ok=False, text=(f"Not changed: the user did not ask to change "
-                                              f"experiment {rid}. Suggest it in your reply "
-                                              f"instead."))
-        changes = {k: args[k] for k in editable if k in args and args[k] is not None}
-        if not changes:
-            return ToolResult(ok=False, text="Nothing to change: give at least one field.")
-        if changes.get("status") and changes["status"] not in EXPERIMENT_STATUSES:
-            return ToolResult(ok=False, text=f"status must be one of {list(EXPERIMENT_STATUSES)}.")
-        try:
-            updated = factory().update_experiment(quest_id, rid, **changes)
-        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
-            return ToolResult(ok=False, text=f"Nothing was changed: {e}")
-        if not updated:
-            return ToolResult(ok=False, text=f"Nothing was changed on experiment {rid}.")
-        return ToolResult(ok=True, data=updated,
-                          text=(f"Updated experiment {rid} on quest {quest_id}: "
-                                f"{', '.join(sorted(changes))} (status now {updated.get('status')})."))
-
-    return ToolSpec(
-        name="update_quest_experiment",
-        handler=handler,
-        description=("Change details of an existing experiment: its question, context, "
-                     "hypothesis, purpose, sub-questions, assumptions, status (open, experimenting, concluded), conclusion, linked "
-                     "goal or habit ids, start or end date (an empty string clears a date). Send "
-                     "ONLY the fields the user asked to change; the others stay as they are. "
-                     "Get the id from find_quest_experiments. The quest's own default question keeps "
-                     "its question text and context (they belong to the quest, so edit the "
-                     "quest's fields for those); its status, hypothesis, conclusion, links "
-                     "and dates can change here."),
-        when_to_use=("The user asked to edit, rename, conclude, reopen, re-date or relink an "
-                     "experiment. " + _NEVER_CODE),
-        when_not_to_use=("Creating an experiment (use create_quest_experiment). Logging data for "
-                         "it (write to the tracking habit or collection). A change the user did "
-                         "not ask for: suggest it instead."),
-        parameters={
-            "type": "object",
-            "required": ["research_question_id"],
-            "properties": {
-                "quest_id": _QUEST_ID_PARAM,
-                "research_question_id": {"type": "string",
-                                         "description": "The experiment's id, from find_quest_experiments."},
-                "question": {"type": "string"},
-                "context": {"type": "string"},
-                "hypothesis": {"type": "string"},
-                "purpose": _EXPERIMENT_PURPOSE_PARAM,
-                "sub_questions": {**_EXPERIMENT_SUB_QUESTIONS_PARAM,
-                                  "description": "The FULL new list of sub-questions."},
-                "assumptions": {**_EXPERIMENT_ASSUMPTIONS_PARAM,
-                                "description": "The FULL new list of assumptions."},
-                "status": {"type": "string", "enum": list(EXPERIMENT_STATUSES)},
-                "conclusion": {"type": "string"},
-                "linked_goal_ids": {"type": "array", "items": {"type": "string"},
-                                    "description": "The FULL new list of linked goal ids."},
-                "linked_collection_ids": {"type": "array", "items": {"type": "string"},
-                                          "description": "The FULL new list of linked habit / collection ids."},
-                "start_date": {"type": "string", "description": "YYYY-MM-DD, or '' to clear."},
-                "end_date": {"type": "string", "description": "YYYY-MM-DD, or '' to clear."},
-                "user_asked_for_this_field": _ASKED_PARAM,
-            },
-        },
-        mutates=True,
-        workflow_step=False,  # needs the user's own say-so (user_asked_for_this_field); a scheduled step cannot assert it
-        origin="standard",
-        keywords=("experiment", "experiments", "research", "question", "hypothesis", "conclude",
-                  "conclusion", "edit", "change", "update", "rename", "reopen", "status"),
-        context_args={"quest_id": "quest_id"},
-        timeout_seconds=45.0,
-    )
-
-
 def _with_credentials(build: Callable[[Mapping[str, str]], ToolSpec]):
     return lambda env: build(env) if quest_credentials_present(env) else None
 
@@ -1348,9 +1085,6 @@ STANDARD_TOOL_BUILDERS: Dict[str, Callable[[Mapping[str, str]], Optional[ToolSpe
     "create_quest_goal": _with_credentials(create_quest_goal_spec),
     "add_quest_strategy": _with_credentials(add_quest_strategy_spec),
     "create_quest_habit": _with_credentials(create_quest_habit_spec),
-    "find_quest_experiments": _with_credentials(find_quest_experiments_spec),
-    "create_quest_experiment": _with_credentials(create_quest_experiment_spec),
-    "update_quest_experiment": _with_credentials(update_quest_experiment_spec),
 }
 
 #: Every standard tool that writes quest data, for guards and briefs that must name them.
@@ -1468,3 +1202,12 @@ def build_tool_registry(env: Optional[Mapping[str, str]] = None) -> ToolRegistry
             log.error("QAR_TOOLS_FILE %s not loaded: %s", path, e)
     apply_standard_overrides(registry, overrides)
     return registry
+
+
+# The Quest operations (asks, progress, notes, goals) register themselves into STANDARD_TOOL_BUILDERS.
+# Imported last because that module imports this one; it is a separate module only to keep this one
+# under the size limit and to give those operations one place.
+from . import tools_quest_ops  # noqa: E402,F401
+from .tools_quest_experiments import (  # noqa: E402,F401  (kept importable from here)
+    EXPERIMENT_STATUSES, create_quest_experiment_spec, find_quest_experiments_spec,
+    search_experiments, update_quest_experiment_spec)

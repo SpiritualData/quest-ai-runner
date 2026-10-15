@@ -31,11 +31,13 @@ from quest_ai_runner.core.tools import (
     file_email_draft_spec,
     send_quest_email_spec,
 )
+from quest_ai_runner.core.tools_quest_ops import QUEST_OPERATION_BUILDERS
 
-# The standard catalog with Quest credentials: the two mail tools plus one quest-data tool per
-# field, goal, strategy and habit (core/tools.py QUEST_DATA_TOOLS).
+# The standard catalog with Quest credentials: the two mail tools, one quest-data tool per field,
+# goal, strategy and habit (core/tools.py QUEST_DATA_TOOLS), and the Quest operations
+# (core/tools_quest_ops.py).
 STANDARD_WITH_QUEST = sorted(["file_email_draft", "send_quest_email", "find_quest_experiments",
-                              *QUEST_DATA_TOOLS])
+                              *QUEST_DATA_TOOLS, *QUEST_OPERATION_BUILDERS])
 
 
 def make_spec(name, *, handler=None, mutates=True, keywords=(), description=None, **kw):

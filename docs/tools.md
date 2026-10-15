@@ -27,6 +27,40 @@ There are two kinds, and the model sees both side by side:
 - **Custom tools** are yours, declared in a TOML file: any command or Python function, described
   with when to use it and when not to.
 
+## Quest operations: one definition, shown when the work needs it
+
+Besides the quest-field writes, the standard catalog holds the operations an AI run performs on a
+quest and its surroundings (`core/tools_quest_ops.py`). Each is defined once, named after the
+`QuestClient` method it wraps, and the registry renders that one definition for every mode:
+
+| Operation | Reads or writes | What it does |
+|---|---|---|
+| `create_decision` | writes | Raise something you need from a person as a Quest ask; an ask already open is recognised, not raised twice |
+| `list_open_decisions_for_quest` | reads | The asks waiting on a person |
+| `list_asks` | reads | What people asked of the AI (the What You Asked ledger), open first, each with its key |
+| `record_ask` | writes | Record a request a person made, in their exact words |
+| `update_ask` | writes | Claim where an ask stands (done waits for the person to accept it); the ask is a key or a phrase of its words |
+| `update_outcome_progress` | writes | A measurable outcome's progress with one line of evidence; the outcome is an id, a phrase of its words, or its position |
+| `add_quest_note`, `list_quest_notes` | writes, reads | The quest's note thread |
+| `create_goal`, `update_goal` | writes | Fill a plan gap, link a goal to its outcome (`on_request_only`: shown only to a run that pins them) |
+
+The quest comes from the run (`context_args`), so no id has to be pasted. A deep run sees
+`python -m quest_ai_runner.tools call NAME --kw arg=value` (`--kw` values that parse as JSON stay
+typed; `--args` takes one JSON object for nested values); `python -m quest_ai_runner.tools show NAME`
+and `quest-ai-runner quest --describe NAME` print one operation's how-to on demand. The same entry
+is the planner's `tool` action, and Quest AI chat in quest-backend has a helper of the same name for
+the asks operations.
+
+**When a run is shown an operation.** Never as standing prompt text. The brief gets the entries that
+match the work (BM25 over name, keywords, the description's first paragraph and `when_to_use`; stopwords
+and words most tools share are ignored), plus the tools the run's composer **pins**
+(`context_meta["tool_pins"]`, set by `runner/run_operations.py`). An autopilot batch is pinned to
+`list_asks`, `record_ask`, `update_ask`, `create_decision` and `update_outcome_progress`, because every
+pass owes the open asks and outcome progress; a run so pinned gets at most two other tools by relevance.
+A spec marked `on_request_only` is never selected by relevance, only pinned or called by name. To make a
+new kind of run know an operation, add its names to `pinned_operations`; to add an operation, add one
+`ToolSpec` (with `when_to_use` and `when_not_to_use`) and it is available everywhere the catalog is.
+
 ## How the model chooses
 
 Every tool carries four things the model reads: a `description`, `when_to_use`,
@@ -130,7 +164,9 @@ The deep-run brief lists the relevant tools with the exact command for each:
 
 ```bash
 python -m quest_ai_runner.tools call send_quest_email \
-  --args '{"subject": "Weekly plan", "body": "..."}' --quest <quest id>
+  --kw subject="Weekly plan" --kw body="..." --quest <quest id>
+# or one JSON object, for nested values:
+python -m quest_ai_runner.tools call send_quest_email --args '{"subject": "Weekly plan", "body": "..."}'
 ```
 
 `--args-file PATH` (or `-` for stdin) takes the JSON from a file. Exit code 0 is success, 1 a failed

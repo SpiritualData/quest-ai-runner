@@ -370,9 +370,8 @@ PROPOSE_TEXT = (
     "quest's outcome, goals and notes. Write it as a single decision-request holding: the "
     "hypothesis, the metric, the minimal design (what changes, for how long, what is recorded), the "
     "cost in time and money, and the decision that would follow from each result. Raise it with "
-    "`quest-ai-runner quest create_decision \"SUMMARY\" --kw kind={kind} --kw quest_id={quest_id} "
-    "--write`. Never create or start the experiment: it exists only if the person approves. If you "
-    "have no well-grounded experiment to propose, propose none.")
+    "create_decision, using kind {kind}. Never create or start the experiment: it exists only if "
+    "the person approves. If you have no well-grounded experiment to propose, propose none.")
 
 PROPOSAL_WAITING_TEXT = (
     "This quest has no experiment of its own yet, and an experiment proposal is already waiting for "

@@ -69,6 +69,9 @@ def _build_parser() -> argparse.ArgumentParser:
                          help="allow a method that modifies Quest (required for those)")
     quest_p.add_argument("--list", action="store_true", dest="list_methods",
                          help="list the callable methods and exit")
+    quest_p.add_argument("--describe", default=None, metavar="METHOD",
+                         help="show how to call one method (what it does, when to use it, its "
+                              "arguments) and exit")
     quest_p.add_argument("--config", default=None, metavar="PATH",
                          help="TOML config file (QAR_CONFIG_FILE also works)")
     quest_p.add_argument("--compact", action="store_true",
@@ -110,6 +113,8 @@ def _build_parser() -> argparse.ArgumentParser:
     goal_p.add_argument("--criteria", default=None, help="completion criteria")
     goal_p.add_argument("--goal-type", default=None, help="e.g. day_goal, week_goal")
     goal_p.add_argument("--parent-goal-id", default=None, help="parent goal id, for a sub-goal")
+    goal_p.add_argument("--outcome-id", default=None,
+                        help="the quest measurable outcome this goal moves (needs --quest-id)")
     goal_p.add_argument("--ai-help", action="store_true",
                         help="mark this goal AI-assisted (Quest Autopilot may act on it)")
     goal_p.add_argument("--assigned-to-user-id", default=None,

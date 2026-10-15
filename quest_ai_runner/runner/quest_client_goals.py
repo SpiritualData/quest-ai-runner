@@ -168,6 +168,7 @@ class GoalsMixin:
                     criteria: Optional[str] = None,
                     goal_type: Optional[str] = None,
                     parent_goal_id: Optional[str] = None,
+                    outcome_id: Optional[str] = None,
                     target_value: Optional[float] = None,
                     target_unit: Optional[str] = None,
                     ai_help: Optional[bool] = None,
@@ -190,6 +191,9 @@ class GoalsMixin:
           quarter "YYYY_Q#"      e.g. "2026_Q3"
           year    "YYYY"         e.g. "2026"
         The deadline is auto-calculated server-side from the period (end of day/week/month/etc).
+
+        ``outcome_id`` links the goal to one of ``quest_id``'s measurable outcomes (the id from the
+        quest's ``measurable_outcomes``), so finishing the goal reads as movement on that outcome.
 
         ``assigned_to_user_id`` assigns the goal, at creation, to a specific HUMAN member of
         ``quest_id`` (a Quest user_id, not an AI persona -- see ``assignee_rep_id`` for that).
@@ -219,6 +223,10 @@ class GoalsMixin:
             body["goal_type"] = goal_type
         if parent_goal_id is not None:
             body["parent_goal_id"] = parent_goal_id
+        if outcome_id is not None:
+            # The measurable outcome (of ``quest_id``) this goal moves; Quest refuses an id that is
+            # not one of that quest's outcomes, and the refusal names it.
+            body["outcome_id"] = outcome_id
         if target_value is not None:
             body["target_value"] = target_value
         if target_unit is not None:

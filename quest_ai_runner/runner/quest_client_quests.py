@@ -457,13 +457,62 @@ class QuestsMixin:
             raise QuestApiError("Not done: progress_pct and current_value must be numbers "
                                 "(progress_pct is 0 to 100)")
         try:
-            result = self._request(
-                "POST", f"/api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress",
-                body=body)
+            result = self.post_outcome_progress(quest_id, outcome_id, body)
         except QuestApiError as e:
             if e.status not in (400, 403, 404, 422):
                 raise
+            if e.status == 404:
+                # The AI usually holds an outcome's WORDS, not its id. Resolve them against the
+                # quest's own outcomes once, so the call that named the outcome in words works;
+                # when nothing (or several things) match, say which outcomes there are.
+                resolved, why = self.resolve_outcome_id(quest_id, outcome_id)
+                if resolved and resolved != outcome_id:
+                    try:
+                        result = self.post_outcome_progress(quest_id, resolved, body)
+                        return self.progress_result(result)
+                    except QuestApiError as retry_error:
+                        e = retry_error
+                elif why:
+                    raise QuestApiError(f"Not done: {why}", status=e.status) from e
             raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
+        return self.progress_result(result)
+
+    def post_outcome_progress(self, quest_id: str, outcome_id: str, body: Dict[str, Any]) -> Any:
+        return self._request(
+            "POST", f"/api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress",
+            body=body)
+
+    def resolve_outcome_id(self, quest_id: str, outcome: str):
+        """``(outcome_id, problem)`` for an outcome named by id OR by (part of) its text.
+
+        An id of this quest's outcomes resolves to itself. Otherwise a case-insensitive match on the
+        outcome text (the whole text, or a fragment unique to one outcome) or a 1-based position
+        resolves to that outcome's id. ``problem`` is a plain sentence listing the quest's outcomes
+        with their ids when nothing or several match, so the next call can be right. ``(None, None)``
+        when the quest's outcomes could not be read at all.
+        """
+        state = self.get_my_quest(quest_id)
+        quest = (state.get("state") if isinstance(state.get("state"), dict) else state) or {}
+        outcomes = [o for o in (quest.get("measurable_outcomes") or quest.get("measurableOutcomes")
+                                or []) if isinstance(o, dict) and o.get("id")]
+        if not outcomes:
+            return None, None
+        wanted = str(outcome or "").strip().lower()
+        for o in outcomes:
+            if str(o["id"]).lower() == wanted:
+                return str(o["id"]), None
+        if wanted.isdigit() and 1 <= int(wanted) <= len(outcomes):
+            return str(outcomes[int(wanted) - 1]["id"]), None
+        hits = [o for o in outcomes if wanted and wanted in str(o.get("text") or "").strip().lower()]
+        if len(hits) == 1:
+            return str(hits[0]["id"]), None
+        listing = "; ".join(f"{o['id']} = {str(o.get('text') or '')[:70]!r}" for o in outcomes)
+        what = ("matches several of this quest's outcomes" if hits
+                else "is not an id or the words of any of this quest's outcomes")
+        return None, f"{outcome!r} {what}. Use one of these ids: {listing}"
+
+    @staticmethod
+    def progress_result(result: Any) -> Dict[str, Any]:
         if (result or {}).get("pending_approval"):
             # The user's permission for this is "ask first": the write is parked on a decision and has
             # NOT happened. Say so; never hand back an empty outcome that reads like a silent success.

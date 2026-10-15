@@ -59,6 +59,7 @@ from .executor_support import (
 from .executor_context import ContextViewMixin
 from .executor_pauses import PausesMixin
 from .executor_reporting import ReportingMixin
+from .run_operations import pinned_operations
 
 
 
@@ -403,6 +404,11 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
         context_meta: Optional[Dict[str, Any]] = {"goal_id": goal_id} if goal_id else None
         if task_id:
             context_meta = {**(context_meta or {}), "task_id": task_id}
+        # Operations this kind of run owes on every pass (see ``run_operations``): their how-to is
+        # shown first in the brief, whatever the brief's wording.
+        run_pins = pinned_operations(task)
+        if run_pins:
+            context_meta = {**(context_meta or {}), "tool_pins": list(run_pins)}
         # The quest fence for every scoped context arm (see ``task_scope_tags``).
         run_scope_tags = task_scope_tags(task)
         if run_scope_tags:

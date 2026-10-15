@@ -226,7 +226,8 @@ class DeepRunMixin:
             # exact shell command that calls it, so a run that needs (say) to send the quest's
             # mail calls the tool instead of rediscovering how. Absent when no tools are wired.
             if self.tools is not None:
-                deep_tools_block = self.tools.render_deep_block(f"{user_message}\n{goal}")
+                deep_tools_block = self.tools.render_deep_block(
+                    f"{user_message}\n{goal}", pins=(ctx_meta or {}).get("tool_pins") or ())
                 if deep_tools_block:
                     if quest_id:
                         deep_tools_block += (f"\nThis run's quest is {quest_id}: add "
