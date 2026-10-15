@@ -264,6 +264,10 @@ def render_goal_notes(notes: Optional[List[Dict[str, Any]]]) -> str:
             who = name or "unattributed"
         if str(note.get("source") or "").lower() == "email":
             who += ", by email"
+        if note.get("source_label"):
+            # What the note is from, per the backend (e.g. "Joshua's Daily Reflection"); absent on
+            # a plain note and on an older backend.
+            who += f", from {str(note['source_label']).strip()}"
         when = str(note.get("created_at") or "")[:10]
         stamp = f"[{when}] " if when else ""
         answering = describe_reply_target(note)

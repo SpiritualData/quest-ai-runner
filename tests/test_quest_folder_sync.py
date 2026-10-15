@@ -806,3 +806,18 @@ def test_push_state_without_a_file_raises():
     with tempfile.TemporaryDirectory() as d:
         with pytest.raises(QuestFolderSyncError):
             push_quest_state(MockStateClient(), QUEST_ID, d)
+
+
+def test_render_names_what_a_reflection_note_is_from_and_leaves_plain_notes_alone():
+    """QUEST_SYNC.md is what the person and the next run read: a note split out of a reflection
+    carries the backend's source_label ("Joshua's Daily Reflection"); others read as before."""
+    state = {"outcome": "Launch", "completed": False}
+    notes = [
+        {"note_id": "note_r", "text": "Booked the venue.", "created_at": "2026-10-14T09:00:00",
+         "author_kind": "user", "author_name": "Joshua", "source_label": "Joshua's Daily Reflection"},
+        {"note_id": "note_p", "text": "Plain note.", "created_at": "2026-10-15T09:00:00",
+         "author_kind": "user", "author_name": "Joshua", "source_label": None},
+    ]
+    text = render_sync_file("", QUEST_ID, state, notes)
+    assert "<!-- id:note_r --> [2026-10-14] (Joshua) (from Joshua's Daily Reflection) Booked the venue." in text
+    assert "<!-- id:note_p --> [2026-10-15] (Joshua) Plain note." in text

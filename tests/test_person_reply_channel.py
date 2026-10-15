@@ -516,3 +516,17 @@ def test_a_report_sized_result_is_truncated_rather_than_flooding_the_run():
 
     assert "[truncated]" in obs.text
     assert len(obs.text) < QuestRetrievalAdapter.MAX_RESULT_CHARS + 1000
+
+
+def test_a_note_split_out_of_a_reflection_says_what_it_is_from():
+    """The backend's source_label ("Joshua's Daily Reflection") rides on the note; a plain note, or
+    a note from a backend that predates the field, reads exactly as before."""
+    out = render_goal_notes([
+        {**person("Booked the venue.", name="Joshua", when="2026-10-14"),
+         "source_label": "Joshua's Daily Reflection"},
+        {**person("Plain note.", name="Joshua", when="2026-10-15"), "source_label": None},
+        person("No field at all.", name="Joshua", when="2026-10-16"),
+    ])
+    assert "[2026-10-14] (Joshua, the person, from Joshua's Daily Reflection) Booked the venue." in out
+    assert "[2026-10-15] (Joshua, the person) Plain note." in out
+    assert "[2026-10-16] (Joshua, the person) No field at all." in out

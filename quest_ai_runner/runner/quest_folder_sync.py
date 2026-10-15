@@ -180,7 +180,11 @@ def _render_notes_block(notes: List[Dict[str, Any]]) -> str:
             author = f"{name}, AI" if name and name.lower() != "ai assistant" else "AI"
         else:
             author = name or kind
-        tag = " ".join(f"[{p}]" if p == created else f"({p})" for p in (created, author) if p)
+        # source_label is the backend's own answer to "what is this note from" (e.g. "Joshua's
+        # Daily Reflection" for a note split out of a reflection); absent on a plain note and on
+        # an older backend, in which case the line reads exactly as it always did.
+        origin = f"from {str(note.get('source_label')).strip()}" if note.get("source_label") else ""
+        tag = " ".join(f"[{p}]" if p == created else f"({p})" for p in (created, author, origin) if p)
         lines.append(f"- {prefix}{tag + ' ' if tag else ''}{text}")
     return "\n".join(lines)
 
