@@ -1,7 +1,8 @@
 """An in-process fake of the Quest backend's card API (stdlib http.server on a thread).
 
 Implements the contract ``QuestApiCardRepository`` speaks: whoami, embedder, stamp, paged list with
-``updated_after``, search, PUT/GET/DELETE with ``team_id`` scope, and ``POST /bulk``. Offline and
+``updated_after``, search, PUT/GET/DELETE with ``team_id`` or ``org_id`` scope (an org card is stored under the key ``org:<id>``), team lookup
+(``GET /api/teams/{id}`` from ``teams``), and ``POST /bulk``. Offline and
 deterministic; ids and urls are obviously fake.
 """
 import json
@@ -23,6 +24,7 @@ class FakeCardBackend:
         self.bulk_batches = []
         self.vectors_seen = {}
         self.whoami_status = 200
+        self.teams = {}            # team_id -> team doc (for GET /api/teams/{id})
         self.page_size_cap = None
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -36,18 +38,21 @@ class FakeCardBackend:
         self.server.shutdown()
         self.server.server_close()
 
-    def put(self, card_id, card, team_id=""):
+    def put(self, card_id, card, team_id="", org_id=""):
         self.clock += 1
+        team_id = f"org:{org_id}" if org_id else team_id
         self.cards[(team_id, card_id)] = {**card, "id": card_id, "updated_at_epoch": self.clock}
 
     def _visible(self, q):
         teams = [t for t in (q.get("team_ids", [""])[0]).split(",") if t]
         out = []
         for (team, cid), card in self.cards.items():
-            if teams and team and team not in teams:
+            if teams and team and not team.startswith("org:") and team not in teams:
                 continue
             c = {k: v for k, v in card.items() if k != "updated_at_epoch"}
-            if team:
+            if team.startswith("org:"):
+                c["org_id"] = team[4:]
+            elif team:
                 c["team_id"] = team
             c["updated_at"] = card["updated_at_epoch"]
             out.append((card["updated_at_epoch"], c))
@@ -83,6 +88,11 @@ class FakeCardBackend:
                     status, detail = backend.fail_next.pop(0)
                     return self._send(status, {"detail": detail})
                 team = (q.get("team_id") or [""])[0]
+                if (q.get("org_id") or [""])[0]:
+                    team = "org:" + q["org_id"][0]
+                if path.startswith("/api/teams/") and path != "/api/teams/whoami" and method == "GET":
+                    doc = backend.teams.get(path.rsplit("/", 1)[-1])
+                    return self._send(200, doc) if doc is not None else self._send(404, {"detail": "no team"})
                 if path == "/api/teams/whoami":
                     if backend.whoami_status != 200:
                         return self._send(backend.whoami_status, {"detail": "bad key"})
@@ -115,7 +125,7 @@ class FakeCardBackend:
                         if not accepted:
                             counts["embedded"] += 1
                         counts["written"] += 1
-                        backend.put(item["id"], item["card"], body.get("team_id") or "")
+                        backend.put(item["id"], item["card"], body.get("team_id") or "", body.get("org_id") or "")
                         results.append({"id": item["id"], "ok": True, "embedded": not accepted,
                                         "vector_accepted": accepted})
                     return self._send(200, {"results": results, "counts": counts,
@@ -140,7 +150,8 @@ class FakeCardBackend:
                     cid = path[len("/api/cards/"):]
                     if method == "PUT":
                         backend.put(cid, body, team)
-                        return self._send(200, {"ok": True, "id": cid, "team_id": team,
+                        return self._send(200, {"ok": True, "id": cid, "team_id": team if not team.startswith("org:") else None,
+                                                "org_id": team[4:] if team.startswith("org:") else None,
                                                 "revision": "r", "updated_at": "t", "embedded": True})
                     if method == "GET":
                         card = backend.cards.get((team, cid))

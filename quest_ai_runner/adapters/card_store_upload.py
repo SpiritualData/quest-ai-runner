@@ -6,7 +6,11 @@ re-embedding anything. Pure planning plus a thin apply step over ``QuestApiCardR
 * Only the store's OWN cards are read (``FilesystemCardRepository``); mounted stores are read-only
   views that never exist as files here, so they are not uploaded (their owners upload them).
 * Namespaced copy-imports (provenance ``imported_from``) are skipped: the source store uploads the
-  original, and uploading the copy would duplicate it.
+  original, and uploading the copy would duplicate it. Exception, opt-in with
+  ``adopt_ancestor_copies``: copies whose ``imported_from`` starts with ``..`` come from a store ABOVE
+  this root that is often stale and never uploaded, and their paths are already relative to THIS root,
+  so they are uploaded as this store's own (``imported_from`` dropped, ``adopted_from`` records it).
+  Nested imports (a store below this root, with its own lane) stay skipped.
 * A vector is offered only when the store's embedder id equals the backend's and the dimension
   matches; otherwise the card is uploaded without one and the BACKEND embeds it. Nothing is ever
   embedded here.
@@ -29,16 +33,19 @@ from .quest_api_card_repository import BULK_MAX_CARDS, runner_env_id, strip_serv
 
 REASON_IMPORTED = "namespaced copy-import: the source store uploads them"
 REASON_NO_ID = "no usable card id"
+ANCESTOR_PREFIX = ".."
 
 
 @dataclass
 class UploadPlan:
     cards_dir: str
-    team_id: str = ""                      # "" = private
+    team_id: str = ""                      # "" with no org = private
+    org_id: str = ""                       # set = every card goes to this org
     total: int = 0
     uploads: List[Tuple[str, Dict[str, Any]]] = field(default_factory=list)
     skipped: Dict[str, List[str]] = field(default_factory=dict)   # reason -> card ids
     mounts: int = 0
+    adopted: List[str] = field(default_factory=list)   # ancestor-store copies uploaded as own
     vectors: Dict[str, List[float]] = field(default_factory=dict)  # usable, by card id
     vectors_available: int = 0
     vector_note: str = ""
@@ -51,7 +58,7 @@ class UploadPlan:
         return -(-len(self.uploads) // BULK_MAX_CARDS)
 
     def render(self) -> str:
-        scope = f"team {self.team_id}" if self.team_id else "private"
+        scope = f"org {self.org_id}" if self.org_id else (f"team {self.team_id}" if self.team_id else "private")
         lines = [
             f"upload plan for {self.cards_dir} ({scope})",
             f"  cards in the store: {self.total}",
@@ -59,6 +66,8 @@ class UploadPlan:
         ]
         for reason, ids in sorted(self.skipped.items()):
             lines.append(f"  skipped {len(ids):>5}:    {reason}")
+        if self.adopted:
+            lines.append(f"  adopted from an ancestor store: {len(self.adopted)} (uploaded as this store's own)")
         if self.mounts:
             lines.append(f"  mounted stores:     {self.mounts} (read-only views, never uploaded from here)")
         lines.append(f"  vectors available:  {self.vectors_available}; usable by the backend: "
@@ -74,6 +83,8 @@ def plan_upload(
     cards_dir: str,
     *,
     team_id: str = "",
+    org_id: str = "",
+    adopt_ancestor_copies: bool = False,
     backend_embedder: Optional[Dict[str, Any]] = None,
     vector_store: Any = None,
     local_embedder_id: str = "",
@@ -81,7 +92,7 @@ def plan_upload(
     """What ``upload`` would send. ``backend_embedder`` is ``{embedder_id, dimension}`` from the
     backend (None when it was not asked); ``vector_store`` an opened ``QdrantVectorStore`` (or None);
     ``local_embedder_id`` the embedder that produced the store's vectors."""
-    plan = UploadPlan(cards_dir=cards_dir, team_id=team_id)
+    plan = UploadPlan(cards_dir=cards_dir, team_id=team_id, org_id=org_id)
     meta = ident.read_meta(cards_dir)
     plan.mounts = len([m for m in meta.get("mounts") or [] if isinstance(m, dict)])
     cards = FilesystemCardRepository(cards_dir).load_all()
@@ -91,7 +102,9 @@ def plan_upload(
     for card_id in sorted(cards):
         card = cards[card_id]
         prov = card.get("provenance")
-        if isinstance(prov, dict) and prov.get("imported_from"):
+        imported_from = str(prov.get("imported_from") or "") if isinstance(prov, dict) else ""
+        adopt = bool(imported_from) and adopt_ancestor_copies and imported_from.startswith(ANCESTOR_PREFIX)
+        if imported_from and not adopt:
             plan.skipped.setdefault(REASON_IMPORTED, []).append(card_id)
             continue
         if not str(card_id).strip():
@@ -100,6 +113,12 @@ def plan_upload(
         body = strip_server_owned(card)
         body["id"] = str(card.get("id") or card_id)
         body.pop("team_id", None)          # the request's scope decides, never a stale field
+        body.pop("org_id", None)
+        if adopt:
+            adopted_prov = {k: v for k, v in prov.items() if k != "imported_from"}
+            adopted_prov["adopted_from"] = imported_from
+            body["provenance"] = adopted_prov
+            plan.adopted.append(str(card_id))
         body.setdefault("runner_env_id", runner_env_id())
         body[ident.ORIGIN_FIELD] = origin
         plan.uploads.append((str(card_id), body))
@@ -139,6 +158,7 @@ def apply_upload(plan: UploadPlan, repository: Any, *, on_batch: Any = None) -> 
         plan.uploads,
         plan.vectors or None,
         team_id=plan.team_id,
+        org_id=plan.org_id,
         embedder_id=plan.embedder_id,
         dimension=plan.dimension,
         on_batch=on_batch,

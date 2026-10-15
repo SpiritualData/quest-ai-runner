@@ -822,6 +822,7 @@ def _resolve_context_assembler_base(
     if chosen is not _AUTO_CONTEXT:
         return chosen  # an explicit instance, or None to disable
     # Default-on: build a FileContextStore (keyword/IDF). Local import avoids a cycle.
+    from .adapters.quest_api_card_repository import CardScopeError
     try:
         from .adapters import FileContextStore
         root = cfg.corpus_root or os.getcwd()
@@ -862,6 +863,13 @@ def _resolve_context_assembler_base(
             if notify:
                 notify(_msg)
         elif _cards_backend in ("", "auto", "quest") and _has_quest_creds:
+            # The lane's card scope (QAR_CARDS_SCOPE). A bad or unresolvable setting is a startup
+            # failure: it is raised here, outside the build guard below, never a quiet fallback.
+            from .adapters.quest_api_card_repository import (
+                QuestApiCardRepository as ScopeProbe, select_card_scope)
+            card_scope = select_card_scope(_qs, org_of_team=lambda lane_team: ScopeProbe(
+                base_url=_qs["base_url"], api_key=_qs["api_key"],
+                user_id=_qs["user_hint"]).org_of_team(lane_team))
             try:
                 from .adapters.quest_api_card_repository import (
                     QuestApiCardRepository, QuestApiCardVectorStore)
@@ -869,16 +877,18 @@ def _resolve_context_assembler_base(
                     base_url=_qs["base_url"],
                     api_key=_qs["api_key"],
                     user_id=_qs["user_hint"],
-                    team_id=_qs["team_id"],
+                    team_id=card_scope["team_id"],
+                    org_id=card_scope["org_id"],
                     on_error=notify,
                 )
                 _user = _card_repository.resolve_user_id()
                 _quest_cards_active = True
                 _cards_vector_store = QuestApiCardVectorStore(_card_repository)
                 _log.info(
-                    "context index: using the Quest backend for cards and vectors (%s, user %s, team %s)",
+                    "context index: using the Quest backend for cards and vectors (%s, user %s, %s)",
                     _qs["base_url"], (_user[:4] + "..." if _user else "UNRESOLVED"),
-                    _qs["team_id"] or "none (private cards)",
+                    (f"org {card_scope['org_id']}" if card_scope["org_id"]
+                     else (f"team {card_scope['team_id']}" if card_scope["team_id"] else "private cards")),
                 )
             except Exception:  # noqa: BLE001
                 _log.error(
@@ -1184,6 +1194,8 @@ def _resolve_context_assembler_base(
         if claude_assembler is not None:
             assemblers.append(claude_assembler)
         return CompositeContextAssembler(assemblers)
+    except CardScopeError:
+        raise  # a bad QAR_CARDS_SCOPE must stop startup, not quietly run on another scope
     except Exception:  # noqa: BLE001 — never let context wiring break runner construction
         return None
 

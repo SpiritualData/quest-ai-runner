@@ -104,6 +104,8 @@ def build_parser() -> argparse.ArgumentParser:
     up.add_argument("--cards-dir", required=True, help="the local store to upload")
     scope = up.add_mutually_exclusive_group(required=True)
     scope.add_argument("--team-id", default=None, help="assign every uploaded card to this team")
+    scope.add_argument("--org-id", default=None,
+                       help="assign every uploaded card to this org (readable by every org member)")
     scope.add_argument("--private", action="store_true",
                        help="upload as private cards of the key's user (no team)")
     up.add_argument("--base-url", default=None,
@@ -118,6 +120,9 @@ def build_parser() -> argparse.ArgumentParser:
     up.add_argument("--embedder-id", default=None,
                     help="embedder that produced the store's vectors (default: the store's recorded "
                          "vector_location embedder, else QAR_EMBEDDER_BACKEND)")
+    up.add_argument("--adopt-ancestor-copies", action="store_true",
+                    help="upload copy-imports from a store ABOVE this root (imported_from starting "
+                         "'..') as this store's own cards; nested imports stay skipped")
     up.add_argument("--apply", action="store_true", help="upload (default: dry run)")
     return parser
 
@@ -137,8 +142,9 @@ def run_upload(args) -> int:
         print("no Quest credentials: pass --base-url/--api-key or set QAR_QUEST_API_URL|QUEST_BASE_URL "
               "and QAR_QUEST_API_KEY|QUEST_API_KEY", file=sys.stderr)
         return 1
-    team_id = "" if args.private else (args.team_id or "").strip()
-    repo = QuestApiCardRepository(base_url=base_url, api_key=api_key, team_id=team_id)
+    org_id = "" if args.private else (args.org_id or "").strip()
+    team_id = "" if (args.private or org_id) else (args.team_id or "").strip()
+    repo = QuestApiCardRepository(base_url=base_url, api_key=api_key, team_id=team_id, org_id=org_id)
     try:
         user = repo.resolve_user_id()
     except Exception as exc:  # noqa: BLE001
@@ -157,7 +163,8 @@ def run_upload(args) -> int:
     recorded = ident.vector_location_of(meta) or {}
     local_embedder = args.embedder_id if args.embedder_id is not None else (
         str(recorded.get("embedder") or "") or embedder_id_from_env())
-    plan = plan_upload(args.cards_dir, team_id=team_id, backend_embedder=backend_embedder,
+    plan = plan_upload(args.cards_dir, team_id=team_id, org_id=org_id,
+                       adopt_ancestor_copies=args.adopt_ancestor_copies, backend_embedder=backend_embedder,
                        vector_store=vector, local_embedder_id=local_embedder)
     print(plan.render())
     if plan.problems:

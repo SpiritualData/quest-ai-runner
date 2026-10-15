@@ -224,7 +224,7 @@ quest-ai-runner context merge-into --cards-dir NARROW --into WIDE [--apply] [--p
         [--qdrant-url URL | --qdrant-path PATH] [--collection-prefix PREFIX] [--vector-size N]
 quest-ai-runner context store-info --cards-dir DIR --vector-location URL|embedded
         [--vector-collection-prefix P] [--vector-size N] [--embedder-id ID] [--vector-path DIR] --apply
-quest-ai-runner context upload --cards-dir DIR (--team-id ID | --private) [--apply] [...]
+quest-ai-runner context upload --cards-dir DIR (--team-id ID | --org-id ID | --private) [--apply] [...]
 ```
 
 `upload` is described in [Uploading a local store](#uploading-a-local-store-context-upload).
@@ -391,8 +391,14 @@ The personal lane's corpus root sits above the org's folder, so the org's store 
 | `QAR_QUEST_API_KEY`, else `QUEST_API_KEY` | Bearer key; its user is the acting user |
 | `QAR_TEAM_ID`, else `QUEST_TEAM_ID` | the team a lane writes cards to; unset means private cards |
 | `QAR_RUNNER_ENV_ID`, else `QAR_ENV_ID`, else hostname | this runner environment's id |
+| `QAR_CARDS_SCOPE` | the scope this lane writes cards to: `org:<id>`, `team:<id>`, `private`, or bare `org`. Unset keeps the default (the lane's team, private when it has none). An id inside the value wins over the variables below |
+| `QAR_ORG_ID`, else `QUEST_ORG_ID` | the org for a bare `QAR_CARDS_SCOPE=org`. When it is not set the org is resolved from the lane's team (`GET /api/teams/{team_id}`, field `org_id`) |
 | `QAR_USER_ID` | optional hint only; the key's identity (`GET /api/teams/whoami`) always wins and a difference is logged as a warning |
 | `QAR_CARDS_BACKEND` | unset or `auto`: Quest when credentials exist, otherwise local. `local` (alias `file`): the opt-out. `qdrant`: one Qdrant collection (unchanged). `quest`: require Quest; without credentials it logs an ERROR, notifies, and runs local, so the ERROR is the flag that cards are not on the backend |
+
+An unusable `QAR_CARDS_SCOPE` (unknown form, `org` with no org and no team that belongs to one, a failed
+team lookup) stops startup with `CardScopeError`; a lane never quietly runs on a different scope. For an
+org scope the lane's team stays only as provenance on the `local_fetch` item; writes go to the org.
 
 The `QAR_*` name wins when both names are set. Only the environment is read (a lane's `qar.toml`
 `[env]` table is the usual source); `RunnerConfig.quest_base_url` is not consulted for cards.
@@ -405,15 +411,16 @@ Mounting is off (cards are remote; nothing to mount), logged at info. Cards a la
 
 ### Access model (enforced by the backend)
 
-- A card has an owner user and an optional team. No team means private to its owner.
-- Readable by its owner and by members of its team. Writable and deletable by the owner, or by a
-  member writing the team's card.
+- A card has an owner user and exactly one scope: private, a team, or an org.
+- Readable by its owner and by members of its team or org. Writable and deletable by the owner, or by a
+  member writing the team's or org's card. An org card is readable by every member of that org.
 - Listing, search and assembly default to everything the key's user can read: their private cards plus
-  the cards of every team they belong to. A person's personal lane therefore reaches an org team's
-  cards only through that person's own team membership. `read_team_ids` narrows a repository to chosen
-  teams.
-- Card identity is `(scope, card_id)`, scope being the owner (private) or the team. The same id may
-  exist privately and in a team. The repository presents a `{card_id: card}` mapping, so on an id
+  the cards of every team they belong to and of every org they belong to (the backend defines org
+  membership; see its `docs/CONTEXT_CARDS_API.md`). A person's personal lane therefore reaches an org team's
+  cards only through that person's own team membership. `read_team_ids` / `read_org_ids` narrow a
+  repository to chosen teams / orgs (sent as `team_ids` / `org_ids`).
+- Card identity is `(scope, card_id)`, scope being the owner (private), the team or the org. The same id
+  may exist in several scopes. The repository presents a `{card_id: card}` mapping, so on an id
   collision the card in the lane's own write scope wins, then the private card; updating a card writes
   it back to the scope it was listed from, never into a different one.
 - A service account (a key whose user has no interactive identity) may act only for users it shares a
@@ -458,7 +465,7 @@ use all of them. Anything that REWRITES or DELETES cards does not.
 
 ### Protocol the repository speaks
 
-`PUT/GET/DELETE /api/cards/{id}[?team_id=]`, `GET /api/cards` (paged with `limit`/`cursor`, delta with
+`PUT/GET/DELETE /api/cards/{id}[?team_id= | ?org_id=]` (never both), `GET /api/cards` (paged with `limit`/`cursor`, delta with
 `updated_after`), `GET /api/cards/stamp` (count, newest `updated_at`), `GET /api/cards/search`,
 `GET /api/cards/embedder`, `POST /api/cards/bulk` (at most 100 cards per request, optional vectors).
 Server-owned fields (`updated_at`, `revision`, `owner_user_id`, `user_id`, `card_id`) are never sent
@@ -490,8 +497,8 @@ remote-vector readers and the local vector arm behave exactly as documented abov
 ## Uploading a local store (`context upload`)
 
 ```
-quest-ai-runner context upload --cards-dir DIR (--team-id ID | --private) [--apply]
-        [--qdrant-url URL | --qdrant-path PATH] [--collection-prefix PREFIX] [--vector-size N]
+quest-ai-runner context upload --cards-dir DIR (--team-id ID | --org-id ID | --private) [--apply]
+        [--adopt-ancestor-copies] [--qdrant-url URL | --qdrant-path PATH] [--collection-prefix PREFIX] [--vector-size N]
         [--embedder-id ID] [--base-url URL] [--api-key KEY]
 ```
 
@@ -499,8 +506,15 @@ Dry run by default: it prints how many cards would upload, in how many batches o
 skipped and why, and how many vectors are usable, and sends nothing. `--apply` uploads and prints the
 backend's per-batch counts; it exits non-zero if any card failed. Re-running upserts the same ids.
 
-- Exactly one scope is required: `--team-id` assigns every card to that team, `--private` leaves them
-  private to the key's user.
+- Exactly one scope is required: `--team-id` assigns every card to that team, `--org-id` to that org
+  (readable by every org member), `--private` leaves them private to the key's user.
+- `--adopt-ancestor-copies`: copy-imports whose `provenance.imported_from` starts with `..` come from
+  a store above this root, often a stale ad-hoc one that will never be uploaded, and their file paths
+  are already relative to this root. With the flag they upload as this store's own cards: `imported_from`
+  is dropped, `adopted_from` records the old value, the id and paths are kept, this store's origin is
+  stamped and local vectors are used if present (plan line "adopted from an ancestor store: N"). Nested
+  imports (a store below this root, which has its own lane) stay skipped. Because the uploaded copy
+  carries this store's origin, the store's own refresh treats it as its own afterwards.
 - Skipped: namespaced copy-imports (provenance `imported_from`; "the source store uploads them") and
   mounted stores (read-only views that are not files in this store).
 - Vectors: with `--qdrant-url` or `--qdrant-path` the store's existing card vectors are read

@@ -9,14 +9,18 @@ Environment (read by ``quest_card_settings_from_env`` / the config factory, pass
   QAR_QUEST_API_URL  or QUEST_BASE_URL  -- Quest backend base URL
   QAR_QUEST_API_KEY  or QUEST_API_KEY   -- Bearer key (the key's own user is the acting user)
   QAR_TEAM_ID        or QUEST_TEAM_ID   -- team this lane writes cards to (omit for private cards)
+  QAR_CARDS_SCOPE                       -- card scope of the lane: ``org:<id>`` | ``team:<id>`` |
+                                           ``private`` | ``org`` (org from QAR_ORG_ID / QUEST_ORG_ID,
+                                           else the lane's team's org); unset = the lane's team
+  QAR_ORG_ID         or QUEST_ORG_ID    -- the org for ``QAR_CARDS_SCOPE=org``
   QAR_RUNNER_ENV_ID  or QAR_ENV_ID      -- this runner environment's id (default: hostname)
   QAR_USER_ID                           -- optional hint; the key's identity (whoami) always wins
 
 ACCESS MODEL (enforced server-side; this class only chooses the scope of each call)
-  * A card has an owner user and an optional team. No team means private to its owner.
-  * Readable by the owner and by members of its team; writable by the owner, or by a member writing
-    the team's card. Listing and search return everything the key's user can read.
-  * Card identity is (scope, card_id): the same id may exist privately and in a team. This class keeps
+  * A card has an owner user and exactly one scope: private, a team, or an org.
+  * Readable by the owner and by members of its team or org; writable by the owner, or by a member
+    writing the team's or org's card. Listing and search return everything the key's user can read.
+  * Card identity is (scope, card_id): the same id may exist privately, in a team and in an org. This class keeps
     a ``{card_id: card}`` mapping (the CardRepository protocol); on an id collision the card in this
     repository's WRITE scope wins, then the private card.
 
@@ -92,7 +96,57 @@ def quest_card_settings_from_env(env: Optional[Dict[str, str]] = None) -> Dict[s
         "api_key": first_env("QAR_QUEST_API_KEY", "QUEST_API_KEY", env=env),
         "team_id": first_env("QAR_TEAM_ID", "QUEST_TEAM_ID", env=env),
         "user_hint": first_env("QAR_USER_ID", env=env),
+        "org_id": first_env("QAR_ORG_ID", "QUEST_ORG_ID", env=env),
+        "cards_scope": first_env("QAR_CARDS_SCOPE", env=env),
     }
+
+
+class CardScopeError(ValueError):
+    """The lane's card scope setting cannot be turned into a scope (fail at startup, never guess)."""
+
+
+def select_card_scope(
+    settings: Dict[str, str],
+    org_of_team: Optional[Callable[[str], str]] = None,
+) -> Dict[str, str]:
+    """``{team_id, org_id}`` for a lane from ``quest_card_settings_from_env`` output.
+
+    ``QAR_CARDS_SCOPE`` is ``org:<id>``, ``team:<id>``, ``private``, or a bare ``org`` (the org is
+    ``QAR_ORG_ID``/``QUEST_ORG_ID``, else ``org_of_team(lane team)``). Unset keeps the default: the
+    lane's team (private when it has none). An id inside the scope value wins over ``QAR_ORG_ID`` and
+    the team variables. For an org scope ``team_id`` is kept only as provenance (the lane's team);
+    writes go to the org. Raises ``CardScopeError`` for an unknown form or an unresolvable org.
+    """
+    raw = (settings.get("cards_scope") or "").strip()
+    team = (settings.get("team_id") or "").strip()
+    org = (settings.get("org_id") or "").strip()
+    if not raw:
+        return {"team_id": team, "org_id": ""}
+    kind, _, ident_part = raw.partition(":")
+    kind = kind.strip().lower()
+    ident_part = ident_part.strip()
+    if kind == "private" and not ident_part:
+        return {"team_id": "", "org_id": ""}
+    if kind == "team":
+        chosen = ident_part or team
+        if not chosen:
+            raise CardScopeError("QAR_CARDS_SCOPE=team needs a team id (team:<id> or QAR_TEAM_ID)")
+        return {"team_id": chosen, "org_id": ""}
+    if kind == "org":
+        chosen = ident_part or org
+        if not chosen and team and org_of_team is not None:
+            try:
+                chosen = str(org_of_team(team) or "").strip()
+            except Exception as exc:  # noqa: BLE001
+                raise CardScopeError(
+                    f"QAR_CARDS_SCOPE=org: could not resolve the org of the lane's team: {exc}") from exc
+        if not chosen:
+            raise CardScopeError(
+                "QAR_CARDS_SCOPE=org needs an org: use org:<id>, QAR_ORG_ID/QUEST_ORG_ID, or a lane team "
+                "that belongs to an org")
+        return {"team_id": team, "org_id": chosen}
+    raise CardScopeError(
+        f"QAR_CARDS_SCOPE={raw!r} is not one of org:<id>, team:<id>, private, org")
 
 
 def _detect_source_type(card: Dict[str, Any]) -> str:
@@ -168,10 +222,10 @@ def _enrich_card(card: Dict[str, Any], user_id: str, team_id: str = "") -> Dict[
     return enriched
 
 
-def _cards_by_id(payload: Any) -> Dict[str, Dict[str, Any]]:
-    """Normalize a ``cards`` reply (a list, or the older ``{id: card}`` mapping) into ``{id: card}``.
-    Anything else reads as no cards."""
-    out: Dict[str, Dict[str, Any]] = {}
+def card_pairs(payload: Any) -> List[Tuple[str, Dict[str, Any]]]:
+    """Normalize a ``cards`` reply (a list, or the older ``{id: card}`` mapping) into ordered
+    ``(id, card)`` pairs, keeping every card: two scopes may share an id. Anything else reads as none."""
+    out: List[Tuple[str, Dict[str, Any]]] = []
     if isinstance(payload, dict):
         items = payload.items()
     elif isinstance(payload, list):
@@ -186,8 +240,13 @@ def _cards_by_id(payload: Any) -> Dict[str, Dict[str, Any]]:
             continue
         if not card.get("id"):
             card = {**card, "id": cid}
-        out[cid] = card
+        out.append((cid, card))
     return out
+
+
+def _cards_by_id(payload: Any) -> Dict[str, Dict[str, Any]]:
+    """``card_pairs`` as ``{id: card}``; on an id shared by several scopes the last one wins."""
+    return dict(card_pairs(payload))
 
 
 # ---------------------------------------------------------------------------
@@ -265,8 +324,12 @@ class QuestApiCardRepository:
     store_id:
         Opaque store identity (card identity is ``(store_id, card_id)``); a remote store is never
         mounted.
-    read_team_ids:
-        Optional restriction of the team cards listed/searched (default: every team the user is in).
+    org_id:
+        The org this lane writes cards to. When set, writes go to the org (``team_id`` then stays
+        only as the lane's provenance for the ``local_fetch`` item).
+    read_team_ids, read_org_ids:
+        Optional restriction of the team / org cards listed/searched (default: everything the user
+        can read: private, direct teams and the orgs they belong to).
     on_error:
         Optional ``callable(message)`` invoked (de-duplicated) when a call fails, so the host can
         surface it in its own status channel.
@@ -283,6 +346,8 @@ class QuestApiCardRepository:
         *,
         team_id: str = "",
         read_team_ids: Optional[Iterable[str]] = None,
+        org_id: str = "",
+        read_org_ids: Optional[Iterable[str]] = None,
         on_error: Optional[Callable[[str], None]] = None,
         cache: Optional[CardCache] = None,
         timeout: float = 15.0,
@@ -293,6 +358,8 @@ class QuestApiCardRepository:
         self.store_id = store_id
         self.team_id = team_id
         self.read_team_ids: List[str] = [t for t in (read_team_ids or []) if t]
+        self.org_id = org_id
+        self.read_org_ids: List[str] = [o for o in (read_org_ids or []) if o]
         self._on_error = on_error
         self._cache: CardCache = cache or NullCardCache()
         self._timeout = timeout
@@ -306,7 +373,7 @@ class QuestApiCardRepository:
         self._listing_at = 0.0
         self._stamp: Optional[Dict[str, Any]] = None
         self._stamp_at = 0.0
-        self._scope_of: Dict[str, str] = {}
+        self._scope_of: Dict[str, Tuple[str, str]] = {}
         # Health.
         self.last_error: Optional[Dict[str, Any]] = None
         self.error_count = 0
@@ -430,23 +497,45 @@ class QuestApiCardRepository:
 
     # -- scope -------------------------------------------------------------
 
-    def _write_scope(self, card_id: str, card: Dict[str, Any]) -> str:
-        """The team a write goes to ("" = private): the card's own team if it carries one, else where
-        the last listing saw this id, else this lane's team."""
+    def default_scope(self) -> Tuple[str, str]:
+        """``(team_id, org_id)`` this lane writes to: its org when it has one, else its team."""
+        return ("", self.org_id) if self.org_id else (self.team_id, "")
+
+    def _write_scope(self, card_id: str, card: Dict[str, Any]) -> Tuple[str, str]:
+        """``(team_id, org_id)`` a write goes to (both empty = private): the card's own team or org if
+        it carries one, else where the last listing saw this id, else this lane's scope."""
         own = str(card.get("team_id") or "").strip()
         if own:
-            return own
+            return (own, "")
+        own_org = str(card.get("org_id") or "").strip()
+        if own_org:
+            return ("", own_org)
         if card_id in self._scope_of:
             return self._scope_of[card_id]
-        return self.team_id
+        return self.default_scope()
+
+    @staticmethod
+    def scope_params(scope: Tuple[str, str]) -> Optional[Dict[str, str]]:
+        team, org = scope
+        if org:
+            return {"org_id": org}
+        return {"team_id": team} if team else None
 
     def _list_params(self, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         params: Dict[str, Any] = dict(_INCLUDE_MANAGED)
-        if self.read_team_ids:
-            params["team_ids"] = ",".join(self.read_team_ids)
-            params["include_private"] = "true"
+        params.update(self.read_filter_params())
         if extra:
             params.update(extra)
+        return params
+
+    def read_filter_params(self) -> Dict[str, str]:
+        params: Dict[str, str] = {}
+        if self.read_team_ids:
+            params["team_ids"] = ",".join(self.read_team_ids)
+        if self.read_org_ids:
+            params["org_ids"] = ",".join(self.read_org_ids)
+        if params:
+            params["include_private"] = "true"
         return params
 
     # -- CardRepository protocol -------------------------------------------
@@ -455,16 +544,17 @@ class QuestApiCardRepository:
         """Upsert a card (to its team scope, or privately). True on success; False, loudly, on failure."""
         scope = self._write_scope(card_id, card)
         try:
-            enriched = _enrich_card(card, self.user_id, self.team_id or scope)
-            if scope:
-                enriched["team_id"] = scope
+            enriched = _enrich_card(card, self.user_id, self.team_id or scope[0])
+            enriched.pop("org_id", None)
+            if scope[0]:
+                enriched["team_id"] = scope[0]
             else:
                 enriched.pop("team_id", None)
-            params = {"team_id": scope} if scope else None
+            params = self.scope_params(scope)
             result = self._call("PUT", f"/api/cards/{urllib.parse.quote(card_id, safe='')}",
                                 body=enriched, params=params)
         except QuestCardApiError:
-            self._cache.enqueue_write(card_id, card, scope)
+            self._cache.enqueue_write(card_id, card, scope[0])
             return False
         finally:
             self._invalidate_listing()
@@ -473,8 +563,7 @@ class QuestApiCardRepository:
 
     def read(self, card_id: str) -> Optional[Dict[str, Any]]:
         """A card by id, or None when it does not exist. A backend failure is loud and returns None."""
-        scope = self._scope_of.get(card_id, None)
-        params = {"team_id": scope} if scope else None
+        params = self.scope_params(self._scope_of.get(card_id, ("", "")))
         try:
             result = self._call("GET", f"/api/cards/{urllib.parse.quote(card_id, safe='')}",
                                 params=params)
@@ -485,8 +574,7 @@ class QuestApiCardRepository:
         return result if isinstance(result, dict) else None
 
     def delete(self, card_id: str) -> bool:
-        scope = self._scope_of.get(card_id, None)
-        params = {"team_id": scope} if scope else None
+        params = self.scope_params(self._scope_of.get(card_id, ("", "")))
         try:
             result = self._call("DELETE", f"/api/cards/{urllib.parse.quote(card_id, safe='')}",
                                 params=params)
@@ -511,9 +599,7 @@ class QuestApiCardRepository:
     def _fetch_stamp(self, max_age_s: float = 0.0) -> Dict[str, Any]:
         if self._stamp is not None and max_age_s > 0 and (time.monotonic() - self._stamp_at) < max_age_s:
             return self._stamp
-        params = {}
-        if self.read_team_ids:
-            params = {"team_ids": ",".join(self.read_team_ids), "include_private": "true"}
+        params = self.read_filter_params()
         reply = self._call("GET", "/api/cards/stamp", params=params or None)
         stamp = reply if isinstance(reply, dict) else {}
         self._stamp = stamp
@@ -531,8 +617,7 @@ class QuestApiCardRepository:
             reply = self._call("GET", "/api/cards", params=params)
             if not isinstance(reply, dict):
                 raise self._fail("GET", "/api/cards", 200, "reply was not a JSON object")
-            page = _cards_by_id(reply.get("cards"))
-            for cid, card in page.items():
+            for cid, card in card_pairs(reply.get("cards")):
                 self._merge_one(out, cid, card)
             cursor = str(reply.get("next_cursor") or "")
             if not cursor:
@@ -540,13 +625,15 @@ class QuestApiCardRepository:
         raise self._fail("GET", "/api/cards", 200, "paging did not terminate")
 
     def _merge_one(self, into: Dict[str, Dict[str, Any]], cid: str, card: Dict[str, Any]) -> None:
-        """Insert ``card``; on an id collision the card in this lane's write scope wins, then private."""
-        scope = str(card.get("team_id") or "")
+        """Insert ``card``; on an id collision the card in this lane's write scope wins, then private.
+        The scope of a listed card is ``(team_id, org_id)``; both empty is private."""
+        scope = (str(card.get("team_id") or ""), str(card.get("org_id") or ""))
+        mine = self.default_scope()
         if cid in into:
-            held = str(into[cid].get("team_id") or "")
-            if held == self.team_id and scope != self.team_id:
+            held = (str(into[cid].get("team_id") or ""), str(into[cid].get("org_id") or ""))
+            if held == mine and scope != mine:
                 return
-            if held == "" and scope != self.team_id:
+            if held == ("", "") and scope != mine:
                 return
         into[cid] = card
         self._scope_of[cid] = scope
@@ -619,8 +706,7 @@ class QuestApiCardRepository:
         ``None`` (loudly) when the backend failed so the store falls back to in-app scoring."""
         try:
             params = {"q": query, "max_results": limit, **_INCLUDE_MANAGED}
-            if self.read_team_ids:
-                params["team_ids"] = ",".join(self.read_team_ids)
+            params.update(self.read_filter_params())
             result = self._call("GET", "/api/cards/search", params=params)
         except QuestCardApiError:
             return None
@@ -629,6 +715,11 @@ class QuestApiCardRepository:
         return None
 
     # -- embedder + bulk ------------------------------------------------------
+
+    def org_of_team(self, team_id: str) -> str:
+        """The ``org_id`` of a team (``GET /api/teams/{team_id}``), ``""`` for a standalone team."""
+        reply = self._call("GET", f"/api/teams/{urllib.parse.quote(team_id, safe='')}")
+        return str((reply or {}).get("org_id") or "") if isinstance(reply, dict) else ""
 
     def embedder_info(self) -> Dict[str, Any]:
         """``{embedder_id, dimension}`` of the backend's embedder (raises ``QuestCardApiError``)."""
@@ -641,6 +732,7 @@ class QuestApiCardRepository:
         vectors: Optional[Dict[str, List[float]]] = None,
         *,
         team_id: Optional[str] = None,
+        org_id: Optional[str] = None,
         embedder_id: str = "",
         dimension: int = 0,
         on_batch: Optional[Callable[[int, Dict[str, Any]], None]] = None,
@@ -648,12 +740,17 @@ class QuestApiCardRepository:
         """Upsert many ``(card_id, card)`` pairs through ``POST /api/cards/bulk`` in batches of at most
         100. ``vectors`` ({card_id: vector}) are offered with ``embedder_id`` and ``dimension``; the
         backend accepts them only when both match its own embedder, otherwise it embeds server-side.
-        Cards are sent as given (minus server-owned fields), without the local_fetch preview.
+        Cards are sent as given (minus server-owned fields), without the local_fetch preview. The
+        scope is ``org_id`` if given, else ``team_id`` (empty = private); with neither, the lane's own.
 
         Returns ``{"batches": n, "counts": {...}, "failed": [ids], "errors": [...]}``. A failed batch
         is logged at ERROR and its ids are listed in ``failed``; the remaining batches still run.
         """
-        scope = self.team_id if team_id is None else team_id
+        if org_id is None and team_id is None:
+            team_scope, org_scope = self.default_scope()
+        else:
+            org_scope = org_id or ""
+            team_scope = "" if org_scope else (self.team_id if team_id is None else team_id)
         pairs = [(str(cid), strip_server_owned(c)) for cid, c in cards]
         totals = {"written": 0, "embedded": 0, "vectors_accepted": 0, "vectors_rejected": 0, "failed": 0}
         failed: List[str] = []
@@ -668,8 +765,10 @@ class QuestApiCardRepository:
                     item["vector"] = list(vectors[cid])
                 items.append(item)
             body: Dict[str, Any] = {"cards": items}
-            if scope:
-                body["team_id"] = scope
+            if org_scope:
+                body["org_id"] = org_scope
+            elif team_scope:
+                body["team_id"] = team_scope
             if vectors:
                 body["embedder_id"] = embedder_id
                 body["dimension"] = int(dimension)
