@@ -32,10 +32,20 @@ def score_case(fn, case):
     return dict(ok=ok, chars=chars, dups=dups, point=case["point"], got=f"{chars} chars", note=note)
 
 
+def p95(values):
+    """Nearest-rank 95th percentile of ``values`` (the max when there are fewer than 20)."""
+    vals = sorted(values)
+    if not vals:
+        return 0
+    return vals[min(len(vals) - 1, max(0, -(-95 * len(vals) // 100) - 1))]
+
+
 def aggregate(rows):
     by = {}
     for r in rows:
         by.setdefault(r.get("point"), []).append(r)
-    parts = [f"{p}: max {max(r.get('chars', 0) for r in rs)} chars, {sum(r.get('dups', 0) for r in rs)} dups"
-             for p, rs in sorted(by.items(), key=lambda kv: str(kv[0]))]
+    parts = []
+    for p, rs in sorted(by.items(), key=lambda kv: str(kv[0])):
+        sizes = [r.get("chars", 0) for r in rs]
+        parts.append(f"{p}: max {max(sizes)} chars, p95 {p95(sizes)} chars, {sum(r.get('dups', 0) for r in rs)} dups")
     return "; ".join(parts)

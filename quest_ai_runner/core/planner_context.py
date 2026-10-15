@@ -427,6 +427,21 @@ def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
         parts.append(_render_gathered(recent))
     return "\n\n".join(parts)
 
+def cap_section(text: str, max_chars: int, *, keep: str = "tail") -> str:
+    """``text`` limited to about ``max_chars`` with an explicit ``[truncated N chars]`` marker.
+
+    ``keep="tail"`` keeps the NEWEST end (transcripts, gathered reads: newest last) and cuts the
+    oldest; ``keep="head"`` keeps the start (a context view ordered by relevance). ``max_chars <= 0``
+    or text already within the limit returns it unchanged, byte for byte."""
+    if not text or max_chars <= 0 or len(text) <= max_chars:
+        return text
+    n = len(text) - max_chars
+    marker = f"[truncated {n} chars]"
+    if keep == "head":
+        return text[:max_chars].rstrip() + "\n" + marker
+    return marker + "\n" + text[n:].lstrip()
+
+
 def gathered_content(gathered: List[Any]) -> List[Any]:
     """``gathered`` without ``planner_only`` notes: what the turn actually read."""
     return [o for o in (gathered or []) if not (isinstance(o, dict) and o.get("planner_only"))]

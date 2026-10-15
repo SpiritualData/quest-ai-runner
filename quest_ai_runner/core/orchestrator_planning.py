@@ -35,6 +35,7 @@ from .planner_prompt import (
 from .planner_context import (
     PLANNER_TOOLS_HEAD,
     _render_gathered_for_planner,
+    cap_section,
     already_said_tail,
     planner_links_block,
     planner_web_block,
@@ -83,6 +84,11 @@ class PlanningMixin:
                 plan_transcript = _REPLAN_TRANSCRIPT_REF
             if context_view:
                 plan_context = _REPLAN_CONTEXT_REF
+        # Hard caps (config-driven): the newest turns / reads survive, the oldest are cut with a
+        # visible marker. The user message and tool catalog are never touched.
+        plan_transcript = cap_section(plan_transcript, self.cfg.planner_transcript_max_chars, keep="tail")
+        plan_context = cap_section(plan_context, self.cfg.planner_context_max_chars, keep="head")
+        gmax = self.cfg.planner_gathered_max_chars
         # When narration is on, the planner writes its `rationale` as the user-facing spoken beat
         # for this step (Approach B), in the selected rep's voice — so we layer the persona on top
         # and swap in the conversational rationale instruction. No extra LLM call: the beat rides on
@@ -152,9 +158,9 @@ class PlanningMixin:
             user_message=user_message,
             transcript=plan_transcript or "(no prior messages)",
             context_view=plan_context or "(no context)",
-            gathered=_render_gathered_for_planner(
+            gathered=cap_section(_render_gathered_for_planner(
                 gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over,
-                current_step=step),
+                current_step=step), gmax, keep="tail"),
             max_reads=self.cfg.max_reads_per_step,
             max_subq=self.cfg.max_subquestions,
             max_deep=self.cfg.max_deep_subtasks,
@@ -217,9 +223,9 @@ class PlanningMixin:
                 user_message=user_message,
                 transcript=plan_transcript or "(no prior messages)",
                 context_view="(provided in the CONTEXT section above)",
-                gathered=_render_gathered_for_planner(
+                gathered=cap_section(_render_gathered_for_planner(
                     gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over,
-                    current_step=step),
+                    current_step=step), gmax, keep="tail"),
                 max_reads=self.cfg.max_reads_per_step,
                 max_subq=self.cfg.max_subquestions,
                 max_deep=self.cfg.max_deep_subtasks,

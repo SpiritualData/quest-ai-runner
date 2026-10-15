@@ -25,6 +25,9 @@ from .orchestrator_constants import (
     DEFAULT_MAX_SUBQUESTIONS,
     DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT,
     DEFAULT_PLANNER_COMPRESS_OVER,
+    DEFAULT_PLANNER_CONTEXT_MAX_CHARS,
+    DEFAULT_PLANNER_GATHERED_MAX_CHARS,
+    DEFAULT_PLANNER_TRANSCRIPT_MAX_CHARS,
     DEFAULT_PLANNER_RECENT_FULL,
 )
 
@@ -80,6 +83,11 @@ class OrchestratorConfig:
     # kept for the final answer; these only trim what the cheap PLANNER re-reads each re-plan step.
     planner_recent_full: int = DEFAULT_PLANNER_RECENT_FULL
     planner_compress_over: int = DEFAULT_PLANNER_COMPRESS_OVER
+    # Character caps on what the planner prompt carries (0 = uncapped). Transcript and gathered keep
+    # the NEWEST text, context keeps its head; each cut leaves a "[truncated N chars]" marker.
+    planner_transcript_max_chars: int = DEFAULT_PLANNER_TRANSCRIPT_MAX_CHARS
+    planner_context_max_chars: int = DEFAULT_PLANNER_CONTEXT_MAX_CHARS
+    planner_gathered_max_chars: int = DEFAULT_PLANNER_GATHERED_MAX_CHARS
     # On re-plan steps (step > 1), replace the unchanged transcript + static context_view with a
     # short reference note (they were sent in full on step 1). Default off → unchanged behavior.
     # The final ANSWER path is never affected — it always grounds on the full transcript/context.

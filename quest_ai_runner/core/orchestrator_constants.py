@@ -169,6 +169,12 @@ DEFAULT_MAX_CONSECUTIVE_READS = 20
 DEFAULT_PLANNER_RECENT_FULL = 4      # newest N observations rendered in full to the planner
 
 
+# Hard character caps on the three volatile sections of the planner prompt (0 disables a cap). The
+# planner only routes, so it needs the latest turns and the head of the context, not all of it; the
+# final ANSWER path keeps the full transcript and context. See ``planner_context.cap_section``.
+DEFAULT_PLANNER_TRANSCRIPT_MAX_CHARS = 8_000
+DEFAULT_PLANNER_CONTEXT_MAX_CHARS = 8_000
+DEFAULT_PLANNER_GATHERED_MAX_CHARS = 10_000
 DEFAULT_PLANNER_COMPRESS_OVER = 6    # leave gathered untouched until it exceeds this many obs
 
 
