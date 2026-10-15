@@ -14,6 +14,10 @@ import sys
 from typing import List, Optional
 
 STORE_COMMANDS = ("move-root", "migrate-imports", "merge-into", "store-info", "upload")
+# A bulk batch whose cards carry no vector is embedded by the backend before it answers, which takes
+# far longer than the card client's interactive default; a client that gives up first leaves the
+# server still embedding while it sends the next batch.
+UPLOAD_TIMEOUT_SECONDS = 600.0
 
 
 def is_store_command(argv: Optional[List[str]]) -> bool:
@@ -144,7 +148,8 @@ def run_upload(args) -> int:
         return 1
     org_id = "" if args.private else (args.org_id or "").strip()
     team_id = "" if (args.private or org_id) else (args.team_id or "").strip()
-    repo = QuestApiCardRepository(base_url=base_url, api_key=api_key, team_id=team_id, org_id=org_id)
+    repo = QuestApiCardRepository(base_url=base_url, api_key=api_key, team_id=team_id, org_id=org_id,
+                                  timeout=UPLOAD_TIMEOUT_SECONDS)
     try:
         user = repo.resolve_user_id()
     except Exception as exc:  # noqa: BLE001
