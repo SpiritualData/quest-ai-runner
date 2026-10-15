@@ -1,0 +1,10 @@
+[
+ {"id": "PSZ-001", "area": "planner", "point": "planner", "fixture": "healthy", "ceiling_chars": 60000},
+ {"id": "PSZ-002", "area": "planner", "point": "planner", "fixture": "incident", "ceiling_chars": 60000},
+ {"id": "PSZ-003", "area": "autopilot_batch", "point": "autopilot_batch", "fixture": "healthy", "ceiling_chars": 105000},
+ {"id": "PSZ-004", "area": "autopilot_batch", "point": "autopilot_batch", "fixture": "incident", "ceiling_chars": 105000},
+ {"id": "PSZ-005", "area": "context_update_bundle", "point": "context_update_bundle", "fixture": "healthy", "ceiling_chars": 20000},
+ {"id": "PSZ-006", "area": "context_update_bundle", "point": "context_update_bundle", "fixture": "incident", "ceiling_chars": 60000},
+ {"id": "PSZ-007", "area": "deep_prompt", "point": "deep_prompt", "fixture": "healthy", "ceiling_chars": 210000},
+ {"id": "PSZ-008", "area": "deep_prompt", "point": "deep_prompt", "fixture": "incident", "ceiling_chars": 210000}
+]

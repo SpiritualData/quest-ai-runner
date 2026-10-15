@@ -68,7 +68,7 @@ def test_quest_ops_scorer_catches_wrong_and_extra_writes():
 
 def test_every_impl_builds_a_callable():
     import importlib
-    for comp in ("classification", "quest_ops", "context_selection", "recipe_fast_path", "staleness"):
+    for comp in ("classification", "quest_ops", "context_selection", "recipe_fast_path", "staleness", "prompt_size"):
         for p in sorted((Path(__file__).parent / comp / "impls").glob("[a-z]*.py")):
             assert hasattr(importlib.import_module(f"{comp}.impls.{p.stem}"), "build")
 
