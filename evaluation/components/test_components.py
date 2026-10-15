@@ -157,3 +157,12 @@ def test_recipe_fast_path_cases_cover_all_groups():
     import json
     cases = json.loads((Path(__file__).parent / "recipe_fast_path" / "cases.json").read_text())
     assert len(cases) == 30 and {c["group"] for c in cases} == {"repeat", "near_miss", "unrelated"}
+
+
+def test_leaderboard_only_compares_rows_scored_on_the_same_cases():
+    import leaderboard
+    mk = lambda impl, passed, sha: dict(impl=impl, cases="10", passed=str(passed), cost_usd="0", cases_sha=sha)
+    rows = {"cur": mk("cur", 5, "aaaa"), "other": mk("other", 9, "bbbb"), "same": mk("same", 8, "aaaa")}
+    assert [r["impl"] for r in leaderboard.challengers(rows, "cur")] == ["same"]
+    blank = {"cur": mk("cur", 5, ""), "old": mk("old", 9, "")}  # legacy rows compare as one group
+    assert [r["impl"] for r in leaderboard.challengers(blank, "cur")] == ["old"]

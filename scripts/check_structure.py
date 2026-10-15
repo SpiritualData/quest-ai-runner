@@ -16,9 +16,11 @@ Rules checked:
   S3 root        no .py file at the repo root
   S4 size        no module over MAX_LINES lines (waiver otherwise)
   S5 docstring   every library module opens with a docstring that states its role
-  S6 direction   dependencies point inward: core imports no adapters/runner/config/cli;
-                 adapters import no runner/config/cli (waiver otherwise)
-  S7 solutions   every port in core/adapters.py has a solutions.csv row; implementations exist
+  S6 direction   layers are ordered core < adapters < runner < config < cli/tools/ui; a module may
+                 import only its own layer or a lower one. A module's layer is its components.csv
+                 row's layer (top-level config*, usage, pricing, resources are `config`; cli*,
+                 interactive_session*, textual_*, tools/ are `cli`). Waiver otherwise.
+  S7 solutions   every Protocol port under quest_ai_runner/ has a solutions.csv row; implementations exist
   S8 generated   COMPONENTS.md matches components.csv
   S9 waivers     every waiver still applies (the list can only shrink)
   S10 selection  the selected implementation of a measured solution is its leaderboard winner,
@@ -26,7 +28,11 @@ Rules checked:
                  recorded result
   S11 metric     a `done` component has a metric kind (eval with a recorded result, invariant
                  pinned by tests, or exempt with a reason); a harness command names a real
-                 component and implementation; every component solution id exists
+                 component and implementation; every component solution id exists; an invariant
+                 component states in `invariant_reason` why "best" cannot vary; every solution
+                 is linked from some component's `solutions` column (or waived as S11 solution:<id>)
+  S13 config     no os.environ / os.getenv in quest_ai_runner/core (waiver per file until the
+                 read migrates into RunnerConfig)
 """
 from __future__ import annotations
 
@@ -42,17 +48,12 @@ STRUCT = ROOT / "docs" / "structure"
 MAX_LINES = 1500
 PKG = "quest_ai_runner"
 STATUSES = {"done", "partial", "waived", "open"}
-# layer -> package prefixes it must not import (dependencies point inward)
-# a prefix matches the package or any module that starts with it (``config`` also bans ``config_resolvers``)
-FORBIDDEN = {
-    "core": ("adapters", "runner", "config", "cli", "tools", "interactive_session", "textual_ui"),
-    "adapters": ("runner", "config", "cli", "tools", "interactive_session", "textual_ui"),
-    "runner": ("cli", "interactive_session", "textual_ui"),
-}
+# Dependencies point inward: a module may import its own layer or a lower one.
+LAYER_RANK = {"core": 0, "adapters": 1, "runner": 2, "config": 3, "cli": 4, "tools": 4}
 METRIC_KINDS = {"eval", "invariant", "exempt", "none"}
 HARNESS = re.compile(r"components/run\.py (\w+) --impl (\w+)")
 COMPONENT_COLS = ["component_id", "layer", "path", "role", "interface", "metric", "docs", "tests",
-                  "rules", "gap", "action", "status", "metric_kind", "solutions"]
+                  "rules", "gap", "action", "status", "metric_kind", "solutions", "invariant_reason"]
 SOLUTION_COLS = ["solution_id", "problem", "ideal", "port", "implementations", "selected",
                  "selected_by", "metric", "metric_command", "gap", "action"]
 
@@ -136,6 +137,23 @@ def module_imports(path: Path, dotted: str) -> list[tuple[int, str]]:
     return found
 
 
+def uses_environ(path: Path) -> list[int]:
+    """Lines that read the process environment (os.environ, os.getenv, or those names imported from os)."""
+    try:
+        tree = ast.parse(path.read_text())
+    except SyntaxError:
+        return []
+    lines = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in ("environ", "getenv", "putenv") \
+                and isinstance(node.value, ast.Name) and node.value.id == "os":
+            lines.append(node.lineno)
+        elif isinstance(node, ast.ImportFrom) and node.module == "os" \
+                and any(a.name in ("environ", "getenv", "putenv") for a in node.names):
+            lines.append(node.lineno)
+    return lines
+
+
 def render_docs(components: list[dict]) -> str:
     lines = [
         "# Components",
@@ -216,7 +234,26 @@ def check() -> list[str]:
         if "/" not in f and f.endswith(".py"):
             bad.append(f"S3 {f}: .py file at the repo root (use tests/, scripts/ or the package)")
 
-    # S4 size, S5 docstring, S6 direction
+    # layer of a file = the layer column of the component that owns it (S6)
+    # (a file inside core/, adapters/, runner/ or tools/ takes its package, so a file placed in the
+    # wrong component cannot hide a violation)
+    comp_layer = {r["component_id"]: r["layer"] for r in components}
+    file_layer = {}
+    for f, ids in owners.items():
+        pkg = f.split("/")[1] if f.startswith(PKG + "/") and f.count("/") > 1 else ""
+        if pkg in LAYER_RANK:
+            file_layer[f] = pkg
+        elif ids:
+            file_layer[f] = comp_layer[ids[0]]
+
+    def top_layer(top: str) -> str:
+        """Layer of ``quest_ai_runner/<top>`` (a module or a package), from its owning component."""
+        for cand in (f"{PKG}/{top}.py", f"{PKG}/{top}/__init__.py"):
+            if cand in file_layer:
+                return file_layer[cand]
+        return next((v for f, v in file_layer.items() if f.startswith(f"{PKG}/{top}/")), "")
+
+    # S4 size, S5 docstring, S6 direction, S13 config
     for f in files:
         if not f.endswith(".py"):
             continue
@@ -234,12 +271,15 @@ def check() -> list[str]:
             if path.stat().st_size and not doc:
                 bad.append(f"S5 {f}: module has no docstring stating its role")
             dotted = f[:-3].replace("/", ".")
-            segs = f.split("/")
-            layer = segs[1] if len(segs) > 2 else ""
+            layer = file_layer.get(f, "")
             for line, top in module_imports(path, dotted):
-                if any(top == b or top.startswith(b + "_") for b in FORBIDDEN.get(layer, ())) \
+                target = top_layer(top)
+                if layer in LAYER_RANK and target in LAYER_RANK and LAYER_RANK[target] > LAYER_RANK[layer] \
                         and not waived("S6", f"{f}:{top}"):
-                    bad.append(f"S6 {f}:{line}: {layer} imports {top} (dependencies point inward)")
+                    bad.append(f"S6 {f}:{line}: {layer} imports {top} ({target}); dependencies point inward")
+            if f.startswith(PKG + "/core/") and uses_environ(path) and not waived("S13", f):
+                bad.append(f"S13 {f}:{uses_environ(path)[0]}: core reads the environment; take the value from "
+                           "RunnerConfig (or add a waiver 'migrate into RunnerConfig')")
 
     # S7 solutions
     ports: set[str] = set()
@@ -300,6 +340,8 @@ def check() -> list[str]:
         for sid in patterns(r["solutions"]):
             if sid not in sol_ids:
                 bad.append(f"S11 {cid}: solution {sid!r} is not in solutions.csv")
+        if kind == "invariant" and not r["invariant_reason"].strip():
+            bad.append(f"S11 {cid}: invariant metric needs invariant_reason (why 'best' cannot vary)")
         if r["status"] != "done":
             continue
         if kind == "none":
@@ -314,6 +356,13 @@ def check() -> list[str]:
                 bad.append(f"S11 {cid}: eval metric must be a components/run.py command")
             elif hm.group(2) not in results.get(hm.group(1), {}):
                 bad.append(f"S11 {cid}: eval {hm.group(1)}/{hm.group(2)} has no recorded result in results.csv")
+
+    # S11 reverse link: every solution is owned by some component
+    linked = {sid for r in components for sid in patterns(r["solutions"])}
+    for r in solutions:
+        sid = r["solution_id"]
+        if sid not in linked and not waived("S11", f"solution:{sid}"):
+            bad.append(f"S11 {sid}: no component lists it in `solutions` (link it in components.csv or add a waiver)")
 
     # S8 generated docs
     gen = STRUCT / "COMPONENTS.md"

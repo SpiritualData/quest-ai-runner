@@ -6,24 +6,24 @@ solutions or frameworks is writing another implementation, never changing the ha
 
 ```
 PY=.venv/bin/python3        # from the quest-ai-runner repo root
-$PY evaluation/components/run.py classification --impl qar_planner      # current
+$PY evaluation/components/run.py classification --impl qar_planner      # selected per solutions.csv
 $PY evaluation/components/run.py classification --impl single_prompt    # alternative
 $PY evaluation/components/run.py classification --impl keyword_rules    # zero-call floor
-$PY evaluation/components/run.py quest_ops --impl qar_orchestrator      # current
+$PY evaluation/components/run.py quest_ops --impl qar_orchestrator      # selected per solutions.csv
 $PY evaluation/components/run.py quest_ops --impl direct_tool_call      # alternative
-$PY evaluation/components/run.py context_selection --impl hybrid_union    # selected (see docs/structure/solutions.csv), zero model calls
+$PY evaluation/components/run.py context_selection --impl hybrid_union    # selected per solutions.csv, zero model calls
 $PY evaluation/components/run.py context_selection --impl blind_grep           # zero-model floor
 $PY evaluation/components/run.py context_selection --impl vector_bge_small     # local embedder, offline, ~90 s
 $PY evaluation/components/run.py context_selection --impl hybrid_union         # IDF + vector union, ~90 s
-$PY evaluation/components/run.py staleness --impl store_sha256                 # current, zero model calls
+$PY evaluation/components/run.py staleness --impl store_sha256                 # selected per solutions.csv, zero model calls
 $PY evaluation/components/run.py staleness --impl mtime_size                   # baseline
-$PY evaluation/components/run.py recipe_fast_path --impl recipe_replay         # current (real model)
+$PY evaluation/components/run.py recipe_fast_path --impl recipe_replay         # selected per solutions.csv (real model)
 $PY evaluation/components/run.py recipe_fast_path --impl planner_only          # baseline (real model)
 $PY -m pytest evaluation/components/test_components.py                  # offline, no model calls
 ```
 Flags: `--only ID,ID`, `--max-calls N` (aborts when model calls exceed N), `--out path`.
 `QAR_EVAL_MODEL` (default `haiku`) sets the model for every implementation, so they compare like for like.
-Results go to `/tmp/qar_components/<component>_<impl>.json`; the summary line prints the model-call count.
+Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the model-call count. `--record` also appends a row to the committed `results.csv` (with `git_sha`, `cases_sha` and `model`); `leaderboard.py` ranks only rows with the same `cases_sha`. Which implementation is "selected" is whatever `docs/structure/solutions.csv` says, not a label in this file.
 
 ## Components and their functions
 

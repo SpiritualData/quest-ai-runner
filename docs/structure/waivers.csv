@@ -11,3 +11,18 @@ S6,quest_ai_runner/runner/channel_session.py:interactive_session,Channel session
 S10,route-a-message:single_prompt,Pending decision by the Director of AI Platform: single_prompt scores 30/30 at about $0.001 against qar_planner 26/30; switching changes live routing so it needs a held-out re-run and sign-off
 S10,operate-a-quest:direct_tool_call,Pending decision by the Director of AI Platform: direct_tool_call passes the same 12/12 at about 2% of the cost; needs held-out ambiguous and multi-step cases first (see solutions.csv action)
 S10,replay-known-operations:unmeasured,recipe_replay needs the claude CLI to record a live result; run with --record on a host that has it
+S6,quest_ai_runner/runner/channel_runner.py:config,Runner reads RunnerConfig and the config resolvers directly. Inject the resolved values or move the shared helpers into core/runner; until then config sits above runner and this import points outward. Known cycle: config also imports runner.
+S6,quest_ai_runner/runner/lane.py:config,Runner reads RunnerConfig and the config resolvers directly. Inject the resolved values or move the shared helpers into core/runner; until then config sits above runner and this import points outward. Known cycle: config also imports runner.
+S6,quest_ai_runner/runner/poller.py:config,Runner reads RunnerConfig and the config resolvers directly. Inject the resolved values or move the shared helpers into core/runner; until then config sits above runner and this import points outward. Known cycle: config also imports runner.
+S6,quest_ai_runner/runner/poller.py:resources,Poller loads shipped resources through the top-level resources module (config layer); move resource lookup below runner or inject it
+S6,quest_ai_runner/runner/poller.py:usage,Poller records token usage through the top-level usage tracker (config layer); inject a usage sink via RunnerConfig instead
+S13,quest_ai_runner/core/goal_runner.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/goal_runner_contract.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/goal_runner_session.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/note_context_store.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/orchestrator_capabilities.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/orchestrator_judges.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/prompt_budget.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/recipes.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/standing_instructions.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config
+S13,quest_ai_runner/core/tools.py,migrate into RunnerConfig: core reads the process environment here instead of taking the value from config

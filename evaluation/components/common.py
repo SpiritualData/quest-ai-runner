@@ -102,7 +102,7 @@ def build_offline_orchestrator(meter, registry=None, planner_tier="haiku", recip
 
 RESULTS_CSV = HERE / "results.csv"
 RESULT_COLUMNS = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls",
-                  "tokens_in", "tokens_out", "cost_usd", "seconds", "git_sha", "cases_sha"]
+                  "tokens_in", "tokens_out", "cost_usd", "seconds", "git_sha", "cases_sha", "model"]
 
 
 def record_result(summary, date=None, path=RESULTS_CSV):
@@ -113,13 +113,17 @@ def record_result(summary, date=None, path=RESULTS_CSV):
     import subprocess
     comp = summary.get("component", "")
     cases = HERE / comp / "cases.json"
-    sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=HERE, capture_output=True, text=True).stdout.strip()
+    git = lambda *a: subprocess.run(["git", *a], cwd=HERE, capture_output=True, text=True).stdout.strip()
+    sha = git("rev-parse", "--short", "HEAD")
+    if sha and git("status", "--porcelain", "--untracked-files=no", "--", str(REPO / "quest_ai_runner"), str(HERE)):
+        sha += "-dirty"  # the code that produced the number is not exactly that commit
     row = dict(summary, date=date or datetime.date.today().isoformat(),
                cost_usd=summary.get("cli_reported_cost_usd", 0.0), git_sha=sha,
+               model=summary.get("model") or (os.environ.get("QAR_EVAL_MODEL", "haiku") if summary.get("model_calls") else "none"),
                cases_sha=hashlib.sha256(cases.read_bytes()).hexdigest()[:8] if cases.exists() else "")
     new = not Path(path).exists()
     with open(path, "a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=RESULT_COLUMNS, extrasaction="ignore")
+        w = csv.DictWriter(fh, fieldnames=RESULT_COLUMNS, extrasaction="ignore", lineterminator="\n")
         if new:
             w.writeheader()
         w.writerow(row)

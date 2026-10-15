@@ -31,7 +31,7 @@ problems and solutions is `solutions.csv`. A **component** is a place in the tre
 | 4 Principles applied proactively | This folder plus the S rules apply the philosophy to the architecture itself | the check |
 | 5 One source of truth | `solutions.csv` (which implementation) and `components.csv` (where) | S1, S7 |
 | 6 Structure improves over time | `status`, `gap`, `action` columns; waivers can only shrink | S2, S9 |
-| 7 Minimalism | Configuration enters through `RunnerConfig` only; a lane is a config file | CLAUDE.md hard rule 2 |
+| 7 Minimalism | The goal is that configuration enters through `RunnerConfig` only; a lane is a config file. Not yet true: 10 files in `core/` still read the environment, each carried as an S13 waiver ("migrate into RunnerConfig") | CLAUDE.md hard rule 2, S13 |
 | 8 Leverage existing structure | Reference adapters, vendored code listed, providers behind `MultiProvider` | S1 (`vendor` is a component) |
 | 9 Humility | Metrics decide, not opinion; unmeasured solutions are flagged rather than assumed good | S7 |
 | 10 Clarity | Module names state a role; every module opens with a docstring; each component lists its docs | S5, S2 |
@@ -50,10 +50,16 @@ problems and solutions is `solutions.csv`. A **component** is a place in the tre
   re-exporting the old names from the original module so imports keep working. Tests and the legacy
   evaluation scripts are waived (see `waivers.csv`).
 * **S5 docstring.** Every library module opens with a docstring that says its role.
-* **S6 direction.** Dependencies point inward. `core/` imports nothing from `adapters/`, `runner/`,
-  `config`, the CLI or the tools package. `adapters/` imports nothing from `runner/`, `config` or the
-  CLI. Lazy imports count.
-* **S7 solutions.** Every port in `core/adapters.py` (and `CardRepository`) has a row; the selected
+* **S6 direction.** Dependencies point inward along one order: core < adapters < runner < config <
+  cli/ui/tools. A module's layer is its package, or for top-level modules the `layer` of its
+  `components.csv` row (`config*`, `usage`, `pricing`, `resources` are config; `cli*`,
+  `interactive_session*`, `textual_*` are cli). A module may import its own layer or a lower one. Lazy
+  imports count. Known violations (runner reading config, usage and resources; one runner to UI import)
+  are waived with a reason, and `config` still imports `runner`, so a config/runner cycle remains.
+* **S13 config.** No `os.environ` / `os.getenv` in `core/` outside waivers (10 files today, each
+  "migrate into RunnerConfig"); this is the check behind the "configuration enters through
+  `RunnerConfig`" goal.
+* **S7 solutions.** Every `Protocol` class under `quest_ai_runner/` (and `CardRepository`) has a row; the selected
   implementation is one of the listed ones; implementation paths and metric scripts exist; a solution
   without a metric states its gap and action.
 * **S8 generated docs.** `COMPONENTS.md` matches `components.csv`.
@@ -84,7 +90,11 @@ problems and solutions is `solutions.csv`. A **component** is a place in the tre
   `score.py` and an `impls/<impl>.py`.
 * **Ports.** S7 finds every `Protocol` class under `quest_ai_runner/` (not only `core/adapters*.py`);
   each needs a `solutions.csv` row.
-* **Layers (S6).** `core` imports nothing outward; `adapters` imports no runner, config or UI; `runner`
-  imports no CLI or UI. A forbidden name also bans modules that start with it (`config_*`).
-* **Results are comparable.** `results.csv` records `git_sha` and `cases_sha` with each run. Compare
-  rows only when `cases_sha` matches. `evaluation/components` is in pytest `testpaths`.
+* **Invariant reason (S11).** `metric_kind=invariant` needs `invariant_reason`: one line on why "best"
+  cannot vary for that component. A component whose quality can vary (prompt size, for one) is `partial`
+  with `metric_kind=none`, not an invariant. Every solution must be linked from some component's
+  `solutions` column, or carry an `S11 solution:<id>` waiver.
+* **Results are comparable.** `results.csv` records `git_sha` and `cases_sha` with each run. `model` records
+  the model for runs that make model calls. `leaderboard.py` compares rows only when `cases_sha` matches;
+  rows from before the column existed have it blank and compare as one group. The committed record is
+  `evaluation/components/results.csv`; per-run JSON goes to `/tmp/qar_components/`. `evaluation/components` is in pytest `testpaths`.

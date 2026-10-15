@@ -10,8 +10,8 @@ plus the queued-task **executor** (`quest_ai_runner.runner`) for Quest AI tasks.
 open source (Apache-2.0) and is meant to run for *any* org, not one specific deployment.
 
 - `core/` — the brain: a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
-  nothing about Quest, any database, any org, or any user. Depends only on the four adapter
-  *interfaces* it defines in `core/adapters.py`.
+  nothing about Quest, any database, any org, or any user. Depends only on the adapter
+  *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; `docs/structure/solutions.csv` lists them all.
   Prompt text is split out by definition: the planner prompt (rubric, full/compact variants, mode
   notes, profile table) is `core/planner_prompt.py`; `orchestrator.py` holds the loop and re-exports
   those names. A new prompt variant is an entry in `PLANNER_PROFILES`; add prompt text there, not to
@@ -41,8 +41,11 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
   (`interactive_session_*`). A test that monkeypatches a module global patches the
   module whose code looks the name up, so patch the module that now holds the function.
 - `runner/` — the executor: poll → claim → run → escalate → report.
-- `adapters/` — reference *implementations* of the interfaces (`FilesAdapter`, `CachedDbAdapter`,
-  `AnthropicProvider`).
+- `adapters/` — reference *implementations* of the interfaces: retrieval (`FilesAdapter`,
+  `CachedDbAdapter`, `CompositeRetrievalAdapter`, MCP, Notion, Google), model providers (Anthropic,
+  Gemini, OpenAI, DeepSeek, Claude CLI, behind `MultiProvider`), card stores, vector and hybrid context
+  assemblers, web research, deep runners and conversation stores. `docs/structure/COMPONENTS.md` is the
+  current list.
 - `config.py` — `RunnerConfig`: the single place a consumer supplies everything specific.
 - `examples/` — runnable reference consumers (env-driven, no real data).
 - `docs/` — tutorial + how-tos + architecture.
@@ -60,7 +63,7 @@ and `waivers.csv` (justified exceptions that can only shrink). Read `docs/struct
 
 - **Before you commit:** `.venv/bin/python3 scripts/check_structure.py` (it also runs as `tests/test_structure_registry.py`).
   It fails when a file belongs to no component, a module passes 1,500 lines, a module has no docstring,
-  `core/` imports outward, a port has no `solutions.csv` row, a selected implementation is beaten in `results.csv` without a waiver, a `done` component has no metric kind, or `COMPONENTS.md` is stale
+  `core/` imports outward, a layer is imported from below it (S6), `core/` reads the environment (S13), a port has no `solutions.csv` row, a selected implementation is beaten in `results.csv` without a waiver, a `done` component has no metric kind, an `invariant` component gives no `invariant_reason`, a solution is linked from no component, or `COMPONENTS.md` is stale
   (`--write-docs` regenerates it).
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
