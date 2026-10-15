@@ -27,6 +27,11 @@ def hermetic_qar_environment(monkeypatch):
     """
     for name in [n for n in os.environ if n.startswith("QAR_")]:
         monkeypatch.delenv(name, raising=False)
+    # The Quest connection pair is read by the card-store resolution: with both set, the context
+    # assembler wires the live Quest card backend instead of the test's files (the
+    # seed_source_wired test failed for 22s on any lane or dev shell that exports them).
+    for name in ("QUEST_BASE_URL", "QUEST_API_URL", "QUEST_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture(autouse=True)
