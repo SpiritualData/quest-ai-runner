@@ -139,7 +139,8 @@ def _render_zones_guide(quest_id: Optional[str] = None, quest_name: Optional[str
     lines.append("## What's here")
     lines.append("")
     lines.append(
-        f"- `{_SYNC_FILE}`: the quest's live state. Blocks marked `QAR:MANAGED` are overwritten on "
+        f"- `{_SYNC_FILE}`: the quest's live state, including its experiments (read-only here; carry "
+        "them forward). Blocks marked `QAR:MANAGED` are overwritten on "
         "every pull, so never hand-edit inside them. Add bullets under \"Notes to push to Quest\" "
         f"to send findings up. Pull and push with `{_SYNC_CLI} {qid or '<quest_id>'} . "
         "--direction both`.")

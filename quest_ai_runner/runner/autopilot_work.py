@@ -133,7 +133,8 @@ class WorkMixin:
                            persona_instructions: Optional[str] = None,
                            default_quest_instructions: Optional[str] = None,
                            default_persona_instructions: Optional[str] = None,
-                           goal_ladder: Optional[List[Dict[str, Any]]] = None) -> Optional[str]:
+                           goal_ladder: Optional[List[Dict[str, Any]]] = None,
+                           experiments: Optional[str] = None) -> Optional[str]:
         text = compose_batch_text(str(quest.get("outcome") or ""),
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
@@ -145,7 +146,7 @@ class WorkMixin:
                                   persona_instructions=persona_instructions,
                                   default_quest_instructions=default_quest_instructions,
                                   default_persona_instructions=default_persona_instructions,
-                                  goal_ladder=goal_ladder)
+                                  goal_ladder=goal_ladder, experiments=experiments)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,

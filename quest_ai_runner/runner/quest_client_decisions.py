@@ -8,6 +8,7 @@ import re
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
+from .quest_experiments import EXPERIMENT_PROPOSAL_KIND
 from .quest_client_support import DECISION_KIND_RE, QuestApiError, QuestNotConfigured, log
 
 
@@ -91,6 +92,17 @@ class DecisionsMixin:
             assignee_user_id = self.assignee_id(assignee)
         elif assignee_user_id is None and self.default_assignee_user_id:
             assignee_user_id = self.default_assignee_user_id
+        if kind == EXPERIMENT_PROPOSAL_KIND and quest_id:
+            # At most ONE open experiment proposal per quest, enforced here where it is created so
+            # it holds for every caller (several characters on one quest, a retry, a race). The
+            # existing row is returned as-is; the person already has the question in front of them.
+            # A failed read of the open decisions lets the create through: a duplicate is the lesser
+            # harm next to a proposal that can never be raised.
+            for open_decision in self.list_open_decisions_for_quest(quest_id):
+                if str(open_decision.get("kind") or "") == EXPERIMENT_PROPOSAL_KIND:
+                    log.info("create_decision: quest %s already has an open experiment proposal; "
+                             "not raising another", quest_id)
+                    return open_decision
         try:
             tid = team_id or self.team_id
             if not tid:

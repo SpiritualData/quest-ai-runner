@@ -135,6 +135,9 @@ from .autopilot_briefs import (
 from .autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
 from .autopilot_gates import GatesMixin
 from .autopilot_work import WorkMixin
+from .quest_experiments import (
+    experiments_brief_section, fetch_experiments, has_experiment, proposal_is_open,
+)
 from .autopilot_context import PassContextMixin
 
 
@@ -397,6 +400,16 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # concluded (possibly an attended session's, more recent than any pass) rides into the
         # batch as the plan of record.
         standing_next_steps = self._read_next_steps(quest_id)
+        # The quest's experiments, read ONCE per quest (None = could not be read, which renders as
+        # no section at all, never as "no experiments"). Whether a proposal is already waiting is
+        # asked only when it can matter: the quest has no experiment and may plan.
+        quest_experiments = fetch_experiments(self._client, quest_id)
+        experiment_proposal_open = (
+            quest_experiments is not None and not has_experiment(quest_experiments)
+            and planning == "plan_and_work" and proposal_is_open(self._client, quest_id))
+        # One batch per pass may be the one that proposes; a second character's batch is told a
+        # proposal is already being handled instead of raising a duplicate.
+        experiment_proposal_offered = False
         quest_label = _quest_label(quest, quest_id)
         context_bundle: Optional[ContextUpdates] = None
         context_updates_text: Optional[str] = None
@@ -492,6 +505,10 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                     # once the budget is exhausted -- exactly what a real pass would do.
                     budget_used += 1
                     continue
+                experiments_text = experiments_brief_section(
+                    quest_experiments, quest_id=quest_id, planning=planning,
+                    proposal_open=experiment_proposal_open,
+                    may_propose=not experiment_proposal_offered) or None
                 task_id = self._create_batch_task(quest, quest_id, persona, mode,
                                                   title=title,
                                                   scope_label=scope_label, adopted_tasks=tasks,
@@ -507,8 +524,10 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                       default_quest_instructions),
                                                   default_persona_instructions=(
                                                       default_persona_instructions),
-                                                  goal_ladder=goal_ladder)
+                                                  goal_ladder=goal_ladder,
+                                                  experiments=experiments_text)
                 if task_id:
+                    experiment_proposal_offered = True
                     result.created.append({
                         "task_id": task_id, "kind": "work_batch", "quest_id": quest_id,
                         "quest_label": quest_label, "title": title,

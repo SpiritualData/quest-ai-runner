@@ -351,7 +351,8 @@ def compose_batch_text(quest_outcome: str,
                        persona_instructions: Optional[str] = None,
                        default_quest_instructions: Optional[str] = None,
                        default_persona_instructions: Optional[str] = None,
-                       goal_ladder: Optional[List[Dict[str, Any]]] = None) -> str:
+                       goal_ladder: Optional[List[Dict[str, Any]]] = None,
+                       experiments: Optional[str] = None) -> str:
     """The batch task's text: what this run is asked to produce, the period and goals it serves,
     what the person themselves last said about the work, and what the previous period produced.
 
@@ -447,6 +448,14 @@ def compose_batch_text(quest_outcome: str,
     versus what continuity means -- so this stays its own parameter. See ``DEFAULT_ALWAYS`` in
     ``context_updates.py`` for the source-registry side of this same line.
 
+    ``experiments`` (from ``quest_experiments.experiments_brief_section``) is the quest's
+    experiments and what this run should do about them: carry the running ones forward, or, on a
+    quest that has none and may plan, propose one. It is already compact and already carries its own
+    instruction, so it rides in whole or not at all, at the standing-instructions tier: experiments
+    are a core concern of every quest, so they outrank the goal frame, the plan of record and the
+    history when the brief has to be cut. Absent or empty, this emits nothing and the composed text
+    is byte-identical to before this parameter existed.
+
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
     because some consumers resolve the persona from the request text.
@@ -502,6 +511,8 @@ def compose_batch_text(quest_outcome: str,
         # here is some more work", which is the misreading the framing above spends its words
         # preventing.
         add("goal frame", _render_goal_ladder(goal_ladder), prompt_budget.PRIORITY_GOALS)
+    if experiments:
+        add("experiments", experiments, prompt_budget.PRIORITY_STANDING, whole=True)
     if adopted_tasks:
         block = ["Recurring AI tasks for this period, adopted into this run. Carry out each one "
                  "as part of this run; the original occurrences are closed and will NOT run "

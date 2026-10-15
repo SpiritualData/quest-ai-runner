@@ -43,6 +43,12 @@ A THIRD managed block, ``QAR:MANAGED:next_steps``, holds the quest's canonical "
 (see :func:`publish_next_steps`). Unlike the notes block it is a REPLACE, never a log: it is
 regenerated in place on every refresh, so the folder always holds exactly one current answer that
 an attended session and the background autopilot both read instead of each reconstructing its own.
+
+A FOURTH managed block, ``QAR:MANAGED:experiments``, carries every field of the quest's experiments
+(see :mod:`quest_ai_runner.runner.quest_experiments`). It is PULL-ONLY: Quest's experiment fields
+(hypotheses, protocol, analyses, conclusion) are the person's, and the AI tools that write them
+refuse unless the person asked, so a hand edit inside the block is overwritten on the next pull and
+never sent. A pull that cannot read the experiments leaves the block as it was.
 """
 from __future__ import annotations
 
@@ -53,6 +59,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ._managed_sections import extract_between, replace_between
+from .quest_experiments import (
+    EXPERIMENTS_END, EXPERIMENTS_START, fetch_experiments, render_experiments_block,
+)
 from .quest_folder_zones import capture_human_input, ensure_folder_zones
 
 log = logging.getLogger("quest-ai-runner.quest_folder_sync")
@@ -113,6 +122,9 @@ class QuestFolderSyncResult:
     #: Paths the three-zone scaffold created this call (see ``quest_folder_zones``). Empty on an
     #: already-conforming folder, which is the steady state.
     zones_created: List[str] = field(default_factory=list)
+    #: How many experiments the pulled ``QAR:MANAGED:experiments`` block carries, or None when they
+    #: could not be read this pull (the block was then left exactly as it was).
+    experiments_pulled: Optional[int] = None
     #: Human-authored notes captured verbatim into ``human_context/from_quest/`` this call.
     human_notes_captured: List[str] = field(default_factory=list)
 
@@ -186,12 +198,29 @@ def _ensure_to_push_section(text: str) -> str:
     return f"{text}{sep}{_TO_PUSH_PLACEHOLDER}"
 
 
+def _replace_before_to_push(text: str, start: str, end: str, body: str) -> str:
+    """``replace_between``, except a block that does not exist yet goes ABOVE the human's
+    "Notes to push" section instead of after it, so that section stays the file's last word."""
+    if start in text or _TO_PUSH_HEADING not in text:
+        return replace_between(text, start, end, body)
+    head, sep, tail = text.partition(_TO_PUSH_HEADING)
+    return replace_between(head, start, end, body).rstrip("\n") + "\n\n" + sep + tail
+
+
 def render_sync_file(existing: str, quest_id: str, quest_state: Dict[str, Any],
-                     notes: List[Dict[str, Any]]) -> str:
-    """Render the managed sections of a quest-folder sync file, preserving everything else."""
+                     notes: List[Dict[str, Any]],
+                     experiments: Optional[List[Dict[str, Any]]] = None) -> str:
+    """Render the managed sections of a quest-folder sync file, preserving everything else.
+
+    ``experiments`` is :func:`fetch_experiments`'s answer. ``None`` (could not be read) leaves the
+    experiments block exactly as it was, so a failed read can never erase the last good copy.
+    """
     out = _ensure_frontmatter(existing or "", quest_id)
     out = replace_between(out, _GOAL_START, _GOAL_END, _render_goal_block(quest_state))
     out = replace_between(out, _NOTES_START, _NOTES_END, _render_notes_block(notes))
+    if experiments is not None:
+        out = _replace_before_to_push(out, EXPERIMENTS_START, EXPERIMENTS_END,
+                                      render_experiments_block(experiments))
     return _ensure_to_push_section(out)
 
 
@@ -497,9 +526,10 @@ def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
     if not quest_state:
         raise QuestFolderSyncError(f"quest {quest_id} not found or inaccessible")
     notes = list(client.list_quest_notes(quest_id) or [])
+    experiments = fetch_experiments(client, quest_id)
     path = _sync_path(folder, filename)
     existing = _read_existing(path)
-    rendered = render_sync_file(existing, quest_id, quest_state, notes)
+    rendered = render_sync_file(existing, quest_id, quest_state, notes, experiments)
     if rendered != existing:
         _write(path, rendered)
     # After the sync file, never before: the scaffold is best-effort and must not be able to stop
@@ -515,6 +545,7 @@ def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
     return QuestFolderSyncResult(
         direction="pull", quest_id=quest_id, sync_path=str(path),
         pulled=True, notes_pulled=len(notes),
+        experiments_pulled=None if experiments is None else len(experiments),
         zones_created=zones_created, human_notes_captured=captured,
     )
 
@@ -710,6 +741,7 @@ def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = 
             direction="both", quest_id=quest_id, sync_path=pushed.sync_path,
             pulled=True, pushed=True,
             notes_pulled=pulled.notes_pulled, notes_pushed=pushed.notes_pushed,
+            experiments_pulled=pulled.experiments_pulled,
             zones_created=pulled.zones_created,
             human_notes_captured=pulled.human_notes_captured,
         )
