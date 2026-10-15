@@ -62,9 +62,9 @@ def language_instruction(language: Optional[str] = None) -> str:
       per-user preference would use once one is wired in here (mirrors quest-backend's
       ``app/prompts/quest_ai_prompts.py`` ``_language_addendum``).
     - ``None`` or anything else (the default, since quest-ai-runner has no per-user preference
-      lookup of its own) asks the model to mirror whatever language the user's own message is
-      written in. This needs no new plumbing, and it is what actually fixes the reported bug:
-      every reply defaults to English regardless of the language the user writes in.
+      lookup of its own) pins the reply to English unless the user explicitly asks for another
+      language. Mirroring the message language let foreign-language context pull replies out of
+      English (reported by Zee, 2026-10-15), so English is the default.
     """
     name = LANGUAGE_NAMES.get((language or "").strip().lower())
     if name:
@@ -78,9 +78,10 @@ def language_instruction(language: Optional[str] = None) -> str:
         )
     return (
         "--- LANGUAGE ---\n"
-        "Reply in the same language the user's most recent message is written in, and keep any "
-        "reasoning or narration shown to them in that language too. If the message mixes "
-        "languages or the language is unclear, use English. Keep product names, code, file "
+        "Reply in English, and keep any reasoning or narration shown to the user in English too. "
+        "Only reply in another language when the user explicitly asks you to, and then keep using "
+        "it until they say otherwise. Quest titles, quoted data, or context written in another "
+        "language never change your reply language. Keep product names, code, file "
         "paths, URLs, and their own proper nouns (people, quest titles they wrote) exactly as "
         "written; do not translate them. Never use em dashes; split the sentence or use a comma, "
         "colon, or parentheses instead."
