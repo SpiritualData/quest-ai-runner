@@ -12,6 +12,7 @@ The index is built lazily by one walk, kept for a short time (``ttl``), and rebu
 from __future__ import annotations
 
 import difflib
+import functools
 import heapq
 import os
 import threading
@@ -28,7 +29,8 @@ MAX_SUGGESTIONS = 5
 MAP_MAX_LINES = 60
 MAP_LINE_CHARS = 200
 MAP_ROOT_FILE_NAMES = 12
-MAP_CHILD_DIRS = 10
+MAP_CHILD_DIRS = 8
+MAP_MAX_CHARS = 2800
 
 
 def clean_parts(text: Optional[str]) -> List[str]:
@@ -58,30 +60,67 @@ class VisibleIndex:
         return self.built_at is not None and (self.clock() - self.built_at) < self.ttl
 
     def ensure(self) -> None:
+        """A fresh index is used as is. A stale one is used as is too while a background rebuild
+        runs (a miss never waits for a walk after the first). Only the very first call waits."""
         if self.fresh():
             return
+        if self.built_at is not None:
+            if self.lock.acquire(blocking=False):
+                threading.Thread(target=self.rebuild_and_release, daemon=True).start()
+            return
         with self.lock:
-            if self.fresh():
-                return
+            if self.built_at is None:
+                self.build()
+
+    def rebuild_and_release(self) -> None:
+        try:
             self.build()
+        except Exception:  # noqa: BLE001 - the old index stays in use
+            pass
+        finally:
+            self.lock.release()
+
+    def warm(self) -> None:
+        """Build the first index off the request path (called when the server starts)."""
+        if self.lock.acquire(blocking=False):
+            threading.Thread(target=self.warm_build, daemon=True).start()
+
+    def warm_build(self) -> None:
+        try:
+            if self.built_at is None:
+                self.build()
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            self.lock.release()
 
     def build(self) -> None:
+        """One walk. A folder that passed the visibility rules makes its children cheap to judge:
+        only each child's own name, the dot allowlist for a dot name, and the deny list remain."""
+        from .files_server import dot_allowed, hidden_component, is_denied, name_is_secret  # no import cycle at load
         ops = self.operations
         adapter = ops.files
         deadline = self.clock() + BUILD_BUDGET_SECONDS
         files: List[str] = []
         dirs: List[str] = []
+        secret = functools.lru_cache(maxsize=65536)(name_is_secret)
+        deny, allow = adapter.deny, adapter.allow_dot
+
+        def child_blocked(parent: Tuple[str, ...], name: str) -> bool:
+            if secret(name):
+                return True
+            if hidden_component(name) and not dot_allowed(parent + (name,), allow):
+                return True
+            return bool(deny) and is_denied("/".join(parent + (name,)), deny)
+
         for dirpath, dirnames, filenames in os.walk(ops.root):
             prune_dirnames(dirnames, current=Path(dirpath), base_skip=adapter.skip_dirs)
-            base = Path(dirpath)
-            dirnames[:] = [d for d in dirnames if not adapter.blocked(ops.rel_parts(base / d))]
-            rel_dir = ops.relative(base)
-            for d in dirnames:
-                dirs.append(d if rel_dir == "." else f"{rel_dir}/{d}")
-            for fn in filenames:
-                if adapter.blocked(ops.rel_parts(base / fn)):
-                    continue
-                files.append(fn if rel_dir == "." else f"{rel_dir}/{fn}")
+            rel_dir = ops.relative(Path(dirpath))
+            parent = () if rel_dir == "." else tuple(rel_dir.split("/"))
+            dirnames[:] = [d for d in dirnames if not child_blocked(parent, d)]
+            prefix = "" if not parent else rel_dir + "/"
+            dirs.extend(prefix + d for d in dirnames)
+            files.extend(prefix + fn for fn in filenames if not child_blocked(parent, fn))
             if len(files) + len(dirs) >= MAX_INDEX_ENTRIES or self.clock() > deadline:
                 break
         self.files, self.dirs = files, dirs
@@ -165,9 +204,15 @@ class VisibleIndex:
 
     # --- top-level map -----------------------------------------------------------------
 
+    @staticmethod
+    def quiet_last(name: str) -> int:
+        low = name.lower()
+        return 1 if any(word in low for word in ("archive", "backup", "old", "tmp", "cache")) else 0
+
     def tree_map(self) -> str:
         """A compact picture of the top of the tree: root files, then each root folder with its
-        subfolders. Visible entries only, at most ``MAP_MAX_LINES`` lines."""
+        most recently changed subfolders (archive-like names last). Visible entries only, within
+        ``MAP_MAX_LINES`` lines and ``MAP_MAX_CHARS`` characters."""
         ops = self.operations
         top = ops.list_dir(None)
         if not top.get("ok"):
@@ -175,24 +220,43 @@ class VisibleIndex:
         entries = top.get("entries") or []
         root_files = [e["name"] for e in entries if e.get("type") != "dir"]
         root_dirs = [e["name"] for e in entries if e.get("type") == "dir"]
+        skip = ops.files.skip_dirs
+        listed = {}
+        for name in root_dirs[:MAP_MAX_LINES - 2]:
+            sub = ops.list_dir(name)
+            kids = (sub.get("entries") or []) if sub.get("ok") else []
+            subdirs = [e for e in kids if e.get("type") == "dir" and e["name"] not in skip
+                       and not e["name"].startswith("__")]
+            subdirs.sort(key=lambda e: (self.quiet_last(e["name"]), _neg(e.get("modified"))))
+            listed[name] = (subdirs, sum(1 for e in kids if e.get("type") != "dir"))
+        text = ""
+        for per_dir in (MAP_CHILD_DIRS, 5, 3, 0):
+            text = self.render_map(root_files, root_dirs, listed, per_dir)
+            if len(text) <= MAP_MAX_CHARS:
+                break
+        return text
+
+    def render_map(self, root_files, root_dirs, listed, per_dir: int) -> str:
         lines: List[str] = []
         if root_files:
             shown = ", ".join(root_files[:MAP_ROOT_FILE_NAMES])
             more = len(root_files) - MAP_ROOT_FILE_NAMES
             lines.append(f"(top folder files) {shown}" + (f", +{more} more" if more > 0 else ""))
-        room = MAP_MAX_LINES - len(lines) - 1
-        for name in root_dirs[:max(room, 0)]:
-            sub = ops.list_dir(name)
-            kids = sub.get("entries") or [] if sub.get("ok") else []
-            subdirs = [e["name"] + "/" for e in kids if e.get("type") == "dir"]
-            nfiles = sum(1 for e in kids if e.get("type") != "dir")
-            text = ", ".join(subdirs[:MAP_CHILD_DIRS])
-            if len(subdirs) > MAP_CHILD_DIRS:
-                text += f", +{len(subdirs) - MAP_CHILD_DIRS} more folders"
+        for name in root_dirs[:MAP_MAX_LINES - len(lines) - 1]:
+            subdirs, nfiles = listed.get(name, ([], 0))
+            parts = [e["name"] + "/" for e in subdirs[:per_dir]]
+            if len(subdirs) > per_dir:
+                parts.append(f"+{len(subdirs) - per_dir} more folders")
             if nfiles:
-                text += (", " if text else "") + f"{nfiles} file{'s' if nfiles != 1 else ''}"
-            line = f"{name}/: {text}" if text else f"{name}/"
-            lines.append(line[:MAP_LINE_CHARS])
-        if len(root_dirs) > max(room, 0):
-            lines.append(f"(+{len(root_dirs) - max(room, 0)} more top folders: list the top folder)")
+                parts.append(f"{nfiles} file{'s' if nfiles != 1 else ''}")
+            lines.append((f"{name}/: " + ", ".join(parts))[:MAP_LINE_CHARS] if parts else f"{name}/")
+        hidden = len(root_dirs) - (len(lines) - (1 if root_files else 0))
+        if hidden > 0:
+            lines.append(f"(+{hidden} more top folders: list the top folder)")
         return "\n".join(lines)
+
+
+def _neg(modified: Optional[str]) -> Tuple[int, ...]:
+    """Sort key putting the newest ``YYYY-MM-DD HH:MM`` first."""
+    digits = "".join(ch for ch in (modified or "") if ch.isdigit())
+    return tuple(-int(ch) for ch in digits)

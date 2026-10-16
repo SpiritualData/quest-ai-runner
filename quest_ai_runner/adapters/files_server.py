@@ -743,6 +743,7 @@ def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 
         "gate": threading.BoundedSemaphore(MAX_CONCURRENT_OPERATIONS),
     })
     server = FilesHTTPServer((host, port), handler)
+    handler.operations.index.warm()      # build the path index off the request path
     return server
 
 

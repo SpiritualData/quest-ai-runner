@@ -94,6 +94,9 @@ def test_the_index_is_cached_until_the_ttl_passes(root):
     (root / "product" / "setup" / "unit-files" / "NEW_NAME.md").write_text("n\n")
     assert not ops.read("x/NEW_NAME.md").get("suggestions")
     now[0] = 1000.0
+    ops.read("x/NEW_NAME.md")                  # stale: answered from the old index, rebuild starts
+    with ops.index.lock:                       # the background rebuild releases the lock when done
+        pass
     assert ops.read("x/NEW_NAME.md")["suggestions"] == ["product/setup/unit-files/NEW_NAME.md"]
 
 
