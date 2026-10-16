@@ -24,6 +24,7 @@ call. ``core`` imports no runner code; the Quest client arrives through the fact
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 from typing import Any, Dict, List, Mapping, Optional
 
 from .tools import (STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env,
@@ -496,6 +497,130 @@ def list_quest_notes_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         keywords=("notes", "thread", "replies", "said", "recent", "read"),
         context_args={"quest_id": "quest_id"})
 
+#: ``list_quest_goals`` output caps: a quest can hold hundreds of goals, so a call shows one page.
+GOALS_DEFAULT_LIMIT = 25
+GOALS_MAX_LIMIT = 100
+GOAL_TEXT_CHARS = 320
+
+
+def today_date() -> date:
+    return date.today()
+
+
+def day_of(value: Any) -> Optional[date]:
+    """The calendar day in an ISO date or datetime string, or None."""
+    try:
+        return date.fromisoformat(str(value or "")[:10])
+    except ValueError:
+        return None
+
+
+def goal_due_day(goal: Mapping[str, Any]) -> Optional[date]:
+    """The day a goal is meant to happen: its scheduled day, else the end of its period."""
+    return day_of(goal.get("scheduled_date")) or day_of(goal.get("deadline"))
+
+
+def flat_goals(payload: Mapping[str, Any]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for group in payload.get("period_groups") or []:
+        out.extend(g for g in (group.get("goals") or []) if isinstance(g, dict))
+    return out
+
+
+def goal_row(goal: Mapping[str, Any], names: Mapping[str, str]) -> Dict[str, Any]:
+    assignee = goal.get("assigned_to_user_id")
+    due = goal_due_day(goal)
+    return {"id": goal.get("id"), "title": goal.get("name") or "", "text": goal.get("description") or "",
+            "assignee_user_id": assignee, "assignee_name": names.get(str(assignee or "")) or None,
+            "completed": bool(goal.get("completed")), "abandoned": bool(goal.get("abandoned")),
+            "time_scope": goal.get("time_scope"), "period": goal.get("period"),
+            "due": due.isoformat() if due else None, "parent_goal_id": goal.get("parent_goal_id")}
+
+
+def goal_line(row: Mapping[str, Any]) -> str:
+    who = row.get("assignee_name") or row.get("assignee_user_id") or "unassigned"
+    state = "done" if row.get("completed") else ("abandoned" if row.get("abandoned") else "open")
+    text = f" | {trim(row['text'], GOAL_TEXT_CHARS)}" if row.get("text") else ""
+    return (f"- {row['id']} [{state}] due {row.get('due') or 'no date'} ({row.get('time_scope')}) "
+            f"for {who}: {trim(row['title'], 120)}{text}")
+
+
+def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = quest_id_of(args, ctx)
+        if not quest_id:
+            return NO_QUEST
+        client = factory()
+        payload = client.list_quest_goals(quest_id)
+        if not isinstance(payload, dict) or "period_groups" not in payload:
+            return ToolResult(ok=False, text=(
+                f"The goals of quest {quest_id} could not be read just now (the runner log has the "
+                f"reason). Do not assume the quest has none, and do not fill in goal lines you have "
+                f"not seen: say they could not be read."))
+        names = {str(m.get("user_id")): str(m.get("name") or "")
+                 for m in (client.list_assignable_members(quest_id) or []) if m.get("user_id")}
+        rows = [goal_row(g, names) for g in flat_goals(payload)]
+        total = len(rows)
+        if args.get("open_only", True):
+            rows = [r for r in rows if not r["completed"] and not r["abandoned"]]
+        if args.get("assignee_user_id"):
+            rows = [r for r in rows if r["assignee_user_id"] == str(args["assignee_user_id"])]
+        needle = str(args.get("text_contains") or "").strip().lower()
+        if needle:
+            rows = [r for r in rows if needle in f"{r['title']}\n{r['text']}".lower()]
+        if args.get("due_within_days") is not None:
+            first = today_date()
+            last = first + timedelta(days=max(0, int(args["due_within_days"])))
+            early = None if args.get("include_overdue") else first
+            rows = [r for r in rows if r["due"] and day_of(r["due"]) <= last
+                    and (early is None or day_of(r["due"]) >= early)]
+        rows.sort(key=lambda r: (r["due"] is None, r["due"] or "", str(r["id"])))
+        limit = max(1, min(int(args.get("limit") or GOALS_DEFAULT_LIMIT), GOALS_MAX_LIMIT))
+        offset = max(0, int(args.get("offset") or 0))
+        page = rows[offset:offset + limit]
+        if not rows:
+            return ToolResult(ok=True, data=[], text=(
+                f"No goals on quest {quest_id} match ({total} goals in all, before filters)."))
+        more = len(rows) - offset - len(page)
+        head = (f"{len(rows)} matching goals on quest {quest_id} ({total} in all); showing "
+                f"{offset + 1}-{offset + len(page)}, soonest due first"
+                + (f". {more} more: call again with offset={offset + len(page)}." if more > 0 else "."))
+        return ToolResult(ok=True, data=page, text=head + "\n" + "\n".join(goal_line(r) for r in page))
+
+    return ToolSpec(
+        name="list_quest_goals",
+        handler=handler,
+        description=("List the goals on a quest with their id, title, text (the brief, which may "
+                     "start with an owner line), who they are assigned to (id and name), done or "
+                     "open, time scope, due day and parent. Filter by assignee, due window or words; "
+                     "one page at a time."),
+        when_to_use=("You need the real goals of a quest: to remind someone of their open goals, "
+                     "report what is due, find the goals a person owns, or look a goal up by its "
+                     "words. Read it BEFORE writing any message that lists goals."),
+        when_not_to_use=("Whole-portfolio views across quests. A write to a goal (update_goal, "
+                         "create_goal). Never write goal lines into a message without reading them here."),
+        parameters={"type": "object", "properties": {
+            "quest_id": QUEST_ID_PARAM,
+            "assignee_user_id": {"type": "string", "description": "Only goals assigned to this user id."},
+            "open_only": {"type": "boolean",
+                          "description": "Hide done and abandoned goals (default true)."},
+            "due_within_days": {"type": "integer",
+                                "description": "Only goals due from today through this many days ahead."},
+            "include_overdue": {"type": "boolean",
+                                "description": "With due_within_days, also goals already past due."},
+            "text_contains": {"type": "string",
+                              "description": "Only goals whose title or text contains this (case-insensitive), "
+                                             "for example an owner line."},
+            "limit": {"type": "integer",
+                      "description": f"Page size (default {GOALS_DEFAULT_LIMIT}, at most {GOALS_MAX_LIMIT})."},
+            "offset": {"type": "integer", "description": "Skip this many matches (next page)."}}},
+        mutates=False, workflow_step=False, origin="standard",
+        keywords=("goals", "goal", "list", "read", "due", "open", "assigned", "owner", "tasks",
+                  "week", "reminder", "deadline", "assignee", "plan", "items"),
+        context_args={"quest_id": "quest_id"})
+
 
 def create_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
@@ -616,6 +741,7 @@ QUEST_OPERATION_BUILDERS = {
     "update_outcome_progress": with_credentials(update_outcome_progress_spec),
     "add_quest_note": with_credentials(add_quest_note_spec),
     "list_quest_notes": with_credentials(list_quest_notes_spec),
+    "list_quest_goals": with_credentials(list_quest_goals_spec),
     "create_goal": with_credentials(create_goal_spec),
     "update_goal": with_credentials(update_goal_spec),
 }

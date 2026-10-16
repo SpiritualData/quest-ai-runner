@@ -42,6 +42,7 @@ quest and its surroundings (`core/tools_quest_ops.py`). Each is defined once, na
 | `update_ask` | writes | Claim where an ask stands (done waits for the person to accept it); the ask is a key or a phrase of its words |
 | `update_outcome_progress` | writes | A measurable outcome's progress with one line of evidence; the outcome is an id, a phrase of its words, or its position |
 | `add_quest_note`, `list_quest_notes` | writes, reads | The quest's note thread |
+| `list_quest_goals` | read | A quest's goals with text, assignee, status and due day; filters by assignee, due window, words; paged |
 | `create_goal`, `update_goal` | writes | Fill a plan gap, link a goal to its outcome (`on_request_only`: shown only to a run that pins them) |
 
 The quest comes from the run (`context_args`), so no id has to be pasted. A deep run sees
