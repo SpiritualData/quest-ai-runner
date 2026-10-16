@@ -164,8 +164,10 @@ def list_open_decisions_spec(env: Mapping[str, str], client_factory=None) -> Too
         rows = factory().list_open_decisions_for_quest(quest_id)
         if not rows:
             return ToolResult(ok=True, data=[], text=f"No open asks for people on quest {quest_id}.")
+        # Name who each ask waits on: without it a reminder for one person cannot tell their asks
+        # from everyone else's on the quest (seen 2026-10-16: it listed all 15 as Joshua's).
         lines = [f"- {r.get('decision_id') or r.get('id')} [{r.get('kind') or 'approve'}] "
-                 f"{trim(r.get('summary'))}" for r in rows]
+                 f"(waiting on {r.get('assignee_name') or 'nobody named'}) {trim(r.get('summary'))}" for r in rows]
         return ToolResult(ok=True, data=rows, text="Open asks for people on this quest:\n" + "\n".join(lines))
 
     return ToolSpec(
