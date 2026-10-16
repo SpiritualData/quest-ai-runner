@@ -792,6 +792,9 @@ class DeepRunMixin:
                 prior_failures = failing_now
                 tool_broken = repeated is not None and _blocker in ("more_work", "tool_failure")
                 if tool_broken:
+                    log.info("goal loop: the call ledger shows %s failing the same way in two "
+                             "attempts in a row (verifier called it %r); stopping", repeated.tool,
+                             verdict.get("blocker") or "more_work")
                     _blocker = "tool_failure"
                     _q = _q or describe_failure(repeated)
                 if _blocker == "evidence_only" and _q and not verdict.get("claims_unexecuted"):
