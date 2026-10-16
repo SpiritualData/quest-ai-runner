@@ -253,7 +253,10 @@ def describe_read_spec(spec: Dict[str, Any]) -> str:
     if spec.get("web") is not None:
         return f"web({spec['web']!r})"
     if spec.get("web_page"):
-        return f"web_page({spec['web_page']!r})"
+        extra = ""
+        if spec.get("full") or spec.get("part"):
+            extra = f", full, part {spec.get('part') or 1}"
+        return f"web_page({spec['web_page']!r}{extra})"
     if spec.get("grep"):
         return f"grep({spec['grep']!r})"
     if spec.get("query") is not None:

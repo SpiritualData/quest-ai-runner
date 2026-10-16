@@ -306,6 +306,11 @@ def _gathered_has_web_evidence(gathered: Optional[List[Dict[str, Any]]]) -> bool
 # adapter's page token budget), so this is a safety valve for a turn with many web reads, not a
 # normal-path limiter; it keeps the uncached volatile tail of every verify retry bounded.
 VERIFY_WEB_EVIDENCE_MAX_CHARS = 8000
+# The same cap when a turn read a web PAGE (focused excerpts or a whole-document part): the answer
+# was grounded on that text, so a verifier that sees only its first 8000 characters would call a
+# correct detail from later in the page unsupported. Sized for one full part (~12000 tokens) plus
+# a few other reads; search-only turns keep the smaller cap above.
+VERIFY_WEB_PAGE_EVIDENCE_MAX_CHARS = 64000
 
 
 # ---------------------------------------------------------------------------

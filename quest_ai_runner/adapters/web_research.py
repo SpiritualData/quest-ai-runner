@@ -81,11 +81,17 @@ from .web_search_backends import (
 logger = logging.getLogger("quest-ai-runner.web-research")
 
 _DEFAULT_MAX_RESULTS = 5
-_DEFAULT_PAGE_TOKEN_BUDGET = 800
+#: Focused read ({"web_page": url, "focus": ...}): the passages most relevant to the focus.
+_DEFAULT_PAGE_TOKEN_BUDGET = 3000
+#: Whole-document read ({"web_page": url, "full": true}): the text in order, one part at a time.
+_DEFAULT_FULL_PAGE_TOKEN_BUDGET = 12000
 _DEFAULT_SEARCH_TTL = 86400
 _DEFAULT_PAGE_TTL = 604800
 _FETCH_TIMEOUT = 8.0
 _MAX_PAGE_BYTES = 2 * 1024 * 1024
+#: A PDF is binary and its text is a fraction of its size, so it gets a larger byte cap than a
+#: web page (the extracted text is capped separately, see ``web_link_access.PDF_MAX_TEXT_CHARS``).
+_MAX_PDF_BYTES = 15 * 1024 * 1024
 _MAX_REDIRECTS = 5
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -298,16 +304,19 @@ def _default_page_fetcher(url: str) -> FetchedPage:
                     raise UnsupportedContentTypeError(
                         f"web fetch: unsupported content-type {content_type!r} for {url}")
                 declared = resp.headers.get("content-length") or ""
-                if (is_pdf or sniff) and declared.isdigit() and int(declared) > _MAX_PAGE_BYTES:
+                # A declared PDF may be large; an undeclared type is read up to the PDF cap too and
+                # cut back to the page cap below if it turns out not to be a PDF.
+                byte_cap = _MAX_PDF_BYTES if (is_pdf or sniff) else _MAX_PAGE_BYTES
+                if (is_pdf or sniff) and declared.isdigit() and int(declared) > byte_cap:
                     raise PageFetchError(
-                        f"web fetch: {url} is {declared} bytes, over the {_MAX_PAGE_BYTES} byte cap",
+                        f"web fetch: {url} is {declared} bytes, over the {byte_cap} byte cap",
                         REASON_TOO_LARGE)
                 chunks: List[bytes] = []
                 total = 0
                 truncated = False
                 for chunk in resp.iter_bytes():
                     total += len(chunk)
-                    if total > _MAX_PAGE_BYTES:
+                    if total > byte_cap:
                         truncated = True
                         break
                     chunks.append(chunk)
@@ -315,9 +324,12 @@ def _default_page_fetcher(url: str) -> FetchedPage:
             if is_pdf or (sniff and looks_like_pdf(raw)):
                 if truncated:
                     raise PageFetchError(
-                        f"web fetch: {url} is over the {_MAX_PAGE_BYTES} byte cap", REASON_TOO_LARGE)
+                        f"web fetch: {url} is over the {_MAX_PDF_BYTES} byte cap", REASON_TOO_LARGE)
                 return FetchedPage(html="", content_type="application/pdf", status_code=status_code,
                                    data=raw, final_url=current)
+            if sniff and len(raw) > _MAX_PAGE_BYTES:
+                raw = raw[:_MAX_PAGE_BYTES]
+                truncated = True
             if sniff and (b"\x00" in raw[:2048]):
                 if truncated:
                     raise PageFetchError(
@@ -548,7 +560,8 @@ class WebResearchAdapter:
         backend: "SearchBackend",
         *,
         max_results: int = 5,
-        page_token_budget: int = 800,
+        page_token_budget: int = _DEFAULT_PAGE_TOKEN_BUDGET,
+        full_page_token_budget: int = _DEFAULT_FULL_PAGE_TOKEN_BUDGET,
         cache: Optional["WebCache"] = None,
         search_ttl_seconds: int = 86400,
         page_ttl_seconds: int = 604800,
@@ -560,6 +573,7 @@ class WebResearchAdapter:
         self._backend = backend
         self._max_results = max_results
         self._page_token_budget = page_token_budget
+        self._full_page_token_budget = max(page_token_budget, full_page_token_budget)
         self._cache = cache if cache is not None else WebCache()
         self._search_ttl = search_ttl_seconds
         self._page_ttl = page_ttl_seconds
@@ -729,14 +743,21 @@ class WebResearchAdapter:
     # fetch
     # ------------------------------------------------------------------
 
-    def fetch(self, url: str, *, focus: Optional[str] = None, fresh: bool = False) -> Observation:
+    def fetch(self, url: str, *, focus: Optional[str] = None, fresh: bool = False,
+              full: bool = False, part: Optional[int] = None) -> Observation:
+        """Read one page. Default: the passages most relevant to ``focus`` (about
+        ``page_token_budget`` tokens). ``full=True`` returns the document's text in order, one
+        part of about ``full_page_token_budget`` tokens at a time; ``part=N`` (1-based, implies
+        ``full``) reads part N. A long document says how many parts there are and how to ask for
+        the next."""
         try:
-            return self._fetch_inner(url, focus=focus, fresh=fresh)
+            return self._fetch_inner(url, focus=focus, fresh=fresh, full=full, part=part)
         except Exception as exc:  # noqa: BLE001
             logger.debug("WebResearchAdapter.fetch failed for %r", url, exc_info=True)
             return Observation(kind="error", rel_path=url, error=f"web fetch failed: {exc}")
 
-    def _fetch_inner(self, url: str, *, focus: Optional[str], fresh: bool) -> Observation:
+    def _fetch_inner(self, url: str, *, focus: Optional[str], fresh: bool,
+                     full: bool = False, part: Optional[int] = None) -> Observation:
         url = (url or "").strip()
         if not url:
             return Observation(kind="error", error="web fetch: no URL given")
@@ -814,17 +835,61 @@ class WebResearchAdapter:
                 "web_page", canonical, {"title": title, "text": full_text}, ttl_seconds=self._page_ttl
             )
 
+        display_title = title or url
+        try:
+            part_number = int(part) if part is not None and not isinstance(part, bool) else None
+        except (TypeError, ValueError):
+            part_number = None
+        if part_number is not None and part_number < 1:
+            part_number = 1
+
+        if full or part_number is not None:
+            return self._full_observation(url, display_title, full_text, part_number or 1)
+
         passages = split_passages(full_text)
         chosen = select_passages(passages, (focus or "").strip(), self._page_token_budget)
         body = "\n...\n".join(chosen) if chosen else full_text[: self._page_token_budget * 4]
 
-        display_title = title or url
         header = [f"PAGE: {display_title} | {url}"]
         if focus:
             header.append(f"(relevant passages for: {focus}; cite as [{display_title}]({url}))")
+        total_tokens = estimate_tokens(full_text)
+        if total_tokens > self._page_token_budget * 1.25:
+            header.append(
+                f"(excerpts only: this document is about {total_tokens} tokens. If these excerpts do "
+                f"not answer the question, do not re-read with another focus: read all of it in "
+                f"order with {{\"web_page\": \"{url}\", \"full\": true}})")
 
         text = "\n".join(header) + "\n\n" + body
         return Observation(kind="read", rel_path=url, locator=f"web extract: {url}", text=text)
+
+    def _full_observation(self, url: str, display_title: str, full_text: str,
+                          part_number: int) -> Observation:
+        """One part of the whole document, in order, with where it sits and how to continue."""
+        parts = paginate_text(full_text, self._full_page_token_budget * _CHARS_PER_TOKEN)
+        count = len(parts)
+        header = [f"PAGE: {display_title} | {url}"]
+        if part_number > count:
+            header.append(
+                f"(this document has {count} part(s); part {part_number} does not exist. "
+                f"cite as [{display_title}]({url}))")
+            return Observation(kind="read", rel_path=url,
+                               locator=f"web extract: {url} (full, part {part_number})",
+                               text="\n".join(header))
+        header.append(
+            f"(full text, part {part_number} of {count}, in document order; "
+            f"cite as [{display_title}]({url}))")
+        if part_number < count:
+            header.append(
+                f"(the document continues: read the next part with "
+                f"{{\"web_page\": \"{url}\", \"full\": true, \"part\": {part_number + 1}}}. "
+                "Answer from what you have if it already covers the question.)")
+        else:
+            header.append("(end of the document)")
+        text = "\n".join(header) + "\n\n" + parts[part_number - 1]
+        return Observation(kind="read", rel_path=url,
+                           locator=f"web extract: {url} (full, part {part_number} of {count})",
+                           text=text)
 
     def _fetch_and_extract(self, url: str, target: Optional[LinkTarget] = None,
                            shown_url: Optional[str] = None) -> Any:
@@ -894,6 +959,37 @@ class WebResearchAdapter:
         return title, _with_truncation_note(text, page), None, None, reason
 
 
+_CHARS_PER_TOKEN = 4
+
+
+def paginate_text(text: str, max_chars: int) -> List[str]:
+    """Split ``text`` into consecutive parts of at most about ``max_chars`` characters, in order,
+    cutting at a paragraph break when there is one in the last fifth of a part, else at a line
+    break, else at a space. Joining the parts reproduces the text (whitespace at the cuts aside).
+    Always returns at least one part."""
+    text = (text or "").strip()
+    max_chars = max(200, int(max_chars))
+    if len(text) <= max_chars:
+        return [text]
+    parts: List[str] = []
+    start = 0
+    n = len(text)
+    while start < n:
+        end = min(n, start + max_chars)
+        if end < n:
+            floor = start + int(max_chars * 0.8)
+            for sep in ("\n\n", "\n", " "):
+                cut = text.rfind(sep, floor, end)
+                if cut > start:
+                    end = cut + len(sep)
+                    break
+        chunk = text[start:end].strip()
+        if chunk:
+            parts.append(chunk)
+        start = end
+    return parts or [text]
+
+
 def _with_truncation_note(text: str, page: Any) -> str:
     """Say so when the body was cut at the size cap, so a partial read is never silent."""
     if getattr(page, "truncated", False) and text:
@@ -948,7 +1044,11 @@ def build_web_research_from_env(
 
     Tuning env vars (backend selection vars are documented on ``select_search_backend``):
       WEB_SEARCH_MAX_RESULTS      -- max results per search (default 5).
-      QAR_WEB_PAGE_TOKEN_BUDGET   -- max tokens kept from one fetched page (default 800).
+      QAR_WEB_PAGE_TOKEN_BUDGET   -- max tokens kept from one FOCUSED page read: the passages
+                                     most relevant to the focus (default 3000).
+      QAR_WEB_PAGE_FULL_TOKEN_BUDGET -- max tokens in one part of a WHOLE-document read
+                                     ({"web_page": url, "full": true}); a longer document is paged
+                                     with "part": N (default 12000).
       QAR_WEB_SEARCH_TTL_SECONDS  -- search-result cache TTL in seconds (default 86400 = 1 day).
       QAR_WEB_PAGE_TTL_SECONDS    -- fetched-page cache TTL in seconds (default 604800 = 7 days).
       QAR_WEB_CACHE_DIR           -- on-disk cache directory (unset = memory-only cache).
@@ -969,6 +1069,8 @@ def build_web_research_from_env(
 
     max_results = _int_env(env, "WEB_SEARCH_MAX_RESULTS", _DEFAULT_MAX_RESULTS)
     page_token_budget = _int_env(env, "QAR_WEB_PAGE_TOKEN_BUDGET", _DEFAULT_PAGE_TOKEN_BUDGET)
+    full_page_token_budget = _int_env(
+        env, "QAR_WEB_PAGE_FULL_TOKEN_BUDGET", _DEFAULT_FULL_PAGE_TOKEN_BUDGET)
     search_ttl = _int_env(env, "QAR_WEB_SEARCH_TTL_SECONDS", _DEFAULT_SEARCH_TTL)
     page_ttl = _int_env(env, "QAR_WEB_PAGE_TTL_SECONDS", _DEFAULT_PAGE_TTL)
     daily_limit = _int_env(env, "QAR_WEB_SEARCH_DAILY_LIMIT", 0) or None
@@ -982,6 +1084,7 @@ def build_web_research_from_env(
         backend,
         max_results=max_results,
         page_token_budget=page_token_budget,
+        full_page_token_budget=full_page_token_budget,
         cache=cache,
         search_ttl_seconds=search_ttl,
         page_ttl_seconds=page_ttl,

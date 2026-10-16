@@ -382,6 +382,14 @@ _WEB_READ_SPEC_FIELDS: Dict[str, Dict[str, Any]] = {
         "type": "string",
         "description": "With web_page: what you need from that page.",
     },
+    "full": {
+        "type": "boolean",
+        "description": "With web_page: read the whole document in order instead of excerpts.",
+    },
+    "part": {
+        "type": "integer",
+        "description": "With web_page and full: which part of a long document (1 is the first).",
+    },
     "fresh": {
         "type": "boolean",
         "description": "With web/web_page: bypass the cache (only for facts that change by "

@@ -56,6 +56,23 @@ With no web adapter wired, the planner is told nothing about the web (no WEB pro
 it was before this feature existed; a stray `{"web": ...}` spec from a model that invented one
 comes back as a named "not configured" error rather than a crash or a silent drop.
 
+### Reading a whole document: `full` and `part`
+
+A focused read returns only the passages that match `focus`. When the user asks to read,
+summarize, review or check a whole linked document, or the link is the subject, the planner uses
+`{"web_page": "<url>", "full": true}`: the document's text in order, up to
+`QAR_WEB_PAGE_FULL_TOKEN_BUDGET` tokens. A longer document comes back as numbered parts; the
+observation says "part 1 of 4" and the exact read for the next one
+(`{"web_page": "<url>", "full": true, "part": 2}`). `part` alone implies `full`. A focused read of
+a document longer than its budget says so and names the `full` read.
+
+The page cache holds the whole extracted text once per URL, so every mode and part is served from
+one fetch. The read-loop dedup key is the whole read spec, so part 2 is never mistaken for a
+repeat of part 1. The planner's own per-step view of a page read is shortened (the answer step and
+the goal verifier see all of it, see `PLANNER_WEB_PAGE_VIEW_CHARS` and
+`VERIFY_WEB_PAGE_EVIDENCE_MAX_CHARS`). Byte caps: 2 MB for a web page, 15 MB for a PDF (text read
+from at most about 3 million characters of PDF).
+
 `fresh: true` bypasses the cache READ for that one call (it still writes the fresh result back
 to the cache).
 
@@ -121,7 +138,8 @@ A failed search or fetch is never cached.
 | Var | Default | Meaning |
 |---|---|---|
 | `WEB_SEARCH_MAX_RESULTS` | 5 | Max results per search call. |
-| `QAR_WEB_PAGE_TOKEN_BUDGET` | 800 | Max tokens kept from one fetched page. |
+| `QAR_WEB_PAGE_TOKEN_BUDGET` | 3000 | Max tokens kept from one FOCUSED page read (the passages most relevant to `focus`). |
+| `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` | 12000 | Max tokens in one part of a whole-document read (`"full": true`); a longer document is paged with `"part": N`. |
 | `QAR_WEB_SEARCH_TTL_SECONDS` | 86400 (1 day) | Search-result cache TTL. |
 | `QAR_WEB_PAGE_TTL_SECONDS` | 604800 (7 days) | Fetched-page cache TTL. |
 | `QAR_WEB_CACHE_DIR` | unset (memory-only) | On-disk cache directory. |

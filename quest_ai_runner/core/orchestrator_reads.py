@@ -71,8 +71,15 @@ class ReadsMixin:
                 return Observation(kind="error",
                                     error="Web search is not configured in this deployment.")
             try:
+                page_kwargs: Dict[str, Any] = {}
+                # Whole-document paging is an optional extension of the web adapter: only pass it
+                # when the planner asked, so an adapter without it keeps working unchanged.
+                if spec.get("full") or spec.get("part"):
+                    page_kwargs["full"] = bool(spec.get("full"))
+                    if spec.get("part"):
+                        page_kwargs["part"] = spec.get("part")
                 return self.web.fetch(str(spec["web_page"]), focus=spec.get("focus") or None,
-                                      fresh=bool(spec.get("fresh")))
+                                      fresh=bool(spec.get("fresh")), **page_kwargs)
             except Exception as e:  # noqa: BLE001 — a web adapter must never break the loop
                 return Observation(kind="error", error=f"web page fetch failed: {e}")
         # No retrieval adapter: gracefully report unsupported rather than crashing. The brain

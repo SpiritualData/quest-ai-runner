@@ -44,6 +44,7 @@ from .prompt_layers import compose_layers, language_instruction
 from .quest_judge import select_quest
 from .orchestrator_decisions import (
     VERIFY_WEB_EVIDENCE_MAX_CHARS,
+    VERIFY_WEB_PAGE_EVIDENCE_MAX_CHARS,
     _gathered_has_web_evidence,
     verify_output_view,
 )
@@ -214,8 +215,11 @@ class JudgesMixin:
                         if isinstance(o, dict) and not _is_discovery_obs(o)
                         and _gathered_has_web_evidence([o])]
         if web_gathered:
+            read_a_page = any(str(o.get("locator") or "").startswith("web extract:")
+                              for o in web_gathered)
             rendered_evidence = truncate_verify_context(
-                _render_gathered(web_gathered), VERIFY_WEB_EVIDENCE_MAX_CHARS)
+                _render_gathered(web_gathered),
+                VERIFY_WEB_PAGE_EVIDENCE_MAX_CHARS if read_a_page else VERIFY_WEB_EVIDENCE_MAX_CHARS)
             if rendered_evidence.strip():
                 evidence_block = (
                     "--- EVIDENCE GATHERED THIS TURN (INTERNAL: the live web results the worker "

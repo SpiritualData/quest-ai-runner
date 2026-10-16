@@ -187,6 +187,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_WAIT_TIMEOUT_SECONDS` | Seconds each long-poll GET asks the backend to wait (sets RunnerConfig.wait_timeout_seconds). | `cli_config.py` | - |
 | `QAR_WEB_CACHE_DIR` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/web-search.md` |
+| `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_PAGE_TTL_SECONDS` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_BACKEND` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `adapters/web_research.py` | `docs/web-search.md` |

@@ -259,6 +259,11 @@ def looks_like_pdf(data: bytes) -> bool:
     return (data or b"")[:1024].lstrip(b"\xef\xbb\xbf \r\n\t\x00").startswith(b"%PDF")
 
 
+#: Stop reading PDF pages once this much text has been extracted, so a very long file cannot
+#: stall a turn or fill the page cache; the text says so when it stops early.
+PDF_MAX_TEXT_CHARS = 3_000_000
+
+
 def extract_pdf_text(data: bytes) -> str:
     """Text of a PDF via the optional ``pypdf`` package.
 
@@ -275,7 +280,21 @@ def extract_pdf_text(data: bytes) -> str:
             raise LinkReadError(
                 REASON_UNSUPPORTED_TYPE, "encrypted pdf",
                 "This PDF is password protected, so I cannot read it. Please paste the text here.")
-        text = "\n".join((page.extract_text() or "") for page in reader.pages)
+        page_texts = []
+        total_chars = 0
+        stopped_at = 0
+        pages = list(reader.pages)
+        for index, page in enumerate(pages):
+            page_text = page.extract_text() or ""
+            page_texts.append(page_text)
+            total_chars += len(page_text)
+            if total_chars >= PDF_MAX_TEXT_CHARS and index + 1 < len(pages):
+                stopped_at = index + 1
+                break
+        text = "\n".join(page_texts)
+        if stopped_at:
+            text += (f"\n\n[Note: this PDF has {len(pages)} pages; only the first {stopped_at} "
+                     "were read.]")
     except LinkReadError:
         raise
     except Exception as exc:  # noqa: BLE001

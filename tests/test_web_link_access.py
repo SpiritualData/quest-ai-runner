@@ -281,12 +281,12 @@ def test_octet_stream_binary_is_unsupported(monkeypatch):
 
 
 def test_pdf_over_the_size_cap_is_too_large(monkeypatch):
-    body = b"%PDF-1.4 " + b"a" * (wr._MAX_PAGE_BYTES + 10)
+    body = b"%PDF-1.4 " + b"a" * (wr._MAX_PDF_BYTES + 10)
     assert reason_of(monkeypatch, {EXPORT: FakeStream(200, {"content-type": "application/pdf"}, body)}) == wla.REASON_TOO_LARGE
 
 
 def test_declared_length_over_the_cap_is_too_large_without_reading(monkeypatch):
-    headers = {"content-type": "application/pdf", "content-length": str(wr._MAX_PAGE_BYTES + 1)}
+    headers = {"content-type": "application/pdf", "content-length": str(wr._MAX_PDF_BYTES + 1)}
     assert reason_of(monkeypatch, {EXPORT: FakeStream(200, headers, b"%PDF")}) == wla.REASON_TOO_LARGE
 
 

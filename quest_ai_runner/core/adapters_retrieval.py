@@ -128,9 +128,13 @@ class WebResearch(Protocol):
         a "cite as [title](url)" note>, hits=[{"title","url","snippet","query","source"}, ...])``.
         ``fresh`` bypasses any cache (facts that change by the hour). Never raises."""
 
-    def fetch(self, url: str, *, focus: Optional[str] = None, fresh: bool = False) -> Observation:
+    def fetch(self, url: str, *, focus: Optional[str] = None, fresh: bool = False,
+              full: bool = False, part: Optional[int] = None) -> Observation:
         """Fetch ONE web page and extract the passages relevant to ``focus`` (or the page's own
-        gist with no focus), bounded to roughly 800 tokens.
+        gist with no focus), bounded by the adapter's focused budget. ``full=True`` returns the
+        whole document in order instead, one bounded part at a time; ``part=N`` (1-based) reads
+        part N of a long one and the text says how to continue. The orchestrator passes ``full``
+        and ``part`` only when the planner asked for them.
 
         Returns ``Observation(kind="read", rel_path=url, locator="web extract: <url>",
         text=<the relevant passages>)``. ``fresh`` bypasses the page cache. Never raises."""

@@ -56,6 +56,14 @@ PLANNER_WEB_HEAD = (
     "pasted is a web_page read (see LINKS IN THIS MESSAGE), not a hand-off. web_page also reads "
     "Google Docs, Sheets, Slides and Drive files that are shared with a link anyone can open, and "
     "PDFs.\n"
+    "{{\"web_page\": \"<url>\", \"full\": true}} -> the WHOLE document in order, not excerpts. "
+    "Use full when the user asks you to read, summarize, review or check a whole linked document, "
+    "when the link itself is the subject, or when the answer depends on the document's structure "
+    "or ending (its last section, its headings, what it concludes); use focus for a quick fact. "
+    "If a focused read did not contain the answer, read full instead of trying another focus. "
+    "A long document comes in "
+    "parts and says so: ask for the next with \"part\": 2, 3 and so on only if the question needs "
+    "it.\n"
     "Add \"fresh\": true only for facts that change hourly.\n"
     "Never web-search the user's own data, this deployment's files, or chit-chat. Cite web facts "
     "inline as [title](url), using only URLs from the results.\n"
@@ -75,7 +83,9 @@ PLANNER_LINKS_HEAD = (
     "LINKS RULE (the ONE rule for a pasted link; it overrides any earlier line that calls a link a "
     "statement or a hand-off): when the user pasted a link, with or without a question, READ it "
     "first with {{\"web_page\": \"<url>\", \"focus\": \"<what they want from it>\"}}, before you "
-    "answer or hand anything off. A link with no instruction means: read it, say in one or two "
+    "answer or hand anything off. If they want the whole document read, summarized or reviewed, or "
+    "the link is the subject, add \"full\": true instead of a focus (a long one comes in parts: "
+    "\"part\": 2 reads the next). A link with no instruction means: read it, say in one or two "
     "sentences what it is, and ask what they want done with it. Google Docs, Sheets, Slides and "
     "Drive files shared with a link anyone can open, PDFs and ordinary public pages can all be "
     "read.\n"
@@ -146,7 +156,26 @@ def _is_discovery_obs(obs: Any) -> bool:
     the answer and a deep worker's brief never ground on it."""
     return isinstance(obs, dict) and bool(obs.get("discovery") or obs.get("planner_only"))
 
-def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
+#: How much of one live web page read the PLANNER sees on each step. The planner only decides what
+#: to do next, so it gets the start of a long page plus a note; the ANSWER and the verifier are
+#: rendered from the unclipped observation (``_render_gathered`` without ``planner_view``), so a
+#: whole-document read is never cut back down on its way to the reply.
+PLANNER_WEB_PAGE_VIEW_CHARS = 6000
+
+
+def _planner_web_page_text(obs: Dict[str, Any], text: str) -> str:
+    """``text`` shortened for the planner's view when ``obs`` is a live web page read."""
+    if not str(obs.get("locator") or "").startswith("web extract:"):
+        return text
+    if len(text) <= PLANNER_WEB_PAGE_VIEW_CHARS:
+        return text
+    return (text[:PLANNER_WEB_PAGE_VIEW_CHARS].rstrip()
+            + f"\n[planner view shortened: {len(text) - PLANNER_WEB_PAGE_VIEW_CHARS} more "
+            "characters of this page were read; the answer step sees all of it, so there is no "
+            "need to read the page again.]")
+
+
+def _render_gathered(gathered: List[Dict[str, Any]], planner_view: bool = False) -> str:
     if not gathered:
         return "[]"
     parts: List[str] = []
@@ -175,7 +204,10 @@ def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
                     f"content and NOT an answer; you still need to read/grep/query the actual sources "
                     f"to gather facts before answering:\n{obs.get('text', '')}")
             else:
-                parts.append(f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]:\n{obs.get('text', '')}")
+                body = str(obs.get("text", ""))
+                if planner_view:
+                    body = _planner_web_page_text(obs, body)
+                parts.append(f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]:\n{body}")
         elif kind == "error":
             parts.append(f"(gather error: {obs.get('error')})")
     return "\n\n".join(parts)
@@ -411,11 +443,11 @@ def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
         content = gathered_content(gathered)
         body = (_render_gathered_for_planner(content, recent_full, compress_over, current_step)
                 if content else "")
-        return (body + "\n\n" if body else "") + _render_gathered(notes)
+        return (body + "\n\n" if body else "") + _render_gathered(notes, planner_view=True)
     n = len(gathered)
     recent_full = max(0, recent_full)
     if n <= compress_over or n <= recent_full:
-        return _render_gathered(gathered)
+        return _render_gathered(gathered, planner_view=True)
     older, recent = gathered[: n - recent_full], gathered[n - recent_full:]
     parts: List[str] = [
         f"--- EARLIER READS ({len(older)}), compressed to one line each "
@@ -424,7 +456,7 @@ def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
     parts.extend(f"  • {_summarize_observation(o)}" for o in older)
     if recent:
         parts.append(f"--- MOST RECENT READS ({len(recent)}), in full ---")
-        parts.append(_render_gathered(recent))
+        parts.append(_render_gathered(recent, planner_view=True))
     return "\n\n".join(parts)
 
 def cap_section(text: str, max_chars: int, *, keep: str = "tail") -> str:

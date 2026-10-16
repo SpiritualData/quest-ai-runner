@@ -286,8 +286,13 @@ Env it reads:
                                                    claude_cli lane (no Anthropic web_search tool)
                                                    shallow web search.
   WEB_SEARCH_MAX_RESULTS (optional)             — max results per web search call (default 5).
-  QAR_WEB_PAGE_TOKEN_BUDGET (optional)          — token budget for one page-fetch's extracted
-                                                   passages (see ``{"web_page": ...}`` reads).
+  QAR_WEB_PAGE_TOKEN_BUDGET (optional)          — token budget for one FOCUSED page read: the
+                                                   passages most relevant to ``focus`` (see
+                                                   ``{"web_page": ...}`` reads; default 3000).
+  QAR_WEB_PAGE_FULL_TOKEN_BUDGET (optional)     — token budget for one part of a WHOLE-document
+                                                   read (``{"web_page": url, "full": true}``);
+                                                   a longer document is paged with ``"part": N``
+                                                   (default 12000).
   QAR_WEB_CACHE_DIR (optional)                  — directory for the web search/page cache.
   QAR_WEB_SEARCH_TTL_SECONDS (optional)         — cache TTL for search results.
   QAR_WEB_PAGE_TTL_SECONDS (optional)           — cache TTL for fetched pages.
