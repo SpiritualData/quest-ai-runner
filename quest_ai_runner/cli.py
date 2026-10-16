@@ -69,6 +69,9 @@ Env it reads:
   QAR_FILES_TOKEN                                - `serve-files` only: the bearer token every request
                                                    must carry (>= 16 characters; the server refuses to
                                                    start without it). Never passed on the command line.
+  QAR_FILES_DENY (optional)                      - `serve-files` only: comma-separated root-relative paths
+                                                   that are invisible to every operation (a personal
+                                                   folder, a backups tree)
   QAR_FILES_ROOT / QAR_FILES_HOST / QAR_FILES_PORT (optional)
                                                  - `serve-files` only: the directory tree to serve
                                                    (also --root), the bind address (default 127.0.0.1)

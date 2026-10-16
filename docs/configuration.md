@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-196 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+197 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -93,6 +93,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_EXPLAIN_TIER` |  | `cli_config.py` | `docs/answer-explanation.md` |
 | `QAR_FEEDBACK_LEDGER` |  | `cli_config.py` | `docs/feedback-ledger.md` |
 | `QAR_FEEDBACK_LEDGER_PATH` |  | `cli_config.py` | `docs/feedback-ledger.md` |
+| `QAR_FILES_DENY` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_HOST` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_PORT` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_ROOT` |  | `cli_serve_files.py` | `docs/file-server.md` |

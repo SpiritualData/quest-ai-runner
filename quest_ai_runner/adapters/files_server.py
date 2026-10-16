@@ -39,6 +39,8 @@ SAFETY (the point of the module, so each rule is enforced in one place and teste
     answer. This is a net, not a guarantee: keep real secrets out of the served tree.
   * The bearer token is required to start the server and compared in constant time. The server
     binds loopback by default; put TLS in front of it (a reverse proxy) before exposing it.
+  * An operator can fence off parts of the tree entirely (``deny``, ``QAR_FILES_DENY``): a denied
+    folder or file is invisible exactly like a secret one.
   * Bounded work: request body, response size, file size, search time and file count, and the number
     of operations running at once, all have caps.
 """
@@ -55,10 +57,10 @@ import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ..core.adapters import Observation  # noqa: F401  (re-exported type for callers building tests)
-from ._walk import prune_dirnames
+from ._walk import prune_dirnames, skip_subtrees
 from .files_adapter import (
     FilesAdapter,
     _BINARY_EXTS,
@@ -156,6 +158,22 @@ def path_is_secret(rel_parts: Tuple[str, ...]) -> bool:
     return any(name_is_secret(part) for part in rel_parts if part and part != ".")
 
 
+def normalize_deny(entries: Sequence[str]) -> Tuple[str, ...]:
+    """Root-relative paths an operator fenced off, cleaned (``./a//b/`` becomes ``a/b``)."""
+    cleaned: List[str] = []
+    for entry in entries or ():
+        text = "/".join(part for part in str(entry).strip().replace("\\", "/").split("/")
+                        if part not in ("", "."))
+        if text and ".." not in text.split("/"):
+            cleaned.append(text)
+    return tuple(cleaned)
+
+
+def is_denied(rel_posix: str, deny: Sequence[str]) -> bool:
+    """Whether a root-relative path is one of the denied paths or lies inside one."""
+    return any(rel_posix == d or rel_posix.startswith(d + "/") for d in deny)
+
+
 def format_mtime(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
 
@@ -167,6 +185,11 @@ class ServedFilesAdapter(FilesAdapter):
     is what makes the search honour the stricter secret rules and the symlink fence without
     forking the walk."""
 
+    def __init__(self, root: str, *, deny: Sequence[str] = (), **kwargs: Any):
+        super().__init__(root, **kwargs)
+        self.deny = normalize_deny(deny)
+        self.denied_paths = [self.root / d for d in self.deny]
+
     def visible(self, path: Path) -> bool:
         """Secret rules and the symlink fence, without the text-only restriction (a pdf is visible)."""
         try:
@@ -176,7 +199,7 @@ class ServedFilesAdapter(FilesAdapter):
                 if name_is_secret(real.name):
                     return False
             rel = path.relative_to(self.root) if path.is_absolute() else path
-            return not path_is_secret(rel.parts)
+            return not path_is_secret(rel.parts) and not is_denied(rel.as_posix(), self.deny)
         except (OSError, ValueError):
             return False
 
@@ -188,12 +211,13 @@ class FileOperations:
     """The four read operations over one root. Pure logic, no HTTP: the handler is a thin wrapper
     and the tests drive this directly."""
 
-    def __init__(self, root: str, *, clock: Callable[[], float] = time.monotonic):
+    def __init__(self, root: str, *, deny: Sequence[str] = (),
+                 clock: Callable[[], float] = time.monotonic):
         resolved = Path(root).resolve()
         if not resolved.is_dir():
             raise ValueError("the served root is not a directory")
         self.root = resolved
-        self.files = ServedFilesAdapter(str(resolved), default_grep_max_hits=DEFAULT_MAX_HITS)
+        self.files = ServedFilesAdapter(str(resolved), deny=deny, default_grep_max_hits=DEFAULT_MAX_HITS)
         self.clock = clock
 
     # --- helpers -------------------------------------------------------------
@@ -210,7 +234,7 @@ class FileOperations:
             parts = resolved.relative_to(self.root).parts
         except ValueError:
             return None, "path is outside the served root or not allowed"
-        if path_is_secret(parts):
+        if path_is_secret(parts) or is_denied("/".join(parts), self.files.deny):
             return None, "path is outside the served root or not allowed"
         return resolved, None
 
@@ -249,7 +273,8 @@ class FileOperations:
         limit = self.clamp(max_hits, DEFAULT_MAX_HITS, MAX_MAX_HITS)
         deadline = self.clock() + grep_budget_seconds()
         stats: Dict[str, Any] = {"files": 0, "stopped": ""}
-        raw_hits = self.files.grep_pass(start, rx, limit, deadline, stats)
+        with skip_subtrees(self.files.denied_paths):
+            raw_hits = self.files.grep_pass(start, rx, limit, deadline, stats)
         hits: List[Dict[str, Any]] = []
         seen_hits: set = set()
         for h in raw_hits:  # a symlink inside the root resolves to its target: report each line once
@@ -297,7 +322,8 @@ class FileOperations:
             walk = os.walk(start)
         for dirpath, dirnames, filenames in walk:
             prune_dirnames(dirnames, current=Path(dirpath), base_skip=self.files.skip_dirs)
-            dirnames[:] = [d for d in dirnames if not name_is_secret(d)]
+            dirnames[:] = [d for d in dirnames if not name_is_secret(d)
+                           and not is_denied(self.relative(Path(dirpath) / d), self.files.deny)]
             for fn in filenames:
                 if fn.startswith(".") and not start.is_file():
                     continue
@@ -345,7 +371,7 @@ class FileOperations:
         except OSError as exc:
             return {"ok": False, "error": f"could not list the directory: {type(exc).__name__}"}
         for name in names:
-            if name_is_secret(name):
+            if name_is_secret(name) or is_denied(self.relative(target / name), self.files.deny):
                 continue
             child = target / name
             try:
@@ -538,8 +564,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                         body.get("heading"), body.get("max_bytes"))
 
 
-def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 0) -> ThreadingHTTPServer:
+def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 0,
+                 deny: Sequence[str] = ()) -> ThreadingHTTPServer:
     """Build (not start) the server. Raises ``ValueError`` without a usable token or a real root.
+
+    ``deny``: root-relative paths that are invisible to every operation (``QAR_FILES_DENY``).
 
     ``port=0`` picks a free port (tests); read it back from ``server.server_address``."""
     secret = (token or "").strip()
@@ -548,7 +577,7 @@ def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 
             f"a bearer token of at least {MIN_TOKEN_LENGTH} characters is required; "
             "refusing to start an open file server")
     handler = type("BoundRequestHandler", (RequestHandler,), {
-        "operations": FileOperations(root),
+        "operations": FileOperations(root, deny=deny),
         "token": secret.encode("utf-8"),
         "gate": threading.BoundedSemaphore(MAX_CONCURRENT_OPERATIONS),
     })
@@ -557,9 +586,10 @@ def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 
     return server
 
 
-def serve(root: str, token: str, *, host: str = "127.0.0.1", port: int = 8096) -> None:
+def serve(root: str, token: str, *, host: str = "127.0.0.1", port: int = 8765,
+          deny: Sequence[str] = ()) -> None:
     """Run the server until interrupted."""
-    server = build_server(root, token, host=host, port=port)
+    server = build_server(root, token, host=host, port=port, deny=deny)
     log.info("serving read-only files on %s:%s", *server.server_address[:2])
     try:
         server.serve_forever()

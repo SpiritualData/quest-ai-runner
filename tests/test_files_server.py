@@ -283,6 +283,35 @@ def test_redact_leaves_ordinary_code_alone():
     assert redact(code) == code
 
 
+# --- operator deny list ------------------------------------------------------------------------
+
+
+def test_denied_paths_are_invisible_to_every_operation(tree):
+    ops = FileOperations(str(tree), deny=["notes", "./code//token_store.py/"])
+    assert ops.read("notes/plain.txt")["ok"] is False
+    assert ops.read("code/token_store.py")["ok"] is False
+    assert ops.search("needle", scope="notes")["ok"] is False
+    assert ops.list_dir("notes")["ok"] is False
+    assert {h["path"] for h in ops.search("needle")["hits"]}.isdisjoint(
+        {"notes/plain.txt", "code/token_store.py"})
+    assert not [r["path"] for r in ops.find("*")["results"] if r["path"].startswith("notes/")]
+    assert "notes" not in {e["name"] for e in ops.list_dir("")["entries"]}
+    assert "token_store.py" not in {e["name"] for e in ops.list_dir("code")["entries"]}
+    assert ops.read("docs/readme.md")["ok"]          # everything else still works
+
+
+def test_a_deny_entry_matches_a_path_not_a_prefix_of_a_name(tree):
+    (tree / "notes2").mkdir()
+    (tree / "notes2" / "kept.txt").write_text("kept needle\n")
+    ops = FileOperations(str(tree), deny=["notes"])
+    assert ops.read("notes2/kept.txt")["ok"]
+
+
+def test_deny_cannot_be_used_to_escape(tree):
+    ops = FileOperations(str(tree), deny=["../outside", ""])
+    assert ops.files.deny == ()
+
+
 # --- operations -----------------------------------------------------------------------------
 
 

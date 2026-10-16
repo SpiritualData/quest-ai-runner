@@ -17,6 +17,9 @@ quest-ai-runner serve-files --root /path/to/the/files --port 8765
 * `QAR_FILES_TOKEN`: the bearer token every request must carry (at least 16 characters). The
   server **refuses to start without it**, and the token is never accepted on the command line.
 * `--host` (`QAR_FILES_HOST`, default `127.0.0.1`) and `--port` (`QAR_FILES_PORT`, default `8765`).
+* `QAR_FILES_DENY` (optional): comma-separated root-relative paths that are invisible to every
+  operation, as if they did not exist (a personal folder, a backups tree). Use it to fence off
+  anything inside the root that should not be readable by whoever can ask the AI.
 
 The server speaks plain HTTP and binds to loopback by default. To reach it from another machine put
 TLS in front of it (a reverse proxy that forwards one path to this port) and keep the token secret.
