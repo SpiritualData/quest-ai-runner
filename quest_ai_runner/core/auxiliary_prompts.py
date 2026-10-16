@@ -738,10 +738,13 @@ found or produced, naming things the way the person knows them. Claim only what 
 happened; never describe work that was not carried out.
 
 How to test, step by step:
-Numbered steps (1., 2., 3.) a person can follow to check the work themselves: where to open it in
-the app, what they should see, and what a correct result looks like. Keep it to the steps that
-matter, usually 2 to 5. If there is nothing to click through (for example a written answer), say
-what to read or check and what good looks like.
+Numbered steps (1., 2., 3.) a person can follow to check the work themselves. Ground every step in
+the RESULT and the execution record: open the specific goal, document, link or item the work
+produced (by the name or URL the RESULT gives) and check the specific field or content the RESULT
+says it set. NEVER invent screens, menu names, buttons or click paths that the RESULT does not
+show. If you do not know where something lives, say what to check and what good looks like instead
+of guessing a route. Keep it to the steps that matter, usually 2 to 5. If there is nothing to click
+through (for example a written answer), say what to read or check and what good looks like.
 
 Still open:
 Include this section ONLY when the RESULT shows something unfinished or something you need from a

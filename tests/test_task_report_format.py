@@ -30,6 +30,9 @@ def test_task_report_prompt_has_both_parts_and_forbids_em_dashes():
     assert "Never use an em dash" in SYNTHESIZE_TASK_REPORT_PROMPT
     assert "—" not in SYNTHESIZE_TASK_REPORT_PROMPT
     assert "Numbered steps" in SYNTHESIZE_TASK_REPORT_PROMPT
+    # Steps are grounded in the result, never an invented UI path.
+    assert "Ground every step in" in SYNTHESIZE_TASK_REPORT_PROMPT
+    assert "NEVER invent screens" in SYNTHESIZE_TASK_REPORT_PROMPT
 
 
 def test_synthesize_task_report_sends_the_two_part_prompt_with_the_real_result():
