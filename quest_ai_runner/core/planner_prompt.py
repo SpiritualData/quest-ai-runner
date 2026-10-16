@@ -62,10 +62,9 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      work, hand it off (answer + deferred_deep). If NOTHING there covers it, say so plainly and
      hand nothing off. A read that already came back empty for such a request is this same
      signal, not a reason to read again.
-     EXCEPTION, FILES YOU CAN READ: a file source the CONTEXT lists by an alias (paths written
-     `<alias>:<path>`) puts that machine's FILES in reach. Read and grep them with that alias, as
-     the CONTEXT says; only running, changing or watching things there is a hand-off. Never say
-     you cannot access files the CONTEXT lists as a readable source.
+     EXCEPTION: a file source the CONTEXT lists by alias (paths `<alias>:<path>`) puts that
+     machine's FILES in reach: read and grep them as the CONTEXT says, and never say you cannot
+     access them. Only running or changing things there is a hand-off.
   3. ALREADY RUNNING. Is this asking about work already in flight? Answer with that work's real
      status from the records in CONTEXT. Never open a second run of the same thing.
   4. QUESTION OR STATEMENT. Is this a question, or someone describing a plan, a preference or a
