@@ -242,10 +242,14 @@ DECIDE_TOOL: Dict[str, Any] = {
             # What the CURRENT message asks of the assistant (see USER_INTENTS). No description:
             # the rubric at the top of both planner profiles states it, so neither pays twice.
             "user_intent": {"type": "string", "enum": list(USER_INTENTS)},
+            # The reads this decision still owes: what the planner itself says it has NOT yet
+            # opened. Honored structurally by the loop (see ``PlanDecision.pending_read``). The
+            # rubric at the top of both planner profiles states it, so the schema stays bare.
+            "pending_read": {"type": "array", "items": {"type": "object"}},
         },
         # REQUIRED, like card_thread: an optional field is one a model quietly omits, and every
         # omission costs an intent-judge call on an answer turn.
-        "required": ["action", "rationale", "user_intent"],
+        "required": ["action", "rationale", "user_intent", "pending_read"],
     },
 }
 

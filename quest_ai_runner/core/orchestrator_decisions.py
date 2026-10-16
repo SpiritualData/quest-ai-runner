@@ -36,6 +36,36 @@ READ_VOCABULARY_KEYS = frozenset({
 })
 
 
+def clean_read_specs(raw: Any, cfg: OrchestratorConfig, *, tools_enabled: bool = False,
+                     web_enabled: bool = False) -> List[Dict[str, Any]]:
+    """The usable read specs in a planner's ``reads`` (or ``pending_read``) list: anything that
+    is not a dict, or names no read surface this turn has, is dropped. Never raises."""
+    reads_in = raw or []
+    clean_reads: List[Dict[str, Any]] = []
+    if isinstance(reads_in, list):
+        for r in reads_in[: cfg.max_reads_per_step]:
+            if isinstance(r, dict) and (
+                r.get("grep") or r.get("rel_path") or r.get("query")
+                or r.get("list_sources") or r.get("describe_source")
+                or r.get("list_operations") or r.get("describe_operation")
+                or r.get("list_guidance") or r.get("read_guidance")
+                or r.get("cards") or r.get("card")
+                or (tools_enabled and r.get("tools"))
+                or (web_enabled and (r.get("web") is not None or r.get("web_page")))
+            ):
+                clean_reads.append(r)
+            elif isinstance(r, dict) and r and not (READ_VOCABULARY_KEYS & r.keys()):
+                # A structured lookup written without the "query" wrapper (e.g. a named read
+                # operation with its args, which a consumer's own discovery text may show
+                # top-level) used to be DROPPED here, so a "read" step ran nothing and the turn
+                # answered from no data (measured 2026-10-07: every read dropped on 7 of 10 eval
+                # turns). It is the query adapter's job to run it or name what is wrong with it,
+                # so it goes there whole. A spec using a surface this turn does not have (tools,
+                # web) is still dropped above, never re-routed.
+                clean_reads.append({"query": dict(r)})
+    return clean_reads
+
+
 def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
                        tools_enabled: bool = False, web_enabled: bool = False) -> PlanDecision:
     # A provider's structured output is not guaranteed to be a dict: some models/SDKs return a LIST
@@ -62,29 +92,10 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         # "tool" with nothing to call is not an action: answer from what was gathered.
         action = "answer"
 
-    reads_in = raw.get("reads") or []
-    clean_reads: List[Dict[str, Any]] = []
-    if isinstance(reads_in, list):
-        for r in reads_in[: cfg.max_reads_per_step]:
-            if isinstance(r, dict) and (
-                r.get("grep") or r.get("rel_path") or r.get("query")
-                or r.get("list_sources") or r.get("describe_source")
-                or r.get("list_operations") or r.get("describe_operation")
-                or r.get("list_guidance") or r.get("read_guidance")
-                or r.get("cards") or r.get("card")
-                or (tools_enabled and r.get("tools"))
-                or (web_enabled and (r.get("web") is not None or r.get("web_page")))
-            ):
-                clean_reads.append(r)
-            elif isinstance(r, dict) and r and not (READ_VOCABULARY_KEYS & r.keys()):
-                # A structured lookup written without the "query" wrapper (e.g. a named read
-                # operation with its args, which a consumer's own discovery text may show
-                # top-level) used to be DROPPED here, so a "read" step ran nothing and the turn
-                # answered from no data (measured 2026-10-07: every read dropped on 7 of 10 eval
-                # turns). It is the query adapter's job to run it or name what is wrong with it,
-                # so it goes there whole. A spec using a surface this turn does not have (tools,
-                # web) is still dropped above, never re-routed.
-                clean_reads.append({"query": dict(r)})
+    clean_reads = clean_read_specs(raw.get("reads"), cfg, tools_enabled=tools_enabled,
+                                   web_enabled=web_enabled)
+    pending_read = clean_read_specs(raw.get("pending_read"), cfg, tools_enabled=tools_enabled,
+                                    web_enabled=web_enabled)
 
     tier = raw.get("model_tier")
     if isinstance(tier, str):
@@ -216,6 +227,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         tool_calls=tool_calls,
         confidence=confidence,
         user_intent=normalize_user_intent(raw.get("user_intent")),
+        pending_read=pending_read,
     )
 
 

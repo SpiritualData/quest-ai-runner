@@ -160,6 +160,11 @@ DEFAULT_MAX_GATHER_CHARS = 6000
 
 DEFAULT_MAX_CONSECUTIVE_READS = 20
 
+# How many times one turn may swap an `answer` for the reads the planner itself declared it still
+# owes (``PlanDecision.pending_read``). Bounded so a planner that keeps declaring a read it never
+# gets value from still ends in an answer.
+PENDING_READ_MAX_RUNS = 2
+
 
 # Lean re-plan view: the planner is re-fed the WHOLE cumulative ``gathered`` each step, which
 # bloats fast on multi-read runs. Instead, keep the most-recent observations in full and COMPRESS

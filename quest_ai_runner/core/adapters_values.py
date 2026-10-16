@@ -143,6 +143,13 @@ class PlanDecision:
     # this structured verdict instead of reading the message with a keyword list. None = not given
     # (the nets then fall back to the one-shot intent judge, never to a regex).
     user_intent: Optional[str] = None
+    # THE READS THIS DECISION STILL OWES, declared by the planner on the call it already makes (zero
+    # extra LLM calls): read specs (same shape as ``reads``) for sources it has located but not
+    # opened, which the answer it is giving depends on. Empty = the answer is complete. When an
+    # ``answer`` decision carries any, the loop runs them first instead of answering (the planner's
+    # own structured declaration, never a reading of its prose; see the pending-read gate in
+    # ``orchestrator_run_loop``).
+    pending_read: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

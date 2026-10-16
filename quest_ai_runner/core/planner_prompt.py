@@ -90,6 +90,10 @@ change something now (a polite "can you", or a bare report of a defect in someth
 change, counts); "ask" = a question, or asking to be told, shown or given something you can say in
 the reply; "inform" = news, context, or what the user will do THEMSELVES; "hold_off" = about your
 own work itself: do not open a task, answer here, not yet, stop or cancel runs.
+ALWAYS set `pending_read`: the read specs (same shape as `reads`) for anything you have located
+but not opened that your answer depends on, such as a file a listing or search just showed. A
+refused or unreachable path does not count. Empty when you are reading this step or could answer
+from content you already hold. Choose "answer" only with it empty.
 """
 
 # Fresh, GENERAL boundary examples. They exist because the four hardest calls above are hard in

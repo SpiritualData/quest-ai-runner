@@ -34,7 +34,7 @@ from .orchestrator_capabilities import (
     repeated_read_observation,
     split_repeated_reads,
 )
-from .orchestrator_constants import log
+from .orchestrator_constants import PENDING_READ_MAX_RUNS, log
 from .orchestrator_decisions import _clarify_question_text
 from .orchestrator_events import _is_orchestrator_command
 from .orchestrator_text import _future_context_for_display, unconfirmed_no_change_text
@@ -262,6 +262,8 @@ class RunLoopMixin:
         rs.plan: Optional[PlanDecision] = None
         rs.steps = 0
         rs.consecutive_reads = 0  # Track how many steps in a row chose "read"
+        rs.failed_reads: Dict[str, int] = {}  # read_spec_key -> times it came back as an error
+        rs.pending_read_runs = 0  # Times the pending-read gate ran a planner-declared read
         # REPEATED READS: canonical spec -> (the step it ran at, its index among real observations),
         # and how many CONSECUTIVE steps asked for nothing new. Cleared after a tool step, since a
         # write can change what a read returns. Only a read that returned something is recorded.
@@ -553,6 +555,32 @@ class RunLoopMixin:
                     rs.plan.reads = _forced_reads
                     emit.status("Pulling the full text before answering…")
 
+            # --- PENDING-READ GATE: honor the planner's own "I still owe a read" ------------------
+            # The planner declares, in a structured field on the call it already makes, which
+            # reads its decision still depends on (``pending_read``: sources it located but did
+            # not open). An ``answer`` that carries any is the planner contradicting itself, and
+            # live it ended turns on "the README is the file to open, I will check it" with the
+            # file never opened. This runs the declared reads instead of answering. It reads the
+            # planner's STRUCTURED field, never its prose (hard rule #3), so there is no word list
+            # to leak. Bounded: at most PENDING_READ_MAX_RUNS times a turn, never past the step or
+            # gather budget, and a spec that already ran this turn is not run again, so a planner
+            # that keeps declaring the same read gets its answer instead of a loop.
+            if (rs.plan and rs.plan.action == "answer" and rs.plan.pending_read
+                    and rs.pending_read_runs < PENDING_READ_MAX_RUNS
+                    and step + 1 < cfg.max_steps and not budget_exhausted()):
+                _owed, _already = split_repeated_reads(
+                    rs.plan.pending_read, {k: ran[0] for k, ran in executed_reads.items()})
+                # A spec that already failed was attempted, so it is not "owed" any more.
+                _owed = [sp for sp in _owed if read_spec_key(sp) not in rs.failed_reads]
+                _owed = _owed[: cfg.max_reads_per_step]
+                if _owed:
+                    rs.pending_read_runs += 1
+                    log.info("Pending-read gate: the planner chose to answer while declaring %d "
+                             "read(s) it still owes; running them first.", len(_owed))
+                    rs.plan.action = "read"
+                    rs.plan.reads = _owed
+                    emit.status("Reading before answering…")
+
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if rs.plan and rs.plan.action == "read":
                 rs.consecutive_reads += 1
@@ -694,6 +722,16 @@ class RunLoopMixin:
                         for j, (spec, obs) in enumerate(zip(fresh_reads, new_obs)):
                             if isinstance(obs, dict) and obs.get("kind") != "error":
                                 executed_reads[read_spec_key(spec)] = (rs.steps, content_before + j)
+                            elif isinstance(obs, dict):
+                                # One failure stays retryable (a timeout may be transient); the
+                                # same spec failing AGAIN is an answer, not a flake, so it is
+                                # recorded as run and a third try is shown the repeat note
+                                # instead of burning another step (a live turn re-issued one
+                                # missing path four times).
+                                _fkey = read_spec_key(spec)
+                                rs.failed_reads[_fkey] = rs.failed_reads.get(_fkey, 0) + 1
+                                if rs.failed_reads[_fkey] >= 2:
+                                    executed_reads[_fkey] = (rs.steps, content_before + j)
                     for obs in new_obs:
                         if isinstance(obs, dict) and obs.get("planner_note"):
                             gathered.append(planner_note_observation(
