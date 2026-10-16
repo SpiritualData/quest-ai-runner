@@ -374,7 +374,7 @@ def test_read_text_by_lines_heading_and_truncation(ops):
     assert ops.read("docs/guide.md", heading="Missing")["ok"] is False
     small = ops.read("docs/guide.md", max_bytes=10)
     assert small["truncated"] is True and small["text"].endswith("...[truncated]")
-    assert ops.read("docs")["ok"] is False
+    assert ops.read("docs")["kind"] == "directory"      # reading a folder lists it
     assert ops.read("docs/none.md")["ok"] is False
 
 
@@ -620,7 +620,7 @@ def test_symlinks_are_checked_on_the_link_and_on_where_they_lead(home_tree):
 
 def test_denied_secret_and_missing_paths_answer_identically(home_tree):
     ops = FileOperations(str(home_tree), deny=["denied"])
-    answers = [ops.read(p) for p in ("denied/inside.txt", ".bash_history", "no/such/file.txt", "notes")]
+    answers = [ops.read(p) for p in ("denied/inside.txt", ".bash_history", "no/such/file.txt", "notes/missing.txt")]
     answers += [ops.list_dir(p) for p in ("denied", ".claude", "no/such/dir", "notes/plain.txt")]
     answers += [ops.search("x", scope=p) for p in ("denied", ".claude", "no/such")]
     answers += [ops.find("x", scope=p) for p in ("denied", ".claude", "no/such")]

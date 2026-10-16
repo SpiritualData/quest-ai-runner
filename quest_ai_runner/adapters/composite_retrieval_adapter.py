@@ -43,11 +43,11 @@ class CompositeRetrievalAdapter:
         self.max_workers = min(max_workers, len(adapters))
 
     @staticmethod
-    def reasons(errors: List[str], limit: int = 3) -> str:
+    def reasons(errors: List[str], limit: int = 6) -> str:
         """The adapters' own distinct error texts, short, as a suffix (empty when there are none)."""
         seen: List[str] = []
         for text in errors:
-            text = " ".join((text or "").split())[:200]
+            text = " ".join((text or "").split())[:450]
             if text and text not in seen:
                 seen.append(text)
         return f" [{' | '.join(seen[:limit])}]" if seen else ""
