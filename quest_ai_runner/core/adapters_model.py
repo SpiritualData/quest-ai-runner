@@ -33,6 +33,10 @@ STEP_VERIFY = "verify"          # goal verification: did the work meet the goal.
 STEP_REPLY = "reply"            # the user-facing reply/answer text.
 
 
+STEP_NARRATION = "narration"    # the Narrator's optional first-beat line. Its own role so a failed or
+                                # refused beat is never recorded under STEP_REPLY and can never fail the turn.
+
+
 STEP_SELECT = "select"          # relevance filters, query generation, selection among candidates.
 
 

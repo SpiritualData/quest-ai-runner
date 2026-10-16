@@ -110,6 +110,7 @@ from .adapters_model import (  # noqa: F401
     ModelProvider,
     STEP_JUDGE,
     STEP_PLAN,
+    STEP_NARRATION,
     STEP_REPLY,
     STEP_SELECT,
     STEP_SUMMARIZE,

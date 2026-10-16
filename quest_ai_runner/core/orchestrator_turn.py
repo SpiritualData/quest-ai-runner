@@ -15,6 +15,7 @@ from .adapters import (
     Mode,
     ProgressEvent,
     ProgressSink,
+    STEP_NARRATION,
     STEP_REPLY,
     ScopedThreadPoolExecutor as ThreadPoolExecutor,
     answer_with_reasoning,
@@ -248,10 +249,9 @@ class Narrator:
     """
 
     DEFAULT_SYSTEM = (
-        "You are working on the user's request right now and you think out loud to them while you "
-        "work, like a person reasoning through something as they do it. Speak as ONE continuous "
-        "train of thought across the whole turn: each line CONTINUES the same thought and reacts to "
-        "whatever just came in, the way new things occur to someone as they look closer. Keep each "
+        "You are working on the user's request right now and you keep them company while you work, "
+        "saying in the first person what you are about to do or what you just noticed. Each line "
+        "continues the same thread as the earlier ones and reacts to whatever just came in. Keep each "
         "line to one short, natural, spoken sentence. No lists, no markdown, no greeting, no "
         "restating the request back, no sign-off. Stay light and human, never robotic status labels. "
         "Connect to what was last said or done with the user when it helps the moment feel "
@@ -303,9 +303,17 @@ class Narrator:
             )
         if self._said:
             user += "What you've already said out loud this turn:\n" + "\n".join(self._said) + "\n\n"
-        user += f"What just happened: {moment}\n\nSay the next line of your thinking (or empty)."
+        user += f"What just happened: {moment}\n\nIn one short first-person sentence, say what you are about to do or what you noticed (or reply with an empty string if nothing fresh is worth saying)."
         msgs.append({"role": "user", "content": user})
-        return answer_with_reasoning(self._provider, msgs, model=self._model, step=STEP_REPLY)
+        line = answer_with_reasoning(self._provider, msgs, model=self._model, step=STEP_NARRATION)
+        # A provider swallows a model error (or a refusal) and hands back a stand-in apology string,
+        # so the text alone cannot tell a real beat from a failure. The structural signal is the
+        # provider's own per-step outcome (``step_outcomes``, set when it declares one): a failed
+        # narration call yields no beat at all, never the stand-in.
+        outcomes = getattr(self._provider, "step_outcomes", None)
+        if isinstance(outcomes, dict) and outcomes.get(STEP_NARRATION):
+            return None
+        return line
 
     def _say(self, line: Optional[str]) -> None:
         if not line:
