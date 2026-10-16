@@ -42,6 +42,16 @@ class CompositeRetrievalAdapter:
         self.adapters = adapters
         self.max_workers = min(max_workers, len(adapters))
 
+    @staticmethod
+    def reasons(errors: List[str], limit: int = 3) -> str:
+        """The adapters' own distinct error texts, short, as a suffix (empty when there are none)."""
+        seen: List[str] = []
+        for text in errors:
+            text = " ".join((text or "").split())[:200]
+            if text and text not in seen:
+                seen.append(text)
+        return f" [{' | '.join(seen[:limit])}]" if seen else ""
+
     def _adapter_name(self, adapter: RetrievalAdapter) -> str:
         """Get a friendly name for an adapter."""
         return getattr(adapter, "__class__", type(adapter)).__name__
@@ -76,6 +86,7 @@ class CompositeRetrievalAdapter:
     ) -> Observation:
         """Read from the first adapter that has the path; fall back through adapters."""
         # Try each adapter in order until one succeeds (returns non-error).
+        errors: List[str] = []
         for adapter in self.adapters:
             obs = adapter.read_section(
                 rel_path, start_line=start_line, end_line=end_line, heading=heading, max_bytes=max_bytes
@@ -83,11 +94,13 @@ class CompositeRetrievalAdapter:
             if obs.kind != "error":
                 # Mark the source adapter for transparency
                 return obs
+            errors.append(obs.error or "")
 
-        # All adapters failed; return error
+        # All adapters failed; return error, keeping each adapter's own reason so the planner can
+        # tell "no such file" from "the file is there but that heading is not" and fix its next try.
         return Observation(
             kind="error",
-            error=f"path not found in any adapter: {rel_path}",
+            error=f"path not found in any adapter: {rel_path}" + self.reasons(errors),
         )
 
     def grep(
@@ -101,8 +114,10 @@ class CompositeRetrievalAdapter:
         seen: set = set()
         notes: List[str] = []
 
+        errors: List[str] = []
         for adapter, obs in results:
             if obs.kind == "error":
+                errors.append(obs.error or "")
                 continue
             if obs.text and obs.kind == "grep":
                 notes.append(obs.text)
@@ -119,7 +134,8 @@ class CompositeRetrievalAdapter:
             return Observation(
                 kind="error",
                 pattern=pattern,
-                error=f"pattern not found: {pattern}" + (f" ({' '.join(notes)})" if notes else ""),
+                error=f"pattern not found: {pattern}" + (f" ({' '.join(notes)})" if notes else "")
+                + self.reasons(errors),
             )
 
         # Limit total hits if requested

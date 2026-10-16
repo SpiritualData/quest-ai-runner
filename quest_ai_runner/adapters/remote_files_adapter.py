@@ -150,7 +150,14 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
         if not isinstance(answer, dict):
             return None, f"{self.alias}: the file server's answer was not understood"
         if not answer.get("ok"):
-            return None, f"{self.alias}: {answer.get('error') or 'the file server refused the request'}"
+            text = f"{self.alias}: {answer.get('error') or 'the file server refused the request'}"
+            if op in ("read", "search"):
+                # A missing path and a fenced one answer alike, and a path guessed from the user's
+                # words is often just one folder off: point at the way to find the real one.
+                text += (" Next step: paths start at the source's top folder (its own name is not "
+                         "part of a path), so list the folder above this path, or the top folder with "
+                         "an empty path, or find the name, then retry with a path you saw.")
+            return None, text
         return answer, ""
 
     def tag(self, path: str) -> str:
