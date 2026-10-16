@@ -72,6 +72,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .runtime_settings import process_environment
+from .tools_failure_ledger import FileToolLedger, outcome_from_result
 
 log = logging.getLogger(__name__)
 
@@ -214,8 +215,12 @@ def coerce_result(raw: Any) -> ToolResult:
 class ToolRegistry:
     """The catalog. Thread-safe for reads; registration happens at build time."""
 
-    def __init__(self, specs: Optional[Sequence[ToolSpec]] = None):
+    def __init__(self, specs: Optional[Sequence[ToolSpec]] = None,
+                 ledger: Optional[FileToolLedger] = None):
         self._specs: Dict[str, ToolSpec] = {}
+        # Where every call's outcome is written, keyed by the task it ran for (see
+        # ``core/tools_failure_ledger.py``). None = nothing is recorded.
+        self.ledger = ledger
         for spec in specs or ():
             self.register(spec)
 
@@ -454,11 +459,15 @@ class ToolRegistry:
         t.start()
         t.join(spec.timeout_seconds)
         if t.is_alive():
-            return ToolResult(ok=False, text=f"{name} timed out after {spec.timeout_seconds:.0f}s "
-                                             f"(it may still complete; check before retrying)")
-        result = box.get("result") or ToolResult(ok=False, text=f"{name} returned nothing")
+            result = ToolResult(ok=False, text=f"{name} timed out after {spec.timeout_seconds:.0f}s "
+                                               f"(it may still complete; check before retrying)")
+        else:
+            result = box.get("result") or ToolResult(ok=False, text=f"{name} returned nothing")
         if len(result.text) > MAX_RESULT_CHARS:
             result.text = result.text[:MAX_RESULT_CHARS] + " …[truncated]"
+        if self.ledger is not None:
+            self.ledger.record(ctx.task_id, outcome_from_result(name, result.ok, result.text,
+                                                                spec.mutates))
         return result
 
 
@@ -1199,9 +1208,11 @@ def build_tool_registry(env: Optional[Mapping[str, str]] = None) -> ToolRegistry
 
     ``QAR_STANDARD_TOOLS``  default on; ``0`` disables the standard tools.
     ``QAR_TOOLS_FILE``      ``:``-separated TOML files of custom tools and standard overrides.
+    ``QAR_TOOL_LEDGER_DIR`` where each task's tool-call ledger lives (default: a folder in the
+                            system temp directory); the brain and the deep worker must share it.
     """
     env = process_environment() if env is None else env
-    registry = ToolRegistry()
+    registry = ToolRegistry(ledger=FileToolLedger(env.get("QAR_TOOL_LEDGER_DIR") or None))
     if env_flag(env.get("QAR_STANDARD_TOOLS"), default=True):
         for name, builder in STANDARD_TOOL_BUILDERS.items():
             try:

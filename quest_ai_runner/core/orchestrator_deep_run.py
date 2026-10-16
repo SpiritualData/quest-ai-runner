@@ -5,7 +5,7 @@ A mixin of ``Orchestrator`` (see ``orchestrator.py``): methods only, state lives
 from __future__ import annotations
 
 import threading
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .auxiliary_prompts import (
     DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION,
@@ -50,6 +50,9 @@ from .orchestrator_text import (
     _strip_future_context,
 )
 from .orchestrator_turn import _Emitter
+from .tools_failure_ledger import (
+    STUCK_OUTPUT_ALIKE, STUCK_REASON_ALIKE, ToolOutcome, alike, changed_something,
+    describe_failure, repeated_failure, unrecovered_failures)
 from .orchestrator_types import OrchestratorResult
 
 
@@ -577,6 +580,14 @@ class DeepRunMixin:
             verified_not_met = False
             # Verdicts so far that named a tool failure no retry can fix (``tool_failure`` blocker).
             tool_failure_verdicts = 0
+            # The runner's own record of what each tool call answered (``core/tools_failure_ledger``),
+            # read per attempt so a tool that keeps failing is recognised without the verifier's
+            # label: ``prior_failures`` are the previous attempt's unrecovered failures, ``prior_gap``
+            # its (verdict reason, output) when it fell short.
+            ledger = getattr(self.tools, "ledger", None) if self.tools is not None else None
+            ledger_task = (ctx_meta or {}).get("task_id")
+            prior_failures: Dict[str, ToolOutcome] = {}
+            prior_gap: Optional[Tuple[str, str]] = None
             for attempt in range(1, max_iters + 1):
                 # Cooperative cancellation, checked before starting each new attempt (a retry can be
                 # a full agentic subprocess run, so this is the natural point to stop rather than
@@ -612,6 +623,7 @@ class DeepRunMixin:
                 # consumer's API (out of band from this sink) can be recovered below even if the
                 # worker never prints (or garbles) the QAR-ESCALATED marker.
                 before_decision_ids = self.quest_open_decision_ids(quest_id)
+                ledger_mark = ledger.mark(ledger_task) if ledger is not None else 0
                 res = _do_run(run_brief, run_model, active_runner,
                               resume_session_id=resume_session, max_turns=attempt_turns)
                 if model_applies:
@@ -770,6 +782,18 @@ class DeepRunMixin:
                 # the execution record contradicts, which is a different flag.
                 _blocker = verdict.get("blocker") or "more_work"
                 _q = (verdict.get("question") or "").strip()
+                # DETERMINISTIC TOOL-FAILURE CHECK, whatever the verifier called this gap: the same
+                # tool failing the same way, unrecovered, in two attempts in a row is a broken tool
+                # (the verifier labelling it ``more_work`` sent a task through eight attempts, a
+                # stronger model each time, against a tool that could not answer).
+                window = ledger.since(ledger_task, ledger_mark) if ledger is not None else []
+                failing_now = unrecovered_failures(window)
+                repeated = repeated_failure(prior_failures, failing_now)
+                prior_failures = failing_now
+                tool_broken = repeated is not None and _blocker in ("more_work", "tool_failure")
+                if tool_broken:
+                    _blocker = "tool_failure"
+                    _q = _q or describe_failure(repeated)
                 if _blocker == "evidence_only" and _q and not verdict.get("claims_unexecuted"):
                     res.met = True
                     res.error = None
@@ -791,10 +815,26 @@ class DeepRunMixin:
                 if _blocker == "tool_failure":
                     tool_failure_verdicts += 1
                     res.tool_failure = _q or reason
-                    if tool_failure_verdicts >= max(1, self.cfg.deep_tool_failure_attempts):
+                    if tool_broken or tool_failure_verdicts >= max(1, self.cfg.deep_tool_failure_attempts):
                         if emit is not None:
                             emit.status("Stopping here: " + res.tool_failure)
                         break
+                # NO PROGRESS: this attempt fell short for the same reason as the last one, said
+                # the same thing, and changed nothing the runner can see (no write receipt, no
+                # successful tool that acts). Another attempt, on a stronger model or not, would
+                # repeat it: stop and say so instead of escalating.
+                stuck = (prior_gap is not None and _blocker == "more_work"
+                         and alike(reason, prior_gap[0], STUCK_REASON_ALIKE)
+                         and alike(res.output or "", prior_gap[1], STUCK_OUTPUT_ALIKE)
+                         and not changed_something(window)
+                         and not getattr(res, "has_write_receipt", False))
+                prior_gap = (reason, res.output or "")
+                if stuck:
+                    res.stalled = reason
+                    if emit is not None:
+                        emit.status("Stopping here: two attempts in a row ended at the same point "
+                                    "with nothing new done. " + reason)
+                    break
                 # Reads as a sentence, because a person reads it: this lands in the activity feed
                 # and can reach a human. A lowercase "goal not yet met:" followed by a verifier's
                 # raw clause looked like debug output leaking into a report.
@@ -855,14 +895,17 @@ class DeepRunMixin:
                 # A rung that does not run the ladder's model has no tier to switch: the next
                 # attempt is the same runner with the verifier's feedback, and is described as such.
                 # A tool failure is not a capability gap: the retry keeps the same model.
-                _vt = verdict.get("next_tier") if model_applies and _blocker != "tool_failure" else None
+                # ...and neither is a tool the runner's ledger shows failing in this attempt, whatever
+                # the verifier called the gap: the same model retries once, and a repeat stops above.
+                keep_model = _blocker == "tool_failure" or bool(failing_now)
+                _vt = verdict.get("next_tier") if model_applies and not keep_model else None
                 _resolved_tier = self._resolved_deep_tier(_vt, deep_models) if _vt else None
                 if _resolved_tier is not None:
                     run_model = _resolved_tier
                     deep_models[min(tier_idx, len(deep_models) - 1)] = _resolved_tier
                     if emit is not None:
                         emit.status(f"Switching model tier to {_vt} for the next attempt…")
-                elif model_applies and tier_idx < len(deep_models) - 1 and _blocker != "tool_failure":
+                elif model_applies and tier_idx < len(deep_models) - 1 and not keep_model:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
                     if emit is not None:

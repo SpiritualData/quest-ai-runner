@@ -232,6 +232,7 @@ class QuestsMixin:
             return [w for w in items if isinstance(w, dict)] if isinstance(items, list) else []
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_quest_workflows failed for quest %s: %s", quest_id, e)
+            self.last_error = str(e)   # a tool reports why, so a repeat of it can be recognised
             return None
 
     def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:

@@ -232,6 +232,10 @@ class DeepResult:
     # verifier's ``tool_failure`` blocker), named in one plain sentence. The goal loop stops after
     # ``deep_tool_failure_attempts`` such verdicts instead of retrying and escalating the model.
     tool_failure: str = ""
+    # The goal loop stopped because two attempts in a row fell short for the same reason, said the
+    # same thing and changed nothing the runner can see (the verifier's reason, plain). Retrying,
+    # or moving to a stronger model, would only repeat the attempt.
+    stalled: str = ""
     # NOTHING CHANGED: the runner's own receipts of what it wrote show that this attempt changed
     # nothing in the system it acts on (no write completed, or every write matched nothing). It is
     # a structural fact the runner reports from its own bookkeeping, never inferred from the wording

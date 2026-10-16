@@ -144,6 +144,12 @@ bare flag. With `"stdin_json"` the arguments arrive as one JSON object on stdin.
 and anything else a failure; stdout is the result text, parsed into `data` when it is JSON. The
 command also gets `QAR_TOOL_QUEST_ID` and `QAR_TOOL_TASK_ID` in its environment.
 
+**The call ledger.** `ToolRegistry.invoke` appends every call's outcome (tool, ok, a failure
+signature, whether the tool acts) to a per-task file under `QAR_TOOL_LEDGER_DIR` (default: a folder
+in the system temp directory), keyed by the task id. The brain and a deep worker's shell command
+(`python -m quest_ai_runner.tools call ... --task ID`) write to the same file. The goal loop reads
+it to tell a tool that keeps failing from a worker's mistake, whatever the verifier called the gap.
+
 **Python tools.** `handler = "package.module:function"` instead of `command`. The function takes
 `(args: dict, ctx: ToolContext)` and returns a `ToolResult`, a dict, or a string.
 

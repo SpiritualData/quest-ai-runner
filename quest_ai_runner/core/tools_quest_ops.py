@@ -547,6 +547,12 @@ def goal_line(row: Mapping[str, Any]) -> str:
             f"for {who}: {trim(row['title'], 120)}{text}")
 
 
+def read_failure_reason(client: Any) -> str:
+    """Why the client's last read failed, in a few words, or a pointer to the runner log."""
+    reason = " ".join(str(getattr(client, "last_error", "") or "").split())
+    return reason[:160] if reason else "the runner log has the reason"
+
+
 def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -558,9 +564,9 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         payload = client.list_quest_goals(quest_id)
         if not isinstance(payload, dict) or "period_groups" not in payload:
             return ToolResult(ok=False, text=(
-                f"The goals of quest {quest_id} could not be read just now (the runner log has the "
-                f"reason). Do not assume the quest has none, and do not fill in goal lines you have "
-                f"not seen: say they could not be read."))
+                f"The goals of quest {quest_id} could not be read just now "
+                f"({read_failure_reason(client)}). Do not assume the quest has none, and do not fill "
+                f"in goal lines you have not seen: say they could not be read."))
         names = {str(m.get("user_id")): str(m.get("name") or "")
                  for m in (client.list_assignable_members(quest_id) or []) if m.get("user_id")}
         rows = [goal_row(g, names) for g in flat_goals(payload)]
@@ -675,9 +681,9 @@ def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> To
         workflows = client.list_quest_workflows(quest_id)
         if workflows is None:
             return ToolResult(ok=False, text=(
-                f"The workflows of quest {quest_id} could not be read just now (the runner log has the "
-                f"reason). Do not assume it has none, and do not state any step as fact: say they could "
-                f"not be read."))
+                f"The workflows of quest {quest_id} could not be read just now "
+                f"({read_failure_reason(client)}). Do not assume it has none, and do not state any "
+                f"step as fact: say they could not be read."))
         if not workflows:
             return ToolResult(ok=True, data=[], text=f"Quest {quest_id} has no workflows.")
         names = {str(m.get("user_id")): str(m.get("name") or "")

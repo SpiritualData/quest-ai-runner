@@ -252,6 +252,22 @@ class ReportingMixin:
             self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
             self.dispatch_incomplete(task_id, msg, session_id=session_id)
             return ExecutionOutcome(task_id, "incomplete", msg)
+        # The goal loop saw two attempts in a row end at the same point with nothing new done and
+        # stopped (``DeepResult.stalled``): say so, plainly, rather than a bare failure.
+        stalled = [d.stalled for d in deep if getattr(d, "stalled", "") and not d.met]
+        if stalled:
+            work = "\n\n".join(_strip_future_context(d.output).strip()
+                                for d in deep if (d.output or "").strip()).strip()
+            msg = ("I stopped because two attempts in a row ended at the same point with nothing new "
+                   "done, so trying again would not change it: " + " ".join(stalled) + " Nothing "
+                   "further was run.")
+            if work:
+                msg = work + "\n\n" + msg
+            self._report_progress(task_id, "done", text="Stopped: no further progress was possible.",
+                                  output=msg)
+            self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
+            self.dispatch_incomplete(task_id, msg, session_id=session_id)
+            return ExecutionOutcome(task_id, "incomplete", msg)
         # UNVERIFIED is never reported as done, and never as a bare failure either: the work RAN
         # but its verification could not (LLM outage, no verify tier, parse failure), so the
         # outcome is genuinely unknown. The chat message must say that plainly, presenting any

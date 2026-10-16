@@ -127,6 +127,7 @@ class GoalsMixin:
                     quest_id, tid, e, resolved_now=resolved_now)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_quest_goals failed for quest %s: %s", quest_id, e)
+            self.last_error = str(e)   # a tool reports why, so a repeat of it can be recognised
             return {}
 
     def update_goal(self, goal_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:

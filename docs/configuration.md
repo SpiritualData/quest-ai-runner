@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-198 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+200 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -172,6 +172,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_TEAM_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
 | `QAR_TEAM_QUEST_ID` | Quest the bootstrap report is posted to. | `adapters/bootstrap_reporter.py` | - |
 | `QAR_TOOLS_FILE` |  | `core/tools.py` | `docs/tools.md` |
+| `QAR_TOOL_LEDGER_DIR` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_TOOL_QUEST_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/tools.md` |
 | `QAR_TOOL_TASK_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/tools.md` |
 | `QAR_USER_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
@@ -186,8 +187,8 @@ the docs and `.env.example` that describe what it does.
 | `QAR_WAIT_CHANNEL` |  | `cli_config.py` | `docs/quest-api-contract.md` |
 | `QAR_WAIT_TIMEOUT_SECONDS` | Seconds each long-poll GET asks the backend to wait (sets RunnerConfig.wait_timeout_seconds). | `cli_config.py` | - |
 | `QAR_WEB_CACHE_DIR` |  | `adapters/web_research.py` | `docs/web-search.md` |
-| `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/web-search.md` |
+| `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_PAGE_TTL_SECONDS` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_BACKEND` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `adapters/web_research.py` | `docs/web-search.md` |
