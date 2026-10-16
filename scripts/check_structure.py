@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that the repo still follows the adaptable-structure rules in docs/structure/.
+"""Check that the repo still follows the evolvable-structure (ESOI) rules in docs/structure/.
 
 Run from anywhere:  python scripts/check_structure.py [--write-docs]
 Exit 0 = clean, 1 = violations (printed one per line as ``RULE path: message``).

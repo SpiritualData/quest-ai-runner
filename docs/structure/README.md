@@ -1,7 +1,7 @@
-# Adaptable structure in quest-ai-runner
+# Evolvable structure (ESOI) in quest-ai-runner
 
 This folder is the source of truth for how the repo is organised and why. It applies the
-adaptable-structure philosophy (structure that is stable where it should be and changeable where
+evolvable-structure (ESOI) philosophy (structure that is stable where it should be and changeable where
 change is expected) to QAR's architecture, not only to individual modules. `CLAUDE.md` is the
 pre-flight checklist; `ARCHITECTURE_STANDARDS.md` is the reasoning for the code rules; this folder is
 the inventory and the automated check.
@@ -88,7 +88,7 @@ problems and solutions is `solutions.csv`. A **component** is a place in the tre
 * **S10 selection.** The selected implementation of a measured solution must be the leaderboard winner
   (`evaluation/components/leaderboard.py`), and must have a recorded row in `results.csv`. A challenger
   that wins, or an unrecorded selection, needs a waiver naming the pending decision and its owner, so
-  a better implementation cannot sit unnoticed (ideal 3).
+  a better implementation cannot sit unnoticed (ESOI principle 4).
 * **S11 metric kind.** Every component row has `metric_kind`: `eval` (a `components/run.py` command with a
   recorded result), `invariant` (pinned by named tests), `exempt` (metric text starts `exempt:` with the
   reason) or `none` (never `done`; state gap and action). `solutions` links a component to its

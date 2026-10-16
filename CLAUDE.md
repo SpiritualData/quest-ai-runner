@@ -54,7 +54,7 @@ Module names describe **architectural role**, not domain. "core" is the stable c
 depends on; "runner" is the executor; "adapters" are the swappable implementations. See
 `docs/ARCHITECTURE_STANDARDS.md` for the full architecture and the standards code here must follow.
 
-## Adaptable structure: the registry and the check
+## Evolvable structure (ESOI): the registry and the check
 
 The repo's structure is data, not folklore. `docs/structure/` holds `components.csv` (every functional
 component: where it lives, its role, interface, metric, docs, tests, gap and status), `solutions.csv`

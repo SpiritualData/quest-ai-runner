@@ -95,11 +95,11 @@ the docs and `.env.example` that describe what it does.
 | `QAR_FEEDBACK_LEDGER_PATH` |  | `cli_config.py` | `docs/feedback-ledger.md` |
 | `QAR_FILES_ALLOW_DOT` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_DENY` |  | `cli_serve_files.py` | `docs/file-server.md` |
-| `QAR_FILES_GOOGLE_CREDENTIALS` | serve-files: path to a Google service account key; turns on the read-only link operation for pasted Google Drive, Docs, Sheets and Slides links. | `adapters/google_link_reader.py` | - |
-| `QAR_FILES_GOOGLE_IMPERSONATE_DOMAINS` | serve-files: comma separated email domains whose people may be impersonated (domain-wide delegation) so a link opens as the person who asked. | `adapters/google_link_reader.py` | - |
-| `QAR_FILES_GOOGLE_IMPERSONATE_SCOPE` | serve-files: OAuth scope used when impersonating (default: the full Drive scope that delegation grants; reads stay read-only because the server only issues GET and export calls). | `adapters/google_link_reader.py` | - |
-| `QAR_FILES_GOOGLE_SA_FALLBACK` | serve-files: 1 lets the service account itself read links for people who cannot be impersonated or have no access. Off by default, because the service account sees more than any one person. | `adapters/google_link_reader.py` | - |
-| `QAR_FILES_GOOGLE_SA_SCOPE` | serve-files: OAuth scope for direct service account reads (default drive.readonly). | `adapters/google_link_reader.py` | - |
+| `QAR_FILES_GOOGLE_CREDENTIALS` | serve-files: path to a Google service account key; turns on the read-only link operation for pasted Google Drive, Docs, Sheets and Slides links. | `adapters/google_link_reader.py` | `docs/file-server.md` |
+| `QAR_FILES_GOOGLE_IMPERSONATE_DOMAINS` | serve-files: comma separated email domains whose people may be impersonated (domain-wide delegation) so a link opens as the person who asked. | `adapters/google_link_reader.py` | `docs/file-server.md` |
+| `QAR_FILES_GOOGLE_IMPERSONATE_SCOPE` | serve-files: OAuth scope used when impersonating (default: the full Drive scope that delegation grants; reads stay read-only because the server only issues GET and export calls). | `adapters/google_link_reader.py` | `docs/file-server.md` |
+| `QAR_FILES_GOOGLE_SA_FALLBACK` | serve-files: 1 lets the service account itself read links for people who cannot be impersonated or have no access. Off by default, because the service account sees more than any one person. | `adapters/google_link_reader.py` | `docs/file-server.md` |
+| `QAR_FILES_GOOGLE_SA_SCOPE` | serve-files: OAuth scope for direct service account reads (default drive.readonly). | `adapters/google_link_reader.py` | `docs/file-server.md` |
 | `QAR_FILES_HOST` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_PORT` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_ROOT` |  | `cli_serve_files.py` | `docs/file-server.md` |

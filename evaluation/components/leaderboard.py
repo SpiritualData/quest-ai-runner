@@ -6,8 +6,8 @@ Reads results.csv (the latest row per component and implementation, written by `
 and docs/structure/solutions.csv (which implementation is currently selected). Prints a ranking per
 component and flags every challenger that beats the selected implementation: a higher pass rate, or
 the same pass rate at a lower cost. ``--strict`` exits 1 when one does, so a pipeline can surface
-"a better implementation exists" without a human reading the implementations (adaptable-structure
-ideal 3). The harness only ranks; switching the live implementation stays a deliberate decision.
+"a better implementation exists" without a human reading the implementations (ESOI
+principle 4). The harness only ranks; switching the live implementation stays a deliberate decision.
 
 Only rows with the same ``cases_sha`` as the selected row are compared: a score on a different case
 file is not evidence. Rows recorded before ``cases_sha`` existed have it blank and compare as one group,

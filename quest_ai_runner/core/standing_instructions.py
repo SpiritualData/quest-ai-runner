@@ -5,8 +5,9 @@ person's persona, and the budget cuts preamble blocks by priority. Principles th
 ALL work therefore cannot live there. They go in their own layer, composed into every deep prompt
 as a required part (never cut by the budget, never replaced by a persona).
 
-The library ships one default, ``prompts/adaptable_structure.md``: the adaptable-structure
-principles. A deployment changes the layer with ``QAR_DEEP_INSTRUCTIONS_FILES``:
+The library ships one default, ``prompts/evolvable_structure.md``: Joshua's Evolvable Structure
+that Optimizes Intent (ESOI) principles, generated from his skill by
+``scripts/sync_standing_instructions.py`` (never hand-edit it). A deployment changes the layer with ``QAR_DEEP_INSTRUCTIONS_FILES``:
 
 * unset            -> the shipped default;
 * empty            -> no standing instructions;
@@ -30,7 +31,7 @@ log = logging.getLogger("quest-ai-runner.standing_instructions")
 
 DEEP_INSTRUCTIONS_ENV = "QAR_DEEP_INSTRUCTIONS_FILES"
 DEFAULT_TOKEN = "default"
-DEFAULT_INSTRUCTIONS_FILE = Path(__file__).resolve().parent.parent / "prompts" / "adaptable_structure.md"
+DEFAULT_INSTRUCTIONS_FILE = Path(__file__).resolve().parent.parent / "prompts" / "evolvable_structure.md"
 
 
 def instruction_files() -> List[Path]:

@@ -1,4 +1,4 @@
-"""The adaptable-structure registry stays true: see docs/structure/README.md.
+"""The evolvable-structure registry stays true: see docs/structure/README.md.
 
 Runs scripts/check_structure.py in-process (no network, no model). A new module that no component
 claims, a core module importing an adapter, an oversized module or a stale generated doc fails here.
