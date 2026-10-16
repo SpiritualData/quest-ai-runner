@@ -16,6 +16,7 @@ from .adapters import (
 from .auxiliary_prompts import (
     REPLY_VOICE_SYSTEM,
     SYNTHESIZE_AFTER_DEEP_PROMPT,
+    SYNTHESIZE_TASK_REPORT_PROMPT,
     SYNTHESIZE_AFTER_QUEUED_PROMPT,
 )
 from .prompt_layers import compose_layers
@@ -98,8 +99,12 @@ class AnsweringMixin:
 
     def _synthesize_after_deep(self, user_message: str, *, prior_answer: str, deep_output: str,
                                transcript: str, model: str,
-                               rep_preamble: Optional[str] = None) -> str:
+                               rep_preamble: Optional[str] = None,
+                               prompt_template: str = SYNTHESIZE_AFTER_DEEP_PROMPT) -> str:
         """Rewrite the final reply to REPORT what a (deferred) deep run actually did/produced.
+
+        ``prompt_template`` is the report shape: the interactive after-deep reply by default, or
+        ``SYNTHESIZE_TASK_REPORT_PROMPT`` for a finished background task's chat report.
 
         After a deferred deep run, the pre-deep answer is a proposal that usually reads as "shall I
         proceed?", while the real deliverable lives in the deep run's output. This folds that output
@@ -109,7 +114,7 @@ class AnsweringMixin:
         """
         out = (deep_output or "").strip()
         try:
-            prompt = SYNTHESIZE_AFTER_DEEP_PROMPT.format(
+            prompt = prompt_template.format(
                 request=user_message,
                 proposal=(prior_answer or "(none)").strip()[:4000],
                 result=out[:24000],
@@ -171,8 +176,8 @@ class AnsweringMixin:
         """PUBLIC: write the finished-work report for a completed background task.
 
         Used by the runner's executor to fold a deep run's raw output into a message that reads
-        as the AI reporting its own finished work (same prompt shape as the interactive
-        after-deep synthesis), before posting the task's done message into the originating chat.
+        as the AI reporting its own finished work (what was done, how to test it, what is still
+        open), before posting the task's done message into the originating chat.
         ``tier`` resolves through the registry ("balanced" by default; the registry's tiers are
         "fast", "balanced" and "best"). Never raises: any failure returns the raw ``deep_output``
         unchanged.
@@ -181,7 +186,8 @@ class AnsweringMixin:
             model = self.registry.resolve_tier(tier)
             return self._synthesize_after_deep(
                 request, prior_answer="", deep_output=deep_output,
-                transcript=transcript, model=model, rep_preamble=rep_preamble)
+                transcript=transcript, model=model, rep_preamble=rep_preamble,
+                prompt_template=SYNTHESIZE_TASK_REPORT_PROMPT)
         except Exception:  # noqa: BLE001 — a report rewrite must never break task reporting
             log.warning("task report synthesis failed; using raw output", exc_info=True)
             return deep_output

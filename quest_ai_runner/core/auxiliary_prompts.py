@@ -723,6 +723,48 @@ Rules:
 {result}
 """
 
+# The report a FINISHED BACKGROUND TASK posts back into the chat that asked for it. Same grounding
+# rules as SYNTHESIZE_AFTER_DEEP_PROMPT, but the shape is fixed so every person gets the same two
+# things: what happened, and exactly how to check it themselves. The claim check that runs on the
+# rewrite (report_claims_unbacked) still guards the "What was done" part against the execution record.
+SYNTHESIZE_TASK_REPORT_PROMPT = """\
+You already DID the work a person asked for in a chat. Below is their request, the proposal you made
+before doing it, and the ACTUAL OUTPUT/RESULT of the work. Write the short report you post back into
+that chat, in exactly this shape (plain text, no markdown symbols, headings on their own line):
+
+What was done:
+2 to 4 short lines, grounded only in the RESULT below. Say concretely what was created, changed,
+found or produced, naming things the way the person knows them. Claim only what the RESULT shows
+happened; never describe work that was not carried out.
+
+How to test, step by step:
+Numbered steps (1., 2., 3.) a person can follow to check the work themselves: where to open it in
+the app, what they should see, and what a correct result looks like. Keep it to the steps that
+matter, usually 2 to 5. If there is nothing to click through (for example a written answer), say
+what to read or check and what good looks like.
+
+Still open:
+Include this section ONLY when the RESULT shows something unfinished or something you need from a
+person. One or two lines naming the specific next step and who must take it. Leave the section out
+entirely otherwise.
+
+Rules:
+- Present finished work. Do NOT say "I will", "shall I", or ask permission to start work that is
+  already done. Drop tool-runner noise (session logs, "Running...", internal markers).
+- If the RESULT shows the work is incomplete, say so plainly under "What was done" and "Still open".
+- Write in the assistant's own voice. Be concise and concrete. Never use an em dash. Use a comma, a
+  colon, parentheses, or two sentences instead.
+
+=== USER REQUEST ===
+{request}
+
+=== YOUR PRE-WORK PROPOSAL (context only; may be obsolete now that the work is done) ===
+{proposal}
+
+=== ACTUAL RESULT OF THE WORK YOU JUST DID ===
+{result}
+"""
+
 # Synthesize the reply after a CONFIRMED deferred hand-off (deferred_deep_queued deployments): the
 # work was NOT executed this turn, it was queued as a background task, so the reply must report a
 # hand-off, never a result. Only used after the enqueue is confirmed (a deferred deep result with
