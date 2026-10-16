@@ -112,7 +112,10 @@ AUTOMATIC_DELIVERY_NOTE = (
     "DELIVERY (set by this quest, not by you): when this run finishes, your result is emailed to "
     "the quest's people automatically. Any instruction above to email, send, or deliver the work "
     "to them is fulfilled by putting the finished work in your result. Do not send it yourself, "
-    "and it is not left undone because you did not."
+    "and it is not left undone because you did not. This covers the quest's own people only: an "
+    "instruction to send a message to a named person by calling a send tool with that recipient "
+    "spelled out is a different message to a different reader, so carry that one out with the "
+    "tool as written."
 )
 
 

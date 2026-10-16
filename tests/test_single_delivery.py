@@ -57,3 +57,9 @@ def test_a_quest_that_does_not_mail_gets_no_delivery_note():
 
 def test_the_verifier_counts_email_it_as_met_by_the_result():
     assert "PLATFORM DELIVERY" in VERIFY_GOAL_PROMPT
+
+
+def test_the_delivery_note_leaves_an_explicit_send_to_a_named_person_to_the_tool():
+    note = " ".join(AUTOMATIC_DELIVERY_NOTE.split())
+    assert "named person" in note and "recipient" in note and "with the tool as written" in note
+    assert "—" not in note
