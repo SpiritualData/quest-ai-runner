@@ -30,5 +30,17 @@ def test_file_half_answers_when_the_search_half_fails():
     assert obs.kind == "read" and obs.text == "file text"
 
 
+def test_a_readable_file_wins_over_a_wandering_search():
+    class Both(Retrieval):
+        def grep(self, pattern, scope=None):
+            return Observation(kind="grep", pattern=pattern, hits=[], text="noise")
+
+    class Other(Fake):
+        retrieval = Both()
+
+    obs = Other()._exec_one_read({"rel_path": "a:CLAUDE.md", "grep": "dash", "scope": "a:"})
+    assert obs.kind == "read"
+
+
 def test_a_search_alone_keeps_its_error():
     assert run({"grep": "dash", "scope": "a:nowhere"}).kind == "error"
