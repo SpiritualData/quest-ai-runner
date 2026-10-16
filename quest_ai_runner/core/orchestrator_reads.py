@@ -24,6 +24,12 @@ from .orchestrator_turn import TurnCardCache, _Emitter
 from .orchestrator_capabilities import describe_read_spec, read_op_timeout_seconds
 
 
+# A tool that acts (sends, writes) echoes its arguments to the re-plan and the answer check this
+# long: the message it sent IS the evidence, and a body cut at 600 characters made the check say it
+# could not see the closing line of an email that had gone out whole.
+ACTING_TOOL_ARGS_CHARS = 4000
+
+
 class ReadsMixin:
     """Executing the planner's read specs and direct tool calls."""
 
@@ -430,7 +436,7 @@ class ReadsMixin:
                         pass
             gathered.append({"kind": "query", "locator": f"tool:{name}",
                              "text": f"TOOL {name} {'SUCCEEDED' if ok else 'FAILED'} "
-                                     f"(args {json.dumps(args, default=str)[:600]}):\n{text}"})
+                                     f"(args {json.dumps(args, default=str)[:(ACTING_TOOL_ARGS_CHARS if (spec is None or spec.mutates) else 600)]}):\n{text}"})
             if spec is None or spec.mutates:
                 exec_record.facts.append(ExecutionFact(
                     goal=f"tool {name}: {text[:200]}" if ok else f"tool {name}",
