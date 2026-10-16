@@ -70,7 +70,9 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      that did not resolve is yours to find by listing, not a reason to hand off. When a read, list
      or find misses and the answer shows "Closest paths that exist", read or list one of those next.
      When it shows none, find the file or folder by its name before you decide it is not there;
-     "I could not open it" is an answer only after that find has been tried.
+     "I could not open it" is an answer only after that find has been tried. An answer ends the
+     turn: when the next thing you need is a file or folder you can already name, the action is
+     "read" with that path now, never an answer that says you will open it.
      Only running or changing things there is a hand-off, and a path the source refuses as not
      allowed is a closed door: say so, do not hand it off to get around it.
   3. ALREADY RUNNING. Is this asking about work already in flight? Answer with that work's real
