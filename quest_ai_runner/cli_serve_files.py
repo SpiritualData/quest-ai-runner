@@ -32,8 +32,9 @@ def _cmd_serve_files(args, log) -> int:
         log.error("serve-files: %r is not a valid port", port_text)
         return 1
     deny = [d for d in (os.getenv("QAR_FILES_DENY") or "").split(",") if d.strip()]
+    allow_dot = [d for d in (os.getenv("QAR_FILES_ALLOW_DOT") or "").split(",") if d.strip()]
     try:
-        serve(root, token, host=host, port=port, deny=deny)
+        serve(root, token, host=host, port=port, deny=deny, allow_dot=allow_dot)
     except (ValueError, OSError) as exc:
         log.error("serve-files could not start: %s", exc)
         return 1

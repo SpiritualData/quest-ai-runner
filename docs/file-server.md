@@ -20,6 +20,9 @@ quest-ai-runner serve-files --root /path/to/the/files --port 8765
 * `QAR_FILES_DENY` (optional): comma-separated root-relative paths that are invisible to every
   operation, as if they did not exist (a personal folder, a backups tree). Use it to fence off
   anything inside the root that should not be readable by whoever can ask the AI.
+* `QAR_FILES_ALLOW_DOT` (optional): comma-separated root-relative dot paths that stay readable
+  (for example `.claude/docs,app/.claude/skills`), matched on whole path components. Every other
+  path with a component that starts with `.` is refused (see Hidden folders below).
 
 The server speaks plain HTTP and binds to loopback by default. To reach it from another machine put
 TLS in front of it (a reverse proxy that forwards one path to this port) and keep the token secret.
@@ -50,13 +53,30 @@ There is no write, delete, rename or execute operation, and no way to add one by
   listed, found, searched or read. The rule is applied to every folder name on the path. A file that
   looks like a credential (a private key block, a `"private_key"` entry) is refused even when its
   name is harmless.
-* **Redaction.** Obvious secret values in ordinary files (private key blocks, well-known API key
-  shapes, bearer tokens, `password = <long value>`) are replaced with `[redacted]` in every answer.
-  This is a safety net, not a guarantee; keep real secrets out of the served tree.
+* **Redaction.** Obvious secret values in ordinary files are replaced with `[redacted]` in every
+  answer: private key blocks, well-known API key shapes (OpenAI, Anthropic, Stripe, Resend, Voyage,
+  Google, GitHub, Slack, AWS, JWTs), bearer and basic tokens, `user:password@` in a URI,
+  `NAME_SECRET_KEY=value` style assignments (also quoted, `export`, JSON and YAML), and
+  `--password`, `--token`, `-p 'value'` command line arguments. Only the text being returned is
+  scanned, after it is cut to the read cap. This is a safety net, not a guarantee; keep real secrets
+  out of the served tree.
 * **Bounded work.** Request, response and file sizes, search time and file count, and the number of
   operations running at once are capped. A search that hits a cap says so.
-* **Hidden folders.** Searches and `find` skip dot-folders and the usual build folders
-  (`node_modules`, virtual environments); name one as the scope to search inside it.
+* **Hidden files and folders.** Any path with a component that starts with `.` (`.bash_history`,
+  `.bashrc`, `.git/`, `.claude/`, `.config/`) is refused by every operation, in a scope and in a
+  direct read, and is not listed. The only way in is the operator allowlist `QAR_FILES_ALLOW_DOT`.
+  Shell and REPL histories (`*_history`), `.viminfo` and a `snap/` folder are always secret. The
+  usual build folders (`node_modules`, virtual environments) are skipped by searches and `find`.
+  Serving a home directory is risky: prefer a root that holds only the files you mean to share.
+* **Symlinks.** Every rule is checked on the link as walked AND on the real file it leads to.
+* **One refusal message.** A denied, secret, hidden or missing path all answer with the same text, so
+  a caller cannot probe which paths exist.
+* **Search is a killable child process.** A search runs in a child that is killed at
+  `QAR_GREP_BUDGET_SECONDS` (plus a short grace), so a catastrophic regex cannot freeze the server;
+  hits found before the kill are kept and the answer says the search stopped early. A line longer
+  than 4000 characters is matched on its first 4000.
+* **Untrusted content.** `RemoteFilesAdapter` wraps what it returns in an explicit
+  `UNTRUSTED FILE CONTENT` frame: file text is data for the brain to use, never instructions.
 
 ## Using it from a brain
 

@@ -17,7 +17,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import Observation, RetrievalAdapterBase
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
@@ -248,8 +248,18 @@ class FilesAdapter(RetrievalAdapterBase):
             return None
         return None if here == self.root else here
 
+    # A line longer than this is only matched on its first characters: one multi-megabyte minified
+    # line must not hand a regex unbounded work. Subclasses may lower it.
+    grep_max_line_chars = 100_000
+
+    def format_hit_line(self, line: str) -> str:
+        """The text reported for a matching line, before the 300 character cap. Subclasses that
+        must scrub the text (the file server redacts secret values) override this."""
+        return line
+
     def grep_pass(self, pass_root: Path, rx, max_hits: int, deadline: float,
-                  stats: Dict[str, Any]) -> List[Dict[str, Any]]:
+                  stats: Dict[str, Any], on_hit: Optional[Callable[[Dict[str, Any]], None]] = None
+                  ) -> List[Dict[str, Any]]:
         """One bounded walk of ``pass_root``: stops at ``max_hits``, the time budget, or the file cap."""
         hits: List[Dict[str, Any]] = []
         max_files = grep_max_files()
@@ -277,12 +287,15 @@ class FilesAdapter(RetrievalAdapterBase):
                         continue
                     with open(path, "r", encoding="utf-8", errors="replace") as f:
                         for line_no, line in enumerate(f, start=1):
-                            if rx.search(line):
-                                snippet = line.rstrip("\n")
+                            if rx.search(line[:self.grep_max_line_chars]):
+                                snippet = self.format_hit_line(line.rstrip("\n")[:self.grep_max_line_chars])
                                 if len(snippet) > 300:
                                     snippet = snippet[:300].rstrip() + " …"
-                                hits.append({"rel_path": self._rel(path), "line_no": line_no,
-                                             "line": snippet})
+                                hit = {"rel_path": self._rel(path), "line_no": line_no,
+                                       "line": snippet}
+                                hits.append(hit)
+                                if on_hit is not None:
+                                    on_hit(hit)
                                 if len(hits) >= max_hits:
                                     return hits
                 except OSError:
