@@ -78,3 +78,24 @@ def test_shipped_default_matches_the_skill_it_is_generated_from():
     expected = sync.build(skill.read_text(encoding="utf-8"))
     assert si.DEFAULT_INSTRUCTIONS_FILE.read_text(encoding="utf-8") == expected, (
         "prompts/evolvable_structure.md drifted from the skill: run scripts/sync_standing_instructions.py")
+
+
+def test_public_doc_matches_the_skill_it_is_generated_from():
+    """docs/evolvable-structure.md (the page the explanation panel links to) is the same source."""
+    sync = _sync_module()
+    skill = sync.skill_path()
+    if not skill.is_file():
+        pytest.skip(f"skill not on this machine: {skill}")
+    expected = sync.build_public(skill.read_text(encoding="utf-8"))
+    assert sync.PUBLIC_OUTPUT.read_text(encoding="utf-8") == expected, (
+        "docs/evolvable-structure.md drifted from the skill: run scripts/sync_standing_instructions.py")
+
+
+def test_public_doc_carries_no_runner_or_skill_only_text():
+    """The public page is for readers: the principles, not instructions to an agent."""
+    sync = _sync_module()
+    text = sync.PUBLIC_OUTPUT.read_text(encoding="utf-8")
+    assert "## Principles" in text and "## Definitions" in text
+    for internal in (sync.RUNNER_LINE, "Diving Deeper", "## Background", "sub-agents",
+                     "Apply the below principles:"):
+        assert internal not in text

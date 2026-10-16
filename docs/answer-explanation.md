@@ -5,7 +5,8 @@
 
 A user-facing, expandable account of how a turn reached its answer: what the question was taken to
 be, what information was used, the shape of the reasoning, the assumptions, the confidence and
-limits, and what would change the answer.
+limits, and (version 2) an evolvable structure section: the ideal the answer serves, a practical way
+to check it, the structure it built on or left open to change, and what would change or improve it.
 
 ## What this is NOT
 
@@ -64,8 +65,8 @@ run are never eligible, because they are not answers.
 | `used.reads` | real observations (path, locator, kind) | yes |
 | `used.actions` | `ExecutionRecord` facts with succeeded/failed state | yes |
 | `used.web` | a web-search observation was present | yes |
-| `signals.*` | exit reason, goal verdict, claim-honesty flag, step count | yes |
-| `understood`, `approach`, `assumptions`, `confidence`, `limitations`, `what_would_change` | one cheap-tier model call | no |
+| `signals.*` | exit reason, goal verdict (a deep turn's from its `deep_met`/`deep_not_met` exit), claim-honesty flag, step count | yes |
+| `understood`, `approach`, `assumptions`, `confidence`, `limitations`, `what_would_change`, `evolvable_structure` | one cheap-tier model call | no |
 
 Two consequences worth keeping:
 
@@ -82,17 +83,18 @@ of the expanded panel. Word it as a claim about the product, not about the model
 "Written by Quest AI to describe how it reached this answer. It is a summary, not a recording of
 every step."
 
-## Payload shape (version 1)
+## Payload shape (version 2)
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "understood": "string",
   "approach": "string",
   "assumptions": ["string"],
   "confidence": "string",
   "limitations": ["string"],
   "what_would_change": ["string"],
+  "evolvable_structure": {"ideal": "string", "metric": "string", "structure": "string"},
   "used": {
     "cards":   [{"title": "str", "adapter": "str"}],
     "sources": [{"label": "str", "adapter": "str", "item_count": 0}],
@@ -106,6 +108,28 @@ every step."
   }
 }
 ```
+
+Version 2 only added `evolvable_structure`; every version 1 key means what it did, so a version 1
+consumer is unaffected.
+
+### The evolvable structure section
+
+Deep runs work under ESOI (Evolvable Structure that Optimizes Intent, the standing instructions in
+`prompts/evolvable_structure.md`). The section says, in ESOI's own intent vocabulary, how that
+shaped the answer, and adds only what the other fields do not already say:
+
+| Key | ESOI term | Meaning for the reader |
+|---|---|---|
+| (`understood`) | problem | what they want, already its own field, so not repeated |
+| `ideal` | ideal | the outcome a good answer serves, the purpose behind the question |
+| `metric` | metric | a practical way they can tell whether the answer achieves it |
+| `structure` | implementation | the lasting thing it created, changed or built on, and what stays open to change; empty when nothing lasting is involved |
+| (`what_would_change`) | evolve | what would change or improve it next time; keeps its version 1 key |
+
+The model omits the whole object for a simple factual reply. A consumer renders it as one section
+whose heading links to the public page `docs/evolvable-structure.md` (generated from the same
+source as the standing instructions), with `what_would_change` inside it when the object is present
+and as its own section otherwise.
 
 Every field is optional except `version`, `used` and `signals`. A consumer must render defensively
 and show nothing at all when the payload is absent.

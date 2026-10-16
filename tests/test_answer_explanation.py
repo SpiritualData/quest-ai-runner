@@ -80,6 +80,9 @@ SAMPLE_EXPLANATION = {
     "confidence": "High for what the document states, since it was read directly.",
     "limitations": ["Only one document was checked."],
     "what_would_change": ["A newer version of the document saying something different."],
+    "evolvable_structure": {"ideal": "You can act on the metrics policy without guessing.",
+                            "metric": "The figures you report match the weekly count.",
+                            "structure": ""},
 }
 
 
@@ -177,7 +180,11 @@ def test_explanation_payload_carries_the_written_sections_and_the_real_record():
     # The record half: a real read, not prose about a read.
     paths = [r["path"] for r in payload["used"]["reads"]]
     assert "README.md" in paths
-    assert payload["version"] == 1
+    assert payload["version"] == 2
+    # The ESOI section: empty sentences are dropped, the rest kept as written.
+    assert payload["evolvable_structure"] == {
+        "ideal": "You can act on the metrics policy without guessing.",
+        "metric": "The figures you report match the weekly count."}
     # And it is carried on the result too, for a consumer that never watches the stream.
     assert res.explanation == payload
 
@@ -264,3 +271,35 @@ def test_payload_signals_carry_the_real_verdict():
     assert signals["verdict_reason"] == "the document says so"
     assert signals["exit_reason"] == "verified"
     assert signals["steps"] == 2
+
+
+# --- version 2: the evolvable structure section ------------------------------------------------
+
+def test_evolvable_structure_is_optional_and_cleaned():
+    """Absent, empty or malformed, it leaves the version 1 keys exactly as they were."""
+    trace = TurnTrace(kind="answer", answer="Yes.", steps=2,
+                      gathered=[{"kind": "read", "rel_path": "README.md"}])
+    base = {"understood": "u", "approach": "a", "confidence": "c"}
+    for raw in (None, {}, "a string", {"ideal": "  ", "metric": None}):
+        payload = build_payload(trace, {**base, "evolvable_structure": raw})
+        assert "evolvable_structure" not in payload
+        assert payload["understood"] == "u"
+    payload = build_payload(trace, {**base, "evolvable_structure": {
+        "ideal": " Serve the plan. ", "structure": "Built on your weekly plan.", "other": "dropped"}})
+    assert payload["evolvable_structure"] == {"ideal": "Serve the plan.",
+                                              "structure": "Built on your weekly plan."}
+
+
+def test_evolvable_structure_alone_is_renderable():
+    from quest_ai_runner.core.answer_explanation import has_renderable_content
+    assert has_renderable_content({"used": {}, "evolvable_structure": {"ideal": "x"}})
+
+
+def test_a_deep_turn_carries_its_own_verifier_outcome():
+    """A deep turn has no goal verdict; its exit reason already records the deep verifier's call."""
+    for exit_reason, met in (("deep_met", True), ("deep_not_met", False), ("deferred", None)):
+        trace = TurnTrace(kind="deep", answer="Done.", steps=1, exit_reason=exit_reason)
+        assert build_payload(trace, None)["signals"]["goal_met"] is met
+    # A real verdict still wins over the exit reason.
+    trace = TurnTrace(kind="deep", answer="Done.", exit_reason="deep_met", goal_verdict={"met": False})
+    assert build_payload(trace, None)["signals"]["goal_met"] is False

@@ -10,9 +10,17 @@ The split matters, so it is encoded in the payload shape rather than left to a c
   * ``used`` and ``signals`` are FACTS. They are assembled here from the turn's real trace (the
     observations the gather steps produced, the execution record, the assembled cards and sources,
     the goal verdict, the exit reason). No model writes them. They can be checked.
-  * ``understood``, ``approach``, ``assumptions``, ``confidence``, ``limitations`` and
-    ``what_would_change`` are a model-written summary, constrained to that same trace. They are a
-    reconstruction, not a transcript of anything, which is why the consumer shows a disclaimer.
+  * ``understood``, ``approach``, ``assumptions``, ``confidence``, ``limitations``,
+    ``what_would_change`` and ``evolvable_structure`` are a model-written summary, constrained to
+    that same trace. They are a reconstruction, not a transcript of anything, which is why the
+    consumer shows a disclaimer.
+
+``evolvable_structure`` (version 2) says how Evolvable Structure that Optimizes Intent (ESOI, the
+runner's standing instructions, ``prompts/evolvable_structure.md``) shaped the answer, in the ESOI
+intent vocabulary: the ``ideal`` the answer serves, a practical ``metric`` the reader can check it
+by, and the ``structure`` it built on or left open to change. ``what_would_change`` is the evolve
+half of the same section (what would change or improve the answer next time); it keeps its version
+1 key so a version 1 consumer still renders it.
 
 Two invariants this module exists to hold:
 
@@ -35,8 +43,12 @@ from typing import Any, Dict, List, Optional
 
 log = logging.getLogger(__name__)
 
-# The payload version a consumer can branch on if the shape ever grows.
-EXPLANATION_VERSION = 1
+# The payload version a consumer can branch on if the shape ever grows. Version 2 added the optional
+# ``evolvable_structure`` object; every version 1 key is unchanged, so a version 1 consumer is safe.
+EXPLANATION_VERSION = 2
+
+# The ``evolvable_structure`` keys, each one optional sentence.
+EVOLVABLE_KEYS = ("ideal", "metric", "structure")
 
 # How many items of any one kind survive into the payload. The panel is a summary, not a log, and
 # the payload is persisted on the message, so it stays small on purpose.
@@ -71,11 +83,13 @@ EXPLAIN_TOOL: Dict[str, Any] = {
             "assumptions": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Up to 4 unstated assumptions the answer rests on. Empty if none.",
+                "description": "Up to 4 unstated assumptions that, if wrong, would change the "
+                               "answer. Skip ones that would hold for any answer. Empty if none.",
             },
             "confidence": {
                 "type": "string",
-                "description": "One sentence: how confident, and why, grounded in what was available.",
+                "description": "One sentence: how confident, and why, grounded in what was checked "
+                               "this turn. Not 'fully confident' unless the record shows a check.",
             },
             "limitations": {
                 "type": "array",
@@ -85,7 +99,35 @@ EXPLAIN_TOOL: Dict[str, Any] = {
             "what_would_change": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Up to 4 specific things that would change this answer if different.",
+                "description": "Up to 4 specific things that would change this answer or improve "
+                               "the next one: a fact that, if different, would change it, or what "
+                               "they could tell you, check or measure next time. Do not restate an "
+                               "assumption or limitation already listed.",
+            },
+            "evolvable_structure": {
+                "type": "object",
+                "description": "How the answer serves their intent and can improve over time. Omit "
+                               "for a simple factual reply where it would only restate the answer.",
+                "properties": {
+                    "ideal": {
+                        "type": "string",
+                        "description": "One sentence: the outcome a good answer serves for them, "
+                                       "the purpose behind the question, not a restatement of it.",
+                    },
+                    "metric": {
+                        "type": "string",
+                        "description": "One sentence: a practical way they can tell whether the "
+                                       "answer is achieving that outcome (something to observe "
+                                       "or check).",
+                    },
+                    "structure": {
+                        "type": "string",
+                        "description": "One sentence: the lasting thing the answer created, changed "
+                                       "or built on (a plan, habit, goal, document, earlier "
+                                       "conversation) and what stays open to change. Empty when "
+                                       "nothing lasting is involved.",
+                    },
+                },
             },
         },
         "required": ["understood", "approach", "confidence"],
@@ -125,6 +167,11 @@ HARD RULES:
 - Do not restate the answer. They have already read it.
 - Do not quote their own words back at them.
 - Be brief. Each sentence should earn its place. Prefer three short sentences to one long one.
+- evolvable_structure: Quest AI works by Evolvable Structure that Optimizes Intent, turning what a
+  person wants into something that serves it and can improve over time. Name the ideal the answer
+  serves and a practical way to check it; name a structure only if the answer or the record shows
+  one (if the answer says how it applied evolvable structure, draw on that). Leave it out for a
+  simple factual reply.
 - Never use an em dash. Split the sentence, or use a comma, colon, or parentheses.
 {language}"""
 
@@ -338,10 +385,17 @@ def render_used(trace: TurnTrace) -> Dict[str, Any]:
             "actions": actions, "web": trace.used_web()}
 
 
+# A deep turn's outcome when it carries no goal verdict of its own: the deep runner's verifier
+# already decided it, and ``orchestrator_run_answer`` records that as the exit reason.
+DEEP_EXIT_MET = {"deep_met": True, "deep_not_met": False}
+
+
 def render_signals(trace: TurnTrace) -> Dict[str, Any]:
     """The ``signals`` section: the run's own outcome facts, for the confidence block."""
     verdict = trace.goal_verdict or {}
     met = verdict.get("met")
+    if met is None:
+        met = DEEP_EXIT_MET.get(trace.exit_reason or "")
     return {
         "exit_reason": trace.exit_reason or "",
         "goal_met": bool(met) if met is not None else None,
@@ -399,15 +453,30 @@ def build_payload(trace: TurnTrace, written: Optional[Dict[str, Any]]) -> Dict[s
             payload["limitations"] = limitations
         if what_would_change:
             payload["what_would_change"] = what_would_change
+        evolvable = clean_evolvable(written.get("evolvable_structure"))
+        if evolvable:
+            payload["evolvable_structure"] = evolvable
     return payload
+
+
+def clean_evolvable(raw: Any) -> Dict[str, str]:
+    """Keep the non-empty ``evolvable_structure`` sentences, each capped. Never raises."""
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, str] = {}
+    for key in EVOLVABLE_KEYS:
+        text = str(raw.get(key) or "").strip()
+        if text:
+            out[key] = text[:400]
+    return out
 
 
 def has_renderable_content(payload: Dict[str, Any]) -> bool:
     """True when the payload holds enough for a panel to be worth a toggle at all."""
     if not isinstance(payload, dict):
         return False
-    if any(payload.get(k) for k in ("understood", "approach", "confidence",
-                                    "assumptions", "limitations", "what_would_change")):
+    if any(payload.get(k) for k in ("understood", "approach", "confidence", "assumptions",
+                                    "limitations", "what_would_change", "evolvable_structure")):
         return True
     used = payload.get("used") or {}
     return bool(used.get("cards") or used.get("sources") or used.get("reads")
