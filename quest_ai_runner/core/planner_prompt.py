@@ -62,6 +62,10 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      work, hand it off (answer + deferred_deep). If NOTHING there covers it, say so plainly and
      hand nothing off. A read that already came back empty for such a request is this same
      signal, not a reason to read again.
+     EXCEPTION, FILES YOU CAN READ: a file source the CONTEXT lists by an alias (paths written
+     `<alias>:<path>`) puts that machine's FILES in reach. Read and grep them with that alias, as
+     the CONTEXT says; only running, changing or watching things there is a hand-off. Never say
+     you cannot access files the CONTEXT lists as a readable source.
   3. ALREADY RUNNING. Is this asking about work already in flight? Answer with that work's real
      status from the records in CONTEXT. Never open a second run of the same thing.
   4. QUESTION OR STATEMENT. Is this a question, or someone describing a plan, a preference or a
@@ -254,7 +258,8 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   links: a link the user pasted follows LINKS IN THIS MESSAGE (read it first; if the read comes
   back LINK NOT READ, tell the user why). This hand-off rule never overrides it.
   An environment named in the CONTEXT is somewhere you hand work OFF TO, never a place you can
-  read, grep, or query FROM: never pass its name, or any other machine/server/repo name, as a
+  read, grep, or query FROM (unless the CONTEXT lists its files as a readable source with an
+  alias: then use that alias, see rule 2): never pass its name, or any other machine/server/repo name, as a
   `scope` or `rel_path` -- that is not a real source and will not work. The same reach applies to
   DISCOVERY: `list_sources` / `list_operations` / `describe_*` enumerate this SAME limited set, so
   they will not reveal a source for machine work either. Do not call them "just to check" when the
@@ -727,6 +732,7 @@ THE ACTIONS:
     Read again whenever you cannot yet NAME the file or trace the path you would rely on. Stop when
     a pass adds no new load-bearing fact, and answer or escalate the model tier instead of looping.
     Never pass a machine, server or repository NAME as a `scope` or `rel_path`: it is not a source.
+    Only a file source's alias (`<alias>:<path>`) is, when the CONTEXT lists one (rule 2).
   - "answer": you have enough real content, or it is chit-chat. A capability or discovery LISTING
     is not content: it says only what you could call. Use "answer" to INFORM. Describing a change
     the user asked you to MAKE, or printing a patch instead of applying it, is a failure.

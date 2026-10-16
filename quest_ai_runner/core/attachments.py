@@ -204,6 +204,36 @@ def _extract_docx(data: bytes) -> Optional[str]:
         return None
 
 
+def _extract_xlsx(data: bytes) -> Optional[str]:
+    """Extract cell text from a .xlsx IF openpyxl is installed; else None.
+
+    One block per sheet, one tab-separated line per non-empty row, cached cell VALUES (not
+    formulas). Bounded: at most 20 sheets and 5000 rows per sheet, so a huge workbook cannot stall
+    a turn."""
+    try:
+        import openpyxl
+    except ImportError:
+        return None
+    try:
+        import io
+        workbook = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        blocks: List[str] = []
+        for sheet in list(workbook.worksheets)[:20]:
+            rows: List[str] = []
+            for index, row in enumerate(sheet.iter_rows(values_only=True)):
+                if index >= 5000:
+                    rows.append("... (more rows not shown)")
+                    break
+                cells = ["" if value is None else str(value) for value in row]
+                if any(cells):
+                    rows.append("\t".join(cells).rstrip())
+            blocks.append(f"## Sheet: {sheet.title}\n" + "\n".join(rows))
+        workbook.close()
+        return "\n\n".join(blocks).strip() or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _binary_note(filename: str, mime: str, size: int) -> str:
     """The clear, honest note for a file whose content we can't extract here."""
     return f"binary file {filename} ({mime}, {_human_size(size)}); content not extractable"
@@ -226,6 +256,10 @@ def _extract_file_text(item: Dict[str, Any]) -> str:
         if (mime in ("application/vnd.openxmlformats-officedocument.wordprocessingml.document",)
                 or filename.lower().endswith(".docx")):
             text = _extract_docx(data)
+            return f"{label}\n{_truncate(text)}" if text else _binary_note(filename, mime, len(data))
+        if (mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                or filename.lower().endswith(".xlsx")):
+            text = _extract_xlsx(data)
             return f"{label}\n{_truncate(text)}" if text else _binary_note(filename, mime, len(data))
         # Unknown type: try a tolerant UTF-8 decode; if it yields little printable content treat
         # it as binary. This catches stray text files with odd MIME types without spewing garbage

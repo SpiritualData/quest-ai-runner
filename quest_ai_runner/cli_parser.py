@@ -219,6 +219,16 @@ def _build_parser() -> argparse.ArgumentParser:
                                 "QAR_CONFIG_FILE also works. Environment variables always win over "
                                 "a value the file also sets.")
 
+    # --- serve-files: a read-only file server so a remote brain can read this machine's files ---
+    files_p = sub.add_parser(
+        "serve-files", help="serve one directory tree read-only over HTTP (needs QAR_FILES_TOKEN)")
+    files_p.add_argument("--root", default=None, metavar="DIR",
+                         help="the directory tree to serve (QAR_FILES_ROOT also works)")
+    files_p.add_argument("--host", default=None, metavar="ADDR",
+                         help="address to bind (default 127.0.0.1; QAR_FILES_HOST also works)")
+    files_p.add_argument("--port", default=None, type=int, metavar="PORT",
+                         help="port to listen on (default 8765; QAR_FILES_PORT also works)")
+
     # Legacy: flags directly on the root command (no subcommand given) stay working; also
     # documented on `poll` above. Kept visible (not argparse.SUPPRESS) so `-h` shows them.
     parser.add_argument("--once", action="store_true",

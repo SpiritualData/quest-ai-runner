@@ -66,6 +66,13 @@ Env it reads:
                                                    requests route to by default (RunnerConfig.
                                                    default_assignee_user_id / QuestDecisionSink's
                                                    fallback assignee)
+  QAR_FILES_TOKEN                                - `serve-files` only: the bearer token every request
+                                                   must carry (>= 16 characters; the server refuses to
+                                                   start without it). Never passed on the command line.
+  QAR_FILES_ROOT / QAR_FILES_HOST / QAR_FILES_PORT (optional)
+                                                 - `serve-files` only: the directory tree to serve
+                                                   (also --root), the bind address (default 127.0.0.1)
+                                                   and the port (default 8765). See docs/file-server.md
   QAR_DEEP_MAX_TURNS (optional)                  — hard per-attempt turn cap for the deep goal loop
                                                    (OrchestratorConfig.deep_max_turns; library
                                                    default 30 — raise it for a lane whose tasks
@@ -435,6 +442,9 @@ from .cli_poll import (  # noqa: F401
     _cmd_channel,
     _cmd_poll,
 )
+from .cli_serve_files import (  # noqa: F401
+    _cmd_serve_files,
+)
 from .cli_parser import (  # noqa: F401
     _build_parser,
 )
@@ -474,6 +484,7 @@ def main(argv=None) -> int:
         "paste-context": _cmd_paste_context,
         "search-context": _cmd_search_context,
         "channel": _cmd_channel,
+        "serve-files": _cmd_serve_files,
     }
     # No subcommand (the legacy flat flags) and `poll` both run the poller.
     return handlers.get(args.command, _cmd_poll)(args, log)

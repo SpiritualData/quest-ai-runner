@@ -41,6 +41,11 @@ dependencies = [
     # Reads PDF links a user pastes (adapters/web_link_access.extract_pdf_text). Core, not an extra:
     # a deployed image installs only the core list, and without it every PDF link fails.
     "pypdf>=4.0",
+    # Word and Excel text for attachments and for `serve-files` reads (core/attachments.py loads
+    # each lazily and falls back to a binary note when absent). Core, like pypdf: a deployed
+    # image installs only this list.
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]

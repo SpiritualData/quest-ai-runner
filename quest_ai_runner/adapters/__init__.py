@@ -2,6 +2,8 @@
 
 These satisfy the core interfaces; a consumer wires the ones it needs into a RunnerConfig:
   * FilesAdapter              — RetrievalAdapter over a configured file root (quest-docs + corpus).
+  * RemoteFilesAdapter        — the same read vocabulary over a `quest-ai-runner serve-files` server on
+                                another machine, namespaced by an alias (docs/file-server.md).
   * FilesWriter               — FileWriter: the OPT-IN write side of that same root. Confines every
                                 path with the SAME resolver FilesAdapter reads through, refuses
                                 credential-ish files, and backs up what it replaces. Constructing
@@ -185,6 +187,7 @@ from .card_repository import (
 from .file_context_store import FileContextStore
 from .fast_edit_runner import FastEditConfig, FastEditRunner
 from .files_adapter import FilesAdapter
+from .remote_files_adapter import RemoteFilesAdapter
 from .files_writer import FilesWriter
 from .guidance_card_manager import GuidanceCard, GuidanceCardManager
 from .hybrid_context_assembler import HybridContextAssembler
@@ -277,6 +280,7 @@ __all__ = [
     "MCPOperationRunner",
     "MCPOperationConfig",
     "FilesAdapter",
+    "RemoteFilesAdapter",
     "FilesWriter",
     "FastEditRunner",
     "FastEditConfig",

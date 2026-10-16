@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-192 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+196 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -93,6 +93,10 @@ the docs and `.env.example` that describe what it does.
 | `QAR_EXPLAIN_TIER` |  | `cli_config.py` | `docs/answer-explanation.md` |
 | `QAR_FEEDBACK_LEDGER` |  | `cli_config.py` | `docs/feedback-ledger.md` |
 | `QAR_FEEDBACK_LEDGER_PATH` |  | `cli_config.py` | `docs/feedback-ledger.md` |
+| `QAR_FILES_HOST` |  | `cli_serve_files.py` | `docs/file-server.md` |
+| `QAR_FILES_PORT` |  | `cli_serve_files.py` | `docs/file-server.md` |
+| `QAR_FILES_ROOT` |  | `cli_serve_files.py` | `docs/file-server.md` |
+| `QAR_FILES_TOKEN` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILE_BACKUP_DIR` |  | `adapters/files_writer.py` | `docs/fast-edit-runner.md` |
 | `QAR_FOLDER_REVIEW` | 0 turns off the LLM folder-relevance review during bootstrap. | `adapters/context_folder_review.py` | - |
 | `QAR_GOAL_MAX_ATTEMPTS` | Max attempts of the goal loop (OrchestratorConfig.goal_max_attempts). | `cli_config.py` | - |
