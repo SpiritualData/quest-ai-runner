@@ -207,11 +207,17 @@ class TasksMixin:
         return body
 
     def report_done(self, task_id: str, result: str,
-                    session_id: Optional[str] = None) -> Dict[str, Any]:
+                    session_id: Optional[str] = None,
+                    result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """PATCH done. ``result_data`` carries ``{"outcome": "done" | "nothing_done"}``: whether the
+        run made at least one successful mutating call ("done") or only talked ("nothing_done"), so
+        a consumer that needs the work done (a workflow step) can tell the two apart."""
+        body: Dict[str, Any] = {"status": "done", "result": result}
+        if result_data:
+            body["result_data"] = result_data
         try:
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body=self._with_session(
-                                     {"status": "done", "result": result}, session_id))
+                                 body=self._with_session(body, session_id))
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("report_done failed for task %s: %s", task_id, e)
             return {}

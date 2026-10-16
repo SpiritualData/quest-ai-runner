@@ -12,6 +12,7 @@ from .context_updates import parse_manifest, parse_usage_notes, render_receipt, 
 from .executor_support import (
     ExecutionOutcome,
     _model_used_note,
+    client_accepts_named_param,
     client_accepts_session_id,
     terminal_session_id,
 )
@@ -163,7 +164,9 @@ class ReportingMixin:
             self._report_progress(task_id, "done", text="Done.", output=done_text)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
-            self.dispatch_report("report_done", task_id, done_text, session_id=session_id)
+            record = getattr(result, "execution_record", None)
+            worked = bool(record is not None and record.any_success)
+            self.dispatch_done(task_id, done_text, "done" if worked else "nothing_done", session_id=session_id)
             return ExecutionOutcome(task_id, "done", done_text)
 
         if result.kind == "confirm":
@@ -203,7 +206,7 @@ class ReportingMixin:
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_report, kind="done", task_id=task_id,
                             card_id=card_id)
-            self.dispatch_report("report_done", task_id, done_report, session_id=session_id)
+            self.dispatch_done(task_id, done_report, "done", session_id=session_id)
             return ExecutionOutcome(task_id, "done", done_report)
         # A deep run that raised a human decision instead of finishing.
         decision_id = next((d.decision_id for d in deep if d.decision_id), None)
@@ -451,6 +454,20 @@ class ReportingMixin:
         if session_id and client_accepts_session_id(fn):
             kwargs["session_id"] = session_id
         self._safe(lambda: fn(task_id, *args, **kwargs))
+
+    def dispatch_done(self, task_id: str, text: str, outcome: str, *,
+                      session_id: Optional[str] = None) -> None:
+        """Report done, stamping ``result_data.outcome`` (``done`` or ``nothing_done``) when the
+        client's ``report_done`` declares a ``result_data`` parameter; otherwise the plain call."""
+        fn = getattr(self._client, "report_done", None)
+        if not callable(fn):
+            return
+        kwargs: Dict[str, Any] = {}
+        if session_id and client_accepts_session_id(fn):
+            kwargs["session_id"] = session_id
+        if client_accepts_named_param(fn, "result_data"):
+            kwargs["result_data"] = {"outcome": outcome}
+        self._safe(lambda: fn(task_id, text, **kwargs))
 
     def dispatch_incomplete(self, task_id: str, result: str, *,
                             session_id: Optional[str] = None) -> None:

@@ -144,6 +144,16 @@ def utc_stamp(moment) -> str:
     return moment.astimezone(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def client_accepts_named_param(fn: Any, name: str) -> bool:
+    """Whether a client method declares a parameter called ``name`` EXPLICITLY. Stricter than
+    ``client_accepts_session_id``: a ``**kwargs`` catch-all (a test double, a mock) does not count,
+    so an older client keeps being called with exactly the arguments it always was."""
+    try:
+        return name in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+
+
 def client_accepts_session_id(fn: Any) -> bool:
     """Whether a client's report method takes a ``session_id`` keyword (or ``**kwargs``).
 
