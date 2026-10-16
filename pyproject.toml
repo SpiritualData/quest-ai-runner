@@ -67,7 +67,7 @@ acp = ["agent-client-protocol>=0.12"]
 mcp = ["mcp==2.0.0"]
 # GoogleChatAdapter's service_account_token_provider (domain-wide delegation for a Google
 # Workspace). The adapter itself is stdlib-only; only this token provider needs google-auth.
-google = ["google-auth>=2.0"]
+google = ["google-auth>=2.0", "requests>=2.28"]
 # GoogleDriveAdapter's PDF text extraction (files.get(alt="media") -> pypdf). The adapter itself
 # is stdlib-only except for this lazy import, used only when a PDF is actually read; Docs/Sheets/
 # plain-text reads need no extra dependency. Pair with [google] for the service-account token

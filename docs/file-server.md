@@ -83,6 +83,47 @@ There is no write, delete, rename or execute operation, and no way to add one by
 * **Untrusted content.** `RemoteFilesAdapter` wraps what it returns in an explicit
   `UNTRUSTED FILE CONTENT` frame: file text is data for the brain to use, never instructions.
 
+## Private Google links (optional)
+
+A hosted brain cannot open a Google Doc, Sheet, Slides file or Drive file that is not shared with
+"anyone with the link": Google answers with a sign-in page. The file server can hold the Google
+access instead. It is off unless `QAR_FILES_GOOGLE_CREDENTIALS` points at a service account key
+(install the `[google]` extra: `pip install 'quest-ai-runner[google]'`).
+
+| Variable | Meaning |
+|---|---|
+| `QAR_FILES_GOOGLE_CREDENTIALS` | path to the service account JSON key; turns the feature on |
+| `QAR_FILES_GOOGLE_IMPERSONATE_DOMAINS` | comma separated email domains whose people may be impersonated (needs domain-wide delegation granted to the key) |
+| `QAR_FILES_GOOGLE_IMPERSONATE_SCOPE` | scope for impersonation; default is the full Drive scope, the only one delegation usually grants |
+| `QAR_FILES_GOOGLE_SA_SCOPE` | scope for direct service account reads; default `drive.readonly` |
+| `QAR_FILES_GOOGLE_SA_FALLBACK` | `1` lets the service account read for people who cannot be impersonated or have no access; off by default |
+
+Operations: `POST /v1/link` with `{url, as_user?, full?, part?, focus?}` and `POST /v1/capabilities`
+(`{"links": {"google": true, ...}}`). The link may be a Doc, Sheet (with `#gid=` for one tab,
+otherwise every tab), Slides, a Drive file (PDF, Word, Excel, text) or a folder (its entries are
+listed). Long documents page like `web_page`: `full` reads in order, `part` picks the part, `focus`
+selects passages.
+
+Rules, enforced in code and tested:
+
+* **Read-only.** Every request is a GET to a short allowlist of Drive read paths (`files.get`,
+  `files.list`, `files.export`) and the Docs-family export URLs. There is no create, update,
+  permissions or delete path, whatever scope the credential carries.
+* **People see what they can see.** With `as_user` in an allowed domain the file is read as that
+  person. If Drive answers 403 or 404 the reply is "not shared with your account", and the service
+  account is **not** tried (it would show a person everything the account can see) unless the
+  operator set `QAR_FILES_GOOGLE_SA_FALLBACK=1`.
+* **No identity, no read.** A request without a usable `as_user` (absent, malformed or outside the
+  allowed domains) is refused unless the fallback is on.
+* Output is size capped, redacted for secret shapes like every other file, and framed by the client
+  as untrusted data. The consumer must send `as_user` from its own verified account record, never
+  from text a person typed in a chat.
+
+On the brain side, `RemoteFilesAdapter.link_reader(as_user)` returns a reader, and
+`PrivateLinkWebResearch(web, [reader])` wraps the web adapter for one turn so a Google link that
+fails publicly is retried privately. The model sees one ordinary `web_page` read; a private result
+is never put in the shared web cache.
+
 ## Using it from a brain
 
 ```python

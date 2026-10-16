@@ -21,6 +21,10 @@ answers without one and reveals nothing):
   * ``map``     ``{}``                                a compact map of the top of the tree
   * ``read``    ``{path, start_line?, end_line?, heading?, max_bytes?}``  text, or text extracted
                 from pdf/docx/xlsx; any other binary file is answered with an honest note
+  * ``link``    ``{url, as_user?, full?, part?, focus?}``  OPTIONAL: one pasted Google Drive / Docs /
+                Sheets / Slides link, read-only, as the person ``as_user`` (see
+                ``google_link_reader``); answers ``reason: "unavailable"`` when not configured
+  * ``capabilities`` ``{}``                           what this server can do beyond files
 
 Every answer is ``{"ok": true, ...}`` or ``{"ok": false, "error": "..."}``.
 
@@ -122,6 +126,7 @@ DATA_SUFFIXES = frozenset({"", ".json", ".txt", ".yaml", ".yml", ".toml", ".ini"
                            ".dat", ".pickle", ".pkl", ".csv", ".log"})
 
 EXTRACTABLE_SUFFIXES = (".pdf", ".docx", ".xlsx")
+ALL_OPERATIONS = ("search", "find", "list", "read", "map", "link", "capabilities")
 
 CREDENTIAL_SNIFF = re.compile(
     r'-----BEGIN [A-Z ]*PRIVATE KEY-----|"private_key"\s*:|"client_secret"\s*:')
@@ -249,7 +254,7 @@ class FileOperations:
     and the tests drive this directly."""
 
     def __init__(self, root: str, *, deny: Sequence[str] = (), allow_dot: Sequence[str] = (),
-                 clock: Callable[[], float] = time.monotonic):
+                 clock: Callable[[], float] = time.monotonic, links: Optional[Any] = None):
         resolved = Path(root).resolve()
         if not resolved.is_dir():
             raise ValueError("the served root is not a directory")
@@ -260,6 +265,7 @@ class FileOperations:
                                         default_grep_max_hits=DEFAULT_MAX_HITS)
         self.clock = clock
         self.index = VisibleIndex(self)
+        self.links = links      # optional GoogleLinkReader; None = link reading is off
 
     # --- helpers -------------------------------------------------------------
 
@@ -315,6 +321,25 @@ class FileOperations:
     def tree_map(self) -> Dict[str, Any]:
         """A compact map of the top of the tree (visible entries only)."""
         return {"ok": True, "map": self.index.tree_map()}
+
+    def capabilities(self) -> Dict[str, Any]:
+        """What this server offers beyond file reads, so a client knows before it asks."""
+        return {"ok": True, "files": True,
+                "links": self.links.capabilities() if self.links else {"google": False}}
+
+    def read_link(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Read one pasted Google link as the person named by ``as_user`` (see ``google_link_reader``)."""
+        if self.links is None:
+            return {"ok": False, "reason": "unavailable",
+                    "error": "this server is not set up to open private Google links"}
+        as_user = body.get("as_user")
+        part = body.get("part")
+        return self.links.read(
+            str(body.get("url") or "")[:2000],
+            as_user=as_user if isinstance(as_user, str) else None,
+            full=bool(body.get("full")),
+            part=part if isinstance(part, int) and not isinstance(part, bool) else None,
+            focus=str(body.get("focus") or "")[:500] or None)
 
     @staticmethod
     def clamp(value: Any, default: int, upper: int) -> int:
@@ -661,7 +686,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_json(404, {"ok": False, "error": "not found"})
             return
         op = route[len(API_PREFIX) + 1:]
-        if op not in ("search", "find", "list", "read", "map"):
+        if op not in ALL_OPERATIONS:
             self.send_json(404, {"ok": False, "error": "not found"})
             return
         try:
@@ -700,6 +725,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             return ops.list_dir(body.get("path"))
         if op == "map":
             return ops.tree_map()
+        if op == "capabilities":
+            return ops.capabilities()
+        if op == "link":
+            return ops.read_link(body)
         return ops.read(str(body.get("path") or ""), body.get("start_line"), body.get("end_line"),
                         body.get("heading"), body.get("max_bytes"))
 
@@ -734,13 +763,16 @@ class FilesHTTPServer(ThreadingHTTPServer):
 
 
 def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 0,
-                 deny: Sequence[str] = (), allow_dot: Sequence[str] = ()) -> ThreadingHTTPServer:
+                 deny: Sequence[str] = (), allow_dot: Sequence[str] = (),
+                 links: Optional[Any] = None) -> ThreadingHTTPServer:
     """Build (not start) the server. Raises ``ValueError`` without a usable token or a real root.
 
     ``deny``: root-relative paths that are invisible to every operation (``QAR_FILES_DENY``).
 
     ``allow_dot``: root-relative dot paths that stay readable (``QAR_FILES_ALLOW_DOT``); every other
     path with a dot-named component is refused.
+
+    ``links``: an optional ``GoogleLinkReader`` that turns on the ``link`` operation.
 
     ``port=0`` picks a free port (tests); read it back from ``server.server_address``."""
     secret = (token or "").strip()
@@ -749,7 +781,7 @@ def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 
             f"a bearer token of at least {MIN_TOKEN_LENGTH} characters is required; "
             "refusing to start an open file server")
     handler = type("BoundRequestHandler", (RequestHandler,), {
-        "operations": FileOperations(root, deny=deny, allow_dot=allow_dot),
+        "operations": FileOperations(root, deny=deny, allow_dot=allow_dot, links=links),
         "token": secret.encode("utf-8"),
         "gate": threading.BoundedSemaphore(MAX_CONCURRENT_OPERATIONS),
     })
@@ -759,9 +791,9 @@ def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 
 
 
 def serve(root: str, token: str, *, host: str = "127.0.0.1", port: int = 8765,
-          deny: Sequence[str] = (), allow_dot: Sequence[str] = ()) -> None:
+          deny: Sequence[str] = (), allow_dot: Sequence[str] = (), links: Optional[Any] = None) -> None:
     """Run the server until interrupted."""
-    server = build_server(root, token, host=host, port=port, deny=deny, allow_dot=allow_dot)
+    server = build_server(root, token, host=host, port=port, deny=deny, allow_dot=allow_dot, links=links)
     log.info("serving read-only files on %s:%s", *server.server_address[:2])
     try:
         server.serve_forever()

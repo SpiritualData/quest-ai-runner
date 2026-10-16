@@ -188,6 +188,7 @@ from .file_context_store import FileContextStore
 from .fast_edit_runner import FastEditConfig, FastEditRunner
 from .files_adapter import FilesAdapter
 from .remote_files_adapter import RemoteFilesAdapter
+from .private_link_web import PrivateLinkWebResearch
 from .files_writer import FilesWriter
 from .guidance_card_manager import GuidanceCard, GuidanceCardManager
 from .hybrid_context_assembler import HybridContextAssembler
@@ -281,6 +282,7 @@ __all__ = [
     "MCPOperationConfig",
     "FilesAdapter",
     "RemoteFilesAdapter",
+    "PrivateLinkWebResearch",
     "FilesWriter",
     "FastEditRunner",
     "FastEditConfig",

@@ -119,9 +119,12 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
             return text[len(prefix):].strip()
         return None
 
-    def call(self, op: str, payload: Dict[str, Any],
-             timeout_s: Optional[float] = None) -> Tuple[Optional[Dict[str, Any]], str]:
-        """POST one operation. Returns ``(answer, "")`` or ``(None, error text)``. Never raises."""
+    def call(self, op: str, payload: Dict[str, Any], timeout_s: Optional[float] = None,
+             keep_refusal: bool = False) -> Tuple[Optional[Dict[str, Any]], str]:
+        """POST one operation. Returns ``(answer, "")`` or ``(None, error text)``. Never raises.
+
+        ``keep_refusal``: hand back a server answer of ``ok: false`` as the answer itself (its
+        ``reason`` and ``error`` intact) instead of folding it into an error string."""
         token = None
         try:
             token = self.token_provider()
@@ -156,6 +159,8 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
             return None, f"{self.alias}: the file server's answer was not understood"
         if not isinstance(answer, dict):
             return None, f"{self.alias}: the file server's answer was not understood"
+        if not answer.get("ok") and keep_refusal:
+            return answer, ""
         if not answer.get("ok"):
             text = f"{self.alias}: {answer.get('error') or 'the file server refused the request'}"
             near = [str(p) for p in (answer.get("suggestions") or []) if isinstance(p, str)][:5]
@@ -206,6 +211,92 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
 
     def tag(self, path: str) -> str:
         return f"{self.alias}:{path}"
+
+    # --- private links -------------------------------------------------------------
+
+    CAPABILITY_CACHE: Dict[Tuple[str, str], Tuple[float, bool]] = {}
+
+    def reads_links(self) -> bool:
+        """Whether the server can open private Google links (``capabilities``), asked once per
+        ten minutes per server and token. A server that does not answer (or an older one without
+        the operation) is treated as not reading links; a failure is remembered for a minute."""
+        try:
+            token = self.token_provider() or ""
+        except Exception:  # noqa: BLE001
+            token = ""
+        key = (self.base_url, hashlib.sha256(token.encode("utf-8")).hexdigest()[:12])
+        now = time.monotonic()
+        with self.MAP_LOCK:
+            hit = self.CAPABILITY_CACHE.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
+        answer, _error = self.call("capabilities", {}, timeout_s=min(self.timeout_s, MAP_TIMEOUT_SECONDS),
+                                   keep_refusal=True)
+        links = (answer or {}).get("links") if isinstance(answer, dict) else None
+        supported = bool(isinstance(links, dict) and links.get("google"))
+        with self.MAP_LOCK:
+            self.CAPABILITY_CACHE[key] = (now + (MAP_TTL_SECONDS if answer is not None else MAP_FAILURE_TTL_SECONDS),
+                                          supported)
+        return supported
+
+    def read_link(self, url: str, *, as_user: Optional[str] = None, full: bool = False,
+                  part: Optional[int] = None, focus: Optional[str] = None) -> Optional[Observation]:
+        """Open a private Google link through the server, as ``as_user``.
+
+        Returns an ``Observation`` (a read, or an error carrying the typed ``LINK NOT READ [reason]``
+        sentence for the person), or ``None`` when this server cannot read links at all or could
+        not be reached, so the caller keeps the error it already has. Never raises."""
+        from .web_link_access import link_not_read_error
+        answer, _error = self.call(
+            "link", {"url": url, "as_user": as_user, "full": bool(full) or None, "part": part,
+                     "focus": focus}, keep_refusal=True)
+        if answer is None:
+            return None
+        if not answer.get("ok"):
+            reason = str(answer.get("reason") or "")
+            if reason == "unavailable":
+                return None
+            return Observation(kind="error", rel_path=url, error=link_not_read_error(
+                url, reason or "unreachable", str(answer.get("error") or "")))
+        title = str(answer.get("title") or "") or url
+        header = [f"PAGE: {title} | {url}"]
+        text = str(answer.get("text") or "")
+        if answer.get("mode") == "full":
+            number, count = int(answer.get("part") or 1), int(answer.get("parts") or 1)
+            if number > count:
+                header.append(f"(this document has {count} part(s); part {number} does not exist.)")
+            else:
+                header.append(f"(full text, part {number} of {count}, in document order)")
+                if number < count:
+                    header.append(
+                        f"(the document continues: read the next part with "
+                        f"{{\"web_page\": \"{url}\", \"full\": true, \"part\": {number + 1}}}. "
+                        "Answer from what you have if it already covers the question.)")
+                else:
+                    header.append("(end of the document)")
+        else:
+            if focus:
+                header.append(f"(relevant passages for: {focus})")
+            if answer.get("excerpt_only"):
+                header.append(
+                    f"(excerpts only: this document is about {answer.get('total_tokens')} tokens. If these "
+                    f"excerpts do not answer the question, do not re-read with another focus: read all of "
+                    f"it in order with {{\"web_page\": \"{url}\", \"full\": true}})")
+        if answer.get("truncated"):
+            header.append("(this file is very large; only its start was read)")
+        body = frame_untrusted(f"{self.alias} link", text)
+        return Observation(kind="read", rel_path=url, locator=f"private link: {url}",
+                           text="\n".join(header) + "\n\n" + body)
+
+    def link_reader(self, as_user: Optional[str]):
+        """A ``private_link_reader`` for ``PrivateLinkWebResearch``: opens links as ``as_user``
+        (the requesting person's verified address, supplied by the consumer, never by the chat)."""
+        def reader(url: str, *, full: bool = False, part: Optional[int] = None,
+                   focus: Optional[str] = None) -> Optional[Observation]:
+            if not self.reads_links():
+                return None
+            return self.read_link(url, as_user=as_user, full=full, part=part, focus=focus)
+        return reader
 
     def not_ours(self, name: Any, what: str) -> Observation:
         return Observation(kind="error", rel_path=str(name or ""),
