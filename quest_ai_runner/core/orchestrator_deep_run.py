@@ -575,6 +575,8 @@ class DeepRunMixin:
             # falling through to the next rung, or a continuation each announce themselves, and
             # none of them is a goal that was checked and fell short.
             verified_not_met = False
+            # Verdicts so far that named a tool failure no retry can fix (``tool_failure`` blocker).
+            tool_failure_verdicts = 0
             for attempt in range(1, max_iters + 1):
                 # Cooperative cancellation, checked before starting each new attempt (a retry can be
                 # a full agentic subprocess run, so this is the natural point to stop rather than
@@ -635,6 +637,9 @@ class DeepRunMixin:
                         res.decision_id = recovered
                         res.met = False
                 tokens_used += max(0, getattr(res, "tokens", 0) or 0)
+                # A task cancelled while this attempt ran stops now: no verifier call, no next attempt.
+                if cancel_check is not None and cancel_check():
+                    break
                 # ASYNC HAND-OFF: the runner queued the real run to finish out-of-band (its
                 # ``output`` is a "task #N launched"-style sentinel, not work product). Re-verifying
                 # that sentinel against the goal would ALWAYS fail and relaunch a fresh task every
@@ -778,6 +783,18 @@ class DeepRunMixin:
                     if emit is not None:
                         emit.status("Stopping here: this needs a person. " + _q)
                     break
+                # A tool or service the work needs is failing in a way running the worker again
+                # cannot change (2026-10-16: a goals read answering 500 sent a task through five
+                # fresh sessions, each judged "not met", each on a stronger model). One retry
+                # covers a transient blip; the next verdict of the same kind ends the loop with the
+                # failure named, so a person is told instead of the account being billed.
+                if _blocker == "tool_failure":
+                    tool_failure_verdicts += 1
+                    res.tool_failure = _q or reason
+                    if tool_failure_verdicts >= max(1, self.cfg.deep_tool_failure_attempts):
+                        if emit is not None:
+                            emit.status("Stopping here: " + res.tool_failure)
+                        break
                 # Reads as a sentence, because a person reads it: this lands in the activity feed
                 # and can reach a human. A lowercase "goal not yet met:" followed by a verifier's
                 # raw clause looked like debug output leaking into a report.
@@ -823,7 +840,7 @@ class DeepRunMixin:
                 # retrieval, and a targeted retrieval grep). The widening grows with each round so a
                 # retry always sees more than the last, never the same context again. Added to
                 # ``extra_context`` so it rides the next ``_do_run`` preamble for THIS goal.
-                if verdict.get("need_more_context"):
+                if verdict.get("need_more_context") and _blocker != "tool_failure":
                     widened = self._widen_for_goal(
                         goal, verdict.get("context_query") or reason, attempt,
                         ctx_meta=ctx_meta)
@@ -837,14 +854,15 @@ class DeepRunMixin:
                 # at the chosen tier.
                 # A rung that does not run the ladder's model has no tier to switch: the next
                 # attempt is the same runner with the verifier's feedback, and is described as such.
-                _vt = verdict.get("next_tier") if model_applies else None
+                # A tool failure is not a capability gap: the retry keeps the same model.
+                _vt = verdict.get("next_tier") if model_applies and _blocker != "tool_failure" else None
                 _resolved_tier = self._resolved_deep_tier(_vt, deep_models) if _vt else None
                 if _resolved_tier is not None:
                     run_model = _resolved_tier
                     deep_models[min(tier_idx, len(deep_models) - 1)] = _resolved_tier
                     if emit is not None:
                         emit.status(f"Switching model tier to {_vt} for the next attempt…")
-                elif model_applies and tier_idx < len(deep_models) - 1:
+                elif model_applies and tier_idx < len(deep_models) - 1 and _blocker != "tool_failure":
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
                     if emit is not None:

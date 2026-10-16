@@ -36,10 +36,10 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
             "next_tier": {"type": "string",
                           "description": "Optional stronger tier (fast/balanced/quality/best) for a "
                                          "capability gap. Omit to keep the current tier."},
-            "blocker": {"type": "string", "enum": ["more_work", "evidence_only", "needs_person"],
+            "blocker": {"type": "string", "enum": ["more_work", "evidence_only", "needs_person", "tool_failure"],
                         "description": "Only when met=false; see the rules above."},
             "question": {"type": "string",
-                         "description": "If blocker is needs_person or evidence_only: the one gap, per "
+                         "description": "If blocker is needs_person, evidence_only or tool_failure: the one gap, per "
                                         "the rules above."},
             "claims_unexecuted": {"type": "boolean",
                                   "description": "True if the output claims a completed change the "
@@ -115,6 +115,11 @@ entirely (not shown at all) and the answer could not have known whether history 
         identity, an access grant, a real-world act, a taste or direction call, or sign-off on
         something irreversible. Put the ONE specific question in question. Never use it for work the
         worker could do itself, and never to hand the worker's own job to a person.
+      tool_failure: the output shows a tool, API or service the work needs failed with an error that
+        running the worker again cannot change (a server error, an outage, a missing capability or
+        permission), and the worker said so plainly. Put ONE plain sentence in question naming the
+        tool and the error. Never use it for a failure that was the worker's own mistake (a wrong
+        argument, a typo, a wrong file), which another attempt can fix: that is more_work.
 Do NOT use em dashes.
 
 {persona}{standards}--- GOAL (done-standard) ---

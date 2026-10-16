@@ -24,7 +24,7 @@ def run_with_verdicts(verdicts, runner=None):
 
 def test_schema_and_prompt_carry_the_blocker():
     props = o.VERIFY_GOAL_TOOL["input_schema"]["properties"]
-    assert props["blocker"]["enum"] == ["more_work", "evidence_only", "needs_person"]
+    assert props["blocker"]["enum"] == ["more_work", "evidence_only", "needs_person", "tool_failure"]
     assert "question" in props
     t = " ".join(o.VERIFY_GOAL_PROMPT.split())
     assert "needs_person" in t and "never to hand the worker's own job to a person" in t

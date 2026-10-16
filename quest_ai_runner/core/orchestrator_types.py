@@ -51,6 +51,10 @@ class OrchestratorConfig:
     # and lets the brain steer the next attempt. NOTE: now a HARD SAFETY CAP on attempts; the PRIMARY
     # stop is the token budget below.
     deep_goal_max_iterations: int = 8
+    # Attempts a deep goal gets once the verifier reports ``tool_failure`` (a tool or service the
+    # work needs is failing in a way a retry cannot fix). One retry covers a transient blip; more
+    # only re-run a model, a stronger one each time, against the same broken tool.
+    deep_tool_failure_attempts: int = 2
     # Overall TOKEN BUDGET for one turn's deep goal loop (sum of the worker's reported tokens across
     # attempts). The loop keeps iterating + escalating the model WHILE under budget; None disables it
     # (then only the attempt cap applies). The consumer sets this from an env var so it is operator-

@@ -228,6 +228,10 @@ class DeepResult:
     verdict_next_action: str = ""
     needs_person: str = ""
     unconfirmed_note: str = ""
+    # A tool, API or service the work needs failed in a way another attempt cannot change (the
+    # verifier's ``tool_failure`` blocker), named in one plain sentence. The goal loop stops after
+    # ``deep_tool_failure_attempts`` such verdicts instead of retrying and escalating the model.
+    tool_failure: str = ""
     # NOTHING CHANGED: the runner's own receipts of what it wrote show that this attempt changed
     # nothing in the system it acts on (no write completed, or every write matched nothing). It is
     # a structural fact the runner reports from its own bookkeeping, never inferred from the wording

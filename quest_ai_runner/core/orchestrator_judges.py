@@ -309,7 +309,7 @@ class JudgesMixin:
                             "next_tier": (str(_tier).strip() or None) if _tier else None,
                             "blocker": (str(raw.get("blocker") or "").strip().lower()
                                         if str(raw.get("blocker") or "").strip().lower()
-                                        in ("more_work", "evidence_only", "needs_person")
+                                        in ("more_work", "evidence_only", "needs_person", "tool_failure")
                                         else "more_work"),
                             "question": str(raw.get("question") or "").strip(),
                             "claims_unexecuted": bool(raw.get("claims_unexecuted"))}, None

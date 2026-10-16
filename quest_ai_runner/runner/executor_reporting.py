@@ -235,6 +235,23 @@ class ReportingMixin:
             self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id, card_id=card_id)
             self.dispatch_report("report_needs_you", task_id, summary, "", session_id=session_id)
             return ExecutionOutcome(task_id, "needs_you", summary)
+        # A tool or service the work needs kept failing and the goal loop stopped retrying it (see
+        # ``deep_tool_failure_attempts``). Say which one and what it answered, plainly, so a person
+        # fixes the cause; the task stays non-done ("incomplete") and is not billed further.
+        broken = [d.tool_failure for d in deep if getattr(d, "tool_failure", "") and not d.met]
+        if broken:
+            work = "\n\n".join(_strip_future_context(d.output).strip()
+                                for d in deep if (d.output or "").strip()).strip()
+            msg = ("I stopped because something this task needs is failing, and trying again would "
+                   "not change that: " + " ".join(broken) + " Nothing further was run. Once that is "
+                   "fixed, ask me to run this again.")
+            if work:
+                msg = work + "\n\n" + msg
+            self._report_progress(task_id, "done", text="Stopped: a tool this task needs is failing.",
+                                  output=msg)
+            self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
+            self.dispatch_incomplete(task_id, msg, session_id=session_id)
+            return ExecutionOutcome(task_id, "incomplete", msg)
         # UNVERIFIED is never reported as done, and never as a bare failure either: the work RAN
         # but its verification could not (LLM outage, no verify tier, parse failure), so the
         # outcome is genuinely unknown. The chat message must say that plainly, presenting any
