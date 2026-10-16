@@ -163,3 +163,10 @@ def test_a_server_without_a_map_falls_back_to_the_top_listing_and_is_not_asked_a
     assert adapter.map_text() == "a/, b.md"
     adapter.map_text()
     assert calls == ["map", "list"]
+
+
+def test_reading_a_folder_lists_its_visible_entries(ops):
+    answer = ops.read("product/setup/unit-files")
+    assert answer["ok"] and answer["kind"] == "directory"
+    assert "README.md" in answer["text"] and "unit.service" in answer["text"]
+    assert ops.read("private_area")["ok"] is False

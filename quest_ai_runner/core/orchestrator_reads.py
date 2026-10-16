@@ -149,9 +149,18 @@ class ReadsMixin:
                     kind="query", locator=f"describe_operation({name})",
                     text="discovery not supported by this adapter")
             if spec.get("grep"):
-                return self.retrieval.grep(
+                found = self.retrieval.grep(
                     str(spec["grep"]), scope=spec.get("scope") or None
                 )
+                # A spec that names a file AND a search (the planner contract allows "and/or") is
+                # about that file: when the search half fails (a guessed scope that does not exist),
+                # the file half still answers instead of the whole step coming back empty.
+                if found is not None and found.kind == "error" and spec.get("rel_path"):
+                    return self.retrieval.read_section(
+                        str(spec["rel_path"]), start_line=spec.get("start_line"),
+                        end_line=spec.get("end_line"), heading=spec.get("heading"),
+                        max_bytes=self.cfg.max_gather_chars)
+                return found
             if spec.get("query") is not None:
                 # Planner specs nest the query params under "query" ({"query": {"text": ...},
                 # "time_range": ...}), but adapters read params at the TOP level of the dict

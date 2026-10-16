@@ -512,6 +512,17 @@ class FileOperations:
     def read(self, path: str, start_line: Optional[int] = None, end_line: Optional[int] = None,
              heading: Optional[str] = None, max_bytes: Optional[int] = None) -> Dict[str, Any]:
         target, error = self.locate(path)
+        if target is not None and target.is_dir():
+            # Reading a folder lists it (the same visible entries `list` shows), so a guess that
+            # names a folder still lands somewhere useful.
+            listing = self.list_dir(path)
+            if not listing.get("ok"):
+                return listing
+            rows = [f"{e['name']}/" if e["type"] == "dir" else f"{e['name']}  ({e['size']} bytes)"
+                    for e in listing["entries"]]
+            return {"ok": True, "path": listing["path"], "kind": "directory", "locator": "list",
+                    "truncated": False,
+                    "text": f"{listing['path']} is a folder; its entries:\n" + "\n".join(rows)}
         if target is None or not target.is_file():
             return self.miss(path)
         rel = self.relative(target)
