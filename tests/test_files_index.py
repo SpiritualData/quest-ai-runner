@@ -170,3 +170,22 @@ def test_reading_a_folder_lists_its_visible_entries(ops):
     assert answer["ok"] and answer["kind"] == "directory"
     assert "README.md" in answer["text"] and "unit.service" in answer["text"]
     assert ops.read("private_area")["ok"] is False
+
+
+def test_an_absolute_path_inside_the_root_resolves_and_the_rest_is_refused(root, ops):
+    inside = str(root / "product" / "setup" / "unit-files" / "README.md")
+    answer = ops.read(inside)
+    assert answer["ok"] and answer["path"] == "product/setup/unit-files/README.md"
+    assert str(root) not in json.dumps(answer)
+    assert ops.list_dir(str(root / "product"))["path"] == "product"
+    # outside the root, and denied inside it: the same refusal as a missing path, no root revealed
+    outside = ops.read(str(root.parent / "elsewhere" / "x.md"))
+    denied = ops.read(str(root / "private_area" / "plan.md"))
+    assert outside["error"] == denied["error"] == NOT_ALLOWED
+    assert "private_area" not in json.dumps(denied) and str(root) not in json.dumps(denied)
+
+
+def test_a_wrong_absolute_path_still_gets_closest_paths(root, ops):
+    answer = ops.read(str(root / "setup" / "unit-files" / "README.md"))
+    assert answer["suggestions"][0] == "product/setup/unit-files/README.md"
+    assert str(root) not in json.dumps(answer)
