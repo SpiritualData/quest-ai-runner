@@ -510,3 +510,15 @@ def test_wrapper_prefers_the_readers_specific_error():
     specific = Observation(kind="error", error="LINK NOT READ [not_shared] u : not shared with your account")
     wrapped = PrivateLinkWebResearch(FakeWeb(PUBLIC_FAIL), [lambda url, **k: specific])
     assert wrapped.fetch(f"https://docs.google.com/document/d/{DOC}/edit") is specific
+
+
+def test_a_sheet_excerpt_keeps_the_tab_names_and_header_row():
+    from quest_ai_runner.adapters.google_link_reader import sheet_orientation
+    drive = FakeDrive()
+    rows = "\n".join(f"row{i}\t" + "cell " * 40 for i in range(900))
+    drive.sheet_csv = "colA,colB\n" + rows
+    answer = make_reader(drive).read(
+        f"https://docs.google.com/spreadsheets/d/{SHEET}/edit#gid=3", as_user=ALICE, focus="row500")
+    assert answer["ok"] and answer["text"].startswith("[Header row of this tab: colA,colB]")
+    book = "## Sheet: One\nh1\tx\nr\n\n## Sheet: Two\nh2\ty\nr"
+    assert sheet_orientation(book) == "[This spreadsheet has 2 tab(s): One (header row: h1\tx); Two (header row: h2\ty)]\n"

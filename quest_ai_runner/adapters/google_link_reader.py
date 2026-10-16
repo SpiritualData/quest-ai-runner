@@ -626,9 +626,29 @@ class GoogleLinkReader:
         passages = split_passages(text)
         chosen = select_passages(passages, (focus or "").strip(), DEFAULT_FOCUS_TOKENS)
         body = "\n...\n".join(chosen) if chosen else text[: DEFAULT_FOCUS_TOKENS * CHARS_PER_TOKEN]
+        if doc.kind == KIND_SHEET:
+            body = sheet_orientation(text) + body
         answer.update(mode="focus", text=body, total_tokens=total_tokens,
                       excerpt_only=total_tokens > DEFAULT_FOCUS_TOKENS * 1.25)
         return answer
+
+
+def sheet_orientation(text: str) -> str:
+    """What a table excerpt would otherwise lose: the tab names and each tab's header row. Selected
+    passages of a sheet start mid-row, so without this a question about columns or tabs cannot be
+    answered from them."""
+    lines = text.splitlines()
+    tabs: List[str] = []
+    headers: List[str] = []
+    for index, line in enumerate(lines):
+        if line.startswith("## Sheet:"):
+            tabs.append(line[len("## Sheet:"):].strip())
+            if index + 1 < len(lines):
+                headers.append(lines[index + 1][:400])
+    if not tabs:
+        return f"[Header row of this tab: {lines[0][:400]}]\n" if lines else ""
+    shown = "; ".join(f"{t} (header row: {h})" for t, h in zip(tabs[:20], headers[:20]))
+    return f"[This spreadsheet has {len(tabs)} tab(s): {shown}]\n"
 
 
 def refusal(reason: str, message: str) -> Dict[str, Any]:
