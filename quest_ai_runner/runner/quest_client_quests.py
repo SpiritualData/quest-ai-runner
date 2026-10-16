@@ -218,6 +218,22 @@ class QuestsMixin:
             log.warning("write_quest_fields failed for quest %s: %s", quest_id, e)
             return {}
 
+    def list_quest_workflows(self, quest_id: str) -> Optional[List[Dict[str, Any]]]:
+        """GET /api/quests/{quest_id}/workflows: every workflow touching this quest the caller may
+        view, each with its steps (actor, window, derived status) and edges.
+
+        ``[]`` when the read worked and the quest has none; ``None`` when the read FAILED, so a
+        caller never reports "no workflows" for an outage.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", f"/api/quests/{quest_id}/workflows") or {}
+            items = resp.get("items") if isinstance(resp, dict) else None
+            return [w for w in items if isinstance(w, dict)] if isinstance(items, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_quest_workflows failed for quest %s: %s", quest_id, e)
+            return None
+
     def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
         """GET /api/teams/{team_id}/quests/{quest_id} — fetch a single quest by ID.
 

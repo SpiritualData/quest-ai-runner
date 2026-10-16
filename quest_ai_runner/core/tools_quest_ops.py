@@ -624,6 +624,123 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         context_args={"quest_id": "quest_id"})
 
 
+#: ``list_quest_workflows`` output cap: a workflow can hold dozens of steps, so a call shows one page.
+WORKFLOW_STEPS_DEFAULT_LIMIT = 30
+WORKFLOW_STEPS_MAX_LIMIT = 100
+
+
+def step_actor_name(actor: Mapping[str, Any], names: Mapping[str, str]) -> str:
+    """Who a workflow step belongs to, in words: a person's name, an AI rep, or a seat."""
+    user = str(actor.get("userId") or "")
+    if user:
+        return names.get(user) or actor.get("label") or user
+    if actor.get("repId"):
+        return actor.get("label") or "an AI rep"
+    return actor.get("label") or actor.get("seat") or "nobody named"
+
+
+def step_rows(workflow: Mapping[str, Any], names: Mapping[str, str]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for step in workflow.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        actor = step.get("actor") or {}
+        window = step.get("window") or {}
+        rows.append({
+            "workflow_id": workflow.get("workflowId"), "workflow_title": workflow.get("title") or "",
+            "step_id": step.get("stepId"), "title": step.get("title") or "",
+            "instructions": step.get("instructions") or "",
+            "actor_kind": actor.get("kind"), "assignee_user_id": actor.get("userId"),
+            "assignee_name": step_actor_name(actor, names),
+            "status": str(step.get("status") or ""), "window_starts": window.get("startsAt"),
+            "due": window.get("endsAt") or window.get("startsAt"),
+            "completed_at": step.get("completedAt")})
+    return rows
+
+
+def step_line(row: Mapping[str, Any]) -> str:
+    window = f"{row.get('window_starts') or '?'} to {row.get('due') or '?'}"
+    return (f"- {row['step_id']} [{row['status'] or 'unknown'}] for {row['assignee_name']}, window {window}: "
+            f"{trim(row['title'], 120)}")
+
+
+def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = quest_id_of(args, ctx)
+        if not quest_id:
+            return NO_QUEST
+        client = factory()
+        workflows = client.list_quest_workflows(quest_id)
+        if workflows is None:
+            return ToolResult(ok=False, text=(
+                f"The workflows of quest {quest_id} could not be read just now (the runner log has the "
+                f"reason). Do not assume it has none, and do not state any step as fact: say they could "
+                f"not be read."))
+        if not workflows:
+            return ToolResult(ok=True, data=[], text=f"Quest {quest_id} has no workflows.")
+        names = {str(m.get("user_id")): str(m.get("name") or "")
+                 for m in (client.list_assignable_members(quest_id) or []) if m.get("user_id")}
+        rows = [r for wf in workflows for r in step_rows(wf, names)]
+        total = len(rows)
+        if args.get("open_only", True):
+            rows = [r for r in rows if r["status"] != "done"]
+        if args.get("status"):
+            wanted = {w.strip().lower() for w in str(args["status"]).split(",") if w.strip()}
+            rows = [r for r in rows if r["status"].lower() in wanted]
+        who = str(args.get("assignee") or "").strip().lower()
+        if who:
+            rows = [r for r in rows if who == str(r["assignee_user_id"] or "").lower()
+                    or who in r["assignee_name"].lower()]
+        needle = str(args.get("text_contains") or "").strip().lower()
+        if needle:
+            rows = [r for r in rows if needle in f"{r['step_id']}\n{r['title']}\n{r['instructions']}".lower()]
+        rows.sort(key=lambda r: (r["due"] is None, r["due"] or "", str(r["step_id"])))
+        limit = max(1, min(int(args.get("limit") or WORKFLOW_STEPS_DEFAULT_LIMIT), WORKFLOW_STEPS_MAX_LIMIT))
+        offset = max(0, int(args.get("offset") or 0))
+        page = rows[offset:offset + limit]
+        if not rows:
+            return ToolResult(ok=True, data=[], text=(
+                f"No workflow steps on quest {quest_id} match ({total} steps in all, before filters)."))
+        more = len(rows) - offset - len(page)
+        head = (f"{len(rows)} matching workflow steps on quest {quest_id} ({total} in all); showing "
+                f"{offset + 1}-{offset + len(page)}, soonest due first"
+                + (f". {more} more: call again with offset={offset + len(page)}." if more > 0 else "."))
+        return ToolResult(ok=True, data=page, text=head + "\n" + "\n".join(step_line(r) for r in page))
+
+    return ToolSpec(
+        name="list_quest_workflows",
+        handler=handler,
+        description=("List the steps of the workflows on a quest: step id, title, who it belongs to "
+                     "(a name), its window, its status (pending, open, done, late or missed) and "
+                     "when it is due. Filter by person, status or words; one page at a time."),
+        when_to_use=("You need what a workflow still asks of someone: the approvals or steps waiting "
+                     "on a person, what is late or due soon, or a step found by its words. Read it "
+                     "BEFORE writing any message that says what is waiting."),
+        when_not_to_use=("Asks raised for people (list_open_decisions_for_quest), goals "
+                         "(list_quest_goals), or changing a workflow."),
+        parameters={"type": "object", "properties": {
+            "quest_id": QUEST_ID_PARAM,
+            "assignee": {"type": "string",
+                         "description": "Only steps for this person: part of their name, or their user id."},
+            "open_only": {"type": "boolean",
+                          "description": "Hide done steps (default true). Pending and not-yet-started steps stay."},
+            "status": {"type": "string",
+                       "description": "Only these statuses, comma separated (pending, open, late, missed, done)."},
+            "text_contains": {"type": "string",
+                              "description": "Only steps whose id, title or instructions contain this "
+                                             "(case-insensitive), for example approve_."},
+            "limit": {"type": "integer",
+                      "description": f"Page size (default {WORKFLOW_STEPS_DEFAULT_LIMIT}, at most "
+                                     f"{WORKFLOW_STEPS_MAX_LIMIT})."},
+            "offset": {"type": "integer", "description": "Skip this many matches (next page)."}}},
+        mutates=False, workflow_step=False, origin="standard",
+        keywords=("workflow", "workflows", "steps", "step", "approval", "approvals", "waiting", "late",
+                  "missed", "pending", "due", "assigned", "window", "schedule", "cadence"),
+        context_args={"quest_id": "quest_id"})
+
+
 def create_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -744,6 +861,7 @@ QUEST_OPERATION_BUILDERS = {
     "add_quest_note": with_credentials(add_quest_note_spec),
     "list_quest_notes": with_credentials(list_quest_notes_spec),
     "list_quest_goals": with_credentials(list_quest_goals_spec),
+    "list_quest_workflows": with_credentials(list_quest_workflows_spec),
     "create_goal": with_credentials(create_goal_spec),
     "update_goal": with_credentials(update_goal_spec),
 }
