@@ -42,3 +42,23 @@ def test_a_failed_mutating_call_is_not_work_done():
     record = ExecutionRecord(facts=[ExecutionFact(goal="tool send_message", failed=True)])
     _, data = run(OrchestratorResult(kind="answer", text="It failed.", execution_record=record))
     assert data == {"outcome": "nothing_done"}
+
+
+def test_a_backend_that_refuses_result_data_still_gets_the_task_reported_done(monkeypatch):
+    """A backend older than ``result_data`` answers 422 to the whole PATCH; the report is retried
+    without the stamp instead of leaving the finished task in progress."""
+    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.runner.quest_client_support import QuestApiError
+
+    bodies = []
+
+    def fake_request(self, method, path, body=None, **kw):
+        bodies.append(dict(body))
+        if "result_data" in body:
+            raise QuestApiError("PATCH -> 422: result_data: Extra inputs are not permitted", status=422)
+        return {"status": "done"}
+
+    monkeypatch.setattr(QuestClient, "_request", fake_request)
+    client = QuestClient(base_url="http://x", api_key="k")
+    out = client.report_done("t1", "ok", result_data={"outcome": "done"})
+    assert out == {"status": "done"} and "result_data" in bodies[0] and "result_data" not in bodies[1]

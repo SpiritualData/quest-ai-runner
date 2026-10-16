@@ -218,7 +218,23 @@ class TasksMixin:
         try:
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
                                  body=self._with_session(body, session_id))
-        except (QuestApiError, QuestNotConfigured) as e:
+        except QuestApiError as e:
+            # A backend that predates ``result_data`` refuses the whole PATCH (422, extra field),
+            # which left a finished task "in progress" forever. The outcome stamp is an extra: report
+            # the task done without it rather than not at all.
+            if getattr(e, "status", None) == 422 and "result_data" in body and "result_data" in str(e):
+                log.warning("backend does not accept result_data on a task report; reporting task "
+                            "%s done without it", task_id)
+                body.pop("result_data", None)
+                try:
+                    return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
+                                         body=self._with_session(body, session_id))
+                except (QuestApiError, QuestNotConfigured) as e2:
+                    log.warning("report_done failed for task %s: %s", task_id, e2)
+                    return {}
+            log.warning("report_done failed for task %s: %s", task_id, e)
+            return {}
+        except QuestNotConfigured as e:
             log.warning("report_done failed for task %s: %s", task_id, e)
             return {}
 
