@@ -53,6 +53,7 @@ class VisibleIndex:
         self.dirs: List[str] = []
         self.files_by_name: Dict[str, List[str]] = {}
         self.dirs_by_name: Dict[str, List[str]] = {}
+        self.files_by_dir: Dict[str, List[str]] = {}
 
     # --- build ---------------------------------------------------------------------
 
@@ -126,6 +127,10 @@ class VisibleIndex:
         self.files, self.dirs = files, dirs
         self.files_by_name = self.group(files)
         self.dirs_by_name = self.group(dirs)
+        by_dir: Dict[str, List[str]] = {}
+        for path in files:
+            by_dir.setdefault(path.rpartition("/")[0], []).append(path)
+        self.files_by_dir = by_dir
         self.built_at = self.clock()
 
     @staticmethod
@@ -151,7 +156,11 @@ class VisibleIndex:
     def suggest(self, typed: Optional[str], limit: int = MAX_SUGGESTIONS) -> List[str]:
         """Up to ``limit`` visible paths closest to ``typed``: the same file or folder under another
         top folder first, then the same name, then a near spelling. Folders end with ``/``."""
-        parts = clean_parts(typed)
+        text = (typed or "").replace("\\", "/")
+        root = str(self.operations.root).rstrip("/") + "/"
+        if text.startswith(root):
+            text = text[len(root):]          # a pasted absolute path inside the root
+        parts = clean_parts(text)
         if not parts:
             return []
         try:
@@ -182,6 +191,12 @@ class VisibleIndex:
             for path in self.dirs_by_name.get(prefix[-1], ()):
                 if self.trailing_match(path, prefix) == k:
                     add(path, 500 + 100 * k, True)
+        # The files beside the missing one: when its folder is real and visible, the answer a person
+        # wants is usually a sibling (a README next to a refused env file). Whether the typed file is
+        # denied or absent changes nothing here: only the visible folder is consulted.
+        parent = "/".join(parts[:-1])
+        for path in sorted(self.files_by_dir.get(parent, ()))[:4]:
+            add(path, 400, False)
         if not any(not key.endswith("/") for key in scored):
             near = [n for n in self.files_by_name if abs(len(n) - len(last)) <= 3]
             near += [n for n in self.dirs_by_name if abs(len(n) - len(last)) <= 3]

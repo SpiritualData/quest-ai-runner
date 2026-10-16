@@ -189,3 +189,12 @@ def test_a_wrong_absolute_path_still_gets_closest_paths(root, ops):
     answer = ops.read(str(root / "setup" / "unit-files" / "README.md"))
     assert answer["suggestions"][0] == "product/setup/unit-files/README.md"
     assert str(root) not in json.dumps(answer)
+
+
+def test_a_missing_file_in_a_real_folder_also_suggests_its_siblings(root, ops):
+    for typed in ("product/setup/unit-files/.env", str(root / "product" / "setup" / "unit-files" / "gone.cfg")):
+        near = ops.read(typed)["suggestions"]
+        assert "product/setup/unit-files/README.md" in near
+        assert "product/setup/unit-files/unit.service" in near
+    # a denied folder offers nothing, exactly like a folder that does not exist
+    assert ops.read("private_area/gone.md") == ops.read("nowhere/gone.md")
