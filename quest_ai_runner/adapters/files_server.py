@@ -324,18 +324,19 @@ class FileOperations:
             prune_dirnames(dirnames, current=Path(dirpath), base_skip=self.files.skip_dirs)
             dirnames[:] = [d for d in dirnames if not name_is_secret(d)
                            and not is_denied(self.relative(Path(dirpath) / d), self.files.deny)]
+            rel_dir = self.relative(Path(dirpath))
             for fn in filenames:
                 if fn.startswith(".") and not start.is_file():
                     continue
-                path = Path(dirpath) / fn
                 if self.clock() > deadline:
                     stopped = "time budget"
                     break
                 seen_files += 1
-                if not self.files.visible(path):
+                rel = fn if rel_dir == "." else f"{rel_dir}/{fn}"
+                if not accepts(rel, fn):      # the cheap name test first; the filesystem checks only for matches
                     continue
-                rel = self.relative(path)
-                if not accepts(rel, fn):
+                path = Path(dirpath) / fn
+                if not self.files.visible(path):
                     continue
                 try:
                     info = path.stat()
@@ -564,6 +565,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                         body.get("heading"), body.get("max_bytes"))
 
 
+class FilesHTTPServer(ThreadingHTTPServer):
+    """A threaded HTTP server with a deeper accept queue than the stdlib default of 5."""
+    request_queue_size = 32
+    daemon_threads = True
+
+
 def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 0,
                  deny: Sequence[str] = ()) -> ThreadingHTTPServer:
     """Build (not start) the server. Raises ``ValueError`` without a usable token or a real root.
@@ -581,8 +588,7 @@ def build_server(root: str, token: str, *, host: str = "127.0.0.1", port: int = 
         "token": secret.encode("utf-8"),
         "gate": threading.BoundedSemaphore(MAX_CONCURRENT_OPERATIONS),
     })
-    server = ThreadingHTTPServer((host, port), handler)
-    server.daemon_threads = True
+    server = FilesHTTPServer((host, port), handler)
     return server
 
 
