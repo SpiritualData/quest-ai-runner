@@ -358,6 +358,9 @@ The four actions:
     For a substantive request you MUST first read/grep the actual sources (or run a real query) to
     gather facts before you "answer"; answering from just the capability menu, or replying with
     which discovery operations you would run, is a FAILURE -- gather first, then answer.
+    A folder listing, a find result or a list of search hits that only NAMES files is not content
+    either: read the file that holds the fact, then answer. An answer that says you will open or
+    check something is a failure; the read is the action.
     Use "answer" ONLY to INFORM (explain, summarize, advise). If the user asked you to CHANGE
     something (create/add/update/edit/delete/mark/set/rename their data or artifacts, OR fix/
     implement/build/refactor CODE OR FILES), that is an ACTION -- do NOT just describe the change in
@@ -743,7 +746,8 @@ THE ACTIONS:
     Never pass a machine, server or repository NAME as a `scope` or `rel_path`: it is not a source.
     Only a file source's alias (`<alias>:<path>`) is, when the CONTEXT lists one (rule 2).
   - "answer": you have enough real content, or it is chit-chat. A capability or discovery LISTING
-    is not content: it says only what you could call. Use "answer" to INFORM. Describing a change
+    is not content: it says only what you could call, and neither is a list of file names:
+    read the file. Never answer that you will open something; open it. Use "answer" to INFORM. Describing a change
     the user asked you to MAKE, or printing a patch instead of applying it, is a failure.
     When you have gathered enough and now see that work is needed, use "answer" WITH
     deferred_deep. {deferred_deep_semantics}
