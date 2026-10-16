@@ -116,6 +116,18 @@ def test_nothing_attached_means_say_so_rather_than_hand_off():
     assert "hand nothing off" in rule
 
 
+def test_files_of_a_listed_file_source_stay_in_reach():
+    """A machine's FILES are readable when the CONTEXT lists a file source by alias (see
+    docs/file-server.md); only running or changing things there is a hand-off. The exception sits
+    inside rule 2 and rides both profiles through the shared rubric."""
+    rule = PLANNER_DECISION_RUBRIC[PLANNER_DECISION_RUBRIC.index("2. OUT OF REACH"):
+                                   PLANNER_DECISION_RUBRIC.index("3. ALREADY RUNNING")]
+    assert "EXCEPTION" in rule and "`<alias>:<path>`" in rule
+    assert "never say you cannot" in rule and "Only running or changing" in rule
+    for name, template in PLANNER_PROFILES.items():
+        assert "alias" in template, name
+
+
 # ---------------------------------------------------------------------------
 # Profile selection
 # ---------------------------------------------------------------------------
