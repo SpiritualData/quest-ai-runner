@@ -22,8 +22,11 @@ no write operation and this client has no method that would call one.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import threading
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -33,6 +36,9 @@ from ..core.adapters import Observation, RetrievalAdapterBase
 log = logging.getLogger("quest-ai-runner.remote_files_adapter")
 
 DEFAULT_TIMEOUT_SECONDS = 25.0
+MAP_TTL_SECONDS = 600.0           # the top-level map of a source changes rarely
+MAP_FAILURE_TTL_SECONDS = 60.0    # a source that did not answer is not asked again for a minute
+MAP_TIMEOUT_SECONDS = 8.0         # grounding must not wait long for an optional map
 MAX_RESPONSE_BYTES = 3 * 1024 * 1024
 TokenProvider = Callable[[], Optional[str]]
 # (url, headers, body, timeout) -> (http status, response bytes). Injectable for tests.
@@ -113,7 +119,8 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
             return text[len(prefix):].strip()
         return None
 
-    def call(self, op: str, payload: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+    def call(self, op: str, payload: Dict[str, Any],
+             timeout_s: Optional[float] = None) -> Tuple[Optional[Dict[str, Any]], str]:
         """POST one operation. Returns ``(answer, "")`` or ``(None, error text)``. Never raises."""
         token = None
         try:
@@ -126,7 +133,7 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
                    "Accept": "application/json"}
         body = json.dumps({k: v for k, v in payload.items() if v is not None}).encode("utf-8")
         try:
-            status, raw = self.transport(f"{self.base_url}/v1/{op}", headers, body, self.timeout_s)
+            status, raw = self.transport(f"{self.base_url}/v1/{op}", headers, body, timeout_s or self.timeout_s)
         except TimeoutError:
             return None, f"{self.alias}: the file server did not answer in time"
         except (urllib.error.URLError, OSError) as exc:
@@ -151,14 +158,51 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
             return None, f"{self.alias}: the file server's answer was not understood"
         if not answer.get("ok"):
             text = f"{self.alias}: {answer.get('error') or 'the file server refused the request'}"
-            if op in ("read", "search"):
+            near = [str(p) for p in (answer.get("suggestions") or []) if isinstance(p, str)][:5]
+            if near:
+                # Only paths the server shows anyone: a folder ends with "/" and is listed, not read.
+                text += (" Closest paths that exist: " + "; ".join(self.tag(p) for p in near)
+                         + ". Use one of them (a folder is listed, a file is read).")
+            elif op in ("read", "search", "list", "find"):
                 # A missing path and a fenced one answer alike, and a path guessed from the user's
                 # words is often just one folder off: point at the way to find the real one.
                 text += (" Next step: paths start at the source's top folder (its own name is not "
-                         "part of a path), so list the folder above this path, or the top folder with "
-                         "an empty path, or find the name, then retry with a path you saw.")
+                         "part of a path), so find the file or folder by its name, or list the "
+                         "folder above this path (an empty path lists the top folder), then retry "
+                         "with a path you saw.")
             return None, text
         return answer, ""
+
+    MAP_CACHE: Dict[Tuple[str, str], Tuple[float, str]] = {}
+    MAP_LOCK = threading.Lock()
+
+    def map_text(self) -> str:
+        """A compact map of the source's top level (visible entries only), fetched once and kept
+        for ``MAP_TTL_SECONDS`` across adapter instances. "" when the server cannot give one; a
+        failure is remembered briefly so a down server never slows each turn."""
+        try:
+            token = self.token_provider() or ""
+        except Exception:  # noqa: BLE001
+            token = ""
+        key = (self.base_url, hashlib.sha256(token.encode("utf-8")).hexdigest()[:12])
+        now = time.monotonic()
+        with self.MAP_LOCK:
+            hit = self.MAP_CACHE.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
+        wait = min(self.timeout_s, MAP_TIMEOUT_SECONDS)
+        answer, _error = self.call("map", {}, timeout_s=wait)
+        text = str(answer.get("map") or "") if answer else ""
+        if not text and answer is None:
+            # An older server has no map: its plain top-level listing is the next best thing.
+            listing, _error = self.call("list", {"path": None}, timeout_s=wait)
+            names = [f"{e.get('name')}/" if e.get("type") == "dir" else str(e.get("name"))
+                     for e in ((listing or {}).get("entries") or []) if isinstance(e, dict)]
+            text = ", ".join(names[:60])
+        ttl = MAP_TTL_SECONDS if text else MAP_FAILURE_TTL_SECONDS
+        with self.MAP_LOCK:
+            self.MAP_CACHE[key] = (now + ttl, text)
+        return text
 
     def tag(self, path: str) -> str:
         return f"{self.alias}:{path}"
@@ -273,12 +317,8 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
     def describe_source(self, name, *, path=None) -> Observation:
         if self.strip_alias(name) is None:
             return self.not_ours(name, "source")
-        answer, _error = self.call("list", {"path": None})
-        top = ""
-        if answer is not None:
-            names = [f"{e.get('name')}/" if e.get("type") == "dir" else str(e.get("name"))
-                     for e in (answer.get("entries") or []) if isinstance(e, dict)]
-            top = "\nTop level: " + ", ".join(names[:60]) if names else ""
+        top_map = self.map_text()
+        top = f"\nTop of the tree (paths start here):\n{top_map}" if top_map else ""
         what = self.description or "files on a connected server"
         return Observation(kind="query", locator=f"describe_source({name})",
                            text=f"{self.alias}: {what} (read-only). {self.usage()}{top}")

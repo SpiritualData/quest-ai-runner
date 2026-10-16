@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-197 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+198 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -93,6 +93,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_EXPLAIN_TIER` |  | `cli_config.py` | `docs/answer-explanation.md` |
 | `QAR_FEEDBACK_LEDGER` |  | `cli_config.py` | `docs/feedback-ledger.md` |
 | `QAR_FEEDBACK_LEDGER_PATH` |  | `cli_config.py` | `docs/feedback-ledger.md` |
+| `QAR_FILES_ALLOW_DOT` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_DENY` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_HOST` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_PORT` |  | `cli_serve_files.py` | `docs/file-server.md` |
@@ -102,8 +103,8 @@ the docs and `.env.example` that describe what it does.
 | `QAR_FOLDER_REVIEW` | 0 turns off the LLM folder-relevance review during bootstrap. | `adapters/context_folder_review.py` | - |
 | `QAR_GOAL_MAX_ATTEMPTS` | Max attempts of the goal loop (OrchestratorConfig.goal_max_attempts). | `cli_config.py` | - |
 | `QAR_GOAL_TOKEN_BUDGET` | Token budget of the goal loop (OrchestratorConfig.goal_token_budget). | `cli_config.py` | - |
-| `QAR_GREP_BUDGET_SECONDS` | Wall-clock budget for one corpus grep (default 20). | `adapters/files_adapter.py` | - |
-| `QAR_GREP_MAX_FILES` | Most files one grep opens (default 20000). | `adapters/files_adapter.py` | - |
+| `QAR_GREP_BUDGET_SECONDS` | Wall-clock budget for one corpus grep (default 20). | `adapters/files_adapter.py` | `docs/file-server.md` |
+| `QAR_GREP_MAX_FILES` | Most files one grep opens (default 20000). | `adapters/files_adapter.py`, `adapters/files_search_worker.py`, `adapters/files_server.py` | - |
 | `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` |  | `config_core_settings.py` | `.env.example`, `docs/guidance-cards.md` |
 | `QAR_INTENT_JUDGE_TIMEOUT_SECONDS` | Budget for the intent-directive judgment call (default 8). CoreSettings.intent_judge_timeout_seconds. | `config_core_settings.py` | `.env.example` |
 | `QAR_LANE_USER_ID` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
@@ -162,7 +163,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_RUNNER_ENV_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
 | `QAR_RUNNER_LABEL` |  | `cli_config.py` | `.env.example` |
 | `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `interactive_session_commands.py` | - |
-| `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `adapters/_walk.py` | - |
+| `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `adapters/_walk.py`, `adapters/files_search_worker.py`, `adapters/files_server.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `adapters/context_folder_review.py` | - |
 | `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `cli_quest.py` | - |

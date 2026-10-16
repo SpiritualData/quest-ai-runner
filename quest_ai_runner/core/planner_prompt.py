@@ -67,7 +67,10 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      machine's FILES in reach: read and grep them as the CONTEXT says, and never say you cannot
      access them. A request to read, find, list or summarize files on that machine (even worded
      "on the server" or "in that folder") is a READ of the source, never a hand-off, and a path
-     that did not resolve is yours to find by listing, not a reason to hand off.
+     that did not resolve is yours to find by listing, not a reason to hand off. When a read, list
+     or find misses and the answer shows "Closest paths that exist", read or list one of those next.
+     When it shows none, find the file or folder by its name before you decide it is not there;
+     "I could not open it" is an answer only after that find has been tried.
      Only running or changing things there is a hand-off, and a path the source refuses as not
      allowed is a closed door: say so, do not hand it off to get around it.
   3. ALREADY RUNNING. Is this asking about work already in flight? Answer with that work's real

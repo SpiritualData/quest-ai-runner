@@ -18,6 +18,7 @@ answers without one and reveals nothing):
   * ``search``  ``{pattern, scope?, max_hits?}``      regex over file contents
   * ``find``    ``{pattern, scope?, max_results?}``   files by name or glob, newest first
   * ``list``    ``{path?}``                           one directory
+  * ``map``     ``{}``                                a compact map of the top of the tree
   * ``read``    ``{path, start_line?, end_line?, heading?, max_bytes?}``  text, or text extracted
                 from pdf/docx/xlsx; any other binary file is answered with an honest note
 
@@ -65,6 +66,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ..core.adapters import Observation  # noqa: F401  (re-exported type for callers building tests)
 from ._walk import prune_dirnames
+from .files_index import VisibleIndex
 from .files_redaction import REDACTED, redact  # noqa: F401  (redact re-exported for callers and tests)
 from .files_adapter import (
     FilesAdapter,
@@ -257,6 +259,7 @@ class FileOperations:
         self.files = ServedFilesAdapter(str(resolved), deny=deny, allow_dot=allow_dot,
                                         default_grep_max_hits=DEFAULT_MAX_HITS)
         self.clock = clock
+        self.index = VisibleIndex(self)
 
     # --- helpers -------------------------------------------------------------
 
@@ -295,6 +298,24 @@ class FileOperations:
         except ValueError:
             return path.name
 
+    def miss(self, typed: Optional[str]) -> Dict[str, Any]:
+        """The ONE refusal for a denied, secret, hidden or missing path, plus the visible paths
+        closest to what was typed. The suggestions come from the visible index only, so they say
+        nothing about which of the four it was."""
+        answer: Dict[str, Any] = {"ok": False, "error": NOT_ALLOWED}
+        try:
+            near = self.index.suggest(typed)
+        except Exception as exc:  # noqa: BLE001 - a suggestion must never break the refusal
+            log.warning("suggestions failed: %s", type(exc).__name__)
+            near = []
+        if near:
+            answer["suggestions"] = near
+        return answer
+
+    def tree_map(self) -> Dict[str, Any]:
+        """A compact map of the top of the tree (visible entries only)."""
+        return {"ok": True, "map": self.index.tree_map()}
+
     @staticmethod
     def clamp(value: Any, default: int, upper: int) -> int:
         try:
@@ -317,10 +338,8 @@ class FileOperations:
         except re.error as exc:
             return {"ok": False, "error": f"bad regex: {exc}"}
         start, error = self.locate(scope)
-        if start is None:
-            return {"ok": False, "error": error}
-        if not start.exists():
-            return {"ok": False, "error": NOT_ALLOWED}
+        if start is None or not start.exists():
+            return self.miss(scope)
         limit = self.clamp(max_hits, DEFAULT_MAX_HITS, MAX_MAX_HITS)
         raw_hits, stats = self.run_search_child(start, pattern, limit)
         hits: List[Dict[str, Any]] = []
@@ -395,10 +414,8 @@ class FileOperations:
         if not pattern:
             return {"ok": False, "error": "pattern is required"}
         start, error = self.locate(scope)
-        if start is None:
-            return {"ok": False, "error": error}
-        if not start.exists():
-            return {"ok": False, "error": NOT_ALLOWED}
+        if start is None or not start.exists():
+            return self.miss(scope)
         limit = self.clamp(max_results, DEFAULT_MAX_RESULTS, MAX_MAX_RESULTS)
         has_glob = any(ch in pattern for ch in "*?[")
         wants_path = "/" in pattern
@@ -461,10 +478,8 @@ class FileOperations:
 
     def list_dir(self, path: Optional[str] = None) -> Dict[str, Any]:
         target, error = self.locate(path)
-        if target is None:
-            return {"ok": False, "error": error}
-        if not target.is_dir():
-            return {"ok": False, "error": NOT_ALLOWED}
+        if target is None or not target.is_dir():
+            return self.miss(path)
         entries: List[Dict[str, Any]] = []
         try:
             names = sorted(os.listdir(target), key=str.lower)
@@ -497,10 +512,8 @@ class FileOperations:
     def read(self, path: str, start_line: Optional[int] = None, end_line: Optional[int] = None,
              heading: Optional[str] = None, max_bytes: Optional[int] = None) -> Dict[str, Any]:
         target, error = self.locate(path)
-        if target is None:
-            return {"ok": False, "error": error}
-        if not target.is_file():
-            return {"ok": False, "error": NOT_ALLOWED}
+        if target is None or not target.is_file():
+            return self.miss(path)
         rel = self.relative(target)
         budget = self.clamp(max_bytes, DEFAULT_READ_BYTES, MAX_READ_BYTES)
         suffix = target.suffix.lower()
@@ -533,7 +546,7 @@ class FileOperations:
             text = data.decode("utf-8", errors="replace")
             kind = "text"
             if CREDENTIAL_SNIFF.search(text[:200_000]):
-                return {"ok": False, "error": NOT_ALLOWED}
+                return self.miss(path)
 
         lines = text.splitlines()
         if heading:
@@ -637,7 +650,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_json(404, {"ok": False, "error": "not found"})
             return
         op = route[len(API_PREFIX) + 1:]
-        if op not in ("search", "find", "list", "read"):
+        if op not in ("search", "find", "list", "read", "map"):
             self.send_json(404, {"ok": False, "error": "not found"})
             return
         try:
@@ -674,6 +687,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             return ops.find(str(body.get("pattern") or ""), body.get("scope"), body.get("max_results"))
         if op == "list":
             return ops.list_dir(body.get("path"))
+        if op == "map":
+            return ops.tree_map()
         return ops.read(str(body.get("path") or ""), body.get("start_line"), body.get("end_line"),
                         body.get("heading"), body.get("max_bytes"))
 

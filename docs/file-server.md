@@ -38,6 +38,7 @@ All operations are `POST /v1/<op>` with a JSON body and `Authorization: Bearer <
 | `search` | `pattern` (regex), `scope?`, `max_hits?` | matching lines: path, line number, text |
 | `find` | `pattern` (name part or `*.glob`), `scope?`, `max_results?` | files, newest first |
 | `list` | `path?` | the entries of one directory |
+| `map` | none | a compact map of the top of the tree (root files, each top folder with its subfolders; at most 60 lines, visible entries only) |
 | `read` | `path`, `start_line?`, `end_line?`, `heading?`, `max_bytes?` | text; pdf, docx and xlsx are converted to text; other binary files answer with a note |
 
 There is no write, delete, rename or execute operation, and no way to add one by request.
@@ -70,7 +71,11 @@ There is no write, delete, rename or execute operation, and no way to add one by
   Serving a home directory is risky: prefer a root that holds only the files you mean to share.
 * **Symlinks.** Every rule is checked on the link as walked AND on the real file it leads to.
 * **One refusal message.** A denied, secret, hidden or missing path all answer with the same text, so
-  a caller cannot probe which paths exist.
+  a caller cannot probe which paths exist. The refusal may carry `suggestions`: up to five visible
+  paths closest to what was typed (same trailing path under another folder, same name, near
+  spelling; folders end with `/`). They come from an index of VISIBLE paths only (rebuilt every two
+  minutes), are a function of the typed text alone, and never include the typed path itself, so they
+  reveal nothing about denied, secret or hidden paths.
 * **Search is a killable child process.** A search runs in a child that is killed at
   `QAR_GREP_BUDGET_SECONDS` (plus a short grace), so a catastrophic regex cannot freeze the server;
   hits found before the kill are kept and the answer says the search stopped early. A line longer

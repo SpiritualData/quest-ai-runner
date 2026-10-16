@@ -469,7 +469,7 @@ def test_adapter_discovery_lines_follow_the_composite_format(remote):
     assert sources.split(":", 1)[0] == ALIAS
     assert "scope" in remote.list_operations().text
     described = remote.describe_source(ALIAS).text
-    assert "Top level:" in described and "docs/" in described
+    assert "Top of the tree" in described and "docs/" in described
 
 
 def test_adapter_errors_name_the_problem_but_never_the_token_or_url(server):
