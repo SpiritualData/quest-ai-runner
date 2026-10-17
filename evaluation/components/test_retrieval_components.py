@@ -1,4 +1,4 @@
-"""Offline tests for the retrieval and conversation_recall components. No model call, no network.
+"""Offline tests for the retrieval, conversation_recall, recent_context and vector_recall components. No model call, no network.
 Run: .venv/bin/python3 -m pytest evaluation/components/test_retrieval_components.py -q -p no:cacheprovider"""
 import sys
 from pathlib import Path
@@ -53,3 +53,23 @@ def test_changed_fixture_fails_loudly(tmp_path, monkeypatch):
     case = dict(common.load_cases("retrieval")[0], corpus_sha="00000000")
     with pytest.raises(RuntimeError, match="corpus.json changed"):
         score.score_case(lambda q, c: {"ids": []}, case)
+
+
+def test_recent_context_gate_never_leaks_and_beats_the_floor():
+    rows, _ = run("recent_context", "file_store_filter")
+    assert not any(r["leak"] for r in rows.values())
+    assert {i for i, r in rows.items() if not r["ok"]} == {"RCT-010"}
+    floor, _ = run("recent_context", "last_turn")
+    assert sum(r["leak"] for r in floor.values()) == 4
+
+
+def test_vector_recall_qdrant_matches_the_in_memory_baseline():
+    pytest.importorskip("qdrant_client")
+    pytest.importorskip("fastembed")
+    try:
+        qdrant, _ = run("vector_recall", "qdrant_embedded")
+    except RuntimeError as exc:  # the local embedder is not cached on this machine
+        pytest.skip(str(exc))
+    memory, _ = run("vector_recall", "memory_cosine")
+    assert {i: r["ok"] for i, r in qdrant.items()} == {i: r["ok"] for i, r in memory.items()}
+    assert sum(r["ok"] for r in qdrant.values()) >= 14

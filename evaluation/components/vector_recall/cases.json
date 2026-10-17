@@ -1,0 +1,146 @@
+[
+ {
+  "id": "VEC-001",
+  "area": "paraphrase",
+  "query": "Who do I phone when the boat gets stuck at sea?",
+  "relevant": [
+   "ferry-breakdown"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-002",
+  "area": "paraphrase",
+  "query": "What are the opening times for buying petrol?",
+  "relevant": [
+   "fuel-dock"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-003",
+  "area": "paraphrase",
+  "query": "How much does it cost to park a visiting yacht overnight?",
+  "relevant": [
+   "dock-fees"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-004",
+  "area": "paraphrase",
+  "query": "When do the old fishing nets get patched up?",
+  "relevant": [
+   "net-mending"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-005",
+  "area": "paraphrase",
+  "query": "What happens to my vote if I forget to pay my annual fee?",
+  "relevant": [
+   "member-dues"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-006",
+  "area": "paraphrase",
+  "query": "How do I find out when the sea will be high or low?",
+  "relevant": [
+   "tide-tables"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-007",
+  "area": "paraphrase",
+  "query": "Who is allowed to cast a ballot at the yearly meeting?",
+  "relevant": [
+   "spring-assembly"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-008",
+  "area": "paraphrase",
+  "query": "How is the daily cost of cod decided?",
+  "relevant": [
+   "fish-pricing"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-009",
+  "area": "paraphrase",
+  "query": "What should I do if the machine that makes frozen water cuts out?",
+  "relevant": [
+   "ice-plant"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-010",
+  "area": "paraphrase",
+  "query": "How long does a newcomer train before joining fully?",
+  "relevant": [
+   "apprentice-program"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-011",
+  "area": "paraphrase",
+  "query": "Where do I leave a jacket I found on the pier?",
+  "relevant": [
+   "lost-property"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-012",
+  "area": "paraphrase",
+  "query": "Where do we gather if the building is burning?",
+  "relevant": [
+   "pier-inspection-manual"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-013",
+  "area": "exact",
+  "query": "When does the island ferry leave on weekdays?",
+  "relevant": [
+   "ferry-timetable"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-014",
+  "area": "exact",
+  "query": "How many tonnes can the boat lift carry?",
+  "relevant": [
+   "boat-lift"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-015",
+  "area": "exact",
+  "query": "What does the red flag on the signal mast mean?",
+  "relevant": [
+   "storm-warning"
+  ],
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-016",
+  "area": "exact",
+  "query": "Is there a rule about alder chips and the flue?",
+  "relevant": [
+   "smokehouse-safety"
+  ],
+  "corpus_sha": "7b98923f"
+ }
+]

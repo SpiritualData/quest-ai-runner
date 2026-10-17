@@ -1,0 +1,321 @@
+[
+ {
+  "id": "RCT-001",
+  "area": "followup_free_pass",
+  "turns": [
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "What do guests pay at the dock?",
+    "cards": [
+     {
+      "id": "dock-fees",
+      "title": "Dock fees"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c1"
+  ],
+  "query": "and for members?",
+  "followup": true,
+  "relevant": [
+   "dock-fees"
+  ],
+  "forbidden": []
+ },
+ {
+  "id": "RCT-002",
+  "area": "lexical_reuse",
+  "turns": [
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "Show the ferry times",
+    "cards": [
+     {
+      "id": "ferry-timetable",
+      "title": "Ferry timetable"
+     }
+    ]
+   },
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "What are the dues?",
+    "cards": [
+     {
+      "id": "member-dues",
+      "title": "Membership dues"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c1"
+  ],
+  "query": "when is the ferry timetable posted",
+  "followup": false,
+  "relevant": [
+   "ferry-timetable"
+  ],
+  "forbidden": [
+   "member-dues"
+  ]
+ },
+ {
+  "id": "RCT-003",
+  "area": "unrelated_question",
+  "turns": [
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "What do guests pay at the dock?",
+    "cards": [
+     {
+      "id": "dock-fees",
+      "title": "Dock fees"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c1"
+  ],
+  "query": "how do I bake sourdough bread",
+  "followup": false,
+  "relevant": [],
+  "forbidden": [
+   "dock-fees"
+  ]
+ },
+ {
+  "id": "RCT-004",
+  "area": "cross_quest_fence",
+  "turns": [
+   {
+    "scope_keys": [
+     "conv:c1",
+     "quest:q1",
+     "global"
+    ],
+    "user_text": "Storm warning steps",
+    "cards": [
+     {
+      "id": "storm-warning",
+      "title": "Storm warning plan"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c2",
+   "quest:q2",
+   "global"
+  ],
+  "query": "what is the storm warning plan",
+  "followup": false,
+  "relevant": [],
+  "forbidden": [
+   "storm-warning"
+  ]
+ },
+ {
+  "id": "RCT-005",
+  "area": "same_quest_other_conversation",
+  "turns": [
+   {
+    "scope_keys": [
+     "conv:c1",
+     "quest:q1"
+    ],
+    "user_text": "Storm warning steps",
+    "cards": [
+     {
+      "id": "storm-warning",
+      "title": "Storm warning plan"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c2",
+   "quest:q1"
+  ],
+  "query": "what is the storm warning plan",
+  "followup": false,
+  "relevant": [
+   "storm-warning"
+  ],
+  "forbidden": []
+ },
+ {
+  "id": "RCT-006",
+  "area": "outside_conversation_no_free_pass",
+  "turns": [
+   {
+    "scope_keys": [
+     "quest:q1"
+    ],
+    "user_text": "Net mending schedule",
+    "cards": [
+     {
+      "id": "net-mending",
+      "title": "Net mending guide"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c2",
+   "quest:q1"
+  ],
+  "query": "and what about the weather",
+  "followup": true,
+  "relevant": [],
+  "forbidden": [
+   "net-mending"
+  ]
+ },
+ {
+  "id": "RCT-007",
+  "area": "only_previous_turn_is_free",
+  "turns": [
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "Net mending schedule",
+    "cards": [
+     {
+      "id": "net-mending",
+      "title": "Net mending guide"
+     }
+    ]
+   },
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "Fuel dock hours",
+    "cards": [
+     {
+      "id": "fuel-dock",
+      "title": "Fuel dock"
+     }
+    ]
+   },
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "What do guests pay at the dock?",
+    "cards": [
+     {
+      "id": "dock-fees",
+      "title": "Dock fees"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c1"
+  ],
+  "query": "and the cost for members?",
+  "followup": true,
+  "relevant": [
+   "dock-fees"
+  ],
+  "forbidden": [
+   "net-mending",
+   "fuel-dock"
+  ]
+ },
+ {
+  "id": "RCT-008",
+  "area": "title_overlap",
+  "turns": [
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "hello",
+    "cards": [
+     {
+      "id": "storm-warning",
+      "title": "Storm warning plan"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c1"
+  ],
+  "query": "storm warning",
+  "followup": false,
+  "relevant": [
+   "storm-warning"
+  ],
+  "forbidden": []
+ },
+ {
+  "id": "RCT-009",
+  "area": "global_needs_overlap",
+  "turns": [
+   {
+    "scope_keys": [
+     "global"
+    ],
+    "user_text": "Fuel dock hours",
+    "cards": [
+     {
+      "id": "fuel-dock",
+      "title": "Fuel dock"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c9",
+   "global"
+  ],
+  "query": "when can I buy diesel at the fuel dock",
+  "followup": false,
+  "relevant": [
+   "fuel-dock"
+  ],
+  "forbidden": []
+ },
+ {
+  "id": "RCT-010",
+  "area": "paraphrase_gap",
+  "turns": [
+   {
+    "scope_keys": [
+     "conv:c1"
+    ],
+    "user_text": "hello",
+    "cards": [
+     {
+      "id": "fuel-dock",
+      "title": "Fuel dock"
+     }
+    ]
+   }
+  ],
+  "load_keys": [
+   "conv:c1"
+  ],
+  "query": "what are the opening times for buying petrol",
+  "followup": false,
+  "relevant": [
+   "fuel-dock"
+  ],
+  "forbidden": []
+ }
+]
