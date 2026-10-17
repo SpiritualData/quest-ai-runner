@@ -35,6 +35,7 @@ Rules checked:
                  an alternative (module-level ALTERNATIVE = True, or a docstring opening ALTERNATIVE,
                  BASELINE, ABLATION or FLOOR); a solution's selected harness implementation must be
                  a live one, or carry an `S12 <solution_id>:<impl>` waiver
+  S18 ids       solution, component and tracker ids are unique
   S17 tracker    docs/structure/tracker/{problems,solutions,implementations,ideals,metrics}.csv match what
                  solutions.csv, components.csv, principles.csv and results.csv now produce (only the
                  tracking_* columns are hand-edited; scripts/build_tracker.py rewrites the rest)
@@ -500,11 +501,25 @@ def check() -> list[str]:
     if env_vars.without_explained_in(doc_text) != env_vars.without_explained_in(env_vars.render_env_doc(ROOT)):
         bad.append("S15 docs/configuration.md: out of date (run scripts/check_structure.py --write-docs)")
 
+    # S18 ids are unique: a tracker row keyed twice would silently merge two things
+    from collections import Counter
+    for sid, n in Counter(s["solution_id"] for s in read_csv(STRUCT / "solutions.csv")).items():
+        if n > 1:
+            bad.append(f"S18 solutions.csv: solution id {sid} appears {n} times")
+    for cid, n in Counter(c["component_id"] for c in components).items():
+        if n > 1:
+            bad.append(f"S18 components.csv: component id {cid} appears {n} times")
+
     # S17 tracker tabs match the registry (tracking_* columns are free)
     import importlib.util as _ilu
     _spec = _ilu.spec_from_file_location("qar_build_tracker", ROOT / "scripts" / "build_tracker.py")
     _bt = _ilu.module_from_spec(_spec)
     _spec.loader.exec_module(_bt)
+    for tab, rows in _bt.build().items():
+        key = _bt.COLUMNS[tab][0]
+        for ident, n in Counter(r[key] for r in rows).items():
+            if n > 1:
+                bad.append(f"S18 tracker {tab}: id {ident} appears {n} times (two implementations share a file name)")
     for tab in _bt.stale():
         bad.append(f"S17 docs/structure/tracker/{tab}.csv: out of date (run scripts/build_tracker.py)")
 

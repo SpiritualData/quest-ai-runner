@@ -113,6 +113,8 @@ def record_result(summary, date=None, path=RESULTS_CSV):
     import subprocess
     comp = summary.get("component", "")
     cases = HERE / comp / "cases.json"
+    if not cases.exists():  # a component whose dataset is reviewed as a sheet keeps cases.csv
+        cases = HERE / comp / "cases.csv"
     git = lambda *a: subprocess.run(["git", *a], cwd=HERE, capture_output=True, text=True).stdout.strip()
     sha = git("rev-parse", "--short", "HEAD")
     if sha and git("status", "--porcelain", "--untracked-files=no", "--", str(REPO / "quest_ai_runner"), str(HERE),
