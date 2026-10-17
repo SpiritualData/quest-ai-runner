@@ -889,5 +889,81 @@
     "bad_passed": 0
    }
   }
+ },
+ {
+  "id": "MEA-032",
+  "kind": "rank",
+  "area": "winner",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.96,
+     "tokens_in": 0,
+     "tokens_out": 0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 1.0,
+     "tokens_in": 0,
+     "tokens_out": 0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "a"
+    ],
+    "beats": [],
+    "unverified": []
+   }
+  }
+ },
+ {
+  "id": "MEA-033",
+  "kind": "rank",
+  "area": "winner",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.02,
+     "tokens_in": 1000000,
+     "tokens_out": 20000,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.2,
+     "tokens_in": 1040000,
+     "tokens_out": 21000,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "a"
+    ],
+    "beats": [],
+    "unverified": []
+   }
+  }
  }
 ]

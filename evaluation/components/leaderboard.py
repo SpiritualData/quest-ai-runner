@@ -104,8 +104,27 @@ def is_ablation(row):
     return path.read_text().lstrip().startswith('"' * 3 + "ABLATION")
 
 
+COST_TIE_TOLERANCE = 0.10  # costs within 10% are a tie: run-to-run noise must not flip a selection
+
+
+def spend(row):
+    """What a run consumed. Tokens when the run reports them (the CLI-reported dollars swing with prompt
+    caching), else the recorded dollars."""
+    tokens = float(row.get("tokens_in") or 0) + float(row.get("tokens_out") or 0)
+    return ("tokens", tokens) if tokens > 0 else ("usd", float(row.get("cost_usd") or 0))
+
+
+def clearly_cheaper(row, other):
+    """True when ``row`` spent more than COST_TIE_TOLERANCE less than ``other``, in the same unit."""
+    (unit, mine), (other_unit, theirs) = spend(row), spend(other)
+    if unit != other_unit:
+        unit, (mine, theirs) = "usd", (float(row.get("cost_usd") or 0), float(other.get("cost_usd") or 0))
+    return mine < theirs * (1 - COST_TIE_TOLERANCE)
+
+
 def challengers(rows, selected):
-    """Implementations that beat the selected one on pass rate, or tie it at lower cost.
+    """Implementations that beat the selected one on pass rate, or tie it at clearly lower spend (more than
+    COST_TIE_TOLERANCE below it: see ``spend``).
     Rows scored on a different ``cases_sha`` than the selected one are skipped, and so is an unverified
     challenger against a verified selection (and the reverse): provenance-free numbers are not evidence.
     An ABLATION implementation (see ``is_ablation``) is never a challenger."""
@@ -117,7 +136,7 @@ def challengers(rows, selected):
         if r["impl"] == selected or not comparable(r, cur) or is_ablation(r):
             continue
         higher = pass_rate(r) > pass_rate(cur)
-        cheaper_tie = pass_rate(r) == pass_rate(cur) and float(r["cost_usd"] or 0) < float(cur["cost_usd"] or 0)
+        cheaper_tie = pass_rate(r) == pass_rate(cur) and clearly_cheaper(r, cur)
         if higher or cheaper_tie:
             better.append(r)
     return better
