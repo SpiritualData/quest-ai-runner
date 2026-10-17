@@ -4,8 +4,8 @@
 
 Reads results.csv (the latest row per component and implementation, written by ``run.py --record``)
 and docs/structure/solutions.csv (which implementation is currently selected). Prints a ranking per
-component and flags every challenger that beats the selected implementation: a higher pass rate, or
-the same pass rate at a lower cost. ``--strict`` exits 1 when one does, so a pipeline can surface
+component and flags every challenger that beats the selected implementation: a pass rate higher by more than the
+stated margin, or a pass rate inside it at clearly lower spend. ``--strict`` exits 1 when one does, so a pipeline can surface
 "a better implementation exists" without a human reading the implementations (ESOI
 principle 4). The harness only ranks; switching the live implementation stays a deliberate decision.
 
@@ -22,6 +22,7 @@ treated as evidence against a verified row (``comparable`` keeps them apart). Re
 """
 import csv
 import hashlib
+import json
 import re
 import sys
 from fractions import Fraction
@@ -139,7 +140,32 @@ def is_ablation(row):
     return arm_kind(row) in NOT_RIVALS
 
 
-COST_TIE_TOLERANCE = 0.10  # costs within 10% are a tie: run-to-run noise must not flip a selection
+COST_TIE_TOLERANCE = 0.10   # spend within 10% is a tie for deterministic runs: noise must not flip a selection
+SAMPLED_PASS_MARGIN = 0.10  # sampled, model-judged runs: pass rates within 10 percentage points are a tie
+SAMPLED_SPEND_TOLERANCE = 0.15  # and spend within 15% is a tie (one pair's tokens moved 6.5% to 11% between re-runs)
+
+
+def is_sampled(row):
+    """A run that called a model: its pass rate and tokens move between re-runs of the same code, so a small gap
+    between two such rows is noise, not a finding."""
+    return int(float(row.get("model_calls") or 0)) > 0
+
+
+def noise(row, other):
+    """``(pass_margin, spend_tolerance)`` for comparing two rows: a fraction of pass rate, and a fraction of spend,
+    inside which they are a TIE. Deterministic runs (no model call on either side) keep exact pass counts and the
+    cost tolerance. A sampled comparison uses the defaults above unless the component folder carries a
+    ``noise.json`` such as ``{"pass_margin": 0.15, "spend_tolerance": 0.2}`` (its own measured re-run swing)."""
+    if not (is_sampled(row) or is_sampled(other)):
+        return 0.0, COST_TIE_TOLERANCE
+    margin, tolerance = SAMPLED_PASS_MARGIN, SAMPLED_SPEND_TOLERANCE
+    component = row.get("component") or other.get("component") or ""
+    setting = HERE / component / "noise.json"
+    if component and setting.is_file():
+        found = json.loads(setting.read_text())
+        margin = float(found.get("pass_margin", margin))
+        tolerance = float(found.get("spend_tolerance", tolerance))
+    return margin, tolerance
 
 
 def spend(row):
@@ -150,16 +176,28 @@ def spend(row):
 
 
 def clearly_cheaper(row, other):
-    """True when ``row`` spent more than COST_TIE_TOLERANCE less than ``other``, in the same unit."""
+    """True when ``row`` spent more than the spend tolerance (see ``noise``) less than ``other``, in the same unit."""
     (unit, mine), (other_unit, theirs) = spend(row), spend(other)
     if unit != other_unit:
         unit, (mine, theirs) = "usd", (float(row.get("cost_usd") or 0), float(other.get("cost_usd") or 0))
-    return mine < theirs * (1 - COST_TIE_TOLERANCE)
+    return mine < theirs * (1 - noise(row, other)[1])
+
+
+def clearly_higher(row, other):
+    """True when ``row`` passes more than the pass margin (see ``noise``) above ``other``."""
+    return Fraction(pass_rate(row)).limit_denominator(10000) - Fraction(pass_rate(other)).limit_denominator(10000) \
+        > Fraction(noise(row, other)[0]).limit_denominator(10000)
+
+
+def cheaper_without_passing_less(row, other):
+    """Spend settles a comparison only when the cheaper side passes at least as much: inside the pass margin a lower
+    pass rate at lower spend is not a finding (it may be a worse implementation, and the margin cannot say)."""
+    return pass_rate(row) >= pass_rate(other) and clearly_cheaper(row, other)
 
 
 def challengers(rows, selected):
-    """Implementations that beat the selected one on pass rate, or tie it at clearly lower spend (more than
-    COST_TIE_TOLERANCE below it: see ``spend``).
+    """Implementations that beat the selected one on pass rate by more than the pass margin, or stay inside the
+    margin at clearly lower spend without passing less (more than the spend tolerance below it: see ``noise`` and ``spend``).
     Rows scored on a different ``cases_sha`` than the selected one are skipped, and so is an unverified
     challenger against a verified selection (and the reverse): provenance-free numbers are not evidence.
     An ABLATION implementation (see ``is_ablation``) is never a challenger."""
@@ -170,9 +208,7 @@ def challengers(rows, selected):
     for r in rows.values():
         if r["impl"] == selected or not comparable(r, cur) or is_ablation(r):
             continue
-        higher = pass_rate(r) > pass_rate(cur)
-        cheaper_tie = pass_rate(r) == pass_rate(cur) and clearly_cheaper(r, cur)
-        if higher or cheaper_tie:
+        if clearly_higher(r, cur) or (not clearly_higher(cur, r) and cheaper_without_passing_less(r, cur)):
             better.append(r)
     return better
 
@@ -182,20 +218,31 @@ def tag(row):
     return f"  [{kind.upper()}]" if kind else ""
 
 
+def tokens_label(row):
+    """Tokens in and out, compact (``1.29M``, ``610k``, ``0``): the number spend verdicts are decided on."""
+    total = float(row.get("tokens_in") or 0) + float(row.get("tokens_out") or 0)
+    return f"{total / 1e6:.2f}M" if total >= 1e6 else f"{total / 1e3:.0f}k" if total >= 1e3 else f"{total:.0f}"
+
+
 def print_rows(rows, sel):
     for r in rank(rows):
         mark = "*" if r["impl"] == sel else " "
         flag = "  [unverified: no cases_sha, recorded before provenance]" if unverified(r) else ""
         print(f"  {mark} {r['impl']:<20} {r['passed']}/{r['cases']} (held-out {r['heldout']}) "
-              f"calls={r['model_calls']} cost=${float(r['cost_usd'] or 0):.4f}  {r['date']}{tag(r)}{flag}")
+              f"calls={r['model_calls']} tokens={tokens_label(r)} cost=${float(r['cost_usd'] or 0):.4f}  "
+              f"{r['date']}{tag(r)}{flag}")
+        if (r.get("details") or "").strip():
+            print(f"      per-case reasons: {r['details'].strip()}")
 
 
 def verdict(rows, selected):
     """How the selected implementation stands against the other measured ones, as ``(label, detail)``:
 
     * ``WIN``: it beats every rival on the same cases, by pass rate or by clearly lower spend at the same rate;
-    * ``TIE``: some rival passes as many cases at spend within COST_TIE_TOLERANCE (or lower): the metric did not
-      separate them, so the selection is kept for a reason outside the number (``selected_by``), not decided by it;
+    * ``TIE``: some rival is inside the noise (``noise``: exact pass counts and the cost tolerance for deterministic
+      runs; a pass-rate margin and a spend tolerance when a model was called, because sampled, model-judged runs move
+      between re-runs): the metric did not separate them, so the selection is kept for a reason outside the number
+      (``selected_by``), not decided by it;
     * ``LOSS``: a rival beats it (see ``challengers``);
     * ``UNMEASURED``: it has no row, or no rival was measured on the same cases, so nothing was compared.
 
@@ -209,16 +256,26 @@ def verdict(rows, selected):
     beaten_by = [r["impl"] for r in challengers(rows, selected)]
     if beaten_by:
         return "LOSS", "beaten by " + ", ".join(sorted(beaten_by))
-    mine = Fraction(int(cur["passed"]), max(int(cur["cases"]), 1))
-    tied = [r["impl"] for r in rivals
-            if Fraction(int(r["passed"]), max(int(r["cases"]), 1)) == mine and not clearly_cheaper(cur, r)]
+    tied = []
+    for r in rivals:
+        if clearly_higher(cur, r) or cheaper_without_passing_less(cur, r):
+            continue
+        margin, tolerance = noise(cur, r)
+        tied.append((r["impl"], margin, tolerance))
     if tied:
-        return "TIE", (f"passes as many cases as {', '.join(sorted(tied))} at spend within "
-                       f"{int(COST_TIE_TOLERANCE * 100)}% (or lower), so the metric does not separate them")
+        names = ", ".join(sorted(t[0] for t in tied))
+        margin, tolerance = max(t[1] for t in tied), max(t[2] for t in tied)
+        if margin:
+            return "TIE", (f"within the stated margin of {names}: pass rate inside {margin * 100:.0f} percentage "
+                           f"points and spend inside {tolerance * 100:.0f}% (sampled, model-judged runs move that "
+                           "much between re-runs), so the metric does not separate them")
+        return "TIE", (f"passes as many cases as {names} at spend within {tolerance * 100:.0f}% (or lower), so the "
+                       "metric does not separate them")
     reasons = []
     for r in sorted(rivals, key=lambda r: r["impl"]):
-        if Fraction(int(r["passed"]), max(int(r["cases"]), 1)) < mine:
-            reasons.append(f"passes more cases than {r['impl']}")
+        if clearly_higher(cur, r):
+            reasons.append(f"passes more cases than {r['impl']}"
+                           + (f" by more than the {noise(cur, r)[0] * 100:.0f} point margin" if noise(cur, r)[0] else ""))
         else:
             (_, theirs), (_, ours) = spend(r), spend(cur)
             saved = 1 - ours / theirs if theirs and spend(r)[0] == spend(cur)[0] else 0.0

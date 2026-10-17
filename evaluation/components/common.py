@@ -106,7 +106,7 @@ def build_offline_orchestrator(meter, registry=None, planner_tier="haiku", recip
 
 RESULTS_CSV = HERE / "results.csv"
 RESULT_COLUMNS = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls",
-                  "tokens_in", "tokens_out", "cost_usd", "seconds", "git_sha", "cases_sha", "model"]
+                  "tokens_in", "tokens_out", "cost_usd", "seconds", "git_sha", "cases_sha", "model", "details"]
 
 
 def record_result(summary, date=None, path=RESULTS_CSV):

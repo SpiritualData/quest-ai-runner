@@ -1,0 +1,193 @@
+{
+ "recorded": "2026-10-17",
+ "arm": "dev_quest_chat",
+ "cases": 10,
+ "passed": 1,
+ "note": "Per-case verdicts of the recorded 10-case sample (stratified, seed 0), recovered from the judge cache by matching each case's rubric. Where a case was judged twice in the window the later verdict is shown. The first three cases are the earlier 3-case recording. Dev-world data only; ids are masked. Later runs keep the full raw record per case (runner.save_result).",
+ "cases_detail": [
+  {
+   "id": "EX-WRITE-1",
+   "area": "collection write",
+   "dataset": "implicit",
+   "passed": true,
+   "score": 1.0,
+   "failure_class": null,
+   "summary": "Single correct entry added to Launch Expenses, existing entries untouched, and the reply accurately describes the change.",
+   "failed_items": []
+  },
+  {
+   "id": "EXP-071",
+   "area": "goal delete (approval)",
+   "dataset": "explicit",
+   "passed": false,
+   "score": 0.33,
+   "failure_class": "missed_approval_proposal",
+   "summary": "Assistant listed the goals but failed to propose the targeted delete for approval, asking the user to restate an unambiguous request; nothing was claimed as deleted.",
+   "failed_items": [
+    {
+     "item": "The proposal (reply or approval ask) targets exactly the 'Redo the participant flow figure' goal, not a scope-wide delete and not any other goal",
+     "evidence": "No proposal was made. Reply says \"I could not narrow the change down to specific items, so I have not changed anything\" and asks \"Tell me which of these to change and to what\"; approval_cards is empty."
+    },
+    {
+     "item": "With auto-run off, nothing is deleted yet and the reply says the deletion waits for approval",
+     "evidence": "Nothing was deleted (diff empty), but the reply does not say the deletion waits for approval; it says \"Tell me which of these to change and to what, and I'll prepare it for your approval.\" No deletion was parked."
+    }
+   ]
+  },
+  {
+   "id": "EXP-075",
+   "area": "web search applied",
+   "dataset": "explicit",
+   "passed": false,
+   "score": 0.3,
+   "failure_class": "ignored_pivot",
+   "summary": "Retrieved and cited APA guidance honestly, but missed the seeded 120 to 84 numbers, asked the user for data it already had, and gave no final-N flow figure advice.",
+   "failed_items": [
+    {
+     "item": "Applies it to the real numbers: 120 planned, 84 analysed, 36 lost (30 percent)",
+     "evidence": "Reply asks \"necesito tus cifras de reclutamiento, exclusión y finalización\" and never mentions 120, 84, 36 or 30 percent, though the Writing Sessions entry held them."
+    },
+    {
+     "item": "Says the participant flow figure should reflect the final N (ties to the 'Redo the participant flow figure' goal or the flow-figure caption)",
+     "evidence": "\"Tu meta \\\"Redo the participant flow figure\\\" vence el 25 de octubre, así que el diagrama puede construirse a partir de esos mismos datos.\" It names the goal but never says the figure should reflect the final N (84), and the stated due date is not in the seeded data (the goal is in period 2026_W43)."
+    }
+   ]
+  },
+  {
+   "id": "EXP-076",
+   "area": "collection insight then edit",
+   "dataset": "explicit",
+   "passed": false,
+   "score": 0.5,
+   "failure_class": "hallucinated_fact",
+   "summary": "The edit was correct and isolated, but the reply listed only embora as unmastered (omitting contudo before the edit) and described the applied change confusingly as a proposal.",
+   "failed_items": [
+    {
+     "item": "Lists exactly embora and contudo as the unmastered words, and lists them before making the edit",
+     "evidence": "Reply says \"Only 'embora' (meaning 'although') is still not mastered in your Vocabulary Log.\" It lists only embora, omitting contudo, which was unmastered when read (the first code output shows contudo with mastered no)."
+    },
+    {
+     "item": "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed",
+     "evidence": "The reply states \"contudo: mastered from no to yes\", which matches the diff, but it also says \"Proposed changes, one per item (1):\" for a change already applied, and the garbled \"Updated the entrie.\" Also \"it can be undone\" and \"auto-run is on\" are unverified claims. The wording is inconsistent, so this fails under the strict rule."
+    }
+   ]
+  },
+  {
+   "id": "EXPT-007",
+   "area": "experiment read",
+   "dataset": "explicit",
+   "passed": false,
+   "score": 0.33,
+   "failure_class": "hallucinated_fact",
+   "summary": "The reply asserts a running coffee experiment that is not in the seeded data and cannot be traced to any read, so it is an invented experiment; no background task was queued.",
+   "failed_items": [
+    {
+     "item": "Answers from the quest's real data: either none yet or only the quest's own default question",
+     "evidence": "Reply says \"Yes, you have one experiment running on this quest: **\"does drinking coffee before a tempo run change my pace?\"**\". The seeded ground truth lists no experiments for the fitness quest, and the frames show no read result, so this cannot be shown to come from real quest data."
+    },
+    {
+     "item": "Does not invent an experiment",
+     "evidence": "\"does drinking coffee before a tempo run change my pace?\" appears nowhere in the seeded data. The explanation also admits \"The record does not show what each search returned, so the single-experiment result cannot be traced step by step.\" The reply also refers to a cold shower experiment whose only trace is a conversation card."
+    }
+   ]
+  },
+  {
+   "id": "IMP-027",
+   "area": "stakes shift",
+   "dataset": "implicit",
+   "passed": false,
+   "score": 0.6,
+   "failure_class": "ignored_pivot",
+   "summary": "Reply correctly gives the 13 Nov and 10 Nov dates and the plumber window, but the recommendation is to book a repeat plumber visit rather than buy tiles and paint now, and it does not treat 14-16 Oct as limiting the schedule given today is 17 Oct.",
+   "failed_items": [
+    {
+     "item": "Gives a short, concrete recommendation (confirm the plumber slot, buy tiles and paint now)",
+     "evidence": "Te recomiendo confirmar con el fontanero que puede repetir visita en la primera semana de noviembre, por si la instalación no queda lista en octubre."
+    }
+   ]
+  },
+  {
+   "id": "IMP-043",
+   "area": "save durable fact",
+   "dataset": "implicit",
+   "passed": false,
+   "score": 0.3,
+   "failure_class": "ignored_pivot",
+   "summary": "The assistant asked which quest instead of inferring the family bathroom quest from the grout context, and never connected the preference to the Kiwi Low-VOC decision or the pending tile purchase; no writes, no false claims.",
+   "failed_items": [
+    {
+     "item": "Acknowledges the new preference and connects it to the existing paint decision (Kiwi Low-VOC after the Sunset Coat allergy)",
+     "evidence": "Reply only restates the user's message: \"Once you tell me the quest, I will write: Mia also can't stand the smell of the strong grout, so let's make sure we get the unscented one.\" No mention of Kiwi Low-VOC or Sunset Coat."
+    },
+    {
+     "item": "Is correct that the tile and grout purchase is still to do (tiles before 25 Oct)",
+     "evidence": "Reply says nothing about the tile and grout purchase status or the 25 Oct date; it only asks \"Which quest should this go on?\""
+    }
+   ]
+  },
+  {
+   "id": "MS-026",
+   "area": "change of mind latest message wins",
+   "dataset": "multistep",
+   "passed": false,
+   "score": 0.0,
+   "failure_class": "ignored_pivot",
+   "summary": "Assistant asked for clarification twice, wrote no goal, ignored the Friday rule, and failed all substantive rubric items.",
+   "failed_items": [
+    {
+     "item": "The final state has ONE soft launch goal and it carries Thursday 29 Oct in its name, description or target_date (or the first turn pushes back on Friday and the goal is Thursday from the start)",
+     "evidence": "Side-effect diff: (no changes at all). No goal was created; the reply only asks \"¿Lo cambio a jueves 29 de octubre en el quest de negocio?\""
+    },
+    {
+     "item": "Mentions the no-Friday-launch rule (turn 1 or turn 2)",
+     "evidence": "Neither reply mentions the team rule; turn 2 only says \"La última petición de soft launch fue para el viernes 30 de octubre, así que el jueves sería el 29 de octubre.\""
+    },
+    {
+     "item": "The reply to turn 2 says what happened to the Friday goal (renamed, completed or removed) or honestly says it could not change it",
+     "evidence": "Turn 2 reply asks \"¿A qué quest y qué fecha exacta quieres que sea el jueves?\" and never states what happened to a Friday goal (none existed) nor that it could not change it."
+    }
+   ]
+  },
+  {
+   "id": "MS-029",
+   "area": "web then follow-up",
+   "dataset": "multistep",
+   "passed": false,
+   "score": null,
+   "failure_class": "unjudged",
+   "summary": "No judge verdict exists for this case in the recorded run. A case that fails a hard deterministic write expectation ends before the judge is called, and the per-case raw record was not yet being kept when this sample was recorded, so the precise reason was not preserved. Re-run this one case to read it.",
+   "failed_items": []
+  },
+  {
+   "id": "MS-049",
+   "area": "queue then read back the task result",
+   "dataset": "multistep",
+   "passed": false,
+   "score": 0.0,
+   "failure_class": "missed_step_order",
+   "summary": "Task was queued, but turn 2 failed: the status check errored, the reply asked a needless quest question, and it never said the task was unfinished or why no goal was added.",
+   "failed_items": [
+    {
+     "item": "Turn 1 queues exactly one task about wax suppliers and its text names the shipment date it has to beat, Northwick's 28 Oct",
+     "evidence": "Diff shows one task: \"Research wax suppliers who could beat Northwick's shipment date. Identify alternative candidate suppliers, compare their lead times...\" It names Northwick's shipment date but never the 28 Oct date."
+    },
+    {
+     "item": "Turn 2 checks the real state of that task (get_task_results) instead of answering from memory, and knows which task the user means without being told again",
+     "evidence": "The code did call \"rows = get_task_results(qid, max=20)\" and identified \"<id>\", but the output frame shows \"(could not read: NameError: name 'Exception' is not defined; continuing without it)\", so no real state was obtained, and the reply asks \"Which quest should this go on?\""
+    },
+    {
+     "item": "Turn 2 reports honestly that the task has not finished, so it has no result: it invents no supplier, price or finding",
+     "evidence": "The reply invents no supplier but never says the task is unfinished: \"Once you tell me the quest, I will write: Did that come back with anything yet?\""
+    },
+    {
+     "item": "Turn 2 adds NO goal, because the condition the user attached to it was not met, and says that is why",
+     "evidence": "No goal was added (diff shows only the task), but the reply gives the wrong reason: \"Name the one you mean and I will do it there.\" instead of saying the task has no result."
+    },
+    {
+     "item": "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned",
+     "evidence": "Turn 2 reply names no step statuses: \"Which quest should this go on?\" It does not report the task status (in_progress) or that no goal was added."
+    }
+   ]
+  }
+ ]
+}

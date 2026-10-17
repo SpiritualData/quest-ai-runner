@@ -168,6 +168,30 @@ def test_leaderboard_only_compares_rows_scored_on_the_same_cases():
     assert [r["impl"] for r in leaderboard.challengers(blank, "cur")] == ["old"]
 
 
+def test_a_sampled_comparison_inside_the_margin_is_a_tie_and_a_deterministic_one_is_exact(tmp_path, monkeypatch):
+    import leaderboard
+    mk = lambda impl, passed, calls, tokens: dict(impl=impl, component="margin_probe", cases="30", passed=str(passed),
+                                                  cost_usd="0", cases_sha="aaaa", model_calls=str(calls),
+                                                  tokens_in=str(tokens), tokens_out="0")
+    sampled = {"cur": mk("cur", 18, 60, 1000), "rival": mk("rival", 15, 60, 800)}
+    assert leaderboard.verdict(sampled, "cur")[0] == "TIE"             # three cases of thirty is inside ten points
+    assert leaderboard.challengers(sampled, "cur") == []               # cheaper but passing less is no challenger
+    clear = {"cur": mk("cur", 18, 60, 1000), "rival": mk("rival", 12, 60, 1000)}
+    assert leaderboard.verdict(clear, "cur")[0] == "WIN"               # six cases of thirty clears the margin
+    beaten = {"cur": mk("cur", 12, 60, 1000), "rival": mk("rival", 18, 60, 1000)}
+    assert [r["impl"] for r in leaderboard.challengers(beaten, "cur")] == ["rival"]
+    tokens = {"cur": mk("cur", 20, 60, 880), "rival": mk("rival", 20, 60, 1000)}
+    assert leaderboard.verdict(tokens, "cur")[0] == "TIE"              # 12% fewer tokens is inside the tolerance
+    tokens["cur"]["tokens_in"] = "800"
+    assert leaderboard.verdict(tokens, "cur")[0] == "WIN"              # 20% fewer is not
+    offline = {"cur": mk("cur", 18, 0, 0), "rival": mk("rival", 15, 0, 0)}
+    assert leaderboard.verdict(offline, "cur")[0] == "WIN"             # no model called: exact counts decide
+    (tmp_path / "margin_probe").mkdir()
+    (tmp_path / "margin_probe" / "noise.json").write_text('{"pass_margin": 0.05}')
+    monkeypatch.setattr(leaderboard, "HERE", tmp_path)
+    assert leaderboard.verdict(sampled, "cur")[0] == "WIN"             # a component can state a tighter margin
+
+
 def test_leaderboard_flags_rows_without_provenance(capsys, tmp_path, monkeypatch):
     import csv
 

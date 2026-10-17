@@ -33,7 +33,7 @@ $PY -m pytest evaluation/components/test_components.py                  # offlin
 ```
 Flags: `--only ID,ID`, `--max-calls N` (aborts when model calls exceed N), `--out path`.
 `QAR_EVAL_MODEL` (default `haiku`) sets the model for every implementation, so they compare like for like.
-Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the model-call count. `--record` also appends a row to the committed `results.csv` (with `git_sha`, `cases_sha` and `model`); `leaderboard.py` ranks only rows with the same `cases_sha`. Which implementation is "selected" is whatever `docs/structure/solutions.csv` says, not a label in this file.
+Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the model-call count. `--record` also appends a row to the committed `results.csv` (with `git_sha`, `cases_sha` and `model`); `leaderboard.py` ranks only rows with the same `cases_sha`. A row may carry a `details` path to a committed per-case reasons file. A comparison where a model was called is a TIE inside a 10 point pass-rate margin and 15% spend (override per component in `noise.json`). Which implementation is "selected" is whatever `docs/structure/solutions.csv` says, not a label in this file.
 
 ## Components and their functions
 
