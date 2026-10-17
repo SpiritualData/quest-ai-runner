@@ -55,6 +55,7 @@ case in `evaluation/components/check_the_structure/`.
 22. **S22 numbers.** No score, percentage, dollar amount or case count in a solution's `metric`, `gap` or `action` or in a waiver reason; numbers live in `results.csv`, read through the leaderboard.
 23. **S23 selected is the table default.** For a solution with a selection-table entry, `selected` equals that entry's default.
 24. **S24 recorded claims are true.** Every arm a `metric_command` names has a `results.csv` row, and a gap or action that says an implementation is "not recorded" (or says to "Record" it) names none that already has a row.
+25. **S25 cases discriminate.** An `invariant` solution's `evaluation/components/<x>/broken/` holds at least one baseline module besides `__init__.py` (the naive implementation a first draft would write), so `test_a_deliberately_broken_implementation_fails_the_cases` proves its cases can tell it from the live code.
 
 ## Notes on the rules
 

@@ -184,3 +184,15 @@ def test_a_protocol_needs_a_port_cell_not_a_row_of_its_own(monkeypatch):
     monkeypatch.setattr(mod, "read_csv", edited(mod, "solutions.csv", lambda rows: solution(rows, "search-the-web").update(
         port="WebResearch")))
     assert any(p.startswith("S7 SearchBackend: port is listed in the `port` cell of no solutions.csv row") for p in mod.check())
+
+
+def test_an_invariant_solution_without_a_broken_baseline_is_reported(monkeypatch, tmp_path):
+    mod = _load_checker()
+    assert not any(p.startswith("S25") for p in mod.check())
+    empty = tmp_path / "gate_an_autopilot_pass" / "broken"
+    empty.mkdir(parents=True)
+    (empty / "__init__.py").write_text("")
+    monkeypatch.setattr(mod, "EVALUATION", tmp_path)
+    problems = mod.check()
+    assert any(p.startswith("S25 gate-an-autopilot-pass") and "no baseline module" in p for p in problems)
+    assert any(p.startswith("S25 persist-cards") for p in problems)      # a missing broken/ folder counts too

@@ -4,13 +4,13 @@
 Run from anywhere:  python scripts/check_structure.py [--write-docs] [--strict]
 Exit 0 = clean, 1 = violations (printed one per line as ``RULE path: message``).
 
-The registry is data, not code (see docs/structure/README.md, which lists rules S1 to S24 once, in order):
+The registry is data, not code (see docs/structure/README.md, which lists rules S1 to S25 once, in order):
   * components.csv   placement only: component_id, layer, path globs, role, the solutions each serves
   * solutions.csv    each solution: problem, ideal, port, implementations, selected one, metric, gap, action
   * waivers.csv      known, justified exceptions to a rule (each must still apply)
   * COMPONENTS.md    generated from components.csv (--write-docs rewrites it, with configuration.md and tracker/)
 
-Every problem line starts with the id of the rule it breaks (S1 to S24); the one-line statement of each rule is
+Every problem line starts with the id of the rule it breaks (S1 to S25); the one-line statement of each rule is
 in docs/structure/README.md, so there is a single list to keep current.
 """
 from __future__ import annotations
@@ -27,6 +27,7 @@ import env_vars  # noqa: E402  (scripts/env_vars.py: the S15 scanner and the con
 
 ROOT = Path(__file__).resolve().parent.parent
 STRUCT = ROOT / "docs" / "structure"
+EVALUATION = ROOT / "evaluation" / "components"
 MAX_LINES = 1500
 PKG = "quest_ai_runner"
 # Dependencies point inward: a module may import its own layer or a lower one.
@@ -432,6 +433,18 @@ def check() -> list[str]:
                 if re.search(rf"\b{re.escape(stem)}\b", sentence) and not waived("S24", f"{sid}:{stem}"):
                     bad.append(f"S24 {sid}: the gap or action says {stem} is not recorded, but results.csv has a row "
                                f"for it ({sentence.strip()[:70]!r}); update the text")
+
+    # S25 an invariant solution's cases are proved to discriminate: its evaluation folder has a broken/ baseline module
+    for r in solutions:
+        sid = r["solution_id"]
+        hm = HARNESS.search(r["metric_command"])
+        if r.get("metric_kind", "").strip() != "invariant" or not hm:
+            continue
+        broken = EVALUATION / hm.group(1) / "broken"
+        baselines = [f for f in broken.glob("*.py") if f.name != "__init__.py"] if broken.is_dir() else []
+        if not baselines and not waived("S25", sid):
+            bad.append(f"S25 {sid}: evaluation/components/{hm.group(1)}/broken/ has no baseline module (add the naive "
+                       "implementation a first draft would write; a test proves the cases fail it)")
 
     # S11 metric kinds
     sol_ids ={r["solution_id"] for r in solutions}
