@@ -223,7 +223,7 @@ def test_hybrid_union_wraps_the_live_assembler(tmp_path, monkeypatch):
     select = hybrid_union.build(common.CallMeter())
     ranked = select("which module discovers due tasks and claims them", corpus)
     assert calls and ranked and ranked[0] == "pkg/poller.py"
-    assert select.budget == 6
+    assert not hasattr(select, "budget")  # strict top 3 is the ideal
     import importlib.util
     spec = importlib.util.spec_from_file_location("cs", Path(__file__).resolve().parents[2] / "scripts" / "check_structure.py")
     cs = importlib.util.module_from_spec(spec)
