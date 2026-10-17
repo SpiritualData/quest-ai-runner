@@ -1009,3 +1009,20 @@ def test_submit_oversee_no_duplicate_retry_when_tiers_resolve_to_same_model():
         sig = pending["future"].result(timeout=5)
     assert provider.overseer_models == [balanced]  # same model both tiers: no pointless retry
     assert sig.signal == "proceed" and sig.degraded is True
+
+
+def test_build_digest_sheds_operations_and_conversation_before_prior_escalations():
+    from quest_ai_runner.core.overseer import build_digest
+    digest = build_digest(
+        user_message="Open the second workspace.",
+        step=3,
+        max_steps=6,
+        recent_conversation=["user: " + "open the workspace " * 10] * 3,
+        prior_escalations=["1: escalated to human, outcome: refused, proposed: create new workspaces"],
+        operations=["[query] workspaces -> 4 existing"] * 6,
+        operations_total=6,
+        char_budget=450,
+    )
+    assert len(digest) <= 450
+    assert "outcome: refused" in digest
+    assert "CURRENT USER REQUEST" in digest

@@ -246,7 +246,8 @@ def build_digest(
     DRAFT ANSWER -- are PROTECTED: they are built first and always included in full. The "history"
     sections (RECENT CONVERSATION, PRIOR ESCALATIONS THIS CONVERSATION, OPERATIONS THIS TURN) are
     SHEDDABLE: each gets its own per-section cap, and if the overall ``char_budget`` is still tight,
-    whole sheddable sections are dropped (last-added first) until it fits. Only if the protected
+    whole sheddable sections are dropped until it fits: operations first, then recent conversation, and
+    PRIOR ESCALATIONS last, because a refusal recorded there must not be asked again. Only if the protected
     fields ALONE somehow exceed ``char_budget`` (a pathologically small budget) does a last-resort
     tail-truncation kick in, matching the previous behavior.
     """
@@ -264,6 +265,9 @@ def build_digest(
         # --- SHEDDABLE middle: cross-turn history. Each section individually capped, and this
         # whole block is what gets trimmed/dropped first if the overall budget is tight (Fix 8). ---
         sheddable: List[str] = []
+        # Shedding priority, first dropped to last: operations, then recent conversation, then prior
+        # escalations (a refusal there is what stops the same proposal being put to the user again).
+        shed_rank: List[int] = []
 
         conv = [c for c in (recent_conversation or []) if c and str(c).strip()]
         if conv:
@@ -271,14 +275,17 @@ def build_digest(
             lines = [f"RECENT CONVERSATION (last {n} turn{'s' if n != 1 else ''}):"]
             lines.extend(f"  - {_oneline(c, 160)}" for c in conv)
             sheddable.append(_cap_section("\n".join(lines), _RECENT_CONVERSATION_CHAR_CAP))
+            shed_rank.append(1)
 
         esc = [e for e in (prior_escalations or []) if e and str(e).strip()]
         if esc:
             lines = ["PRIOR ESCALATIONS THIS CONVERSATION:"]
             lines.extend(f"  {_oneline(e, 160)}" for e in esc)
             sheddable.append(_cap_section("\n".join(lines), _PRIOR_ESCALATIONS_CHAR_CAP))
+            shed_rank.append(2)
         else:
             sheddable.append("PRIOR ESCALATIONS THIS CONVERSATION: none yet")
+            shed_rank.append(0)
 
         ops = [o for o in (operations or []) if o and str(o).strip()]
         if ops:
@@ -289,6 +296,7 @@ def build_digest(
             sheddable.append(_cap_section("\n".join(lines), _OPERATIONS_CHAR_CAP))
         else:
             sheddable.append("OPERATIONS THIS TURN: none yet")
+        shed_rank.append(0)
 
         # --- PROTECTED tail: the fields the decision actually turns on. Always included in full. -
         tail: List[str] = [f"PASS: {step} of {max_steps}"]
@@ -320,11 +328,14 @@ def build_digest(
         if len(full_text) <= budget:
             return full_text
 
-        # Over budget: drop whole SHEDDABLE sections (last-added first) until it fits. head/tail
+        # Over budget: drop whole SHEDDABLE sections (operations, then conversation, then escalations) until it fits. head/tail
         # are NEVER touched here (Fix 8's must-survive guarantee).
-        shed = list(sheddable)
-        while shed and len("\n".join(head + shed + tail)) > budget:
-            shed.pop()
+        shed = list(range(len(sheddable)))
+        for idx in sorted(shed, key=lambda i: (shed_rank[i], -i)):
+            if len("\n".join(head + [sheddable[i] for i in shed] + tail)) <= budget:
+                break
+            shed.remove(idx)
+        shed = [sheddable[i] for i in shed]
         fitted = "\n".join(head + shed + tail)
         if len(fitted) <= budget:
             return fitted
