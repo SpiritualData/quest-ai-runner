@@ -39,8 +39,9 @@ def test_selected_implementation_beaten_in_results_needs_a_waiver(monkeypatch):
     mod = _load_checker()
     monkeypatch.setattr(mod, "read_csv", lambda p, _r=mod.read_csv: (
         [] if p.name == "waivers.csv" else _r(p)))
+    monkeypatch.setattr(mod.leaderboard, "challengers", lambda rows, sel: [{"impl": "rival"}])
     problems = mod.check()
-    assert any(p.startswith("S10 route-a-message") for p in problems)
+    assert any(p.startswith("S10 route-a-message") and "rival beat" in p for p in problems)
 
 
 def test_done_component_without_a_metric_kind_is_reported(monkeypatch):

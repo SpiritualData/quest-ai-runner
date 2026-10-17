@@ -326,7 +326,7 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         self.web: Optional[Any] = web
         # Operations learned from earlier turns, replayed before any context search (core/recipes.py).
         self.recipes: Optional[RecipeStore] = recipes
-        # The cheap first look at a message (``core/pre_route.py``, solution route-a-message): a class
+        # The cheap first look at a message (``core/pre_route.py``, solution operate-a-quest): a class
         # built as ``cls(provider, model, direct_tools)``. It may settle a clear request for a
         # ``ToolSpec.direct`` tool without the planner; None (the default, and what quest-backend
         # passes) means the planner decides every message, exactly as before.

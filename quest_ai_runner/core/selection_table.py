@@ -78,10 +78,10 @@ SELECTION = {
         "rep": _A + "rep_context_assembler:RepContextAssembler",
         "composite": _C + "composite_assembler:CompositeContextAssembler",
     }},
-    # The default is the winner on the classification component (whole job: route, tool, arguments,
-    # confirm or clarify): the pre-route fronts the planner; "planner" is the planner alone.
-    "route-a-message": {"default": "pre_route", "implementations": {
-        "planner": _C + "pre_route:NoPreRoute",
+    # operate-a-quest: the pre-route may carry out a clear tool request without the planner;
+    # "orchestrator" is the planner path alone. The default is the quest_ops winner.
+    "operate-a-quest": {"default": "pre_route", "implementations": {
+        "orchestrator": _C + "pre_route:NoPreRoute",
         "pre_route": _C + "pre_route:PreRouter",
     }},
     "persist-cards": {"default": "quest_api", "implementations": {

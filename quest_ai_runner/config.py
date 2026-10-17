@@ -826,9 +826,9 @@ def build_orchestrator(
         tools=resolve_tool_registry(cfg),
         web=cfg.web_research,
         recipes=cfg.recipe_store or build_recipe_store_from_env(os.environ),
-        # Which first look fronts the planner: the selection table's route-a-message entry (or
-        # ``cfg.selections["route-a-message"]``); "planner" turns the pre-route off.
-        pre_router_cls=resolve("route-a-message", overrides=cfg.selections),
+        # Which first look fronts the planner: the selection table's operate-a-quest entry (or
+        # ``cfg.selections["operate-a-quest"]``); "orchestrator" turns the pre-route off.
+        pre_router_cls=resolve("operate-a-quest", overrides=cfg.selections),
         edited_files_card_updater=update_cards_from_deep_edits,
         background_thread_registrar=_register_index_thread,
     )

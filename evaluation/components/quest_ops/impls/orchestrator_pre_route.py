@@ -1,4 +1,4 @@
-"""The LIVE default: the same whole brain as ``qar_orchestrator`` with the ``route-a-message`` selection
+"""The LIVE default: the same whole brain as ``qar_orchestrator`` with the ``operate-a-quest`` selection
 ``pre_route``, so the cheap pre-route may settle a clear request for a direct tool before the planner runs.
 Everything else (answers, reads, confirms, deep) is the planner's, as in ``qar_orchestrator``."""
 import os
@@ -13,7 +13,7 @@ def build(meter):
 
     def run_operation(message, world):
         orch = common.build_offline_orchestrator(meter, registry=WORLD.registry, planner_tier=tier,
-                                                 selections={"route-a-message": "pre_route"})
+                                                 selections={"operate-a-quest": "pre_route"})
         res = orch.run(message, quest_id=world.quest_id, context_view=record_view(world))
         return {"reply": getattr(res, "text", "") or ""}
     return run_operation

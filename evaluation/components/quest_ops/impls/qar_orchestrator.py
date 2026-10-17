@@ -20,7 +20,7 @@ def record_view(world):
     return "\n".join(lines)
 
 
-SELECTIONS = {"route-a-message": "planner"}   # the planner decides every message
+SELECTIONS = {"operate-a-quest": "orchestrator"}   # the planner decides every message
 
 
 def build(meter):
