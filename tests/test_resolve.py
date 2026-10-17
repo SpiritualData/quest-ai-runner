@@ -58,12 +58,12 @@ def test_a_config_class_comes_with_runners_that_take_one():
 
 
 def test_register_adds_an_implementation_and_can_make_it_the_default():
-    register("search-backends", "mine", "quest_ai_runner.adapters.web_search_backends:BraveBackend")
-    assert "mine" in names("search-backends")
-    assert resolve("search-backends", "mine").__name__ == "BraveBackend"
-    assert default_name("search-backends") == "serper"
-    register("search-backends", "mine", "quest_ai_runner.adapters.web_search_backends:BraveBackend", default=True)
-    assert resolve("search-backends").__name__ == "BraveBackend"
+    register("search-the-web", "mine", "quest_ai_runner.adapters.web_search_backends:BraveBackend")
+    assert "mine" in names("search-the-web")
+    assert resolve("search-the-web", "mine").__name__ == "BraveBackend"
+    assert default_name("search-the-web") == "web_research"
+    register("search-the-web", "mine", "quest_ai_runner.adapters.web_search_backends:BraveBackend", default=True)
+    assert resolve("search-the-web").__name__ == "BraveBackend"
     with pytest.raises(ValueError):
         register("not-a-solution", "x", "a.b:C")
 
@@ -98,7 +98,7 @@ def test_search_backend_class_comes_from_the_table():
 def test_switching_a_search_backend_is_a_table_change(monkeypatch):
     """Point the table name at another class: the selection site follows with no code change."""
     from quest_ai_runner.adapters.web_search_backends import BraveBackend, select_search_backend
-    register("search-backends", "serper", "quest_ai_runner.adapters.web_search_backends:BraveBackend")
+    register("search-the-web", "serper", "quest_ai_runner.adapters.web_search_backends:BraveBackend")
     assert isinstance(select_search_backend({"QAR_WEB_SEARCH_BACKEND": "serper", "SERPER_API_KEY": "k"}), BraveBackend)
 
 

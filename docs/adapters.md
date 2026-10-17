@@ -251,7 +251,7 @@ from quest_ai_runner.core.resolve import resolve, register
 
 resolve("call-a-model", "gemini")                      # an explicit name
 resolve("run-deep-work", overrides=cfg.selections)     # RunnerConfig.selections, else the table default
-register("search-backends", "mine", "my_pkg.search:MyBackend")   # your own implementation, no core edit
+register("search-the-web", "mine", "my_pkg.search:MyBackend")   # your own implementation, no core edit
 ```
 
 In a lane's config file: `[selections]` then `"run-deep-work" = "acp"`. An unknown name raises with the list of

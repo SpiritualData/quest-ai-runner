@@ -659,7 +659,7 @@ def select_search_backend(
         if args is None:
             return None
         try:
-            backend_cls = resolve("search-backends", name)
+            backend_cls = resolve("search-the-web", name)
         except ValueError:
             return None
         return backend_cls(**args)

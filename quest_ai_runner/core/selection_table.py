@@ -39,6 +39,13 @@ SELECTION = {
         "web_research": _A + "web_research:WebResearchAdapter",
         "web_search": _A + "web_search_adapter:WebSearchAdapter",
         "provider_web_search": _A + "provider_web_search_adapter:ProviderWebSearchAdapter",
+        # The search backends are this solution's implementations too (select_search_backend resolves them here).
+        "serper": _A + "web_search_backends:SerperBackend",
+        "brave": _A + "web_search_backends:BraveBackend",
+        "tavily": _A + "web_search_backends:TavilyBackend",
+        "searxng": _A + "web_search_backends:SearxngBackend",
+        "gemini": _A + "web_search_backends:GeminiGroundingBackend",
+        "provider": _A + "web_search_backends:ProviderNativeBackend",
     }},
     # The default is the keyless one; the env-driven chooser in cli_config picks by API keys first.
     "call-a-model": {"default": "claude_cli", "implementations": {
@@ -80,14 +87,6 @@ SELECTION = {
     "guide-by-feedback": {"default": "universal", "implementations": {
         "universal": _C + "guidance_provider:UniversalGuidanceProvider"}},
     "talk-over-a-channel": {"default": "openclaw", "implementations": {"openclaw": _A + "openclaw_channel:OpenClawChannel"}},
-    "search-backends": {"default": "serper", "implementations": {
-        "serper": _A + "web_search_backends:SerperBackend",
-        "brave": _A + "web_search_backends:BraveBackend",
-        "tavily": _A + "web_search_backends:TavilyBackend",
-        "searxng": _A + "web_search_backends:SearxngBackend",
-        "gemini": _A + "web_search_backends:GeminiGroundingBackend",
-        "provider": _A + "web_search_backends:ProviderNativeBackend",
-    }},
     "feed-context-sources": {"default": "base", "implementations": {"base": _R + "context_sources_base:ContextSource"}},
     "store-feedback": {"default": "ledger", "implementations": {"ledger": _R + "feedback_ledger:FeedbackLedger"}},
     "recall-recent-context": {"default": "file", "implementations": {"file": _C + "recent_context:FileRecentContextStore"}},

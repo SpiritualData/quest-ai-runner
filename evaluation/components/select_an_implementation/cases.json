@@ -124,7 +124,7 @@
   "kind": "by_name",
   "area": "name",
   "args": {
-   "solution": "search-backends",
+   "solution": "search-the-web",
    "name": "brave"
   },
   "expect": {
@@ -225,7 +225,7 @@
   "args": {
    "solution": "call-a-model",
    "overrides": {
-    "search-backends": "brave"
+    "search-the-web": "brave"
    }
   },
   "expect": {
@@ -271,12 +271,12 @@
   "kind": "by_default",
   "area": "default",
   "args": {
-   "solution": "search-backends"
+   "solution": "search-the-web"
   },
   "expect": {
    "eq": {
-    "cls": "SerperBackend",
-    "default": "serper",
+    "cls": "WebResearchAdapter",
+    "default": "web_research",
     "error": null
    }
   }

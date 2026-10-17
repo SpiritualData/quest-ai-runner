@@ -45,9 +45,14 @@ def fake_http(payloads):
 
 
 def run(backend, case):
-    """Run the case's query through a fresh adapter and the bench; return the solution's result dict."""
+    """Run the case's query through a fresh adapter (over ``backend``) and the bench; return the result dict."""
+    return run_adapter(WebResearchAdapter(backend, cache=WebCache()), case)
+
+
+def run_adapter(adapter, case, fresh=False):
+    """Run the case's query through ``adapter`` and the bench; return the solution's result dict. ``fresh``
+    bypasses the adapter's cache READ, so a live run pays for (and measures) a real backend call."""
     t = tool()
-    adapter = WebResearchAdapter(backend, cache=WebCache())
     items = [t.QueryItem(id="q1", q=case["query"])] + ([t.QueryItem(id="q2", q=case["query"])] if case.get("repeat") else [])
     max_results = case.get("max_results")
     seen, original = [], adapter.search
@@ -56,7 +61,7 @@ def run(backend, case):
         seen.append(original(*a, **k))
         return seen[-1]
     adapter.search = recording_search
-    report = t.run_benchmark(adapter, items, max_results=max_results)
+    report = t.run_benchmark(adapter, items, max_results=max_results, fresh=fresh)
     obs = seen[0]
     first = report.results[0]
     return dict(urls=[h["url"] for h in (obs.hits or [])], text=obs.text or "",

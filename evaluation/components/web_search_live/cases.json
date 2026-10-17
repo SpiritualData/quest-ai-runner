@@ -1,0 +1,88 @@
+[
+ {
+  "id": "WL-01",
+  "area": "fact",
+  "query": "capital of Mongolia",
+  "answers": [
+   "Ulaanbaatar",
+   "Ulan Bator"
+  ]
+ },
+ {
+  "id": "WL-02",
+  "area": "fact",
+  "query": "what is the chemical symbol for gold",
+  "answers": [
+   "Au"
+  ]
+ },
+ {
+  "id": "WL-03",
+  "area": "fact",
+  "query": "who wrote the novel Pride and Prejudice",
+  "answers": [
+   "Austen"
+  ]
+ },
+ {
+  "id": "WL-04",
+  "area": "fact",
+  "query": "capital city of Australia",
+  "answers": [
+   "Canberra"
+  ]
+ },
+ {
+  "id": "WL-05",
+  "area": "fact",
+  "query": "tallest mountain above sea level on Earth",
+  "answers": [
+   "Everest"
+  ]
+ },
+ {
+  "id": "WL-06",
+  "area": "fact",
+  "query": "speed of light in a vacuum in metres per second",
+  "answers": [
+   "299,792,458",
+   "299792458"
+  ]
+ },
+ {
+  "id": "WL-07",
+  "area": "fact",
+  "query": "chemical name of table salt",
+  "answers": [
+   "sodium chloride",
+   "NaCl"
+  ]
+ },
+ {
+  "id": "WL-08",
+  "area": "fact",
+  "query": "largest planet in the solar system",
+  "answers": [
+   "Jupiter"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "WL-09",
+  "area": "fact",
+  "query": "year the Berlin Wall fell",
+  "answers": [
+   "1989"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "WL-10",
+  "area": "fact",
+  "query": "author of the theory of general relativity",
+  "answers": [
+   "Einstein"
+  ],
+  "heldout": true
+ }
+]

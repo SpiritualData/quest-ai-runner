@@ -2,7 +2,7 @@
 
     cls = resolve("call-a-model", "gemini")                    # an explicit name
     cls = resolve("run-deep-work", overrides=cfg.selections)   # a per-solution override dict, else the default
-    cls = resolve("search-backends")                           # the table default
+    cls = resolve("search-the-web")                            # the table default
 
 Precedence: explicit ``name``, then ``overrides[solution_id]``, then the table's ``default``. An unknown
 solution or name raises ``ValueError`` listing the choices, so a typo in config fails loudly instead of
