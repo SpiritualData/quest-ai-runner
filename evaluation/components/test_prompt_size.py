@@ -23,17 +23,45 @@ def test_duplicate_counter_sees_repeated_context_update_blocks_and_paragraphs():
 
 
 def test_scorer_fails_a_prompt_with_duplicated_blocks_even_under_the_ceiling():
-    case = dict(id="t", point="context_update_bundle", fixture="healthy", ceiling_chars=10 ** 6)
+    case = dict(id="t", point="context_update_bundle", fixture="healthy")
     block = fixtures.update_bundle(2, 300).as_prompt_block()
     r = score_case(lambda point, inputs: block + "\n\n" + block, case)
     assert not r["ok"] and r["dups"] >= 1 and "duplicated" in r["note"]
     assert score_case(lambda point, inputs: block, case)["ok"]
 
 
-def test_scorer_fails_a_prompt_over_its_ceiling():
-    case = dict(id="t", point="planner", fixture="healthy", ceiling_chars=100)
-    assert not score_case(lambda point, inputs: "x" * 101, case)["ok"]
-    assert score_case(lambda point, inputs: "x" * 100, case)["ok"]
+def test_scorer_fails_a_prompt_over_its_derived_budget_and_reports_headroom():
+    from prompt_size import budgets
+    budget = budgets.derive("planner")["budget_chars"]
+    case = dict(id="t", point="planner", fixture="healthy")
+    assert not score_case(lambda point, inputs: "x" * (budget + 1), case)["ok"]
+    at_budget = score_case(lambda point, inputs: "x" * budget, case)
+    assert at_budget["ok"] and at_budget["headroom"] == 0.0 and at_budget["budget"] == budget
+    assert score_case(lambda point, inputs: "x" * (budget // 2), case)["headroom"] == pytest.approx(0.5, abs=0.001)
+
+
+def test_budgets_come_from_the_window_a_share_of_it_and_the_cost_per_call():
+    from prompt_size import budgets
+    from quest_ai_runner.core import prompt_budget
+    planner = budgets.derive("planner")
+    assert planner["window_tokens"] == prompt_budget.context_window_tokens("gemini-3.1-flash-lite")
+    assert planner["budget_tokens"] == min(planner["window_bound"], planner["cost_bound"])
+    assert planner["window_bound"] == int(planner["window_tokens"] * budgets.INPUTS["planner"]["window_share"])
+    price = budgets.price_per_mtok(planner["model"]) / 1_000_000
+    assert planner["cost_bound"] == int(budgets.INPUTS["planner"]["usd_cap_per_run"] / planner["calls"] / price)
+    assert planner["budget_chars"] == int(planner["budget_tokens"] * prompt_budget.CHARS_PER_TOKEN)
+    deep = budgets.derive("deep_prompt")
+    assert deep["window_bound"] == planner["window_tokens"] - prompt_budget.WORKER_RESERVED_TOKENS
+    assert budgets.derive("autopilot_batch")["budget_tokens"] == int(deep["budget_tokens"] * 0.5)
+    from quest_ai_runner.core.model_registry import DEFAULT_FALLBACK_TOP
+    assert DEFAULT_FALLBACK_TOP[budgets.cheapest_tier()] == DEFAULT_FALLBACK_TOP["fast"]
+
+
+def test_a_tighter_spend_cap_lowers_the_budget(monkeypatch):
+    from prompt_size import budgets
+    before = budgets.derive("planner")["budget_tokens"]
+    monkeypatch.setitem(budgets.INPUTS["planner"], "usd_cap_per_run", 0.003)
+    assert budgets.derive("planner")["budget_tokens"] < before
 
 
 def test_incident_fixtures_really_carry_the_duplicated_blocks_the_live_path_must_remove():
@@ -45,7 +73,7 @@ def test_incident_fixtures_really_carry_the_duplicated_blocks_the_live_path_must
 
 
 @pytest.mark.parametrize("case", [c for c in CASES if c["point"] != "planner"], ids=lambda c: c["id"])
-def test_live_path_meets_ceiling_with_no_duplicates(case):
+def test_live_path_meets_its_budget_with_no_duplicates(case):
     from prompt_size.impls import live
     r = score_case(live.build(common.CallMeter()), case)
     assert r["ok"], r["note"]
@@ -59,8 +87,8 @@ def test_live_planner_healthy_fixture_passes():
 
 
 @pytest.mark.parametrize("case", [c for c in CASES if c["fixture"] == "production"], ids=lambda c: c["id"])
-def test_production_sized_sweep_has_a_real_p95_under_the_ceiling(case):
+def test_production_sized_sweep_has_a_real_p95_under_the_budget(case):
     from prompt_size.impls import live
     r = score_case(live.build(common.CallMeter()), case)
     assert r["ok"], r["note"]
-    assert r["p95_chars"] < r["chars"] <= case["ceiling_chars"]
+    assert r["p95_chars"] < r["chars"] <= r["budget"]

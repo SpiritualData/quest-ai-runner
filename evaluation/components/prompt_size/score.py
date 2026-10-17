@@ -1,12 +1,15 @@
 """Score one prompt_size case: build the fixed inputs, assemble the prompt, measure it.
 
-A case passes when the prompt is within the case's ``ceiling_chars`` (the assembly point's budget) AND holds
-zero duplicated blocks. A duplicated block is either a second (or later) context-updates block, or an
+A case passes when the prompt is within the assembly point's DERIVED budget (``budgets.py``: the cheapest tier's
+context window, a stated share of it, and the cost per call; no number here is fitted to a measurement) AND holds
+zero duplicated blocks. Every row also reports its headroom, the share of the budget left unused. A duplicated block is either a second (or later) context-updates block, or an
 identical paragraph of at least ``MIN_BLOCK_CHARS`` characters repeated (whitespace-normalised). The
 2026-10-06 incident had 16 duplicated context-update blocks in an 838K-character autopilot prompt.
 """
 import re
 from collections import Counter
+
+from prompt_size import budgets
 
 MIN_BLOCK_CHARS = 200
 
@@ -26,12 +29,12 @@ def score_sweep(fn, case):
     rows = [score_case(fn, dict(case, sweep=sweep, sample=i, sweep_run=True)) for i in range(sweep)]
     sizes = [r["chars"] for r in rows]
     dups = sum(r["dups"] for r in rows)
-    ceiling = case["ceiling_chars"]
-    ok = max(sizes) <= ceiling and dups == 0
+    budget = budgets.derive(case["point"])["budget_chars"]
+    ok = max(sizes) <= budget and dups == 0
     note = (f"{sweep} production samples: median {sorted(sizes)[len(sizes) // 2]}, p95 {p95(sizes)}, max {max(sizes)} "
-            f"chars (ceiling {ceiling}), {dups} duplicated blocks")
-    return dict(ok=ok, chars=max(sizes), p95_chars=p95(sizes), dups=dups, point=case["point"],
-                got=f"max {max(sizes)} chars", note=note)
+            f"chars (budget {budget}), {dups} duplicated blocks")
+    return dict(ok=ok, chars=max(sizes), p95_chars=p95(sizes), dups=dups, point=case["point"], budget=budget,
+                headroom=round(1 - max(sizes) / budget, 3), got=f"max {max(sizes)} chars", note=note)
 
 
 def score_case(fn, case):
@@ -42,11 +45,13 @@ def score_case(fn, case):
     chars = len(text)
     blocks, paras = duplicate_blocks(text)
     dups = blocks + paras
-    ceiling = case["ceiling_chars"]
-    ok = chars <= ceiling and dups == 0
-    note = (f"{chars} chars (ceiling {ceiling}), {dups} duplicated blocks "
+    derived = budgets.derive(case["point"])
+    budget = derived["budget_chars"]
+    ok = chars <= budget and dups == 0
+    note = (f"{chars} chars (budget {budget}, {derived['basis']}), {dups} duplicated blocks "
             f"({blocks} context-update, {paras} identical paragraphs)")
-    return dict(ok=ok, chars=chars, dups=dups, point=case["point"], got=f"{chars} chars", note=note)
+    return dict(ok=ok, chars=chars, dups=dups, point=case["point"], budget=budget,
+                headroom=round(1 - chars / budget, 3), got=f"{chars} chars", note=note)
 
 
 def p95(values):
@@ -58,7 +63,8 @@ def p95(values):
 
 
 def aggregate(rows):
-    """Per assembly point: the max and p95 of the fixed fixtures, and of the production sweep on its own line."""
+    """Per assembly point: the derived budget, the max and p95 of the fixed fixtures, and of the production sweep on
+    its own line, with the smallest headroom (share of the budget unused) of the point."""
     by = {}
     for r in rows:
         key = f"{r.get('point')}{' (production sweep)' if 'p95_chars' in r else ''}"
@@ -67,5 +73,6 @@ def aggregate(rows):
     for p, rs in sorted(by.items()):
         sizes = [r.get("chars", 0) for r in rs]
         p95s = [r["p95_chars"] for r in rs if "p95_chars" in r] or [p95(sizes)]
-        parts.append(f"{p}: max {max(sizes)} chars, p95 {max(p95s)} chars, {sum(r.get('dups', 0) for r in rs)} dups")
+        parts.append(f"{p}: max {max(sizes)} chars of budget {rs[0].get('budget')}, p95 {max(p95s)} chars, "
+                     f"headroom {min(r.get('headroom', 0) for r in rs):.0%}, {sum(r.get('dups', 0) for r in rs)} dups")
     return "; ".join(parts)

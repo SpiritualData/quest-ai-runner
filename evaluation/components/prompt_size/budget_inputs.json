@@ -1,0 +1,29 @@
+{
+  "note": "Policy inputs, not measurements. A budget is derived from these and from code data (budgets.py); changing a number here changes what passes. window_share is the fraction of the cheapest tier's context window one prompt of this point may fill; usd_cap_per_run is the most the input tokens of one run of the point may cost; calls_per_run says how many times the prompt is sent in a run (a number, or the name of the OrchestratorConfig default that bounds it); share_of takes a fraction of another point's budget instead.",
+  "points": {
+    "planner": {
+      "tier": "fast",
+      "window_share": 0.25,
+      "usd_cap_per_run": 0.03,
+      "calls_per_run": "max_steps",
+      "why": "The planner is re-sent on every step of a turn, on the cheap tier. A quarter of the window leaves the model room for the tool schema, its output and later steps' observations; three cents bounds the input spend of one turn's worst case of max_steps plans."
+    },
+    "deep_prompt": {
+      "tier": "best",
+      "window_share": "worker_reserve",
+      "usd_cap_per_run": 1.5,
+      "calls_per_run": "deep_goal_max_iterations",
+      "why": "The deep worker needs WORKER_RESERVED_TOKENS of its window for its own system prompt, memory files and file reads, so our prompt may fill the rest. A goal re-sends the prompt on every verify-retry, up to deep_goal_max_iterations, and a dollar and a half bounds the input spend of one goal."
+    },
+    "autopilot_batch": {
+      "share_of": "deep_prompt",
+      "share": 0.5,
+      "why": "The autopilot batch is the brief inside a deep prompt: half of it, the rest being standing instructions, goal frame and retrieval."
+    },
+    "context_update_bundle": {
+      "share_of": "deep_prompt",
+      "share": 0.25,
+      "why": "The context-updates bundle is one section of a deep prompt: a quarter of it."
+    }
+  }
+}
