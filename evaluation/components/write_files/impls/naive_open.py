@@ -2,7 +2,7 @@
 protected names, no size ceiling, no backup. The floor the real writer must beat. Zero model calls."""
 import os
 
-from write_files.impls.files_writer import observe, scratch_tree
+from write_files.impls.bounded_writer import observe, scratch_tree
 
 
 def build(meter):  # noqa: ARG001
