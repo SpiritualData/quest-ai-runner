@@ -25,16 +25,36 @@ TRACKING = ["tracking_status", "tracking_owner", "tracking_updated", "tracking_n
 ALTERNATIVE_MARKERS = ("ALTERNATIVE", "BASELINE", "ABLATION", "FLOOR", "VALIDITY")
 SEP = ";"
 
+
+
+def load_records():
+    """quest_ai_runner/structure/records.py (standard library only) owns the template reader."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("qar_structure_records", ROOT / "quest_ai_runner" / "structure" / "records.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+records = load_records()
+TEMPLATE = records.load_template(STRUCT / "esoi_template.csv")
+
+
+def template_columns(entity: str) -> list[str]:
+    """The record fields the evolvable-structure template lists for an entity (esoi_template.csv)."""
+    return records.fields(TEMPLATE, entity, interface_required=True)
+
+
 COLUMNS = {
-    "problems": ["problem_id", "problem", "solution_ids", "component_ids", "auto_status"],
-    "solutions": ["solution_id", "port", "problem_id", "ideal_ids", "metric_ids", "implementation_ids",
-                  "selected_implementation_id", "selected_by", "metric_kind", "verdict", "verdict_detail",
+    "problems": ["problem_id"] + template_columns("problem") + ["solution_ids", "ideal_ids", "component_ids", "auto_status"],
+    "solutions": ["solution_id"] + template_columns("solution") + ["problem_ids", "ideal_ids", "metric_ids", "implementation_ids",
+                  "port", "selected_implementation_id", "selected_by", "metric_kind", "verdict", "verdict_detail",
                   "component_ids", "auto_status"],
-    "implementations": ["implementation_id", "solution_id", "path", "kind", "selected", "latest_result",
-                        "latest_cost_usd", "cases_sha", "auto_status"],
-    "ideals": ["ideal_id", "scope", "statement", "applies_to", "metric_ids", "auto_status"],
-    "metrics": ["metric_id", "solution_id", "metric", "command", "kind", "latest_result", "gap", "action",
-                "auto_status"],
+    "implementations": ["implementation_id", "solution_id", "path"] + template_columns("implementation") + [
+                        "kind", "selected", "latest_result", "latest_cost_usd", "cases_sha", "auto_status"],
+    "ideals": ["ideal_id", "scope"] + template_columns("ideal") + ["problem_ids", "solution_ids", "metric_ids", "auto_status"],
+    "metrics": ["metric_id"] + template_columns("metric") + ["solution_ids", "command", "kind", "latest_result", "gap",
+                "action", "auto_status"],
 }
 
 
@@ -115,9 +135,15 @@ def _command_target(command: str) -> tuple[str, str]:
 
 
 def build() -> dict[str, list[dict]]:
+    """The five tabs, from the first-class records (problems, solutions, implementations, ideals, metrics)."""
     solutions = read_csv(STRUCT / "solutions.csv")
     components = read_csv(STRUCT / "components.csv")
     principles = read_csv(STRUCT / "principles.csv")
+    problem_records = read_csv(STRUCT / "problems.csv")
+    ideal_records = read_csv(STRUCT / "ideals.csv")
+    impl_records = {r["implementation_id"]: r for r in read_csv(STRUCT / "implementations.csv")}
+    metric_records = read_csv(STRUCT / "metrics.csv")
+    metric_by_id = {m["metric_id"]: m for m in metric_records}
     results = _latest_results()
     verdicts = _leaderboard().solution_verdicts()
     table = selection_table()
@@ -125,15 +151,23 @@ def build() -> dict[str, list[dict]]:
     for comp in components:
         for sid in filter(None, comp["solutions"].split(SEP)):
             by_solution.setdefault(sid, []).append(comp["component_id"])
+    sol_by_id = {s["solution_id"]: s for s in solutions}
+
+    def command_of(s: dict) -> str:
+        return SEP.join(metric_by_id[m]["command"] for m in filter(None, s["metric_ids"].split(SEP)) if m in metric_by_id)
 
     problems, sol_rows, impls, ideals, metrics = [], [], [], [], []
+    for p in problem_records:
+        linked = [sol_by_id[s] for s in filter(None, p["solution_ids"].split(SEP)) if s in sol_by_id]
+        open_ones = [s["solution_id"] for s in linked if s["gap"]]
+        problems.append({**{k: p.get(k, "") for k in COLUMNS["problems"]},
+                         "component_ids": SEP.join(sorted({c for s in linked for c in by_solution.get(s["solution_id"], [])})),
+                         "auto_status": "open: gap on " + ", ".join(open_ones) if open_ones else "served"})
     for s in solutions:
         sid = s["solution_id"]
-        has_metric = s["metric_command"] not in ("", "none")
-        comp, _ = _command_target(s["metric_command"])
-        problems.append({"problem_id": f"prob-{sid}", "problem": s["problem"], "solution_ids": sid,
-                         "component_ids": SEP.join(by_solution.get(sid, [])),
-                         "auto_status": "open: " + s["action"][:80] if s["gap"] else "served"})
+        command = command_of(s)
+        has_metric = command not in ("", "none")
+        comp, _ = _command_target(command)
         impl_ids, selected_id = [], ""
         chosen = selected_path(s, table)
         for path in filter(None, s["implementations"].split(SEP)):
@@ -142,40 +176,51 @@ def build() -> dict[str, list[dict]]:
             is_sel = path == chosen
             selected_id = iid if is_sel else selected_id
             res = results.get((comp, _stem(path))) if comp else None
+            rec = impl_records.get(iid, {})
             impls.append({
-                "implementation_id": iid, "solution_id": sid, "path": path, "kind": _kind(path),
+                "implementation_id": iid, "solution_id": sid, "path": path,
+                **{k: rec.get(k, "") for k in template_columns("implementation")}, "kind": _kind(path),
                 "selected": "yes" if is_sel else "",
                 "latest_result": f"{res['passed']}/{res['cases']}" if res else "",
                 "latest_cost_usd": res["cost_usd"] if res else "",
                 "cases_sha": res["cases_sha"] if res else "",
                 "auto_status": "selected" if is_sel else ("measured" if res else "unmeasured")})
-        ideals.append({"ideal_id": f"ideal-{sid}", "scope": "solution", "statement": s["ideal"],
-                       "applies_to": sid, "metric_ids": f"metric-{sid}", "auto_status":
-                       "measured" if has_metric else "unmeasured"})
-        sel_res = results.get((comp, _command_target(s["metric_command"])[1])) if comp else None
-        metrics.append({
-            "metric_id": f"metric-{sid}", "solution_id": sid, "metric": s["metric"],
-            "command": s["metric_command"],
-            "kind": s["metric_kind"] or ("eval" if has_metric else ("invariant-tests" if s["metric"] == "tests" else "none")),
-            "latest_result": f"{sel_res['passed']}/{sel_res['cases']}" if sel_res else "",
-            "gap": s["gap"], "action": s["action"],
-            "auto_status": "measured" if sel_res else ("needs_run" if has_metric else
-                                                        ("pinned_by_tests" if s["metric"] == "tests" else "needs_metric"))})
+        sel_res = results.get((comp, _command_target(command)[1])) if comp else None
         sol_rows.append({
-            "solution_id": sid, "port": s["port"], "problem_id": f"prob-{sid}", "ideal_ids": f"ideal-{sid}",
-            "metric_ids": f"metric-{sid}", "implementation_ids": SEP.join(impl_ids),
-            "selected_implementation_id": selected_id, "selected_by": s["selected_by"],
-            "metric_kind": s["metric_kind"],
+            **{k: s.get(k, "") for k in ["solution_id"] + template_columns("solution") + ["problem_ids", "ideal_ids", "metric_ids", "port",
+                                                                                          "selected_by", "metric_kind"]},
+            "implementation_ids": SEP.join(impl_ids), "selected_implementation_id": selected_id,
             "verdict": verdicts.get(sid, {}).get("verdict", ""),
             "verdict_detail": verdicts.get(sid, {}).get("detail", ""),
             "component_ids": SEP.join(by_solution.get(sid, [])),
             "auto_status": "invariant" if s["metric_kind"] == "invariant"
             else (STATUS_BY_VERDICT.get(verdicts.get(sid, {}).get("verdict", ""), "decided-by-hand")
                   if sel_res else "decided-by-hand")})
+        for mid in filter(None, s["metric_ids"].split(SEP)):
+            m = metric_by_id.get(mid)
+            if m is None:
+                continue
+            metrics.append({
+                **{k: m.get(k, "") for k in ["metric_id"] + template_columns("metric") + ["solution_ids", "command"]},
+                "kind": s["metric_kind"] or ("eval" if has_metric else "none"),
+                "latest_result": f"{sel_res['passed']}/{sel_res['cases']}" if sel_res else "",
+                "gap": s["gap"], "action": s["action"],
+                "auto_status": "measured" if sel_res else ("needs_run" if has_metric else "needs_metric")})
+    solutions_of_ideal: dict[str, list[str]] = {}
+    for s in solutions:
+        for iid in filter(None, s["ideal_ids"].split(SEP)):
+            solutions_of_ideal.setdefault(iid, []).append(s["solution_id"])
+    for i in ideal_records:
+        sids = solutions_of_ideal.get(i["ideal_id"], [])
+        measured = any(_command_target(command_of(sol_by_id[sid]))[0] for sid in sids)
+        ideals.append({**{k: i.get(k, "") for k in ["ideal_id"] + template_columns("ideal") + ["problem_ids"]}, "scope": "solution",
+                       "solution_ids": SEP.join(sids),
+                       "metric_ids": SEP.join(m for sid in sids for m in sol_by_id[sid]["metric_ids"].split(SEP) if m),
+                       "auto_status": "measured" if measured else "unmeasured"})
     for p in principles:
-        ideals.append({"ideal_id": p["principle_id"].lower(), "scope": "principle",
-                       "statement": f"{p['name']}: {p['statement']}",
-                       "applies_to": "the whole repo", "metric_ids": p["how_measured"],
+        ideals.append({"ideal_id": p["principle_id"].lower(), "scope": "principle", "name": p["name"], "principle": p["statement"],
+                       "state_description": "", "hints_of_measurement": p["how_measured"], "problem_ids": "",
+                       "solution_ids": "the whole repo", "metric_ids": "",
                        "auto_status": "enforced-by-check" if "(S" in p["how_measured"] else "behaviour-eval"})
     return {"problems": problems, "solutions": sol_rows, "implementations": impls,
             "ideals": ideals, "metrics": metrics}

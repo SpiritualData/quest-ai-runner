@@ -4,13 +4,13 @@
 Run from anywhere:  python scripts/check_structure.py [--write-docs] [--strict]
 Exit 0 = clean, 1 = violations (printed one per line as ``RULE path: message``).
 
-The registry is data, not code (see docs/structure/README.md, which lists rules S1 to S25 once, in order):
+The registry is data, not code (see docs/structure/README.md, which lists rules S1 to S27 once, in order):
   * components.csv   placement only: component_id, layer, path globs, role, the solutions each serves
   * solutions.csv    each solution: problem, ideal, port, implementations, selected one, metric, gap, action
   * waivers.csv      known, justified exceptions to a rule (each must still apply)
   * COMPONENTS.md    generated from components.csv (--write-docs rewrites it, with configuration.md and tracker/)
 
-Every problem line starts with the id of the rule it breaks (S1 to S25); the one-line statement of each rule is
+Every problem line starts with the id of the rule it breaks (S1 to S27); the one-line statement of each rule is
 in docs/structure/README.md, so there is a single list to keep current.
 """
 from __future__ import annotations
@@ -25,8 +25,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env_vars  # noqa: E402  (scripts/env_vars.py: the S15 scanner and the configuration.md renderer)
 
+try:                                    # the template reader exists in the full repo; a copied-in fixture lacks it
+    import sync_esoi_template  # noqa: E402
+except ImportError:                     # pragma: no cover
+    sync_esoi_template = None
+
 ROOT = Path(__file__).resolve().parent.parent
 STRUCT = ROOT / "docs" / "structure"
+TEMPLATE = STRUCT / "esoi_template.csv"
 EVALUATION = ROOT / "evaluation" / "components"
 MAX_LINES = 1500
 PKG = "quest_ai_runner"
@@ -58,6 +64,19 @@ def _load_leaderboard():
 
 
 leaderboard = _load_leaderboard()
+
+
+def load_records():
+    """quest_ai_runner/structure/records.py is the one checker of the intent records (also used by consumers);
+    it is standard-library only, so it is loaded by path."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("qar_structure_records", ROOT / "quest_ai_runner" / "structure" / "records.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+records = load_records()
 
 
 def latest_results():
@@ -203,10 +222,27 @@ def load_selection_table() -> dict:
     return mod.SELECTION
 
 
+def join_metrics(solutions: list[dict], metrics: list[dict]) -> list[dict]:
+    """Give each solution row the `metric` (names) and `metric_command` (commands) of its metric records.
+
+    A solution links its metrics through `metric_ids`; the name and command live on the metric record
+    (metrics.csv), so the rules that read a solution's metric_command see the one source. A registry with no
+    metrics.csv keeps the columns it has.
+    """
+    if not metrics:
+        return solutions
+    by_id = {m["metric_id"]: m for m in metrics}
+    for row in solutions:
+        linked = [by_id[i] for i in records.ids(row.get("metric_ids", "")) if i in by_id]
+        row["metric"] = "; ".join(m["name"] for m in linked if m["name"])
+        row["metric_command"] = "; ".join(m["command"] for m in linked if m["command"])
+    return solutions
+
+
 def check() -> list[str]:
     bad: list[str] = []
     components = read_csv(STRUCT / "components.csv")
-    solutions = read_csv(STRUCT / "solutions.csv")
+    solutions = join_metrics(read_csv(STRUCT / "solutions.csv"), read_csv(STRUCT / "metrics.csv"))
     waivers = read_csv(STRUCT / "waivers.csv")
     files = repo_files()
     used_waivers: set[tuple[str, str]] = set()
@@ -535,7 +571,7 @@ def check() -> list[str]:
                        "folder; make it a solution's metric or delete it")
 
     # S22 numbers live in results.csv only
-    prose = [("solutions.csv", r["solution_id"], col, r[col]) for r in solutions for col in ("metric", "gap", "action")]
+    prose = [("solutions.csv", r["solution_id"], col, r[col]) for r in solutions for col in ("gap", "action")]
     prose += [("waivers.csv", f"{w['rule']} {w['path']}", "reason", w["reason"]) for w in waivers]
     for where, ident, col, text in prose:
         hit = NUMBER_IN_PROSE.search(text)
@@ -551,8 +587,9 @@ def check() -> list[str]:
     strict = "--strict" in sys.argv
     for r in solutions:
         sid = r["solution_id"]
-        for col in ("problem", "ideal", "metric", "selected"):
-            if not r[col].strip():
+        needed = ("selected",) if waived("S26", sid) else ("problem_ids", "ideal_ids", "metric_ids", "selected")
+        for col in needed:
+            if col in r and not r[col].strip():
                 bad.append(f"S20 {sid}: `{col}` is empty (a solution needs a problem, an ideal, a metric and a selected implementation)")
         if not patterns(r["implementations"]):
             bad.append(f"S20 {sid}: lists no implementation")
@@ -577,6 +614,31 @@ def check() -> list[str]:
             continue
         if not waived("S20", sid):
             bad.append(f"S20 {sid}: {why}; re-run `run.py {comp} --impl {sel} --record` on committed code")
+
+    # S26 the intent records specify every field of the evolvable-structure template, and link as it says;
+    # S27 the parsed template is current with the skill (skipped where the skill is not reachable)
+    if TEMPLATE.exists():
+        template = records.load_template(TEMPLATE)
+        pending = {r["solution_id"] for r in solutions if waived("S26", r["solution_id"])}
+        bad += [f"S26 {line}" for line in records.check_records(STRUCT, template, pending)]
+        record_files = (("problems.csv", "problem_id", "problem"), ("ideals.csv", "ideal_id", "ideal"),
+                        ("solutions.csv", "solution_id", "solution"), ("implementations.csv", "implementation_id", "implementation"),
+                        ("metrics.csv", "metric_id", "metric"))
+        prose = []
+        for name, key, entity in record_files:
+            columns = [t["field_key"] for t in template.get(entity, []) if t["group"] != "meta"]
+            rows = solutions if entity == "solution" else read_csv(STRUCT / name)
+            prose += [(name, row[key], col, row[col]) for row in rows for col in columns if col in row]
+        for name, ident, col, text in prose:
+            hit = NUMBER_IN_PROSE.search(text)
+            if hit:
+                bad.append(f"S22 {name} {ident}: `{col}` states a number ({hit.group(0)!r}); numbers live in results.csv")
+        skill = sync_esoi_template.skill_path() if sync_esoi_template else None
+        if skill is not None and skill.exists():
+            rows, _ = sync_esoi_template.parse(skill.read_text())
+            if sync_esoi_template.render_csv(rows) != TEMPLATE.read_text():
+                bad.append("S27 docs/structure/esoi_template.csv: stale against the evolvable-structure skill "
+                           "(run scripts/sync_esoi_template.py, then fill the columns it adds)")
 
     # S9 waivers still apply
     for w in waivers:

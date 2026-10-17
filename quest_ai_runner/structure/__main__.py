@@ -12,7 +12,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .consumer_check import check_consumer
+from .consumer_check import check_consumer, library_dir
+from .records import check_records, load_template, read_csv
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -26,7 +27,26 @@ def main(argv: Optional[list] = None) -> int:
     check.add_argument("--fail-on-lag", action="store_true", help="exit 1 when the pin is behind the installed checkout")
     check.add_argument("--solutions", default=None, help="the consumer's solutions CSV (with --results: C9 and C10)")
     check.add_argument("--results", default=None, help="the consumer's recorded results CSV")
+    rec = sub.add_parser("check-records", help="verify intent records (problems, solutions, implementations, ideals, metrics)")
+    rec.add_argument("--dir", default="docs/structure", help="the folder holding problems.csv, ideals.csv, solutions.csv, implementations.csv, metrics.csv")
+    rec.add_argument("--template", default=None, help="the parsed ESOI template (default: the library's docs/structure/esoi_template.csv)")
+    rec.add_argument("--related-problems", default=None, help="another registry's problems.csv that related_problem_ids must resolve in "
+                     "(default: the library's, when found)")
+    rec.add_argument("--waive", default="", help="comma-separated solution ids whose records are still to be written")
     args = parser.parse_args(argv)
+    if args.cmd == "check-records":
+        source = library_dir().parent / "docs" / "structure"
+        template = Path(args.template) if args.template else source / "esoi_template.csv"
+        if not template.exists():
+            print(f"note: template {template} not found (a wheel install has no docs); records not checked")
+            return 0
+        related = Path(args.related_problems) if args.related_problems else source / "problems.csv"
+        known = {row["problem_id"] for row in read_csv(related)} if related.exists() else None
+        problems = check_records(Path(args.dir), load_template(template), {w for w in args.waive.split(",") if w},
+                                 related_problem_ids=known)
+        for line in problems:
+            print(line)
+        return 1 if problems else 0
     report = check_consumer(Path(args.registry), Path(args.root), Path(args.requirements) if args.requirements else None,
                             Path(args.solutions) if args.solutions else None, Path(args.results) if args.results else None)
     for line in report.problems:

@@ -50,15 +50,29 @@ def cases_digest(component, base=HERE):
     return hashlib.sha256(b"".join(f.read_bytes().replace(b"\r\n", b"\n") for f in files)).hexdigest()[:8]
 
 
+def solution_rows(path=SOLUTIONS):
+    """The rows of solutions.csv, each with the `metric_command` of its metric records (metrics.csv beside it,
+    linked by `metric_ids`); a registry without metrics.csv keeps the column it has."""
+    path = Path(path)
+    with open(path, newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    metrics_file = path.with_name("metrics.csv")
+    if metrics_file.exists():
+        with open(metrics_file, newline="") as fh:
+            commands = {m["metric_id"]: m["command"] for m in csv.DictReader(fh)}
+        for row in rows:
+            row["metric_command"] = "; ".join(commands[i] for i in row.get("metric_ids", "").split(";") if i in commands)
+    return rows
+
+
 def invariant_components(path=SOLUTIONS):
     """{component: invariant_reason} for every component named by the metric_command of an ``invariant`` solution."""
     out = {}
-    with open(path, newline="") as fh:
-        for row in csv.DictReader(fh):
-            if (row.get("metric_kind") or "").strip() != "invariant":
-                continue
-            for m in re.finditer(r"components/run\.py (\w+) --impl \w+", row["metric_command"]):
-                out[m.group(1)] = row["invariant_reason"].strip()
+    for row in solution_rows(path):
+        if (row.get("metric_kind") or "").strip() != "invariant":
+            continue
+        for m in re.finditer(r"components/run\.py (\w+) --impl \w+", row["metric_command"]):
+            out[m.group(1)] = row["invariant_reason"].strip()
     return out
 
 
@@ -88,10 +102,9 @@ def latest_results(path=RESULTS):
 def selected_impls(path=SOLUTIONS):
     """{component: selected impl name} for solutions whose metric is one or more harness commands."""
     out = {}
-    with open(path, newline="") as fh:
-        for row in csv.DictReader(fh):
-            for m in re.finditer(r"components/run\.py (\w+) --impl (\w+)", row["metric_command"]):
-                out.setdefault(m.group(1), m.group(2))   # a row may name more than one arm: each is that arm's selection
+    for row in solution_rows(path):
+        for m in re.finditer(r"components/run\.py (\w+) --impl (\w+)", row["metric_command"]):
+            out.setdefault(m.group(1), m.group(2))   # a row may name more than one arm: each is that arm's selection
     return out
 
 
@@ -289,18 +302,17 @@ def solution_verdicts(results=None, path=SOLUTIONS):
     first harness arm of its ``metric_command`` (the primary metric; later arms are listed on the board)."""
     results = latest_results(RESULTS) if results is None else results
     out = {}
-    with open(path, newline="") as fh:
-        for row in csv.DictReader(fh):
-            if (row.get("metric_kind") or "").strip() != "eval":
-                continue
-            m = re.search(r"components/run\.py (\w+) --impl (\w+)", row["metric_command"])
-            if not m:
-                out[row["solution_id"]] = dict(verdict="UNMEASURED", detail="no harness metric", component="",
-                                               selected_by=row["selected_by"])
-                continue
-            label, detail = verdict(results.get(m.group(1), {}), m.group(2))
-            out[row["solution_id"]] = dict(verdict=label, detail=detail, component=m.group(1),
+    for row in solution_rows(path):
+        if (row.get("metric_kind") or "").strip() != "eval":
+            continue
+        m = re.search(r"components/run\.py (\w+) --impl (\w+)", row["metric_command"])
+        if not m:
+            out[row["solution_id"]] = dict(verdict="UNMEASURED", detail="no harness metric", component="",
                                            selected_by=row["selected_by"])
+            continue
+        label, detail = verdict(results.get(m.group(1), {}), m.group(2))
+        out[row["solution_id"]] = dict(verdict=label, detail=detail, component=m.group(1),
+                                       selected_by=row["selected_by"])
     return out
 
 

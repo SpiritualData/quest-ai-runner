@@ -20,10 +20,11 @@ REPO = Path(__file__).resolve().parents[3]
 PY = sys.executable
 ENV = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", PYTHONPATH=str(REPO))
 COPIED = ["scripts/check_structure.py", "scripts/env_vars.py", "scripts/build_tracker.py",
-          "evaluation/components/leaderboard.py"]
+          "evaluation/components/leaderboard.py", "quest_ai_runner/structure/records.py"]
 COMPONENT_COLS = ["component_id", "layer", "path", "role", "solutions"]
-SOLUTION_COLS = ["solution_id", "problem", "ideal", "port", "implementations", "selected", "selected_by",
-                 "metric_kind", "invariant_reason", "metric", "metric_command", "gap", "action"]
+TEMPLATE = REPO / "docs" / "structure" / "esoi_template.csv"      # the parsed skill template: every record fills its fields
+SOLUTION_LINKS = ["problem_ids", "ideal_ids", "metric_ids", "port", "implementations", "selected", "selected_by",
+                  "metric_kind", "invariant_reason", "gap", "action"]
 RESULT_COLS = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls", "tokens_in",
                "tokens_out", "cost_usd", "seconds", "git_sha", "cases_sha", "model"]
 CASES_SHA = hashlib.sha256(b"[]\n").hexdigest()[:8]   # what the S20 check recomputes from greet/cases.json
@@ -62,6 +63,7 @@ COMPONENTS = [  # id, layer, path globs; every fixture component serves the one 
     ("docs", "docs", "docs/*.md;README.md;.gitignore"),
     ("tests", "tests", "tests/**"),
     ("eval", "evaluation", "evaluation/components/**"),
+    ("structure-tools", "cli", "quest_ai_runner/structure/*.py"),
 ]
 
 
@@ -77,12 +79,42 @@ def component_row(cid, layer, path):
     return dict(component_id=cid, layer=layer, path=path, role="fixture role", solutions="greet")
 
 
+def template_keys(entity, interface=True):
+    groups = {"specify", "interface"} if interface else {"specify"}
+    return [r["field_key"] for r in read_rows(TEMPLATE) if r["entity"] == entity and r["group"] in groups]
+
+
+def filled(entity, **fixed):
+    """A record with every template field of the entity filled with plain text (and ``fixed`` columns on top)."""
+    row = {key: f"fixture {key.replace('_', ' ')}" for key in template_keys(entity)}
+    row.update(fixed)
+    return row
+
+
+PROBLEM_TEXT = "Greeting a person by hand is slow and people are greeted by the wrong name"
+
+
 def solution_row():
-    return dict(solution_id="greet", problem="Greet a person", ideal="The greeting names the person",
-                port="Greeter", implementations="quest_ai_runner/adapters/plain.py;evaluation/components/greet/impls/live.py;"
-                "evaluation/components/greet/impls/shout.py", selected="plain",
-                selected_by="selection table", metric_kind="eval", invariant_reason="", metric="names the person",
-                metric_command=METRIC, gap="", action="")
+    return filled("solution", solution_id="greet", problem_ids="prob-greet", ideal_ids="ideal-greet", metric_ids="metric-greet",
+                  port="Greeter", implementations="quest_ai_runner/adapters/plain.py;evaluation/components/greet/impls/live.py;"
+                  "evaluation/components/greet/impls/shout.py", selected="plain",
+                  selected_by="selection table", metric_kind="eval", invariant_reason="", gap="", action="")
+
+
+def record_files():
+    """The other four intent record files of the clean fixture: one problem, ideal, metric and an implementation each."""
+    solution = solution_row()
+    return {
+        "problems.csv": (["problem_id"] + template_keys("problem") + ["ideal_ids", "solution_ids"],
+                         [filled("problem", problem_id="prob-greet", problem=PROBLEM_TEXT, ideal_ids="ideal-greet", solution_ids="greet")]),
+        "ideals.csv": (["ideal_id"] + template_keys("ideal") + ["problem_ids"],
+                       [filled("ideal", ideal_id="ideal-greet", problem_ids="prob-greet")]),
+        "metrics.csv": (["metric_id"] + template_keys("metric") + ["solution_ids", "command"],
+                        [filled("metric", metric_id="metric-greet", solution_ids="greet", command=METRIC)]),
+        "implementations.csv": (["implementation_id", "solution_id", "path"] + template_keys("implementation"),
+                                [filled("implementation", implementation_id=f"greet:{path.rsplit('/', 1)[-1][:-3]}", solution_id="greet", path=path)
+                                 for path in solution["implementations"].split(";")]),
+    }
 
 
 def result_row(impl, passed, cases_sha=CASES_SHA):
@@ -105,7 +137,10 @@ def baseline_repo(dest):
     for rel, text in PYTHON_SOURCES.items():
         write(root, rel, text)
     write(root, "docs/structure/components.csv", csv_text(COMPONENT_COLS, [component_row(*c) for c in COMPONENTS]))
-    write(root, "docs/structure/solutions.csv", csv_text(SOLUTION_COLS, [solution_row()]))
+    write(root, "docs/structure/esoi_template.csv", TEMPLATE.read_text())
+    write(root, "docs/structure/solutions.csv", csv_text(["solution_id"] + template_keys("solution") + SOLUTION_LINKS, [solution_row()]))
+    for name, (cols, rows) in record_files().items():
+        write(root, f"docs/structure/{name}", csv_text(cols, rows))
     write(root, "docs/structure/waivers.csv", csv_text(["rule", "path", "reason"], []))
     write(root, "docs/structure/principles.csv", csv_text(
         ["principle_id", "name", "statement", "how_measured"],

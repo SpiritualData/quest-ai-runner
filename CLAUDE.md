@@ -57,10 +57,9 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 ## Evolvable structure (ESOI): the registry and the check
 
 The repo's structure is data, not folklore. `docs/structure/` holds `components.csv` (placement only: id, layer,
-path globs, role, the solutions each serves), `solutions.csv` (each solution: problem, ideal, port, implementations,
-the selected one, `eval` or `invariant`, its metric command, gap and action) and `waivers.csv` (justified exceptions
+path globs, role, the solutions each serves), `problems.csv`, `ideals.csv`, `solutions.csv`, `implementations.csv` and `metrics.csv` (the intent records, each with the fields of the evolvable-structure skill's template in `esoi_template.csv`; a solution also has its port, implementations, the selected one, `eval` or `invariant`, gap and action, and a metric its command) and `waivers.csv` (justified exceptions
 that can only shrink). `tracker/` is the generated, committed Sheet view of the registry (check S17;
-`python scripts/build_tracker.py`). To add a solution, read `docs/structure/STANDARD.md`; the numbered rules S1 to S25 are
+`python scripts/build_tracker.py`). To add a solution, read `docs/structure/STANDARD.md`; the numbered rules S1 to S27 are
 a reference in `docs/structure/README.md`. Nothing lives outside a solution: a component that serves none (S19), or a
 solution with no current recorded run (S20), fails the check, and the code is removed rather than waived.
 `evaluation/components/esoi_behavior/` scores whether an AI's replies follow ESOI (`cases.csv` is reviewed as a sheet).

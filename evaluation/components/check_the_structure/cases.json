@@ -164,6 +164,11 @@
      "value": "2"
     },
     {
+     "op": "write",
+     "path": "evaluation/components/greet/broken/naive.py",
+     "content": "\"\"\"BASELINE: the naive greeter a first draft would write.\"\"\"\n"
+    },
+    {
      "op": "regen"
     }
    ]
@@ -499,10 +504,10 @@
    "edits": [
     {
      "op": "csv_cell",
-     "path": "docs/structure/solutions.csv",
-     "key_col": "solution_id",
-     "key": "greet",
-     "col": "metric_command",
+     "path": "docs/structure/metrics.csv",
+     "key_col": "metric_id",
+     "key": "metric-greet",
+     "col": "command",
      "value": "none"
     },
     {
@@ -546,9 +551,9 @@
    "edits": [
     {
      "op": "csv_cell",
-     "path": "docs/structure/solutions.csv",
-     "key_col": "solution_id",
-     "key": "greet",
+     "path": "docs/structure/problems.csv",
+     "key_col": "problem_id",
+     "key": "prob-greet",
      "col": "problem",
      "value": "Greet someone else"
     }
@@ -611,10 +616,6 @@
      "path": "docs/structure/solutions.csv",
      "row": {
       "solution_id": "lonely",
-      "problem": "p",
-      "ideal": "i",
-      "metric": "none",
-      "metric_command": "none",
       "gap": "g",
       "action": "a"
      }
@@ -960,7 +961,7 @@
      "path": "docs/structure/solutions.csv",
      "key_col": "solution_id",
      "key": "greet",
-     "col": "ideal",
+     "col": "ideal_ids",
      "value": ""
     },
     {
@@ -982,10 +983,10 @@
    "edits": [
     {
      "op": "csv_cell",
-     "path": "docs/structure/solutions.csv",
-     "key_col": "solution_id",
-     "key": "greet",
-     "col": "metric_command",
+     "path": "docs/structure/metrics.csv",
+     "key_col": "metric_id",
+     "key": "metric-greet",
+     "col": "command",
      "value": "tests/test_greet.py"
     },
     {
@@ -1289,10 +1290,10 @@
    "edits": [
     {
      "op": "csv_cell",
-     "path": "docs/structure/solutions.csv",
-     "key_col": "solution_id",
-     "key": "greet",
-     "col": "metric_command",
+     "path": "docs/structure/metrics.csv",
+     "key_col": "metric_id",
+     "key": "metric-greet",
+     "col": "command",
      "value": "evaluation/components/run.py greet --impl live; evaluation/components/run.py greet --impl ghost"
     },
     {
@@ -1377,6 +1378,129 @@
   },
   "expect": {
    "clean": true
+  }
+ },
+ {
+  "id": "CTS-118",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a template field of a problem left empty",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/problems.csv",
+     "key_col": "problem_id",
+     "key": "prob-greet",
+     "col": "why_hard",
+     "value": ""
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S26",
+   "contains": "why_hard"
+  }
+ },
+ {
+  "id": "CTS-119",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a problem written as a task",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/problems.csv",
+     "key_col": "problem_id",
+     "key": "prob-greet",
+     "col": "problem",
+     "value": "Decide whether to greet a person"
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S26",
+   "contains": "reads as a task"
+  }
+ },
+ {
+  "id": "CTS-120",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a solution that addresses no problem",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "problem_ids",
+     "value": ""
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S26",
+   "contains": "addresses no problem"
+  }
+ },
+ {
+  "id": "CTS-121",
+  "area": "repo",
+  "kind": "repo",
+  "description": "an ideal that opposes no problem",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/ideals.csv",
+     "key_col": "ideal_id",
+     "key": "ideal-greet",
+     "col": "problem_ids",
+     "value": ""
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S26",
+   "contains": "opposes no problem"
+  }
+ },
+ {
+  "id": "CTS-122",
+  "area": "repo",
+  "kind": "repo",
+  "description": "an implementation with no record",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_drop",
+     "path": "docs/structure/implementations.csv",
+     "key_col": "implementation_id",
+     "key": "greet:shout"
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S26",
+   "contains": "has no record"
   }
  }
 ]

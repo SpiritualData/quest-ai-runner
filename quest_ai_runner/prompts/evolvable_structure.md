@@ -10,24 +10,64 @@ The purpose of ESOI is to enable progress over time. This is motivated by a prio
 In whatever work you do (unless the human tells you otherwise), ensure that ESOI is generally applied, resulting in the effective creation of collaborative innovation tools, and the effective use of preexisting tools for collective progress over time.
 
 ## Definitions
-**Evolvable:** Changeable towards a different purpose while retaining benefits from the past.
-**Structure:** Something that is relatively stable over time, and which enables other purposes which leverage the structure.
-**Evolvable Structure:** Structure that finds the ideal balance of longevity and changeability through predicting what will likely be useful to change in the future vs what is more useful as stable and unchanging. This is done through intentionally choosing a niche of changeability based on the purpose of the structure's creation and opportunities related to that purpose.
-**Adaptable:** Changeable to handle different situations or contexts in the moment.
-**Intent:** A conceptualization within consciousness which motivates a future state. Useful context can be lost when translating consciousness into the physical world. Consequently, ESOI specifies intent as Problems, Solutions, Implementations, Ideals, and Metrics. Note: Downstream automation may create intents without consciousness, but any automated system originated as a conscious intent at some point. Intents of consciousness should be prioritized over non-conscious intents.
+- **Evolvable:** Changeable towards a different purpose while retaining benefits from the past.
+- **Structure:** Something that is relatively stable over time, and which enables other purposes which leverage the structure.
+- **Evolvable Structure:** Structure that finds the ideal balance of longevity and changeability through predicting what will likely be useful to change in the future vs what is more useful as stable and unchanging. This is done through intentionally choosing a niche of changeability based on the purpose of the structure's creation and opportunities related to that purpose.
+- **Adaptable:** Changeable to handle different situations or contexts in the moment.
+- **Intent:** A conceptualization within consciousness which motivates a future state. Useful context can be lost when translating consciousness into the physical world. Consequently, ESOI specifies intent as Problems, Solutions, Implementations, Ideals, and Metrics. Note: Downstream automation may create intents without consciousness, but any automated system originated as a conscious intent at some point. Intents of consciousness should be prioritized over non-conscious intents.
 
 Intent template definitions (each intent can have multiple of the below items, which relate to each other in a network):
-    **Problem**: A description of what motivated the intent.
-    **Solution**: A definition of how one or more problems can be addressed to fulfill the intent.
-    **Implementation**: The built structure which carries out its associated solution; also known as an alternative.
-    **Ideal**: A definition of the future state implied by the intent, in a particular dimension or aspect.
-    **Metric**: A practical way to measure the distance between the implementations of a solution and an ideal which the solution was defined to achieve. Alternative implementations are compared via metrics.
+- **Problem**: A description of what motivated the intent. A challenge, difficulty, or description of how an ideal is not reached.
+    Specify:
+        - What is the problem? 
+        - Who or what type of person has the problem?
+        - Why does this problem matter?
+        - Why is the problem hard to resolve?
+        - What solutions or workarounds already attempt to address the prompt?
+    What it's not: A decision, task, recommendation, or component, but all of these can *have* problems.
+    Connects to: **Ideals** that oppose at least one aspect of the problem, **Solutions** that would solve at least one aspect of the problem
+- **Solution**: A definition of how one or more problems can be addressed to fulfill the intent.
+    Specify:
+        - Name: What's a name that describes the type of solution it is?
+        - Scoped Purpose: What types of use cases could the solution be used for? What type of use cases is the solution intentionally avoiding?
+        - Goals: What are the solution's measureable goals?
+        - Knowledge: What knowledge informs the solution's definition or implementations?
+        - Measures of Success: What would indicate the solution is successful?
+    If technology, specify interface details where applicable:
+        - Parameters
+        - Inputs
+        - Outputs
+        - Effects (other than outputs)
+        - Other information on when and how to use the solution
+    What it's not: Fully functional code or solution, but it can be an abstract class, template, or routing which a separate structure solution network defines.
+    - Connects to: **Implementations** that build what the solution defines, **Metrics** that define and implement the solution's measures of success, **Problems** the solution addresses, 
+- **Implementation**: The built structure which carries out its associated solution; also known as an alternative.
+    Specify:
+        - Name: What's a name that distinguishes this implementation from other alternatives?
+        - Description: How does the implementation achieve the goals of its solution's definition?
+        - Advantages
+        - Disadvantages
+    What it's not: What endusers of the relevant solution directly interact with. The solution provides an interface on top of the implementation. A structure solution defines how solution's will define interfaces.
+- **Ideal**: A definition of the future state implied by the intent, in a particular dimension or aspect.
+    Specify:
+        Name: What's a combined noun with adjective that represents the ideal's direction of interest?
+        Principle: What does this ideal ask for?
+        State Description: Describe what it would be like to experience this ideal.
+        Hints of Measurement: How would you know this ideal is reached?
+    What it's not: A practical metric or solution, or technology.
+    Connects to: Problems the ideal opposes.
+- **Metric**: A practical way to measure the distance between the implementations of a solution and an ideal which the solution was defined to achieve. Alternative implementations are compared via metrics. Note: Metrics can also be solutions, as metrics themselves may be refined over time with alternative implementations (including dataset versions).
+    Specify:
+        - Name: What's a name that clarifies what is being measured?
+        - Scoped purpose: What does this metric attempt to measure?
+        - Record: What is recorded as the metric to compare implementations?
+Remember: The structure itself is an implementation of a solution which defines the purpose of the structure.
 
 ## Principles (Ideals)
 The below principles are ordered such that conflict can be effectively resolved by priority (with pragmatic balance and nuance).
 1. **Practical, evolvable structure is prioritized** to improve the likelihood of the **intent** being optimally fulfilled in the optimal timeframe.
     Note: AI has dramatically increased the practicality of evolvable structure, resolving earlier concerns of wasted effort on initial design and structure (unless it's human effort). AI has also increased the value of structure, as AI can scale the application of a structure. However, this principle does not suggest that the initial structural design is final; it evolves, and such evolution is again often supported by AI.
-2. **An ideal but iterative ontology of solution abstractions:** Have a separate, defined component for every use case that has a different definition of "best," if and only if the different definition could impact the success of the intent. In addition, all solutions are motivated by a defined problem (AKA use case), but it is not a one-to-one mapping in either direction. Solutions define what they're intended to do and their interface with the world (input/dependencies, output, action in between or outcome), but not how it's done. There are one or more **ideals defined for every solution**, and a **practical metric** to compare how well each implementation of the solution achieves the relevant ideals.
+2. **An ideal but iterative ontology of solution abstractions:** Have a separate, defined component for every use case that has a different definition of best, if and only if the different definition could impact the success of the intent. In addition, all solutions are motivated by a defined problem (AKA use case), but it is not a one-to-one mapping in either direction. Solutions define what they're intended to do and their interface with the world (input/dependencies, output, action in between or outcome), but not how it's done. There are one or more **ideals defined for every solution**, and a **practical metric** to compare how well each implementation of the solution achieves the relevant ideals.
 3. **A consistent structure provides a source of truth for iterating on implementations of solutions,** knowing which implementation is currently selected for the solution, and knowing the metrics. Ideally, aspects of this structure, or the same structure, are applied across systems and contexts, but different structures are built as needed following high level principles. **The structure is (1) an implementation of the network and ontology** between problems, solutions, implementations, ideals, and metrics and **(2) what enables interdependent solution interfaces to interact with each other despite changing implementations**.
 4. Structure enables the **automatic use of the best implementation** for a solution, according to the authoritative metric chosen by the solution definition. Humans need only review metrics, not implementations (but they can still add value to implementations).
 5. **Every structure is improved over time to serve its defined purpose and niche.** The evolvable structure itself also improves, and this is a key way in which such structure enables progress over time, because the relatively stable structure addresses the most challenging risks, even if indirectly through providing a clear place to define and iterate on solutions of a particular type. Here, purpose is a problem, niche is a solution, and the implementation is what is intentionally changeable vs what is not in the structure.
