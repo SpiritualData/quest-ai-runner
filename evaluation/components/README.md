@@ -37,6 +37,7 @@ Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the mod
 | `context_selection/` | `select(task, corpus) -> [file paths, best first]` | the labelled file's rank: top-1, top-3 (or within the solution's declared `budget`) |
 | `staleness/` | `changed(before, after) -> {stale paths}` | exact set of edited or deleted files; precision and recall over all cases |
 | `recipe_fast_path/` | `handle(message, world) -> {"reply", "exit_reason"}` | the fake tool world's recorded calls: right tool and args on a repeat, no lookalike write on a near miss, no tool on chat |
+| `chat_quality/` | `converse(case) -> record` | the dev Quest chat's judged pass flag per case (opt-in, SKIPs offline): routing, grounding on pivot facts, database side effects, rubric |
 
 | `judges/` | `judge(kind, args) -> dict` for overseer parsing and digest, reach verdict and block, quest ranking, sufficiency gate | declarative `expect` per case (`expect.py`); per-kind pass counts |
 | `overseer_signals/` | `signal(digest) -> {"signal", "reason", "hint"}` on 16 labelled scenarios | digest shows the label's evidence (offline); signal in `want` (live) |
@@ -130,7 +131,7 @@ $PY evaluation/components/quest_ops/dev_run.py --recipes-subset 10 --recipes on 
   `dev_recipe_subsets.json` holds the old 1, 10 and 30 teach-then-score sets.
 * `dev_world.py` (fixture and cleanup, verified gone), `dev_arm.py` (the arm: same `run_operation(message, world)`
   signature, route classification), `dev_verify.py` (verifiers), `dev_run.py` (scoring, sampling, CLI). The
-  REST and SSE plumbing is `evaluation/qualitative/devclient.py`, not a copy.
+  REST and SSE plumbing is `chat_quality/devclient.py`, not a copy.
 * Quest creation is gated for API keys: set `QAR_EVAL_QUEST_ID` (one approved quest, one run) or
   `QAR_EVAL_QUEST_FACTORY` (a command printing a new quest id; `QAR_EVAL_QUEST_FACTORY_CWD`,
   `QAR_EVAL_QUEST_DELETE` with `{quest_id}`), and optionally `QAR_EVAL_CATEGORY_ID`.
@@ -167,7 +168,9 @@ partial write. Fixes are in quest-backend history.
 Scoring is deterministic (no judge), so a run costs exactly the implementation's own model calls,
 which the harness counts. Cases 23-30 of classification are held out (the keyword baseline was
 written seeing 1-22 only), so a baseline gap between the two groups shows over-fitting.
-The old end-to-end harness (`evaluation/qualitative/`, needs a dev Quest world) stays for system-level checks.
+`chat_quality/` is the end-to-end chat metric (formerly `evaluation/qualitative/`): `converse(case) -> record`, scored from the
+record's pass flag. It needs a built dev Quest world, so its one implementation (`impls/dev_quest_chat.py`) SKIPs offline with
+exit 0; the full datasets, world lifecycle and judge are driven by `chat_quality/runner.py` (see its README).
 
 Every implementation measures live code or says it does not (check S12 in `docs/structure/README.md`): it
 imports or drives `quest_ai_runner`, or declares `ALTERNATIVE = True` (or a docstring opening `ALTERNATIVE`,

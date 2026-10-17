@@ -70,7 +70,7 @@ def check_dev_backend():
 
 def cancellable(row):
     """Why ``row`` may not be cancelled, or None when it is safe to clear. Pure (no I/O), so it is
-    unit-testable on its own from ``evaluation/qualitative/``."""
+    unit-testable on its own from ``evaluation/components/chat_quality/``."""
     if row is None:
         return "not found"
     if row.get("status") != "open":

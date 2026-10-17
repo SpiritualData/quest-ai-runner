@@ -2,7 +2,7 @@
 
 One file per dataset: `datasets/explicit.json`, `datasets/implicit.json`, `datasets/multistep.json`.
 Each is a JSON list of cases (or `{"cases": [...]}`). Files starting with `_` are ignored by
-`runner.py run` (use `_example.json` via `run --examples`). Aim for 30+ cases per dataset.
+`runner.py run` (the two smoke cases are `../cases.json`, run via `run --examples`). Aim for 30+ cases per dataset.
 `runner.py` validates every case on load and refuses duplicate ids.
 
 | field | required | meaning |
@@ -100,7 +100,7 @@ already cost a round of cases:
   cases where the right behaviour is to ask which quest, and say so in the rubric.
 * Use the PIVOTS: a case where the correct answer CHANGES because of a seeded fact is the point
   of the exercise. Ask for advice a pivot-blind answer would get wrong.
-* Check what the world actually contains with `python3 evaluation/qualitative/world.py show`.
+* Check what the world actually contains with `python3 evaluation/components/chat_quality/world.py show`.
 
 ## Every rubric item is required
 

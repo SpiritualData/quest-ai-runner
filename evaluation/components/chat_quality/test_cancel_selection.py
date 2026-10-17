@@ -6,7 +6,7 @@ Lives beside the harness, not under ``tests/`` (``pyproject.toml`` scopes ``test
 in ``devclient``, which refuses to load unless pointed at this machine's dev lane .env, the same
 constraint every other module in this DEV ONLY harness already carries. Run explicitly:
 
-    .venv/bin/python3 -m pytest evaluation/qualitative/test_cancel_selection.py -q
+    .venv/bin/python3 -m pytest evaluation/components/chat_quality/test_cancel_selection.py -q
 
 No network calls: every function under test here is a pure filter over fabricated dicts.
 """

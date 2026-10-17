@@ -24,7 +24,7 @@ import threading
 from pathlib import Path
 
 BACKEND_DIR = Path(os.environ.get("QUAL_BACKEND_DIR")
-                   or Path(__file__).resolve().parents[3] / "quest-backend")
+                   or Path(__file__).resolve().parents[4] / "quest-backend")
 TIERS = ("fast", "balanced", "quality", "science", "best")
 LOCK = threading.RLock()  # serializes requests; held for a whole chat stream
 USAGE_LOCK = threading.Lock()  # never LOCK here: LLM calls run on worker threads mid-stream

@@ -1,13 +1,13 @@
 """Qualitative QAR evaluation runner: real in-app Quest AI chat, DB side-effect diffs, LLM judge.
 
-    .venv/bin/python3 evaluation/qualitative/runner.py validate      # datasets only, no world, no network
-    .venv/bin/python3 evaluation/qualitative/runner.py setup [--wait SECONDS] [--partial]
-    .venv/bin/python3 evaluation/qualitative/runner.py run [--dataset explicit|implicit|multistep|all]
+    .venv/bin/python3 evaluation/components/chat_quality/runner.py validate      # datasets only, no world, no network
+    .venv/bin/python3 evaluation/components/chat_quality/runner.py setup [--wait SECONDS] [--partial]
+    .venv/bin/python3 evaluation/components/chat_quality/runner.py run [--dataset explicit|implicit|multistep|all]
                                                            [--only ID,ID] [--workers N] [--no-judge]
-    .venv/bin/python3 evaluation/qualitative/runner.py report
-    .venv/bin/python3 evaluation/qualitative/runner.py reset
-    .venv/bin/python3 evaluation/qualitative/runner.py teardown [--keep-quests]
-    .venv/bin/python3 evaluation/qualitative/runner.py cleanup-asks [--apply]
+    .venv/bin/python3 evaluation/components/chat_quality/runner.py report
+    .venv/bin/python3 evaluation/components/chat_quality/runner.py reset
+    .venv/bin/python3 evaluation/components/chat_quality/runner.py teardown [--keep-quests]
+    .venv/bin/python3 evaluation/components/chat_quality/runner.py cleanup-asks [--apply]
 
 Each case drives ONE FRESH conversation of the real chat (POST
 /api/quest-ai/conversations/{id}/messages/stream, auto_run true, the surface a subscriber uses).
@@ -152,11 +152,11 @@ def validate_datasets():
 
 
 def load_example_cases():
-    """The two smoke cases in datasets/_example.json (ignored by normal runs)."""
-    data = json.loads((DATASET_DIR / "_example.json").read_text())
+    """The two smoke cases in cases.json (the component's case file; ignored by normal dataset runs)."""
+    data = json.loads((HERE / "cases.json").read_text())
     cases = data["cases"] if isinstance(data, dict) else data
     for case in cases:
-        validate_case(case, "_example.json")
+        validate_case(case, "cases.json")
     return cases
 
 
@@ -579,7 +579,7 @@ def main():
                         help="parallelism for read-only cases (mutating cases always run serially)")
     parser.add_argument("--no-judge", action="store_true", help="deterministic pre-checks only")
     parser.add_argument("--examples", action="store_true",
-                        help="run datasets/_example.json (pipeline smoke test) instead of datasets")
+                        help="run cases.json (pipeline smoke test) instead of datasets")
     parser.add_argument("--wait", type=int, default=0, help="setup: seconds to wait for approvals")
     parser.add_argument("--partial", action="store_true", help="setup: smoke world, no quests")
     parser.add_argument("--approve-own-asks", action="store_true",

@@ -1,8 +1,15 @@
-# Qualitative QAR (Quest AI) evaluation
+# chat_quality: qualitative Quest AI chat evaluation
+
+This is the `chat_quality` component of `evaluation/components/` (solution `route-a-message`: does the chat
+route, ground and act correctly). Its function is `converse(case) -> record` (`interface.py`), scored by
+`score.py` from the record's pass flag; the one implementation, `impls/dev_quest_chat.py`, drives the dev Quest
+chat and SKIPs (exit 0) when no dev Quest is configured, so `components/run.py chat_quality --impl dev_quest_chat`
+is safe offline. The offline tests are `test_*.py` here. The full harness below (world lifecycle, datasets, judge)
+is what that implementation calls.
 
 Goal: measure whether Quest AI in the real app chat makes good, grounded, correctly routed, safely
 side-effecting decisions on a rich realistic account, not just which planner action it picks (that
-is the dev arm of `evaluation/components/quest_ops/`). Three datasets (73 / 44 / 48):
+is the dev arm of `evaluation/components/quest_ops/`). Three datasets (the counts are printed by `runner.py validate`):
 
 * `explicit`: the conversation is pinned to the case's quest (the assistant knows which quest).
 * `implicit`: no quest pinned; the assistant must work out which of five quests is meant.
@@ -14,7 +21,8 @@ DEV ONLY. Credentials come from the dev lane env file (relative to this checkout
 ## Files
 
 * `devclient.py`: dev REST + SSE client.
-* `world.py`: the disposable world (5 quests, 12 collections, notes, docs, team context, 16 named
+* `world_spec.py`: the world as data (date helpers, 17 named pivot facts, 5 quests, 12 collections, team context).
+* `world.py`: builds and tears down that world ( 12 collections, notes, docs, team context, 16 named
   pivot facts), `snapshot()`/`diff()` side-effect detector, `revert()`, `reset()`, `teardown()`, and
   the context-card cleanup: `cards_created_since`/`sweep_new_cards` (id-only, against the run's
   baseline) plus `card_snapshot`/`cards_to_restore`/`restore_cards` (full-dict, per case, also
@@ -23,7 +31,7 @@ DEV ONLY. Credentials come from the dev lane env file (relative to this checkout
 * `judge.py`: evidence builder, deterministic pre-checks, `claude -p` judge (sonnet, no API key).
 * `runner.py`: loads `datasets/*.json`, drives one fresh conversation per case, snapshots the DB
   before and after, pre-checks, judges, writes `RESULTS.md` and `/tmp/qualeval/raw/*.json`.
-* `datasets/schema.md`: the case schema. `datasets/_example.json`: two smoke cases.
+* `datasets/schema.md`: the case schema. `cases.json`: the two smoke cases that `components/run.py chat_quality` scores.
 * `test_card_sweep.py`: offline tests for the id-only sweep's selection/settling.
   `test_card_restore.py`: offline tests for the full-dict restore's selection
   (`cards_to_restore`, `managed_only_card`).
@@ -32,18 +40,18 @@ DEV ONLY. Credentials come from the dev lane env file (relative to this checkout
 
 ```
 PY=.venv/bin/python3        # from the quest-ai-runner repo root
-$PY evaluation/qualitative/runner.py setup --approve-own-asks  # dev: files 5 quest asks and approves them itself
-$PY evaluation/qualitative/runner.py setup --wait 900   # or: waits for a person to approve them
-$PY evaluation/qualitative/world.py show                # ids, pivots
-# author evaluation/qualitative/datasets/{explicit,implicit,multistep}.json (see schema.md)
-$PY evaluation/qualitative/runner.py validate           # schema-check the datasets: no world, no network
-$PY evaluation/qualitative/runner.py run --dataset explicit --only EXP-001,EXP-002   # try a few
-$PY evaluation/qualitative/runner.py run --dataset all --workers 4
-$PY evaluation/qualitative/runner.py report             # RESULTS.md
-$PY evaluation/qualitative/runner.py reset              # back to seeded state, no new approvals
-$PY evaluation/qualitative/runner.py teardown           # delete everything and prove it
-$PY evaluation/qualitative/runner.py cleanup-asks       # sweep leftover approval cards, dry run
-$PY evaluation/qualitative/runner.py cleanup-asks --apply   # actually clear them
+$PY evaluation/components/chat_quality/runner.py setup --approve-own-asks  # dev: files 5 quest asks and approves them itself
+$PY evaluation/components/chat_quality/runner.py setup --wait 900   # or: waits for a person to approve them
+$PY evaluation/components/chat_quality/world.py show                # ids, pivots
+# author evaluation/components/chat_quality/datasets/{explicit,implicit,multistep}.json (see schema.md)
+$PY evaluation/components/chat_quality/runner.py validate           # schema-check the datasets: no world, no network
+$PY evaluation/components/chat_quality/runner.py run --dataset explicit --only EXP-001,EXP-002   # try a few
+$PY evaluation/components/chat_quality/runner.py run --dataset all --workers 4
+$PY evaluation/components/chat_quality/runner.py report             # RESULTS.md
+$PY evaluation/components/chat_quality/runner.py reset              # back to seeded state, no new approvals
+$PY evaluation/components/chat_quality/runner.py teardown           # delete everything and prove it
+$PY evaluation/components/chat_quality/runner.py cleanup-asks       # sweep leftover approval cards, dry run
+$PY evaluation/components/chat_quality/runner.py cleanup-asks --apply   # actually clear them
 ```
 
 ### The one human step: quest approval
@@ -77,7 +85,7 @@ and start time, while another holds it. The kernel releases it when the holder e
 
 The dev server's models are its `.env`, shared by everyone. To compare models, run the harness
 in-process with quest-backend's interpreter: `QUAL_INPROCESS=1 [QUAL_INPROCESS_MODEL=<id>]
-<quest-backend>/venv/bin/python3 evaluation/qualitative/runner.py run ... --workers 1`. Every call
+<quest-backend>/venv/bin/python3 evaluation/components/chat_quality/runner.py run ... --workers 1`. Every call
 (REST and chat stream) is then served by the backend app in that process (`inprocess.py`,
 TestClient, same dev database, startup hooks not run), with every tier pinned to `<id>` for that
 run only; without a model it uses the backend `.env`, i.e. dev's current config. Run both arms of a

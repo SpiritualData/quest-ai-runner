@@ -3,7 +3,7 @@ routes, the REST calls the verifiers read, and a cleanup that proves it is gone.
 
 Nothing here runs offline. ``client()`` raises ``DevUnavailable`` unless ``QAR_EVAL_DEV_ENV_FILE`` names the
 dev lane's env file (never hardcode it) and the base URL is on the host named by ``QAR_EVAL_DEV_HOST``.
-The REST/SSE plumbing is ``evaluation/qualitative/devclient.py``, imported lazily, not copied.
+The REST/SSE plumbing is ``evaluation/components/chat_quality/devclient.py``, imported lazily, not copied.
 
 Quest creation is gated (an API key cannot approve its own hold): the fixture falls back, in order, to
 ``QAR_EVAL_QUEST_ID`` (reuse one approved quest, one run only) and ``QAR_EVAL_QUEST_FACTORY`` (a shell
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 TAG = "ZZEVAL"
-QUALITATIVE = Path(__file__).resolve().parents[2] / "qualitative"
+QUALITATIVE = Path(__file__).resolve().parents[1] / "chat_quality"
 HABITS = (("habit", "Morning Run", "binary", None), ("evening_walk", "Evening Walk", "binary", None),
           ("timer", "Stretching Timer", "timer", 15), ("meditation", "Meditation", "timer", 10))
 COLLECTION_KEYS = ("habit", "evening_walk", "timer", "meditation", "journal")

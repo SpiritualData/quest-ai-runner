@@ -7,7 +7,7 @@ waits for the card set to go quiet and runs twice, once after judging and once r
 case starts. These tests pin WHICH cards it selects and WHEN it stops waiting; no network, no real
 sleeping.
 
-Run:  .venv/bin/python3 -m pytest evaluation/qualitative/test_card_sweep.py -q
+Run:  .venv/bin/python3 -m pytest evaluation/components/chat_quality/test_card_sweep.py -q
 
 Kept beside the harness (not under tests/) for the same reason as the other two files here: importing
 ``world`` pulls in ``devclient``, which only loads against this machine's dev-lane env, so these are

@@ -7,7 +7,7 @@ which an id-only sweep can never see since its id was already in the baseline be
 These tests pin the pure selection logic (``cards_to_restore``, ``managed_only_card``) that decides
 what a full-dict snapshot/restore undoes; no network, no real waiting.
 
-Run:  .venv/bin/python3 -m pytest evaluation/qualitative/test_card_restore.py -q
+Run:  .venv/bin/python3 -m pytest evaluation/components/chat_quality/test_card_restore.py -q
 
 Kept beside the harness (not under tests/) for the same reason as the other files here: importing
 ``world`` pulls in ``devclient``, which only loads against this machine's dev-lane env, so these are

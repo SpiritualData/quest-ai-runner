@@ -5,7 +5,7 @@ Lives beside the harness, not under ``tests/`` (``pyproject.toml`` scopes ``test
 in ``devclient``, which refuses to load unless pointed at this machine's dev lane .env, the same
 constraint every other module in this DEV ONLY harness already carries. Run explicitly:
 
-    .venv/bin/python3 -m pytest evaluation/qualitative/test_judge.py -q
+    .venv/bin/python3 -m pytest evaluation/components/chat_quality/test_judge.py -q
 
 No network calls and no real ``claude -p``: every provider here is a fake stand-in for
 ``ModelProvider.answer()``, and the account-data fetch is driven through a monkeypatched
