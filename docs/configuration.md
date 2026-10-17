@@ -23,9 +23,9 @@ the docs and `.env.example` that describe what it does.
 | `DEEPSEEK_THINKING` |  | `adapters/deepseek_provider.py` | `docs/adapters.md` |
 | `GOOGLE_API_KEY` |  | `adapters/gemini_provider.py`, `cli_chat.py`, `cli_config.py` +2 | `docs/web-search.md` |
 | `MAX_THINKING_TOKENS` | Claude Code variable the CLI provider sets to cap extended thinking on plan() calls (0 turns thinking off). | `adapters/claude_cli_provider.py` | - |
-| `OPENAI_API_KEY` | OpenAI key: registers the OpenAI provider and the OpenAI embedder. | `adapters/qdrant_vector_store.py`, `cli_chat.py`, `cli_config.py` +2 | - |
-| `QAR_ACP_AGENT_COMMAND` |  | `adapters/acp_deep_runner.py` | `docs/acp-deep-runner.md` |
-| `QAR_ACP_NODE_PATH` |  | `adapters/acp_deep_runner.py` | `docs/acp-deep-runner.md` |
+| `OPENAI_API_KEY` | OpenAI key: registers the OpenAI provider and the OpenAI embedder. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `cli_config.py` +2 | - |
+| `QAR_ACP_AGENT_COMMAND` |  | `adapters/acp_deep_runner_protocol.py` | `docs/acp-deep-runner.md` |
+| `QAR_ACP_NODE_PATH` |  | `adapters/acp_deep_runner_protocol.py` | `docs/acp-deep-runner.md` |
 | `QAR_ANSWER_TIMEOUT` |  | `cli_config.py` | `.env.example` |
 | `QAR_ANTHROPIC_THINKING` |  | `adapters/anthropic_provider.py` | `.env.example` |
 | `QAR_ANTICIPATION` |  | `cli_config.py` | `docs/README.md`, `docs/anticipation.md` |
@@ -80,14 +80,14 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_MODEL_HARD` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_DEEP_MODEL_NORMAL` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_DEEP_MODEL_SIMPLE` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
-| `QAR_DEEP_PROMPT_TOKEN_BUDGET` | Token budget for one deep prompt, capped at the model's window. CoreSettings.deep_prompt_token_budget. | `config_core_settings.py`, `core/prompt_budget.py` | `.env.example` |
+| `QAR_DEEP_PROMPT_TOKEN_BUDGET` | Token budget for one deep prompt, capped at the model's window. CoreSettings.deep_prompt_token_budget. | `config_core_settings.py` | `.env.example` |
 | `QAR_DEEP_REVIEW_INTERVAL_SECONDS` |  | `config_core_settings.py`, `core/goal_runner_contract.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_DEEP_TIMEOUT_SECONDS` |  | `config_core_settings.py`, `core/goal_runner_contract.py` | `.env.example`, `docs/acp-deep-runner.md`, `docs/writing-a-consumer.md` |
 | `QAR_DEEP_WORKING_DIR` |  | `config_resolvers.py` | `.env.example`, `docs/adapters.md`, `docs/corpus-playbooks.md` +3 |
 | `QAR_DISCOVERY_TEAM_ID` |  | `cli_config.py` | `.env.example`, `docs/deployment.md` |
-| `QAR_EMBEDDER_BACKEND` |  | `adapters/qdrant_vector_store.py`, `config_assembler.py`, `config_context_index.py` | `docs/context-card-stores.md` |
-| `QAR_EMBED_BATCH` | Texts per embedding request (positive integer; shipped default in qdrant_vector_store). | `adapters/qdrant_vector_store.py` | - |
-| `QAR_EMBED_MAX_CHARS` | Characters of one text sent to the embedder before it is cut. | `adapters/qdrant_vector_store.py` | - |
+| `QAR_EMBEDDER_BACKEND` |  | `adapters/qdrant_embedders.py`, `config_assembler.py`, `config_context_index.py` | `docs/context-card-stores.md` |
+| `QAR_EMBED_BATCH` | Texts per embedding request (positive integer; shipped default in qdrant_vector_store). | `adapters/qdrant_embedders.py` | - |
+| `QAR_EMBED_MAX_CHARS` | Characters of one text sent to the embedder before it is cut. | `adapters/qdrant_embedders.py` | - |
 | `QAR_ENV_ID` |  | `adapters/quest_api_card_repository.py`, `cli_config.py` | `.env.example`, `docs/context-card-stores.md` |
 | `QAR_EXPLAIN_ANSWER` |  | `cli_config.py` | `docs/answer-explanation.md` |
 | `QAR_EXPLAIN_TIER` |  | `cli_config.py` | `docs/answer-explanation.md` |
@@ -123,7 +123,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_MODE_RELEASE_TIMEOUT_SECONDS` | Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds. | `config_core_settings.py` | `.env.example` |
 | `QAR_NOTE_FLOOR_FRESH_MINUTES` | A note learned within this many minutes bypasses the floor's relevance gate (default 5). CoreSettings.note_floor_fresh_minutes. | `config_core_settings.py` | `.env.example` |
 | `QAR_NOTE_FLOOR_RELEVANCE_GATED` | 0/false/no/off restores the unconditional always-recent notes floor (default gated). CoreSettings.note_floor_relevance_gated. | `config_core_settings.py` | `.env.example` |
-| `QAR_OPENAI_EMBEDDING_MODEL` | OpenAI embedding model id used by the OpenAI embedder. | `adapters/qdrant_vector_store.py` | - |
+| `QAR_OPENAI_EMBEDDING_MODEL` | OpenAI embedding model id used by the OpenAI embedder. | `adapters/qdrant_embedders.py` | - |
 | `QAR_OPENCLAW_ARGS` |  | `cli_config.py` | `docs/live-channels.md` |
 | `QAR_OPENCLAW_CALL_TIMEOUT` |  | `cli_config.py` | `docs/live-channels.md` |
 | `QAR_OPENCLAW_COMMAND` |  | `cli_config.py` | `docs/live-channels.md` |
@@ -212,7 +212,7 @@ the docs and `.env.example` that describe what it does.
 | `SERPER_API_KEY` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
 | `TAVILY_API_KEY` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
 | `VOYAGE_EMBEDDING_SIZE` | Vector size of the Voyage embedder (default 1024). | `config_assembler.py`, `config_context_index.py` | - |
-| `VOYAGE_MODEL` |  | `adapters/qdrant_vector_store.py` | `docs/vector-context.md` |
+| `VOYAGE_MODEL` |  | `adapters/qdrant_embedders.py` | `docs/vector-context.md` |
 | `VTE_VERSION` | Set by VTE terminals; the terminal UI reads it to pick key handling. Never set by hand. | `textual_ui_widgets.py` | - |
 | `WEB_SEARCH_API_KEY` |  | `adapters/web_search_adapter.py`, `adapters/web_search_backends.py` | `.env.example`, `docs/web-search.md` |
 | `WEB_SEARCH_ENABLED` |  | `adapters/web_search_backends.py`, `config_orchestrator.py` | `.env.example`, `docs/web-search.md` |

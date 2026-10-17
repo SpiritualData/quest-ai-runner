@@ -1,0 +1,172 @@
+[
+ {
+  "id": "PRD-001",
+  "kind": "roundtrip",
+  "area": "roundtrip",
+  "args": {},
+  "expect": {
+   "eq": {
+    "patterns": [
+     "p1",
+     "p2"
+    ],
+    "predictions": [
+     "d1"
+    ],
+    "weight": 0.5
+   }
+  }
+ },
+ {
+  "id": "PRD-002",
+  "kind": "isolation",
+  "area": "isolation",
+  "args": {},
+  "expect": {
+   "eq": {
+    "other_patterns": 0,
+    "other_predictions": 0,
+    "own_patterns": 1
+   }
+  }
+ },
+ {
+  "id": "PRD-003",
+  "kind": "replace",
+  "area": "replace",
+  "args": {},
+  "expect": {
+   "eq": {
+    "predictions": [
+     "d3"
+    ],
+    "patterns": 2
+   }
+  }
+ },
+ {
+  "id": "PRD-004",
+  "kind": "expiry",
+  "area": "expiry",
+  "args": {},
+  "expect": {
+   "eq": {
+    "predictions": [
+     "live"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRD-005",
+  "kind": "view",
+  "area": "view",
+  "args": {},
+  "expect": {
+   "eq": {
+    "view": "bundle text",
+    "no_view": "",
+    "unknown": ""
+   }
+  }
+ },
+ {
+  "id": "PRD-006",
+  "kind": "clear",
+  "area": "clear",
+  "args": {},
+  "expect": {
+   "eq": {
+    "predictions": 0,
+    "patterns": 1
+   }
+  }
+ },
+ {
+  "id": "PRD-007",
+  "kind": "log",
+  "area": "log",
+  "args": {
+   "n": 3
+  },
+  "expect": {
+   "eq": {
+    "logged": 3
+   }
+  }
+ },
+ {
+  "id": "PRD-008",
+  "kind": "log",
+  "area": "log",
+  "args": {
+   "n": 10
+  },
+  "expect": {
+   "eq": {
+    "logged": 10
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "PRD-009",
+  "kind": "restart",
+  "area": "restart",
+  "args": {},
+  "expect": {
+   "eq": {
+    "patterns": 1,
+    "predictions": 1,
+    "view": "v"
+   }
+  }
+ },
+ {
+  "id": "PRD-010",
+  "kind": "tolerance",
+  "area": "tolerance",
+  "args": {},
+  "expect": {
+   "eq": {
+    "patterns": 0,
+    "predictions": 0,
+    "view": "",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "PRD-011",
+  "kind": "roundtrip",
+  "area": "roundtrip",
+  "args": {},
+  "expect": {
+   "eq": {
+    "patterns": [
+     "p1",
+     "p2"
+    ],
+    "predictions": [
+     "d1"
+    ],
+    "weight": 0.5
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "PRD-012",
+  "kind": "expiry",
+  "area": "expiry",
+  "args": {},
+  "expect": {
+   "eq": {
+    "predictions": [
+     "live"
+    ]
+   }
+  },
+  "heldout": true
+ }
+]
