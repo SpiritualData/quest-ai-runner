@@ -1,0 +1,788 @@
+[
+ {
+  "id": "USE-001",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "anthropic",
+   "model": "claude-sonnet-4-6"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 3.0
+   }
+  }
+ },
+ {
+  "id": "USE-002",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "anthropic",
+   "model": "claude-haiku-4-5"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 0.8
+   }
+  }
+ },
+ {
+  "id": "USE-003",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "anthropic",
+   "model": "haiku"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 0.8
+   }
+  }
+ },
+ {
+  "id": "USE-004",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "anthropic",
+   "model": "opus"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 15.0
+   }
+  }
+ },
+ {
+  "id": "USE-005",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "anthropic",
+   "model": "claude-opus-4-9"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 15.0
+   }
+  }
+ },
+ {
+  "id": "USE-006",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "anthropic",
+   "model": "mystery-model"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 3.0
+   }
+  }
+ },
+ {
+  "id": "USE-007",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "openai",
+   "model": "gpt-4o"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 2.5
+   }
+  }
+ },
+ {
+  "id": "USE-008",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "openai",
+   "model": "o3-mini"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 1.0
+   }
+  }
+ },
+ {
+  "id": "USE-009",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "openai",
+   "model": "gpt-4o-2024-11-20"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 2.5
+   }
+  }
+ },
+ {
+  "id": "USE-010",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "gemini",
+   "model": "gemini-2.0-flash"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 0.075
+   }
+  }
+ },
+ {
+  "id": "USE-011",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "gemini",
+   "model": "gemini-1.5-pro"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 1.25
+   }
+  }
+ },
+ {
+  "id": "USE-012",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "claude_cli",
+   "model": "sonnet"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 0.0167
+   }
+  }
+ },
+ {
+  "id": "USE-013",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "nobody",
+   "model": "x"
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": null
+   }
+  }
+ },
+ {
+  "id": "USE-014",
+  "kind": "price",
+  "area": "price",
+  "args": {
+   "provider": "anthropic",
+   "model": ""
+  },
+  "expect": {
+   "eq": {
+    "per_mtok": 3.0
+   }
+  }
+ },
+ {
+  "id": "USE-015",
+  "kind": "estimate",
+  "area": "estimate",
+  "args": {
+   "tokens": 2000000,
+   "env": {
+    "ANTHROPIC_API_KEY": "k"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cost": 1.6,
+    "provider": "anthropic",
+    "model": "haiku"
+   }
+  }
+ },
+ {
+  "id": "USE-016",
+  "kind": "estimate",
+  "area": "estimate",
+  "args": {
+   "tokens": 500000,
+   "env": {
+    "QAR_MODEL_BACKEND": "openai",
+    "OPENAI_API_KEY": "k"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cost": 1.25,
+    "provider": "openai",
+    "model": "gpt-4o"
+   }
+  }
+ },
+ {
+  "id": "USE-017",
+  "kind": "estimate",
+  "area": "estimate",
+  "args": {
+   "tokens": 1000000,
+   "env": {}
+  },
+  "expect": {
+   "eq": {
+    "cost": 0.0167,
+    "provider": "claude_cli",
+    "model": "sonnet"
+   }
+  }
+ },
+ {
+  "id": "USE-018",
+  "kind": "estimate",
+  "area": "estimate",
+  "args": {
+   "tokens": 0,
+   "env": {}
+  },
+  "expect": {
+   "eq": {
+    "cost": 0.0,
+    "provider": "claude_cli",
+    "model": "sonnet"
+   }
+  }
+ },
+ {
+  "id": "USE-019",
+  "kind": "estimate",
+  "area": "estimate",
+  "args": {
+   "tokens": 1000000,
+   "env": {
+    "QAR_MODEL_BACKEND": "anthropic",
+    "ANTHROPIC_API_KEY": "k",
+    "QAR_PLANNER_TIER": "opus"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cost": 15.0,
+    "provider": "anthropic",
+    "model": "opus"
+   }
+  }
+ },
+ {
+  "id": "USE-020",
+  "kind": "provider",
+  "area": "provider",
+  "args": {
+   "env": {}
+  },
+  "expect": {
+   "eq": {
+    "provider": "claude_cli",
+    "model": "sonnet",
+    "key": null
+   }
+  }
+ },
+ {
+  "id": "USE-021",
+  "kind": "provider",
+  "area": "provider",
+  "args": {
+   "env": {
+    "ANTHROPIC_API_KEY": "k"
+   }
+  },
+  "expect": {
+   "eq": {
+    "provider": "anthropic",
+    "model": "haiku",
+    "key": "configured"
+   }
+  }
+ },
+ {
+  "id": "USE-022",
+  "kind": "provider",
+  "area": "provider",
+  "args": {
+   "env": {
+    "QAR_MODEL_BACKEND": "anthropic"
+   }
+  },
+  "expect": {
+   "eq": {
+    "provider": "anthropic",
+    "model": "haiku",
+    "key": "missing"
+   }
+  }
+ },
+ {
+  "id": "USE-023",
+  "kind": "provider",
+  "area": "provider",
+  "args": {
+   "env": {
+    "QAR_MODEL_BACKEND": "gemini",
+    "GOOGLE_API_KEY": "g"
+   }
+  },
+  "expect": {
+   "eq": {
+    "provider": "gemini",
+    "model": "gemini-2.0-flash",
+    "key": "configured"
+   }
+  }
+ },
+ {
+  "id": "USE-024",
+  "kind": "provider",
+  "area": "provider",
+  "args": {
+   "env": {
+    "QAR_MODEL_BACKEND": "weird"
+   }
+  },
+  "expect": {
+   "eq": {
+    "provider": "anthropic",
+    "model": "sonnet",
+    "key": null
+   }
+  }
+ },
+ {
+  "id": "USE-025",
+  "kind": "daily_budget",
+  "area": "daily_budget",
+  "args": {
+   "env": {},
+   "calls": [
+    [
+     1000,
+     500
+    ],
+    [
+     200,
+     300
+    ]
+   ],
+   "reload": false
+  },
+  "expect": {
+   "eq": {
+    "total": 2000,
+    "over": false,
+    "status": "2,000/2,000,000 tokens today (0%)"
+   }
+  }
+ },
+ {
+  "id": "USE-026",
+  "kind": "daily_budget",
+  "area": "daily_budget",
+  "args": {
+   "env": {
+    "QAR_DAILY_TOKEN_LIMIT": "1000"
+   },
+   "calls": [
+    [
+     600,
+     300
+    ]
+   ],
+   "reload": false
+  },
+  "expect": {
+   "eq": {
+    "total": 900,
+    "over": false,
+    "status": "900/1,000 tokens today (90%)"
+   }
+  }
+ },
+ {
+  "id": "USE-027",
+  "kind": "daily_budget",
+  "area": "daily_budget",
+  "args": {
+   "env": {
+    "QAR_DAILY_TOKEN_LIMIT": "1000"
+   },
+   "calls": [
+    [
+     600,
+     400
+    ]
+   ],
+   "reload": false
+  },
+  "expect": {
+   "eq": {
+    "total": 1000,
+    "over": true,
+    "status": "1,000/1,000 tokens today (100%)"
+   }
+  }
+ },
+ {
+  "id": "USE-028",
+  "kind": "daily_budget",
+  "area": "daily_budget",
+  "args": {
+   "env": {
+    "QAR_DAILY_TOKEN_LIMIT": "off"
+   },
+   "calls": [
+    [
+     5000000,
+     5000000
+    ]
+   ],
+   "reload": false
+  },
+  "expect": {
+   "eq": {
+    "total": 10000000,
+    "over": false,
+    "status": "10,000,000 tokens today (no limit)"
+   }
+  }
+ },
+ {
+  "id": "USE-029",
+  "kind": "daily_budget",
+  "area": "daily_budget",
+  "args": {
+   "env": {
+    "QAR_DAILY_TOKEN_LIMIT": "0"
+   },
+   "calls": [
+    [
+     10,
+     10
+    ]
+   ],
+   "reload": false
+  },
+  "expect": {
+   "eq": {
+    "total": 20,
+    "over": false,
+    "status": "20 tokens today (no limit)"
+   }
+  }
+ },
+ {
+  "id": "USE-030",
+  "kind": "daily_budget",
+  "area": "daily_budget",
+  "args": {
+   "env": {
+    "QAR_DAILY_TOKEN_LIMIT": "lots"
+   },
+   "calls": [
+    [
+     10,
+     10
+    ]
+   ],
+   "reload": false
+  },
+  "expect": {
+   "eq": {
+    "total": 20,
+    "over": false,
+    "status": "20/2,000,000 tokens today (0%)"
+   }
+  }
+ },
+ {
+  "id": "USE-031",
+  "kind": "daily_budget",
+  "area": "daily_budget",
+  "args": {
+   "env": {
+    "QAR_DAILY_TOKEN_LIMIT": "1000"
+   },
+   "calls": [
+    [
+     600,
+     300
+    ],
+    [
+     -50,
+     -50
+    ]
+   ],
+   "reload": false
+  },
+  "expect": {
+   "eq": {
+    "total": 900,
+    "over": false,
+    "status": "900/1,000 tokens today (90%)"
+   }
+  }
+ },
+ {
+  "id": "USE-032",
+  "kind": "daily_budget",
+  "area": "daily_budget",
+  "args": {
+   "env": {
+    "QAR_DAILY_TOKEN_LIMIT": "1000"
+   },
+   "calls": [
+    [
+     600,
+     300
+    ],
+    [
+     200,
+     0
+    ]
+   ],
+   "reload": true
+  },
+  "expect": {
+   "eq": {
+    "total": 1100,
+    "over": true,
+    "status": "1,100/1,000 tokens today (110%)"
+   }
+  }
+ },
+ {
+  "id": "USE-033",
+  "kind": "resource_guard",
+  "area": "resource_guard",
+  "args": {
+   "env": {},
+   "snapshots": [
+    [
+     99,
+     10,
+     50
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "paused": [
+     false
+    ],
+    "enabled": false
+   }
+  }
+ },
+ {
+  "id": "USE-034",
+  "kind": "resource_guard",
+  "area": "resource_guard",
+  "args": {
+   "env": {
+    "QAR_MAX_MEMORY_PERCENT": "90"
+   },
+   "snapshots": [
+    [
+     50,
+     1000,
+     1
+    ],
+    [
+     95,
+     100,
+     1
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "paused": [
+     false,
+     true
+    ],
+    "enabled": true
+   }
+  }
+ },
+ {
+  "id": "USE-035",
+  "kind": "resource_guard",
+  "area": "resource_guard",
+  "args": {
+   "env": {
+    "QAR_MAX_MEMORY_PERCENT": "90"
+   },
+   "snapshots": [
+    [
+     95,
+     100,
+     1
+    ],
+    [
+     88,
+     100,
+     1
+    ],
+    [
+     80,
+     100,
+     1
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "paused": [
+     true,
+     true,
+     false
+    ],
+    "enabled": true
+   }
+  }
+ },
+ {
+  "id": "USE-036",
+  "kind": "resource_guard",
+  "area": "resource_guard",
+  "args": {
+   "env": {
+    "QAR_MIN_FREE_MEMORY_MB": "500"
+   },
+   "snapshots": [
+    [
+     50,
+     400,
+     1
+    ],
+    [
+     50,
+     520,
+     1
+    ],
+    [
+     50,
+     600,
+     1
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "paused": [
+     true,
+     true,
+     false
+    ],
+    "enabled": true
+   }
+  }
+ },
+ {
+  "id": "USE-037",
+  "kind": "resource_guard",
+  "area": "resource_guard",
+  "args": {
+   "env": {
+    "QAR_MAX_LOAD_PER_CORE": "2"
+   },
+   "snapshots": [
+    [
+     50,
+     1000,
+     2.5
+    ],
+    [
+     50,
+     1000,
+     1.9
+    ],
+    [
+     50,
+     1000,
+     1.0
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "paused": [
+     true,
+     true,
+     false
+    ],
+    "enabled": true
+   }
+  }
+ },
+ {
+  "id": "USE-038",
+  "kind": "resource_guard",
+  "area": "resource_guard",
+  "args": {
+   "env": {
+    "QAR_MAX_LOAD_PER_CORE": "2"
+   },
+   "snapshots": [
+    [
+     null,
+     null,
+     null
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "paused": [
+     false
+    ],
+    "enabled": true
+   }
+  }
+ },
+ {
+  "id": "USE-039",
+  "kind": "resource_guard",
+  "area": "resource_guard",
+  "args": {
+   "env": {
+    "QAR_MAX_MEMORY_PERCENT": "not-a-number"
+   },
+   "snapshots": [
+    [
+     99,
+     10,
+     50
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "paused": [
+     false
+    ],
+    "enabled": false
+   }
+  }
+ }
+]

@@ -24,8 +24,8 @@ ANTHROPIC_PRICING = {
     "claude-3.5-haiku-20241101": 0.8,
     # Claude 3 Opus (older)
     "claude-3-opus": 15.0,
-    "claude-opus-4-8": 3.0,  # Opus 4 (2025+)
-    "claude-opus-4": 3.0,
+    "claude-opus-4-8": 15.0,  # Opus 4 (2025+): the opus family list price, not the sonnet one
+    "claude-opus-4": 15.0,
     # Claude 3 Sonnet (older)
     "claude-3-sonnet": 3.0,
     "claude-sonnet-4-6": 3.0,  # Sonnet 4 (2025+)
