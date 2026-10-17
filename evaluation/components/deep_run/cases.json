@@ -945,42 +945,42 @@
    "verdicts": [
     {
      "met": false,
-     "reason": "not yet",
+     "reason": "the report file was never created",
      "next_action": "try again"
     },
     {
      "met": false,
-     "reason": "not yet",
+     "reason": "the report exists but the totals are wrong",
      "next_action": "try again"
     },
     {
      "met": false,
-     "reason": "not yet",
+     "reason": "the totals are right but the chart is missing",
      "next_action": "try again"
     },
     {
      "met": false,
-     "reason": "not yet",
+     "reason": "still wrong",
      "next_action": "try again"
     },
     {
      "met": false,
-     "reason": "not yet",
+     "reason": "still wrong",
      "next_action": "try again"
     },
     {
      "met": false,
-     "reason": "not yet",
+     "reason": "still wrong",
      "next_action": "try again"
     },
     {
      "met": false,
-     "reason": "not yet",
+     "reason": "still wrong",
      "next_action": "try again"
     },
     {
      "met": false,
-     "reason": "not yet",
+     "reason": "still wrong",
      "next_action": "try again"
     }
    ],
@@ -992,7 +992,8 @@
     "verify_calls": 3,
     "final_met": false
    }
-  }
+  },
+  "description": ""
  },
  {
   "id": "DRN-086",
@@ -1117,5 +1118,97 @@
     "final_met": false
    }
   }
+ },
+ {
+  "id": "DRN-088",
+  "kind": "goal_loop",
+  "area": "loop",
+  "args": {
+   "runs": [
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    },
+    {
+     "met": false,
+     "output": "x"
+    }
+   ],
+   "verdicts": [
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    },
+    {
+     "met": false,
+     "reason": "not yet",
+     "next_action": "try again"
+    }
+   ],
+   "max_iterations": 3
+  },
+  "expect": {
+   "eq": {
+    "runner_calls": 2,
+    "verify_calls": 2,
+    "final_met": false
+   }
+  },
+  "description": "Two attempts that fall short for the same reason and change nothing: the loop stops at two, not at the cap"
  }
 ]
