@@ -1,0 +1,442 @@
+[
+ {
+  "id": "MCP-001",
+  "kind": "write",
+  "area": "exact",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "create",
+    {
+     "title": "x"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "n_calls": 1,
+    "calls": [
+     [
+      "create",
+      {
+       "title": "x"
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "MCP-002",
+  "kind": "write",
+  "area": "exact",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "srv:update",
+    {
+     "id": 1
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "n_calls": 1,
+    "calls": [
+     [
+      "update",
+      {
+       "id": 1
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "MCP-003",
+  "kind": "write",
+  "area": "exact",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "update",
+    {
+     "id": 2,
+     "body": "b"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "calls": [
+     [
+      "update",
+      {
+       "id": 2,
+       "body": "b"
+      }
+     ]
+    ],
+    "detail_tool": "update"
+   }
+  }
+ },
+ {
+  "id": "MCP-004",
+  "kind": "write",
+  "area": "allowlist",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "delete",
+    {
+     "id": 1
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "n_calls": 0,
+    "calls": [],
+    "detail_tool": "delete"
+   }
+  }
+ },
+ {
+  "id": "MCP-005",
+  "kind": "write",
+  "area": "allowlist",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "search",
+    {
+     "q": "x"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "n_calls": 0
+   }
+  }
+ },
+ {
+  "id": "MCP-006",
+  "kind": "write",
+  "area": "allowlist",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "other:create",
+    {}
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "n_calls": 0
+   }
+  }
+ },
+ {
+  "id": "MCP-007",
+  "kind": "write",
+  "area": "allowlist",
+  "args": {
+   "alias": "srv",
+   "writable": [],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "create",
+    {}
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "n_calls": 0
+   }
+  }
+ },
+ {
+  "id": "MCP-008",
+  "kind": "write",
+  "area": "input",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "",
+    {}
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "n_calls": 0
+   }
+  }
+ },
+ {
+  "id": "MCP-009",
+  "kind": "write",
+  "area": "input",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "create",
+    "not a dict"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "n_calls": 0
+   }
+  }
+ },
+ {
+  "id": "MCP-010",
+  "kind": "write",
+  "area": "failure",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "create",
+    {}
+   ],
+   "results": {
+    "create": {
+     "ok": false,
+     "error": "quota"
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "n_calls": 1,
+    "error": true
+   }
+  }
+ },
+ {
+  "id": "MCP-011",
+  "kind": "write",
+  "area": "failure",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "call": [
+    "create",
+    {}
+   ],
+   "raises": [
+    "create"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "n_calls": 1,
+    "error": true
+   }
+  }
+ },
+ {
+  "id": "MCP-012",
+  "kind": "list",
+  "area": "discovery",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "names": [
+     "srv:create",
+     "srv:update"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MCP-013",
+  "kind": "list",
+  "area": "discovery",
+  "args": {
+   "alias": "issues",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "names": [
+     "issues:create",
+     "issues:update"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MCP-014",
+  "kind": "list",
+  "area": "discovery",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "update"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ],
+   "discovery_fails": true
+  },
+  "expect": {
+   "eq": {
+    "names": []
+   }
+  }
+ },
+ {
+  "id": "MCP-015",
+  "kind": "list",
+  "area": "discovery",
+  "args": {
+   "alias": "srv",
+   "writable": [
+    "create",
+    "ghost"
+   ],
+   "tools": [
+    "create",
+    "update",
+    "search"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "names": [
+     "srv:create"
+    ]
+   }
+  }
+ }
+]

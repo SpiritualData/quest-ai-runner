@@ -1,0 +1,291 @@
+[
+ {
+  "id": "ESC-001",
+  "kind": "escalate",
+  "area": "addressing",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a",
+    "review_url": "https://example.org/draft/1"
+   }
+  },
+  "expect": {
+   "eq": {
+    "filed": 1,
+    "assignee": "user_a",
+    "review_url": "https://example.org/draft/1",
+    "kind": "approve"
+   }
+  }
+ },
+ {
+  "id": "ESC-002",
+  "kind": "escalate",
+  "area": "addressing",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1"
+   },
+   "default_assignee": "user_default",
+   "quest_owner": "user_owner"
+  },
+  "expect": {
+   "eq": {
+    "filed": 1,
+    "assignee": "user_default"
+   }
+  }
+ },
+ {
+  "id": "ESC-003",
+  "kind": "escalate",
+  "area": "addressing",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1"
+   },
+   "quest_owner": "user_owner"
+  },
+  "expect": {
+   "eq": {
+    "filed": 1,
+    "assignee": "user_owner"
+   }
+  }
+ },
+ {
+  "id": "ESC-004",
+  "kind": "escalate",
+  "area": "addressing",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1"
+   }
+  },
+  "expect": {
+   "eq": {
+    "filed": 0,
+    "id": ""
+   }
+  }
+ },
+ {
+  "id": "ESC-005",
+  "kind": "escalate",
+  "area": "detail",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a",
+    "kind": "explicit:spend",
+    "default_on_silence": "proceed"
+   }
+  },
+  "expect": {
+   "eq": {
+    "filed": 1,
+    "kind": "explicit:spend",
+    "default_on_silence": "proceed"
+   }
+  }
+ },
+ {
+  "id": "ESC-006",
+  "kind": "escalate",
+  "area": "detail",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a"
+   }
+  },
+  "expect": {
+   "eq": {
+    "default_on_silence": "hold",
+    "deadline_set": false
+   }
+  }
+ },
+ {
+  "id": "ESC-007",
+  "kind": "escalate",
+  "area": "detail",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a",
+    "deadline_hours": 48
+   }
+  },
+  "expect": {
+   "eq": {
+    "deadline_set": true
+   }
+  }
+ },
+ {
+  "id": "ESC-008",
+  "kind": "escalate",
+  "area": "detail",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a"
+   },
+   "default_deadline_hours": 24
+  },
+  "expect": {
+   "eq": {
+    "deadline_set": true
+   }
+  }
+ },
+ {
+  "id": "ESC-009",
+  "kind": "escalate",
+  "area": "routing",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a"
+   },
+   "team": "team_b"
+  },
+  "expect": {
+   "eq": {
+    "filed": 1,
+    "team_id": "team_b"
+   }
+  }
+ },
+ {
+  "id": "ESC-010",
+  "kind": "escalate",
+  "area": "dedupe",
+  "args": {
+   "escalation": {
+    "summary": "Approve  the Q3 ad spend?",
+    "quest_id": "quest_1",
+    "assignee": "user_a"
+   },
+   "open_decisions": [
+    {
+     "id": "dec_open",
+     "summary": "approve the q3 AD spend?"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "filed": 0,
+    "id": "dec_open"
+   }
+  }
+ },
+ {
+  "id": "ESC-011",
+  "kind": "escalate",
+  "area": "dedupe",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a"
+   },
+   "open_decisions": [
+    {
+     "id": "dec_open",
+     "summary": "Pick a venue for the retreat"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "filed": 1
+   }
+  }
+ },
+ {
+  "id": "ESC-012",
+  "kind": "escalate",
+  "area": "dedupe",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a"
+   },
+   "repeat": 3
+  },
+  "expect": {
+   "eq": {
+    "filed": 1,
+    "id": "dec_1"
+   }
+  }
+ },
+ {
+  "id": "ESC-013",
+  "kind": "escalate",
+  "area": "dedupe",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a"
+   },
+   "lookup_fails": true
+  },
+  "expect": {
+   "eq": {
+    "filed": 1
+   }
+  }
+ },
+ {
+  "id": "ESC-014",
+  "kind": "escalate",
+  "area": "failure",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": "quest_1",
+    "assignee": "user_a"
+   },
+   "create_fails": true
+  },
+  "expect": {
+   "eq": {
+    "filed": 0,
+    "id": ""
+   }
+  }
+ },
+ {
+  "id": "ESC-015",
+  "kind": "escalate",
+  "area": "failure",
+  "args": {
+   "escalation": {
+    "summary": "Approve the Q3 ad spend of the planned amount?",
+    "quest_id": null,
+    "assignee": "user_a"
+   }
+  },
+  "expect": {
+   "eq": {
+    "filed": 1
+   }
+  }
+ }
+]

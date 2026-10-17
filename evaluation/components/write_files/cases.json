@@ -1,0 +1,345 @@
+[
+ {
+  "id": "WF-001",
+  "kind": "write",
+  "area": "ordinary",
+  "args": {
+   "content": "new text",
+   "path": "notes/new.md"
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "created": true,
+    "final": "new text",
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-002",
+  "kind": "write",
+  "area": "ordinary",
+  "args": {
+   "content": "new text",
+   "path": "docs/guide.md",
+   "files": {
+    "docs/guide.md": "orig"
+   }
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "created": false,
+    "final": "new text",
+    "backup_kept": true,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-003",
+  "kind": "write",
+  "area": "ordinary",
+  "args": {
+   "content": "new text",
+   "path": "a/b/c/deep.md"
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "created": true,
+    "final": "new text",
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-004",
+  "kind": "write",
+  "area": "ordinary",
+  "args": {
+   "content": "new text",
+   "path": "{root}/docs/abs.md"
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "final": "new text",
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-005",
+  "kind": "write",
+  "area": "containment",
+  "args": {
+   "content": "new text",
+   "path": "../outside/secret.txt"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "final": null,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-006",
+  "kind": "write",
+  "area": "containment",
+  "args": {
+   "content": "new text",
+   "path": "docs/../../outside/new.txt"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-007",
+  "kind": "write",
+  "area": "containment",
+  "args": {
+   "content": "new text",
+   "path": "{outside}/secret.txt"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-008",
+  "kind": "write",
+  "area": "containment",
+  "args": {
+   "content": "new text",
+   "path": "{root}-evil/x.md"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-009",
+  "kind": "write",
+  "area": "containment",
+  "args": {
+   "content": "new text",
+   "path": "link/planted.txt",
+   "symlink": "link"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-010",
+  "kind": "write",
+  "area": "protected",
+  "args": {
+   "content": "new text",
+   "path": ".env"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "final": null,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-011",
+  "kind": "write",
+  "area": "protected",
+  "args": {
+   "content": "new text",
+   "path": "config/credentials.json"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "final": null,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-012",
+  "kind": "write",
+  "area": "protected",
+  "args": {
+   "content": "new text",
+   "path": "keys/server.pem"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "final": null,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-013",
+  "kind": "write",
+  "area": "protected",
+  "args": {
+   "content": "new text",
+   "path": "logo.png"
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "final": null,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-014",
+  "kind": "write",
+  "area": "reject",
+  "args": {
+   "content": "new text",
+   "path": "docs",
+   "files": {
+    "docs/guide.md": "orig"
+   }
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-015",
+  "kind": "write",
+  "area": "reject",
+  "args": {
+   "content": "new text",
+   "path": "  "
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-016",
+  "kind": "write",
+  "area": "limits",
+  "args": {
+   "content": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "path": "docs/guide.md",
+   "files": {
+    "docs/guide.md": "orig"
+   },
+   "max_write_bytes": 10
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "final": "orig",
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-017",
+  "kind": "write",
+  "area": "limits",
+  "args": {
+   "content": "new text",
+   "path": "fresh.md",
+   "allow_create": false
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "final": null,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-018",
+  "kind": "write",
+  "area": "limits",
+  "args": {
+   "content": "new text",
+   "path": "docs/guide.md",
+   "files": {
+    "docs/guide.md": "orig"
+   },
+   "allow_create": false
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "final": "new text",
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-019",
+  "kind": "write",
+  "area": "reversible",
+  "args": {
+   "content": "new text",
+   "path": "docs/guide.md",
+   "files": {
+    "docs/guide.md": "orig"
+   },
+   "backups": false
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "final": "new text",
+    "backup_kept": false,
+    "outside_intact": true
+   }
+  }
+ },
+ {
+  "id": "WF-020",
+  "kind": "write",
+  "area": "reversible",
+  "args": {
+   "content": "new text",
+   "path": "docs/guide.md",
+   "files": {
+    "docs/guide.md": "orig"
+   },
+   "backup_blocked": true
+  },
+  "expect": {
+   "eq": {
+    "ok": false,
+    "final": "orig",
+    "outside_intact": true
+   }
+  }
+ }
+]
