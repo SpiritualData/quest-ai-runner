@@ -324,3 +324,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-17,check_the_structure,live_checker,61,61,61/61,0/0,0,0,0,0.0,14.6,34fe46e,7f6990a2,none,
 2026-10-17,chat_quality,reference_replies,226,226,226/226,0/0,0,0,0,0.0,0.0,34fe46e,382a6069,none,
 2026-10-17,esoi_judge,model_judge,120,120,88/88,32/32,120,123095,8631,0.0289,331.5,34fe46e,0b7b38cf,haiku,
+2026-10-17,check_the_structure,live_checker,66,66,66/66,0/0,0,0,0,0.0,20.2,8311227,35df1ba6,none,
