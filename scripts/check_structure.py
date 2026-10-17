@@ -35,6 +35,9 @@ Rules checked:
                  an alternative (module-level ALTERNATIVE = True, or a docstring opening ALTERNATIVE,
                  BASELINE, ABLATION or FLOOR); a solution's selected harness implementation must be
                  a live one, or carry an `S12 <solution_id>:<impl>` waiver
+  S19 serves     every component names at least one solution it serves
+  S20 complete   every solution has a problem, ideal, implementations, metric, selected implementation and a
+                 recorded run on the current cases with a git_sha (--strict also rejects -dirty rows)
   S18 ids       solution, component and tracker ids are unique
   S17 tracker    docs/structure/tracker/{problems,solutions,implementations,ideals,metrics}.csv match what
                  solutions.csv, components.csv, principles.csv and results.csv now produce (only the
@@ -56,6 +59,7 @@ from __future__ import annotations
 
 import ast
 import csv
+import hashlib
 import re
 import subprocess
 import sys
@@ -522,6 +526,43 @@ def check() -> list[str]:
                 bad.append(f"S18 tracker {tab}: id {ident} appears {n} times (two implementations share a file name)")
     for tab in _bt.stale():
         bad.append(f"S17 docs/structure/tracker/{tab}.csv: out of date (run scripts/build_tracker.py)")
+
+    # S19 every component serves a solution; S20 every solution is complete and has a current result
+    for r in components:
+        if not patterns(r["solutions"]):
+            bad.append(f"S19 {r['component_id']}: serves no solution (name one in the `solutions` column, "
+                       "or remove the code: nothing in this repo exists outside a solution)")
+    strict = "--strict" in sys.argv
+    for r in solutions:
+        sid = r["solution_id"]
+        for col in ("problem", "ideal", "metric", "selected"):
+            if not r[col].strip():
+                bad.append(f"S20 {sid}: `{col}` is empty (a solution needs a problem, an ideal, a metric and a selected implementation)")
+        if not patterns(r["implementations"]):
+            bad.append(f"S20 {sid}: lists no implementation")
+        hm = HARNESS.search(r["metric_command"])
+        if not hm:
+            if not waived("S20", sid):
+                bad.append(f"S20 {sid}: metric_command is not an evaluation/components/run.py command "
+                           "(a metric is a recorded run, not tests alone)")
+            continue
+        comp, sel = hm.groups()
+        row = results.get(comp, {}).get(sel)
+        if row is None:
+            continue  # S10 reports the missing row
+        cases_file = next((ROOT / "evaluation" / "components" / comp / n for n in ("cases.json", "cases.csv")
+                           if (ROOT / "evaluation" / "components" / comp / n).exists()), None)
+        now = hashlib.sha256(cases_file.read_bytes()).hexdigest()[:8] if cases_file else ""
+        if not row.get("git_sha", "").strip():
+            why = "its latest row has no git_sha"
+        elif row.get("cases_sha", "") != now:
+            why = f"its latest row was recorded on other cases (cases_sha {row.get('cases_sha') or 'blank'}, now {now})"
+        elif strict and row["git_sha"].endswith("-dirty"):
+            why = "its latest row was recorded on uncommitted code"
+        else:
+            continue
+        if not waived("S20", sid):
+            bad.append(f"S20 {sid}: {why}; re-run `run.py {comp} --impl {sel} --record` on committed code")
 
     # S9 waivers still apply
     for w in waivers:

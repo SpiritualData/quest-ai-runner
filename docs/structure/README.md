@@ -13,6 +13,7 @@ the inventory and the automated check.
 | `principles.csv` | The 13 principles of the evolvable-structure skill in short, with how each is measured here | people and AI, by hand |
 | `tracker/*.csv` | The ESOI intent network as five tabs (problems, solutions, implementations, ideals, metrics), each with `tracking_*` columns; import each as a Google Sheet tab | generated: `python scripts/build_tracker.py` (tracking columns are hand-edited and preserved) |
 | `audit.csv` | Every component against principles P1 to P13: objective facts (size, unmeasured solutions, waivers) plus a hand-written finding and action; `tracking_*` columns for review | generated: `python scripts/build_audit.py` (finding, action and tracking columns are hand-edited and preserved) |
+| `STANDARD.md` | The one shape every solution takes (row, port, selection entry, `evaluation/components/<id>/`, recorded result, leaderboard), a worked example of adding one, and how another repo adopts this | people and AI, by hand |
 | `waivers.csv` | Known, justified exceptions to a structure rule. Each must still apply, so the list only shrinks | people and AI, by hand |
 | `COMPONENTS.md` | A readable table of `components.csv` | generated: `python scripts/check_structure.py --write-docs` |
 
@@ -75,6 +76,14 @@ on 2026-10-15 and its principles were renumbered; the old list is retired).
   implementation is one of the listed ones; implementation paths and metric scripts exist; a solution
   without a metric states its gap and action.
 * **S8 generated docs.** `COMPONENTS.md` matches `components.csv`.
+* **S18 ids.** Solution, component and tracker ids are unique (a duplicated id silently merged two things).
+* **S19 serves.** Every component names at least one solution it serves. Infrastructure counts: configuration,
+  the CLI, the tests, the docs and the evaluation harness each serve a named solution with an ideal and a metric.
+  Code that serves none is removed, not waived.
+* **S20 complete.** Every solution has a problem, an ideal, implementations, a metric, a selected
+  implementation and a recorded run on the current cases with a `git_sha` (`--strict` also rejects a run
+  recorded on uncommitted code). "Tests only" is not a metric. A live-only metric needs an `S20,<solution_id>`
+  waiver saying why.
 * **S9 waivers.** A waiver that no longer applies is deleted, and every waiver has a reason.
 
 ## When you change the repo
