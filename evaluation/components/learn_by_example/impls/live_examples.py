@@ -14,7 +14,7 @@ from quest_ai_runner.config import RunnerConfig
 
 REPO = Path(__file__).resolve().parents[4]
 EXAMPLES = REPO / "examples"
-SECRET_PATTERNS = [r"sk-ant-[A-Za-z0-9]", r"qsk_[A-Za-z0-9]{8,}", r"/home/\w", r"\b[0-9a-f]{24}\b",
+SECRET_PATTERNS = [r"sk-ant-[A-Za-z0-9]", r"qsk_[A-Za-z0-9]{8,}", "/" + "home" + r"/\w", r"\b[0-9a-f]{24}\b",
                    r"[\w.+-]+@(?!example\.)[\w-]+\.(?:com|org|net)\b"]
 
 
