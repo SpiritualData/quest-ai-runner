@@ -46,13 +46,13 @@ def template_columns(entity: str) -> list[str]:
 
 
 COLUMNS = {
-    "problems": ["problem_id"] + template_columns("problem") + ["solution_ids", "ideal_ids", "component_ids", "auto_status"],
-    "solutions": ["solution_id"] + template_columns("solution") + ["problem_ids", "ideal_ids", "metric_ids", "implementation_ids",
+    "problems": ["problem_id", "overall_problem_id"] + template_columns("problem") + ["solution_ids", "ideal_ids", "component_ids", "auto_status"],
+    "solutions": ["solution_id", "area"] + template_columns("solution") + ["problem_ids", "ideal_ids", "metric_ids", "implementation_ids",
                   "port", "selected_implementation_id", "selected_by", "metric_kind", "verdict", "verdict_detail",
                   "component_ids", "auto_status"],
     "implementations": ["implementation_id", "solution_id", "path"] + template_columns("implementation") + [
                         "kind", "selected", "latest_result", "latest_cost_usd", "cases_sha", "auto_status"],
-    "ideals": ["ideal_id", "scope"] + template_columns("ideal") + ["problem_ids", "solution_ids", "metric_ids", "auto_status"],
+    "ideals": ["ideal_id", "overall_ideal_id", "scope"] + template_columns("ideal") + ["problem_ids", "solution_ids", "metric_ids", "auto_status"],
     "metrics": ["metric_id"] + template_columns("metric") + ["solution_ids", "command", "kind", "latest_result", "gap",
                 "action", "auto_status"],
 }
@@ -160,7 +160,7 @@ def build() -> dict[str, list[dict]]:
     for p in problem_records:
         linked = [sol_by_id[s] for s in filter(None, p["solution_ids"].split(SEP)) if s in sol_by_id]
         open_ones = [s["solution_id"] for s in linked if s["gap"]]
-        problems.append({**{k: p.get(k, "") for k in COLUMNS["problems"]},
+        problems.append({**{k: p.get(k, "") for k in COLUMNS["problems"] if k not in ("component_ids", "auto_status")},
                          "component_ids": SEP.join(sorted({c for s in linked for c in by_solution.get(s["solution_id"], [])})),
                          "auto_status": "open: gap on " + ", ".join(open_ones) if open_ones else "served"})
     for s in solutions:
@@ -187,7 +187,7 @@ def build() -> dict[str, list[dict]]:
                 "auto_status": "selected" if is_sel else ("measured" if res else "unmeasured")})
         sel_res = results.get((comp, _command_target(command)[1])) if comp else None
         sol_rows.append({
-            **{k: s.get(k, "") for k in ["solution_id"] + template_columns("solution") + ["problem_ids", "ideal_ids", "metric_ids", "port",
+            **{k: s.get(k, "") for k in ["solution_id", "area"] + template_columns("solution") + ["problem_ids", "ideal_ids", "metric_ids", "port",
                                                                                           "selected_by", "metric_kind"]},
             "implementation_ids": SEP.join(impl_ids), "selected_implementation_id": selected_id,
             "verdict": verdicts.get(sid, {}).get("verdict", ""),
@@ -213,7 +213,7 @@ def build() -> dict[str, list[dict]]:
     for i in ideal_records:
         sids = solutions_of_ideal.get(i["ideal_id"], [])
         measured = any(_command_target(command_of(sol_by_id[sid]))[0] for sid in sids)
-        ideals.append({**{k: i.get(k, "") for k in ["ideal_id"] + template_columns("ideal") + ["problem_ids"]}, "scope": "solution",
+        ideals.append({**{k: i.get(k, "") for k in ["ideal_id", "overall_ideal_id"] + template_columns("ideal") + ["problem_ids"]}, "scope": "solution",
                        "solution_ids": SEP.join(sids),
                        "metric_ids": SEP.join(m for sid in sids for m in sol_by_id[sid]["metric_ids"].split(SEP) if m),
                        "auto_status": "measured" if measured else "unmeasured"})

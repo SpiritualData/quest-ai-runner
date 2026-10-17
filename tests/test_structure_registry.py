@@ -324,3 +324,9 @@ def test_a_number_in_a_record_field_is_reported(monkeypatch):
     monkeypatch.setattr(mod, "read_csv", edited(mod, "problems.csv", lambda rows: rows[0].update(
         why_it_matters="It fails on 54/56 of the cases")))
     assert any(p.startswith("S22 problems.csv") and "54/56" in p for p in mod.check())
+
+
+def test_detailed_records_name_the_overall_item_they_serve(monkeypatch):
+    mod = _load_checker()
+    monkeypatch.setattr(mod, "read_csv", edited(mod, "problems.csv", lambda rows: rows[0].update(overall_problem_id="QP99")))
+    assert any(p.startswith("S26 prob-") and "QP99" in p for p in mod.check())

@@ -621,6 +621,18 @@ def check() -> list[str]:
         template = records.load_template(TEMPLATE)
         pending = {r["solution_id"] for r in solutions if waived("S26", r["solution_id"])}
         bad += [f"S26 {line}" for line in records.check_records(STRUCT, template, pending)]
+        overall = STRUCT / "qar_solution.md"
+        if overall.exists():
+            # The overall network (qar_solution.md) is written separately; each detailed record names the overall item it serves.
+            text = overall.read_text()
+            for name, key, col, prefix in (("problems.csv", "problem_id", "overall_problem_id", "QP"), ("ideals.csv", "ideal_id", "overall_ideal_id", "QI")):
+                for row in read_csv(STRUCT / name):
+                    if not re.search(rf"^### {re.escape(row.get(col, ''))} ", text, re.M) or not row.get(col):
+                        bad.append(f"S26 {row[key]}: `{col}` {row.get(col)!r} is not a `### {prefix}n` item of qar_solution.md")
+            areas = set(re.findall(r"^\d+\. \*\*([^*]+):\*\*", text, re.M))
+            for row in solutions:
+                if row["solution_id"] not in pending and row.get("area", "").split(" ", 1)[-1] not in areas:
+                    bad.append(f"S26 {row['solution_id']}: `area` {row.get('area')!r} is not an area of qar_solution.md")
         record_files = (("problems.csv", "problem_id", "problem"), ("ideals.csv", "ideal_id", "ideal"),
                         ("solutions.csv", "solution_id", "solution"), ("implementations.csv", "implementation_id", "implementation"),
                         ("metrics.csv", "metric_id", "metric"))
