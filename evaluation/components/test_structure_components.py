@@ -1,6 +1,6 @@
 """Offline pins for the infrastructure components: each live implementation passes a few of its own cases. The
 broken baselines of these invariant components live in ``broken/`` and are failed by test_components.py. Whole case
-files are run by ``run.py``, not here."""
+files are run by ``esoi run``, not here."""
 
 import common
 import pytest
@@ -14,7 +14,6 @@ def run(component, impl, ids):
 
 
 @pytest.mark.parametrize("component,impl,ids", [
-    ("check_the_structure", "live_checker", ["CTS-000", "CTS-004", "CTS-105"]),
     ("expose_the_public_api", "live_surface", ["API-001", "API-070", "API-100"]),
     ("learn_by_example", "live_examples", ["EXM-001", "EXM-014", "EXM-030"]),
     ("keep_secrets_out", "live_scanner", ["SEC-001", "SEC-013", "SEC-035"]),

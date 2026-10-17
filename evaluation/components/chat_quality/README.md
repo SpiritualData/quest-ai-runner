@@ -3,7 +3,7 @@
 This is the `chat_quality` component of `evaluation/components/` (the metric of solution `answer-a-turn`: does the chat
 answer a user's question in a grounded, correctly routed, side-effect-safe way). Its function is `converse(case) -> record` (`interface.py`), scored by
 `score.py` from the record's pass flag; the one implementation, `impls/dev_quest_chat.py`, drives the dev Quest
-chat and SKIPs (exit 0) when no dev Quest is configured, so `components/run.py chat_quality --impl dev_quest_chat`
+chat and SKIPs (exit 0) when no dev Quest is configured, so `esoi run chat_quality --impl dev_quest_chat`
 is safe offline. The offline tests are `test_*.py` here. The full harness below (world lifecycle, datasets, judge)
 is what that implementation calls.
 
@@ -31,7 +31,7 @@ DEV ONLY. Credentials come from the dev lane env file (relative to this checkout
 * `judge.py`: evidence builder, deterministic pre-checks, `claude -p` judge (sonnet, no API key).
 * `runner.py`: loads `datasets/*.json`, drives one fresh conversation per case, snapshots the DB
   before and after, pre-checks, judges, writes `RESULTS.md` and `/tmp/qualeval/raw/*.json`.
-* `datasets/schema.md`: the case schema. `cases.json`: the two smoke cases. The component's case set (`score.load_cases`) is every dataset case plus those two; the offline arm checks all of them, and `components/run.py chat_quality --impl dev_quest_chat --sample N` (or `--only`) draws the live ones.
+* `datasets/schema.md`: the case schema. `cases.json`: the two smoke cases. The component's case set (`score.load_cases`) is every dataset case plus those two; the offline arm checks all of them, and `esoi run chat_quality --impl dev_quest_chat --sample N` (or `--only`) draws the live ones.
 * `test_card_sweep.py`: offline tests for the id-only sweep's selection/settling.
   `test_card_restore.py`: offline tests for the full-dict restore's selection
   (`cards_to_restore`, `managed_only_card`).
@@ -94,7 +94,7 @@ arms. `inprocess_usage.json` records calls and tokens per model actually served.
 
 The component's own live arm uses the same transport and counts what it spends. From the repo root:
 `QAR_EVAL_DEV_ENV_FILE=<dev lane env file> QAR_EVAL_DEV_HOST=<its host> QUAL_INPROCESS=1 QUAL_INPROCESS_MODEL=<cheapest tier id>
-<quest-backend>/venv/bin/python3 evaluation/components/run.py chat_quality --impl dev_quest_chat --sample 3 --max-calls 120 --record`
+esoi run chat_quality --impl dev_quest_chat --sample 3 --max-calls 120 --record`
 (then `--sample 10`; a smaller sample is part of a larger one). The first line it prints names the cases and the
 budget, so a dropped argument shows before any case spends; `--max-calls` stops the run before the next case once the
 budget is passed. Over plain HTTP the server's own models answer and only one call per case is counted.

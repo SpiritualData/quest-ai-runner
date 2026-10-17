@@ -6,7 +6,7 @@ guidance card) and `guide-by-feedback` (the `GuidanceProvider` port: `core/guida
 relevant cards in front of the next turn) are two halves of one loop, and neither is worth anything alone, so
 the metric is the whole loop: after a correction is stored, does the guidance shown to the next relevant turn
 contain it, and not the irrelevant ones. Both solution rows therefore carry
-`evaluation/components/run.py feedback_loop --impl ledger_guidance` as their metric command.
+`esoi run feedback_loop --impl ledger_guidance` as their metric command.
 
 * `ledger_guidance` (selected): the real `FeedbackLedger`, `record_run_account`, `guidance_writer_for`,
   `GuidanceCardManager`, `UniversalGuidanceProvider` and a real `Orchestrator`; the guidance read is what the

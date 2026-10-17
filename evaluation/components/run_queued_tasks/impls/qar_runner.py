@@ -15,7 +15,7 @@ from quest_ai_runner.runner.quest_folder_sync import (
     QuestFolderSyncError, pull_quest_to_folder, push_folder_to_quest, quest_for_path,
 )
 
-from hermetic_env import hermetic_env
+from common import hermetic_env
 from run_queued_tasks import fakes
 
 QUEST_ID = "quest_000000000001"

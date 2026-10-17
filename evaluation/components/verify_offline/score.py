@@ -1,6 +1,6 @@
 """Score one offline-suite case with the declarative ``expect`` (see ``expect.py``); ``aggregate`` reports the
 pass count per kind, and the shard cases also add up to the suite-wide collected count."""
-import expect
+from esoi import expect
 
 
 def score_case(fn, case):

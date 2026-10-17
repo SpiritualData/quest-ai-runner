@@ -1,6 +1,6 @@
-"""CURRENT: the live scanner, ``quest_ai_runner.structure.hygiene``. Text cases call ``scan_text``; repo cases call
-``scan_repo`` over the real checkout (files git knows about, filtered by glob); command cases run
-``python -m quest_ai_runner.structure.hygiene`` in a throwaway git repository. Zero model calls, zero network."""
+"""CURRENT: the live scanner, ``esoi.hygiene`` (the ``esoi hygiene`` command). Text cases call ``scan_text``; repo
+cases call ``scan_repo`` over the real checkout (files git knows about, filtered by glob); command cases run
+``python -m esoi hygiene`` in a throwaway git repository. Zero model calls, zero network."""
 import fnmatch
 import os
 import subprocess
@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.structure import hygiene
+from esoi import hygiene
 
 REPO = Path(__file__).resolve().parents[4]
 
@@ -29,7 +29,7 @@ def run_cli(args):
         if args.get("stage"):
             subprocess.run(["git", "add", "--", *args["stage"]], cwd=root, check=True)
         env = dict(os.environ, PYTHONPATH=str(REPO))
-        done = subprocess.run([sys.executable, "-m", hygiene.__name__, "--root", str(root), *args.get("argv", [])],
+        done = subprocess.run([sys.executable, "-m", "esoi", "hygiene", "--root", str(root), *args.get("argv", [])],
                               capture_output=True, text=True, env=env, timeout=120)
     return {"exit": done.returncode, "text": done.stdout + done.stderr}
 

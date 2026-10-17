@@ -1,6 +1,6 @@
 """Score one persistence case against its declarative ``expect`` (see ``expect.py``); ``aggregate``
 reports pass counts per kind."""
-import expect
+from esoi import expect
 
 
 def score_case(fn, case):

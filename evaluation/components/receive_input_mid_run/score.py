@@ -1,6 +1,6 @@
 """Score one mid-run input case with the shared declarative check (``expect.py``); ``aggregate`` reports
 pass counts per kind."""
-import expect
+from esoi import expect
 
 
 def score_case(fn, case):

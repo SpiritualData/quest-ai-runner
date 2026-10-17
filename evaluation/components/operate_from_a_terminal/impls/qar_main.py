@@ -6,7 +6,7 @@ import io
 import tempfile
 from pathlib import Path
 
-from hermetic_env import hermetic_env
+from common import hermetic_env
 from quest_ai_runner import cli
 from quest_ai_runner.tools import __main__ as tools_main
 

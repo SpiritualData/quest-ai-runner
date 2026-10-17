@@ -1,6 +1,6 @@
 """Score one context-source case with the shared declarative check (``expect.py``); ``aggregate`` reports
 pass counts per channel."""
-import expect
+from esoi import expect
 
 
 def score_case(fn, case):

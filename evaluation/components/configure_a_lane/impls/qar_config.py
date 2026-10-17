@@ -6,7 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from hermetic_env import hermetic_env
+from common import hermetic_env
 from quest_ai_runner.cli_config import _config_from_env
 from quest_ai_runner.config import ConfigFileError, RunnerConfig
 from quest_ai_runner.config_core_settings import core_settings_from_env

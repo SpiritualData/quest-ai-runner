@@ -159,67 +159,6 @@ def test_recipe_fast_path_cases_cover_all_groups():
     assert len(cases) == 30 and {c["group"] for c in cases} == {"repeat", "near_miss", "unrelated"}
 
 
-def test_leaderboard_only_compares_rows_scored_on_the_same_cases():
-    import leaderboard
-    mk = lambda impl, passed, sha: dict(impl=impl, cases="10", passed=str(passed), cost_usd="0", cases_sha=sha)
-    rows = {"cur": mk("cur", 5, "aaaa"), "other": mk("other", 9, "bbbb"), "same": mk("same", 8, "aaaa")}
-    assert [r["impl"] for r in leaderboard.challengers(rows, "cur")] == ["same"]
-    blank = {"cur": mk("cur", 5, ""), "old": mk("old", 9, "")}  # legacy rows compare as one group
-    assert [r["impl"] for r in leaderboard.challengers(blank, "cur")] == ["old"]
-
-
-def test_a_sampled_comparison_inside_the_margin_is_a_tie_and_a_deterministic_one_is_exact(tmp_path, monkeypatch):
-    import leaderboard
-    mk = lambda impl, passed, calls, tokens: dict(impl=impl, component="margin_probe", cases="30", passed=str(passed),
-                                                  cost_usd="0", cases_sha="aaaa", model_calls=str(calls),
-                                                  tokens_in=str(tokens), tokens_out="0")
-    sampled = {"cur": mk("cur", 18, 60, 1000), "rival": mk("rival", 15, 60, 800)}
-    assert leaderboard.verdict(sampled, "cur")[0] == "TIE"             # three cases of thirty is inside ten points
-    assert leaderboard.challengers(sampled, "cur") == []               # cheaper but passing less is no challenger
-    clear = {"cur": mk("cur", 18, 60, 1000), "rival": mk("rival", 12, 60, 1000)}
-    assert leaderboard.verdict(clear, "cur")[0] == "WIN"               # six cases of thirty clears the margin
-    beaten = {"cur": mk("cur", 12, 60, 1000), "rival": mk("rival", 18, 60, 1000)}
-    assert [r["impl"] for r in leaderboard.challengers(beaten, "cur")] == ["rival"]
-    tokens = {"cur": mk("cur", 20, 60, 880), "rival": mk("rival", 20, 60, 1000)}
-    assert leaderboard.verdict(tokens, "cur")[0] == "TIE"              # 12% fewer tokens is inside the tolerance
-    tokens["cur"]["tokens_in"] = "800"
-    assert leaderboard.verdict(tokens, "cur")[0] == "WIN"              # 20% fewer is not
-    offline = {"cur": mk("cur", 18, 0, 0), "rival": mk("rival", 15, 0, 0)}
-    assert leaderboard.verdict(offline, "cur")[0] == "WIN"             # no model called: exact counts decide
-    (tmp_path / "margin_probe").mkdir()
-    (tmp_path / "margin_probe" / "noise.json").write_text('{"pass_margin": 0.05}')
-    monkeypatch.setattr(leaderboard, "HERE", tmp_path)
-    assert leaderboard.verdict(sampled, "cur")[0] == "WIN"             # a component can state a tighter margin
-
-
-def test_leaderboard_flags_rows_without_provenance(capsys, tmp_path, monkeypatch):
-    import csv
-
-    import leaderboard
-    assert leaderboard.unverified(dict(cases_sha="")) and leaderboard.unverified({})
-    assert not leaderboard.unverified(dict(cases_sha="abcd1234"))
-    # a provenance-free challenger never beats a verified selection (and the reverse)
-    mk = lambda impl, passed, sha: dict(impl=impl, cases="10", passed=str(passed), cost_usd="0", cases_sha=sha)
-    assert leaderboard.challengers({"cur": mk("cur", 5, "aaaa"), "legacy": mk("legacy", 10, "")}, "cur") == []
-    assert leaderboard.challengers({"cur": mk("cur", 5, ""), "new": mk("new", 10, "aaaa")}, "cur") == []
-    path = tmp_path / "results.csv"
-    cols = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls", "tokens_in", "tokens_out",
-            "cost_usd", "seconds", "git_sha", "cases_sha", "model"]
-    with open(path, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=cols)
-        w.writeheader()
-        base = dict(date="2026-10-14", component="classification", cases="30", dev="1/1", heldout="0/0", model_calls="0",
-                    tokens_in="0", tokens_out="0", cost_usd="0", seconds="0", git_sha="", model="")
-        w.writerow(dict(base, impl="old_impl", passed="25", cases_sha=""))
-        w.writerow(dict(base, impl="new_impl", passed="26", cases_sha="abcd1234", git_sha="abc", model="haiku"))
-    monkeypatch.setattr(leaderboard, "RESULTS", path)
-    leaderboard.main([])
-    out = capsys.readouterr().out
-    old_line = next(line for line in out.splitlines() if "old_impl" in line)
-    new_line = next(line for line in out.splitlines() if "new_impl" in line)
-    assert "unverified" in old_line and "unverified" not in new_line
-
-
 def test_hybrid_union_wraps_the_live_assembler(tmp_path, monkeypatch):
     """The impl drives HybridContextAssembler, FileContextStore and VectorContextAssembler (not a re-implementation).
     A fake bag-of-words embedder stands in for bge-small so this runs offline."""
@@ -248,11 +187,6 @@ def test_hybrid_union_wraps_the_live_assembler(tmp_path, monkeypatch):
     ranked = select("which module discovers due tasks and claims them", corpus)
     assert calls and ranked and ranked[0] == "pkg/poller.py"
     assert not hasattr(select, "budget")  # strict top 3 is the ideal
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("cs", Path(__file__).resolve().parents[2] / "scripts" / "check_structure.py")
-    cs = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cs)
-    assert cs.impl_kind(Path(hybrid_union.__file__)) == "live"
 
 
 BROKEN = sorted(Path(__file__).resolve().parent.glob("*/broken/*.py"))

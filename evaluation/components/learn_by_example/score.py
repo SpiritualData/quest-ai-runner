@@ -1,5 +1,5 @@
 """Score one example case with the declarative ``expect`` (see ``expect.py``); ``aggregate`` reports per kind."""
-import expect
+from esoi import expect
 
 
 def score_case(fn, case):

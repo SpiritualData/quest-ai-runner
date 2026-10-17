@@ -54,7 +54,7 @@
   "expect": {
    "eq": {
     "patterns": [
-     "quest-key"
+     "api-key"
     ]
    }
   }
@@ -94,6 +94,7 @@
   "expect": {
    "eq": {
     "patterns": [
+     "api-key",
      "github-token"
     ]
    }
@@ -674,7 +675,7 @@
     "exit": 1
    },
    "contains": [
-    "quest-key"
+    "api-key"
    ]
   }
  }

@@ -14,7 +14,7 @@ correctly routed and free of unrequested side effects. It needs the disposable w
 ``impls/reference_replies.py`` checks the metric itself (schema, and pre-checks that accept a reference reply and reject none).
 The component's cases are the whole dataset (``datasets/``, validated offline by ``runner.py validate``) plus the two smoke
 cases in ``cases.json`` (``score.load_cases``); the offline arm checks every one, and the live arm is drawn with
-``components/run.py chat_quality --sample N`` or run in full with ``runner.py``.
+``esoi run chat_quality --sample N`` or run in full with ``runner.py``.
 
 An implementation module in ``impls/`` exposes ``build(meter) -> converse``.
 """

@@ -6,7 +6,5 @@ S4,tests/test_orchestrator.py,"Test file grouped by subject; per-role files (tes
 S4,tests/test_runner.py,Test file grouped by subject; split by poller/executor role when next touched
 S4,tests/test_vector_context.py,"Test file grouped by subject; split by arm (vector, hybrid, seed source) when next touched"
 S12,watch-a-run:digest_probe,"digest_probe returns no signal by design; the scorer builds the live digest with quest_ai_runner.core.overseer.build_digest, so the recorded number is the live digest's. It is the offline arm; the signal arm (live_model) needs a model."
-S26,check-the-structure,Intent records for the registry and its checks are being drafted for the owner's review and are loaded here once approved
-S26,measure-implementations,Intent records for the leaderboard and the recorded results are being drafted for the owner's review and are loaded here once approved
 S26,select-an-implementation,Intent records for the selection table are being drafted for the owner's review and are loaded here once approved
 S26,verify-offline,Intent records for the offline test collection check are being drafted with the structure records for the owner's review and are loaded here once approved

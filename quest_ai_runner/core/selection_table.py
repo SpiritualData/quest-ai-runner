@@ -15,7 +15,7 @@ Shape, keyed by ``solution_id``::
 never imports an adapter at import time and an optional dependency is only needed when its implementation
 is chosen). Switching an implementation is an edit to a ``default`` here, a ``name`` passed by the caller or
 ``RunnerConfig.selections``; never a new ``if``/``elif`` at the call site. Every implementation module must
-be listed in that solution's ``implementations`` column; ``scripts/check_structure.py`` (S14) enforces both
+be listed in that solution's ``implementations`` column; ``esoi check`` (S14) enforces both
 that every port row appears here and that the two lists agree.
 """
 from __future__ import annotations

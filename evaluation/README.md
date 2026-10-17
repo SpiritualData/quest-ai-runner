@@ -6,11 +6,11 @@ components behind a fixed interface (swap a solution by name, results comparable
 
 ```
 PY=.venv/bin/python3        # from the quest-ai-runner repo root
-$PY evaluation/components/run.py context_selection --impl idf_docstrings   # also: idf_paths_only, blind_grep,
+esoi run context_selection --impl idf_docstrings   # also: idf_paths_only, blind_grep,
                                                                            #       vector_bge_small, hybrid_union
-$PY evaluation/components/run.py staleness --impl store_sha256            # also: mtime_size
-$PY evaluation/components/run.py recipe_fast_path --impl recipe_replay     # also: planner_only (real model)
-$PY evaluation/components/run.py claude_code_ab --impl idf_hint             # the A/B hint arm, offline (cold_claude / warm_claude spend haiku tokens)
+esoi run staleness --impl store_sha256            # also: mtime_size
+esoi run recipe_fast_path --impl recipe_replay     # also: planner_only (real model)
+esoi run claude_code_ab --impl idf_hint             # the A/B hint arm, offline (cold_claude / warm_claude spend haiku tokens)
 ```
 
 See `components/README.md` for the interface of each. There are no standalone scripts in `evaluation/` any more. The retired ones, and where they went:
@@ -455,6 +455,6 @@ guarantees**, not as a retrieval engine that must beat grep on every cold query.
 Every new LLM call needs a labeled classification eval of at least 30 cases that must score 100%.
 This one runs the production liveness-review prompt and CLI call over 39 hand-labeled log tails
 (stop vs keep running) and exits non-zero on any miss. Makes one small Haiku call per case, about
-5 minutes per run: `python evaluation/components/run.py deep_review --impl live_reviewer`. Re-run it after any edit to
+5 minutes per run: `esoi run deep_review --impl live_reviewer`. Re-run it after any edit to
 `DEEP_REVIEW_PROMPT`.
 

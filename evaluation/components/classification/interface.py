@@ -17,6 +17,6 @@ and no tool call where the message asked for no change (see ``score.py`` and the
 
 An implementation module in ``impls/`` exposes ``build(meter) -> classify``; it counts any model call
 it makes with ``meter.record()`` (``meter.wrap(provider)`` does it for a QAR provider). The harness
-(``../run.py``) and scorer (``score.py``) never change when a solution is added.
+(``esoi run``) and scorer (``score.py``) never change when a solution is added.
 """
 ROUTES = ("answer", "tool", "deep", "confirm", "clarify")

@@ -1,7 +1,7 @@
 """LIVE ARM (opt-in): the real in-app Quest chat on a disposable dev world, judged by ``claude -p``.
 
 Needs a dev Quest (``QAR_EVAL_DEV_ENV_FILE``) and a built world (``runner.py setup``); without them ``build`` prints SKIPPED
-and exits 0, so the offline suite and ``components/run.py`` stay green. The chat under test is the Quest AI that runs this
+and exits 0, so the offline suite and ``esoi run`` stay green. The chat under test is the Quest AI that runs this
 checkout's ``quest_ai_runner`` brain; the version below ties a result to that code. Spends model tokens on dev.
 
 Cases come from the component's whole set (``score.load_cases``); draw a few with ``--sample N`` (or name them with

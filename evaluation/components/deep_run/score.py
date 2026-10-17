@@ -1,6 +1,6 @@
 """Score one deep-run contract case: run the kind, compare the returned dict with the case's declarative
 ``expect`` (see ``expect.py``). ``aggregate`` reports pass counts per kind."""
-import expect
+from esoi import expect
 
 
 def score_case(fn, case):

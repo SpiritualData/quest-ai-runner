@@ -11,7 +11,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import common  # noqa: E402
-import expect  # noqa: E402
+from esoi import expect  # noqa: E402
 
 # component -> (selected/offline solution, baseline, ids that fail BY DESIGN because they pin a known gap)
 OFFLINE = {

@@ -1,6 +1,6 @@
 """Score one reply-guard case: run the kind, compare with the case's declarative ``expect``
 (see ``expect.py``). ``aggregate`` reports pass counts per kind."""
-import expect
+from esoi import expect
 
 
 def score_case(fn, case):

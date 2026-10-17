@@ -6,29 +6,29 @@ solutions or frameworks is writing another implementation, never changing the ha
 
 ```
 PY=.venv/bin/python3        # from the quest-ai-runner repo root
-$PY evaluation/components/run.py classification --impl qar_planner      # selected per solutions.csv
-$PY evaluation/components/run.py classification --impl single_prompt    # alternative
-$PY evaluation/components/run.py classification --impl keyword_rules    # zero-call floor
-$PY evaluation/components/run.py quest_ops --impl qar_orchestrator      # selected per solutions.csv
-$PY evaluation/components/run.py quest_ops --impl direct_tool_call      # alternative
-$PY evaluation/components/run.py context_selection --impl hybrid_union    # selected per solutions.csv, zero model calls
-$PY evaluation/components/run.py context_selection --impl blind_grep           # zero-model floor
-$PY evaluation/components/run.py context_selection --impl vector_bge_small     # local embedder, offline, ~90 s
-$PY evaluation/components/run.py context_selection --impl hybrid_union         # the LIVE HybridContextAssembler (keyword + vector arms), ~10 s with a warm embed cache
-$PY evaluation/components/run.py staleness --impl store_sha256                 # selected per solutions.csv, zero model calls
-$PY evaluation/components/run.py staleness --impl mtime_size                   # baseline
-$PY evaluation/components/run.py recipe_fast_path --impl recipe_replay         # selected per solutions.csv (real model)
-$PY evaluation/components/run.py recipe_fast_path --impl planner_only          # baseline (real model)
-$PY evaluation/components/run.py recipe_fast_path --impl recipe_replay_offline # OFFLINE arm: rule model instead of the claude CLI, recorded
-$PY evaluation/components/run.py recipe_fast_path --impl planner_only_offline  # offline baseline
-$PY evaluation/components/run.py feedback_loop --impl ledger_guidance          # live ledger + guidance provider, scripted model
-$PY evaluation/components/run.py feed_context_sources --impl update_engine     # live UpdateEngine quest channels, fake Quest client
-$PY evaluation/components/run.py receive_input_mid_run --impl in_memory        # live inbox wired into the live Orchestrator
-$PY evaluation/components/run.py esoi_behavior --impl reference_good   # offline validity: must pass all 60
-$PY evaluation/components/run.py esoi_behavior --impl reference_bad    # offline validity: must fail all 60
-$PY evaluation/components/run.py esoi_behavior --impl standing_instructions --only ESOI-002,ESOI-020 --max-calls 8   # chat arm + model judge, costs cents
-$PY evaluation/components/run.py esoi_behavior --impl insitu_standing_instructions --only ESOI-002,ESOI-020           # real deep-run prompt, tools off
-$PY evaluation/components/run.py esoi_judge --impl model_judge         # the judge's own agreement with labelled replies (120 cheap calls)
+esoi run classification --impl qar_planner      # selected per solutions.csv
+esoi run classification --impl single_prompt    # alternative
+esoi run classification --impl keyword_rules    # zero-call floor
+esoi run quest_ops --impl qar_orchestrator      # selected per solutions.csv
+esoi run quest_ops --impl direct_tool_call      # alternative
+esoi run context_selection --impl hybrid_union    # selected per solutions.csv, zero model calls
+esoi run context_selection --impl blind_grep           # zero-model floor
+esoi run context_selection --impl vector_bge_small     # local embedder, offline, ~90 s
+esoi run context_selection --impl hybrid_union         # the LIVE HybridContextAssembler (keyword + vector arms), ~10 s with a warm embed cache
+esoi run staleness --impl store_sha256                 # selected per solutions.csv, zero model calls
+esoi run staleness --impl mtime_size                   # baseline
+esoi run recipe_fast_path --impl recipe_replay         # selected per solutions.csv (real model)
+esoi run recipe_fast_path --impl planner_only          # baseline (real model)
+esoi run recipe_fast_path --impl recipe_replay_offline # OFFLINE arm: rule model instead of the claude CLI, recorded
+esoi run recipe_fast_path --impl planner_only_offline  # offline baseline
+esoi run feedback_loop --impl ledger_guidance          # live ledger + guidance provider, scripted model
+esoi run feed_context_sources --impl update_engine     # live UpdateEngine quest channels, fake Quest client
+esoi run receive_input_mid_run --impl in_memory        # live inbox wired into the live Orchestrator
+esoi run esoi_behavior --impl reference_good   # offline validity: must pass all 60
+esoi run esoi_behavior --impl reference_bad    # offline validity: must fail all 60
+esoi run esoi_behavior --impl standing_instructions --only ESOI-002,ESOI-020 --max-calls 8   # chat arm + model judge, costs cents
+esoi run esoi_behavior --impl insitu_standing_instructions --only ESOI-002,ESOI-020           # real deep-run prompt, tools off
+esoi run esoi_judge --impl model_judge         # the judge's own agreement with labelled replies (120 cheap calls)
 $PY -m pytest evaluation/components/test_components.py                  # offline, no model calls
 ```
 Flags: `--only ID,ID`, `--max-calls N` (aborts when model calls exceed N), `--out path`.
@@ -69,7 +69,7 @@ Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the mod
 Add a solution: create `<component>/impls/<name>.py` exposing `build(meter) -> function`, count any
 model call with `meter.record()` (or `meter.wrap(provider)`), and run it with `--impl <name>`.
 `module:build` also works for a solution that lives outside this repo.
-A component's score module may also define `aggregate(rows) -> str`; `run.py` prints it as the headline
+A component's score module may also define `aggregate(rows) -> str`; `esoi run` prints it as the headline
 (top-1 / top-3, precision / recall, correct per group). A solution that legitimately returns more than
 the usual top 3 (the hybrid union) declares it with `select.budget = N`, and the scorer reports both.
 

@@ -1,0 +1,7 @@
+metric_id,name,scoped_purpose,record,solution_ids,measured_through,ideal_ids
+QME1,Passing chat turns per dollar,"share of realistic chat turns that pass their rubric (grounded facts, right handling, exact changes), and cost per passing turn","share of realistic chat turns that pass their rubric (grounded facts, right handling, exact changes), and cost per passing turn",QS1,answer-a-turn,QI2;QI6
+QME2,Delegated tasks meeting their standard,"share of queued tasks that meet their written goal without human rework, and cost per task","share of queued tasks that meet their written goal without human rework, and cost per task",QS1,run-queued-tasks and run-deep-work,QI1;QI6
+QME3,Exact and consented changes,"unrequested writes, missing requested writes, and human-only steps taken without a person","unrequested writes, missing requested writes, and human-only steps taken without a person",QS1,"operate-a-quest, escalate-to-a-human and answer-a-turn",QI3
+QME4,Data kept in scope,"items from another user, team or quest reaching a prompt or store","items from another user, team or quest reaching a prompt or store",QS1,,QI2
+QME5,Engine reuse,"glue each consumer writes, and engine code copied into a consumer","glue each consumer writes, and engine code copied into a consumer",QS1,the consumer check,QI4
+QME6,Measured coverage,share of QAR's solutions with a current measured result whose selection follows it,share of QAR's solutions with a current measured result whose selection follows it,QS1,the structure check and the leaderboard,QI5;QI6

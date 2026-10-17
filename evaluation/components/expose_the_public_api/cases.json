@@ -615,36 +615,6 @@
   }
  },
  {
-  "id": "API-042",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.structure.consumer_check.check_consumer is public",
-  "args": {
-   "module": "quest_ai_runner.structure.consumer_check",
-   "name": "check_consumer"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-043",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.structure.consumer_check.cases_hash is public",
-  "args": {
-   "module": "quest_ai_runner.structure.consumer_check",
-   "name": "cases_hash"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
   "id": "API-044",
   "area": "version",
   "kind": "version",
@@ -1366,20 +1336,6 @@
   "description": "quest_ai_runner.cli imports with every socket call refusing",
   "args": {
    "module": "quest_ai_runner.cli"
-  },
-  "expect": {
-   "eq": {
-    "imported": true
-   }
-  }
- },
- {
-  "id": "API-089",
-  "area": "offline_import",
-  "kind": "offline_import",
-  "description": "quest_ai_runner.structure imports with every socket call refusing",
-  "args": {
-   "module": "quest_ai_runner.structure"
   },
   "expect": {
    "eq": {

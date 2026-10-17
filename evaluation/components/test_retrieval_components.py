@@ -40,9 +40,10 @@ def test_the_composite_stack_gathers_the_labelled_documents():
 
 
 def test_per_source_arm_shares_the_stack_cases_and_is_not_ranked():
-    import leaderboard
+    from esoi import leaderboard
     assert (HERE / "retrieval_sources" / "cases.json").resolve() == (HERE / "retrieval" / "cases.json").resolve()
-    assert leaderboard.invariant_reason("retrieval_sources") and not leaderboard.invariant_reason("retrieval")
+    assert leaderboard.invariant_reason("retrieval_sources", eval_dir=HERE)
+    assert not leaderboard.invariant_reason("retrieval", eval_dir=HERE)
     assert not (HERE / "retrieval" / "impls" / "notion_pages.py").exists()
 
 

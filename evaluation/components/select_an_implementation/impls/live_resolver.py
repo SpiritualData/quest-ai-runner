@@ -5,7 +5,7 @@
 inside the block. Zero model calls."""
 import importlib
 
-from hermetic_env import hermetic_env
+from common import hermetic_env
 from quest_ai_runner.adapters.web_search_backends import select_search_backend
 from quest_ai_runner.cli_config import _model_provider_from_env
 from quest_ai_runner.config import RunnerConfig
