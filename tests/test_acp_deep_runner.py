@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from quest_ai_runner.adapters import acp_deep_runner as acp
+from quest_ai_runner.adapters import acp_deep_runner_config as acp_config
 from quest_ai_runner.core.adapters import DeepRunner, EVENT_EXEC, Escalation
 from quest_ai_runner.core.goal_runner import SubprocessGoalRunner
 from quest_ai_runner.core.guard import classify_exec_phase
@@ -587,7 +588,7 @@ def fake_node(monkeypatch, version: str):
     def fake_run(cmd, **kwargs):
         assert cmd[1] == "--version"
         return subprocess.CompletedProcess(cmd, 0, stdout=version.encode(), stderr=b"")
-    monkeypatch.setattr(acp.subprocess, "run", fake_run)
+    monkeypatch.setattr(acp_config.subprocess, "run", fake_run)
 
 
 def test_a_js_entry_point_is_launched_under_the_configured_node(monkeypatch, tmp_path):
@@ -613,7 +614,7 @@ def test_a_too_old_node_fails_loudly_and_names_the_env_var(monkeypatch, tmp_path
 
 def test_a_missing_agent_program_names_what_to_install(monkeypatch):
     monkeypatch.delenv(acp.QAR_ACP_AGENT_COMMAND_ENV_VAR, raising=False)
-    monkeypatch.setattr(acp.shutil, "which", lambda name: None)
+    monkeypatch.setattr(acp_config.shutil, "which", lambda name: None)
     argv, error = acp.build_agent_argv(agent_command=None, agent_args=[], node_path=None)
     assert argv == []
     assert "claude-agent-acp" in error and acp.QAR_ACP_AGENT_COMMAND_ENV_VAR in error
@@ -632,7 +633,7 @@ def test_the_agent_command_env_var_is_the_fallback(monkeypatch):
 
 def test_run_goal_reports_the_resolution_error_instead_of_spawning(monkeypatch):
     monkeypatch.delenv(acp.QAR_ACP_AGENT_COMMAND_ENV_VAR, raising=False)
-    monkeypatch.setattr(acp.shutil, "which", lambda name: None)
+    monkeypatch.setattr(acp_config.shutil, "which", lambda name: None)
     result = acp.AcpDeepRunner(acp.AcpConfig(working_dir="/w")).run_goal(goal="g", brief="b")
     assert result.met is False
     assert "claude-agent-acp" in (result.error or "")
