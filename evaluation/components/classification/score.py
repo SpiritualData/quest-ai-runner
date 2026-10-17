@@ -2,7 +2,7 @@
 
 A case passes only when every check it carries holds:
   expect       the route is one of these
-  tools        on a tool route the first call is one of these
+  tools        on a tool route at least one call is one of these (a find before a create is a fine first move)
   arg_checks   [{"tool", "contains": {arg: substring}}]: when that tool is called, the stated detail survives in
                its arguments (the named argument, or any other argument of that call: a goal's number may land
                in its title or its criteria)
@@ -29,8 +29,8 @@ def score_case(fn, case):
         problems.append(f"invalid route {route!r}")
     elif route not in case["expect"]:
         problems.append(f"expected {'/'.join(case['expect'])}")
-    if route == "tool" and case.get("tools") and tool not in case["tools"]:
-        problems.append(f"tool {tool!r} not in {case['tools']}")
+    if route == "tool" and case.get("tools") and not any(c["name"] in case["tools"] for c in calls):
+        problems.append(f"no call to {case['tools']} (got {[c['name'] for c in calls]})")
     if route == "tool":
         for chk in case.get("arg_checks", []):
             for call in (c for c in calls if c["name"] == chk["tool"]):
