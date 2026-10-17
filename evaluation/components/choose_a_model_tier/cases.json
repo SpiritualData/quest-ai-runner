@@ -1,0 +1,763 @@
+[
+ {
+  "id": "MDL-001",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "simple",
+   "ladder": [
+    "haiku",
+    "sonnet",
+    "opus"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "start": "haiku",
+    "ladder": [
+     "haiku",
+     "sonnet",
+     "opus"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MDL-002",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "hard",
+   "ladder": [
+    "haiku",
+    "sonnet",
+    "opus"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "start": "sonnet",
+    "ladder": [
+     "sonnet",
+     "opus"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MDL-003",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "trivial",
+   "ladder": [
+    "haiku",
+    "sonnet"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "start": "haiku",
+    "ladder": [
+     "haiku",
+     "sonnet"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MDL-004",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "nonsense",
+   "ladder": [
+    "haiku",
+    "sonnet"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "start": null,
+    "ladder": [
+     "haiku",
+     "sonnet"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MDL-005",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "simple",
+   "ladder": [
+    "sonnet",
+    "opus"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "start": "sonnet",
+    "ladder": [
+     "sonnet",
+     "opus"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MDL-006",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "hard",
+   "ladder": [
+    "haiku"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "start": "haiku",
+    "ladder": [
+     "haiku"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MDL-007",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "hard",
+   "ladder": [
+    "haiku",
+    "sonnet",
+    "opus"
+   ],
+   "models": {
+    "hard": "opus"
+   }
+  },
+  "expect": {
+   "eq": {
+    "start": "opus",
+    "ladder": [
+     "opus"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MDL-008",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "simple",
+   "ladder": []
+  },
+  "expect": {
+   "eq": {
+    "start": null,
+    "ladder": []
+   }
+  }
+ },
+ {
+  "id": "MDL-009",
+  "kind": "family",
+  "area": "family",
+  "args": {
+   "model": "sonnet",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "claude-sonnet-4-6"
+   }
+  }
+ },
+ {
+  "id": "MDL-010",
+  "kind": "family",
+  "area": "family",
+  "args": {
+   "model": "claude-sonnet",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5",
+    "claude-sonnet-4-7"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "claude-sonnet-4-7"
+   }
+  }
+ },
+ {
+  "id": "MDL-011",
+  "kind": "family",
+  "area": "family",
+  "args": {
+   "model": "gemini-flash",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "gemini-3.5-flash"
+   }
+  }
+ },
+ {
+  "id": "MDL-012",
+  "kind": "family",
+  "area": "family",
+  "args": {
+   "model": "gemini-flash-lite",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "gemini-3.1-flash-lite"
+   }
+  }
+ },
+ {
+  "id": "MDL-013",
+  "kind": "family",
+  "area": "family",
+  "args": {
+   "model": "claude-sonnet-4-6",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "claude-sonnet-4-6"
+   }
+  }
+ },
+ {
+  "id": "MDL-014",
+  "kind": "family",
+  "area": "family",
+  "args": {
+   "model": "sonnet",
+   "live": []
+  },
+  "expect": {
+   "eq": {
+    "model": "sonnet"
+   }
+  }
+ },
+ {
+  "id": "MDL-015",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": "fast",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "claude-haiku-4-5"
+   }
+  }
+ },
+ {
+  "id": "MDL-016",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": "balanced",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "gemini-3.5-flash"
+   }
+  }
+ },
+ {
+  "id": "MDL-017",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": "quality",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "claude-sonnet-4-6"
+   }
+  }
+ },
+ {
+  "id": "MDL-018",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": "best",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "claude-sonnet"
+   }
+  }
+ },
+ {
+  "id": "MDL-019",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": "best",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ],
+   "pins": {
+    "best": "opus-pin"
+   }
+  },
+  "expect": {
+   "eq": {
+    "model": "opus-pin"
+   }
+  }
+ },
+ {
+  "id": "MDL-020",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": "mystery",
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "gemini-3.5-flash"
+   }
+  }
+ },
+ {
+  "id": "MDL-021",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": null,
+   "live": [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-pro",
+    "gpt-5-mini",
+    "gpt-5"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "gemini-3.5-flash"
+   }
+  }
+ },
+ {
+  "id": "MDL-022",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": "fast",
+   "live": []
+  },
+  "expect": {
+   "eq": {
+    "model": "gemini-3.1-flash-lite"
+   }
+  }
+ },
+ {
+  "id": "MDL-023",
+  "kind": "tier",
+  "area": "tier",
+  "args": {
+   "tier": "fast",
+   "live": [
+    "deepseek-chat"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "model": "gemini-3.1-flash-lite"
+   }
+  }
+ },
+ {
+  "id": "MDL-024",
+  "kind": "lower_tier",
+  "area": "lower_tier",
+  "args": {
+   "tier": "best"
+  },
+  "expect": {
+   "eq": {
+    "tier": "quality"
+   }
+  }
+ },
+ {
+  "id": "MDL-025",
+  "kind": "lower_tier",
+  "area": "lower_tier",
+  "args": {
+   "tier": "fast"
+  },
+  "expect": {
+   "eq": {
+    "tier": null
+   }
+  }
+ },
+ {
+  "id": "MDL-026",
+  "kind": "lower_tier",
+  "area": "lower_tier",
+  "args": {
+   "tier": "nope"
+  },
+  "expect": {
+   "eq": {
+    "tier": null
+   }
+  }
+ },
+ {
+  "id": "MDL-027",
+  "kind": "vision",
+  "area": "vision",
+  "args": {
+   "model": "claude-sonnet-4-6"
+  },
+  "expect": {
+   "eq": {
+    "vision": true
+   }
+  }
+ },
+ {
+  "id": "MDL-028",
+  "kind": "vision",
+  "area": "vision",
+  "args": {
+   "model": "gpt-3.5-turbo"
+  },
+  "expect": {
+   "eq": {
+    "vision": false
+   }
+  }
+ },
+ {
+  "id": "MDL-029",
+  "kind": "vision",
+  "area": "vision",
+  "args": {
+   "model": "gemini-3.5-flash"
+  },
+  "expect": {
+   "eq": {
+    "vision": true
+   }
+  }
+ },
+ {
+  "id": "MDL-030",
+  "kind": "vision",
+  "area": "vision",
+  "args": {
+   "model": ""
+  },
+  "expect": {
+   "eq": {
+    "vision": false
+   }
+  }
+ },
+ {
+  "id": "MDL-031",
+  "kind": "vision",
+  "area": "vision",
+  "args": {
+   "model": "sonnet"
+  },
+  "expect": {
+   "eq": {
+    "vision": true
+   }
+  }
+ },
+ {
+  "id": "MDL-032",
+  "kind": "vision",
+  "area": "vision",
+  "args": {
+   "model": "deepseek-chat"
+  },
+  "expect": {
+   "eq": {
+    "vision": false
+   }
+  }
+ },
+ {
+  "id": "MDL-033",
+  "kind": "outage",
+  "area": "outage",
+  "args": {
+   "message": "Error 529: overloaded"
+  },
+  "expect": {
+   "eq": {
+    "outage": true
+   }
+  }
+ },
+ {
+  "id": "MDL-034",
+  "kind": "outage",
+  "area": "outage",
+  "args": {
+   "message": "request timeout"
+  },
+  "expect": {
+   "eq": {
+    "outage": false
+   }
+  }
+ },
+ {
+  "id": "MDL-035",
+  "kind": "outage",
+  "area": "outage",
+  "args": {
+   "message": "429 rate limit exceeded"
+  },
+  "expect": {
+   "eq": {
+    "outage": true
+   }
+  }
+ },
+ {
+  "id": "MDL-036",
+  "kind": "outage",
+  "area": "outage",
+  "args": {
+   "message": "invalid api key"
+  },
+  "expect": {
+   "eq": {
+    "outage": false
+   }
+  }
+ },
+ {
+  "id": "MDL-037",
+  "kind": "usage_limit",
+  "area": "usage_limit",
+  "args": {
+   "text": "You've hit your weekly limit \u00b7 resets Sep 26, 1pm (America/Los_Angeles)",
+   "now": "2026-09-24T12:00:00"
+  },
+  "expect": {
+   "eq": {
+    "limited": true,
+    "kind": "weekly",
+    "resets_at": "2026-09-26T20:00:00+00:00",
+    "resume_at": "2026-09-26T20:02:00+00:00"
+   }
+  }
+ },
+ {
+  "id": "MDL-038",
+  "kind": "usage_limit",
+  "area": "usage_limit",
+  "args": {
+   "text": "You've hit your session limit \u00b7 resets 8:30am (America/Los_Angeles)",
+   "now": "2026-09-24T12:00:00"
+  },
+  "expect": {
+   "eq": {
+    "limited": true,
+    "kind": "session",
+    "resets_at": "2026-09-24T15:30:00+00:00",
+    "resume_at": "2026-09-24T15:32:00+00:00"
+   }
+  }
+ },
+ {
+  "id": "MDL-039",
+  "kind": "usage_limit",
+  "area": "usage_limit",
+  "args": {
+   "text": "You've hit your session limit",
+   "now": "2026-09-24T12:00:00"
+  },
+  "expect": {
+   "eq": {
+    "limited": true,
+    "kind": "session",
+    "resets_at": null,
+    "resume_at": "2026-09-24T12:30:00+00:00"
+   }
+  }
+ },
+ {
+  "id": "MDL-040",
+  "kind": "usage_limit",
+  "area": "usage_limit",
+  "args": {
+   "text": "Claude AI usage limit reached|1790500000",
+   "now": "2026-09-24T12:00:00"
+  },
+  "expect": {
+   "eq": {
+    "limited": true,
+    "kind": "",
+    "resets_at": "2026-09-27T09:06:40+00:00",
+    "resume_at": "2026-09-27T09:08:40+00:00"
+   }
+  }
+ },
+ {
+  "id": "MDL-041",
+  "kind": "usage_limit",
+  "area": "usage_limit",
+  "args": {
+   "text": "resets in 2h 30m. You've hit your weekly limit",
+   "now": "2026-09-24T12:00:00"
+  },
+  "expect": {
+   "eq": {
+    "limited": true,
+    "kind": "weekly",
+    "resets_at": "2026-09-24T14:30:00+00:00",
+    "resume_at": "2026-09-24T14:32:00+00:00"
+   }
+  }
+ },
+ {
+  "id": "MDL-042",
+  "kind": "usage_limit",
+  "area": "usage_limit",
+  "args": {
+   "text": "The report discusses the rate limit policy",
+   "now": "2026-09-24T12:00:00"
+  },
+  "expect": {
+   "eq": {
+    "limited": false,
+    "kind": "",
+    "resets_at": null,
+    "resume_at": null
+   }
+  }
+ }
+]
