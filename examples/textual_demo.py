@@ -26,7 +26,7 @@ async def demo_orchestrator_events():
     events = [
         {"type": "status", "text": "gathering context…"},
         {"type": "read", "text": "", "data": {
-            "sources": ["/home/user/code/main.py", "/home/user/code/utils.py"],
+            "sources": ["/workspace/code/main.py", "/workspace/code/utils.py"],
             "reads": 2
         }},
         {"type": "plan", "text": "I'll analyze the code structure first", "action": "analyze"},
@@ -37,12 +37,12 @@ async def demo_orchestrator_events():
                 "adapter": "memory",
                 "relevance_score": 0.92,
                 "file_count": 3,
-                "files": ["/home/user/code/main.py", "/home/user/code/utils.py", "/home/user/code/config.py"]
+                "files": ["/workspace/code/main.py", "/workspace/code/utils.py", "/workspace/code/config.py"]
             }],
             "sources": [{
                 "adapter": "files",
                 "label": "Python Files",
-                "items": ["/home/user/code/main.py", "/home/user/code/utils.py", "/home/user/code/config.py"]
+                "items": ["/workspace/code/main.py", "/workspace/code/utils.py", "/workspace/code/config.py"]
             }]
         }},
         {"type": "status", "text": "thinking…"},
@@ -52,7 +52,7 @@ async def demo_orchestrator_events():
         {"type": "partial", "text": "main, utils, ", "data": {}},
         {"type": "partial", "text": "and config.", "data": {}},
         {"type": "partial", "text": " ", "data": {"ack": True}},  # ack message
-        {"type": "exec", "text": "Read: /home/user/code/main.py", "data": {
+        {"type": "exec", "text": "Read: /workspace/code/main.py", "data": {
             "run_id": "exec-001",
             "goal": "Refactor main.py for clarity"
         }},

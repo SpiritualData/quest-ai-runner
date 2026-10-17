@@ -1,0 +1,565 @@
+[
+ {
+  "id": "EXM-001",
+  "area": "compile",
+  "kind": "compile",
+  "description": "composite_retrieval_example.py compiles",
+  "args": {
+   "file": "composite_retrieval_example.py"
+  },
+  "expect": {
+   "eq": {
+    "compiles": true
+   }
+  }
+ },
+ {
+  "id": "EXM-002",
+  "area": "compile",
+  "kind": "compile",
+  "description": "custom_consumer.py compiles",
+  "args": {
+   "file": "custom_consumer.py"
+  },
+  "expect": {
+   "eq": {
+    "compiles": true
+   }
+  }
+ },
+ {
+  "id": "EXM-003",
+  "area": "compile",
+  "kind": "compile",
+  "description": "e2e_demo.py compiles",
+  "args": {
+   "file": "e2e_demo.py"
+  },
+  "expect": {
+   "eq": {
+    "compiles": true
+   }
+  }
+ },
+ {
+  "id": "EXM-004",
+  "area": "compile",
+  "kind": "compile",
+  "description": "minimal_lane.py compiles",
+  "args": {
+   "file": "minimal_lane.py"
+  },
+  "expect": {
+   "eq": {
+    "compiles": true
+   }
+  }
+ },
+ {
+  "id": "EXM-005",
+  "area": "compile",
+  "kind": "compile",
+  "description": "run_lane.py compiles",
+  "args": {
+   "file": "run_lane.py"
+  },
+  "expect": {
+   "eq": {
+    "compiles": true
+   }
+  }
+ },
+ {
+  "id": "EXM-006",
+  "area": "compile",
+  "kind": "compile",
+  "description": "textual_demo.py compiles",
+  "args": {
+   "file": "textual_demo.py"
+  },
+  "expect": {
+   "eq": {
+    "compiles": true
+   }
+  }
+ },
+ {
+  "id": "EXM-007",
+  "area": "import",
+  "kind": "import",
+  "description": "composite_retrieval_example.py imports",
+  "args": {
+   "module": "examples.composite_retrieval_example"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "EXM-008",
+  "area": "import",
+  "kind": "import",
+  "description": "custom_consumer.py imports",
+  "args": {
+   "module": "examples.custom_consumer"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "EXM-009",
+  "area": "import",
+  "kind": "import",
+  "description": "e2e_demo.py imports",
+  "args": {
+   "module": "examples.e2e_demo"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "EXM-010",
+  "area": "import",
+  "kind": "import",
+  "description": "minimal_lane.py imports",
+  "args": {
+   "module": "examples.minimal_lane"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "EXM-011",
+  "area": "import",
+  "kind": "import",
+  "description": "run_lane.py imports",
+  "args": {
+   "module": "examples.run_lane"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "EXM-012",
+  "area": "import",
+  "kind": "import",
+  "description": "textual_demo.py imports",
+  "args": {
+   "module": "examples.textual_demo"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "EXM-013",
+  "area": "run",
+  "kind": "run",
+  "description": "custom_consumer reports what is missing instead of crashing, on an empty environment",
+  "args": {
+   "file": "custom_consumer.py"
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "RunnerConfig is incomplete",
+    "quest_base_url is required"
+   ]
+  }
+ },
+ {
+  "id": "EXM-014",
+  "area": "run",
+  "kind": "run",
+  "description": "custom_consumer with a base URL, key and corpus reports its identity",
+  "args": {
+   "file": "custom_consumer.py",
+   "env": {
+    "QUEST_BASE_URL": "https://api.example.org",
+    "QUEST_API_KEY": "qsk_example",
+    "QUEST_TEAM_ID": "team_example"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "team_id='team_example'",
+    "base_url='https://api.example.org'"
+   ]
+  }
+ },
+ {
+  "id": "EXM-015",
+  "area": "run",
+  "kind": "run",
+  "description": "run_lane --help lists its flags",
+  "args": {
+   "file": "run_lane.py",
+   "argv": [
+    "--help"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "--once",
+    "--check"
+   ]
+  }
+ },
+ {
+  "id": "EXM-016",
+  "area": "run",
+  "kind": "run",
+  "description": "run_lane --once on an empty environment exits 0 and says why it did not run",
+  "args": {
+   "file": "run_lane.py",
+   "argv": [
+    "--once"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "lane not fully configured"
+   ]
+  }
+ },
+ {
+  "id": "EXM-017",
+  "area": "run",
+  "kind": "run",
+  "description": "minimal_lane --help lists its flags",
+  "args": {
+   "file": "minimal_lane.py",
+   "argv": [
+    "--help"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "--once",
+    "--check",
+    "minimal quest-ai-runner lane"
+   ]
+  }
+ },
+ {
+  "id": "EXM-018",
+  "area": "run",
+  "kind": "run",
+  "description": "minimal_lane --check on an empty environment exits 0 and says why",
+  "args": {
+   "file": "minimal_lane.py",
+   "argv": [
+    "--check"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "lane not fully configured"
+   ]
+  }
+ },
+ {
+  "id": "EXM-019",
+  "area": "run",
+  "kind": "run",
+  "description": "composite_retrieval_example runs end to end on its temporary corpus",
+  "args": {
+   "file": "composite_retrieval_example.py"
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "Multi-source retrieval working",
+    "Available sources"
+   ]
+  }
+ },
+ {
+  "id": "EXM-020",
+  "area": "run",
+  "kind": "run",
+  "description": "e2e_demo refuses to start without a Quest backend and says what to set",
+  "args": {
+   "file": "e2e_demo.py"
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "Set the required env vars first"
+   ]
+  }
+ },
+ {
+  "id": "EXM-021",
+  "area": "stub",
+  "kind": "stub",
+  "description": "the e2e demo's stub asks for confirmation on a human-only task",
+  "args": {
+   "marker": true
+  },
+  "expect": {
+   "eq": {
+    "action": "confirm"
+   }
+  }
+ },
+ {
+  "id": "EXM-022",
+  "area": "stub",
+  "kind": "stub",
+  "description": "the e2e demo's stub answers an ordinary task",
+  "args": {
+   "marker": false
+  },
+  "expect": {
+   "eq": {
+    "action": "answer"
+   }
+  }
+ },
+ {
+  "id": "EXM-023",
+  "area": "config_file",
+  "kind": "config_file",
+  "description": "the shipped qar.toml loads through RunnerConfig.from_file",
+  "args": {},
+  "expect": {
+   "eq": {
+    "runner_label": "minimal-lane-example"
+   }
+  }
+ },
+ {
+  "id": "EXM-024",
+  "area": "documented",
+  "kind": "documented",
+  "description": "examples/README.md introduces composite_retrieval_example.py",
+  "args": {
+   "file": "composite_retrieval_example.py"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "EXM-025",
+  "area": "documented",
+  "kind": "documented",
+  "description": "examples/README.md introduces custom_consumer.py",
+  "args": {
+   "file": "custom_consumer.py"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "EXM-026",
+  "area": "documented",
+  "kind": "documented",
+  "description": "examples/README.md introduces e2e_demo.py",
+  "args": {
+   "file": "e2e_demo.py"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "EXM-027",
+  "area": "documented",
+  "kind": "documented",
+  "description": "examples/README.md introduces minimal_lane.py",
+  "args": {
+   "file": "minimal_lane.py"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "EXM-028",
+  "area": "documented",
+  "kind": "documented",
+  "description": "examples/README.md introduces run_lane.py",
+  "args": {
+   "file": "run_lane.py"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "EXM-029",
+  "area": "documented",
+  "kind": "documented",
+  "description": "examples/README.md introduces textual_demo.py",
+  "args": {
+   "file": "textual_demo.py"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "EXM-030",
+  "area": "documented",
+  "kind": "documented",
+  "description": "examples/README.md introduces qar.toml",
+  "args": {
+   "file": "qar.toml"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "EXM-031",
+  "area": "clean",
+  "kind": "clean",
+  "description": "composite_retrieval_example.py holds no key, machine path, object id or real address",
+  "args": {
+   "file": "composite_retrieval_example.py"
+  },
+  "expect": {
+   "eq": {
+    "hits": []
+   }
+  }
+ },
+ {
+  "id": "EXM-032",
+  "area": "clean",
+  "kind": "clean",
+  "description": "custom_consumer.py holds no key, machine path, object id or real address",
+  "args": {
+   "file": "custom_consumer.py"
+  },
+  "expect": {
+   "eq": {
+    "hits": []
+   }
+  }
+ },
+ {
+  "id": "EXM-033",
+  "area": "clean",
+  "kind": "clean",
+  "description": "e2e_demo.py holds no key, machine path, object id or real address",
+  "args": {
+   "file": "e2e_demo.py"
+  },
+  "expect": {
+   "eq": {
+    "hits": []
+   }
+  }
+ },
+ {
+  "id": "EXM-034",
+  "area": "clean",
+  "kind": "clean",
+  "description": "minimal_lane.py holds no key, machine path, object id or real address",
+  "args": {
+   "file": "minimal_lane.py"
+  },
+  "expect": {
+   "eq": {
+    "hits": []
+   }
+  }
+ },
+ {
+  "id": "EXM-035",
+  "area": "clean",
+  "kind": "clean",
+  "description": "run_lane.py holds no key, machine path, object id or real address",
+  "args": {
+   "file": "run_lane.py"
+  },
+  "expect": {
+   "eq": {
+    "hits": []
+   }
+  }
+ },
+ {
+  "id": "EXM-036",
+  "area": "clean",
+  "kind": "clean",
+  "description": "textual_demo.py holds no key, machine path, object id or real address",
+  "args": {
+   "file": "textual_demo.py"
+  },
+  "expect": {
+   "eq": {
+    "hits": []
+   }
+  }
+ },
+ {
+  "id": "EXM-037",
+  "area": "clean",
+  "kind": "clean",
+  "description": "qar.toml holds no key, machine path, object id or real address",
+  "args": {
+   "file": "qar.toml"
+  },
+  "expect": {
+   "eq": {
+    "hits": []
+   }
+  }
+ }
+]
