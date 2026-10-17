@@ -95,6 +95,22 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   backends). Its `prompt_toolkit`/ANSI passages are prior art only: that renderer has since been
   removed and Textual is the one chat UI.
 
+## More reference
+
+- [Environment variables](configuration.md): every variable the code reads (generated).
+- [Consumer registry](consumer-registry.md): adopting QAR in any system and checking the integration.
+- [A lane is a config file](a-lane-is-a-config-file.md): a lane as data, not a program.
+- [Evolvable structure](evolvable-structure.md): the standing instructions deep runs follow.
+- [Context card schema](card-schema.md), [context assembly](context-assembly.md), [vector context](vector-context.md),
+  [conversation cards](conversation-cards.md): what a card is and how context reaches a run.
+- [Multi-source retrieval](multi-source-retrieval.md), [Claude conversations](claude-conversations-integration.md),
+  [edited files extraction](edited-files-extraction.md): reading from files, databases and conversations.
+- [Web search](web-search.md), [file server](file-server.md), [live channels](live-channels.md): reaching outside the corpus.
+- [Recipes](recipes.md), [the overseer](overseer.md), [cheap model routing](cheap-model-routing.md): replay, intervention and cost.
+- [Quest folder goals](quest-folder-goals.md) and [zones](quest-folder-zones.md): a quest as a working folder.
+- Background notes: [bootstrap token savings](BOOTSTRAP_TOKEN_SAVINGS.md), [TF-DF-IDF sampling](TF_DF_IDF_SAMPLING.md),
+  [lessons from Claude Code](lessons-from-claude-code.md), [state store verification](statestore-verification.md).
+
 ## See also
 
 - [`examples/`](../examples/) — runnable reference consumers.

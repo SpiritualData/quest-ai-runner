@@ -593,3 +593,12 @@ lane at a time:
 
 To roll back a lane, set `QAR_CARD_MOUNT=copy` and run a bootstrap; the copy-import resumes. Mount
 records in `bootstrap_meta.json` are ignored in `copy` mode.
+
+## Command line
+
+- `quest-ai-runner paste-context "<text>"` saves text (or stdin) as a context card; `--card-id` names it,
+  `--goal-id` ties it to a goal.
+- `quest-ai-runner search-context "<query>"` shows which cards a query selects; `--no-llm` skips the model
+  and ranks by keywords only.
+- `quest-ai-runner reconcile-plan <quest_id>` compares a quest's plan with what happened and prints the
+  changes it would make; `--write` applies them.

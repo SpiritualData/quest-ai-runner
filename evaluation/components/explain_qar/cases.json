@@ -1,0 +1,6533 @@
+[
+ {
+  "id": "DOC-001",
+  "area": "links",
+  "kind": "links",
+  "description": ".github/PULL_REQUEST_TEMPLATE.md: every relative link resolves",
+  "args": {
+   "file": ".github/PULL_REQUEST_TEMPLATE.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-002",
+  "area": "links",
+  "kind": "links",
+  "description": "CHANGELOG.md: every relative link resolves",
+  "args": {
+   "file": "CHANGELOG.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-003",
+  "area": "links",
+  "kind": "links",
+  "description": "CLAUDE.md: every relative link resolves",
+  "args": {
+   "file": "CLAUDE.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-004",
+  "area": "links",
+  "kind": "links",
+  "description": "CODE_OF_CONDUCT.md: every relative link resolves",
+  "args": {
+   "file": "CODE_OF_CONDUCT.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-005",
+  "area": "links",
+  "kind": "links",
+  "description": "CONTRIBUTING.md: every relative link resolves",
+  "args": {
+   "file": "CONTRIBUTING.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-006",
+  "area": "links",
+  "kind": "links",
+  "description": "README.md: every relative link resolves",
+  "args": {
+   "file": "README.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-007",
+  "area": "links",
+  "kind": "links",
+  "description": "SECURITY.md: every relative link resolves",
+  "args": {
+   "file": "SECURITY.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-008",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/ARCHITECTURE_STANDARDS.md: every relative link resolves",
+  "args": {
+   "file": "docs/ARCHITECTURE_STANDARDS.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-009",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/BOOTSTRAP_TOKEN_SAVINGS.md: every relative link resolves",
+  "args": {
+   "file": "docs/BOOTSTRAP_TOKEN_SAVINGS.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-010",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/README.md: every relative link resolves",
+  "args": {
+   "file": "docs/README.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-011",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/TF_DF_IDF_SAMPLING.md: every relative link resolves",
+  "args": {
+   "file": "docs/TF_DF_IDF_SAMPLING.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-012",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/a-lane-is-a-config-file.md: every relative link resolves",
+  "args": {
+   "file": "docs/a-lane-is-a-config-file.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-013",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/acp-deep-runner.md: every relative link resolves",
+  "args": {
+   "file": "docs/acp-deep-runner.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-014",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/adapters.md: every relative link resolves",
+  "args": {
+   "file": "docs/adapters.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-015",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/answer-explanation.md: every relative link resolves",
+  "args": {
+   "file": "docs/answer-explanation.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-016",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/anticipation.md: every relative link resolves",
+  "args": {
+   "file": "docs/anticipation.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-017",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/card-schema.md: every relative link resolves",
+  "args": {
+   "file": "docs/card-schema.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-018",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/chat.md: every relative link resolves",
+  "args": {
+   "file": "docs/chat.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-019",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/cheap-model-routing.md: every relative link resolves",
+  "args": {
+   "file": "docs/cheap-model-routing.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-020",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/claude-conversations-integration.md: every relative link resolves",
+  "args": {
+   "file": "docs/claude-conversations-integration.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-021",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/configuration.md: every relative link resolves",
+  "args": {
+   "file": "docs/configuration.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-022",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/consumer-registry.md: every relative link resolves",
+  "args": {
+   "file": "docs/consumer-registry.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-023",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/context-assembly.md: every relative link resolves",
+  "args": {
+   "file": "docs/context-assembly.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-024",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/context-card-stores.md: every relative link resolves",
+  "args": {
+   "file": "docs/context-card-stores.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-025",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/context-updates.md: every relative link resolves",
+  "args": {
+   "file": "docs/context-updates.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-026",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/conversation-cards.md: every relative link resolves",
+  "args": {
+   "file": "docs/conversation-cards.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-027",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/corpus-playbooks.md: every relative link resolves",
+  "args": {
+   "file": "docs/corpus-playbooks.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-028",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/deep-run-continuation.md: every relative link resolves",
+  "args": {
+   "file": "docs/deep-run-continuation.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-029",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/deployment.md: every relative link resolves",
+  "args": {
+   "file": "docs/deployment.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-030",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/edited-files-extraction.md: every relative link resolves",
+  "args": {
+   "file": "docs/edited-files-extraction.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-031",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/evolvable-structure.md: every relative link resolves",
+  "args": {
+   "file": "docs/evolvable-structure.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-032",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/fast-edit-runner.md: every relative link resolves",
+  "args": {
+   "file": "docs/fast-edit-runner.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-033",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/feedback-ledger.md: every relative link resolves",
+  "args": {
+   "file": "docs/feedback-ledger.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-034",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/file-server.md: every relative link resolves",
+  "args": {
+   "file": "docs/file-server.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-035",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/guidance-cards.md: every relative link resolves",
+  "args": {
+   "file": "docs/guidance-cards.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-036",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/lessons-from-claude-code.md: every relative link resolves",
+  "args": {
+   "file": "docs/lessons-from-claude-code.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-037",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/link-guard.md: every relative link resolves",
+  "args": {
+   "file": "docs/link-guard.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-038",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/live-channels.md: every relative link resolves",
+  "args": {
+   "file": "docs/live-channels.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-039",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/multi-source-retrieval.md: every relative link resolves",
+  "args": {
+   "file": "docs/multi-source-retrieval.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-040",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/overseer.md: every relative link resolves",
+  "args": {
+   "file": "docs/overseer.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-041",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/personal-lexicon.md: every relative link resolves",
+  "args": {
+   "file": "docs/personal-lexicon.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-042",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/personas.md: every relative link resolves",
+  "args": {
+   "file": "docs/personas.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-043",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/public-hygiene.md: every relative link resolves",
+  "args": {
+   "file": "docs/public-hygiene.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-044",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/quest-api-contract.md: every relative link resolves",
+  "args": {
+   "file": "docs/quest-api-contract.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-045",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/quest-folder-goals.md: every relative link resolves",
+  "args": {
+   "file": "docs/quest-folder-goals.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-046",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/quest-folder-zones.md: every relative link resolves",
+  "args": {
+   "file": "docs/quest-folder-zones.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-047",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/quickstart.md: every relative link resolves",
+  "args": {
+   "file": "docs/quickstart.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-048",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/recipes.md: every relative link resolves",
+  "args": {
+   "file": "docs/recipes.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-049",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/statestore-verification.md: every relative link resolves",
+  "args": {
+   "file": "docs/statestore-verification.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-050",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/streaming-and-modes.md: every relative link resolves",
+  "args": {
+   "file": "docs/streaming-and-modes.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-051",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/structure/COMPONENTS.md: every relative link resolves",
+  "args": {
+   "file": "docs/structure/COMPONENTS.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-052",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/structure/README.md: every relative link resolves",
+  "args": {
+   "file": "docs/structure/README.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-053",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/structure/STANDARD.md: every relative link resolves",
+  "args": {
+   "file": "docs/structure/STANDARD.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-054",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/structure/joshua_review_2026-10-15.md: every relative link resolves",
+  "args": {
+   "file": "docs/structure/joshua_review_2026-10-15.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-055",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/structure/joshua_review_2_2026-10-15.md: every relative link resolves",
+  "args": {
+   "file": "docs/structure/joshua_review_2_2026-10-15.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-056",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/terminal-ux-prior-art.md: every relative link resolves",
+  "args": {
+   "file": "docs/terminal-ux-prior-art.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-057",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/tools.md: every relative link resolves",
+  "args": {
+   "file": "docs/tools.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-058",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/tutorial-your-first-lane.md: every relative link resolves",
+  "args": {
+   "file": "docs/tutorial-your-first-lane.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-059",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/vector-context.md: every relative link resolves",
+  "args": {
+   "file": "docs/vector-context.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-060",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/web-search.md: every relative link resolves",
+  "args": {
+   "file": "docs/web-search.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-061",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/writing-a-consumer.md: every relative link resolves",
+  "args": {
+   "file": "docs/writing-a-consumer.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-062",
+  "area": "links",
+  "kind": "links",
+  "description": "evaluation/README.md: every relative link resolves",
+  "args": {
+   "file": "evaluation/README.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-063",
+  "area": "links",
+  "kind": "links",
+  "description": "evaluation/components/README.md: every relative link resolves",
+  "args": {
+   "file": "evaluation/components/README.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-064",
+  "area": "links",
+  "kind": "links",
+  "description": "evaluation/components/chat_quality/README.md: every relative link resolves",
+  "args": {
+   "file": "evaluation/components/chat_quality/README.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-065",
+  "area": "links",
+  "kind": "links",
+  "description": "evaluation/components/chat_quality/datasets/schema.md: every relative link resolves",
+  "args": {
+   "file": "evaluation/components/chat_quality/datasets/schema.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-066",
+  "area": "links",
+  "kind": "links",
+  "description": "evaluation/components/feedback_loop/README.md: every relative link resolves",
+  "args": {
+   "file": "evaluation/components/feedback_loop/README.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-067",
+  "area": "links",
+  "kind": "links",
+  "description": "examples/README.md: every relative link resolves",
+  "args": {
+   "file": "examples/README.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-068",
+  "area": "links",
+  "kind": "links",
+  "description": "quest_ai_runner/prompts/evolvable_structure.md: every relative link resolves",
+  "args": {
+   "file": "quest_ai_runner/prompts/evolvable_structure.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-069",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": ".github/PULL_REQUEST_TEMPLATE.md: no em dash",
+  "args": {
+   "file": ".github/PULL_REQUEST_TEMPLATE.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-070",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "CHANGELOG.md: no em dash",
+  "args": {
+   "file": "CHANGELOG.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-071",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "CLAUDE.md: no em dash",
+  "args": {
+   "file": "CLAUDE.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-072",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "CODE_OF_CONDUCT.md: no em dash",
+  "args": {
+   "file": "CODE_OF_CONDUCT.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-073",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "CONTRIBUTING.md: no em dash",
+  "args": {
+   "file": "CONTRIBUTING.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-074",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "README.md: no em dash",
+  "args": {
+   "file": "README.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-075",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "SECURITY.md: no em dash",
+  "args": {
+   "file": "SECURITY.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-076",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/ARCHITECTURE_STANDARDS.md: no em dash",
+  "args": {
+   "file": "docs/ARCHITECTURE_STANDARDS.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-077",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/BOOTSTRAP_TOKEN_SAVINGS.md: no em dash",
+  "args": {
+   "file": "docs/BOOTSTRAP_TOKEN_SAVINGS.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-078",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/README.md: no em dash",
+  "args": {
+   "file": "docs/README.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-079",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/TF_DF_IDF_SAMPLING.md: no em dash",
+  "args": {
+   "file": "docs/TF_DF_IDF_SAMPLING.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-080",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/a-lane-is-a-config-file.md: no em dash",
+  "args": {
+   "file": "docs/a-lane-is-a-config-file.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-081",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/acp-deep-runner.md: no em dash",
+  "args": {
+   "file": "docs/acp-deep-runner.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-082",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/adapters.md: no em dash",
+  "args": {
+   "file": "docs/adapters.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-083",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/answer-explanation.md: no em dash",
+  "args": {
+   "file": "docs/answer-explanation.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-084",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/anticipation.md: no em dash",
+  "args": {
+   "file": "docs/anticipation.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-085",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/card-schema.md: no em dash",
+  "args": {
+   "file": "docs/card-schema.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-086",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/chat.md: no em dash",
+  "args": {
+   "file": "docs/chat.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-087",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/cheap-model-routing.md: no em dash",
+  "args": {
+   "file": "docs/cheap-model-routing.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-088",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/claude-conversations-integration.md: no em dash",
+  "args": {
+   "file": "docs/claude-conversations-integration.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-089",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/configuration.md: no em dash",
+  "args": {
+   "file": "docs/configuration.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-090",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/consumer-registry.md: no em dash",
+  "args": {
+   "file": "docs/consumer-registry.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-091",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/context-assembly.md: no em dash",
+  "args": {
+   "file": "docs/context-assembly.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-092",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/context-card-stores.md: no em dash",
+  "args": {
+   "file": "docs/context-card-stores.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-093",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/context-updates.md: no em dash",
+  "args": {
+   "file": "docs/context-updates.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-094",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/conversation-cards.md: no em dash",
+  "args": {
+   "file": "docs/conversation-cards.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-095",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/corpus-playbooks.md: no em dash",
+  "args": {
+   "file": "docs/corpus-playbooks.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-096",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/deep-run-continuation.md: no em dash",
+  "args": {
+   "file": "docs/deep-run-continuation.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-097",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/deployment.md: no em dash",
+  "args": {
+   "file": "docs/deployment.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-098",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/edited-files-extraction.md: no em dash",
+  "args": {
+   "file": "docs/edited-files-extraction.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-099",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/evolvable-structure.md: no em dash",
+  "args": {
+   "file": "docs/evolvable-structure.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-100",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/fast-edit-runner.md: no em dash",
+  "args": {
+   "file": "docs/fast-edit-runner.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-101",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/feedback-ledger.md: no em dash",
+  "args": {
+   "file": "docs/feedback-ledger.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-102",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/file-server.md: no em dash",
+  "args": {
+   "file": "docs/file-server.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-103",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/guidance-cards.md: no em dash",
+  "args": {
+   "file": "docs/guidance-cards.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-104",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/lessons-from-claude-code.md: no em dash",
+  "args": {
+   "file": "docs/lessons-from-claude-code.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-105",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/link-guard.md: no em dash",
+  "args": {
+   "file": "docs/link-guard.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-106",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/live-channels.md: no em dash",
+  "args": {
+   "file": "docs/live-channels.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-107",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/multi-source-retrieval.md: no em dash",
+  "args": {
+   "file": "docs/multi-source-retrieval.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-108",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/overseer.md: no em dash",
+  "args": {
+   "file": "docs/overseer.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-109",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/personal-lexicon.md: no em dash",
+  "args": {
+   "file": "docs/personal-lexicon.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-110",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/personas.md: no em dash",
+  "args": {
+   "file": "docs/personas.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-111",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/public-hygiene.md: no em dash",
+  "args": {
+   "file": "docs/public-hygiene.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-112",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/quest-api-contract.md: no em dash",
+  "args": {
+   "file": "docs/quest-api-contract.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-113",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/quest-folder-goals.md: no em dash",
+  "args": {
+   "file": "docs/quest-folder-goals.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-114",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/quest-folder-zones.md: no em dash",
+  "args": {
+   "file": "docs/quest-folder-zones.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-115",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/quickstart.md: no em dash",
+  "args": {
+   "file": "docs/quickstart.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-116",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/recipes.md: no em dash",
+  "args": {
+   "file": "docs/recipes.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-117",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/statestore-verification.md: no em dash",
+  "args": {
+   "file": "docs/statestore-verification.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-118",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/streaming-and-modes.md: no em dash",
+  "args": {
+   "file": "docs/streaming-and-modes.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-119",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/structure/COMPONENTS.md: no em dash",
+  "args": {
+   "file": "docs/structure/COMPONENTS.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-120",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/structure/README.md: no em dash",
+  "args": {
+   "file": "docs/structure/README.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-121",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/structure/STANDARD.md: no em dash",
+  "args": {
+   "file": "docs/structure/STANDARD.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-122",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/structure/joshua_review_2026-10-15.md: no em dash",
+  "args": {
+   "file": "docs/structure/joshua_review_2026-10-15.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-123",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/structure/joshua_review_2_2026-10-15.md: no em dash",
+  "args": {
+   "file": "docs/structure/joshua_review_2_2026-10-15.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-124",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/terminal-ux-prior-art.md: no em dash",
+  "args": {
+   "file": "docs/terminal-ux-prior-art.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-125",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/tools.md: no em dash",
+  "args": {
+   "file": "docs/tools.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-126",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/tutorial-your-first-lane.md: no em dash",
+  "args": {
+   "file": "docs/tutorial-your-first-lane.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-127",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/vector-context.md: no em dash",
+  "args": {
+   "file": "docs/vector-context.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-128",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/web-search.md: no em dash",
+  "args": {
+   "file": "docs/web-search.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-129",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/writing-a-consumer.md: no em dash",
+  "args": {
+   "file": "docs/writing-a-consumer.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-130",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "evaluation/README.md: no em dash",
+  "args": {
+   "file": "evaluation/README.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-131",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "evaluation/components/README.md: no em dash",
+  "args": {
+   "file": "evaluation/components/README.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-132",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "evaluation/components/chat_quality/README.md: no em dash",
+  "args": {
+   "file": "evaluation/components/chat_quality/README.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-133",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "evaluation/components/chat_quality/datasets/schema.md: no em dash",
+  "args": {
+   "file": "evaluation/components/chat_quality/datasets/schema.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-134",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "evaluation/components/feedback_loop/README.md: no em dash",
+  "args": {
+   "file": "evaluation/components/feedback_loop/README.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-135",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "examples/README.md: no em dash",
+  "args": {
+   "file": "examples/README.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-136",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "quest_ai_runner/prompts/evolvable_structure.md: no em dash",
+  "args": {
+   "file": "quest_ai_runner/prompts/evolvable_structure.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-137",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/ARCHITECTURE_STANDARDS.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/ARCHITECTURE_STANDARDS.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-138",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/BOOTSTRAP_TOKEN_SAVINGS.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/BOOTSTRAP_TOKEN_SAVINGS.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-139",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/TF_DF_IDF_SAMPLING.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/TF_DF_IDF_SAMPLING.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-140",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/a-lane-is-a-config-file.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/a-lane-is-a-config-file.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-141",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/acp-deep-runner.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/acp-deep-runner.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-142",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/adapters.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/adapters.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-143",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/answer-explanation.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/answer-explanation.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-144",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/anticipation.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/anticipation.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-145",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/card-schema.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/card-schema.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-146",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/chat.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/chat.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-147",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/cheap-model-routing.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/cheap-model-routing.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-148",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/claude-conversations-integration.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/claude-conversations-integration.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-149",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/configuration.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/configuration.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-150",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/consumer-registry.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/consumer-registry.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-151",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/context-assembly.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/context-assembly.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-152",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/context-card-stores.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/context-card-stores.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-153",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/context-updates.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/context-updates.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-154",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/conversation-cards.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/conversation-cards.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-155",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/corpus-playbooks.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/corpus-playbooks.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-156",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/deep-run-continuation.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/deep-run-continuation.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-157",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/deployment.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/deployment.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-158",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/edited-files-extraction.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/edited-files-extraction.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-159",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/evolvable-structure.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/evolvable-structure.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-160",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/fast-edit-runner.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/fast-edit-runner.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-161",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/feedback-ledger.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/feedback-ledger.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-162",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/file-server.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/file-server.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-163",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/guidance-cards.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/guidance-cards.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-164",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/lessons-from-claude-code.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/lessons-from-claude-code.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-165",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/link-guard.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/link-guard.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-166",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/live-channels.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/live-channels.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-167",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/multi-source-retrieval.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/multi-source-retrieval.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-168",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/overseer.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/overseer.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-169",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/personal-lexicon.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/personal-lexicon.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-170",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/personas.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/personas.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-171",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/public-hygiene.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/public-hygiene.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-172",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/quest-api-contract.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/quest-api-contract.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-173",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/quest-folder-goals.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/quest-folder-goals.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-174",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/quest-folder-zones.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/quest-folder-zones.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-175",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/quickstart.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/quickstart.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-176",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/recipes.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/recipes.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-177",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/statestore-verification.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/statestore-verification.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-178",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/streaming-and-modes.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/streaming-and-modes.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-179",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/terminal-ux-prior-art.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/terminal-ux-prior-art.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-180",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/tools.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/tools.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-181",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/tutorial-your-first-lane.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/tutorial-your-first-lane.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-182",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/vector-context.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/vector-context.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-183",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/web-search.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/web-search.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-184",
+  "area": "indexed",
+  "kind": "indexed",
+  "description": "docs/writing-a-consumer.md: linked from docs/README.md",
+  "args": {
+   "file": "docs/writing-a-consumer.md"
+  },
+  "expect": {
+   "eq": {
+    "indexed": true
+   }
+  }
+ },
+ {
+  "id": "DOC-185",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-ports: every doc it names exists",
+  "args": {
+   "component": "core-ports"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-186",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-orchestrator-loop: every doc it names exists",
+  "args": {
+   "component": "core-orchestrator-loop"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-187",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-planner-prompts: every doc it names exists",
+  "args": {
+   "component": "core-planner-prompts"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-188",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-routing-judges: every doc it names exists",
+  "args": {
+   "component": "core-routing-judges"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-189",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-model-selection: every doc it names exists",
+  "args": {
+   "component": "core-model-selection"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-190",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-deep-run: every doc it names exists",
+  "args": {
+   "component": "core-deep-run"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-191",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-context-selection: every doc it names exists",
+  "args": {
+   "component": "core-context-selection"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-192",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-tools: every doc it names exists",
+  "args": {
+   "component": "core-tools"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-193",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-reply-guards: every doc it names exists",
+  "args": {
+   "component": "core-reply-guards"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-194",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-quest-client: every doc it names exists",
+  "args": {
+   "component": "runner-quest-client"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-195",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-poller: every doc it names exists",
+  "args": {
+   "component": "runner-poller"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-196",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-executor: every doc it names exists",
+  "args": {
+   "component": "runner-executor"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-197",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-autopilot: every doc it names exists",
+  "args": {
+   "component": "runner-autopilot"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-198",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-context-updates: every doc it names exists",
+  "args": {
+   "component": "runner-context-updates"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-199",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-personas: every doc it names exists",
+  "args": {
+   "component": "runner-personas"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-200",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-quest-folder: every doc it names exists",
+  "args": {
+   "component": "runner-quest-folder"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-201",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-lane: every doc it names exists",
+  "args": {
+   "component": "runner-lane"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-202",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "runner-learning: every doc it names exists",
+  "args": {
+   "component": "runner-learning"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-203",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "adapters-model-providers: every doc it names exists",
+  "args": {
+   "component": "adapters-model-providers"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-204",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "adapters-retrieval: every doc it names exists",
+  "args": {
+   "component": "adapters-retrieval"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-205",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "adapters-card-store: every doc it names exists",
+  "args": {
+   "component": "adapters-card-store"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-206",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "adapters-vector-context: every doc it names exists",
+  "args": {
+   "component": "adapters-vector-context"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-207",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "adapters-web: every doc it names exists",
+  "args": {
+   "component": "adapters-web"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-208",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "adapters-deep-runners: every doc it names exists",
+  "args": {
+   "component": "adapters-deep-runners"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-209",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "adapters-conversations: every doc it names exists",
+  "args": {
+   "component": "adapters-conversations"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-210",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "config: every doc it names exists",
+  "args": {
+   "component": "config"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-211",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "cli-and-ui: every doc it names exists",
+  "args": {
+   "component": "cli-and-ui"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-212",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "usage-and-resources: every doc it names exists",
+  "args": {
+   "component": "usage-and-resources"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-213",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "package-root: every doc it names exists",
+  "args": {
+   "component": "package-root"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-214",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "tools-cli: every doc it names exists",
+  "args": {
+   "component": "tools-cli"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-215",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "prompts: every doc it names exists",
+  "args": {
+   "component": "prompts"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-216",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "vendor: every doc it names exists",
+  "args": {
+   "component": "vendor"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-217",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "eval-components: every doc it names exists",
+  "args": {
+   "component": "eval-components"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-218",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "scripts: every doc it names exists",
+  "args": {
+   "component": "scripts"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-219",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "examples: every doc it names exists",
+  "args": {
+   "component": "examples"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-220",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "tests: every doc it names exists",
+  "args": {
+   "component": "tests"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-221",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "structure-registry: every doc it names exists",
+  "args": {
+   "component": "structure-registry"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-222",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "docs-and-meta: every doc it names exists",
+  "args": {
+   "component": "docs-and-meta"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-223",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-selection: every doc it names exists",
+  "args": {
+   "component": "core-selection"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-224",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "consumer-structure-check: every doc it names exists",
+  "args": {
+   "component": "consumer-structure-check"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-225",
+  "area": "component_docs",
+  "kind": "component_docs",
+  "description": "core-consumer-helpers: every doc it names exists",
+  "args": {
+   "component": "core-consumer-helpers"
+  },
+  "expect": {
+   "eq": {
+    "missing": []
+   }
+  }
+ },
+ {
+  "id": "DOC-226",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "ANTHROPIC_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "ANTHROPIC_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-227",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "ANTHROPIC_AUTH_TOKEN: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "ANTHROPIC_AUTH_TOKEN"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-228",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "BRAVE_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "BRAVE_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-229",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "BRAVE_SEARCH_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "BRAVE_SEARCH_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-230",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "CLAUDE_CONFIG_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "CLAUDE_CONFIG_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-231",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "DEEPSEEK_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "DEEPSEEK_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-232",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "DEEPSEEK_BASE_URL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "DEEPSEEK_BASE_URL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-233",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "DEEPSEEK_THINKING: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "DEEPSEEK_THINKING"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-234",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "GOOGLE_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "GOOGLE_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-235",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "MAX_THINKING_TOKENS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "MAX_THINKING_TOKENS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-236",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "OPENAI_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "OPENAI_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-237",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ACP_AGENT_COMMAND: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ACP_AGENT_COMMAND"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-238",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ACP_NODE_PATH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ACP_NODE_PATH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-239",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ANSWER_TIMEOUT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ANSWER_TIMEOUT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-240",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ANTHROPIC_THINKING: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ANTHROPIC_THINKING"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-241",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ANTICIPATION: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ANTICIPATION"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-242",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ANTICIPATION_LLM: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ANTICIPATION_LLM"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-243",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ASYNC_CARD_UPDATE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ASYNC_CARD_UPDATE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-244",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_AUTOPILOT_ADOPT_RECURRING: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_AUTOPILOT_ADOPT_RECURRING"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-245",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_AUTOPILOT_PASS_TIME: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_AUTOPILOT_PASS_TIME"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-246",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_BOOTSTRAP_EMAIL_USER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_BOOTSTRAP_EMAIL_USER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-247",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_BOOTSTRAP_MAX_CARDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_BOOTSTRAP_MAX_CARDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-248",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-249",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_BOOTSTRAP_MAX_FILES: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_BOOTSTRAP_MAX_FILES"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-250",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_BOOTSTRAP_TIER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_BOOTSTRAP_TIER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-251",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_BOOTSTRAP_WORKERS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_BOOTSTRAP_WORKERS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-252",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CARDS_BACKEND: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CARDS_BACKEND"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-253",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CARDS_COLLECTION: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CARDS_COLLECTION"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-254",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CARDS_SCOPE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CARDS_SCOPE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-255",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CARD_MOUNT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CARD_MOUNT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-256",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CHANNEL_ACK_AFTER_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CHANNEL_ACK_AFTER_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-257",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CHANNEL_ALLOWED_SENDERS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CHANNEL_ALLOWED_SENDERS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-258",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CHANNEL_NAME: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CHANNEL_NAME"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-259",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CHANNEL_PROGRESS_MIN_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CHANNEL_PROGRESS_MIN_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-260",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CHANNEL_PROVIDER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CHANNEL_PROVIDER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-261",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CHANNEL_STATE_PATH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CHANNEL_STATE_PATH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-262",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CHANNEL_TURN_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CHANNEL_TURN_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-263",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CHAT_HISTORY_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CHAT_HISTORY_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-264",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CLAUDE_LIVE_MODELS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CLAUDE_LIVE_MODELS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-265",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CLAUDE_PATH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CLAUDE_PATH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-266",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CLAUDE_SESSIONS_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CLAUDE_SESSIONS_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-267",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CLI_EFFORT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CLI_EFFORT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-268",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CLI_HAIKU_THINKING_TOKENS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CLI_HAIKU_THINKING_TOKENS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-269",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CLI_PLAN_THINKING_TOKENS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CLI_PLAN_THINKING_TOKENS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-270",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONFIG_FILE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONFIG_FILE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-271",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-272",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONTEXT_CARDS_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONTEXT_CARDS_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-273",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONTEXT_POLL_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONTEXT_POLL_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-274",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONTEXT_PREAMBLE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONTEXT_PREAMBLE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-275",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONTEXT_PREAMBLE_FILE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONTEXT_PREAMBLE_FILE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-276",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONTEXT_UPDATES: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONTEXT_UPDATES"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-277",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-278",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONTEXT_UPDATES_STATE_PATH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONTEXT_UPDATES_STATE_PATH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-279",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CONVERSATION_SEARCH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CONVERSATION_SEARCH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-280",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_CORPUS_ROOT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_CORPUS_ROOT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-281",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DAILY_TOKEN_LIMIT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DAILY_TOKEN_LIMIT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-282",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DAILY_USAGE_PATH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DAILY_USAGE_PATH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-283",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DECISION_ASSIGNEE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DECISION_ASSIGNEE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-284",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DECISION_ASSIGNEES: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DECISION_ASSIGNEES"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-285",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DECISION_DEFAULT_DEADLINE_HOURS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DECISION_DEFAULT_DEADLINE_HOURS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-286",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_AUTO_MODEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_AUTO_MODEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-287",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_INSTRUCTIONS_FILES: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_INSTRUCTIONS_FILES"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-288",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_MAX_TURNS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_MAX_TURNS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-289",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_MODELS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_MODELS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-290",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_MODEL_HARD: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_MODEL_HARD"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-291",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_MODEL_NORMAL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_MODEL_NORMAL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-292",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_MODEL_SIMPLE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_MODEL_SIMPLE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-293",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_PROMPT_TOKEN_BUDGET: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_PROMPT_TOKEN_BUDGET"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-294",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_REVIEW_INTERVAL_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_REVIEW_INTERVAL_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-295",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-296",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DEEP_WORKING_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DEEP_WORKING_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-297",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_DISCOVERY_TEAM_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_DISCOVERY_TEAM_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-298",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_EMBEDDER_BACKEND: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_EMBEDDER_BACKEND"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-299",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_EMBED_BATCH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_EMBED_BATCH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-300",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_EMBED_MAX_CHARS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_EMBED_MAX_CHARS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-301",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ENV_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ENV_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-302",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_EXPLAIN_ANSWER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_EXPLAIN_ANSWER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-303",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_EXPLAIN_TIER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_EXPLAIN_TIER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-304",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FEEDBACK_LEDGER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FEEDBACK_LEDGER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-305",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FEEDBACK_LEDGER_PATH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FEEDBACK_LEDGER_PATH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-306",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_ALLOW_DOT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_ALLOW_DOT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-307",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_DENY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_DENY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-308",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_GOOGLE_CREDENTIALS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_GOOGLE_CREDENTIALS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-309",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_GOOGLE_IMPERSONATE_DOMAINS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_GOOGLE_IMPERSONATE_DOMAINS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-310",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_GOOGLE_IMPERSONATE_SCOPE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_GOOGLE_IMPERSONATE_SCOPE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-311",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_GOOGLE_SA_FALLBACK: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_GOOGLE_SA_FALLBACK"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-312",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_GOOGLE_SA_SCOPE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_GOOGLE_SA_SCOPE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-313",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_HOST: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_HOST"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-314",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_PORT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_PORT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-315",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_ROOT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_ROOT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-316",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILES_TOKEN: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILES_TOKEN"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-317",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FILE_BACKUP_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FILE_BACKUP_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-318",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_FOLDER_REVIEW: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_FOLDER_REVIEW"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-319",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_GOAL_MAX_ATTEMPTS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_GOAL_MAX_ATTEMPTS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-320",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_GOAL_TOKEN_BUDGET: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_GOAL_TOKEN_BUDGET"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-321",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_GREP_BUDGET_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_GREP_BUDGET_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-322",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_GREP_MAX_FILES: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_GREP_MAX_FILES"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-323",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-324",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_INTENT_JUDGE_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_INTENT_JUDGE_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-325",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_LANE_USER_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_LANE_USER_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-326",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_LINK_GUARD: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_LINK_GUARD"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-327",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_LINK_POLICY_FILE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_LINK_POLICY_FILE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-328",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_MAX_LOAD_PER_CORE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_MAX_LOAD_PER_CORE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-329",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_MAX_MEMORY_PERCENT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_MAX_MEMORY_PERCENT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-330",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_MAX_PARALLEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_MAX_PARALLEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-331",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_MIN_FREE_MEMORY_MB: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_MIN_FREE_MEMORY_MB"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-332",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_MODEL_BACKEND: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_MODEL_BACKEND"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-333",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_MODE_RELEASE_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_MODE_RELEASE_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-334",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_NOTE_FLOOR_FRESH_MINUTES: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_NOTE_FLOOR_FRESH_MINUTES"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-335",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_NOTE_FLOOR_RELEVANCE_GATED: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_NOTE_FLOOR_RELEVANCE_GATED"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-336",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OPENAI_EMBEDDING_MODEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OPENAI_EMBEDDING_MODEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-337",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OPENCLAW_ARGS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OPENCLAW_ARGS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-338",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OPENCLAW_CALL_TIMEOUT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OPENCLAW_CALL_TIMEOUT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-339",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OPENCLAW_COMMAND: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OPENCLAW_COMMAND"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-340",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OPENCLAW_CWD: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OPENCLAW_CWD"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-341",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OPENCLAW_TOKEN_FILE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OPENCLAW_TOKEN_FILE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-342",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_ORG_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_ORG_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-343",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OVERSEER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OVERSEER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-344",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OVERSEER_MAX_SIGNALS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OVERSEER_MAX_SIGNALS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-345",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_OVERSEER_TIER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_OVERSEER_TIER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-346",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_PLANNER_MODEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_PLANNER_MODEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-347",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_PLANNER_PROMPT_PROFILE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_PLANNER_PROMPT_PROFILE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-348",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_PLANNER_REACH_JUDGE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_PLANNER_REACH_JUDGE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-349",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_PLANNER_REACH_JUDGE_TIER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_PLANNER_REACH_JUDGE_TIER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-350",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_PLANNER_TIER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_PLANNER_TIER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-351",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_POLL_INTERVAL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_POLL_INTERVAL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-352",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_PRUNE_DEAD_CARDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_PRUNE_DEAD_CARDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-353",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_QDRANT_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_QDRANT_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-354",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_QDRANT_URL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_QDRANT_URL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-355",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_QUEST_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_QUEST_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-356",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_QUEST_API_URL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_QUEST_API_URL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-357",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_QUEST_AUTO_MATCH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_QUEST_AUTO_MATCH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-358",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_QUEST_FOLDER_MAP: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_QUEST_FOLDER_MAP"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-359",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_QUEST_FOLDER_SYNC_DIRECTION: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_QUEST_FOLDER_SYNC_DIRECTION"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-360",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_QUEST_JUDGE_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_QUEST_JUDGE_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-361",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_READ_OP_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_READ_OP_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-362",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_READ_REACH_SUMMARY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_READ_REACH_SUMMARY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-363",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_READ_REACH_SUMMARY_FILE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_READ_REACH_SUMMARY_FILE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-364",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RECENT_CONTEXT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RECENT_CONTEXT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-365",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RECENT_CONTEXT_GLOBAL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RECENT_CONTEXT_GLOBAL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-366",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RECENT_CONTEXT_MAX_CARDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RECENT_CONTEXT_MAX_CARDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-367",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RECIPES: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RECIPES"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-368",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RECIPES_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RECIPES_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-369",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RECIPES_MIN_SCORE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RECIPES_MIN_SCORE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-370",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RECONCILE_HANDOFF: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RECONCILE_HANDOFF"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-371",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_REFRESH_MIN_INTERVAL_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_REFRESH_MIN_INTERVAL_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-372",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_REP_NAME: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_REP_NAME"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-373",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_REP_PERSONA_FILE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_REP_PERSONA_FILE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-374",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_REP_SYNC_DIRECTION: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_REP_SYNC_DIRECTION"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-375",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RESOURCE_CHECK_INTERVAL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RESOURCE_CHECK_INTERVAL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-376",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RESOURCE_RESUME_MARGIN: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RESOURCE_RESUME_MARGIN"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-377",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_REUSE_NESTED_CARDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_REUSE_NESTED_CARDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-378",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RUNNER_ENV_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RUNNER_ENV_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-379",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_RUNNER_LABEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_RUNNER_LABEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-380",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_SKILLS_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_SKILLS_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-381",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_SKIP_DIRS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_SKIP_DIRS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-382",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_SKIP_NESTED_REPOS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_SKIP_NESTED_REPOS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-383",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_STALL_NOTIFY_TEAM_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_STALL_NOTIFY_TEAM_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-384",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_STALL_NOTIFY_USER_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_STALL_NOTIFY_USER_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-385",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_STANDARD_TOOLS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_STANDARD_TOOLS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-386",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_STATE_PATH: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_STATE_PATH"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-387",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_TEAM_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_TEAM_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-388",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_TEAM_QUEST_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_TEAM_QUEST_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-389",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_TOOLS_FILE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_TOOLS_FILE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-390",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_TOOL_LEDGER_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_TOOL_LEDGER_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-391",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_TOOL_QUEST_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_TOOL_QUEST_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-392",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_TOOL_TASK_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_TOOL_TASK_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-393",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_USER_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_USER_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-394",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_VECTOR_BACKEND: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_VECTOR_BACKEND"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-395",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_VECTOR_MAX_SEED_ITEMS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_VECTOR_MAX_SEED_ITEMS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-396",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_VECTOR_QDRANT_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_VECTOR_QDRANT_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-397",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_VECTOR_QDRANT_URL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_VECTOR_QDRANT_URL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-398",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_VECTOR_SPACE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_VECTOR_SPACE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-399",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_VECTOR_UNATTRIBUTED: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_VECTOR_UNATTRIBUTED"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-400",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_VERIFY_CONTEXT_MAX_CHARS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_VERIFY_CONTEXT_MAX_CHARS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-401",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_VERIFY_TIER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_VERIFY_TIER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-402",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WAIT_CHANNEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WAIT_CHANNEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-403",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WAIT_TIMEOUT_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WAIT_TIMEOUT_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-404",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_CACHE_DIR: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_CACHE_DIR"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-405",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_PAGE_FULL_TOKEN_BUDGET: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_PAGE_FULL_TOKEN_BUDGET"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-406",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_PAGE_TOKEN_BUDGET: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_PAGE_TOKEN_BUDGET"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-407",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_PAGE_TTL_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_PAGE_TTL_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-408",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_SEARCH_BACKEND: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_SEARCH_BACKEND"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-409",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_SEARCH_DAILY_LIMIT: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_SEARCH_DAILY_LIMIT"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-410",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_SEARCH_MODEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_SEARCH_MODEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-411",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_SEARCH_PROVIDER_MODEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_SEARCH_PROVIDER_MODEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-412",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QAR_WEB_SEARCH_TTL_SECONDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QAR_WEB_SEARCH_TTL_SECONDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-413",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QDRANT_URL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QDRANT_URL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-414",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QUEST_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QUEST_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-415",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QUEST_API_URL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QUEST_API_URL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-416",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QUEST_BASE_URL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QUEST_BASE_URL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-417",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QUEST_CLAIM_TEAMS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QUEST_CLAIM_TEAMS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-418",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QUEST_ORG_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QUEST_ORG_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-419",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QUEST_TEAM_ID: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QUEST_TEAM_ID"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-420",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "QUEST_TEAM_IDS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "QUEST_TEAM_IDS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-421",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "SEARXNG_URL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "SEARXNG_URL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-422",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "SERPER_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "SERPER_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-423",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "TAVILY_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "TAVILY_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-424",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "VOYAGE_EMBEDDING_SIZE: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "VOYAGE_EMBEDDING_SIZE"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-425",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "VOYAGE_MODEL: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "VOYAGE_MODEL"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-426",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "VTE_VERSION: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "VTE_VERSION"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-427",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "WEB_SEARCH_API_KEY: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "WEB_SEARCH_API_KEY"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-428",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "WEB_SEARCH_ENABLED: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "WEB_SEARCH_ENABLED"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-429",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "WEB_SEARCH_MAX_RESULTS: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "WEB_SEARCH_MAX_RESULTS"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-430",
+  "area": "env_documented",
+  "kind": "env_documented",
+  "description": "WEB_SEARCH_TIER: has a described row in docs/configuration.md",
+  "args": {
+   "variable": "WEB_SEARCH_TIER"
+  },
+  "expect": {
+   "eq": {
+    "row": true,
+    "described": true
+   }
+  }
+ },
+ {
+  "id": "DOC-431",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner chat is named in the docs",
+  "args": {
+   "command": "chat"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-432",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner quest is named in the docs",
+  "args": {
+   "command": "quest"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-433",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner send is named in the docs",
+  "args": {
+   "command": "send"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-434",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner reconcile-plan is named in the docs",
+  "args": {
+   "command": "reconcile-plan"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-435",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner create-goal is named in the docs",
+  "args": {
+   "command": "create-goal"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-436",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner bootstrap is named in the docs",
+  "args": {
+   "command": "bootstrap"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-437",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner paste-context is named in the docs",
+  "args": {
+   "command": "paste-context"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-438",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner search-context is named in the docs",
+  "args": {
+   "command": "search-context"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-439",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner context is named in the docs",
+  "args": {
+   "command": "context"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-440",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner sync-quest-folder is named in the docs",
+  "args": {
+   "command": "sync-quest-folder"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-441",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner poll is named in the docs",
+  "args": {
+   "command": "poll"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-442",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner channel is named in the docs",
+  "args": {
+   "command": "channel"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-443",
+  "area": "cli_documented",
+  "kind": "cli_documented",
+  "description": "quest-ai-runner serve-files is named in the docs",
+  "args": {
+   "command": "serve-files"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-444",
+  "area": "api_documented",
+  "kind": "api_documented",
+  "description": "core is named in the README or docs",
+  "args": {
+   "name": "core"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-445",
+  "area": "api_documented",
+  "kind": "api_documented",
+  "description": "adapters is named in the README or docs",
+  "args": {
+   "name": "adapters"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-446",
+  "area": "api_documented",
+  "kind": "api_documented",
+  "description": "runner is named in the README or docs",
+  "args": {
+   "name": "runner"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-447",
+  "area": "api_documented",
+  "kind": "api_documented",
+  "description": "config is named in the README or docs",
+  "args": {
+   "name": "config"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-448",
+  "area": "api_documented",
+  "kind": "api_documented",
+  "description": "resources is named in the README or docs",
+  "args": {
+   "name": "resources"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-449",
+  "area": "api_documented",
+  "kind": "api_documented",
+  "description": "load_config is named in the README or docs",
+  "args": {
+   "name": "load_config"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-450",
+  "area": "api_documented",
+  "kind": "api_documented",
+  "description": "load_client is named in the README or docs",
+  "args": {
+   "name": "load_client"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-451",
+  "area": "api_documented",
+  "kind": "api_documented",
+  "description": "__version__ is named in the README or docs",
+  "args": {
+   "name": "__version__"
+  },
+  "expect": {
+   "eq": {
+    "documented": true
+   }
+  }
+ },
+ {
+  "id": "DOC-452",
+  "area": "coverage",
+  "kind": "coverage",
+  "description": "every document and variable has a case",
+  "args": {},
+  "expect": {
+   "eq": {
+    "uncovered": []
+   }
+  }
+ }
+]
