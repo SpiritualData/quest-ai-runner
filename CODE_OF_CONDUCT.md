@@ -9,8 +9,8 @@ collaborative, and professional environment.
 ## Our standard
 
 This project adopts the **Contributor Covenant, version 2.1** as its code of conduct. The full
-text — including the expected behavior, unacceptable behavior, scope, and enforcement
-guidelines — is the canonical reference and is incorporated here by reference:
+text, including the expected behavior, unacceptable behavior, scope, and enforcement
+guidelines, is the canonical reference and is incorporated here by reference:
 
 - Human-readable: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
 - Plain text: https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct.txt

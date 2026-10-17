@@ -266,7 +266,7 @@ Six components score the repo's own plumbing, all offline with zero model calls.
 | `expose_the_public_api/` | `surface(kind, args) -> dict` | documented names import, registrations take effect, front doors and helpers behave, vendored code imports with sockets refusing | `import_smoke` |
 | `learn_by_example/` | `run_example(kind, args) -> dict` | each example compiles, imports, runs its offline path in a scrubbed environment, is in the README, holds no secret | `compile_only` |
 | `verify_offline/` | `verify(kind, args) -> dict` | `pytest --collect-only` over every test file in 21 shards (zero errors, count floor), seeded broken test folders, size ceiling | `syntax_only` |
-| `explain_qar/` | `explain(kind, args) -> dict` | 452 cases generated from the repo by `generate_cases.py` (links, em dashes, index, env variables, subcommands, public names) | `readme_only` |
+| `explain_qar/` | `explain(kind, args) -> dict` | cases generated from the repo by `generate_cases.py` (links, em dashes, index, env variables, subcommands, public names) | `readme_only` |
 | `keep_secrets_out/` | `scan(kind, args) -> dict` | planted secrets found, placeholders quiet, the repo clean, the command's exit code | `grep_oneliner` |
 
 These are `invariant` solutions (see below): a rule holds or it does not, so the baseline is not a rival on a leaderboard.

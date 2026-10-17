@@ -26,8 +26,8 @@ See `components/README.md` for the interface of each. There are no standalone sc
 
 Two components' worth of methodology is described below:
 
-- **`context_selection/` and `staleness/`** (formerly `eval_deterministic.py`) — zero-LLM, zero-token, free to run.
-- **`claude_code_ab/`** (formerly `eval_vs_claude_code.py`) — A/B harness comparing Claude Code alone vs Claude Code
+- **`context_selection/` and `staleness/`** (formerly `eval_deterministic.py`): zero-LLM, zero-token, free to run.
+- **`claude_code_ab/`** (formerly `eval_vs_claude_code.py`): A/B harness comparing Claude Code alone vs Claude Code
   + context, using the `claude` CLI (spends a small amount of Haiku tokens; opt-in only).
 
 ## Methodology
@@ -172,7 +172,7 @@ For each A/B pair the judge returns:
 1. After both arms run, `judge_sample(...)` is called with the task text, the known-correct
    target file, both arms' answer texts, and both arms' tool-call round counts.
 2. A single `claude -p "<judge prompt>" --output-format json --model claude-haiku-4-5`
-   call is made (no working directory, no tool use — pure text reasoning).
+   call is made (no working directory, no tool use; pure text reasoning).
 3. The CLI JSON envelope is parsed to extract the model's `result` text, then the inner
    JSON verdict is extracted robustly (code fences stripped, first `{...}` block found).
 4. On any failure (CLI unavailable, non-zero exit, JSON parse error) the verdict is
@@ -186,7 +186,7 @@ Each judge call is one `claude-haiku-4-5` inference with a ~1 000-token prompt a
 The harness also skips judging automatically with a clear message if the `claude` CLI is
 unavailable.
 
-The judge runs against the **same copy of the repo** that both arms use — the live tree
+The judge runs against the **same copy of the repo** that both arms use: the live tree
 is never touched.
 
 ### Aggregate reporting
@@ -281,7 +281,7 @@ keyword numbers pre-docstring are shown in parentheses for comparison).
 | Context service (IDF, pre-docstring) | (13/53) 25% | (53/93) 57% |
 | Context service (IDF, with docstrings) | 53% | 93% |
 | Vector only (bge-small-en-v1.5) | 53% | 80% |
-| Hybrid union (IDF + vector) | — | **93%** |
+| Hybrid union (IDF + vector) | n/a | **93%** |
 | Blind grep (term frequency) | 0% | 47% |
 
 **How to read these numbers:**
@@ -448,9 +448,9 @@ The measured wins are:
    persistent freshness index.
 
 These three properties together justify the context layer as a **cache with correctness
-guarantees** — not as a retrieval engine that must beat grep on every cold query.
+guarantees**, not as a retrieval engine that must beat grep on every cold query.
 
-## `deep_review/` — deep-run liveness review (real Haiku, 39 cases)
+## `deep_review/`: deep-run liveness review (real Haiku, 39 cases)
 
 Every new LLM call needs a labeled classification eval of at least 30 cases that must score 100%.
 This one runs the production liveness-review prompt and CLI call over 39 hand-labeled log tails

@@ -2,8 +2,8 @@
 
     check(kind: str, args: dict) -> dict
 
-``kind`` is ``repo`` (the repository's own structure registry), ``audit`` (the per-component audit verdicts
-from ``scripts/build_audit.py``) or ``consumer`` (a system built on QAR checking its integration registry). ``args["edits"]`` is a list of declarative edits (see
+``kind`` is ``repo`` (the repository's own structure registry) or ``consumer`` (a system built on QAR checking its
+integration registry). ``args["edits"]`` is a list of declarative edits (see
 ``fixture.apply_edits``) that inject ONE known violation into a small synthetic fixture repo; an empty list
 is the clean fixture. The function runs its checker over that fixture and returns
 

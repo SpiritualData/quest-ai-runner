@@ -1,48 +1,48 @@
 # Components
 
 Generated from `docs/structure/components.csv` by `python scripts/check_structure.py --write-docs`.
-Edit the CSV, never this file. Rules are the numbered ideals in `docs/structure/README.md`.
+Edit the CSV, never this file. The rules are the numbered list in `docs/structure/README.md`.
 
-| Component | Layer | Role | Interface | Metric | Docs | Status |
-|---|---|---|---|---|---|---|
-| `core-ports` | core | The generic boundary: adapter interfaces, value objects, streaming sinks, event constants | Protocol/ABC ports (RetrievalAdapter, ModelProvider, DeepRunner, EscalationSink, ContextAssembler, ...) | tests/test_modes.py (event/sink contract) | docs/adapters.md, docs/ARCHITECTURE_STANDARDS.md | done |
-| `core-orchestrator-loop` | core | The bounded plan, gather, re-plan, answer/deep/confirm loop, split into role mixins | Orchestrator.run(),  new methods go in the mixin that owns the role | evaluation/components/run.py classification --impl qar_planner | CLAUDE.md, docs/ARCHITECTURE_STANDARDS.md | done |
-| `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | PLANNER_PROFILES entry,  PromptLayers | evaluation/components/run.py classification --impl qar_planner | CLAUDE.md, docs/cheap-model-routing.md | done |
-| `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | one judge function per question, tier-resolved model,  deterministic halves measured by evaluation/components/judges (judge(kind, args)), live signal quality by overseer_signals | evaluation/components/run.py judges --impl qar_judges | docs/overseer.md, docs/answer-explanation.md | done |
-| `core-model-selection` | core | Tier to live model id, family resolution, deep-run starting model, outage and usage-limit memory | ModelRegistry.resolve_tier() | evaluation/components/run.py choose_a_model_tier --impl qar_selection | docs/cheap-model-routing.md | done |
-| `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-turn execution record | GoalRunner / SubprocessGoalRunner | evaluation/components/run.py deep_run --impl goal_contract | docs/acp-deep-runner.md, docs/deep-run-continuation.md | done |
-| `core-context-selection` | core | Choosing and learning which context cards enter a prompt | ContextAssembler implementations + card_filter | evaluation/components/run.py context_selection --impl hybrid_union | docs/context-assembly.md, docs/guidance-cards.md | done |
-| `core-tools` | core | The one catalog of operations an AI run can perform (tools, asks, progress, goals, notes, experiments), their relevance selection and per-run pins, plus operator-registered custom tools | standard catalog + register_tool | evaluation/components/run.py quest_ops --impl orchestrator_pre_route | docs/tools.md | done |
-| `core-reply-guards` | core | Link honesty, replayable recipes and the anticipation learner | link_guard / recipes / anticipation engine | evaluation/components/run.py reply_guards --impl qar_guards | docs/link-guard.md, docs/recipes.md, docs/anticipation.md | done |
-| `runner-quest-client` | runner | The Quest HTTP client in API-area mixins plus decision sink | QuestClient | tests/test_quest_client_*.py | CLAUDE.md, docs/quest-api-contract.md | done |
-| `runner-poller` | runner | Event-driven, signature-deduped poll loop with bounded concurrency | Poller | evaluation/components/run.py run_queued_tasks --impl qar_runner | CLAUDE.md, docs/deployment.md | done |
-| `runner-executor` | runner | Run one claimed task through the brain and report | Executor | evaluation/components/run.py run_queued_tasks --impl qar_runner | CLAUDE.md | done |
-| `runner-autopilot` | runner | The recurring autopilot pass: defaults, periods, personas, briefs, gates | autopilot pass task | evaluation/components/run.py prompt_size --impl live | CLAUDE.md, docs/a-lane-is-a-config-file.md | done |
-| `runner-context-updates` | runner | Keeping a quest context up to date: bundle, receipts, state, judges, sources | context_updates engine | evaluation/components/run.py prompt_size --impl live | docs/context-updates.md | done |
-| `runner-personas` | runner | Which persona runs a task (data, not code), rep skill sync, workflow actions | personas resolver,  RunnerConfig field | evaluation/components/run.py run_queued_tasks --impl qar_runner | docs/personas.md | done |
-| `runner-quest-folder` | runner | A quest as a working folder: index, two-way sync, zones, goals, experiments | quest_folder_sync / quest_goal_sync | evaluation/components/run.py run_queued_tasks --impl qar_runner | docs/quest-folder-goals.md, docs/quest-folder-zones.md | done |
-| `runner-lane` | runner | The shared lane entry point and live two-way channel loop | lane.main / ChannelRunner | evaluation/components/run.py run_queued_tasks --impl qar_runner | docs/tutorial-your-first-lane.md, docs/live-channels.md | done |
-| `runner-learning` | runner | What a person asked for and has said: ledger, insights, reflections | feedback ledger | tests/test_feedback_ledger*.py | docs/feedback-ledger.md | done |
-| `adapters-model-providers` | adapters | Swappable ModelProvider implementations routed by model name | MultiProvider | evaluation/components/run.py model_providers --impl multi_provider | docs/adapters.md | done |
-| `adapters-retrieval` | adapters | RetrievalAdapter and writer implementations over files, DBs, MCP, Notion, Google, Quest | RetrievalAdapter (read_section/grep/query) | evaluation/components/run.py retrieval --impl composite | docs/adapters.md, docs/multi-source-retrieval.md, docs/file-server.md | done |
-| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository) | CardRepository / FileContextStore | evaluation/components/run.py persist_cards --impl quest_api (one conformance case set across the filesystem, embedded Qdrant and Quest API repositories,  tests/test_card_store_merge_and_remote.py pins the store logic) | docs/context-card-stores.md, docs/card-schema.md | done |
-| `adapters-vector-context` | adapters | Semantic and keyword context assemblers and their scoring helpers | VectorStore / ContextAssembler | evaluation/components/run.py vector_recall --impl qdrant_embedded | docs/vector-context.md, docs/TF_DF_IDF_SAMPLING.md | done |
-| `adapters-web` | adapters | Live web search and page fetch behind pluggable backends | SearchBackend / WebResearchAdapter | evaluation/components/run.py web_search_live --impl web_research | docs/web-search.md | done |
-| `adapters-deep-runners` | adapters | Alternative DeepRunner implementations | DeepRunner | evaluation/components/run.py deep_runner --impl subprocess_runner | docs/acp-deep-runner.md, docs/fast-edit-runner.md | done |
-| `adapters-conversations` | adapters | Claude session transcripts as context and ConversationStore | ConversationStore | evaluation/components/run.py conversation_recall --impl session_files | docs/claude-conversations-integration.md, docs/conversation-cards.md | done |
-| `config` | config | RunnerConfig and build_orchestrator(): the one seam for consumer specifics | RunnerConfig | evaluation/components/run.py configure_a_lane --impl qar_config | CLAUDE.md, docs/writing-a-consumer.md | done |
-| `cli-and-ui` | cli | Console entry point, attended chat session and Textual UI, card-store maintenance CLI | quest-ai-runner console script | evaluation/components/run.py operate_from_a_terminal --impl qar_main | docs/chat.md, docs/quickstart.md | done |
-| `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | usage tracker | evaluation/components/run.py track_usage_and_cost --impl qar_usage | docs/deployment.md | done |
-| `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | load_config / load_client | evaluation/components/run.py expose_the_public_api --impl live_surface | docs/deployment.md | done |
-| `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | tools CLI | evaluation/components/run.py operate_from_a_terminal --impl qar_main | docs/tools.md | done |
-| `prompts` | prompts | Standing deep-run instructions shipped as data (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) | QAR_DEEP_INSTRUCTIONS_FILES | evaluation/components/run.py prompt_size --impl live | docs/acp-deep-runner.md, docs/evolvable-structure.md | done |
-| `vendor` | vendor | Vendored third-party code, unmodified | import path | evaluation/components/run.py expose_the_public_api --impl live_surface | CLAUDE.md | done |
-| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset | evaluation/components/run.py <component> --impl <name> | evaluation/components/run.py measure_implementations --impl live_harness | evaluation/components/README.md | done |
-| `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (persist-cards), restart-if-idle (run-queued-tasks) | CLI scripts | evaluation/components/run.py web_search_live --impl web_research (web_search_bench.py is its live operator),  quarantine_cards.py serves persist-cards (persist_cards) and restart_if_idle.sh serves run-queued-tasks (run_queued_tasks lane cases) | docs/deployment.md | done |
-| `examples` | examples | Runnable reference consumers (env-driven, no real data) | examples/README.md | evaluation/components/run.py learn_by_example --impl live_examples | examples/README.md, docs/writing-a-consumer.md | done |
-| `tests` | tests | Offline test suite and shared fakes | pytest per file | evaluation/components/run.py verify_offline --impl collect_by_file | CLAUDE.md | done |
-| `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | python scripts/check_structure.py | evaluation/components/run.py check_the_structure --impl live_checker | docs/structure/README.md | done |
-| `docs-and-meta` | docs | Documentation and repo-level project files | docs/README.md index | evaluation/components/run.py explain_qar --impl shipped_docs | docs/README.md | done |
-| `core-selection` | core | Selection as data: resolve(solution_id, name) turns a name into the implementation from the selection table, so switching an implementation is a data or config change | resolve / resolve_config / chosen_name / register,  SELECTION table keyed by solutions.csv solution_id | evaluation/components/run.py select_an_implementation --impl live_resolver | docs/structure/README.md, docs/adapters.md | done |
-| `consumer-structure-check` | tools | The generic check any system built on QAR runs on its own integration registry (implementations satisfy their ports, solution ids exist, duplicates carry an action, pin lag),  the public-repo hygiene scan (secrets, real paths, real addresses) | python -m quest_ai_runner.structure check-consumer --registry <csv> | evaluation/components/run.py check_the_structure --impl live_checker | docs/consumer-registry.md, docs/public-hygiene.md | done |
-| `core-consumer-helpers` | core | Plumbing every consumer needs and must not copy: one persistent background loop for sync adapters calling async I/O, and signature probes that drop keywords an older installed library lacks | run_coro_sync(), run_detached(),  accepted_keywords(), accepted_fields(), filter_keywords(),  strip_future_context(), sanitize_user_text() | evaluation/components/run.py expose_the_public_api --impl live_surface | docs/consumer-registry.md | done |
+| Component | Layer | Role | Serves |
+|---|---|---|---|
+| `core-ports` | core | The generic boundary: adapter interfaces, value objects, streaming sinks, event constants | show-progress |
+| `core-orchestrator-loop` | core | The bounded plan, gather, re-plan, answer/deep/confirm loop, split into role mixins | route-a-message, answer-a-turn |
+| `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message |
+| `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | watch-a-run, judge-a-decision |
+| `core-model-selection` | core | Tier to live model id, family resolution, deep-run starting model, outage and usage-limit memory | choose-a-model-tier |
+| `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-turn execution record | run-deep-work, receive-input-mid-run, detect-a-stalled-run |
+| `core-context-selection` | core | Choosing and learning which context cards enter a prompt | select-context, guide-by-feedback, recall-recent-context |
+| `core-tools` | core | The one catalog of operations an AI run can perform (tools, asks, progress, goals, notes, experiments), their relevance selection and per-run pins, plus operator-registered custom tools | operate-a-quest |
+| `core-reply-guards` | core | Link honesty, replayable recipes and the anticipation learner | replay-known-operations, guard-a-reply, persist-predictions |
+| `runner-quest-client` | runner | The Quest HTTP client in API-area mixins plus decision sink | escalate-to-a-human |
+| `runner-poller` | runner | Event-driven, signature-deduped poll loop with bounded concurrency | run-queued-tasks |
+| `runner-executor` | runner | Run one claimed task through the brain and report | run-queued-tasks |
+| `runner-autopilot` | runner | The recurring autopilot pass: defaults, periods, personas, briefs, gates | assemble-a-prompt |
+| `runner-context-updates` | runner | Keeping a quest context up to date: bundle, receipts, state, judges, sources | assemble-a-prompt, feed-context-sources |
+| `runner-personas` | runner | Which persona runs a task (data, not code), rep skill sync, workflow actions | run-queued-tasks |
+| `runner-quest-folder` | runner | A quest as a working folder: index, two-way sync, zones, goals, experiments | run-queued-tasks |
+| `runner-lane` | runner | The shared lane entry point and live two-way channel loop | run-queued-tasks |
+| `runner-learning` | runner | What a person asked for and has said: ledger, insights, reflections | store-feedback |
+| `adapters-model-providers` | adapters | Swappable ModelProvider implementations routed by model name | call-a-model |
+| `adapters-retrieval` | adapters | RetrievalAdapter and writer implementations over files, DBs, MCP, Notion, Google, Quest | gather-evidence, write-files, write-through-mcp, talk-over-a-channel |
+| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository) | persist-cards, resolve-references, cache-cards, detect-stale-cards |
+| `adapters-vector-context` | adapters | Semantic and keyword context assemblers and their scoring helpers | index-by-meaning, select-context |
+| `adapters-web` | adapters | Live web search and page fetch behind pluggable backends | search-the-web |
+| `adapters-deep-runners` | adapters | Alternative DeepRunner implementations | run-deep-work |
+| `adapters-conversations` | adapters | Claude session transcripts as context and ConversationStore | remember-conversations |
+| `config` | config | RunnerConfig and build_orchestrator(): the one seam for consumer specifics | configure-a-lane |
+| `cli-and-ui` | cli | Console entry point, attended chat session and Textual UI, card-store maintenance CLI | operate-from-a-terminal |
+| `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | track-usage-and-cost |
+| `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | expose-the-public-api |
+| `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |
+| `prompts` | prompts | Standing deep-run instructions shipped as data (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior |
+| `vendor` | vendor | Vendored third-party code, unmodified | expose-the-public-api |
+| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset | measure-implementations |
+| `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (persist-cards), restart-if-idle (run-queued-tasks) | search-the-web, persist-cards, run-queued-tasks |
+| `examples` | examples | Runnable reference consumers (env-driven, no real data) | learn-by-example |
+| `tests` | tests | Offline test suite and shared fakes | verify-offline |
+| `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | check-the-structure |
+| `docs-and-meta` | docs | Documentation and repo-level project files | explain-qar |
+| `core-selection` | core | Selection as data: resolve(solution_id, name) turns a name into the implementation from the selection table, so switching an implementation is a data or config change | select-an-implementation |
+| `consumer-structure-check` | tools | The generic check any system built on QAR runs on its own integration registry (implementations satisfy their ports, solution ids exist, duplicates carry an action, pin lag),  the public-repo hygiene scan (secrets, real paths, real addresses) | check-the-structure, keep-secrets-out |
+| `core-consumer-helpers` | core | Plumbing every consumer needs and must not copy: one persistent background loop for sync adapters calling async I/O, and signature probes that drop keywords an older installed library lacks | expose-the-public-api |

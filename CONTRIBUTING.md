@@ -2,7 +2,7 @@
 
 Thanks for your interest in improving `quest-ai-runner`! This project is the domain-free
 orchestrator **brain** (`core`) plus the queued-task **executor** (`runner`) for Quest AI tasks.
-Contributions of all kinds are welcome — bug reports, docs, tests, new adapters, and features.
+Contributions of all kinds are welcome: bug reports, docs, tests, new adapters, and features.
 
 By participating you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -11,7 +11,7 @@ By participating you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md)
 This library is deliberately **generic**. The single most important design rule:
 
 > **No consumer-specific logic lives in `quest_ai_runner/`.** No org names, user ids, team ids,
-> emails, API keys, or absolute filesystem paths — anywhere in the package, the tests, or the
+> emails, API keys, or absolute filesystem paths anywhere in the package, the tests, or the
 > git history. Everything specific comes from a consumer's `RunnerConfig` (see `examples/`).
 
 If your change would hardcode any of the above, route it through config/adapters instead. See
@@ -22,7 +22,7 @@ If your change would hardcode any of the above, route it through config/adapters
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e '.[anthropic,dev]'
-python -m pytest -q          # no network, no API key needed — uses stubs + a mock client
+python -m pytest -q          # no network, no API key needed; uses stubs + a mock client
 ```
 
 The test suite runs the core loop against a stub `ModelProvider` + stub `RetrievalAdapter`, and
@@ -42,7 +42,7 @@ the runner against a mock `QuestClient`, so it is fully offline.
 
 ## What we look for in review
 
-- **The generic boundary holds** — no consumer specifics leaked into the library.
+- **The generic boundary holds**: no consumer specifics leaked into the library.
 - **The four adapter interfaces** (`RetrievalAdapter`, `ModelProvider`, `DeepRunner`,
   `EscalationSink`) stay clean and minimal; new capabilities go behind an interface.
 - **The frozen public API** in `quest_ai_runner.core` (`Mode`, `StreamSink`, `MilestoneSink`,
@@ -51,7 +51,7 @@ the runner against a mock `QuestClient`, so it is fully offline.
 
 ## Reporting bugs & requesting features
 
-Use the GitHub issue templates. For anything security-sensitive, do **not** open a public issue —
+Use the GitHub issue templates. For anything security-sensitive, do **not** open a public issue;
 see [SECURITY.md](SECURITY.md).
 
 ## License

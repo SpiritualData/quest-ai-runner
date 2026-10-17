@@ -10,10 +10,10 @@
 
 Report privately through either channel:
 
-- **GitHub Security Advisories** — use the *"Report a vulnerability"* button on the
+- **GitHub Security Advisories**: use the *"Report a vulnerability"* button on the
   [Security tab](https://github.com/SpiritualData/quest-ai-runner/security/advisories/new)
   of this repository. This is the preferred channel.
-- **Email** — `security@spiritualdata.org`, with `quest-ai-runner` in the subject line.
+- **Email**: `security@spiritualdata.org`, with `quest-ai-runner` in the subject line.
 
 Please include: affected version/commit, a description of the issue, reproduction steps or a
 proof of concept, and the impact you anticipate. We aim to acknowledge reports within 5 business
@@ -34,4 +34,4 @@ days and to provide a remediation timeline after triage.
   configured root and skips secret-ish/binary/oversize files. Keep secrets out of any corpus root
   you point it at anyway.
 
-If you find a way these protections can be bypassed, that **is** in scope — please report it.
+If you find a way these protections can be bypassed, that **is** in scope. Please report it.

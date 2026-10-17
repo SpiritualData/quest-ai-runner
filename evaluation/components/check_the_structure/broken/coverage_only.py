@@ -42,9 +42,7 @@ def coverage(root):
 def build(meter):  # noqa: ARG001
     def check(kind, args):
         root = fixture.fresh_repo(kind, args.get("edits", []))
-        if kind == "audit":
-            problems = []  # a coverage checker has no per-component verdicts
-        elif kind == "repo":
+        if kind == "repo":
             problems = coverage(root)
         else:
             with (root / "registry.csv").open(newline="") as fh:

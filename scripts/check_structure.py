@@ -1,72 +1,17 @@
 #!/usr/bin/env python3
 """Check that the repo still follows the evolvable-structure (ESOI) rules in docs/structure/.
 
-Run from anywhere:  python scripts/check_structure.py [--write-docs]
+Run from anywhere:  python scripts/check_structure.py [--write-docs] [--strict]
 Exit 0 = clean, 1 = violations (printed one per line as ``RULE path: message``).
 
-The registry is data, not code (see docs/structure/README.md):
-  * components.csv   every functional component: path globs, role, interface, metric, docs, tests, gap
-  * solutions.csv    each swappable solution: problem, ideal, metric, implementations, selected one
-  * waivers.csv      known, justified exceptions to a structure rule (each must still apply)
-  * COMPONENTS.md    generated from components.csv (--write-docs rewrites it)
+The registry is data, not code (see docs/structure/README.md, which lists rules S1 to S23 once, in order):
+  * components.csv   placement only: component_id, layer, path globs, role, the solutions each serves
+  * solutions.csv    each solution: problem, ideal, port, implementations, selected one, metric, gap, action
+  * waivers.csv      known, justified exceptions to a rule (each must still apply)
+  * COMPONENTS.md    generated from components.csv (--write-docs rewrites it, with configuration.md and tracker/)
 
-Rules checked:
-  S1 coverage    every file belongs to exactly one component; every component glob matches a file
-  S2 component   docs and tests named by a component exist; unfinished components state gap and action
-  S3 root        no .py file at the repo root
-  S4 size        no module over MAX_LINES lines (waiver otherwise)
-  S5 docstring   every library module opens with a docstring that states its role
-  S6 direction   layers are ordered core < adapters < runner < config < cli/tools/ui; a module may
-                 import only its own layer or a lower one. A module's layer is its components.csv
-                 row's layer (top-level config*, usage, pricing, resources are `config`; cli*,
-                 interactive_session*, textual_*, tools/ are `cli`). Waiver otherwise.
-  S7 solutions   every Protocol port under quest_ai_runner/ is listed in the `port` cell of some solutions.csv
-                 row (a row may list several ports, ';'-separated, so a port needs no row of its own);
-                 implementations exist; `selected` is the selection-table name for a table-backed solution
-                 and a listed implementation path otherwise
-  S8 generated   COMPONENTS.md matches components.csv
-  S9 waivers     every waiver still applies (the list can only shrink)
-  S10 selection  the selected implementation of an `eval` solution is its leaderboard winner, or a waiver
-                 names the pending decision; an `invariant` solution is never ranked; either way the
-                 selected harness implementation has a recorded result
-  S11 metric     a `done` component has a metric kind (eval with a recorded result, invariant
-                 pinned by tests, or exempt with a reason); a harness command names a real
-                 component and implementation; every component solution id exists; an invariant
-                 component states in `invariant_reason` why "best" cannot vary; every solution
-                 is linked from some component's `solutions` column (or waived as S11 solution:<id>);
-                 every solution has a `metric_kind` (eval, or invariant with an `invariant_reason`)
-  S12 measured   every evaluation/components/*/impls/*.py wraps live quest_ai_runner code, or declares itself
-                 an alternative (module-level ALTERNATIVE = True, or a docstring opening ALTERNATIVE,
-                 BASELINE, ABLATION or FLOOR); a solution's selected harness implementation must be
-                 a live one, or carry an `S12 <solution_id>:<impl>` waiver
-  S19 serves     every component names at least one solution it serves
-  S20 complete   every solution has a problem, ideal, implementations, metric, selected implementation and a
-                 recorded run on the current cases with a git_sha (--strict also rejects -dirty rows)
-  S18 ids       solution, component and tracker ids are unique, and no id repeats inside one cell
-                 (a `solutions`, `port`, `implementations` or `path` list)
-  S17 tracker    docs/structure/tracker/{problems,solutions,implementations,ideals,metrics}.csv match what
-                 solutions.csv, components.csv, principles.csv and results.csv now produce (only the
-                 tracking_* columns are hand-edited; scripts/build_tracker.py rewrites the rest)
-  S14 selection table   every solutions.csv row with a port has an entry in core/selection_table.py
-                 (and no entry is for an unknown row); each default is one of its implementations;
-                 each implementation's module is listed in the row's `implementations`
-  S15 env docs   every environment variable read in quest_ai_runner/ appears in docs/configuration.md
-                 (generated by --write-docs from the code, with a description from
-                 docs/structure/env_descriptions.csv or a doc that explains it); a variable with
-                 neither fails; a rare exemption is a waiver `S15,<VARIABLE>,reason`
-  S16 provenance the latest results.csv row of every implementation carries a cases_sha, or an
-                 `S16 <component>/<impl>` waiver says why it cannot be re-recorded (the leaderboard
-                 flags such rows as unverified and never treats them as evidence)
-  S13 config     no os.environ / os.getenv in quest_ai_runner/core (waiver per file until the
-                 read migrates into RunnerConfig)
-  S21 eval folders  every evaluation/components/<x>/ folder is named by a solutions.csv `metric_command`, or
-                 by an `evaluation/components/<x>` mention in a solution's `metric` (a declared arm), or is
-                 listed in SHARED_EVAL_DIRS (shared infrastructure); an orphan eval folder is deleted
-  S22 numbers    no score, percentage, dollar amount or case count in a solutions.csv `metric`, `gap` or
-                 `action`, a waiver reason, a component `gap`/`action` or an audit `finding`/`action`;
-                 numbers live only in results.csv, read through the leaderboard
-  S23 selected   for a solution with a selection-table entry, `selected` is a table name and equals the
-                 table default, so the registry, the table and the live default cannot disagree
+Every problem line starts with the id of the rule it breaks (S1 to S23); the one-line statement of each rule is
+in docs/structure/README.md, so there is a single list to keep current.
 """
 from __future__ import annotations
 
@@ -85,10 +30,10 @@ ROOT = Path(__file__).resolve().parent.parent
 STRUCT = ROOT / "docs" / "structure"
 MAX_LINES = 1500
 PKG = "quest_ai_runner"
-STATUSES = {"done", "partial", "waived", "open"}
 # Dependencies point inward: a module may import its own layer or a lower one.
 LAYER_RANK = {"core": 0, "adapters": 1, "runner": 2, "config": 3, "cli": 4, "tools": 4}
-METRIC_KINDS = {"eval", "invariant", "exempt", "none"}
+# Layers a component row may name: the ordered code layers plus the non-code areas of the repo.
+COMPONENT_LAYERS = set(LAYER_RANK) | {"prompts", "docs", "evaluation", "examples", "scripts", "tests", "vendor"}
 SOLUTION_KINDS = {"eval", "invariant"}
 # Folders of evaluation/components that serve every component and are not themselves a solution's metric.
 SHARED_EVAL_DIRS = {"__pycache__"}
@@ -98,10 +43,6 @@ NUMBER_IN_PROSE = re.compile(
     r"|\b\d[\d,]*\s+(?:[a-z-]+\s+){0,2}?(?:cases?|scenarios?|queries|questions|tasks|fixtures?|logs|calls|"
     r"documents|sequences|names)\b")
 HARNESS = re.compile(r"components/run\.py (\w+) --impl (\w+)")
-COMPONENT_COLS = ["component_id", "layer", "path", "role", "interface", "metric", "docs", "tests",
-                  "rules", "gap", "action", "status", "metric_kind", "solutions", "invariant_reason"]
-SOLUTION_COLS = ["solution_id", "problem", "ideal", "port", "implementations", "selected",
-                 "selected_by", "metric_kind", "invariant_reason", "metric", "metric_command", "gap", "action"]
 
 
 def _load_leaderboard():
@@ -211,20 +152,14 @@ def render_docs(components: list[dict]) -> str:
         "# Components",
         "",
         "Generated from `docs/structure/components.csv` by `python scripts/check_structure.py --write-docs`.",
-        "Edit the CSV, never this file. Rules are the numbered ideals in `docs/structure/README.md`.",
+        "Edit the CSV, never this file. The rules are the numbered list in `docs/structure/README.md`.",
         "",
-        "| Component | Layer | Role | Interface | Metric | Docs | Status |",
-        "|---|---|---|---|---|---|---|",
+        "| Component | Layer | Role | Serves |",
+        "|---|---|---|---|",
     ]
     for r in components:
         cell = lambda k: r[k].replace("|", "/").replace(";", ", ")
-        lines.append(f"| `{r['component_id']}` | {r['layer']} | {cell('role')} | {cell('interface')} | "
-                     f"{cell('metric')} | {cell('docs')} | {r['status']} |")
-    open_rows = [r for r in components if r["status"] != "done"]
-    if open_rows:
-        lines += ["", "## Open gaps", ""]
-        for r in open_rows:
-            lines.append(f"* `{r['component_id']}` ({r['status']}): {r['gap']} Action: {r['action']}")
+        lines.append(f"| `{r['component_id']}` | {r['layer']} | {cell('role')} | {cell('solutions')} |")
     return "\n".join(lines) + "\n"
 
 
@@ -294,8 +229,10 @@ def check() -> list[str]:
         if cid in seen_ids:
             bad.append(f"S1 {cid}: duplicate component_id")
         seen_ids.add(cid)
-        if r["status"] not in STATUSES:
-            bad.append(f"S2 {cid}: status {r['status']!r} not in {sorted(STATUSES)}")
+        if r["layer"] not in COMPONENT_LAYERS:
+            bad.append(f"S2 {cid}: layer {r['layer']!r} not in {sorted(COMPONENT_LAYERS)}")
+        if not r["role"].strip():
+            bad.append(f"S2 {cid}: column role is empty (state the role the component owns)")
         for p in patterns(r["path"]):
             rx = glob_re(p)
             hit = [f for f in files if rx.match(f)]
@@ -304,20 +241,6 @@ def check() -> list[str]:
             for f in hit:
                 if cid not in owners[f]:
                     owners[f].append(cid)
-        for k in ("role", "interface", "metric", "docs", "tests", "rules"):
-            if not r[k].strip():
-                bad.append(f"S2 {cid}: column {k} is empty")
-        if r["status"] != "done" and not (r["gap"].strip() and r["action"].strip()):
-            bad.append(f"S2 {cid}: status {r['status']} needs both gap and action")
-        for d in patterns(r["docs"]):
-            if not (ROOT / d).exists():
-                bad.append(f"S2 {cid}: doc {d} does not exist")
-        for t in patterns(r["tests"]):
-            if t.startswith("none:"):
-                continue
-            rx = glob_re(t)
-            if not any(rx.match(f) for f in files):
-                bad.append(f"S2 {cid}: test pattern {t!r} matches no file")
     for f, ids in owners.items():
         if not ids:
             bad.append(f"S1 {f}: belongs to no component (add it to docs/structure/components.csv)")
@@ -499,28 +422,9 @@ def check() -> list[str]:
         elif kind == "eval" and r.get("invariant_reason", "").strip():
             bad.append(f"S11 {sid}: invariant_reason is set but metric_kind is eval")
     for r in components:
-        cid, kind = r["component_id"], r["metric_kind"].strip()
-        if kind not in METRIC_KINDS:
-            bad.append(f"S11 {cid}: metric_kind {kind!r} not in {sorted(METRIC_KINDS)}")
         for sid in patterns(r["solutions"]):
             if sid not in sol_ids:
-                bad.append(f"S11 {cid}: solution {sid!r} is not in solutions.csv")
-        if kind == "invariant" and not r["invariant_reason"].strip():
-            bad.append(f"S11 {cid}: invariant metric needs invariant_reason (why 'best' cannot vary)")
-        if r["status"] != "done":
-            continue
-        if kind == "none":
-            bad.append(f"S11 {cid}: status done needs a metric (eval, invariant or exempt: reason)")
-        elif kind == "invariant" and r["tests"].startswith("none"):
-            bad.append(f"S11 {cid}: invariant metric needs tests that pin it")
-        elif kind == "exempt" and not r["metric"].lower().startswith("exempt:"):
-            bad.append(f"S11 {cid}: exempt metric must start with 'exempt:' and give the reason")
-        elif kind == "eval":
-            hm = HARNESS.search(r["metric"])
-            if not hm:
-                bad.append(f"S11 {cid}: eval metric must be a components/run.py command")
-            elif hm.group(2) not in results.get(hm.group(1), {}):
-                bad.append(f"S11 {cid}: eval {hm.group(1)}/{hm.group(2)} has no recorded result in results.csv")
+                bad.append(f"S11 {r['component_id']}: solution {sid!r} is not in solutions.csv")
 
     # S11 reverse link: every solution is owned by some component
     linked = {sid for r in components for sid in patterns(r["solutions"])}
@@ -561,7 +465,7 @@ def check() -> list[str]:
             bad.append(f"S18 components.csv: component id {cid} appears {n} times")
 
     for r in components:
-        for col in ("solutions", "rules", "path"):
+        for col in ("solutions", "path"):
             for ident, n in Counter(patterns(r[col])).items():
                 if n > 1:
                     bad.append(f"S18 components.csv {r['component_id']}: `{col}` lists {ident} {n} times")
@@ -597,12 +501,7 @@ def check() -> list[str]:
 
     # S22 numbers live in results.csv only
     prose = [("solutions.csv", r["solution_id"], col, r[col]) for r in solutions for col in ("metric", "gap", "action")]
-    prose += [("components.csv", r["component_id"], col, r[col]) for r in components for col in ("gap", "action")]
     prose += [("waivers.csv", f"{w['rule']} {w['path']}", "reason", w["reason"]) for w in waivers]
-    audit_path = STRUCT / "audit.csv"
-    if audit_path.exists():
-        prose += [("audit.csv", r["component_id"], col, r[col]) for r in read_csv(audit_path)
-                  for col in ("finding", "action")]
     for where, ident, col, text in prose:
         hit = NUMBER_IN_PROSE.search(text)
         if hit:

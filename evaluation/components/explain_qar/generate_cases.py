@@ -1,10 +1,9 @@
-"""Regenerate ``cases.json`` from the repository: one case per Markdown document, per component row, per environment
+"""Regenerate ``cases.json`` from the repository: one case per Markdown document, per environment
 variable the code reads, per CLI subcommand and per name in ``quest_ai_runner.__all__``.
 
     .venv/bin/python3 evaluation/components/explain_qar/generate_cases.py
 
 Run it when a document, a variable, a subcommand or a public name is added; the ``coverage`` case fails until you do."""
-import csv
 import json
 import subprocess
 import sys
@@ -37,9 +36,6 @@ def main():
         add("em_dash", f"{f}: no em dash", {"file": f}, {"eq": {"count": 0}})
     for f in [d for d in docs if d.startswith("docs/") and d.count("/") == 1 and d != "docs/README.md"]:
         add("indexed", f"{f}: linked from docs/README.md", {"file": f}, {"eq": {"indexed": True}})
-    for row in csv.DictReader((REPO / "docs/structure/components.csv").open(newline="")):
-        add("component_docs", f"{row['component_id']}: every doc it names exists", {"component": row["component_id"]},
-            {"eq": {"missing": []}})
     for var in env_vars.env_vars_in_code(REPO):
         add("env_documented", f"{var}: has a described row in docs/configuration.md", {"variable": var},
             {"eq": {"row": True, "described": True}})

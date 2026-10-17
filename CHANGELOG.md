@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A smaller structure registry.** `docs/structure/components.csv` keeps placement only (`component_id`, `layer`, `path`, `role`, `solutions`); metric, gap, action and status live on the solution rows. The self-graded `audit.csv` and `scripts/build_audit.py` are gone, and `docs/structure/README.md` lists rules S1 to S23 once, in order, after a pointer to `STANDARD.md`.
 - **A durable card cache, and a cold start during a backend outage serves it.** `FileCardCache` (`adapters/card_cache_file.py`) keeps the last card listing and the queue of failed writes as atomic JSON files. `QuestApiCardRepository` now serves the stored listing when it starts while the backend is unreachable (still loud), then does a full refresh once the backend answers. The `cache-cards` selection defaults to the file cache (`null` opts out). Also fixed: a deleted file is reported stale by `stale_cards_for`, and the overseer digest sheds operations, then recent conversation, before prior escalations. Tests: `tests/test_card_cache_file.py`, `tests/test_overseer.py`, `tests/test_context_assembler.py`.
 - **The answer explanation says how evolvable structure shaped the answer (payload version 2).** "Explain how I got this" gains an optional `evolvable_structure` object (`ideal`, `metric`, `structure`), in ESOI's intent vocabulary; every version 1 key is unchanged. A deep turn's `signals.goal_met` now carries its own verifier outcome (`deep_met`/`deep_not_met`) instead of being empty. The prompt asks only for assumptions that would change the answer, confidence grounded in what was checked, and `what_would_change` that does not repeat them. Tests: `tests/test_answer_explanation.py`. Docs: `docs/answer-explanation.md`.
 - **A public ESOI page, generated from the same source.** `docs/evolvable-structure.md` is the reader-facing page the explanation panel links to. `scripts/sync_standing_instructions.py` now writes it alongside `prompts/evolvable_structure.md` (`--check` covers both), its default skill path is relative to the checkout instead of absolute, and `tests/test_standing_instructions.py` fails when either copy drifts.
@@ -1112,12 +1113,12 @@ All notable changes to this project are documented here. The format is based on
   was handed the CLAUDE.md chain above it (~9,400 tokens of repo instructions it has no tools to
   act on). Ten to fifteen such calls make an ordinary turn, so 18,820 each is exactly the 200k
   users saw: the count was honest, the harness behind it was not. Fixed in `claude_cli_provider.py`
-  by passing `--tools ""` (no tools at all, so no schemas — supersedes `--disallowed-tools`, kept
+  by passing `--tools ""` (no tools at all, so no schemas, supersedes `--disallowed-tools`, kept
   only as a fallback for older CLI builds that don't accept `--tools`) and running the subprocess in
   `_neutral_cwd()`, a scratch directory with no CLAUDE.md chain above it; the same call measured
   462 tokens afterward. A short-lived middle attempt at this bug (committed as part of the same
   investigation) instead stopped counting `cache_read_input_tokens` into `tokens_in`, on the theory
-  that a cache read re-counts tokens already paid for as cache creation — that is wrong (a read is
+  that a cache read re-counts tokens already paid for as cache creation, that is wrong (a read is
   separately billed input on its OWN call) and was reverted once the harness measurement above
   showed the real cause; a warm call after the harness fix measured 2 fresh + 9,894 cache read,
   which the reverted theory would have reported as "2 tokens used" for a real 9,896. `tokens_in` is
@@ -1288,7 +1289,7 @@ All notable changes to this project are documented here. The format is based on
   Test: `tests/test_deep_output_ui.py::test_dashboard_arrow_follows_the_detail_panel_not_the_last_streaming_run`.
 - **`FilesAdapter`/`FilesWriter` would read or overwrite Claude Code's own `.claude.json` (OAuth
   account metadata, feature-flag caches) given its exact path**, even though `list_sources`/`grep`
-  already skip every dotfile during discovery — the gap was a targeted `read_section`/write by a
+  already skip every dotfile during discovery, the gap was a targeted `read_section`/write by a
   path already known (e.g. copied from elsewhere in a poisoned corpus). `_is_secretish` (the shared
   boundary in `adapters/files_adapter.py::resolve_in_tree`, used by both the read and write sides)
   now also refuses the same `is_claude_state_file` family as the indexing fix below. Tests:
@@ -1794,17 +1795,17 @@ All notable changes to this project are documented here. The format is based on
   out of `list_quest_goals` (which carries `description` and `criteria`); `list_goal_notes` falls
   back to the goal's update thread, mapped to the note shape its callers expect.
 
-- **`quest_ai_runner.load_client()` — a `QuestClient` with no adapter stack** (`__init__.py`,
+- **`quest_ai_runner.load_client()`, a `QuestClient` with no adapter stack** (`__init__.py`,
   `config.quest_client_from_config` / `config.load_quest_client`). The scripting front door for
   anything that is not a full lane: a script, a notebook, an agent's one-off lookup, a cron job.
   `load_client("~/my-lane/qar.toml")` (or `QAR_CONFIG_FILE`) reads the same TOML file a lane uses,
-  applies its `env_files`/`env_aliases`/`env` tables, and builds just the API client — no model
+  applies its `env_files`/`env_aliases`/`env` tables, and builds just the API client, no model
   provider, no vector store, no optional dependencies, so it starts instantly. Raises
   `QuestNotConfigured` when the URL or key is missing rather than falling back to another
   deployment's credentials. `config.quest_client_from_config(cfg)` is the same wiring for a caller
   that already has a `RunnerConfig`; `config._quest_client_for` now delegates to it instead of
   duplicating the construction.
-- **`quest-ai-runner quest <method>` — the Quest API from a shell, no Python** (`cli.py`). Calls
+- **`quest-ai-runner quest <method>`, the Quest API from a shell, no Python** (`cli.py`). Calls
   any `QuestClient` method by name against the configured account and prints the JSON result:
   `quest-ai-runner quest whoami`, `quest-ai-runner quest get_task task_123`. Read-only methods
   (`whoami`, `assignee_id`, and anything prefixed `get_`/`list_`/`is_`/`search_`/`discover_`/
@@ -1817,12 +1818,12 @@ All notable changes to this project are documented here. The format is based on
 - **`RunnerConfig.decision_assignees` / `QAR_DECISION_ASSIGNEES`** (`config.py`,
   `runner/quest_client.py`): named decision-routing roles (`{"owner": "user_...", "operator":
   "user_..."}`), file-expressible under `[decision_assignees]` and settable via
-  `QAR_DECISION_ASSIGNEES` (a JSON object, or `name=id,name=id` pairs — `config.
+  `QAR_DECISION_ASSIGNEES` (a JSON object, or `name=id,name=id` pairs, `config.
   parse_decision_assignees` parses either, raising `ConfigFileError` on anything else). `WHO`
   approves what is deployment policy, so it lives in config; `QuestClient.assignee_id(name)`
   resolves a role to a user id (raises `QuestNotConfigured` on an unknown name rather than
   silently routing to the default person, `None` yields `default_assignee_user_id`), and
-  `create_decision(..., assignee="operator")` uses it — an explicit `assignee_user_id=` still
+  `create_decision(..., assignee="operator")` uses it, an explicit `assignee_user_id=` still
   wins over a role name. Resolution happens outside `create_decision`'s error-swallowing `try`, on
   purpose: a misspelled role raises instead of degrading into an unassigned decision.
 - **`RunnerConfig.from_file` now expands `~`** in the path it is given, so a documented
@@ -1836,13 +1837,13 @@ All notable changes to this project are documented here. The format is based on
 - **`ai_driven/source_of_truth/`: a place for the current answer, not another dated snapshot**
   (`runner/quest_folder_zones.py`). Folder zones already separated a person's own words
   (`human_context/`) from AI proposals (`ai_driven/`), but had no way to mark a document as THE
-  place to look for a topic, refined in place, versus a point-in-time research artifact — so the
+  place to look for a topic, refined in place, versus a point-in-time research artifact, so the
   same topic got re-researched into a new dated file run after run, and the working answer ended up
   spread across a dozen files with no canonical one. `ensure_folder_zones` now also scaffolds
   `ai_driven/source_of_truth/`; the folder's `CLAUDE.md` and `docs/quest-folder-zones.md` explain
   the convention (no date in the filename, check here before starting new research, named headings
   rather than numbered ones so sections can be reordered without renumbering). Nested inside
-  `ai_driven/`, not a new top-level zone — still AI workspace, still a proposal until the ledger
+  `ai_driven/`, not a new top-level zone, but still AI workspace and still a proposal until the ledger
   says otherwise.
 - **Default quest instructions now tell a run to iterate on an existing document rather than
   fragment into one-offs** (`runner/autopilot.py`'s `BUNDLED_DEFAULT_QUEST_INSTRUCTIONS`, matched
@@ -1897,16 +1898,16 @@ All notable changes to this project are documented here. The format is based on
   files: **91% of it was dependency checkouts, generated data, build output, another tool's caches
   and a folder of credentials.** Three layers decide it, cheapest first, because each catches what
   the others cannot:
-  1. **Nested repositories** (`_nested_vcs_dirs`) — a directory with its own `.git`/`.hg`/`.svn` is
+  1. **Nested repositories** (`_nested_vcs_dirs`), a directory with its own `.git`/`.hg`/`.svn` is
      a separate project checked out in place. Deterministic, no model call, and it alone accounted
      for 76,032 files across 32 repos. A nested repo that has its own card store is excluded
      because the reuse path already imports it; one that has none is excluded but NAMED IN THE LOG,
      so nothing disappears silently. `QAR_SKIP_NESTED_REPOS=0` opts out.
-  2. **Fuzzy duplicates** (`_duplicate_folders`) — sampled `(relpath, hash)` overlap, reported as a
+  2. **Fuzzy duplicates** (`_duplicate_folders`), sampled `(relpath, hash)` overlap, reported as a
      percentage, because real duplicates are the same tree at different commits rather than
      byte-identical copies (the pair that motivated this differed in 19,222 entries and was still
      obviously one thing twice). The smaller of a pair is the one dropped.
-  3. **A batched model review** for what neither can see — that a folder is an export, a fixture,
+  3. **A batched model review** for what neither can see, that a folder is an export, a fixture,
      an archive, or an agent's state store. Adaptive by depth: judge shallow, then open up only
      folders that are large or judged `mixed`, which took 15,423 directories down to ~207
      decisions in a handful of calls.
@@ -1916,14 +1917,14 @@ All notable changes to this project are documented here. The format is based on
   individually), and a parent with any kept child cannot veto it. Without those, one corpus lost
   its entire company workspace to a single "huge duplicate mirror" verdict. The presence of an
   AI-orientation file (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, …) is passed to the model as
-  evidence a folder is curated knowledge — evidence and not proof, since a vendored clone carries
+  evidence a folder is curated knowledge, evidence and not proof, since a vendored clone carries
   its upstream's instruction file too, which is why the deterministic layers run first and win.
   Verdicts and reasons are cached in the cards dir for a human to read, edit or delete.
   `QAR_FOLDER_REVIEW=0` disables it; corpora under 2,000 files skip it entirely.
 
 - **`bootstrap --yes` and a first-run confirmation for a large corpus** (`cli.py`). Indexing is the
   one operation whose cost scales with something the user may never have looked at. This replaces
-  a hardcoded 10,000-file ceiling that was applied SILENTLY — a corpus of 81,465 files was walked
+  a hardcoded 10,000-file ceiling that was applied SILENTLY: a corpus of 81,465 files was walked
   to the 10,000th and reported as done. `max_files`/`max_cards` now default to **no limit**
   (`QAR_BOOTSTRAP_MAX_FILES`, `QAR_BOOTSTRAP_MAX_CARDS`), and a limit that actually bites says so
   at WARNING instead of leaving a partial store looking complete.
@@ -1974,7 +1975,7 @@ All notable changes to this project are documented here. The format is based on
   produced almost nothing. A configured path that is missing now falls through to the same
   discovery a bare name gets.
 
-- **`bootstrap --prune-only`**: remove the cards a corpus no longer indexes and stop — no model
+- **`bootstrap --prune-only`**: remove the cards a corpus no longer indexes and stop, no model
   calls, nothing re-analysed. A store accumulates dead weight faster than anyone wants to re-index
   a large corpus (a skip list grows, a vendored SDK lands, files are deleted), so making the
   cleanup conditional on a full bootstrap means it never happens on exactly the corpora where it
@@ -1984,7 +1985,7 @@ All notable changes to this project are documented here. The format is based on
 - **The keyless CLI provider now reports what it spent** (`adapters/claude_cli_provider.py`).
   Callers already read `tokens_in`/`tokens_out` off a provider to report a run's cost (`cli.py`
   prints them after a bootstrap) and `ClaudeCliProvider` never set them, so every keyless
-  deployment reported its bootstrap as costing nothing — an absent answer dressed as a cheap one.
+  deployment reported its bootstrap as costing nothing: an absent answer dressed as a cheap one.
   The CLI's own JSON envelope carries the token counts and the price it computed, so `_invoke` now
   accumulates `tokens_in`, `tokens_out`, `cost_usd` and `call_count`. Cache-creation and cache-read
   tokens are counted as input, because counting only `input_tokens` under-reports a harness-heavy
@@ -2070,11 +2071,11 @@ All notable changes to this project are documented here. The format is based on
 
 - **Work a killed runner was holding is handed back, instead of vanishing**
   (`runner/state_store.py`, `runner/poller.py`). Claiming a task PATCHes it to `in_progress`,
-  which is what stops a second worker taking it — and is exactly wrong once the worker dies: the
+  which is what stops a second worker taking it, and is exactly wrong once the worker dies: the
   row says someone is running it and nobody is. Nothing on the runner side noticed, because the
   code that would notice is the code that was killed. The row then sat until a backend staleness
   sweeper timed it out hours later and marked it `failed`, and a failed row is deliberately not
-  mailable — so for an autopilot quest the day produced no output and no error anywhere the person
+  mailable, so for an autopilot quest the day produced no output and no error anywhere the person
   could see. Three consecutive days of a daily brief went missing that way before it was possible
   to tell autopilot was even involved. The runner now persists what it has claimed
   (`StateStore.claim_in_flight`, written through to disk because the case this exists for is the
@@ -2088,9 +2089,9 @@ All notable changes to this project are documented here. The format is based on
   (`adapters/claude_cli_provider.py`). `ClaudeCliProvider` promised "a single-shot text
   generation" but `claude -p` boots the whole Claude Code agent by default: its system prompt,
   every built-in tool schema, the settings sources, the `CLAUDE.md` files above the working
-  directory, skills, plugins and any ambient MCP servers — on every planner, judge and indexing
+  directory, skills, plugins and any ambient MCP servers, on every planner, judge and indexing
   call. Measured on one call answering with the single word "OK": **17,815 system tokens and
-  $0.0368**, versus **0 tokens and $0.0017** once the harness is dropped — a 22x cost difference,
+  $0.0368**, versus **0 tokens and $0.0017** once the harness is dropped, a 22x cost difference,
   and the same multiple in work done inside each spawned process. `_invoke` now passes
   `--system-prompt` (which REPLACES the agent prompt, where `--append-system-prompt` kept it),
   `--exclude-dynamic-system-prompt-sections`, `--setting-sources ""` and `--strict-mcp-config`.
@@ -2102,7 +2103,7 @@ All notable changes to this project are documented here. The format is based on
 - **Index bootstrap fan-out honours the deployment's parallelism budget**
   (`adapters/file_context_store.py`). `_BOOTSTRAP_WORKERS` was a hardcoded `8` that no config
   reached, so a deployment that had lowered `QAR_MAX_PARALLEL` for its box still got eight
-  concurrent model calls during indexing — and for a subprocess-backed provider each one is a
+  concurrent model calls during indexing, and for a subprocess-backed provider each one is a
   child process, making this a memory figure rather than a concurrency one. On a loaded box that
   is the difference between a bounded pass and an OOM kill part-way through, which strands the
   task the runner had claimed (marked in-progress, nobody running it) until something reaps the
@@ -2446,13 +2447,13 @@ All notable changes to this project are documented here. The format is based on
   model call; (2) an LLM-judged EXPLICIT ask on `judge_tier` (opt-in, needs a provider); (3)
   domain-card dominance (opt-in, needs `cards_dir`) where a card is tied to a persona by an
   explicit owner field or by carrying its identity as a whole token in the card id/filename, and
-  ambiguity counts for nobody; (4) the structural fallback for an id the registry does not know —
+  ambiguity counts for nobody; (4) the structural fallback for an id the registry does not know,
   `auto_register` turns it into a real invocable skill (slugified display name from
   `get_ai_profile`, unique under the skills root, seeded `SKILL.md` with valid frontmatter plus the
   empty `QAR:MANAGED` markers, persisted into `registry_file` in that file's existing shape, never
   clobbering a human-authored file), else `cache_dir/<id>`, else nothing. A disabled step is never
   entered, so a structural-only lane makes no model call and reads no cards. **A bare name mention
-  never activates a persona** — enforced three ways at once (exact matching, the judge's prompt,
+  never activates a persona**: enforced three ways at once (exact matching, the judge's prompt,
   and each persona's own name/aliases excluded from its card scoring) because naming somebody is
   not asking them. `on_resolved` is called with `{"task", "user_id", "skill_dir"}` on every
   resolution and `None` otherwise, so a consumer can recover which persona a run is for (the
@@ -2464,7 +2465,7 @@ All notable changes to this project are documented here. The format is based on
   `examples/minimal_lane.py`). Three separate consumers of this library each wrote the same
   `--check`/`--once`/loop-forever driver around `Poller` (argv shape, logging setup, `.env`
   loading, degrade-instead-of-crash on an incomplete config). Two noticed the duplication and
-  extracted a shared copy — but OUTSIDE this library, so the third consumer had nowhere to find it
+  extracted a shared copy, but OUTSIDE this library, so the third consumer had nowhere to find it
   and wrote a fourth copy. `run_lane(argv, *, prog, description, lane_label, log_name,
   build_config, env_file=None, state_path=None, not_configured_keywords=("key", "url"))` is that
   driver, moved in and generalized: `state_path` now also defaults from `QAR_STATE_PATH` (folding
@@ -2477,31 +2478,31 @@ All notable changes to this project are documented here. The format is based on
   monkey-patch here would be dead code standing in for a safety net that isn't one. The function
   stays, doing nothing but logging which module owns the behavior, only so a caller that still
   names it explicitly keeps working. `examples/run_lane.py` (the ~70-line hand-rolled driver this
-  replaces) is left in place but is now superseded — see the example's own module for the
+  replaces) is left in place but is now superseded, see the example's own module for the
   pointer. Tests: `tests/test_lane.py`.
 - **Config gaps that forced a `.py` consumer for ordinary settings are closed** (`config.py`,
   `cli.py`). `RunnerConfig.discovery_team_id`, `rep_sync_direction`, `default_assignee_user_id`,
   `autopilot_pass_time`, and `autopilot_adopt_recurring` were real fields with no environment-variable
-  path to them at all in `cli._config_from_env` — a consumer that needed one of these had to import
+  path to them at all in `cli._config_from_env`, a consumer that needed one of these had to import
   the library and build `RunnerConfig` in code, even though every other adjacent setting was one
   `QAR_*` env var away. New: `QAR_DISCOVERY_TEAM_ID` (unset falls back to `team_id`; `""` explicitly
-  requests owner-scoped discovery — `os.environ.get`, not `getenv(..., default)`, is what keeps that
+  requests owner-scoped discovery, `os.environ.get`, not `getenv(..., default)`, is what keeps that
   distinction), `QAR_DECISION_ASSIGNEE` (documented in `.env.example`/`examples/custom_consumer.py`
   since earlier but never actually wired into the stock CLI until now), `QAR_DEEP_MAX_TURNS` (lands
   on `OrchestratorConfig.deep_max_turns`, same pattern as the existing `QAR_GOAL_TOKEN_BUDGET`/
   `QAR_GOAL_MAX_ATTEMPTS`), `QAR_REP_SYNC_DIRECTION`, `QAR_AUTOPILOT_PASS_TIME`, and
   `QAR_AUTOPILOT_ADOPT_RECURRING`. Also new: `RunnerConfig.context_preamble` (org/persona doctrine
-  prepended to every deep-run brief) — previously reachable only by constructing a `SubprocessConfig`
+  prepended to every deep-run brief), previously reachable only by constructing a `SubprocessConfig`
   by hand; `config.resolve_deep_runner` now threads it into the auto-built default worker, and
-  `cli._config_from_env` fills it from `QAR_CONTEXT_PREAMBLE_FILE` (a file path — multi-line org
+  `cli._config_from_env` fills it from `QAR_CONTEXT_PREAMBLE_FILE` (a file path, multi-line org
   doctrine is miserable as a bare env var) or the shorter inline `QAR_CONTEXT_PREAMBLE`, file
-  winning when both are set. `rep_sync_resolver` (a callable) is deliberately NOT env-expressible —
+  winning when both are set. `rep_sync_resolver` (a callable) is deliberately NOT env-expressible,
   see the personas entry above for its declarative alternative. Tests: `tests/test_config_env_vars.py`.
 - **`RunnerConfig.personas` wires straight into the poller** (`config.py`:
   `resolve_rep_sync_resolver`; `runner/poller.py`: `Poller.__init__`). The declarative
   `PersonaResolverConfig` from the entry above needs a seam onto `RunnerConfig.rep_sync_resolver`
   to actually run anything: `resolve_rep_sync_resolver(cfg, quest_client=...)` composes one via
-  `build_persona_resolver` when `cfg.personas` is set and `cfg.rep_sync_resolver` was left unset —
+  `build_persona_resolver` when `cfg.personas` is set and `cfg.rep_sync_resolver` was left unset,
   an explicit `rep_sync_resolver` (any consumer wiring one by hand, before `personas` existed, or
   one that means to fully replace the declarative policy) always wins, exactly the same
   never-override-an-explicit-choice contract `resolve_deep_runner` already has for `deep_runner`.
@@ -2509,7 +2510,7 @@ All notable changes to this project are documented here. The format is based on
   consumer or test that reads it after construction sees the resolved callable, not the config
   object. `runner.personas` is imported lazily (only when `cfg.personas` is actually set, and only
   inside this function) so building a `RunnerConfig` with no persona policy pays no import cost for
-  it — importing it at module level in `config.py` would also be circular (`quest_ai_runner.runner`'s
+  it, importing it at module level in `config.py` would also be circular (`quest_ai_runner.runner`'s
   `__init__` imports `.poller`, which imports `RunnerConfig` from `config.py`). Tests:
   `tests/test_personas_config_wiring.py`.
 - **File-based config (TOML), via stdlib `tomllib`** (`config.py`: `RunnerConfig.from_file`,
@@ -2518,7 +2519,7 @@ All notable changes to this project are documented here. The format is based on
   file-based config at all before this (no TOML, no YAML). `RunnerConfig.from_file(path)` parses a
   TOML file whose keys mirror `RunnerConfig` field names into a config, refusing (via
   `ConfigFileError`, a `ValueError`) rather than silently ignoring: a missing/unreadable file,
-  invalid TOML, a key that is not a real field at all, and — distinctly, with its own message — a
+  invalid TOML, a key that is not a real field at all, and, distinctly, with its own message, a
   real field name that holds a live adapter/callable/sentinel and so cannot be expressed as TOML
   data (accepting one of those would silently build a config with the wrong kind of value in that
   field, failing later far from the file that caused it). `[personas]` is the one nested table,
@@ -2530,7 +2531,7 @@ All notable changes to this project are documented here. The format is based on
   falls back to the file's value before the retrieval adapter is built from it), so a file-only
   corpus still produces a working `FilesAdapter`. This repo has scar tissue about a config field
   that silently did nothing because nobody validated the key that set it (see the quest-backend
-  `UpdateAutopilotRequest` incident, referenced in `docs/writing-a-consumer.md`) — loud failure
+  `UpdateAutopilotRequest` incident, referenced in `docs/writing-a-consumer.md`), loud failure
   here is deliberate, not an oversight. Tests: `tests/test_config_from_file.py`.
 - **Claude Fable is now a runnable, vision-capable Claude family, alongside Opus/Sonnet/Haiku**
   (`adapters/claude_cli_provider.py`, `core/goal_runner.py`, `core/model_registry.py`). The
@@ -2986,7 +2987,7 @@ All notable changes to this project are documented here. The format is based on
   model id: it is a family-BUCKET LABEL from `ClaudeCliProvider.CLI_RUNNABLE_MODELS`, which exists
   so `ModelRegistry.bucket_top` can bucket tiers on a CLI-only deployment that has no live model
   list. The spawn gated on `_is_claude_model`, which asks a purely SYNTACTIC question ("is this
-  string Claude-shaped?") — the label passes it, so it was forwarded raw. The translator for
+  string Claude-shaped?"), the label passes it, so it was forwarded raw. The translator for
   exactly this already lived beside the labels it invents (`claude_cli_provider.cli_model`: family
   → the bare alias the CLI accepts, non-Claude → `None`, other Claude ids unchanged) and the
   shallow plan/answer path has used it since it was introduced; the deep path was simply missed.
@@ -3000,13 +3001,13 @@ All notable changes to this project are documented here. The format is based on
   not-met goal" escalates.** `fallback_deep_ladder` extended the ladder only when the fallback
   model was NOT Claude-runnable, on the reasoning that a Claude deployment had already chosen its
   deep model. But "Claude-shaped" and "a distinct rung worth escalating to" are different
-  questions, and a CLI-only lane resolves its tiers to bucket labels — so the guard saw Claude,
+  questions, and a CLI-only lane resolves its tiers to bucket labels, so the guard saw Claude,
   returned a length-1 ladder, and the goal loop's attempt-N indexing re-ran the identical model on
   every attempt. That is the other half of the six identical failures above: the escalation
   mechanism ran exactly as designed, with nothing to escalate to. The extension is now attempted
   for every fallback, and rungs are deduped by what the worker would ACTUALLY invoke
   (`cli_safe_model`), so `claude-sonnet`, `sonnet` and `claude-sonnet-4-6` count as one rung rather
-  than three lookalike steps that would re-run the same model — a stronger tier is added only when
+  than three lookalike steps that would re-run the same model, a stronger tier is added only when
   it is genuinely a different model. Pins (an explicit per-task model request, a guidance model
   preference) still return a single-model ladder before this is reached, and the existing
   "escalation unavailable" WARNING still fires when nothing distinct can be found.
@@ -3022,13 +3023,13 @@ All notable changes to this project are documented here. The format is based on
   narration). (`tests/test_deep_output_ui.py`.)
 - **A deep run that dies before printing its final envelope now reports what it ACTUALLY did,
   read from its own session record.** Observed live: a run read half a dozen files, wrote and ran
-  a sanity-check script, wrote a design doc, edited three files and drafted an email, then failed
-  — and the whole human-readable result was "The worker exited 1 with no error output. … Read the
+  a sanity-check script, wrote a design doc, edited three files and drafted an email, then failed,
+  and the whole human-readable result was "The worker exited 1 with no error output. … Read the
   run output below for what it actually did", with nothing below it. The cause is that everything
   a human reads on a failure was derived from ONE source: the worker's final `--output-format
   json` envelope on stdout. A worker killed, crashed or reaped mid-flight never gets to print that
   envelope, so `out` is empty, so the `if tail:` branch that attaches "Last output:" never fires,
-  and the message carries nothing — the exact failure mode where knowing what the run did matters
+  and the message carries nothing, the exact failure mode where knowing what the run did matters
   most. A complete record existed the whole time: the Claude Code session JSONL under
   `.claude/projects/`, bound deterministically by the `--session-id` this runner itself generates,
   which the live monitor thread was already tailing line by line. Both blind-spot paths (`exit
@@ -3041,8 +3042,8 @@ All notable changes to this project are documented here. The format is based on
   `- <assistant text>`) instead of being a second, divergent parser for the same format. The block
   is framed as an observation, never a diagnosis ("its own session record shows it last did (most
   recent last): …"), keeping the rule that this message states recorded facts and does not assert a
-  cause the code cannot know; the one place that DID assert one — "the goal did not actually run"
-  on an exit-0 empty run — now softens to "cannot be confirmed to have run" only when the record
+  cause the code cannot know; the one place that DID assert one, "the goal did not actually run"
+  on an exit-0 empty run, now softens to "cannot be confirmed to have run" only when the record
   contradicts it, and is otherwise unchanged. Because this runs synchronously on the failure path
   it is bounded and silent: at most the last 256KB of the file is read, at most 12 actions and 1500
   characters are rendered, malformed or truncated records are skipped individually (a file cut off
@@ -3227,7 +3228,7 @@ All notable changes to this project are documented here. The format is based on
   `quest_folder_sync.quest_id_in_folder` reads the `quest_id` its sync file already stamps in
   frontmatter. `RunnerConfig.quest_folder_map` remains the FIRST answer wherever it is set (it is
   the deployment's own statement, and `quest_for_path` also returns the mapped root, which is where
-  the artifact lives when a session starts in a subfolder) — but the map is opt-in env config a chat
+  the artifact lives when a session starts in a subfolder), but the map is opt-in env config a chat
   user need not have set up, and the fallback is what lets the read and the write-back resolve in a
   folder that was ever pulled. Only the frontmatter counts: a `quest_id:` line elsewhere in the file
   is prose, not the mapping.
@@ -3240,8 +3241,8 @@ All notable changes to this project are documented here. The format is based on
   Tuesday sat untouched while every pass since composed its brief as if it had never been written.
   Adds `QuestClient.get_insights_collection` / `list_collection_entries` / `mark_insight_acted_on`
   and `runner/insights.py`, which composes recent unacted captures into one dated, tagged
-  `InsightsContext`. The entries route is generic and has **no** server-side filter — not by date,
-  not by field — so both halves of the selection are applied client-side, mirroring quest-backend's
+  `InsightsContext`. The entries route is generic and has **no** server-side filter, not by date,
+  not by field, so both halves of the selection are applied client-side, mirroring quest-backend's
   own `_get_recent_unacted_insights`: skip anything ticked `acted_on`, bound by the later of the
   caller's cutoff and a 14-day window, cap and clip the rest. Newest-first ordering lets paging stop
   at the first entry past the cutoff instead of walking a person's whole history. Both timestamp
@@ -3255,13 +3256,13 @@ All notable changes to this project are documented here. The format is based on
   saying plainly that they are the person's labels for their own thinking rather than a routing
   rule: one tagged for something else can still matter here, one whose tag looks like a match can
   be irrelevant, decide and pass over the rest without comment. That judgment belongs to the model
-  already weighing goals, next steps, and reflections for this quest. The alternative — comparing a
-  tag against a quest or goal name — is a fixed string rule that silently drops every wording it did
+  already weighing goals, next steps, and reflections for this quest. The alternative, comparing a
+  tag against a quest or goal name, is a fixed string rule that silently drops every wording it did
   not anticipate ("dissertation" vs. "thesis" vs. no tag at all), which is exactly what hard rule #3
   forbids. `compose_batch_text` carries the block beside the reflection, for the same reason and
   with the same framing; `next_steps_from_pass` puts one condensed line in the artifact's `note`
   slot but never promotes an insight to a *step*, because the person captured it rather than
-  committing to it. The freshness cutoff is the quest's own `autopilot.last_pass_at` — the same
+  committing to it. The freshness cutoff is the quest's own `autopilot.last_pass_at`, the same
   stamp the cadence gate reads, so "since the last time it ran" cannot drift out of step with when
   it actually ran, and no second tracker exists to go stale. Insights are user-scoped, so a pass
   reads them ONCE over the widest window it could need and re-cuts that result per quest in memory
@@ -3270,8 +3271,8 @@ All notable changes to this project are documented here. The format is based on
   batch it composed before. (`tests/test_autopilot_insights.py`.)
 - **`mark_insight_acted_on` exists, and autopilot deliberately does not call it.** A pass creates a
   task; it does not do the work. Ticking the box at pass time would claim an action that has not
-  happened, and a ticked insight drops out of every unacted list — including the one the person's
-  weekly review is built from — so an insight marked acted-on for a task that is then never approved
+  happened, and a ticked insight drops out of every unacted list, including the one the person's
+  weekly review is built from, so an insight marked acted-on for a task that is then never approved
   or that fails has been silently removed from their own list with nothing to show for it. The
   method is there for a surface that knows the work actually landed, reports failure rather than
   swallowing it, and is documented with that boundary in `docs/quest-api-contract.md`.
@@ -3289,7 +3290,7 @@ All notable changes to this project are documented here. The format is based on
   `adapters.FastEditRunner` is a `DeepRunner` that takes the other path: hand the model the context
   QAR already has plus the current content of the candidate files, ask for the edit in one
   `provider.answer()` call through `MultiProvider`, apply it in process, return. The wire format is
-  chosen by file size rather than by cleverness — at or below 400 lines the model returns the
+  chosen by file size rather than by cleverness, at or below 400 lines the model returns the
   file's COMPLETE new content, whose apply step is a `write_text` and therefore cannot fail to
   apply, and above that it emits SEARCH/REPLACE blocks. The blocks are matched by CONTENT, never by
   line number: exact match, then a uniform-indent-drift match (the mistake models actually make),
@@ -3302,7 +3303,7 @@ All notable changes to this project are documented here. The format is based on
   **The write boundary is the part that got the care, not the LLM plumbing.** `adapters.FilesWriter`
   is the only component in this library that writes into a consumer's corpus (everything else that
   opens a file for writing writes QAR's own state). Its containment runs through
-  `files_adapter.resolve_in_tree` — deliberately the SAME function the read adapter resolves
+  `files_adapter.resolve_in_tree`, deliberately the SAME function the read adapter resolves
   through, extracted rather than copied, because two independent implementations of one security
   boundary is itself the risk: they drift, and only one of them gets the fix. It resolves before it
   tests, so `..` is normalized AND symlinks are followed first, and containment is
@@ -3321,7 +3322,7 @@ All notable changes to this project are documented here. The format is based on
   `WriteResult(ok=False)`, never an exception, and `ok=False` always means the file is unchanged.
 
   The runner may only touch files that were ALREADY in the turn's context: candidate paths are read
-  out of the goal/brief/preamble, resolved through the writer's boundary, and must exist — and that
+  out of the goal/brief/preamble, resolved through the writer's boundary, and must exist, and that
   candidate set is enforced again as an allow-list at apply time, so the model cannot widen its own
   blast radius. The text scan only NOMINATES; the filesystem decides. With no candidate it spends
   no model call at all and returns not-met, so the failure direction is toward the more capable
@@ -3331,7 +3332,7 @@ All notable changes to this project are documented here. The format is based on
   the only way write access is granted: no env var, no auto tri-state. Left unset, no object in the
   wired brain can modify a file, `resolve_deep_runner_ladder` returns a one-rung ladder holding
   exactly the runner the consumer already had, and behaviour is byte-for-byte what shipped before.
-  `cfg.deep_runner` deliberately keeps meaning what it meant (a single runner — consumers and both
+  `cfg.deep_runner` deliberately keeps meaning what it meant (a single runner, consumers and both
   chat UIs read it to decide whether execution is available); the ladder is the orchestrator's
   business. New: `core.adapters.FileWriter`/`FileWriterBase`/`WriteResult`,
   `config.resolve_fast_edit_runner`, `config.resolve_deep_runner_ladder`,
@@ -3358,18 +3359,18 @@ All notable changes to this project are documented here. The format is based on
   raw ANSI cursor math (`_ContextPanel`'s spinner/source panel), a raw-stdin `termios` ESC watcher,
   a `prompt_toolkit` REPL, and its own turn renderer and footer. That fallback stopped earning its
   keep: `textual` has been a CORE dependency (not an extra) since it landed, so the fallback could
-  only ever fire on a broken or unsynced install; and every UI feature since — prompt docking, clean
+  only ever fire on a broken or unsynced install; and every UI feature since, prompt docking, clean
   log routing, in-app selection and OSC-52 copy, the multi-deep dashboard, the mid-turn decision
-  prompt — had to be either written twice or silently left missing on the ANSI path. This project
+  prompt, had to be either written twice or silently left missing on the ANSI path. This project
   has decided to maintain one chat UI well rather than two unevenly, so the whole ANSI rendering
   implementation was deleted rather than deprecated.
 
   What this means in practice:
-  - `quest_ai_runner.interactive` no longer exists. The shared session brain it contained —
+  - `quest_ai_runner.interactive` no longer exists. The shared session brain it contained,
     `InteractiveSession` (orchestrator construction, persona auto-resolution, bootstrap-log
     suppression, session save/load and history, `/status`/`/tasks` bookkeeping, the model-tier menu
     data, the Quest client) plus `_Console`, `_DeepRunTracker`, `_HELP`, `_BANNER` and
-    `_SLASH_COMMANDS` — moved unchanged to **`quest_ai_runner.interactive_session`**. It sits at the
+    `_SLASH_COMMANDS`, moved unchanged to **`quest_ai_runner.interactive_session`**. It sits at the
     top level, beside `textual_ui.py` and `textual_session.py`, rather than in `core/`, because it
     wires concrete config and adapters and so belongs on the same layer as the other entry points;
     `core/` stays adapter-agnostic. Update any import of `quest_ai_runner.interactive` to
@@ -3380,7 +3381,7 @@ All notable changes to this project are documented here. The format is based on
     `PromptSession` REPL and its slash completer/history, and `InteractiveSession`'s ANSI-only
     members (`_run_turn`, `_print_turn_footer`, `_print_header`, `run`, and the five
     `prompt_toolkit`-driven pickers `_cmd_models_menu`, `_pick_from_list`, `_cmd_goal`,
-    `_cmd_quests`, `_cmd_reps` — the Textual UI has had its own native versions of all of these).
+    `_cmd_quests`, `_cmd_reps`, the Textual UI has had its own native versions of all of these).
     One latent bug goes with them: `InteractiveSession.__init__` cleared the root logger's handlers
     and installed `_PanelAwareLogHandler`, and since Textual builds the session in a background
     worker AFTER `on_mount`, that clobbered the `RichLog` handler Textual had just installed.
@@ -3399,7 +3400,7 @@ All notable changes to this project are documented here. The format is based on
 ### Changed
 - **The deep runner is resolved as an ORDERED LADDER, so escalating by runner needs no new logic.**
   `_run_deep`'s goal loop already ran an attempt, verified it against the written done-standard,
-  and retried on failure — but it escalated only by MODEL. The runner was resolved once per task
+  and retried on failure, but it escalated only by MODEL. The runner was resolved once per task
   into a single `active_runner`. It now resolves a list, and the attempt loop indexes it with the
   same `min(index, len - 1)` shape the model ladder already used, so attempt 1 runs the cheapest
   rung and a rung that fails verification hands the next attempt to the next one. A one-rung ladder
@@ -3407,7 +3408,7 @@ All notable changes to this project are documented here. The format is based on
   fell out of it: the optional-kwarg probes (`emit` / `run_id` / `context_preamble` /
   `working_dir`) are now computed PER RUNNER and cached by identity, since the rungs are different
   objects with different signatures and a probe of one says nothing about another; and the rule
-  "a hard failure with no output is terminal" now applies only when there is no further rung — it
+  "a hard failure with no output is terminal" now applies only when there is no further rung, it
   was written when a goal had one runner, so "this runner produced nothing" and "nothing more can
   be tried" were the same statement, and on a ladder a first rung that declines is precisely the
   case the next rung exists for. A pinned `runner_override` and a classifier-selected named runner
@@ -3418,8 +3419,8 @@ All notable changes to this project are documented here. The format is based on
 - **Deep execution is now ON BY DEFAULT: a consumer that does nothing gets Claude Code.**
   `RunnerConfig.deep_runner` defaulted to `None`, and nothing anywhere resolved it, so every
   consumer had to know to construct a `SubprocessGoalRunner` itself or lose deep/execution work
-  entirely. Worse, `None` meant two incompatible things at once — "I never wired one" and "I
-  deliberately want no execution" — which are indistinguishable to the library, so the forgetful
+  entirely. Worse, `None` meant two incompatible things at once, "I never wired one" and "I
+  deliberately want no execution", which are indistinguishable to the library, so the forgetful
   case got the silent-disable behaviour. That is exactly how the false "Executing: …" report above
   reached a live user: the request routed to deep, and deep had nothing to route to. The field now
   carries the same tri-state `context_assembler` has had all along: leave it unset (the
@@ -3431,11 +3432,11 @@ All notable changes to this project are documented here. The format is based on
   `QAR_CLAUDE_PATH`, with `QAR_DEEP_TIMEOUT_SECONDS` applied inside the runner), so this adds no
   new knobs. If Claude Code is not on PATH the resolution degrades the way everything else in this
   repo degrades: one loud warning naming the binary it looked for, what is now unavailable, and the
-  three ways to fix it, then no runner — never a runner that would fail on every spawn, and never
+  three ways to fix it, then no runner, never a runner that would fail on every spawn, and never
   an exception. `build_orchestrator` resolves and **writes the result back onto the config**, so
   after it runs `cfg.deep_runner` is always a real runner or a real `None`; the chat UIs and
   `derive_capabilities` read that field directly, and the sentinel must never reach them.
-  The CLI no longer builds the runner itself — it was duplicating this logic, and its
+  The CLI no longer builds the runner itself, it was duplicating this logic, and its
   `deep_runner = None` for a corpus-less run meant `qar chat` outside a corpus could never execute
   anything. (`tests/test_deep_runner_default.py`; `docs/writing-a-consumer.md`, `docs/adapters.md`.)
 
@@ -3443,7 +3444,7 @@ All notable changes to this project are documented here. The format is based on
 - **QAR can now read the person's own reflections, so "pick something based on my daily reflection"
   is a lookup instead of an apology.** Observed live: asked exactly that, an attended session
   replied that it did not have the reflection in front of it and asked the person to paste it. The
-  model was right on both counts — it needed the text and it refused to invent it — but no action
+  model was right on both counts, it needed the text and it refused to invent it, but no action
   existed that could go and get it, and `grep -rn reflection quest_ai_runner/` found nothing. Quest
   had been storing the answers all along, in two user-scoped endpoints nothing here called:
   `GET /api/daily-plan/today` (`yesterday_review`, the person's own account of how the previous day
@@ -3463,7 +3464,7 @@ All notable changes to this project are documented here. The format is based on
   `reflection_context` query kind on `QuestRetrievalAdapter`, advertised to the planner as
   `get_reflection_context` in `list_operations`/`describe_operation` the same way `goal_context` is,
   needing no goal or quest id. When nothing is on record it answers `kind="query"` with a plain
-  statement to that effect rather than `kind="error"` — an error reads as "this lookup is broken"
+  statement to that effect rather than `kind="error"`, an error reads as "this lookup is broken"
   and pushes the planner straight back into asking the human for text it has just verified does not
   exist. Autopilot reads the reflection once per pass (user-scoped, so caching it per pass rather
   than per quest is one pair of reads instead of N), derives the period order from the quest's own
@@ -3478,14 +3479,14 @@ All notable changes to this project are documented here. The format is based on
 - **A deep run can now be steered WHILE it is running, through a second, opt-in `DeepRunner`.**
   `SubprocessGoalRunner` shells out to `claude -p`: one prompt in, one blob out, nothing can reach
   the worker once it has started. So a user message that arrived mid-run could only be folded in at
-  the NEXT goal-loop attempt, which is the first moment the orchestrator gets control back — the
+  the NEXT goal-loop attempt, which is the first moment the orchestrator gets control back, the
   person watching a twenty-minute run go the wrong way had no way to say so. New
   `adapters/acp_deep_runner.py` (`AcpDeepRunner` + `AcpConfig`) runs the SAME contract over the
   Agent Client Protocol instead: a live JSON-RPC session with the Node `claude-agent-acp` agent
   (which wraps Anthropic's Claude Agent SDK), whose steering extension injects a message into the
   turn currently in flight, pre-empting the generation and slotting in between a multi-step turn's
-  tool calls. Both routes in are wired to machinery QAR already has: an `InputInbox` (`core/inbox.py`
-  — the same inbox the orchestrator drains between attempts) polled while the turn is live, and a
+  tool calls. Both routes in are wired to machinery QAR already has: an `InputInbox` (`core/inbox.py`,
+  the same inbox the orchestrator drains between attempts) polled while the turn is live, and a
   public `steer()` any thread can call. A message that arrives after the turn settled is pushed BACK
   to the queue for the next attempt rather than dropped, and the channel latches closed so a
   returned message is never re-offered on the next poll tick. This is **purely additive**:
@@ -3494,15 +3495,15 @@ All notable changes to this project are documented here. The format is based on
   (`docs/acp-deep-runner.md`; `tests/test_acp_deep_runner.py`.)
 - **That runner reuses QAR's existing vocabularies rather than inventing parallel ones.** The ACP
   `session/update` stream is translated into the `EVENT_EXEC` ticks a `claude -p` deep run already
-  emits — same event type, same `run_id`, same one-line texture (`$ pytest -q`, `Read: docs/x.md`,
-  `[thinking] …`) — so every existing consumer renders it unchanged. One trap is pinned by a test:
+  emits, same event type, same `run_id`, same one-line texture (`$ pytest -q`, `Read: docs/x.md`,
+  `[thinking] …`), so every existing consumer renders it unchanged. One trap is pinned by a test:
   a tool finishing must NOT use the phase strings `core/guard.py` treats as terminal, or one
   completed `Read` would mark the whole subgoal succeeded; tool lifecycle uses
   `tool_result`/`tool_error` and only the run's own final tick is terminal. Permission requests are
   answered from the SAME config surface the subprocess runner uses (`disallowed_tools` beats
   auto-approval, a pinned `allowed_tools` fails CLOSED on a tool the payload cannot identify,
   `skip_permissions` auto-approves), and when a human is genuinely needed the ask becomes a real
-  `EscalationSink` decision-request and the run returns `DeepResult(met=False, decision_id=…)` —
+  `EscalationSink` decision-request and the run returns `DeepResult(met=False, decision_id=…)`,
   the same `needs_you` contract the `QAR-ESCALATED:` marker gives today, which still works too. The
   tool being asked about is read from the structured `_meta.claudeCode.toolName` field, never from
   the agent-composed title (hard rule #3).
@@ -3511,7 +3512,7 @@ All notable changes to this project are documented here. The format is based on
   (and often cannot be upgraded, because other tooling depends on it). So the binary is resolved
   from `AcpConfig.node_path`, then `QAR_ACP_NODE_PATH`, then `PATH`, probed with `node --version`
   up front, and a version below the floor returns a `DeepResult` naming the version found, where it
-  was found, and the knob to set — instead of dying inside the child with an engine warning. An npm
+  was found, and the knob to set, instead of dying inside the child with an engine warning. An npm
   bin shim is resolved through its symlink to the `.js` entry and launched as `<node> <entry>`,
   because the shim's shebang would otherwise pick up whichever `node` is first on `PATH`. The agent
   program resolves the same way (`AcpConfig.agent_command`, then `QAR_ACP_AGENT_COMMAND`, then
@@ -3523,7 +3524,7 @@ All notable changes to this project are documented here. The format is based on
   connection seam, so importing `quest_ai_runner.adapters` never requires it and a deployment that
   does not use ACP pays nothing. It is not part of `[all]`, since the other half of this integration
   is an npm package pip cannot install. `tests/test_acp_deep_runner.py` runs fully offline against a
-  scripted fake connection — no package import, no process, no auth, no network — and covers the
+  scripted fake connection, no package import, no process, no auth, no network, and covers the
   interface contract, the event translation, the permission mapping, a mid-run steering injection
   actually reaching the session, and graceful degradation on a missing package, a missing binary, a
   too-old Node, a failed handshake, and a blown timeout.
@@ -3602,7 +3603,7 @@ All notable changes to this project are documented here. The format is based on
   mirror image of nested (descendant) reuse.** Nested reuse only ever looked DOWN into a corpus
   root's descendants, so a narrower root (e.g. bootstrapping a subfolder several levels below an
   already-indexed `~/hq`) could never see the wider corpus's index, since an ancestor is by
-  definition not inside `walk_root` — it re-ran full LLM topic discovery on content the wider
+  definition not inside `walk_root`, it re-ran full LLM topic discovery on content the wider
   corpus had almost certainly already indexed. Bootstrap now also walks UP through parent
   directories (bounded to 12 levels, stopping at the filesystem root either way) looking for the
   nearest ancestor with its own completed `.quest-context/bootstrap_meta.json`. When found, its
@@ -3625,7 +3626,7 @@ All notable changes to this project are documented here. The format is based on
   `Executing: CLAUDE.md's Current situation reflects that committee follow-up is paused until the
   in-person intensive with Dr. Mitchell.` Nothing had run. No deep executor was configured, no file
   was touched, and the only signal was a dim side note above it reading "(No deep executor
-  configured; cannot auto-execute)" — easy to miss under a sentence that reads like a completion
+  configured; cannot auto-execute)", easy to miss under a sentence that reads like a completion
   report. Three defects lined up to produce it, and all three are fixed at their own level rather
   than papered over in the renderer. **(1)** The orchestrator announced `Executing: <goal>` the
   instant the planner chose to execute, BEFORE checking whether anything could execute; it now
@@ -3641,7 +3642,7 @@ All notable changes to this project are documented here. The format is based on
   it now carries `NO_DEEP_EXECUTOR_TEXT`, which states plainly that nothing ran, that no files were
   changed, and what to configure. The same wording therefore reaches every consumer, not just the
   one UI that had a side note for it. Both UIs also stopped recording `Attempted: <goal>` in the
-  session history for a turn with no deep results at all — nothing was attempted, and that line is
+  session history for a turn with no deep results at all, nothing was attempted, and that line is
   read back as context by the next turn.
   (`tests/test_no_deep_executor_honesty.py`.)
 - **Autopilot tasks were titled after their persona and named it by raw id.** With no explicit
@@ -3672,32 +3673,32 @@ All notable changes to this project are documented here. The format is based on
   pairs, never the bare number, so December does not read as later than the following January.
 - **Autopilot did nothing at all, because nobody ever created the task that does the work.**
   Autopilot is implemented as a recurring assistant task (`task_kind: "autopilot"`) that the
-  executor routes to `AutopilotPass` — the design's deliberate choice, so the autonomy is visible,
+  executor routes to `AutopilotPass`, the design's deliberate choice, so the autonomy is visible,
   pausable and auditable like any other task. But creating that task was left to "a consumer", and
   no consumer ever did. Switching a quest to Suggest/Act saved the setting correctly and then
   produced silence forever, with no error anywhere to explain why. `Poller._ensure_autopilot_pass`
   now closes the loop from the runner side: any scan that finds an opted-in quest with no OPEN
   pass task creates one (daily, at `RunnerConfig.autopilot_pass_time`). The steady state costs one
-  list call per scan — the per-quest opt-in read only happens when no pass task was found. Disable
+  list call per scan, the per-quest opt-in read only happens when no pass task was found. Disable
   with `autopilot_ensure_pass_task=False` where something else owns that lifecycle.
 - **Every autopilot work batch was created against the wrong id, so none of them could be
   created.** A task's `goal_id` field holds a QUEST id (the API resolves it with `get_quest` and
   404s anything else), but `_create_batch_task` passed the first target goal's own id from
-  `list_quest_goals` — a different document with a different id. Work batches now link to the
+  `list_quest_goals`, a different document with a different id. Work batches now link to the
   quest; which goals a batch covers is carried in its text, where `compose_batch_text` already put
   it. This also repairs the backpressure gate, which looks tasks up by quest id and so could never
   have seen autopilot's own output.
 - **A suggestion could execute before the human ever saw it.** Autopilot created every task
   `queued` and PATCHed it down to `suggested` afterwards, because the create route had no `status`
   field when that code was written. Between those two calls the runner's poll could claim and run
-  the task — precisely the approval that suggest mode exists to require. The status is now
+  the task, precisely the approval that suggest mode exists to require. The status is now
   asserted at creation, so the window does not exist.
-- **Internal per-stage bootstrap/scan logs (`context index: stage N — ...`, `BM25 context index:
+- **Internal per-stage bootstrap/scan logs (`context index: stage N: ...`, `BM25 context index:
   building for the first time`, etc.) cluttered the chat transcript.** A June fix
   (`InteractiveSession.__init__` raising `quest-ai-runner.context`'s logger level to WARNING before
   `build_orchestrator()`) was removed in August when the ANSI terminal moved to a panel-aware log
   handler for a DIFFERENT problem (cursor corruption, not noise), and Textual never had an
-  equivalent — `on_mount`'s `_RichLogHandler` routes every propagated record straight into the
+  equivalent, `on_mount`'s `_RichLogHandler` routes every propagated record straight into the
   visible scrollback. Restored as `_suppress_background_bootstrap_logs()`, shared by both UIs via
   `InteractiveSession.__init__` (now covers `bm25_content_store`'s logger too, not just the context
   one), gated off when the caller passes `-v`/`-vv` so an explicit verbose request still sees them.
@@ -3734,7 +3735,7 @@ All notable changes to this project are documented here. The format is based on
 - **`GuidanceProvider.select()` could hang an entire turn indefinitely, UI-agnostic.** Unlike the
   concurrent context-assembly fetch right above it (bounded by
   `context_assembly_timeout_seconds()`), the turn-start guidance pre-selection called a
-  caller-supplied `select()` directly and synchronously with no timeout of its own — a
+  caller-supplied `select()` directly and synchronously with no timeout of its own, a
   `dynamic_guidance_loader` hitting a stuck DB/network call, or a provider's own LLM filtering pass
   inside `select()`, blocked the whole orchestrator turn loop in the SAME "Searching context…"
   status the (actually-protected) context fetch already showed, indistinguishable from that fetch
@@ -3745,7 +3746,7 @@ All notable changes to this project are documented here. The format is based on
   `select()` that raises. (`core/orchestrator.py`; `tests/test_guidance_selection_timeout.py`.)
 - **A "Sources:" header could print with nothing under it.** The Textual terminal's `EVENT_CONTEXT`
   rendering gated the header on the outer `sources` list being non-empty, but gated each line
-  separately on that source's own `items` — a source with no file-level items (e.g. a recent/card
+  separately on that source's own `items`, a source with no file-level items (e.g. a recent/card
   match) left a dangling header with an unrelated narration beat landing right after it, reading as
   broken/missing content. The per-source lines are now built first and the header is only written
   when at least one line has content. (`textual_ui.py`; `tests/test_context_sources_header.py`.)
@@ -3771,13 +3772,13 @@ All notable changes to this project are documented here. The format is based on
 - `QuestClient.create_task` gained the fields the Quest API already accepted but the client could
   not send: `status` (queued/suggested, asserted atomically at creation), `recurrence` (free text
   or a structured `{frequency, days?, time?, interval_days?}`), `scheduled_date`/`scheduled_time`,
-  and `assignee_rep_id` — which lets autopilot carry the resolved persona STRUCTURALLY instead of
+  and `assignee_rep_id`, which lets autopilot carry the resolved persona STRUCTURALLY instead of
   only naming it in prose for a consumer to parse back out.
 - **`QuestClient.create_goal` + `quest-ai-runner create-goal` CLI subcommand: create a real, typed
   Goal, not just an assistant task.** Until now the client had no goal-creation endpoint at all
   (`runner/autopilot.py`'s `_maybe_create_goal` degraded to a no-op, waiting for one to exist).
   `create_goal` POSTs to `/api/planning/goals` with a required `period` (validated client-side
-  against the five accepted formats — day/week/month/quarter/year — so a typo fails fast instead
+  against the five accepted formats, day/week/month/quarter/year, so a typo fails fast instead
   of round-tripping to a 400) and an optional `quest_id` (goals attach to a quest's shared plan
   when given, or the caller's own standalone account when omitted). Raises on failure rather than
   swallowing it, same contract as `create_task`. See `docs/quest-api-contract.md`.
@@ -3863,7 +3864,7 @@ All notable changes to this project are documented here. The format is based on
   runner-lane wrapper (`FilePredictionStore`, one JSON file per scope key under
   `.quest-context/predictions/`, and `Anticipator`). Every turn, when enabled: at TURN START
   the actual message is scored against the predictions planned after the previous turn (the
-  objective function — keyword similarity between predicted and actual text — is logged for
+  objective function, keyword similarity between predicted and actual text, is logged for
   EVERY prediction, hit or miss, to `predictions/prediction_log.jsonl`, so hit rate/mean score
   are measurable offline); a match at/above `MATCH_SERVE` seeds the turn with that prediction's
   PRECOMPUTED context as a cheap, discardable `--- ANTICIPATED CONTEXT` hint (the normal fresh
@@ -3872,11 +3873,11 @@ All notable changes to this project are documented here. The format is based on
   pattern that keeps matching drifts toward 1.0 and one that keeps missing decays toward 0.0 and
   is eventually pruned) and plans + precomputes the next turn's predictions, never blocking the
   answer. Pattern-based only: NO LLM calls anywhere in this engine. Wired into
-  `OrchestratorConfig.anticipation_enabled` (default `False` — with it off, or no `Anticipator`
+  `OrchestratorConfig.anticipation_enabled` (default `False`, with it off, or no `Anticipator`
   wired, a run is byte-for-byte identical: zero calls, zero threads, zero store files touched)
   and `config.resolve_anticipator` (built over the same `context_cards_dir` the card/recent-context
   stores use); opt in via env `QAR_ANTICIPATION=1`. Every touch point is guarded so a failure
-  degrades to the normal path — anticipation can only ever save work, never break a turn. A
+  degrades to the normal path, anticipation can only ever save work, never break a turn. A
   consumer with its own storage (e.g. an async database) reuses the pure functions directly
   instead of porting a duplicate. (`quest_ai_runner/core/anticipation.py`, wired in
   `core/orchestrator.py`, `config.py`, `cli.py`; `docs/anticipation.md`;
@@ -3916,10 +3917,10 @@ All notable changes to this project are documented here. The format is based on
   from canonical text, see below). Added an OPTIONAL one-LLM-call-per-turn refresh
   (`Anticipator.refresh`, off unless a `refiner` is wired): refines each candidate's raw
   `canonical_text` into a natural `display_text` for the chip (the canonical text itself is never
-  rewritten — it stays the scoring/linkage key), drops predictions the conversation just
+  rewritten, it stays the scoring/linkage key), drops predictions the conversation just
   obsoleted, and adds up to `MAX_FOLLOWUPS` (2) new conversational follow-up predictions. Gated by
   a new `OrchestratorConfig.anticipation_llm_enabled` / env `QAR_ANTICIPATION_LLM` (default
-  `False` — the engine stays fully model-free by default; when on, `resolve_anticipator` wires a
+  `False`, the engine stays fully model-free by default; when on, `resolve_anticipator` wires a
   refiner from `cfg.model_provider` at the `"balanced"` tier). `apply_refresh` and
   `parse_refresh_response` are pure and shared so a consumer with a centralized prompt store
   (e.g. quest-backend) can supply its own prompt and still reuse them. (`core/anticipation.py`,
@@ -4013,7 +4014,7 @@ All notable changes to this project are documented here. The format is based on
   `QuestClient.claim_task_messages` (`POST /api/assistant-tasks/{id}/messages/claim`, atomic: the
   backend stamps `delivered_at` so a re-poll returns `[]` and a message can never be folded into two
   prompts) feeds a throttled callable the executor now passes explicitly as `pending_inputs=` to
-  `Orchestrator.run()`, rather than relying on the inbox's own auto-wiring — `_conv_key` only
+  `Orchestrator.run()`, rather than relying on the inbox's own auto-wiring, `_conv_key` only
   resolves via `quest_id`/`conversation_id`/`session_id`/`user_id`, and a goal-only personal task's
   `context_meta` is just `{"goal_id": ...}`, so auto-wiring alone would never see a message for that
   case. The executor also does one drain before the first prompt (catches a message sent while the
@@ -4066,7 +4067,7 @@ All notable changes to this project are documented here. The format is based on
   `tests/test_card_filter_selection.py::TestBatchedFileRanking::test_non_numeric_scores_are_coerced_and_never_kill_the_selection`.
 - **`QdrantVectorStore` no longer creates one Qdrant collection per scope (collection sprawl),
   and scoped searches now see the shared corpus.** The store derived a collection name from a
-  hash of every distinct `scope` dict and created that collection even on mere *search* — and
+  hash of every distinct `scope` dict and created that collection even on mere *search*, and
   since `VectorContextAssembler.assemble()` forwards its `meta` dict (e.g. the executor's
   per-goal `{"goal_id": ...}`) straight through as scope, every distinct goal/conversation left
   a permanent empty collection on the shared Qdrant server (observed: 327 empty collections,
@@ -4090,7 +4091,7 @@ All notable changes to this project are documented here. The format is based on
   the same shared server used to collide on one collection: whichever config created it pinned
   the dimension, and every write from the other config was declined point-by-point server-side
   ("Vector dimension error: expected dim: 384, got 1024") while the never-raises contract kept
-  callers oblivious — observed live against a shared dev server. Worse, `vector_size` was only
+  callers oblivious, observed live against a shared dev server. Worse, `vector_size` was only
   a declaration: the auto-wired Voyage/OpenAI embedder paths never set it, so the store could
   create a 384-d collection and then embed 1024-d vectors into it. The unified collection is
   now named `{prefix}_default_{size}`, the store adopts the REAL dimension observed from
@@ -4133,7 +4134,7 @@ All notable changes to this project are documented here. The format is based on
   `QAR_MODEL_BACKEND=claude_cli` and no tier overrides, `ModelRegistry`'s generic last-known
   defaults resolve the fast/balanced/quality tiers to Gemini ids; the orchestrator's
   provider-routing then found no Gemini provider, fell back to the primary claude_cli provider,
-  and passed the Gemini id straight to `claude --model` — which exits 1 having done nothing, so
+  and passed the Gemini id straight to `claude --model`, which exits 1 having done nothing, so
   EVERY queued task failed at its first planner call. `cli_model()` now applies the same gate the
   deep runner's `_is_claude_model` has always applied: a non-Claude id maps to `None` (the CLI's
   default model) instead of leaking into `--model`. Additionally, `_invoke` no longer reports a
@@ -4143,20 +4144,20 @@ All notable changes to this project are documented here. The format is based on
 
 - **Socket-level transport errors no longer escape `QuestClient` raw.** `_request` wrapped only
   `HTTPError`/`URLError`, but a read that times out (or a connection reset) escapes `urlopen` as
-  a RAW `TimeoutError`/`OSError` — blowing through every "never raises" caller contract (e.g. the
+  a RAW `TimeoutError`/`OSError`, blowing through every "never raises" caller contract (e.g. the
   fast lane's `wait_for_interactive`) and spamming the poller log with a full traceback per
   iteration. These now wrap into `QuestApiError` like every other transport failure, so callers
   degrade calmly and retry. (`quest_ai_runner/runner/quest_client.py`.)
 
 - **A budget-capped CHANGE REQUEST escalates to deep instead of wrapping up with words.** The
   read-budget fallback answered with a best-effort reply whenever ANY observation had been
-  gathered — even for an explicit "do X" task with escalation available — and that reply path
+  gathered, even for an explicit "do X" task with escalation available, and that reply path
   returns early, bypassing the `_answer_describes_unexecuted_work` net that guards the normal
   answer path. Caught live by an artifact-verified reliability battery (2026-07-19): a
   write-a-file probe was answered "I cannot execute this task in the read-and-answer step …
   the system will need to execute the following …" and reported `done` with nothing executed.
   Now `_message_requests_change` gates the wrap-up: a change request escalates to deep (brainstorm
-  mode unchanged — escalation is unavailable there by design). The classifier also learned two
+  mode unchanged, escalation is unavailable there by design). The classifier also learned two
   confession shapes it missed: "I cannot execute/run …" and "the system will need to execute/
   write …". (`quest_ai_runner/core/orchestrator.py`.)
 
@@ -4178,14 +4179,14 @@ All notable changes to this project are documented here. The format is based on
   (`quest_ai_runner/runner/quest_client.py`.)
 
 ### Added
-- **`GoogleDriveAdapter`** (`quest_ai_runner/adapters/google_drive_adapter.py`) — a generic
+- **`GoogleDriveAdapter`** (`quest_ai_runner/adapters/google_drive_adapter.py`), a generic
   `RetrievalAdapter` over Google Drive files and folders, mirroring `GoogleChatAdapter` exactly:
   auth is injected via a token provider (reuses `google_chat_adapter`'s `service_account_token_provider`
   / `static_token_provider`, not duplicated; pass `scopes=DEFAULT_DRIVE_SCOPES`), HTTP is
   stdlib-only, and every method returns `Observation(kind="error")` rather than raising.
   `query({"action": "list", "folder_id": ...})` lists a folder's direct children (id, name,
   mimeType, webViewLink, modifiedTime, size); `query({"action": "read", "file_id": ...})` reads a
-  file's text content — Google Docs export as plain text, Google Sheets export their FIRST sheet as
+  file's text content, Google Docs export as plain text, Google Sheets export their FIRST sheet as
   CSV (a documented limitation), PDFs are extracted via the optional `pypdf` package (new `[drive]`
   extra; lazy-imported so it's never a hard dependency), and plain-text mimeTypes are decoded as
   UTF-8; any other mimeType returns a clear "not supported yet" error instead of raw binary.
@@ -4199,7 +4200,7 @@ All notable changes to this project are documented here. The format is based on
   `list_operations`/`describe_operation`) follows the same tone as the other adapters.
   (`quest_ai_runner/adapters/google_drive_adapter.py`, exported from `adapters/__init__.py`;
   `pyproject.toml` `[drive]` extra; tests in `tests/test_google_drive_adapter.py`.)
-- **`GoogleDriveAdapter.query()` now accepts pasted URLs, not just bare ids** — `folder_id` (for
+- **`GoogleDriveAdapter.query()` now accepts pasted URLs, not just bare ids**: `folder_id` (for
   `action: "list"`) and `file_id` (for `action: "read"`) are each resolved via `parse_drive_url`
   before use, exactly like `read_section` already did. Previously only `read_section` accepted a
   raw Drive/Docs/Sheets URL; a consumer whose planner only ever calls `query()` (e.g. one source
@@ -4231,16 +4232,16 @@ All notable changes to this project are documented here. The format is based on
   why, now)`. Nothing in the module hardcodes `"conversation"` / `conv_id`: the caller supplies the
   `ref_type`, a `locator_fn(candidate) -> dict`, and the `why`, and any card store duck-typed like
   `FileContextStore` (`get_card` / `update_card` / `mark_sources_used`) participates. Behavior is
-  unchanged — `ClaudeConversationsAdapter` now delegates to the shared functions. (`google_chat_adapter`
-  now adopts this too — see the reference-resolution capability entry below.)
+  unchanged, `ClaudeConversationsAdapter` now delegates to the shared functions. (`google_chat_adapter`
+  now adopts this too, see the reference-resolution capability entry below.)
   (`quest_ai_runner/adapters/card_scoped_learning.py`, `claude_conversations_adapter.py`,
   `google_chat_adapter.py`.)
-- **Reference resolution is now a formal, checkable `RetrievalAdapter` capability — and Google Chat is
+- **Reference resolution is now a formal, checkable `RetrievalAdapter` capability, and Google Chat is
   wired through it.** "Can this adapter's content be persisted as a learned card reference and
   re-fetched fresh later?" was tribal knowledge (you had to read code); the one `conversation` resolver
   was hard-wired to local Claude session files. `core.adapters.RetrievalAdapter` (and its ABC
-  `RetrievalAdapterBase`) now carry three optional members — `reference_type: Optional[str]`,
-  `make_locator(candidate) -> dict`, `resolve_reference(locator, *, max_chars) -> Optional[str]` — the
+  `RetrievalAdapterBase`) now carry three optional members, `reference_type: Optional[str]`,
+  `make_locator(candidate) -> dict`, `resolve_reference(locator, *, max_chars) -> Optional[str]`, the
   same optional-capability convention `query()` already uses (NO second protocol). The ABC default is
   `reference_type = None`, so every existing adapter is structurally "unsupported" untouched, and the
   whole check is `adapter.reference_type is not None`. `ClaudeConversationsAdapter` formalizes its
@@ -4265,8 +4266,8 @@ All notable changes to this project are documented here. The format is based on
   (a) WIDENS the relevance gate to the union of the query terms and the card's own topic terms (so a
   conversation about the card's idea surfaces even when it doesn't match this turn's wording), and
   (b) for the selected conversations relevant to BOTH the request and the card, attaches each as a
-  `conversation` reference via `FileContextStore.update_card` and stamps it via `mark_sources_used`
-  — so recall participates in the SAME usage-recency retrieval that files and collections already
+  `conversation` reference via `FileContextStore.update_card` and stamps it via `mark_sources_used`,
+  so recall participates in the SAME usage-recency retrieval that files and collections already
   get, and future turns retrieve it by recency instead of re-scanning. With no active card (or no
   store) it degrades to the exact prior global keyword + TF-DF-IDF scan. Re-selecting the same
   conversation on a later turn re-warms the existing reference (dedupe by `conv_id`) rather than
@@ -4434,7 +4435,7 @@ All notable changes to this project are documented here. The format is based on
   `docs/writing-a-consumer.md`.
 - **Autopilot pass (`runner/autopilot.py`).** A new `AutopilotPass`, routed by the executor for
   any task whose **`task_kind == "autopilot"`** (a recurring pass task). Routing reads `task_kind`,
-  the backend's PERSISTENT classification, never `handler` — the poller overwrites `handler` on
+  the backend's PERSISTENT classification, never `handler`, the poller overwrites `handler` on
   every `claim()` with the claiming worker's label, so a re-polled/retried/resumed pass task would
   otherwise stop routing (`handler == "autopilot"` is still honored as a back-compat fallback).
   Scans a team's quests whose `autopilot.mode` is `suggest`/`act`; gates each quest, cheapest first
@@ -4456,7 +4457,7 @@ All notable changes to this project are documented here. The format is based on
     reading opt-in from it would treat every quest as `off` forever.
   - Created work carries `task_kind="autopilot_work"` (**not** the pass's own kind, which would
     route each created task into another pass: an infinite loop). `source` stays within the API's
-    closed enum (`chat`/`reflection`/`review`) — `source="autopilot"` is rejected with a 400.
+    closed enum (`chat`/`reflection`/`review`), `source="autopilot"` is rejected with a 400.
   - The create route has no `status`, `quest_id`, or persona field: `suggested` is reached by
     create-then-PATCH (`QuestClient.update_task`, which raises on failure so an unapproved
     proposal can never silently stay queued and execute), a task's `goal_id` **is** its quest link,
@@ -4921,7 +4922,7 @@ All notable changes to this project are documented here. The format is based on
   `Poller.run_once()` calls a new `_sync_all_quest_folders()` that syncs EVERY entry in
   `cfg.quest_folder_map` on every scan (best-effort per entry; one bad folder never blocks the
   others or the scan), so the standing `poll`/systemd/cron process keeps every mapped quest
-  folder's `QUEST_SYNC.md` current on its own poll cadence with no task required — the previous
+  folder's `QUEST_SYNC.md` current on its own poll cadence with no task required, the previous
   task-scoped pre-run pull / post-run push hooks still fire additionally, right around a matching
   task, for freshest-at-execution-time behavior. `quest_folder_map` and
   `quest_folder_sync_direction` are now also settable without writing consumer code, via new env
@@ -4965,7 +4966,7 @@ All notable changes to this project are documented here. The format is based on
   docstring). See `docs/quest-api-contract.md` ("Fast lane for interactive tasks").
 - **Query-aware retrieval routing: structured constraints, filter-capable stores, a planner-visible
   filtered query.** Some requests name an explicit time period, topic, who, or kind of content
-  ("what did we finish last Wednesday?") — relevance-only ranking under-serves these. The SAME
+  ("what did we finish last Wednesday?"), relevance-only ranking under-serves these. The SAME
   goal-condition-derivation call `Orchestrator._derive_goal_condition` already makes for a
   self-contained message now ALSO parses OPTIONAL structured retrieval constraints
   (`time_range`/`topic_terms`/`actor`/`content_kind`) from its one reply (no new LLM call); new pure
@@ -4985,7 +4986,7 @@ All notable changes to this project are documented here. The format is based on
   structural "kind" to check). `ConversationContext` gains `degraded_note`. The reference
   `ClaudeConversationsAdapter.query` applies the same `time_range` hard-filter-then-degrade rule.
   Planner-visible: `time_range`/`topic_terms`/`actor`/`content_kind` are new generic, optional
-  `reads[]` properties in `DECIDE_TOOL`'s schema, documented in the planner prompt — since
+  `reads[]` properties in `DECIDE_TOOL`'s schema, documented in the planner prompt, since
   `_exec_one_read` already forwards the whole read spec to `RetrievalAdapter.query(spec)`
   unchanged, no new dispatch path was needed, so the brain can make a targeted, filtered retriever
   call mid-run (the same widening loop that already exists for reads) with zero core plumbing
@@ -5105,9 +5106,9 @@ All notable changes to this project are documented here. The format is based on
   correlate a chat progress post back to the task it belongs to. `TaskExecutor` now passes the
   task's own id on every started/progress/done/decision message it posts into the chat.
 - **The goal/claims verification judge now runs at a strong tier, with a risk-managed fallback.**
-  New `OrchestratorConfig.verify_tier` (default `"best"`): `_verify_goal` — the ONE small,
+  New `OrchestratorConfig.verify_tier` (default `"best"`): `_verify_goal`, the ONE small,
   hard-capped call whose verdict gates the whole turn (met/not-met decides done vs
-  needs_you/failed; `claims_unexecuted` decides honesty remediation) — resolves its model from
+  needs_you/failed; `claims_unexecuted` decides honesty remediation), resolves its model from
   this tier instead of the mid `planner_tier`, routed via `get_provider_for_model` like the
   overseer. Spend the strong model on judgment, keep cheap tiers for gathering: a wrong verdict
   either ships a false "done" or triggers a full regeneration / deep re-run, both costlier than
@@ -5299,7 +5300,7 @@ All notable changes to this project are documented here. The format is based on
   safety nets) all tested `self.deep_runner is not None`. That was correct for the single-runner
   wiring style, but a consumer using the newer named registry (`deep_runner=None` plus
   `deep_runners`/`deep_runner_classifier`, e.g. one runner for in-app data ops and one for
-  open-ended tasks) has real execution capability that these checks didn't see — so a `deep` plan,
+  open-ended tasks) has real execution capability that these checks didn't see, so a `deep` plan,
   or a safety net trying to defer to `deep` after an answer merely described the action, silently
   did nothing. Separately, the emit/run_id/context_preamble capability checks were computed against
   `self.deep_runner` (always `None` for a named-registry consumer) instead of the runner actually
@@ -5401,7 +5402,7 @@ All notable changes to this project are documented here. The format is based on
 ### Fixed
 - **Terminal UI: mouse-wheel scrolling works again, and text selection works without Shift.** The
   Textual app was launched with `.run(mouse=False)` (added so the terminal could do native drag-to-
-  select), which disables ALL mouse reporting — so the scroll wheel did nothing and the
+  select), which disables ALL mouse reporting, so the scroll wheel did nothing and the
   `on_mouse_scroll_*` handlers never fired. A Textual app runs in the alternate-screen buffer where
   the terminal has no scrollback of its own, so the app must consume wheel events itself, which
   requires mouse reporting on. It now launches with `mouse=True` (Textual's default), so: the wheel
@@ -5412,13 +5413,13 @@ All notable changes to this project are documented here. The format is based on
   copies the last AI reply. Tested in `tests/test_copy_or_quit.py`.
 - **Terminal UI: click anywhere to start typing.** The transcript (a `RichLog`) and the scrollable
   side panels are focusable by default, so clicking them moved keyboard focus off the message input
-  and keystrokes went to the transcript instead of the prompt — you had to click precisely in the
+  and keystrokes went to the transcript instead of the prompt, you had to click precisely in the
   input to type. The transcript is now non-focusable, and an app-level `on_click` sends focus back to
   the prompt for any click (covering the still-focusable side panels), so a click anywhere leaves the
   cursor in the message box. Wheel scroll, PageUp/PageDown, and drag-to-select are all unaffected.
   Tested in `tests/test_click_focus.py`.
 - **Terminal UI: drag-to-select and copy the transcript actually works now.** A stock `RichLog`
-  stores pre-rendered `Strip`s and its `render_line` returns them verbatim — it never paints
+  stores pre-rendered `Strip`s and its `render_line` returns them verbatim, it never paints
   Textual's `screen--selection` highlight and its text extraction doesn't fire, so dragging over the
   transcript did *nothing* (no highlight, no copy), regardless of terminal/tmux native-selection
   behavior. `TranscriptLog` now implements selection itself: it captures the mouse on press, tracks
@@ -5434,7 +5435,7 @@ All notable changes to this project are documented here. The format is based on
   (wl-copy/xclip/xsel) first for a definite success; fall back to tmux-aware OSC-52
   when no tool is installed (works over SSH if the terminal supports OSC-52); and show
   ephemeral toasts (2.5 second notifications, not scrollback) with clear status ("Copied:
-  clipboard" vs. "sent to terminal — install wl-clipboard/xclip if paste fails"). The
+  clipboard" vs. "sent to terminal, install wl-clipboard/xclip if paste fails"). The
   robustness is unified in `QuestAITerminal._copy_text()` and `_emit_osc52()`, shared by
   both Ctrl+Y (last reply) and drag-select (transcript selection).
 - **`ClaudeConversationsAdapter` now wired into the default retrieval stack.** The adapter was fully
@@ -5615,7 +5616,7 @@ All notable changes to this project are documented here. The format is based on
 - **Direct follow-ups are answered from the conversation instead of triggering a fresh corpus
   search.** When a user asked a follow-up whose answer the assistant had JUST given (e.g. it
   described a plan and its file path, then the user asked "what's the filepath?"), the planner still
-  ran a full read/grep loop over the corpus — slow, and pointless because the answer was already in
+  ran a full read/grep loop over the corpus, slow, and pointless because the answer was already in
   the transcript it was handed. The planner prompt now leads with a TRANSCRIPT-FIRST principle:
   before choosing `read`, check the RECENT TRANSCRIPT and GATHERED, and if the answer is already
   there (the common direct-follow-up case) answer straight from it; only `read` when the current
@@ -5627,14 +5628,14 @@ All notable changes to this project are documented here. The format is based on
 - **Capability/discovery menus no longer pollute the answer (the planner stops answering from the
   operations list).** The auto-injected `list_operations` menu (and any `list_sources`/`describe_*`
   discovery read) was added to `gathered` and rendered to the answer LLM as "ACTUAL CONTENT READ FOR
-  THIS ANSWER" — so for a substantive request the model answered FROM the menu ("I have these
+  THIS ANSWER", so for a substantive request the model answered FROM the menu ("I have these
   operations; shall I run discover_goals / grep?") instead of gathering the real material (codebase,
   conversation). Discovery observations are now tagged (`discovery: true`) at the read site and: (1)
-  excluded from the answer grounding entirely (`_grounding_block`) — when only a menu was gathered,
+  excluded from the answer grounding entirely (`_grounding_block`), when only a menu was gathered,
   there is no answer-content section, so the model grounds on real context or says it lacks it; (2)
   excluded from a single-goal deep run's `context_preamble` (the worker has its own tools and does
   not need the orchestrator's operations menu); (3) relabeled in the planner/worker view as
-  "AVAILABLE CAPABILITIES — a MENU of what you can call, NOT content"; and (4) the planner prompt now
+  "AVAILABLE CAPABILITIES, a MENU of what you can call, NOT content"; and (4) the planner prompt now
   states a capability listing is not "real content" and it must read actual sources before
   answering. Regression test `test_discovery_listing_is_not_answer_grounding_content`.
 
@@ -5645,7 +5646,7 @@ All notable changes to this project are documented here. The format is based on
 - **A deferred deep run's output is now folded into the final answer, instead of being discarded.**
   When the planner routed to `answer` but the turn then escalated to a deferred deep run (because the
   message requested a change, or the answer only described unexecuted work), the deep worker did the
-  real work but the user-facing reply stayed the pre-deep proposal — typically a "shall I proceed?"
+  real work but the user-facing reply stayed the pre-deep proposal, typically a "shall I proceed?"
   stub with zero awareness of what the deep run produced. The deliverable was emitted only as a side
   milestone (which some consumers, e.g. the Textual UI, truncate to its first sentence), so the real
   result was effectively lost and the turn looked like it stopped to ask permission for work it had
@@ -5667,10 +5668,10 @@ All notable changes to this project are documented here. The format is based on
 - **The planner now distinguishes a QUESTION from a COMMAND, so asking ABOUT something is answered
   instead of being executed as a task.** Routing was keyword-driven: a message containing an action
   verb ("fix", "add", "change", "build", "update", "show"…) was treated as work to do, even when the
-  user was only ASKING — "how would I add a field?", "what would it take to fix the back button?",
+  user was only ASKING, "how would I add a field?", "what would it take to fix the back button?",
   "should we refactor this?" These were mis-handled as deep tasks instead of being answered. Two
   changes fix it: (1) the `PLANNER_PROMPT` now opens with an explicit QUESTION-vs-COMMAND gate that
-  decides intent BEFORE the code-change rule — an interrogative ("how/what/why/should we/is it…") or
+  decides intent BEFORE the code-change rule, an interrogative ("how/what/why/should we/is it…") or
   a "?" message that asks about something is a QUESTION → answer; a plain or polite imperative ("fix
   X", "can you add…", "please update…") is a COMMAND → deep; when torn, answer. (2) the message-intent
   escalation fallback `_message_requests_change()` no longer auto-escalates a question that merely
@@ -5684,7 +5685,7 @@ All notable changes to this project are documented here. The format is based on
   does not execute inline but queues the real run to finish out-of-band (e.g. a chat runner that
   creates a tracked task and returns a `DeepResult(met=True, output="task #N launched")` sentinel)
   was being re-verified by the deep-goal loop: the verifier judged the sentinel `output` against
-  the goal, found it not-met, escalated the model and RELAUNCHED a fresh task — every iteration, up
+  the goal, found it not-met, escalated the model and RELAUNCHED a fresh task, every iteration, up
   to `deep_goal_max_iterations`. The result was N phantom tasks per message and a stream that ended
   in error with no reply. `DeepResult` gains a `deferred: bool = False` flag; when a run is
   `deferred`, the goal loop TRUSTS its `met` and stops (no re-verify, no relaunch). The real outcome
@@ -5739,7 +5740,7 @@ All notable changes to this project are documented here. The format is based on
     message + recent conversation + persona, and (having read nothing yet) claims no findings, so it
     cannot fabricate. HOW it speaks is overridable by the consumer via `narration_system_prompt`
     (the persona is layered on top).
-  - **Every later beat is the planner's OWN `rationale`** — when narrating, the planner writes its
+  - **Every later beat is the planner's OWN `rationale`**: when narrating, the planner writes its
     `rationale` field as a short, spoken, in-persona line about what it is doing/noticing now,
     grounded in the gathered observations, in the planning call it ALREADY makes (Approach B: zero
     extra LLM call). The orchestrator relays it via `Narrator.relay()` at read/deep stages, so the
@@ -5775,12 +5776,12 @@ All notable changes to this project are documented here. The format is based on
 - **Generic Qdrant-backed card persistence: `QdrantCardRepository` + `QdrantCardVectorStore`
   (`adapters/qdrant_card_repository.py`, behind the `[qdrant]` extra).** A reusable
   `CardRepository` that persists context cards as points in ONE Qdrant collection (no `cards_dir`),
-  so any consumer can store cards in Qdrant by wiring config/connection only — no consumer
+  so any consumer can store cards in Qdrant by wiring config/connection only, no consumer
   reimplements a card repo. The connection mirrors `QdrantVectorStore`: pass an existing `client=`,
   OR `url=`/`api_key=` for a server, OR neither for an EMBEDDED local Qdrant under `path`. It takes
   an `embedder` callable (`texts -> vectors`, e.g. `make_voyage_embedder`), a `collection`, a
   `vector_size`, and an OPTIONAL `scope` dict (payload key/values for multi-tenant isolation, e.g.
-  `{"user_id": ...}`) — every read/write/delete/search is filtered by `scope` so a scoped card
+  `{"user_id": ...}`), every read/write/delete/search is filtered by `scope` so a scoped card
   never leaks. `write` derives the card's embed-text via the NEW shared `card_embed_text` helper
   (so it MATCHES `FileContextStore.export_for_embedding`), embeds it ONCE, and upserts one point
   `{id from (scope, card_id), vector, payload: card + scope + a flat _search_text field}`;
@@ -6008,7 +6009,7 @@ All notable changes to this project are documented here. The format is based on
   over-long summary at the single boundary to Quest, so any caller's summary is bounded.
 
 ### Changed
-- `FileContextStore.bootstrap()`: now uses an LLM (via the wired `ModelProvider`) to identify semantic topic cards across the codebase — a topic can span files from completely separate directories. The number of cards reflects the natural structure of the codebase, not a preset range. Without a provider, bootstrap is a no-op (cards accumulate via `record()` instead).
+- `FileContextStore.bootstrap()`: now uses an LLM (via the wired `ModelProvider`) to identify semantic topic cards across the codebase, a topic can span files from completely separate directories. The number of cards reflects the natural structure of the codebase, not a preset range. Without a provider, bootstrap is a no-op (cards accumulate via `record()` instead).
 - **Bootstrap Stage 3 now dedups via keyword-clustering + an LLM merge decision** (replaces the old Jaccard file-overlap merge). Cards that share at least 2 keywords are clustered transitively (union-find); each multi-card cluster gets ONE LLM call asking which cards describe the same concept and should be merged. New cards are also deduped against the cards already on disk, folding a duplicate new card into the existing card's id rather than writing a divergent one. With no provider it falls back to a keyword-union merge (Jaccard >= 30%).
 - **`FileContextStore.bootstrap()` is now INCREMENTAL.** It diffs the walked files against the existing cards: only files referenced by NO card (uncovered) drive a fresh 3-stage LLM fan-out, and only cards whose pinned files changed (stale) are regenerated. When everything is covered and unchanged the bootstrap is a no-op returning 0. (A second `bootstrap()` over an unchanged corpus therefore returns 0, not the card count.)
 - `_walk.py`: add `site-packages` to `_BASE_SKIP_DIRS`
@@ -6040,7 +6041,7 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 - **`quest-ai-runner bootstrap` CLI subcommand.** Builds or refreshes the context card store for a corpus on demand: `--corpus PATH` (default `QAR_CORPUS_ROOT` or cwd) and `--cards-dir PATH` (default `QAR_CONTEXT_CARDS_DIR` or `<corpus>/.quest-context`). Uses the env-selected model provider, runs the incremental bootstrap, and prints the card count.
 - **Bootstrap version metadata + auto re-index.** A successful `bootstrap()` writes a `bootstrap_meta.json` sidecar to the cards dir recording the bootstrap algorithm version, card count, and UTC completion time. On startup, `_bootstrap_if_needed` compares the stored version against the current `_BOOTSTRAP_VERSION`: when the stored cards were built by an older algorithm it re-indexes the corpus in the background (chat stays available immediately) instead of only refreshing stale cards.
-- **`quest-ai-runner chat` — a polished interactive (attended) session.** A multi-turn REPL over
+- **`quest-ai-runner chat`, a polished interactive (attended) session.** A multi-turn REPL over
   the orchestrator brain that streams every `ProgressEvent` to the terminal in real time, keeps a
   rolling transcript so follow-ups share context, and attaches results to a Quest goal with
   `--goal-id` (or `/goal <id>` mid-session). The UX is built for daily use: an animated spinner runs
@@ -6052,11 +6053,11 @@ All notable changes to this project are documented here. The format is based on
   loop checks), Ctrl+C clears the input line without exiting, and Ctrl+D exits. A short header shows
   the goal id (when set) and the shortcuts. The session lives in `quest_ai_runner.interactive`
   (`start_interactive` / `InteractiveSession`). The `[tui]` extra now also pulls in `rich` (alongside
-  `prompt_toolkit`) for the rendering; both are OPTIONAL — the session degrades to plain
+  `prompt_toolkit`) for the rendering; both are OPTIONAL, the session degrades to plain
   `input()`/`print()` (no spinner animation, best-effort keys) when neither is installed, via the
   `_HAS_PROMPT_TOOLKIT` / `_HAS_RICH` pattern. Generic and consumer-free: it only talks to the brain
   through `run_stream`.
-- **`quest-ai-runner send "<task text>"`** — enqueue a new AI task from the CLI and print its id.
+- **`quest-ai-runner send "<task text>"`**: enqueue a new AI task from the CLI and print its id.
   Routes to `QUEST_TEAM_ID` by default (override with `--team-id`), optionally attaches to a goal
   (`--goal-id`) and schedules a future run (`--at <ISO-8601 UTC>`); omit `--at` to run at the next
   poll.
@@ -6073,8 +6074,8 @@ All notable changes to this project are documented here. The format is based on
   earlier iteration gated on regexes and missed real replies like "I have now directly updated
   and written the changes to <file>"). On an unbacked claim the loop AUTO-REMEDIATES: it executes
   the work for real via a deep run, but ONLY when nothing actually executed this turn (no success
-  AND no failure recorded) — an action that already ran, succeeded or failed, is NEVER re-run,
-  since host actions are not guaranteed idempotent (the double-mutation safeguard) — then folds
+  AND no failure recorded), an action that already ran, succeeded or failed, is NEVER re-run,
+  since host actions are not guaranteed idempotent (the double-mutation safeguard), then folds
   the real output back into the reply and re-verifies. Otherwise the reply is regenerated to be
   honest (no false success) and the result is flagged `claim_corrected` / `partial`;
   `TaskExecutor._report` maps a `claim_corrected` background-task answer to `needs_you` instead
@@ -6095,7 +6096,7 @@ All notable changes to this project are documented here. The format is based on
   IS the answering provider.
 
 ### Added
-- **Optional `GuidanceProvider` adapter — retrievable USE-CASE-SPECIFIC instructions.** A host app
+- **Optional `GuidanceProvider` adapter, retrievable USE-CASE-SPECIFIC instructions.** A host app
   can now keep its ALWAYS-ON core prompt small by moving instructions that apply to only SOME inputs
   (product facts, feature-flow guides, behavior policies) out of the static prompt and into a
   retrievable corpus of opaque "guidance cards" (`GuidanceCard{id, title, relevance, body}`). The
@@ -6107,7 +6108,7 @@ All notable changes to this project are documented here. The format is based on
   `context_view` (the same compose order the `ContextAssembler` uses), and the planner gains two
   discovery verbs, `list_guidance` / `read_guidance`, that flow through the SAME observation
   machinery as a read. A `read_guidance` for a card already pre-selected this turn returns a short
-  de-dupe note instead of re-injecting the body. Cards are OPAQUE to the brain — it stays
+  de-dupe note instead of re-injecting the body. Cards are OPAQUE to the brain, it stays
   app-agnostic. Purely additive: a consumer that supplies no `GuidanceProvider` sees byte-for-byte
   today's behavior (no block, no new verbs in effect). `OrchestratorConfig.guidance_topk` (default
   3) tunes how many cards are pre-selected.
@@ -6182,16 +6183,16 @@ All notable changes to this project are documented here. The format is based on
   (`_PLANNER_HEAD`, `_PLANNER_ACTIONS`, `_PLANNER_TAIL`) plus the two gate strings, keeping the
   `.format()` call in `_plan()` unchanged.
 
-- **Multimodal (image) + file-attachment support (the runner owns multimodal)** — the text
+- **Multimodal (image) + file-attachment support (the runner owns multimodal)**: the text
   provider does not do multimodal, so the runner does. A new standard handler
   `core/attachments.py` (`prepare_attachments(attachments, *, model, provider, vision_provider,
   vision_model, max_attachment_bytes)`) takes in-memory attachment items
-  (`{filename, mime_type, data: bytes, kind: "image"|"file"}` — the SAME shape for chat uploads
+  (`{filename, mime_type, data: bytes, kind: "image"|"file"}`, the SAME shape for chat uploads
   and panel context-docs) and, per the answering model/provider, EITHER passes an image NATIVELY
   (base64 content block) when the model is vision-capable and the provider can send blocks, OR
   DESCRIBES it with a separate vision-capable provider (centralized `DESCRIBE_PROMPT`), OR
   extracts a non-image file's text best-effort by type (txt/md/csv/json/code direct; pdf/docx via
-  an optional light extractor if installed; any other type accepted with a clear binary note —
+  an optional light extractor if installed; any other type accepted with a clear binary note,
   never raises). Returns `native_blocks` (for the answer) and `text_context` (for the planner +
   grounding). A new vision-capability seam `model_registry.is_vision_capable(model)` (keyed by
   model FAMILY via `VISION_FAMILY_PATTERNS`: Claude 3.x/4.x, Gemini 1.5/2.x/3.x, gpt-4o/4.1/
@@ -6206,19 +6207,19 @@ All notable changes to this project are documented here. The format is based on
   processed CONCURRENTLY. Offline tests cover the capability map, the SDK image passthrough, the
   CLI degrade, native vs describe vs extract vs oversize vs unknown-binary, and the orchestrator
   threading.
-- **Deep-run escalation marker (`QAR-ESCALATED: <decision_id>`)** — a spawned deep worker that
+- **Deep-run escalation marker (`QAR-ESCALATED: <decision_id>`)**: a spawned deep worker that
   raises a human-only decision mid-run (via whatever escalation mechanism its consumer preamble
   provides) can now report it back to the runner by printing `QAR-ESCALATED: <decision_id>` on its
   own line. `SubprocessGoalRunner` parses the marker (new `ESCALATION_MARKER` /
   `extract_escalation_id` in `core/goal_runner.py`, exported from `core`) and returns
   `DeepResult(met=False, decision_id=...)` regardless of exit code, so the executor reports the
-  task as `needs_you` with the decision linked — the ask surfaces in the consumer's UI attached to
+  task as `needs_you` with the decision linked, the ask surfaces in the consumer's UI attached to
   the paused task instead of the task closing as done/failed. `GoalRunner.run` also normalizes
   `met=True` + `decision_id` to not-met so a custom runner can never report a paused run as done.
   Workers that never print the marker behave exactly as before. Offline tests cover marker parsing
   (last-marker-wins, bare marker ignored), the subprocess runner, the normalization, and the
   executor's `needs_you` report + chat post.
-- **Configurable planner tier + answer timeout (env)** — the CLI now reads two optional env vars so
+- **Configurable planner tier + answer timeout (env)**: the CLI now reads two optional env vars so
   a consumer can tune the brain without code: `QAR_PLANNER_TIER` sets the model tier for the planner
   step that picks read/answer/deep (default stays the cheap `haiku`; raise to e.g. `sonnet` when
   tasks are mostly real work so answer-vs-deep routing is decided by a more capable model), and
@@ -6226,7 +6227,7 @@ All notable changes to this project are documented here. The format is based on
   above its conservative 180s default (headless completions over a large corpus can exceed it).
   Both are plumbed through existing config (`RunnerConfig.orchestrator.planner_tier`,
   `ClaudeCliProvider.timeout_seconds`); absent = prior behavior.
-- **Per-run model hint** — callers can now pass an opaque `model_hint` string to
+- **Per-run model hint**: callers can now pass an opaque `model_hint` string to
   `Orchestrator.run()` and `Orchestrator.run_stream()` to override the tier used for answer and
   deep steps in that run. The hint is consumer-defined: a tier name, or any string the consumer's
   `ModelRegistry` understands. The registry resolves it exactly as it resolves a planner-chosen
@@ -6241,7 +6242,7 @@ All notable changes to this project are documented here. The format is based on
   reaches `provider.answer`, absent hint leaves planner tier unchanged, hint on a deep step,
   unknown hint degrades gracefully, executor task-model field is forwarded, explicit `None` is
   treated as absent, and the full poller path.
-- **Discovery contract on retrieval adapters** — `RetrievalAdapter` gains four optional discovery
+- **Discovery contract on retrieval adapters**: `RetrievalAdapter` gains four optional discovery
   methods (`list_sources`, `describe_source(name, path=None)`, `list_operations`,
   `describe_operation(name)`) that make a source self-describing, so the planner asks what exists
   instead of needing a static schema blob in its prompt. The pattern is cheap-then-drill-down: a
@@ -6255,20 +6256,20 @@ All notable changes to this project are documented here. The format is based on
   `CachedDbAdapter` accepts optional `sources` / `operations` / `describe` metadata at
   construction and falls back to inferring a schema from a sample row. 15 new offline tests in
   `tests/test_discovery.py`.
-- **Stop re-sending unchanged transcript + context to the planner on re-plan steps** — within a
+- **Stop re-sending unchanged transcript + context to the planner on re-plan steps**: within a
   single run the recent `transcript` and the static `context_view` never change between steps, yet
   the loop re-sent BOTH in full to the cheap PLANNER on every re-plan step (the prior wave only
   leaned out `gathered`). New additive `OrchestratorConfig.planner_abbreviate_repeat_context`
   (default `False` → byte-for-byte current behavior): when enabled, step 1 still sees the FULL
   transcript + context_view, and later re-plan steps swap them for a short "(unchanged since step
-  1 — already provided)" reference note, so the planner focuses on the NEW `gathered` observations
-  it's there to react to. The final ANSWER path is untouched — it always grounds on the full
+  1, already provided)" reference note, so the planner focuses on the NEW `gathered` observations
+  it's there to react to. The final ANSWER path is untouched, it always grounds on the full
   transcript + context_view, so answer grounding is never weakened. `_plan` gained a keyword-only
   `step` argument; empty transcript/context are left as-is (no note injected).
-- **Resource-aware throttling (graceful pause under system overload)** — a long-running lane can
+- **Resource-aware throttling (graceful pause under system overload)**: a long-running lane can
   now notice host overload and stop taking on NEW work instead of thrashing, resuming automatically
   once resources recover. New stdlib-only `quest_ai_runner/resources.py`: `ResourceLimits` (all
-  limits OFF by default; set via `RunnerConfig.resource_limits` or env — `QAR_MAX_MEMORY_PERCENT`,
+  limits OFF by default; set via `RunnerConfig.resource_limits` or env, `QAR_MAX_MEMORY_PERCENT`,
   `QAR_MIN_FREE_MEMORY_MB` for the remaining-resource form, `QAR_MAX_LOAD_PER_CORE`, plus
   `QAR_RESOURCE_RESUME_MARGIN` hysteresis (default 10%) and `QAR_RESOURCE_CHECK_INTERVAL` re-check
   cadence while paused (default 30s)) and `ResourceGuard` (samples `/proc/meminfo` /
@@ -6279,18 +6280,18 @@ All notable changes to this project are documented here. The format is based on
   `run_forever` waits at the guard's shorter re-check cadence while paused so the lane resumes
   promptly. Unclaimed tasks stay queued on the backend; in-flight tasks are never killed. Nothing
   configured → the guard is a no-op (backward compatible).
-- **Leaner per-step planner view (older `gathered` compressed)** — the bounded plan→gather→re-plan
+- **Leaner per-step planner view (older `gathered` compressed)**: the bounded plan→gather→re-plan
   loop re-fed the cheap PLANNER the ENTIRE cumulative `gathered` blob verbatim on every step, which
   grows fast on multi-read runs. The planner now sees a LEANER view: the newest
   `OrchestratorConfig.planner_recent_full` observations in full, and everything older collapsed to a
   one-line summary (source/path + key finding) so the planner still knows the ground it covered and
   won't re-issue the same read. The full `gathered` is unchanged and is still what the final ANSWER
-  is synthesized from — only the planner's per-step input is trimmed. Two new config knobs (both
+  is synthesized from, only the planner's per-step input is trimmed. Two new config knobs (both
   additive, defaulted): `planner_recent_full` (default 4) and `planner_compress_over` (default 6);
   compression only engages once `gathered` exceeds `planner_compress_over` observations, so short
   runs are byte-for-byte identical to before. New helpers `_render_gathered_for_planner` and
   `_summarize_observation` in `core/orchestrator.py`; `_render_gathered` (full render) is untouched.
-- **Task handler stamp + live execution-progress stream** — the runner now records WHO ran a task
+- **Task handler stamp + live execution-progress stream**: the runner now records WHO ran a task
   and streams its execution lifecycle to the task, so a Quest task-detail view can show "handled by
   X" and a live progress feed. `QuestClient.claim(task_id, handler=None)` stamps the handler on the
   in-progress PATCH (omitted when None → backward compatible), and the poller resolves the handler
@@ -6302,7 +6303,7 @@ All notable changes to this project are documented here. The format is based on
   BOTH the originating chat AND the progress stream (kind `exec`), and emits a terminal event from
   the result (done→`done`, needs_you→`done` with a paused note, failed→`error`). All progress posts
   are best-effort and degrade cleanly against an older client without `report_progress`.
-- **AI-rep ↔ skill-file sync (`runner.rep_sync`)** — keep a team AI rep's Claude skill file in sync
+- **AI-rep ↔ skill-file sync (`runner.rep_sync`)**: keep a team AI rep's Claude skill file in sync
   with its Quest profile in ONE call: `sync_rep(client, team_id, user_id, skill_dir, direction=...)`
   (and the underlying `pull_rep_to_skill` / `push_skill_to_rep`). Pull renders the rep's `persona`
   and `learned_notes` into the skill file's runner-MANAGED sections (delimited by
@@ -6312,9 +6313,9 @@ All notable changes to this project are documented here. The format is based on
   `GET|PUT /api/teams/{team_id}/members/{user_id}/ai-profile` and
   `POST .../corrections` (reuses the existing urllib client + bearer auth; no new HTTP). The poller
   has an OPT-IN `rep_sync_resolver` on `RunnerConfig`: when set, it pulls the rep's latest profile
-  into its skill file right before running that rep's task (best-effort — a sync failure never breaks
+  into its skill file right before running that rep's task (best-effort, a sync failure never breaks
   execution). Off by default, so existing lanes are unchanged.
-- **Discovery tools on `RetrievalAdapter`** — `list_sources()`, `describe_source(name, path=...)`,
+- **Discovery tools on `RetrievalAdapter`**: `list_sources()`, `describe_source(name, path=...)`,
   `list_operations()`, and `describe_operation(name)` let the brain learn what a source of truth
   CONTAINS (collections/doc-sets, their fields) and what OPERATIONS it can call, instead of needing
   a static schema/operation blob pushed into the planner prompt. Each returns
@@ -6328,16 +6329,16 @@ All notable changes to this project are documented here. The format is based on
   "not supported" Observation). `FilesAdapter` enumerates readable files + heading outlines;
   `CachedDbAdapter` takes optional `sources`/`operations`/`describe` and otherwise infers fields
   from a sample row.
-- **`EVENT_EXEC` + `DeepRunner.run_goal(emit=...)`** — a deep runner can now stream its
+- **`EVENT_EXEC` + `DeepRunner.run_goal(emit=...)`**: a deep runner can now stream its
   EXECUTION LIFECYCLE (generated code, each execution attempt, its raw output, retries, done/error)
   by emitting `ProgressEvent(type=EVENT_EXEC, data={"phase": ...})`. The orchestrator passes a live
   `emit` callable to runners whose `run_goal` accepts it (decided by signature inspection, so older
   `run_goal(*, goal, brief, model, max_turns)` signatures keep working and are never double-called).
-  `EVENT_EXEC` is intermediate texture — NOT in `SURFACING_EVENTS` — so a LIVE run shows it while a
+  `EVENT_EXEC` is intermediate texture, NOT in `SURFACING_EVENTS`, so a LIVE run shows it while a
   BACKGROUND (`MilestoneSink`) run drops it, like the other chatter types. This lets an attended
   chat surface live code-execution + retries while a queued task stays quiet.
 
-- **`ClaudeCliProvider`** — a keyless `ModelProvider` that drives the local `claude` CLI headless,
+- **`ClaudeCliProvider`**: a keyless `ModelProvider` that drives the local `claude` CLI headless,
   so the orchestrator's planner/answer calls run on the box's Claude Code **subscription login**
   with no `ANTHROPIC_API_KEY` (the deep-runner already ran keyless this way; now the whole runner
   can). The CLI can't force `tool_choice`, so `plan` instructs the model to emit the `decide`
@@ -6345,17 +6346,17 @@ All notable changes to this project are documented here. The format is based on
   returns `[]` so the `ModelRegistry` uses its fallback tier map; tier ids map to CLI family
   aliases. The spawned process has API-key / session env vars stripped (subscription only).
 
-- **Multi-environment heartbeat** — `RunnerConfig.env_id` (env var `QAR_ENV_ID`) is sent on the
+- **Multi-environment heartbeat**: `RunnerConfig.env_id` (env var `QAR_ENV_ID`) is sent on the
   environment heartbeat so a team can attach SEVERAL runners, each registering as its own
   environment. Omitted = the team's default environment (single-runner deployments are unchanged).
 
 ### Changed
-- **Deep-step status copy** — the live status emitted when the orchestrator enters the `deep`
-  action is now a neutral `"working on this now…"` instead of `"this needs real work — running a
+- **Deep-step status copy**: the live status emitted when the orchestrator enters the `deep`
+  action is now a neutral `"working on this now…"` instead of `"this needs real work, running a
   goal-driven task"`. The old wording read as jargon (and conflated "task" with a consumer's own
   goal objects) when surfaced verbatim in a chat; the neutral phrasing travels better across
   consumers and drops the em dash.
-- **CLI** — `QAR_MODEL_BACKEND` (`anthropic` | `claude_cli`) selects the model backend; when unset
+- **CLI**: `QAR_MODEL_BACKEND` (`anthropic` | `claude_cli`) selects the model backend; when unset
   it auto-selects `claude_cli` (keyless) unless `ANTHROPIC_API_KEY` is present. The runner now
   works out of the box on a subscription login with no API key. The CLI also reads
   `QAR_RUNNER_LABEL` and `QAR_ENV_ID` for the heartbeat.
@@ -6365,19 +6366,19 @@ All notable changes to this project are documented here. The format is based on
 Initial public release.
 
 ### Added
-- **`core`** — the domain-free orchestrator brain: a bounded plan → gather → re-plan →
+- **`core`**: the domain-free orchestrator brain: a bounded plan → gather → re-plan →
   answer/deep/confirm loop, with the frozen streaming interface (`Mode`, `ProgressEvent`,
   `StreamSink`, `MilestoneSink`) and the live↔background handoff.
-- **`runner`** — the queued-task executor: an event-driven, signature-deduped poller; a claim
+- **`runner`**: the queued-task executor: an event-driven, signature-deduped poller; a claim
   step; an executor that maps results onto the Quest task callback; and a `QuestClient` covering
   discover / claim / report / escalate / loop-close.
-- **The four adapter interfaces** — `RetrievalAdapter`, `ModelProvider`, `DeepRunner`,
-  `EscalationSink` — plus reference implementations (`FilesAdapter`, `CachedDbAdapter`,
+- **The four adapter interfaces**: `RetrievalAdapter`, `ModelProvider`, `DeepRunner`,
+  `EscalationSink`, plus reference implementations (`FilesAdapter`, `CachedDbAdapter`,
   `AnthropicProvider`, `SubprocessGoalRunner`, `QuestDecisionSink`).
 - **`RunnerConfig`** + factory helpers and capability derivation (`web` / `corpus` / `code`).
-- **`quest-ai-runner` CLI** — an env-driven console entry point for the poller.
-- **Examples** (`examples/`) — a custom consumer, a runnable lane, and a live end-to-end demo.
-- **Tests** — offline core-loop, model-registry, mode/streaming, runner (mock client), and
+- **`quest-ai-runner` CLI**: an env-driven console entry point for the poller.
+- **Examples** (`examples/`), a custom consumer, a runnable lane, and a live end-to-end demo.
+- **Tests**: offline core-loop, model-registry, mode/streaming, runner (mock client), and
   example wiring tests.
 
 [Unreleased]: https://github.com/SpiritualData/quest-ai-runner/compare/v0.1.0...HEAD

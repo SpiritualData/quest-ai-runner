@@ -1,8 +1,6 @@
 """CURRENT: the documentation as shipped, checked against the live repository. Relative links are resolved on disk,
-em dashes counted, ``docs/README.md`` and ``docs/configuration.md`` read, ``components.csv`` rows followed to the
-docs they name, and the live package consulted for its public names (``quest_ai_runner.__all__``) and its real
-argparse tree. Zero model calls."""
-import csv
+em dashes counted, ``docs/README.md`` and ``docs/configuration.md`` read, and the live package consulted for its
+public names (``quest_ai_runner.__all__``) and its real argparse tree. Zero model calls."""
 import json
 import re
 from pathlib import Path
@@ -63,10 +61,6 @@ def build(meter):  # noqa: ARG001
             return {"count": (REPO / args["file"]).read_text().count("—")}
         if kind == "indexed":
             return {"indexed": Path(args["file"]).name in (REPO / "docs/README.md").read_text()}
-        if kind == "component_docs":
-            row = next(r for r in csv.DictReader((REPO / "docs/structure/components.csv").open(newline=""))
-                       if r["component_id"] == args["component"])
-            return {"missing": [d for d in row["docs"].split(";") if d.strip() and not (REPO / d.strip()).exists()]}
         if kind == "env_documented":
             rows = config_rows()
             return {"row": args["variable"] in rows, "described": bool(rows.get(args["variable"], "").strip())}

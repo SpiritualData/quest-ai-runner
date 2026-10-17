@@ -19,10 +19,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 PY = sys.executable
 ENV = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", PYTHONPATH=str(REPO))
-COPIED = ["scripts/check_structure.py", "scripts/env_vars.py", "scripts/build_tracker.py", "scripts/build_audit.py",
+COPIED = ["scripts/check_structure.py", "scripts/env_vars.py", "scripts/build_tracker.py",
           "evaluation/components/leaderboard.py"]
-COMPONENT_COLS = ["component_id", "layer", "path", "role", "interface", "metric", "docs", "tests", "rules", "gap",
-                  "action", "status", "solutions", "metric_kind", "invariant_reason"]
+COMPONENT_COLS = ["component_id", "layer", "path", "role", "solutions"]
 SOLUTION_COLS = ["solution_id", "problem", "ideal", "port", "implementations", "selected", "selected_by",
                  "metric_kind", "invariant_reason", "metric", "metric_command", "gap", "action"]
 RESULT_COLS = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls", "tokens_in",
@@ -75,9 +74,7 @@ def csv_text(cols, rows):
 
 
 def component_row(cid, layer, path):
-    return dict(component_id=cid, layer=layer, path=path, role="fixture role", interface="fixture interface",
-                metric=METRIC, docs="README.md", tests="tests/test_greet.py", rules="2;9", gap="", action="",
-                status="done", solutions="greet", metric_kind="eval", invariant_reason="")
+    return dict(component_id=cid, layer=layer, path=path, role="fixture role", solutions="greet")
 
 
 def solution_row():
@@ -223,13 +220,3 @@ def report(root, command):
     done = subprocess.run(command, cwd=root, capture_output=True, text=True, env=ENV, timeout=120)
     problems = [ln for ln in done.stdout.splitlines() if ln and not ln.startswith(("structure check", "note:", "rows by kind"))]
     return {"exit": done.returncode, "problems": problems, "stderr": done.stderr[-300:]}
-
-
-def audit_report(root):
-    """Run the live ``scripts/build_audit.py`` in ``root`` and list every component whose verdict is not ``meets``."""
-    done = subprocess.run([PY, "scripts/build_audit.py"], cwd=root, capture_output=True, text=True, env=ENV, timeout=120)
-    if done.returncode:
-        return {"exit": 2, "problems": [f"AUDIT crashed: {done.stderr[-200:]}"]}
-    problems = [f"AUDIT {r['component_id']}: verdict {r['verdict']}, unmeasured [{r['unmeasured_solutions']}]"
-                for r in read_rows(Path(root) / "docs/structure/audit.csv") if r["verdict"] != "meets"]
-    return {"exit": 1 if problems else 0, "problems": problems}

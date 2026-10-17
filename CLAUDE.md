@@ -1,4 +1,4 @@
-# CLAUDE.md — working rules for this repository
+# CLAUDE.md: working rules for this repository
 
 This file orients any contributor (human or AI) working in `quest-ai-runner`, and encodes the
 **hard rules** that keep this public, open-source repository clean. Read it before making changes.
@@ -9,7 +9,7 @@ This file orients any contributor (human or AI) working in `quest-ai-runner`, an
 plus the queued-task **executor** (`quest_ai_runner.runner`) for Quest AI tasks. It is published as
 open source (Apache-2.0) and is meant to run for *any* org, not one specific deployment.
 
-- `core/` — the brain: a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
+- `core/`: the brain, a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
   nothing about Quest, any database, any org, or any user. Depends only on the adapter
   *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; `docs/structure/solutions.csv` lists them all.
   Prompt text is split out by definition: the planner prompt (rubric, full/compact variants, mode
@@ -40,15 +40,15 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
   `textual_ui.py` (`textual_ui_*`: widgets plus `QuestAITerminal` mixins) and `interactive_session.py`
   (`interactive_session_*`). A test that monkeypatches a module global patches the
   module whose code looks the name up, so patch the module that now holds the function.
-- `runner/` — the executor: poll → claim → run → escalate → report.
-- `adapters/` — reference *implementations* of the interfaces: retrieval (`FilesAdapter`,
+- `runner/`: the executor: poll → claim → run → escalate → report.
+- `adapters/`: reference *implementations* of the interfaces: retrieval (`FilesAdapter`,
   `CachedDbAdapter`, `CompositeRetrievalAdapter`, MCP, Notion, Google), model providers (Anthropic,
   Gemini, OpenAI, DeepSeek, Claude CLI, behind `MultiProvider`), card stores, vector and hybrid context
   assemblers, web research, deep runners and conversation stores. `docs/structure/COMPONENTS.md` is the
   current list.
-- `config.py` — `RunnerConfig`: the single place a consumer supplies everything specific.
-- `examples/` — runnable reference consumers (env-driven, no real data).
-- `docs/` — tutorial + how-tos + architecture.
+- `config.py`: `RunnerConfig`, the single place a consumer supplies everything specific.
+- `examples/`: runnable reference consumers (env-driven, no real data).
+- `docs/`: tutorial + how-tos + architecture.
 
 Module names describe **architectural role**, not domain. "core" is the stable center everything
 depends on; "runner" is the executor; "adapters" are the swappable implementations. See
@@ -56,27 +56,25 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 
 ## Evolvable structure (ESOI): the registry and the check
 
-The repo's structure is data, not folklore. `docs/structure/` holds `components.csv` (every functional
-component: where it lives, its role, interface, metric, docs, tests, gap and status), `solutions.csv`
-(each solution: problem, ideal, port, implementations, the selected one (the selection-table name when it has a port), `eval` or `invariant`, its metric command)
-and `waivers.csv` (justified exceptions that can only shrink). `principles.csv` is the evolvable-structure
-skill's 13 principles (P1..P13; the `rules` column of `components.csv` uses them). `tracker/` is the ESOI
-intent network as five CSV tabs (problems, solutions, implementations, ideals, metrics) with hand-edited
-`tracking_*` columns; `python scripts/build_tracker.py` rebuilds the rest (check S17). Read
-`docs/structure/README.md` first, and `docs/structure/STANDARD.md` for the one shape every solution takes (also the template for another repo). Nothing lives outside a solution: a component that serves none (S19), or a solution with no current recorded run (S20), fails the check, and the code is removed rather than waived. `evaluation/components/esoi_behavior/` scores whether an AI's replies
-follow ESOI (`cases.csv` is reviewed as a sheet).
+The repo's structure is data, not folklore. `docs/structure/` holds `components.csv` (placement only: id, layer,
+path globs, role, the solutions each serves), `solutions.csv` (each solution: problem, ideal, port, implementations,
+the selected one, `eval` or `invariant`, its metric command, gap and action) and `waivers.csv` (justified exceptions
+that can only shrink). `tracker/` is the generated, committed Sheet view of the registry (check S17;
+`python scripts/build_tracker.py`). To add a solution, read `docs/structure/STANDARD.md`; the numbered rules S1 to S23 are
+a reference in `docs/structure/README.md`. Nothing lives outside a solution: a component that serves none (S19), or a
+solution with no current recorded run (S20), fails the check, and the code is removed rather than waived.
+`evaluation/components/esoi_behavior/` scores whether an AI's replies follow ESOI (`cases.csv` is reviewed as a sheet).
 
-- **Before you commit:** `.venv/bin/python3 scripts/check_structure.py` (it also runs as `tests/test_structure_registry.py`).
-  It fails when a file belongs to no component, a module passes 1,500 lines, a module has no docstring,
-  `core/` imports outward, a layer is imported from below it (S6), `core/` reads the environment (S13), an environment variable is missing from `docs/configuration.md` (S15), a port has no `solutions.csv` row, a selected implementation is beaten in `results.csv` without a waiver, a `done` component has no metric kind, an `invariant` component gives no `invariant_reason`, a solution is linked from no component, a component serves no solution (S19), a solution has no recorded run on its current cases (S20), an id is duplicated (S18), or `COMPONENTS.md` / `docs/configuration.md` / `tracker/*.csv` is stale
-  (`--write-docs` regenerates them).
+- **Before you commit:** `.venv/bin/python3 scripts/check_structure.py` (it also runs as `tests/test_structure_registry.py`;
+  `--write-docs` regenerates `COMPONENTS.md`, `docs/configuration.md` and `tracker/*.csv`). Each problem line starts with
+  the id of the rule it breaks; the list is in `docs/structure/README.md`.
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
   when its metric wins on the same cases.
 - **Split rule:** split by role, keep the old module as the stable import path that re-exports every moved
   name, and patch tests at the module whose code looks the name up.
 
-## 🔒 Hard rule #1 — NOTHING consumer-specific or secret goes in the repo
+## 🔒 Hard rule #1: NOTHING consumer-specific or secret goes in the repo
 
 This repo is public. The following must **never** appear in `quest_ai_runner/`, `tests/`,
 `examples/`, the docs, or **the git history**:
@@ -87,18 +85,18 @@ This repo is public. The following must **never** appear in `quest_ai_runner/`, 
 - Any one org's names, personas, corpora, or business logic baked into the library.
 
 All of that is **consumer config**. It comes in at runtime via `RunnerConfig` and environment
-variables — see `examples/custom_consumer.py` and `.env.example`. If a change would hardcode any
+variables, see `examples/custom_consumer.py` and `.env.example`. If a change would hardcode any
 of the above, route it through config or an adapter instead.
 
 > Why this file exists: the project was extracted from an internal codebase that *did* contain
 > such specifics. They were removed and the git history was reset before publication. Do not
 > reintroduce them.
 
-## 🔒 Hard rule #2 — the generic boundary holds
+## 🔒 Hard rule #2: the generic boundary holds
 
 New capabilities go **behind one of the adapter interfaces** (`RetrievalAdapter`, `ModelProvider`,
 `DeepRunner`, `EscalationSink`, `ContextAssembler`, `CardRepository`, `VectorStore`,
-`ConversationStore`, …) or into `RunnerConfig` — never as a special case inside the brain. The brain
+`ConversationStore`, …) or into `RunnerConfig`, never as a special case inside the brain. The brain
 must stay ignorant of who is calling it.
 
 When we build a feature here and in a consumer we maintain (e.g. quest-backend), put the reusable
@@ -107,7 +105,7 @@ consumer; the consumer just wires it. (Anyone using the repo is of course free t
 
 Nothing here is frozen. This is pre-release and single-consumer, so the public API in
 `quest_ai_runner.core` (`Mode`, `StreamSink`, `MilestoneSink`, `ProgressEvent`, `Orchestrator`) is
-free to evolve — change it whenever the design calls for it. Prefer additive, backward-compatible
+free to evolve: change it whenever the design calls for it. Prefer additive, backward-compatible
 changes where they're just as clean, but a breaking change is fine when it's the right shape; just
 keep it generic (hard rule #2 above), update the `CHANGELOG.md` (Unreleased) and any affected docs,
 and keep the tests green.
@@ -127,9 +125,9 @@ and keep the tests green.
 2. Scan your staged change for secrets/PII before committing:
    ```bash
    git diff --cached | grep -nE 'qsk_[A-Za-z0-9]|sk-ant-|/home/|@[A-Za-z0-9.-]+\.(com|org)|[0-9a-f]{24}' \
-     && echo "^^ REVIEW: possible secret/PII — do not commit until cleared" || echo "scan clean"
+     && echo "^^ REVIEW: possible secret/PII, do not commit until cleared" || echo "scan clean"
    ```
-   (`[0-9a-f]{24}` catches Mongo-style ObjectIds. A hit isn't always a problem — review it.)
+   (`[0-9a-f]{24}` catches Mongo-style ObjectIds. A hit isn't always a problem. Review it.)
    The scan is also a command, with placeholders (`qsk_...`, `/home/user/`, `name@example.org`) let through:
    `.venv/bin/python3 -m quest_ai_runner.structure.hygiene --staged` (see `docs/public-hygiene.md`).
 3. Never commit a real `.env`, `qar_state.json`, or any `*_state.json` (all gitignored).
@@ -139,10 +137,10 @@ and keep the tests green.
 
 When running `quest-ai-runner poll` or `quest-ai-runner chat` as systemd user services:
 - **Restart via systemctl:** `systemctl --user restart quest-ai-runner-*.service`
-- **Do NOT kill processes directly** — use systemctl to restart cleanly
+- **Do NOT kill processes directly**: use systemctl to restart cleanly
 - The service file manages lifecycle; always use systemctl for start/stop/restart
 
-## Concurrent AI work — preserve uncommitted changes
+## Concurrent AI work: preserve uncommitted changes
 
 Multiple AIs may work on this repo simultaneously. **Never run destructive git operations
 (`git restore`, `git reset --hard`, `git checkout .`) on files with uncommitted changes.**
@@ -164,25 +162,25 @@ The deployment uses `MultiProvider` to route model calls to the right underlying
 The correct pattern in any code that needs to make an LLM call:
 
 ```python
-# In CLI / entry-point code — call build_orchestrator() first so cfg.model_provider
+# In CLI / entry-point code: call build_orchestrator() first so cfg.model_provider
 # gets wrapped with MultiProvider, then use cfg.model_provider for all calls.
 from .config import build_orchestrator, _config_from_env
 cfg = _config_from_env()
 build_orchestrator(cfg)          # wraps cfg.model_provider with MultiProvider in place
-provider = cfg.model_provider    # now a MultiProvider — routes by model name prefix
+provider = cfg.model_provider    # now a MultiProvider that routes by model name prefix
 
 from .core.model_registry import ModelRegistry
 model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
 result = provider.answer([{"role": "user", "content": prompt}], model=model)
 ```
 
-**Always use `resolve_tier()` for the model — never hardcode a model name, and never call `list_models()[0]`** (that returns the first model from the Anthropic API which may not be routable by the current provider config).
+**Always use `resolve_tier()` for the model: never hardcode a model name, and never call `list_models()[0]`** (that returns the first model from the Anthropic API which may not be routable by the current provider config).
 
 **Tier guidance:** use `"balanced"` for filtering/judgment tasks (Gemini Flash class), `"fast"` for cheap lookups. `"best"` for high-stakes reasoning. The `model_fallback` config maps these to real model IDs.
 
-**JSON parsing:** LLM responses often include markdown fences. Never call `json.loads(raw)` directly — strip fences first with a helper like `_extract_json()` in `core/card_filter.py`.
+**JSON parsing:** LLM responses often include markdown fences. Never call `json.loads(raw)` directly: strip fences first with a helper like `_extract_json()` in `core/card_filter.py`.
 
-## 🔒 Hard rule #3 — do not gate decisions on keywords in AI output
+## 🔒 Hard rule #3: do not gate decisions on keywords in AI output
 
 **Never make a control-flow or safety decision by scanning the model's own generated text for a
 fixed list of words** (a denylist of "risky" verbs, an allowlist of "safe" ones, "if the confirm
@@ -190,7 +188,7 @@ question contains `delete`/`send`/…" and so on). This pattern is brittle by co
 phrases its output arbitrarily, so any fixed list silently leaks every case it did not anticipate.
 A real example that was removed: a `_confirm_is_redundant` gate auto-executed a planner's confirm
 (skipping the human-in-the-loop approval) unless a denylist word appeared in the request or in the
-planner's own confirm question — so "share this doc with the team" and "invite Jane to the quest"
+planner's own confirm question, so "share this doc with the team" and "invite Jane to the quest"
 auto-executed, because `share`/`invite`/`grant`/`message`/`gift`/`transfer` were not on the list.
 Flipping it to an allowlist does not fix it; both make safety depend on the model happening to use
 a word the code guessed.
@@ -198,7 +196,7 @@ a word the code guessed.
 Instead:
 
 - **Honor the model's structured decision.** If the planner emits `action: "confirm"`, that IS the
-  decision that this needs a human — surface it. Do not second-guess it by inspecting the wording
+  decision that this needs a human: surface it. Do not second-guess it by inspecting the wording
   of its message.
 - **If the model decides wrong too often, fix the model, not the output.** Improve the planner's
   prompt / instructions / the schema it fills in, so the decision it returns is the right one.
@@ -207,20 +205,20 @@ Instead:
   `_message_requests_change` and `judge_execution_directive` do on the user message). The rule is
   specifically about gating on words the *model* generated.
 
-## 🔒 Hard rule #4 — a second consumer's need belongs in the library, not copied into a consumer
+## 🔒 Hard rule #4: a second consumer's need belongs in the library, not copied into a consumer
 
 **If a second lane would need it, it goes in `quest_ai_runner`, not in a consumer's own file.**
 This repo exists because generic, reusable plumbing kept getting written once, privately, per
 consumer, instead of once, here, for everybody. Three separate consumers each hand-rolled the same
 executor-lane entry point (the `--check`/`--once`/loop-forever driver around `Poller`); two of them
-noticed the duplication and extracted a shared copy of it — but OUTSIDE this library, in a path only
+noticed the duplication and extracted a shared copy of it, but OUTSIDE this library, in a path only
 their own two lanes could import, so the third consumer had nowhere to find it and wrote a fourth
 copy from scratch. Separately, two consumers independently wrote persona-resolution machinery (a
 registry of ids to skill folders, plus a policy for picking one from a task) with different
 capabilities that never met, until both were rebuilt as one generic module.
 
 **The test to apply:** before writing a helper, a resolver, a CLI loop, or a config-loading
-function inside a consumer, ask "would a second lane need this?" If yes, it is not consumer logic —
+function inside a consumer, ask "would a second lane need this?" If yes, it is not consumer logic;
 it is a gap in this library, and the fix is here:
 
 - A shared entry-point shape, loop, or process-lifecycle concern → `runner/lane.py` (or a new
@@ -233,7 +231,7 @@ it is a gap in this library, and the fix is here:
 - Anything else generic → an adapter interface (hard rule #2) or a new `RunnerConfig` field, per
   the usual rule.
 
-This does not mean invent generality nobody asked for — a genuinely one-off piece of a single
+This does not mean invent generality nobody asked for: a genuinely one-off piece of a single
 consumer's business logic stays in that consumer, same as always. It means: when you notice the
 SAME piece of plumbing being built twice, the second build is the signal to move it here instead of
 finishing a second private copy.
@@ -247,6 +245,6 @@ finishing a second private copy.
   just tests: library code under `quest_ai_runner/`, tests under `tests/`, runnable reference
   consumers under `examples/`, docs under `docs/`, evaluation harnesses under `evaluation/`. The
   repo root is for project config only (`README.md`, `CHANGELOG.md`, `pyproject.toml`, `.env*`,
-  etc.) — do not drop new `.py` files there.
+  etc.): do not drop new `.py` files there.
 - **Throwaway / scratch / demo scripts go in the gitignored `scratch/` directory** (create it if
   absent; it is in `.gitignore`), never the repo root and never committed. Delete them when done.

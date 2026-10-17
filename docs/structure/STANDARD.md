@@ -1,8 +1,8 @@
 # The standard shape for applying ESOI (copy this to another repo)
 
 One solution id names every part of one idea. Nothing in the repo exists outside a solution, and a
-solution is not done until a recorded run says how well it works. The rules that enforce this are in
-[README.md](README.md); the philosophy is the evolvable-structure skill (`principles.csv` is its short form).
+solution is not done until a recorded run says how well it works. This page is enough to add a
+solution; the numbered rules that enforce it are a reference in [README.md](README.md), and the philosophy is the evolvable-structure skill (`principles.csv` is its short form).
 
 ## The shape of one solution
 
@@ -14,7 +14,7 @@ solution is not done until a recorded run says how well it works. The rules that
 | Evaluation | `evaluation/components/<solution_id with underscores>/` | `interface.py` (one function with a fixed signature), `cases.json`, `score.py`, `impls/<impl>.py` driving LIVE code (S12) |
 | Result | `evaluation/components/results.csv` | one row per `run.py <component> --impl <impl> --record`, with `git_sha` and `cases_sha` (S16) |
 | Decision | `evaluation/components/leaderboard.py` | the winner on the same cases; S10 fails when the selected implementation loses without a waiver |
-| Place | `docs/structure/components.csv` | which files serve the solution (`solutions` column); a file in no component, or a component serving no solution, fails the check (S1, S19) |
+| Place | `docs/structure/components.csv` | `component_id`, `layer`, `path` globs, `role`, `solutions`: which files serve the solution; a file in no component, or a component serving no solution, fails the check (S1, S19) |
 
 Whether "best" can vary decides the kind. An `eval` solution has implementations that differ on the metric, so they are
 ranked on the same cases. An `invariant` solution is a rule that holds or does not (a write stays inside its root); it keeps
@@ -50,9 +50,10 @@ Say QAR must `summarize-a-thread`, and two ways exist: a rule-based cut and a mo
 
 ## Adopting it in another repo
 
-Copy `docs/structure/`, `scripts/check_structure.py`, `build_tracker.py`, `build_audit.py` and
+Copy `docs/structure/`, `scripts/check_structure.py`, `scripts/env_vars.py` and
 `evaluation/components/{common,run,leaderboard,expect}.py`. Write `components.csv` first (every file in
 one component), then one `solutions.csv` row per problem with a gap noted where no metric exists yet, and
 turn the gaps into components one at a time. Keep the rules that fit (S1, S10, S19 are the core) and
-record any exception in `waivers.csv`, which only shrinks. The AI behaviour half is
-`evaluation/components/esoi_behavior/`, which scores whether an AI follows the principles.
+record any exception in `waivers.csv`, which only shrinks. `scripts/build_tracker.py` is optional: it
+produces the Sheet view of the registry and nothing depends on it except check S17. The AI behaviour half
+is `evaluation/components/esoi_behavior/`, which scores whether an AI follows the principles.

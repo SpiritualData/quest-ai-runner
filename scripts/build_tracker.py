@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Build the ESOI tracker tabs (problems, solutions, implementations, ideals, metrics) in
 docs/structure/tracker/ from the registry (solutions.csv, components.csv, principles.csv) and the
-recorded evaluation results.
+recorded evaluation results. It is the optional Sheet view: nothing else reads the tabs, and check S17 only
+keeps them in step with the registry.
 
 Each tab is a CSV, importable as one tab of a Google Sheet. Structural columns are regenerated and
 must match the registry (check S17); the `tracking_*` columns are the people's and the AI's own notes
@@ -146,10 +147,9 @@ def build() -> dict[str, list[dict]]:
             "auto_status": "invariant" if s["metric_kind"] == "invariant"
             else ("decided-by-metric" if sel_res else "decided-by-hand")})
     for p in principles:
-        covered = [c["component_id"] for c in components if p["principle_id"][1:] in c["rules"].split(SEP)]
         ideals.append({"ideal_id": p["principle_id"].lower(), "scope": "principle",
                        "statement": f"{p['name']}: {p['statement']}",
-                       "applies_to": f"{len(covered)} components claim it", "metric_ids": p["how_measured"],
+                       "applies_to": "the whole repo", "metric_ids": p["how_measured"],
                        "auto_status": "enforced-by-check" if "(S" in p["how_measured"] else "behaviour-eval"})
     return {"problems": problems, "solutions": sol_rows, "implementations": impls,
             "ideals": ideals, "metrics": metrics}

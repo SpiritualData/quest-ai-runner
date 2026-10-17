@@ -655,56 +655,6 @@
   }
  },
  {
-  "id": "CTS-020",
-  "area": "repo",
-  "kind": "repo",
-  "description": "an invariant component with no reason",
-  "args": {
-   "edits": [
-    {
-     "op": "csv_cell",
-     "path": "docs/structure/components.csv",
-     "key_col": "component_id",
-     "key": "core",
-     "col": "metric_kind",
-     "value": "invariant"
-    },
-    {
-     "op": "regen"
-    }
-   ]
-  },
-  "expect": {
-   "rule": "S11",
-   "contains": "invariant_reason"
-  }
- },
- {
-  "id": "CTS-021",
-  "area": "repo",
-  "kind": "repo",
-  "description": "an eval component with no recorded result",
-  "args": {
-   "edits": [
-    {
-     "op": "csv_cell",
-     "path": "docs/structure/components.csv",
-     "key_col": "component_id",
-     "key": "core",
-     "col": "metric",
-     "value": "evaluation/components/run.py greet --impl ghost"
-    },
-    {
-     "op": "regen"
-    }
-   ]
-  },
-  "expect": {
-   "rule": "S11",
-   "contains": "no recorded result"
-  }
- },
- {
   "id": "CTS-022",
   "area": "repo",
   "kind": "repo",
@@ -867,7 +817,7 @@
   "id": "CTS-029",
   "area": "repo",
   "kind": "repo",
-  "description": "a doc named by a component that is missing",
+  "description": "a component with no role",
   "args": {
    "edits": [
     {
@@ -875,8 +825,8 @@
      "path": "docs/structure/components.csv",
      "key_col": "component_id",
      "key": "core",
-     "col": "docs",
-     "value": "docs/missing.md"
+     "col": "role",
+     "value": ""
     },
     {
      "op": "regen"
@@ -885,14 +835,14 @@
   },
   "expect": {
    "rule": "S2",
-   "contains": "missing.md"
+   "contains": "role is empty"
   }
  },
  {
   "id": "CTS-030",
   "area": "repo",
   "kind": "repo",
-  "description": "an invalid status",
+  "description": "a component on an unknown layer",
   "args": {
    "edits": [
     {
@@ -900,8 +850,8 @@
      "path": "docs/structure/components.csv",
      "key_col": "component_id",
      "key": "core",
-     "col": "status",
-     "value": "finished"
+     "col": "layer",
+     "value": "basement"
     },
     {
      "op": "regen"
@@ -910,32 +860,7 @@
   },
   "expect": {
    "rule": "S2",
-   "contains": "status"
-  }
- },
- {
-  "id": "CTS-031",
-  "area": "repo",
-  "kind": "repo",
-  "description": "a partial component with no gap",
-  "args": {
-   "edits": [
-    {
-     "op": "csv_cell",
-     "path": "docs/structure/components.csv",
-     "key_col": "component_id",
-     "key": "core",
-     "col": "status",
-     "value": "partial"
-    },
-    {
-     "op": "regen"
-    }
-   ]
-  },
-  "expect": {
-   "rule": "S2",
-   "contains": "gap and action"
+   "contains": "layer"
   }
  },
  {
@@ -971,22 +896,6 @@
      "key": "core",
      "col": "solutions",
      "value": ""
-    },
-    {
-     "op": "csv_cell",
-     "path": "docs/structure/components.csv",
-     "key_col": "component_id",
-     "key": "core",
-     "col": "metric_kind",
-     "value": "invariant"
-    },
-    {
-     "op": "csv_cell",
-     "path": "docs/structure/components.csv",
-     "key_col": "component_id",
-     "key": "core",
-     "col": "invariant_reason",
-     "value": "fixed"
     },
     {
      "op": "regen"
@@ -1369,68 +1278,6 @@
   "expect": {
    "rule": "C10",
    "contains": "not all passing"
-  }
- },
- {
-  "id": "CTS-200",
-  "area": "audit",
-  "kind": "audit",
-  "description": "clean fixture: every component meets",
-  "args": {
-   "edits": []
-  },
-  "expect": {
-   "clean": true
-  }
- },
- {
-  "id": "CTS-201",
-  "area": "audit",
-  "kind": "audit",
-  "description": "a component that is not done is audited as a gap",
-  "args": {
-   "edits": [
-    {
-     "op": "csv_cell",
-     "path": "docs/structure/components.csv",
-     "key_col": "component_id",
-     "key": "core",
-     "col": "status",
-     "value": "open"
-    },
-    {
-     "op": "regen"
-    }
-   ]
-  },
-  "expect": {
-   "rule": "AUDIT",
-   "contains": "core: verdict gap"
-  }
- },
- {
-  "id": "CTS-202",
-  "area": "audit",
-  "kind": "audit",
-  "description": "a solution with no metric is audited as partial",
-  "args": {
-   "edits": [
-    {
-     "op": "csv_cell",
-     "path": "docs/structure/solutions.csv",
-     "key_col": "solution_id",
-     "key": "greet",
-     "col": "metric_command",
-     "value": "none"
-    },
-    {
-     "op": "regen"
-    }
-   ]
-  },
-  "expect": {
-   "rule": "AUDIT",
-   "contains": "core: verdict partial"
   }
  }
 ]

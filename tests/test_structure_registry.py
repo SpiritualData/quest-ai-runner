@@ -44,17 +44,20 @@ def test_selected_implementation_beaten_in_results_needs_a_waiver(monkeypatch):
     assert any(p.startswith("S10 route-a-message") and "rival beat" in p for p in problems)
 
 
-def test_done_component_without_a_metric_kind_is_reported(monkeypatch):
+def test_a_component_with_an_unknown_layer_or_no_role_is_reported(monkeypatch):
     mod = _load_checker()
     real = mod.read_csv
 
     def fake(p):
         rows = real(p)
         if p.name == "components.csv":
-            rows[0]["metric_kind"] = "none"
+            rows[0]["layer"] = "basement"
+            rows[1]["role"] = ""
         return rows
     monkeypatch.setattr(mod, "read_csv", fake)
-    assert any(p.startswith("S11 core-ports") for p in mod.check())
+    problems = mod.check()
+    assert any(p.startswith("S2 core-ports") and "layer" in p for p in problems)
+    assert any(p.startswith("S2 core-orchestrator-loop") and "role is empty" in p for p in problems)
 
 
 def test_impl_kind_tells_live_code_from_alternatives_and_unclear(tmp_path):
