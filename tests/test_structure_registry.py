@@ -145,7 +145,7 @@ def test_an_evaluation_folder_no_solution_names_is_reported(monkeypatch):
     def drop_claude_code_ab(rows):
         for r in rows:
             r["metric"] = r["metric"].replace("evaluation/components/claude_code_ab", "the hint arm")
-            r["metric_command"] = r["metric_command"].replace("; evaluation/components/run.py claude_code_ab --impl warm_claude", "")
+            r["metric_command"] = r["metric_command"].replace("; evaluation/components/run.py claude_code_ab --impl idf_hint", "")
     monkeypatch.setattr(mod, "read_csv", edited(mod, "solutions.csv", drop_claude_code_ab))
     assert any(p.startswith("S21 evaluation/components/claude_code_ab") for p in mod.check())
 

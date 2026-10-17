@@ -41,6 +41,7 @@ class CallMeter:
         self.max_calls = max_calls
         self.tokens_in = self.tokens_out = 0
         self.cost_usd = 0.0  # what the claude CLI reports per call (informational on a subscription login)
+        self.model = None   # set by an implementation that pins a model other than QAR_EVAL_MODEL, for the record
 
     def record(self, n=1):
         self.calls += n
@@ -112,12 +113,9 @@ def record_result(summary, date=None, path=RESULTS_CSV):
     """Append one run's summary to the committed results.csv (the source of truth for metrics)."""
     import csv
     import datetime
-    import hashlib
     import subprocess
+    import leaderboard
     comp = summary.get("component", "")
-    cases = HERE / comp / "cases.json"
-    if not cases.exists():  # a component whose dataset is reviewed as a sheet keeps cases.csv
-        cases = HERE / comp / "cases.csv"
     git = lambda *a: subprocess.run(["git", *a], cwd=HERE, capture_output=True, text=True).stdout.strip()
     sha = git("rev-parse", "--short", "HEAD")
     if sha and git("status", "--porcelain", "--untracked-files=no", "--", str(REPO / "quest_ai_runner"), str(HERE),
@@ -126,7 +124,7 @@ def record_result(summary, date=None, path=RESULTS_CSV):
     row = dict(summary, date=date or datetime.date.today().isoformat(),
                cost_usd=summary.get("cli_reported_cost_usd", 0.0), git_sha=sha,
                model=summary.get("model") or (os.environ.get("QAR_EVAL_MODEL", "haiku") if summary.get("model_calls") else "none"),
-               cases_sha=hashlib.sha256(cases.read_bytes()).hexdigest()[:8] if cases.exists() else "")
+               cases_sha=leaderboard.cases_digest(comp, HERE))
     new = not Path(path).exists()
     with open(path, "a", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=RESULT_COLUMNS, extrasaction="ignore", lineterminator="\n")
@@ -150,9 +148,31 @@ def load_impl(spec, component):
     return mod.build
 
 
+def stratified_sample(cases, n, seed=0):
+    """``n`` cases spread over the strata (``stratum``, else ``dataset``, else ``area``), the same cases every time for
+    one seed. A smaller ``n`` is a prefix of a larger one, so a cheap first run is part of the bigger run."""
+    import random
+    rng = random.Random(seed)
+    groups = {}
+    for case in sorted(cases, key=lambda c: str(c["id"])):
+        groups.setdefault(case.get("stratum") or case.get("dataset") or case.get("area") or "", []).append(case)
+    for group in groups.values():
+        rng.shuffle(group)
+    picked = []
+    while len(picked) < n and any(groups.values()):
+        for name in sorted(groups):
+            if groups[name] and len(picked) < n:
+                picked.append(groups[name].pop(0))
+    return sorted(picked, key=lambda c: str(c["id"]))
+
+
 def load_cases(component):
-    """The component's cases: ``cases.json``, or ``cases.csv`` when the dataset is reviewed as a sheet
+    """The component's cases: the ``load_cases()`` of its score module when it has one (a dataset folder that
+    another harness also reads), else ``cases.json``, or ``cases.csv`` when the dataset is reviewed as a sheet
     (a ``heldout`` cell of ``yes`` marks a held-out case)."""
+    score = importlib.import_module(f"{component}.score")
+    if hasattr(score, "load_cases"):
+        return score.load_cases()
     folder = HERE / component
     if (folder / "cases.json").exists():
         return json.loads((folder / "cases.json").read_text())
@@ -169,6 +189,8 @@ def run_component(component, fn_scorer, argv):
     ap = argparse.ArgumentParser(description=f"Evaluate the {component} component on its own.")
     ap.add_argument("--impl", default="qar_planner", help="implementation name (impls/<name>.py) or module:build")
     ap.add_argument("--only", default=None, help="comma-separated case ids")
+    ap.add_argument("--sample", type=int, default=None, metavar="N",
+                    help="run N cases spread over the strata (same cases every time; N=3 is a prefix of N=10)")
     ap.add_argument("--max-calls", type=int, default=None, help="abort when model calls exceed this")
     ap.add_argument("--out", default=None, help="results json path")
     ap.add_argument("--record", action="store_true",
@@ -178,6 +200,11 @@ def run_component(component, fn_scorer, argv):
     if args.only:
         keep = {c.strip() for c in args.only.split(",")}
         cases = [c for c in cases if c["id"] in keep]
+    if args.sample:
+        cases = stratified_sample(cases, args.sample)
+    print(f"{component}: {len(cases)} case(s), impl {args.impl}, model-call budget "
+          f"{args.max_calls if args.max_calls is not None else 'none'}: {', '.join(str(c['id']) for c in cases[:12])}"
+          f"{' ...' if len(cases) > 12 else ''}")
     meter = CallMeter(args.max_calls)
     fn = load_impl(args.impl, component)(meter)
     rows, started = [], time.time()
@@ -200,7 +227,8 @@ def run_component(component, fn_scorer, argv):
                    dev=f"{sum(r['ok'] for r in rows if r not in held)}/{len(rows) - len(held)}",
                    heldout=f"{sum(r['ok'] for r in held)}/{len(held)}",
                    model_calls=meter.calls, tokens_in=meter.tokens_in, tokens_out=meter.tokens_out,
-                   cli_reported_cost_usd=round(meter.cost_usd, 4), seconds=round(time.time() - started, 1))
+                   cli_reported_cost_usd=round(meter.cost_usd, 4), seconds=round(time.time() - started, 1),
+                   model=meter.model)
     print(f"\n{component} / {args.impl}: {passed}/{len(rows)} passed (dev {summary['dev']}, held-out "
           f"{summary['heldout']}), {meter.calls} model calls, {meter.tokens_in} in / {meter.tokens_out} out "
           f"tokens, CLI-reported ${summary['cli_reported_cost_usd']}, {summary['seconds']}s")

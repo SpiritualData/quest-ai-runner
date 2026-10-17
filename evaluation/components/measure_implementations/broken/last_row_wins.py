@@ -8,6 +8,8 @@ def build(meter):  # noqa: ARG001
         if kind == "rank":
             order = [r["impl"] for r in reversed(args["rows"])]
             return {"ranked": order, "beats": [order[0]] if order[0] != args["selected"] else [], "unverified": []}
+        if kind == "verdict":
+            return {"verdict": "WIN", "text": "", "arms": {}}
         if kind == "board":
             last = args["rows"][-1]["impl"]
             return {"exit": 0, "text": f"{last} wins", "beats": [last] if last != args["selected"] else [],

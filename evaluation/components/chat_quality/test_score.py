@@ -26,11 +26,29 @@ def test_scorer_reads_pass_flag_hard_failures_and_errors():
 
 
 def test_smoke_cases_are_valid_dataset_cases():
-    cases = common.load_cases("chat_quality")
+    cases = runner.load_example_cases()
     assert [c["id"] for c in cases] == ["EX-READ-1", "EX-WRITE-1"]
-    assert runner.load_example_cases() == cases
     for case in cases:
         runner.validate_case(case, "cases.json")
+
+
+def test_the_component_covers_every_dataset_case_and_the_offline_arm_checks_all_of_them():
+    cases = common.load_cases("chat_quality")
+    ids = [c["id"] for c in cases]
+    assert ids == [c["id"] for c in runner.load_cases("all")] + ["EX-READ-1", "EX-WRITE-1"]
+    assert len(set(ids)) == len(ids) > 200
+    from chat_quality.impls import reference_replies
+    check = reference_replies.build(None)
+    failing = [c["id"] for c in cases if not score.score_case(check, c)["ok"]]
+    assert not failing, f"the offline arm cannot tell a reference reply from an empty one for {failing}"
+
+
+def test_a_small_sample_is_part_of_a_larger_one_and_spreads_over_the_datasets():
+    cases = common.load_cases("chat_quality")
+    three, ten = common.stratified_sample(cases, 3), common.stratified_sample(cases, 10)
+    assert {c["id"] for c in three} <= {c["id"] for c in ten} and len(ten) == 10
+    assert {c["dataset"] for c in three} == {"explicit", "implicit", "multistep"}
+    assert [c["id"] for c in three] == [c["id"] for c in common.stratified_sample(cases, 3)]
 
 
 def test_live_arm_skips_without_a_dev_quest(monkeypatch, capsys):

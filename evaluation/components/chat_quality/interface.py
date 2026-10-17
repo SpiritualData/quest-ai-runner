@@ -12,8 +12,9 @@ This is the end-to-end metric for the chat solution (``answer-a-turn``): not whi
 correctly routed and free of unrequested side effects. It needs the disposable world on the dev Quest
 (``runner.py setup``), so its graded arm has no offline form: ``impls/dev_quest_chat.py`` SKIPs when no dev Quest is configured. The offline arm
 ``impls/reference_replies.py`` checks the metric itself (schema, and pre-checks that accept a reference reply and reject none).
-The full dataset (``datasets/``, validated offline by ``runner.py validate``) is run with ``runner.py``; the two smoke
-cases in ``cases.json`` are what ``components/run.py`` scores.
+The component's cases are the whole dataset (``datasets/``, validated offline by ``runner.py validate``) plus the two smoke
+cases in ``cases.json`` (``score.load_cases``); the offline arm checks every one, and the live arm is drawn with
+``components/run.py chat_quality --sample N`` or run in full with ``runner.py``.
 
 An implementation module in ``impls/`` exposes ``build(meter) -> converse``.
 """

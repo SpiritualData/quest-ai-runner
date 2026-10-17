@@ -19,16 +19,18 @@ DEV_ENV_FILE = Path(os.environ.get("QUAL_DEV_ENV_FILE")
                     or PRODUCT / "setup" / "sd-dev-runner" / ".env")
 
 DEV_ENV = {}
-for raw_line in DEV_ENV_FILE.read_text().splitlines():
+# No env file is fine for everything that never reaches a backend (the offline validity arm, dataset validation);
+# a call that does reach one fails on the empty base URL.
+for raw_line in (DEV_ENV_FILE.read_text().splitlines() if DEV_ENV_FILE.is_file() else []):
     raw_line = raw_line.strip()
     if raw_line and not raw_line.startswith("#") and "=" in raw_line:
         key, val = raw_line.split("=", 1)
         DEV_ENV[key.strip()] = val.strip().strip('"').strip("'")
 
-QUEST_BASE = DEV_ENV["QUEST_BASE_URL"].rstrip("/")
-QUEST_KEY = DEV_ENV["QUEST_API_KEY"]
+QUEST_BASE = (DEV_ENV.get("QUEST_BASE_URL") or "").rstrip("/")
+QUEST_KEY = DEV_ENV.get("QUEST_API_KEY") or ""
 QUEST_TEAM = DEV_ENV.get("QUEST_TEAM_ID") or ""
-assert "batmanhq" in QUEST_BASE and "spiritualdata.org" not in QUEST_BASE, (
+assert not QUEST_BASE or ("batmanhq" in QUEST_BASE and "spiritualdata.org" not in QUEST_BASE), (
     f"REFUSING TO RUN: {QUEST_BASE} is not the dev Quest backend")
 
 # QUAL_INPROCESS=1: serve every call from quest-backend's app in this process (see inprocess.py),

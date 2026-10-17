@@ -1,0 +1,900 @@
+[
+ {
+  "id": "AGT-001",
+  "kind": "budget",
+  "area": "under budget",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "tasks": [
+    {
+     "id": "t1",
+     "status": "done",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-002",
+  "kind": "budget",
+  "area": "budget used up",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "tasks": [
+    {
+     "id": "t1",
+     "status": "done",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    },
+    {
+     "id": "t2",
+     "status": "done",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    },
+    {
+     "id": "t3",
+     "status": "done",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "budget"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-003",
+  "kind": "budget",
+  "area": "human tasks do not count",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "tasks": [
+    {
+     "id": "t0",
+     "status": "done",
+     "task_kind": "recurring",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    },
+    {
+     "id": "t1",
+     "status": "done",
+     "task_kind": "recurring",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    },
+    {
+     "id": "t2",
+     "status": "done",
+     "task_kind": "recurring",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-004",
+  "kind": "budget",
+  "area": "yesterday does not count",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "tasks": [
+    {
+     "id": "t0",
+     "status": "done",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-13T01:00:00Z",
+     "goal_id": "quest_a"
+    },
+    {
+     "id": "t1",
+     "status": "done",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-13T01:00:00Z",
+     "goal_id": "quest_a"
+    },
+    {
+     "id": "t2",
+     "status": "done",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-13T01:00:00Z",
+     "goal_id": "quest_a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "AGT-005",
+  "kind": "budget",
+  "area": "legacy source marker counts",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "budget": 2,
+   "tasks": [
+    {
+     "id": "t1",
+     "status": "done",
+     "task_kind": "x",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a",
+     "source": "autopilot"
+    },
+    {
+     "id": "t2",
+     "status": "done",
+     "task_kind": "x",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a",
+     "source": "autopilot"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "budget"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-006",
+  "kind": "cadence",
+  "area": "never run",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-007",
+  "kind": "cadence",
+  "area": "daily ran today",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-14T05:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "cadence"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-008",
+  "kind": "cadence",
+  "area": "daily late pass yesterday",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-13T16:11:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-009",
+  "kind": "cadence",
+  "area": "weekly ran this week",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "weekly",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-13T06:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "cadence"
+   ]
+  },
+  "heldout": true
+ },
+ {
+  "id": "AGT-010",
+  "kind": "cadence",
+  "area": "weekly ran last week",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "weekly",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-09T06:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-011",
+  "kind": "cadence",
+  "area": "monthly ran this month",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "monthly",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-01T06:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "cadence"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-012",
+  "kind": "cadence",
+  "area": "monthly ran last month",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "monthly",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-06-30T06:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-013",
+  "kind": "cadence",
+  "area": "unparsable stamp is due",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "garbage"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "AGT-014",
+  "kind": "cadence",
+  "area": "evening run in the quest zone",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "America/Los_Angeles",
+    "last_pass_at": "2026-07-14T05:00:00Z"
+   },
+   "now": "2026-07-14T16:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-015",
+  "kind": "run_now",
+  "area": "request overrides cadence",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-14T05:00:00Z",
+    "run_requested_at": "2026-07-14T08:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-016",
+  "kind": "run_now",
+  "area": "answered request is spent",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-14T08:30:00Z",
+    "run_requested_at": "2026-07-14T08:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "cadence"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-017",
+  "kind": "reactive",
+  "area": "nothing new",
+  "args": {
+   "cfg": {
+    "mode": "reactive",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-13T06:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "asks": [
+    {
+     "occurred_at": "2026-07-12T10:00:00Z"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "reactive"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-018",
+  "kind": "reactive",
+  "area": "a new ask",
+  "args": {
+   "cfg": {
+    "mode": "reactive",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-13T06:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "asks": [
+    {
+     "occurred_at": "2026-07-13T10:00:00Z"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "AGT-019",
+  "kind": "reactive",
+  "area": "unreadable asks fail open",
+  "args": {
+   "cfg": {
+    "mode": "reactive",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-13T06:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "asks": null
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-020",
+  "kind": "reactive",
+  "area": "run now needs no new ask",
+  "args": {
+   "cfg": {
+    "mode": "reactive",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-13T06:00:00Z",
+    "run_requested_at": "2026-07-14T08:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "asks": []
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-021",
+  "kind": "reactive",
+  "area": "first ask of a never-run quest",
+  "args": {
+   "cfg": {
+    "mode": "reactive",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "asks": [
+    {
+     "occurred_at": "2026-07-12T10:00:00Z"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-022",
+  "kind": "reactive",
+  "area": "never run and no ask",
+  "args": {
+   "cfg": {
+    "mode": "reactive",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "asks": []
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "reactive"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-023",
+  "kind": "reactive",
+  "area": "ask without a time is skipped",
+  "args": {
+   "cfg": {
+    "mode": "reactive",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "last_pass_at": "2026-07-13T06:00:00Z"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "asks": [
+    {
+     "text": "no timestamp"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "reactive"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-024",
+  "kind": "roster",
+  "area": "nobody rostered on Saturday",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "personas": [
+     {
+      "rep_id": "rep_one",
+      "days": [
+       "Mon",
+       "Tue",
+       "Wed",
+       "Thu",
+       "Fri"
+      ]
+     }
+    ]
+   },
+   "now": "2026-07-11T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "rostered"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-025",
+  "kind": "roster",
+  "area": "a Saturday character",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "personas": [
+     {
+      "rep_id": "rep_one",
+      "days": [
+       "Mon",
+       "Tue",
+       "Wed",
+       "Thu",
+       "Fri"
+      ]
+     },
+     {
+      "rep_id": "rep_two",
+      "days": [
+       "Sat"
+      ]
+     }
+    ]
+   },
+   "now": "2026-07-11T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "AGT-026",
+  "kind": "roster",
+  "area": "no roster is unrestricted",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-11T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-027",
+  "kind": "roster",
+  "area": "rostered weekday",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC",
+    "personas": [
+     {
+      "rep_id": "rep_one",
+      "days": [
+       "Mon",
+       "Tue",
+       "Wed",
+       "Thu",
+       "Fri"
+      ]
+     }
+    ]
+   },
+   "now": "2026-07-14T09:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-028",
+  "kind": "roster",
+  "area": "the quest's local day decides",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "America/Los_Angeles",
+    "personas": [
+     {
+      "rep_id": "rep_one",
+      "days": [
+       "Tue"
+      ]
+     }
+    ]
+   },
+   "now": "2026-07-14T03:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "rostered"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-029",
+  "kind": "roster",
+  "area": "local Monday is rostered Monday",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "America/Los_Angeles",
+    "personas": [
+     {
+      "rep_id": "rep_one",
+      "days": [
+       "Mon"
+      ]
+     }
+    ]
+   },
+   "now": "2026-07-14T03:00:00Z"
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-030",
+  "kind": "backpressure",
+  "area": "open autopilot work holds the quest",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "backpressure": true,
+   "tasks": [
+    {
+     "id": "t1",
+     "status": "queued",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "skipped"
+   },
+   "contains": [
+    "backpressure"
+   ]
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-031",
+  "kind": "backpressure",
+  "area": "off by default",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "tasks": [
+    {
+     "id": "t1",
+     "status": "queued",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "AGT-032",
+  "kind": "backpressure",
+  "area": "a person's recurring task never holds",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "backpressure": true,
+   "tasks": [
+    {
+     "id": "t1",
+     "status": "queued",
+     "task_kind": "recurring",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "AGT-033",
+  "kind": "backpressure",
+  "area": "finished work does not hold",
+  "args": {
+   "cfg": {
+    "mode": "act",
+    "cadence": "daily",
+    "run_timezone": "UTC"
+   },
+   "now": "2026-07-14T09:00:00Z",
+   "backpressure": true,
+   "tasks": [
+    {
+     "id": "t1",
+     "status": "done",
+     "task_kind": "autopilot_work",
+     "created_at": "2026-07-14T01:00:00Z",
+     "goal_id": "quest_a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "outcome": "ran"
+   }
+  },
+  "heldout": false
+ }
+]

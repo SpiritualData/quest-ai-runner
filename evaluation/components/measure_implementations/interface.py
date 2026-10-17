@@ -12,6 +12,9 @@ built in a temporary folder (with its own throwaway git repository). Determinist
 Kinds and the dict a solution returns:
   rank      args {rows: [{impl, passed, cases, cost_usd, cases_sha}], selected}
             -> {"ranked": [impl, best first], "beats": [challenger impls], "unverified": [impls]}
+  verdict   args {rows: [{impl, passed, cases, cost_usd, cases_sha, component?}], selected}
+            -> {"verdict": "WIN" | "TIE" | "LOSS" | "UNMEASURED", "text": why, "arms": {impl: "" | ablation | baseline | ...}}
+            a win is not a tie: equal pass rate at spend within the tolerance is a TIE, and an ablation is no rival
   board     args {rows: [full results.csv rows], selected, strict}
             -> {"exit": int, "text": leaderboard output, "beats": [...], "incomparable": [...]}   (``main`` end to end)
   record    args {cases_file: "json" | "csv", dirty: bool, edit_cases: bool}

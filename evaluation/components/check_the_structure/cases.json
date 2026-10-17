@@ -1279,5 +1279,104 @@
    "rule": "C10",
    "contains": "not all passing"
   }
+ },
+ {
+  "id": "CTS-114",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a metric_command arm that has no recorded row",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "metric_command",
+     "value": "evaluation/components/run.py greet --impl live; evaluation/components/run.py greet --impl ghost"
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S24",
+   "contains": "ghost"
+  }
+ },
+ {
+  "id": "CTS-115",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a gap that calls a recorded implementation unrecorded",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "gap",
+     "value": "The shout arm is not recorded."
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S24",
+   "contains": "shout"
+  }
+ },
+ {
+  "id": "CTS-116",
+  "area": "repo",
+  "kind": "repo",
+  "description": "an action that says to record an implementation that is recorded",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "action",
+     "value": "Record shout once a model is approved."
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S24",
+   "contains": "shout"
+  }
+ },
+ {
+  "id": "CTS-117",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a gap that truthfully calls an unrecorded arm unrecorded",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "gap",
+     "value": "The ghost arm is not recorded."
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "clean": true
+  }
  }
 ]

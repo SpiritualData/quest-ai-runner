@@ -188,7 +188,8 @@ written seeing 1-22 only), so a baseline gap between the two groups shows over-f
 `chat_quality/` is the end-to-end chat metric (formerly `evaluation/qualitative/`) and the metric of the solution `answer-a-turn`:
 `converse(case) -> record`, scored from the record's pass flag. It needs a built dev Quest world, so its graded implementation
 (`impls/dev_quest_chat.py`) SKIPs offline with exit 0; the full datasets, world lifecycle and judge are driven by
-`chat_quality/runner.py` (see its README). The offline arm `impls/reference_replies.py` is recorded: it shows the metric is sound.
+`chat_quality/runner.py` (see its README). The offline arm `impls/reference_replies.py` is recorded over every case in the datasets: it shows the metric is sound.
+The graded arm is drawn with `--sample N` and counts its spend when run in process (see `chat_quality/README.md`).
 
 Every implementation measures live code or says it does not (check S12 in `docs/structure/README.md`): it
 imports or drives `quest_ai_runner`, or declares `ALTERNATIVE = True` (or a docstring opening `ALTERNATIVE`,

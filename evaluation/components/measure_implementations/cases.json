@@ -965,5 +965,293 @@
     "unverified": []
    }
   }
+ },
+ {
+  "id": "MEA-034",
+  "kind": "verdict",
+  "area": "win by pass rate",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "WIN"
+   }
+  }
+ },
+ {
+  "id": "MEA-035",
+  "kind": "verdict",
+  "area": "equal pass rate at similar cost is a tie",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 1.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 1.05,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "TIE"
+   }
+  }
+ },
+ {
+  "id": "MEA-036",
+  "kind": "verdict",
+  "area": "equal pass rate at clearly lower spend is a win",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 0.5,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 1.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "WIN"
+   }
+  }
+ },
+ {
+  "id": "MEA-037",
+  "kind": "verdict",
+  "area": "a rival ahead is a loss",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "LOSS"
+   }
+  }
+ },
+ {
+  "id": "MEA-038",
+  "kind": "verdict",
+  "area": "equal pass rate with a clearly cheaper rival is a loss",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 1.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 0.5,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "LOSS"
+   }
+  }
+ },
+ {
+  "id": "MEA-039",
+  "kind": "verdict",
+  "area": "no rival measured",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "UNMEASURED"
+   }
+  }
+ },
+ {
+  "id": "MEA-040",
+  "kind": "verdict",
+  "area": "a rival on other cases is not compared",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "y"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "UNMEASURED"
+   }
+  }
+ },
+ {
+  "id": "MEA-041",
+  "kind": "verdict",
+  "area": "the selected implementation has no row",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "UNMEASURED"
+   }
+  }
+ },
+ {
+  "id": "MEA-042",
+  "kind": "verdict",
+  "area": "an ablation scoring higher is no rival",
+  "args": {
+   "rows": [
+    {
+     "impl": "qar_planner",
+     "passed": 8,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x",
+     "component": "classification"
+    },
+    {
+     "impl": "single_prompt",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x",
+     "component": "classification"
+    }
+   ],
+   "selected": "qar_planner"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "UNMEASURED",
+    "arms": {
+     "qar_planner": "",
+     "single_prompt": "ablation"
+    }
+   }
+  }
+ },
+ {
+  "id": "MEA-043",
+  "kind": "verdict",
+  "area": "a baseline is tagged and is a rival",
+  "args": {
+   "rows": [
+    {
+     "impl": "qar_planner",
+     "passed": 8,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x",
+     "component": "classification"
+    },
+    {
+     "impl": "keyword_rules",
+     "passed": 8,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x",
+     "component": "classification"
+    }
+   ],
+   "selected": "qar_planner"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "TIE",
+    "arms": {
+     "qar_planner": "",
+     "keyword_rules": "baseline"
+    }
+   }
+  }
  }
 ]

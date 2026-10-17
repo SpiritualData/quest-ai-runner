@@ -54,6 +54,7 @@ case in `evaluation/components/check_the_structure/`.
 21. **S21 evaluation folders.** Every `evaluation/components/<x>/` is named by some solution's `metric_command` or `metric`, or is listed shared; an orphan folder is deleted.
 22. **S22 numbers.** No score, percentage, dollar amount or case count in a solution's `metric`, `gap` or `action` or in a waiver reason; numbers live in `results.csv`, read through the leaderboard.
 23. **S23 selected is the table default.** For a solution with a selection-table entry, `selected` equals that entry's default.
+24. **S24 recorded claims are true.** Every arm a `metric_command` names has a `results.csv` row, and a gap or action that says an implementation is "not recorded" (or says to "Record" it) names none that already has a row.
 
 ## Notes on the rules
 

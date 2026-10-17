@@ -376,6 +376,32 @@ def infra_errored(record):
     return any("the AI service errored" in (t.get("reply") or "") for t in turns)
 
 
+def run_serial_case(case, world, use_judge=True, on_abort=None):
+    """One case with the lifecycle a serial run gives it, returned as ``(record, world)``: sweep the cards the last
+    case learned, run it (again when the chat says its model service errored), put the world back, sweep again.
+    ``on_abort(record)`` runs before a failed world reset stops the run."""
+    # Right before this case starts: catch anything the previous case's updater wrote late.
+    W.sweep_new_cards(world.get("cards_baseline"))
+    for attempt in range(1 + INFRA_RETRIES):
+        r = run_case(case, world, use_judge)
+        try:
+            world = restore_world(r, world)
+        except SystemExit as stop:  # reset aborted: keep this case's record, then stop the run
+            r["world_reset_failed"] = str(stop)
+            if on_abort:
+                on_abort(r)
+            raise
+        if not infra_errored(r) or attempt == INFRA_RETRIES:
+            break
+        # The model proxy shared with other agents answered 429 or empty: the chat said "the AI
+        # service errored" and did nothing. That is the environment, not the code under test, so
+        # run the case again (world already restored) instead of scoring it as a failure.
+        print(f"  {case['id']}: model service errored, retrying ({attempt + 1}/{INFRA_RETRIES})")
+    r["infra_retries"] = attempt
+    W.sweep_new_cards(world.get("cards_baseline"))
+    return r, world
+
+
 def run_cases(cases, use_judge=True, workers=1):
     world = W.load()
     print(f"Quest backend : {QUEST_BASE} (in-app Quest AI chat, auto_run on)")
@@ -403,26 +429,11 @@ def run_cases(cases, use_judge=True, workers=1):
     # Between the parallel batch and the serial one: the only sweep the parallel cases get.
     W.sweep_new_cards(world.get("cards_baseline"))
     for case in mutating:
-        # Right before this case starts: catch anything the previous case's updater wrote late.
-        W.sweep_new_cards(world.get("cards_baseline"))
-        for attempt in range(1 + INFRA_RETRIES):
-            r = run_case(case, world, use_judge)
-            try:
-                world = restore_world(r, world)
-            except SystemExit as stop:  # reset aborted: keep this case's record, then stop the run
-                r["world_reset_failed"] = str(stop)
-                save_result(r)
-                print_row(r)
-                merge_results(records + [r])
-                raise
-            if not infra_errored(r) or attempt == INFRA_RETRIES:
-                break
-            # The model proxy shared with other agents answered 429 or empty: the chat said "the AI
-            # service errored" and did nothing. That is the environment, not the code under test, so
-            # run the case again (world already restored) instead of scoring it as a failure.
-            print(f"  {case['id']}: model service errored, retrying ({attempt + 1}/{INFRA_RETRIES})")
-        r["infra_retries"] = attempt
-        W.sweep_new_cards(world.get("cards_baseline"))
+        def abort(record):
+            save_result(record)
+            print_row(record)
+            merge_results(records + [record])
+        r, world = run_serial_case(case, world, use_judge, on_abort=abort)
         records.append(r)
         save_result(r)
         print_row(r)

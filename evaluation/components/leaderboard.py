@@ -21,13 +21,32 @@ treated as evidence against a verified row (``comparable`` keeps them apart). Re
 ``run.py --record``, or carry an ``S16`` waiver in docs/structure/waivers.csv saying why they cannot be.
 """
 import csv
+import hashlib
 import re
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results.csv"
 SOLUTIONS = HERE.parents[1] / "docs" / "structure" / "solutions.csv"
+
+
+def cases_files(component, base=HERE):
+    """The case files a component is scored on: ``cases.json`` (or ``cases.csv`` when the dataset is reviewed as a
+    sheet), plus every ``datasets/*.json`` of a component whose cases live in a dataset folder."""
+    folder = Path(base) / component
+    main = next((folder / n for n in ("cases.json", "cases.csv") if (folder / n).is_file()), None)
+    return ([main] if main else []) + sorted((folder / "datasets").glob("*.json"))
+
+
+def cases_digest(component, base=HERE):
+    """Short hash of everything ``cases_files`` names: the ``cases_sha`` a recorded run is pinned to. Line endings
+    are normalised first, because a dataset reviewed as a sheet comes back from the sheet with either kind."""
+    files = cases_files(component, base)
+    if not files:
+        return ""
+    return hashlib.sha256(b"".join(f.read_bytes().replace(b"\r\n", b"\n") for f in files)).hexdigest()[:8]
 
 
 def invariant_components(path=SOLUTIONS):
@@ -94,14 +113,27 @@ def comparable(a, b):
     return (a.get("cases_sha") or "") == (b.get("cases_sha") or "")
 
 
-def is_ablation(row):
-    """True when the implementation's module opens with ABLATION: a part of a candidate measured alone (the
-    cheap call without the planner behind it). It returns less than the whole job, so it is shown in the
-    ranking and never offered as the thing to adopt."""
+ARM_MARKER = re.compile(r'\s*"""\s*(ABLATION|BASELINE|FLOOR|ALTERNATIVE)')
+
+
+def arm_kind(row):
+    """What an implementation is for, from the first word of its module docstring: ``ablation`` (a part of a
+    candidate measured alone: the cheap call without the planner behind it), ``baseline`` (a floor someone
+    would plausibly ship; ``FLOOR`` counts), ``alternative``, or ``""`` for live code. Shown beside every row so a
+    reader can tell a rival from a reference point."""
     path = HERE / row.get("component", "") / "impls" / (row["impl"] + ".py")
     if not path.is_file():
-        return False
-    return path.read_text().lstrip().startswith('"' * 3 + "ABLATION")
+        return ""
+    found = ARM_MARKER.match(path.read_text())
+    if not found:
+        return ""
+    return {"FLOOR": "baseline"}.get(found.group(1), found.group(1).lower())
+
+
+def is_ablation(row):
+    """True when the implementation's module opens with ABLATION: it returns less than the whole job, so it is
+    shown in the ranking and never offered as the thing to adopt."""
+    return arm_kind(row) == "ablation"
 
 
 COST_TIE_TOLERANCE = 0.10  # costs within 10% are a tie: run-to-run noise must not flip a selection
@@ -142,12 +174,74 @@ def challengers(rows, selected):
     return better
 
 
+def tag(row):
+    kind = arm_kind(row)
+    return f"  [{kind.upper()}]" if kind else ""
+
+
 def print_rows(rows, sel):
     for r in rank(rows):
         mark = "*" if r["impl"] == sel else " "
         flag = "  [unverified: no cases_sha, recorded before provenance]" if unverified(r) else ""
         print(f"  {mark} {r['impl']:<20} {r['passed']}/{r['cases']} (held-out {r['heldout']}) "
-              f"calls={r['model_calls']} cost=${float(r['cost_usd'] or 0):.4f}  {r['date']}{flag}")
+              f"calls={r['model_calls']} cost=${float(r['cost_usd'] or 0):.4f}  {r['date']}{tag(r)}{flag}")
+
+
+def verdict(rows, selected):
+    """How the selected implementation stands against the other measured ones, as ``(label, detail)``:
+
+    * ``WIN``: it beats every rival on the same cases, by pass rate or by clearly lower spend at the same rate;
+    * ``TIE``: some rival passes as many cases at spend within COST_TIE_TOLERANCE (or lower): the metric did not
+      separate them, so the selection is kept for a reason outside the number (``selected_by``), not decided by it;
+    * ``LOSS``: a rival beats it (see ``challengers``);
+    * ``UNMEASURED``: it has no row, or no rival was measured on the same cases, so nothing was compared.
+
+    Ablations are not rivals (they return less than the whole job); baselines are."""
+    cur = rows.get(selected)
+    if cur is None:
+        return "UNMEASURED", "the selected implementation has no recorded row"
+    rivals = [r for r in rows.values() if r["impl"] != selected and comparable(r, cur) and not is_ablation(r)]
+    if not rivals:
+        return "UNMEASURED", "no rival implementation was measured on the same cases"
+    beaten_by = [r["impl"] for r in challengers(rows, selected)]
+    if beaten_by:
+        return "LOSS", "beaten by " + ", ".join(sorted(beaten_by))
+    mine = Fraction(int(cur["passed"]), max(int(cur["cases"]), 1))
+    tied = [r["impl"] for r in rivals
+            if Fraction(int(r["passed"]), max(int(r["cases"]), 1)) == mine and not clearly_cheaper(cur, r)]
+    if tied:
+        return "TIE", (f"passes as many cases as {', '.join(sorted(tied))} at spend within "
+                       f"{int(COST_TIE_TOLERANCE * 100)}% (or lower), so the metric does not separate them")
+    reasons = []
+    for r in sorted(rivals, key=lambda r: r["impl"]):
+        if Fraction(int(r["passed"]), max(int(r["cases"]), 1)) < mine:
+            reasons.append(f"passes more cases than {r['impl']}")
+        else:
+            (_, theirs), (_, ours) = spend(r), spend(cur)
+            saved = 1 - ours / theirs if theirs and spend(r)[0] == spend(cur)[0] else 0.0
+            reasons.append(f"same pass rate as {r['impl']} at {saved:.0%} lower spend" if saved
+                           else f"same pass rate as {r['impl']} at lower spend")
+    return "WIN", "; ".join(reasons)
+
+
+def solution_verdicts(results=None, path=SOLUTIONS):
+    """{solution_id: {"verdict", "detail", "component", "selected_by"}} for every ``eval`` solution, judged on the
+    first harness arm of its ``metric_command`` (the primary metric; later arms are listed on the board)."""
+    results = latest_results(RESULTS) if results is None else results
+    out = {}
+    with open(path, newline="") as fh:
+        for row in csv.DictReader(fh):
+            if (row.get("metric_kind") or "").strip() != "eval":
+                continue
+            m = re.search(r"components/run\.py (\w+) --impl (\w+)", row["metric_command"])
+            if not m:
+                out[row["solution_id"]] = dict(verdict="UNMEASURED", detail="no harness metric", component="",
+                                               selected_by=row["selected_by"])
+                continue
+            label, detail = verdict(results.get(m.group(1), {}), m.group(2))
+            out[row["solution_id"]] = dict(verdict=label, detail=detail, component=m.group(1),
+                                           selected_by=row["selected_by"])
+    return out
 
 
 def main(argv):
@@ -159,7 +253,8 @@ def main(argv):
         if component in apart:
             continue
         sel = selected.get(component)
-        print(f"{component} (selected: {sel or 'none recorded'})")
+        label, detail = verdict(rows, sel) if sel else ("UNMEASURED", "no selected implementation")
+        print(f"{component} (selected: {sel or 'none recorded'}) {label}: {detail}")
         print_rows(rows, sel)
         cur = rows.get(sel)
         for r in rows.values():
@@ -170,6 +265,11 @@ def main(argv):
             flagged += 1
             print(f"  ! {r['impl']} beats the selected {sel}: decide whether to adopt it "
                   f"(update solutions.csv `selected` and the live default together)")
+    print("\nBy solution (WIN = the metric chose it; TIE = kept for the reason in selected_by, the metric did not "
+          "separate it; UNMEASURED = no rival was compared)")
+    for sid, v in sorted(solution_verdicts(results).items()):
+        reason = f"  kept because: {v['selected_by']}" if v["verdict"] == "TIE" else ""
+        print(f"  {v['verdict']:<10} {sid}: {v['detail']}{reason}")
     if apart:
         print("\nInvariant solutions (a rule that holds or does not; listed with their recorded run, never ranked)")
         for component, rows in sorted(apart.items()):

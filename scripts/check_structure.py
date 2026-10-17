@@ -4,20 +4,19 @@
 Run from anywhere:  python scripts/check_structure.py [--write-docs] [--strict]
 Exit 0 = clean, 1 = violations (printed one per line as ``RULE path: message``).
 
-The registry is data, not code (see docs/structure/README.md, which lists rules S1 to S23 once, in order):
+The registry is data, not code (see docs/structure/README.md, which lists rules S1 to S24 once, in order):
   * components.csv   placement only: component_id, layer, path globs, role, the solutions each serves
   * solutions.csv    each solution: problem, ideal, port, implementations, selected one, metric, gap, action
   * waivers.csv      known, justified exceptions to a rule (each must still apply)
   * COMPONENTS.md    generated from components.csv (--write-docs rewrites it, with configuration.md and tracker/)
 
-Every problem line starts with the id of the rule it breaks (S1 to S23); the one-line statement of each rule is
+Every problem line starts with the id of the rule it breaks (S1 to S24); the one-line statement of each rule is
 in docs/structure/README.md, so there is a single list to keep current.
 """
 from __future__ import annotations
 
 import ast
 import csv
-import hashlib
 import re
 import subprocess
 import sys
@@ -43,6 +42,8 @@ NUMBER_IN_PROSE = re.compile(
     r"|\b\d[\d,]*\s+(?:[a-z-]+\s+){0,2}?(?:cases?|scenarios?|queries|questions|tasks|fixtures?|logs|calls|"
     r"documents|sequences|names)\b")
 HARNESS = re.compile(r"components/run\.py (\w+) --impl (\w+)")
+# A sentence in a gap or action that claims a run is missing, or tells someone to make it (S24).
+STALE_CLAIM = re.compile(r"\b(?:not|never) (?:yet )?recorded\b|\bunrecorded\b|\bno recorded\b|^\s*Record\b")
 
 
 def _load_leaderboard():
@@ -411,8 +412,29 @@ def check() -> list[str]:
             bad.append(f"S10 {r['solution_id']}: {', '.join(better)} beat the selected {sel} in results.csv; "
                        "adopt the winner or add a waiver naming the pending decision")
 
+    # S24 recorded claims are true: every arm a metric_command names has a row, and a gap or action that says an
+    # implementation is not recorded (or tells someone to record it) names none that already has a row
+    for r in solutions:
+        sid = r["solution_id"]
+        for comp, impl in HARNESS.findall(r["metric_command"])[1:]:   # the first arm is S10's
+            if impl not in results.get(comp, {}) and not waived("S24", f"{sid}:{impl}"):
+                bad.append(f"S24 {sid}: the metric_command names {comp}/{impl}, which has no row in results.csv "
+                           "(record it, or name the recorded arm and say in the gap that the other is unrecorded)")
+        recorded = set()
+        for i in patterns(r["implementations"]):
+            im = re.match(r"evaluation/components/(\w+)/impls/(\w+)\.py$", i.split("::")[0])
+            if im and im.group(2) in results.get(im.group(1), {}):
+                recorded.add(im.group(2))
+        for sentence in re.split(r"(?<=[.;])\s+", r["gap"] + " " + r["action"]):
+            if not STALE_CLAIM.search(sentence):
+                continue
+            for stem in sorted(recorded):
+                if re.search(rf"\b{re.escape(stem)}\b", sentence) and not waived("S24", f"{sid}:{stem}"):
+                    bad.append(f"S24 {sid}: the gap or action says {stem} is not recorded, but results.csv has a row "
+                               f"for it ({sentence.strip()[:70]!r}); update the text")
+
     # S11 metric kinds
-    sol_ids = {r["solution_id"] for r in solutions}
+    sol_ids ={r["solution_id"] for r in solutions}
     for r in solutions:
         sid, kind = r["solution_id"], r.get("metric_kind", "").strip()
         if kind not in SOLUTION_KINDS:
@@ -531,9 +553,7 @@ def check() -> list[str]:
         row = results.get(comp, {}).get(sel)
         if row is None:
             continue  # S10 reports the missing row
-        cases_file = next((ROOT / "evaluation" / "components" / comp / n for n in ("cases.json", "cases.csv")
-                           if (ROOT / "evaluation" / "components" / comp / n).exists()), None)
-        now = hashlib.sha256(cases_file.read_bytes()).hexdigest()[:8] if cases_file else ""
+        now = leaderboard.cases_digest(comp)
         if not row.get("git_sha", "").strip():
             why = "its latest row has no git_sha"
         elif row.get("cases_sha", "") != now:

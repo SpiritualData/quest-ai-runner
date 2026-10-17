@@ -67,8 +67,10 @@ _SEARCH_TEXT_FIELD = "_search_text"
 # Scroll page size for ``load_all`` (a single tenant rarely has many cards; one page usually suffices).
 _SCROLL_PAGE = 256
 
-# Hard cap on points scrolled per tenant in ``load_all`` (defense against an unbounded scan).
-_MAX_SCOPE_CARDS = 2000
+# Safety ceiling on points scrolled per tenant in ``load_all``. It is a runaway guard, far above any real
+# tenant: the scan pages until the server has no more points, and a tenant that reaches the ceiling is
+# logged (a silent truncation at a smaller cap dropped cards 2,049 onwards from every read).
+_MAX_SCOPE_CARDS = 1_000_000
 
 # Repo-internal payload fields stripped before a stored card dict is returned to the store.
 _INTERNAL_FIELDS = {"card_id", _SEARCH_TEXT_FIELD, "updated_at"}
@@ -377,7 +379,10 @@ class QdrantCardRepository:
                         continue
                     out[str(cid)] = self._strip_card(payload, self._scope.keys())
                 scanned += len(points)
-                if offset is None or scanned >= _MAX_SCOPE_CARDS:
+                if offset is None:
+                    break
+                if scanned >= _MAX_SCOPE_CARDS:
+                    logger.warning("QdrantCardRepository.load_all stopped at the %d-point safety ceiling", scanned)
                     break
             return out
         except Exception as e:  # noqa: BLE001

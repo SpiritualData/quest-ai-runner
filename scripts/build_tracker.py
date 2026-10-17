@@ -28,7 +28,8 @@ SEP = ";"
 COLUMNS = {
     "problems": ["problem_id", "problem", "solution_ids", "component_ids", "auto_status"],
     "solutions": ["solution_id", "port", "problem_id", "ideal_ids", "metric_ids", "implementation_ids",
-                  "selected_implementation_id", "selected_by", "metric_kind", "component_ids", "auto_status"],
+                  "selected_implementation_id", "selected_by", "metric_kind", "verdict", "verdict_detail",
+                  "component_ids", "auto_status"],
     "implementations": ["implementation_id", "solution_id", "path", "kind", "selected", "latest_result",
                         "latest_cost_usd", "cases_sha", "auto_status"],
     "ideals": ["ideal_id", "scope", "statement", "applies_to", "metric_ids", "auto_status"],
@@ -48,8 +49,28 @@ def _stem(path: str) -> str:
     return re.sub(r"\.py$", "", path.rsplit("/", 1)[-1])
 
 
+def _leaderboard():
+    """evaluation/components/leaderboard.py is the one ranking implementation; the tracker reads its verdicts."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("qar_leaderboard_for_tracker",
+                                                  ROOT / "evaluation" / "components" / "leaderboard.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# What a solution's verdict means for its status (the leaderboard decides; see leaderboard.verdict).
+STATUS_BY_VERDICT = {"WIN": "decided-by-metric", "TIE": "tie-kept-by-selected_by", "LOSS": "beaten-by-rival",
+                     "UNMEASURED": "no-rival-measured"}
+
+
 def _kind(path: str) -> str:
-    """alternative / live / not-a-file for an implementation path (documentation, not a gate)."""
+    """ablation / baseline / alternative / live for an implementation path (documentation, not a gate)."""
+    found = re.match(r"evaluation/components/(\w+)/impls/(\w+)\.py$", path)
+    if found:
+        tagged = _leaderboard().arm_kind({"component": found.group(1), "impl": found.group(2)})
+        if tagged:
+            return tagged
     full = ROOT / path
     if not full.suffix == ".py" or not full.exists():
         return "live"
@@ -98,6 +119,7 @@ def build() -> dict[str, list[dict]]:
     components = read_csv(STRUCT / "components.csv")
     principles = read_csv(STRUCT / "principles.csv")
     results = _latest_results()
+    verdicts = _leaderboard().solution_verdicts()
     table = selection_table()
     by_solution: dict[str, list[str]] = {}
     for comp in components:
@@ -143,9 +165,13 @@ def build() -> dict[str, list[dict]]:
             "solution_id": sid, "port": s["port"], "problem_id": f"prob-{sid}", "ideal_ids": f"ideal-{sid}",
             "metric_ids": f"metric-{sid}", "implementation_ids": SEP.join(impl_ids),
             "selected_implementation_id": selected_id, "selected_by": s["selected_by"],
-            "metric_kind": s["metric_kind"], "component_ids": SEP.join(by_solution.get(sid, [])),
+            "metric_kind": s["metric_kind"],
+            "verdict": verdicts.get(sid, {}).get("verdict", ""),
+            "verdict_detail": verdicts.get(sid, {}).get("detail", ""),
+            "component_ids": SEP.join(by_solution.get(sid, [])),
             "auto_status": "invariant" if s["metric_kind"] == "invariant"
-            else ("decided-by-metric" if sel_res else "decided-by-hand")})
+            else (STATUS_BY_VERDICT.get(verdicts.get(sid, {}).get("verdict", ""), "decided-by-hand")
+                  if sel_res else "decided-by-hand")})
     for p in principles:
         ideals.append({"ideal_id": p["principle_id"].lower(), "scope": "principle",
                        "statement": f"{p['name']}: {p['statement']}",

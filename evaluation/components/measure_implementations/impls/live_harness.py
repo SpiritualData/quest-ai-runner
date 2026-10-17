@@ -1,4 +1,4 @@
-"""CURRENT: the live harness. ``leaderboard.rank``, ``challengers``, ``unverified``, ``comparable``,
+"""CURRENT: the live harness. ``leaderboard.rank``, ``challengers``, ``verdict``, ``arm_kind``, ``unverified``, ``comparable``,
 ``latest_results``, ``selected_impls`` and ``main``; ``common.record_result``, ``common.load_cases`` and
 ``common.run_component`` pointed (by patching their folder, repository and csv path constants) at a mini
 component and synthetic tables in a temporary folder with its own git repository. Zero model calls."""
@@ -20,6 +20,12 @@ def rank(args):
     ranked = [r["impl"] for r in leaderboard.rank(rows)]
     return {"ranked": ranked, "beats": [r["impl"] for r in leaderboard.challengers(rows, args["selected"])],
             "unverified": [i for i, r in rows.items() if leaderboard.unverified(r)]}
+
+
+def verdict(args):
+    rows = {r["impl"]: dict(date="d", **r) for r in args["rows"]}
+    label, detail = leaderboard.verdict(rows, args["selected"])
+    return {"verdict": label, "text": detail, "arms": {i: leaderboard.arm_kind(r) for i, r in rows.items()}}
 
 
 def board(args):
@@ -87,7 +93,7 @@ def validity(args):  # noqa: ARG001
     return {"cases": good["cases"], "good_passed": good["passed"], "bad_passed": bad["passed"]}
 
 
-KINDS = {"rank": rank, "board": board, "record": record, "run": run, "validity": validity}
+KINDS = {"rank": rank, "verdict": verdict, "board": board, "record": record, "run": run, "validity": validity}
 
 
 def build(meter):  # noqa: ARG001

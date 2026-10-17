@@ -28,7 +28,7 @@ BACKEND_DIR = Path(os.environ.get("QUAL_BACKEND_DIR")
 TIERS = ("fast", "balanced", "quality", "science", "best")
 LOCK = threading.RLock()  # serializes requests; held for a whole chat stream
 USAGE_LOCK = threading.Lock()  # never LOCK here: LLM calls run on worker threads mid-stream
-STATE = {"client": None, "models": None}
+STATE = {"client": None, "models": None, "usage": {}}
 
 
 def model_pins():
@@ -68,7 +68,7 @@ def record_llm_usage():
     import atexit
     import conceptai.functions.functions as cff
     from devclient import WORK_DIR
-    usage = {}
+    usage = STATE["usage"] = {}
     previous = getattr(cff, "_llm_background_callback", None)
 
     def callback(count, record):
@@ -84,6 +84,20 @@ def record_llm_usage():
     cff.set_llm_background_callback(callback)
     atexit.register(lambda: (WORK_DIR / "inprocess_usage.json").write_text(
         json.dumps({"models": STATE["models"], "usage": usage}, indent=1)))
+
+
+def usage_totals():
+    """``(calls, prompt_tokens, completion_tokens)`` of every LLM call this process has made so far."""
+    with USAGE_LOCK:
+        rows = list(STATE["usage"].values())
+    return (sum(r["calls"] for r in rows), sum(r["prompt_tokens"] for r in rows),
+            sum(r["completion_tokens"] for r in rows))
+
+
+def served_models():
+    """The model ids that actually served the run, from the usage counters (proof of the pin)."""
+    with USAGE_LOCK:
+        return sorted(STATE["usage"])
 
 
 def client():

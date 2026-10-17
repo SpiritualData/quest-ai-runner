@@ -17,7 +17,7 @@ Edit the CSV, never this file. The rules are the numbered list in `docs/structur
 | `runner-quest-client` | runner | The Quest HTTP client in API-area mixins plus decision sink | escalate-to-a-human |
 | `runner-poller` | runner | Event-driven, signature-deduped poll loop with bounded concurrency | run-queued-tasks |
 | `runner-executor` | runner | Run one claimed task through the brain and report | run-queued-tasks |
-| `runner-autopilot` | runner | The recurring autopilot pass: defaults, periods, personas, briefs, gates | assemble-a-prompt |
+| `runner-autopilot` | runner | The recurring autopilot pass: defaults, periods, personas, briefs, gates | gate-an-autopilot-pass, assemble-a-prompt |
 | `runner-context-updates` | runner | Keeping a quest context up to date: bundle, receipts, state, judges, sources | assemble-a-prompt, feed-context-sources |
 | `runner-personas` | runner | Which persona runs a task (data, not code), rep skill sync, workflow actions | run-queued-tasks |
 | `runner-quest-folder` | runner | A quest as a working folder: index, two-way sync, zones, goals, experiments | run-queued-tasks |
