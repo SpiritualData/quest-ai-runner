@@ -29,7 +29,7 @@ solution (the optional registry column ``solution_id``) with a CURRENT recorded 
 
     solutions.csv   solution_id, selected, metric_files (';'-separated paths under the root hashed as the cases)
     results.csv     solution_id, cases, passed, git_sha, cases_sha (the latest row per solution counts; rows
-                    with kind=live are live proofs and do not gate)
+                    with kind=live or kind=component do not gate here, C11 reads components)
 
 C9 the row names a solution that exists and has a selected implementation; C10 the solution has a
 result with a git sha and a cases hash, every case passing (or the solution's gap says why not), and the hash still matches the metric files
@@ -292,8 +292,8 @@ def check_solutions(report: ConsumerReport, rows: List[Dict[str, str]], solution
     sols = {r["solution_id"]: r for r in read_rows(solutions)}
     latest: Dict[str, Dict[str, str]] = {}
     for r in read_rows(results):
-        if r.get("kind", "offline") == "live":
-            continue  # a live proof is recorded beside the gating offline metric, never instead of it
+        if r.get("kind", "offline") in ("live", "component"):
+            continue  # live proofs and scored components are recorded beside the gating offline run (C11 reads components)
         latest[r["solution_id"]] = r
     used = set()
     for row in rows:
