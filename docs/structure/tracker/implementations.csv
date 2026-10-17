@@ -162,7 +162,7 @@ measure-implementations:common,measure-implementations,evaluation/components/com
 measure-implementations:leaderboard,measure-implementations,evaluation/components/leaderboard.py,live,,,,,unmeasured,,,,
 measure-implementations:expect,measure-implementations,evaluation/components/expect.py,live,,,,,unmeasured,,,,
 measure-implementations:results.csv,measure-implementations,evaluation/components/results.csv,live,,,,,unmeasured,,,,
-measure-implementations:live_harness,measure-implementations,evaluation/components/measure_implementations/impls/live_harness.py,live,yes,31/31,0.0,9e10c5c5,selected,,,,
+measure-implementations:live_harness,measure-implementations,evaluation/components/measure_implementations/impls/live_harness.py,live,yes,33/33,0.0,5b96f409,selected,,,,
 explain-qar:README.md,explain-qar,docs/README.md,live,,,,,unmeasured,,,,
 explain-qar:shipped_docs,explain-qar,evaluation/components/explain_qar/impls/shipped_docs.py,live,yes,407/407,0.0,e63b74ab,selected,,,,
 persist-predictions:anticipation_store,persist-predictions,quest_ai_runner/core/anticipation_store.py,live,yes,,,,selected,,,,

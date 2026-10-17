@@ -308,3 +308,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-17,quest_ops,qar_orchestrator,22,22,14/14,8/8,172,1240844,51341,0.9923,605.3,b1de558,de2edf94,haiku
 2026-10-17,deep_review,live_reviewer,39,39,39/39,0/0,39,0,0,0.0,152.2,b1de558,b3b6bf0a,haiku
 2026-10-17,web_search_live,web_research,10,10,7/7,3/3,10,0,0,0.35,23.2,b1de558,42137781,haiku
+2026-10-17,measure_implementations,live_harness,33,33,24/24,9/9,0,0,0,0.0,0.2,b5249c8,5b96f409,none
