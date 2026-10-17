@@ -224,3 +224,20 @@ rules), so 60,000 was a stale initial value, not a regression to hide; trimming 
   (fastembed cache, offline) versus an in-memory cosine baseline, on the same handbook cards. It is its own
   component rather than extra `context_selection` cases because those labels are repo files and rank whole
   pipelines, which would put one arm against the full hybrid under check S10.
+
+## Infrastructure solutions (structure, public surface, examples, tests, docs, hygiene)
+
+Six components score the repo's own plumbing, all offline with zero model calls. Each has a declared baseline.
+
+| Component | Function | Scored by | Baseline |
+| --- | --- | --- | --- |
+| `check_the_structure/` | `check(kind, args) -> {"exit", "problems"}` | mutation detection: one known violation injected per case into a synthetic fixture repo (and a consumer registry), rule and path must be reported; clean fixtures must not be flagged | `coverage_only` (file coverage alone) |
+| `expose_the_public_api/` | `surface(kind, args) -> dict` | documented names import, registrations take effect, front doors and helpers behave, vendored code imports with sockets refusing | `import_smoke` |
+| `learn_by_example/` | `run_example(kind, args) -> dict` | each example compiles, imports, runs its offline path in a scrubbed environment, is in the README, holds no secret | `compile_only` |
+| `verify_offline/` | `verify(kind, args) -> dict` | `pytest --collect-only` over every test file in 21 shards (zero errors, count floor), seeded broken test folders, size ceiling | `syntax_only` |
+| `explain_qar/` | `explain(kind, args) -> dict` | 452 cases generated from the repo by `generate_cases.py` (links, em dashes, index, env variables, subcommands, public names) | `readme_only` |
+| `keep_secrets_out/` | `scan(kind, args) -> dict` | planted secrets found, placeholders quiet, the repo clean, the command's exit code | `grep_oneliner` |
+
+Why `verify_offline` does not run the tests: a full run is slow, parts of the suite reach real model providers, and
+one run was killed mid-flight for spend (CLAUDE.md, 2026-09-19). Collection proves every file imports and
+parametrises and that no test vanished; whether a test passes is shown by running the files a change touches.
