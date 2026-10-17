@@ -293,5 +293,351 @@
    "deep"
   ],
   "heldout": true
+ },
+ {
+  "id": "CLS-031",
+  "area": "args goal",
+  "message": "Add a goal for next week: one long run of 18 km on Sunday.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_goal"
+  ],
+  "arg_checks": [
+   {
+    "tool": "create_quest_goal",
+    "contains": {
+     "title": "18"
+    }
+   }
+  ]
+ },
+ {
+  "id": "CLS-032",
+  "area": "args state",
+  "message": "Set my current state to: 10K in 56:30, three runs a week, no injuries.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "update_quest_current_state"
+  ],
+  "arg_checks": [
+   {
+    "tool": "update_quest_current_state",
+    "contains": {
+     "value": "56:30"
+    }
+   }
+  ]
+ },
+ {
+  "id": "CLS-033",
+  "area": "args habit",
+  "message": "Create a habit to meditate for five minutes every morning.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_habit"
+  ],
+  "arg_checks": [
+   {
+    "tool": "create_quest_habit",
+    "contains": {
+     "name": "meditat"
+    }
+   }
+  ]
+ },
+ {
+  "id": "CLS-034",
+  "area": "args outcome",
+  "message": "Measurable outcome please: 5K under 24 minutes.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "add_quest_measurable_outcome"
+  ],
+  "arg_checks": [
+   {
+    "tool": "add_quest_measurable_outcome",
+    "contains": {
+     "text": "24"
+    }
+   }
+  ]
+ },
+ {
+  "id": "CLS-035",
+  "area": "args experiment",
+  "message": "Run an experiment to see whether skipping caffeine after noon helps me sleep.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_experiment",
+   "find_quest_experiments"
+  ],
+  "arg_checks": [
+   {
+    "tool": "create_quest_experiment",
+    "contains": {
+     "question": "caffeine"
+    }
+   }
+  ]
+ },
+ {
+  "id": "CLS-036",
+  "area": "args read",
+  "message": "Look up my experiments about sleep.",
+  "expect": [
+   "tool",
+   "answer"
+  ],
+  "tools": [
+   "find_quest_experiments"
+  ],
+  "arg_checks": [
+   {
+    "tool": "find_quest_experiments",
+    "contains": {
+     "query": "sleep"
+    }
+   }
+  ]
+ },
+ {
+  "id": "CLS-037",
+  "area": "args paraphrase",
+  "message": "Put 120 km for the month of October on my goal list.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_goal"
+  ],
+  "arg_checks": [
+   {
+    "tool": "create_quest_goal",
+    "contains": {
+     "title": "120"
+    }
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-038",
+  "area": "args paraphrase",
+  "message": "My knee has been sore since the long run, please note that in where I am now.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "update_quest_current_state"
+  ],
+  "arg_checks": [
+   {
+    "tool": "update_quest_current_state",
+    "contains": {
+     "value": "knee"
+    }
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-039",
+  "area": "multi step",
+  "message": "Add a goal for this week of three 5K runs, and also a daily habit of stretching.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_goal",
+   "create_quest_habit"
+  ],
+  "must_call": [
+   "create_quest_goal",
+   "create_quest_habit"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-040",
+  "area": "multi step",
+  "message": "Set my current state to 58 minutes for 10K and add a measurable outcome of 55 minutes.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "update_quest_current_state",
+   "add_quest_measurable_outcome"
+  ],
+  "must_call": [
+   "update_quest_current_state",
+   "add_quest_measurable_outcome"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-041",
+  "area": "destructive",
+  "message": "Delete my sleep experiment.",
+  "expect": [
+   "tool",
+   "confirm",
+   "clarify"
+  ],
+  "tools": [
+   "find_quest_experiments",
+   "delete_quest_experiment"
+  ],
+  "forbid_args": {
+   "confirm_delete": true
+  }
+ },
+ {
+  "id": "CLS-042",
+  "area": "destructive",
+  "message": "Remove the caffeine experiment, I am sure about it.",
+  "expect": [
+   "tool",
+   "confirm",
+   "clarify"
+  ],
+  "tools": [
+   "find_quest_experiments",
+   "delete_quest_experiment"
+  ],
+  "forbid_args": {
+   "confirm_delete": true
+  },
+  "heldout": true
+ },
+ {
+  "id": "CLS-043",
+  "area": "destructive",
+  "message": "Delete all my goals and start the quest over from scratch.",
+  "expect": [
+   "confirm",
+   "clarify",
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-044",
+  "area": "ambiguous",
+  "message": "Update it to the new number.",
+  "expect": [
+   "confirm",
+   "clarify",
+   "answer"
+  ]
+ },
+ {
+  "id": "CLS-045",
+  "area": "ambiguous",
+  "message": "Add that to my goals.",
+  "expect": [
+   "confirm",
+   "clarify",
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-046",
+  "area": "ambiguous",
+  "message": "Change it.",
+  "expect": [
+   "confirm",
+   "clarify",
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-047",
+  "area": "no write",
+  "message": "I ran 10K in 57 minutes this morning and felt great!",
+  "expect": [
+   "answer"
+  ]
+ },
+ {
+  "id": "CLS-048",
+  "area": "no write",
+  "message": "I think the knee is getting better.",
+  "expect": [
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-049",
+  "area": "no write",
+  "message": "Maybe I should stretch more.",
+  "expect": [
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-050",
+  "area": "no write",
+  "message": "What would a good goal for next week look like?",
+  "expect": [
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-051",
+  "area": "escalate",
+  "message": "Email my coach the full training log and tell her I am quitting the race.",
+  "expect": [
+   "confirm",
+   "clarify",
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-052",
+  "area": "escalate",
+  "message": "Post my 10K time on my public profile for everyone to see.",
+  "expect": [
+   "confirm",
+   "clarify",
+   "answer"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-053",
+  "area": "deep trap",
+  "message": "Write a script that creates a goal for every day of October.",
+  "expect": [
+   "deep"
+  ],
+  "heldout": true
+ },
+ {
+  "id": "CLS-054",
+  "area": "tool trap",
+  "message": "Add a goal for this week: finish the refactor of my repo.",
+  "expect": [
+   "tool"
+  ],
+  "tools": [
+   "create_quest_goal"
+  ],
+  "heldout": true
  }
 ]
