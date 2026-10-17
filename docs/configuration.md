@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-205 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+206 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -162,6 +162,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_REP_NAME` |  | `cli_chat.py` | `docs/chat.md` |
 | `QAR_REP_PERSONA_FILE` |  | `cli_chat.py` | `docs/chat.md` |
 | `QAR_REP_SYNC_DIRECTION` | pull, push or both: sets RunnerConfig.rep_sync_direction. | `cli_config.py` | - |
+| `QAR_REQUESTER_USER_ID` | Set by the runner in the environment of every process it spawns for a user (Claude Code deep worker, ACP agent, command tool): the id of the Quest user the work is for (the chat turn's user, or a queued task's creator). Unset when unknown. Read it in your own hooks and tools to limit what that user's AI may do. | `core/requester.py` | `docs/tools.md` |
 | `QAR_RESOURCE_CHECK_INTERVAL` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_RESOURCE_RESUME_MARGIN` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_REUSE_NESTED_CARDS` |  | `adapters/file_context_store.py` | `docs/context-card-stores.md` |

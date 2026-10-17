@@ -142,7 +142,9 @@ With `args_mode = "flags"` each argument becomes `--name value` (underscores bec
 `flag = "--other"` on a property to rename it), an array repeats the flag, and a true boolean is a
 bare flag. With `"stdin_json"` the arguments arrive as one JSON object on stdin. Exit 0 is success
 and anything else a failure; stdout is the result text, parsed into `data` when it is JSON. The
-command also gets `QAR_TOOL_QUEST_ID` and `QAR_TOOL_TASK_ID` in its environment.
+command also gets `QAR_TOOL_QUEST_ID` and `QAR_TOOL_TASK_ID` in its environment, and
+`QAR_REQUESTER_USER_ID` (the Quest user the work is for; the same variable is set for deep workers, see
+`core/requester.py`). An unknown requester removes the variable instead of inheriting one.
 
 **The call ledger.** `ToolRegistry.invoke` appends every call's outcome (tool, ok, a failure
 signature, whether the tool acts) to a per-task file under `QAR_TOOL_LEDGER_DIR` (default: a folder

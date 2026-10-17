@@ -71,6 +71,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
+from .requester import apply_requester_env, requester_from_meta
 from .runtime_settings import process_environment
 from .tools_failure_ledger import FileToolLedger, outcome_from_result
 
@@ -551,6 +552,7 @@ def make_command_handler(command: Sequence[str], parameters: Dict[str, Any],
             run_env.setdefault("QAR_TOOL_QUEST_ID", ctx.quest_id)
         if ctx.task_id:
             run_env.setdefault("QAR_TOOL_TASK_ID", ctx.task_id)
+        apply_requester_env(run_env, requester_from_meta({"user_id": ctx.user_id, **(ctx.meta or {})}))
         proc = subprocess.run(argv, input=stdin, capture_output=True, text=True,
                               cwd=expand_placeholders(cwd) if cwd else None, env=run_env,
                               timeout=timeout_seconds)

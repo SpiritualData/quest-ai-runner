@@ -152,6 +152,23 @@ def run_goal_accepts_is_subgoal(deep_runner: Any) -> bool:
     return False
 
 
+def run_goal_accepts_requester_user_id(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``requester_user_id`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``run_goal_accepts_is_subgoal``. A runner that accepts it is told which
+    Quest user the work is for and hands it to the process it spawns as ``QAR_REQUESTER_USER_ID``
+    (see ``core/requester.py``). A runner without the kwarg is called exactly as before.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "requester_user_id" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 def provider_call_accepts_layers(fn: Any) -> bool:
     """Whether a provider's ``plan``/``answer`` accepts the ``layers`` cache-hint kwarg (or **kwargs).
 

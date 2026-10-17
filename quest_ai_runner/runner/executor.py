@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, List, Optional
 from ..core import provider_outage, usage_limit
 from ..core.adapters import Mode
 from ..core.orchestrator import Orchestrator, OrchestratorResult
+from ..core.requester import requester_from_task
 from ..core.work_model import WorkModelUnavailable, apply_work_model, default_effective, is_tier_word
 
 from .executor_contracts import (
@@ -404,6 +405,11 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
         context_meta: Optional[Dict[str, Any]] = {"goal_id": goal_id} if goal_id else None
         if task_id:
             context_meta = {**(context_meta or {}), "task_id": task_id}
+        # Who the work is for (the task's creator), so every process this run spawns carries it
+        # as QAR_REQUESTER_USER_ID (see core/requester.py).
+        requester = requester_from_task(task)
+        if requester:
+            context_meta = {**(context_meta or {}), "requester_user_id": requester}
         # Operations this kind of run owes on every pass (see ``run_operations``): their how-to is
         # shown first in the brief, whatever the brief's wording.
         run_pins = pinned_operations(task)

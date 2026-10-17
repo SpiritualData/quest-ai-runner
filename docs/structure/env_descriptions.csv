@@ -39,6 +39,7 @@ QAR_READ_OP_TIMEOUT_SECONDS,"Per-operation budget for one mid-loop read (default
 QAR_RECONCILE_HANDOFF,"0 turns off the AI handoff judgment during goal reconcile (default on)."
 QAR_REFRESH_MIN_INTERVAL_SECONDS,"Shortest gap between two startup context refreshes (default 1800)."
 QAR_REP_SYNC_DIRECTION,"pull, push or both: sets RunnerConfig.rep_sync_direction."
+QAR_REQUESTER_USER_ID,"Set by the runner in the environment of every process it spawns for a user (Claude Code deep worker, ACP agent, command tool): the id of the Quest user the work is for (the chat turn's user, or a queued task's creator). Unset when unknown. Read it in your own hooks and tools to limit what that user's AI may do."
 QAR_SKILLS_DIR,"Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills)."
 QAR_SKIP_DIRS,"Comma-separated directory names to never index or search, added to the built-in list."
 QAR_SKIP_NESTED_REPOS,"0 indexes directories that carry their own .git (default skips them)."

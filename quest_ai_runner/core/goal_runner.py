@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, Callable, List, Optional, Set, Tuple
 
 from . import usage_limit
+from .requester import apply_requester_env
 from .runtime_settings import process_environment
 from .adapters import DeepResult, DeepRunner, EVENT_EXEC, ProgressEvent
 
@@ -119,8 +120,9 @@ class SubprocessGoalRunner(DeepRunner):
         # cannot import the adapter that owns the real translator, so the config layer passes it.
         self._model_translator = model_translator
 
-    def _build_env(self) -> dict:
+    def _build_env(self, requester_user_id: Optional[str] = None) -> dict:
         env = dict(process_environment())
+        apply_requester_env(env, requester_user_id)
         env["PYTHONUNBUFFERED"] = "1"
         # Don't let a spawned headless run reuse our own session / API billing.
         env.pop("CLAUDECODE", None)
@@ -210,12 +212,14 @@ class SubprocessGoalRunner(DeepRunner):
                  context_preamble: Optional[str] = None,
                  run_id: Optional[str] = None,
                  working_dir: Optional[str] = None,
-                 resume_session_id: Optional[str] = None) -> DeepResult:
+                 resume_session_id: Optional[str] = None,
+                 requester_user_id: Optional[str] = None) -> DeepResult:
         """Run the goal, then stamp the result with the model id Claude Code resolved it to."""
         try:
             res = self.run_goal_once(goal=goal, brief=brief, model=model, max_turns=max_turns,
                                      emit=emit, context_preamble=context_preamble, run_id=run_id,
-                                     working_dir=working_dir, resume_session_id=resume_session_id)
+                                     working_dir=working_dir, resume_session_id=resume_session_id,
+                                     requester_user_id=requester_user_id)
         except Exception as e:  # noqa: BLE001 — the DeepRunner port never raises (adapters_deep.py)
             _log.error("deep worker failed unexpectedly: %s: %s", type(e).__name__, e, exc_info=True)
             return DeepResult(met=False, error=f"The deep worker failed unexpectedly: {type(e).__name__}: {e}")
@@ -231,7 +235,8 @@ class SubprocessGoalRunner(DeepRunner):
                       run_id: Optional[str] = None,
                       working_dir: Optional[str] = None,
                       resume_session_id: Optional[str] = None,
-                      prompt_budget_tokens: Optional[int] = None) -> DeepResult:
+                      prompt_budget_tokens: Optional[int] = None,
+                      requester_user_id: Optional[str] = None) -> DeepResult:
         # ``prompt_budget_tokens`` overrides the configured prompt budget for this call only; it is
         # how a launch refused with "Prompt is too long" retries with a tighter fit (see below).
         # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
@@ -381,7 +386,7 @@ class SubprocessGoalRunner(DeepRunner):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=effective_working_dir,
-                env=self._build_env(),
+                env=self._build_env(requester_user_id),
                 # Own process group: on a timeout we must kill the worker AND every child it
                 # spawned, not just the top pid. See kill_process_group().
                 start_new_session=True,
@@ -558,7 +563,7 @@ class SubprocessGoalRunner(DeepRunner):
                         goal=goal, brief=brief, model=model, max_turns=max_turns, emit=emit,
                         context_preamble=context_preamble, run_id=run_id,
                         working_dir=working_dir, resume_session_id=None,
-                        prompt_budget_tokens=budget)
+                        prompt_budget_tokens=budget, requester_user_id=requester_user_id)
                 tighter = budget // 2
                 if tighter >= prompt_budget.MIN_DEEP_PROMPT_TOKEN_BUDGET:
                     _log.info("prompt too long at a %d-token budget (~%d tokens sent); retrying "
@@ -567,7 +572,7 @@ class SubprocessGoalRunner(DeepRunner):
                         goal=goal, brief=brief, model=model, max_turns=max_turns, emit=emit,
                         context_preamble=context_preamble, run_id=run_id,
                         working_dir=working_dir, resume_session_id=None,
-                        prompt_budget_tokens=tighter)
+                        prompt_budget_tokens=tighter, requester_user_id=requester_user_id)
                 return DeepResult(
                     met=False, output="", session_id=session_id, launch_failed=True,
                     error=(f"The deep worker could not start: the model refused the prompt as too "

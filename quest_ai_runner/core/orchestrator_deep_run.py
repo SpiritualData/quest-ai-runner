@@ -43,6 +43,7 @@ from .orchestrator_capabilities import (
     _run_goal_accepts_working_dir,
     run_goal_accepts_gathered_observations,
     run_goal_accepts_is_subgoal,
+    run_goal_accepts_requester_user_id,
 )
 from .orchestrator_text import (
     _future_context_channel,
@@ -50,6 +51,7 @@ from .orchestrator_text import (
     _strip_future_context,
 )
 from .orchestrator_turn import _Emitter
+from .requester import requester_from_meta
 from .tools_failure_ledger import (
     STUCK_OUTPUT_ALIKE, STUCK_REASON_ALIKE, ToolOutcome, alike, changed_something,
     describe_failure, repeated_failure, unrecovered_failures)
@@ -121,6 +123,7 @@ class DeepRunMixin:
             # covers all of them.
             self.gate_docs_fallback(ctx_meta, user_message)
         quest_id = (ctx_meta or {}).get("quest_id")
+        requester_user_id = requester_from_meta(ctx_meta)
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
@@ -384,7 +387,8 @@ class DeepRunMixin:
             def caps_for(runner: Any) -> Dict[str, bool]:
                 if runner is None:
                     return {"emit": False, "run_id": False, "preamble": False, "gathered": False,
-                            "working_dir": False, "resume": False, "is_subgoal": False}
+                            "working_dir": False, "resume": False, "is_subgoal": False,
+                            "requester": False}
                 cached = runner_caps.get(id(runner))
                 if cached is None:
                     cached = {
@@ -395,6 +399,7 @@ class DeepRunMixin:
                         "working_dir": _run_goal_accepts_working_dir(runner),
                         "resume": _run_goal_accepts_resume_session_id(runner),
                         "is_subgoal": run_goal_accepts_is_subgoal(runner),
+                        "requester": run_goal_accepts_requester_user_id(runner),
                     }
                     runner_caps[id(runner)] = cached
                 return cached
@@ -493,6 +498,10 @@ class DeepRunMixin:
                     # the fuller USER'S REQUEST header this call's brief also carries.
                     if caps["is_subgoal"] and multi:
                         kwargs["is_subgoal"] = True
+                    # WHO the work is for, so the spawned worker's environment carries it
+                    # (``QAR_REQUESTER_USER_ID``, see ``core/requester.py``).
+                    if caps["requester"] and requester_user_id:
+                        kwargs["requester_user_id"] = requester_user_id
                     # The runner LADDER was resolved once per task, above (not re-resolved per
                     # retry — the classifier's inputs don't change across retries of the same
                     # task); which rung of it runs THIS attempt is decided by the loop below and

@@ -49,6 +49,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from ..core.requester import apply_requester_env
 from ..core.adapters import DeepResult, DeepRunnerBase, ProgressEvent
 from ..core.goal_runner import (
     compose_goal_prompt,
@@ -134,7 +135,8 @@ class AcpDeepRunner(DeepRunnerBase):
                  context_preamble: Optional[str] = None,
                  run_id: Optional[str] = None,
                  working_dir: Optional[str] = None,
-                 resume_session_id: Optional[str] = None) -> DeepResult:
+                 resume_session_id: Optional[str] = None,
+                 requester_user_id: Optional[str] = None) -> DeepResult:
         """Run ``goal`` as one ACP turn. Signature matches ``SubprocessGoalRunner.run_goal`` exactly.
 
         ``max_turns`` is accepted for interface parity but is NOT enforceable over ACP today: the
@@ -168,7 +170,8 @@ class AcpDeepRunner(DeepRunnerBase):
             try:
                 box["result"] = asyncio.run(
                     self._run_session(run, argv=argv, prompt=prompt, model=model,
-                                      working_dir=effective_working_dir, timeout=timeout)
+                                      working_dir=effective_working_dir, timeout=timeout,
+                                      requester_user_id=requester_user_id)
                 )
             except BaseException as e:  # noqa: BLE001 — carried out, never raised at the caller
                 box["error"] = e
@@ -205,11 +208,12 @@ class AcpDeepRunner(DeepRunnerBase):
         with self._runs_lock:
             self._runs.pop(run.key, None)
 
-    def build_env(self) -> Dict[str, str]:
+    def build_env(self, requester_user_id: Optional[str] = None) -> Dict[str, str]:
         """The child's environment. Mirrors ``SubprocessGoalRunner._build_env``: the spawned agent
         must not inherit our own Claude Code session or API billing, so those keys are dropped and
         it authenticates the same way the reference deep runner's worker does."""
         env = os.environ.copy()
+        apply_requester_env(env, requester_user_id)
         env.pop("CLAUDECODE", None)
         env.pop("ANTHROPIC_API_KEY", None)
         env.pop("ANTHROPIC_AUTH_TOKEN", None)
@@ -228,11 +232,12 @@ class AcpDeepRunner(DeepRunnerBase):
         return env
 
     async def _run_session(self, run: AcpRun, *, argv: List[str], prompt: str,
-                           model: Optional[str], working_dir: str, timeout: float) -> DeepResult:
+                           model: Optional[str], working_dir: str, timeout: float,
+                           requester_user_id: Optional[str] = None) -> DeepResult:
         run.loop = asyncio.get_running_loop()
         client = AcpSessionClient(run)
         try:
-            async with open_agent_connection(client, argv, env=self.build_env(), cwd=working_dir) as (conn, _proc):
+            async with open_agent_connection(client, argv, env=self.build_env(requester_user_id), cwd=working_dir) as (conn, _proc):
                 run.conn = conn
                 return await self._drive_turn(run, conn, prompt=prompt, model=model,
                                               working_dir=working_dir, timeout=timeout)
