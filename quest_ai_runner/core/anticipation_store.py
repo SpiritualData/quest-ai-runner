@@ -15,7 +15,7 @@ import tempfile
 import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 
 from .anticipation_learner import (
     CONF_FLOOR,
@@ -81,6 +81,28 @@ def prediction_from_dict(d: Dict[str, Any]) -> Optional[Prediction]:
 # version keeps importing. Remove after the next release; use the public names above.
 _pattern_from_dict = pattern_from_dict
 _prediction_from_dict = prediction_from_dict
+
+
+class PredictionStore(Protocol):
+    """The port the anticipation engine persists through: patterns learned per scope, the scope's live
+    predictions with their precomputed context views, and an append-only outcome log. A consumer backs it
+    with its own database; every method is best-effort and must never raise.
+    """
+
+    def load_patterns(self, scope_key: str) -> List[Pattern]: ...
+
+    def save_patterns(self, scope_key: str, patterns: List[Pattern]) -> None: ...
+
+    def load_predictions(self, scope_key: str) -> List[Prediction]: ...
+
+    def save_predictions(self, scope_key: str, predictions: List[Prediction],
+                         views: Optional[Dict[str, str]] = None) -> None: ...
+
+    def load_view(self, scope_key: str, prediction_id: str) -> str: ...
+
+    def clear_predictions(self, scope_key: str) -> None: ...
+
+    def append_log(self, record: Dict[str, Any]) -> None: ...
 
 
 class FilePredictionStore:

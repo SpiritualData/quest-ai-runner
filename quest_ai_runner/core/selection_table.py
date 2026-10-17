@@ -91,6 +91,7 @@ SELECTION = {
     "feed-context-sources": {"default": "base", "implementations": {"base": _R + "context_sources_base:ContextSource"}},
     "store-feedback": {"default": "ledger", "implementations": {"ledger": _R + "feedback_ledger:FeedbackLedger"}},
     "recall-recent-context": {"default": "file", "implementations": {"file": _C + "recent_context:FileRecentContextStore"}},
+    "persist-predictions": {"default": "file", "implementations": {"file": _C + "anticipation_store:FilePredictionStore"}},
     "receive-input-mid-run": {"default": "in_memory", "implementations": {"in_memory": _C + "inbox:InMemoryInbox"}},
     "resolve-references": {"default": "note", "implementations": {"note": _A + "reference_resolver:NoteResolver"}},
     "cache-cards": {"default": "null", "implementations": {
