@@ -142,5 +142,17 @@
    "smokehouse-safety"
   ],
   "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "VEC-LAT",
+  "area": "latency",
+  "kind": "latency",
+  "corpus_size": 500,
+  "warmup": 2,
+  "repeats": 3,
+  "p50_cap_ms": 100,
+  "p95_cap_ms": 250,
+  "cap_basis": "Interactive budget, not a fitted number: a search that answers within 100 ms at the median feels instant and 250 ms at the 95th percentile stays a small fraction of one planner model call, so semantic search never becomes the slow part of a chat turn. Size 500 is a team-scale card collection.",
+  "corpus_sha": "7b98923f"
  }
 ]

@@ -36,3 +36,18 @@ def embedder():
             CACHE_FILE.write_text(json.dumps(cache))
         return np.array([cache[k] for k in keys])
     return embed
+
+
+def uncached_embedder():
+    """Like ``embedder()`` but every call runs the model (no text-hash cache), so a timing measures real work."""
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    import numpy as np
+    from fastembed import TextEmbedding
+    try:
+        model = TextEmbedding(model_name=MODEL, cache_dir=os.environ.get("FASTEMBED_CACHE_PATH", "/tmp/fastembed_cache"))
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"local embedder {MODEL} is not available offline: {e}") from e
+
+    def embed(texts):
+        return np.array([[float(x) for x in v] for v in model.embed([t[:2000] for t in texts])])
+    return embed

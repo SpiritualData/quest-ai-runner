@@ -73,3 +73,25 @@ def test_vector_recall_qdrant_matches_the_in_memory_baseline():
     memory, _ = run("vector_recall", "memory_cosine")
     assert {i: r["ok"] for i, r in qdrant.items()} == {i: r["ok"] for i, r in memory.items()}
     assert sum(r["ok"] for r in qdrant.values()) >= 14
+
+
+def test_vector_recall_latency_corpus_is_fixed_and_deterministic():
+    from vector_recall.filler import padded
+    from retrieval.world import load_corpus
+    first, second = padded(load_corpus(), 120), padded(load_corpus(), 120)
+    assert len(first["docs"]) == 120 and first == second
+    assert [d["id"] for d in first["docs"][:17]] == [d["id"] for d in load_corpus()["docs"]]
+
+
+def test_vector_recall_latency_case_fails_over_its_cap():
+    import time
+    import vector_recall.score as s
+    case = {"id": "L", "kind": "latency", "corpus_size": 20, "warmup": 0, "repeats": 1, "p50_cap_ms": 5, "p95_cap_ms": 5,
+            "corpus_sha": s.corpus_sha()}
+
+    def slow(query, corpus):
+        time.sleep(0.02)
+        return {"ids": []}
+    row = s.score_case(slow, case)
+    assert row["ok"] is False and row["p50_ms"] >= 20
+    assert s.score_case(lambda q, c: {"ids": []}, {**case, "p50_cap_ms": 1000, "p95_cap_ms": 1000})["ok"] is True
