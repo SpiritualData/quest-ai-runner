@@ -24,9 +24,11 @@ $PY evaluation/components/run.py recipe_fast_path --impl planner_only_offline  #
 $PY evaluation/components/run.py feedback_loop --impl ledger_guidance          # live ledger + guidance provider, scripted model
 $PY evaluation/components/run.py feed_context_sources --impl update_engine     # live UpdateEngine quest channels, fake Quest client
 $PY evaluation/components/run.py receive_input_mid_run --impl in_memory        # live inbox wired into the live Orchestrator
-$PY evaluation/components/run.py esoi_behavior --impl reference_good   # offline validity: must pass all 42
-$PY evaluation/components/run.py esoi_behavior --impl reference_bad    # offline validity: must fail all 42
-$PY evaluation/components/run.py esoi_behavior --impl standing_instructions --max-calls 42   # live, costs model calls
+$PY evaluation/components/run.py esoi_behavior --impl reference_good   # offline validity: must pass all 60
+$PY evaluation/components/run.py esoi_behavior --impl reference_bad    # offline validity: must fail all 60
+$PY evaluation/components/run.py esoi_behavior --impl standing_instructions --only ESOI-002,ESOI-020 --max-calls 8   # chat arm + model judge, costs cents
+$PY evaluation/components/run.py esoi_behavior --impl insitu_standing_instructions --only ESOI-002,ESOI-020           # real deep-run prompt, tools off
+$PY evaluation/components/run.py esoi_judge --impl model_judge         # the judge's own agreement with labelled replies (120 cheap calls)
 $PY -m pytest evaluation/components/test_components.py                  # offline, no model calls
 ```
 Flags: `--only ID,ID`, `--max-calls N` (aborts when model calls exceed N), `--out path`.
