@@ -1,0 +1,1 @@
+Complementary sources, not alternatives: each retrieval adapter is mounted for the data it holds, so no one of them replaces another. The measure is that every source keeps the same retrieval contract on the same questions; the ranking that matters is among complete stacks, in the retrieval component.

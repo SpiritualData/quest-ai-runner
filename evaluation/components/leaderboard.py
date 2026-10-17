@@ -25,6 +25,13 @@ RESULTS = HERE / "results.csv"
 SOLUTIONS = HERE.parents[1] / "docs" / "structure" / "solutions.csv"
 
 
+def invariant_reason(component):
+    """The reason in ``<component>/invariant.txt`` when the component's implementations are complementary
+    (not alternatives): the leaderboard shows them but never ranks them or flags a challenger."""
+    note = HERE / component / "invariant.txt"
+    return note.read_text().strip() if note.is_file() else ""
+
+
 def latest_results(path=RESULTS):
     """{component: {impl: row}} keeping the newest row per implementation."""
     out = {}
@@ -91,12 +98,16 @@ def main(argv):
     flagged = 0
     for component, rows in sorted(results.items()):
         sel = selected.get(component)
-        print(f"{component} (selected: {sel or 'none recorded'})")
+        reason = invariant_reason(component)
+        print(f"{component} (selected: {sel or 'none recorded'})" if not reason else
+              f"{component} (invariant, not ranked: {reason})")
         for r in rank(rows):
             mark = "*" if r["impl"] == sel else " "
             flag = "  [unverified: no cases_sha, recorded before provenance]" if unverified(r) else ""
             print(f"  {mark} {r['impl']:<20} {r['passed']}/{r['cases']} (held-out {r['heldout']}) "
                   f"calls={r['model_calls']} cost=${float(r['cost_usd'] or 0):.4f}  {r['date']}{flag}")
+        if reason:
+            continue
         cur = rows.get(sel)
         for r in rows.values():
             if cur is not None and r["impl"] != sel and not comparable(r, cur):

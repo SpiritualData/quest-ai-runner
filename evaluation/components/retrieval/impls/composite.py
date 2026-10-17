@@ -10,7 +10,7 @@ from quest_ai_runner.adapters.composite_retrieval_adapter import CompositeRetrie
 from quest_ai_runner.adapters.files_adapter import FilesAdapter
 
 from retrieval import policy
-from retrieval.impls.cached_db import COLLECTION, ROW_ID, make_fetch
+from retrieval_sources.impls.cached_db import COLLECTION, ROW_ID, make_fetch
 from retrieval.world import Lazy, doc_id_from_path, write_tree
 
 

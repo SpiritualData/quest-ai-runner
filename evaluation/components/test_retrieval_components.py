@@ -13,7 +13,6 @@ import common  # noqa: E402
 RETRIEVAL_GAPS = {
     "files_adapter": {"RET-019", "RET-020"},
     "cached_db": {"RET-019", "RET-020", "RET-021"},
-    "composite": {"RET-019", "RET-020"},
     "mcp_server": {"RET-019", "RET-020"},
     "notion_pages": {"RET-004", "RET-010", "RET-019", "RET-020", "RET-021"},
     "drive_files": {"RET-019", "RET-020"},
@@ -31,8 +30,20 @@ def run(component, impl):
 
 @pytest.mark.parametrize("impl,gaps", sorted(RETRIEVAL_GAPS.items()))
 def test_each_live_adapter_gathers_the_labelled_documents(impl, gaps):
-    rows, _ = run("retrieval", impl)
+    rows, _ = run("retrieval_sources", impl)
     assert {i for i, r in rows.items() if not r["ok"]} == gaps
+
+
+def test_the_composite_stack_gathers_the_labelled_documents():
+    rows, _ = run("retrieval", "composite")
+    assert {i for i, r in rows.items() if not r["ok"]} == {"RET-019", "RET-020"}
+
+
+def test_per_source_arm_shares_the_stack_cases_and_is_not_ranked():
+    import leaderboard
+    assert (HERE / "retrieval_sources" / "cases.json").resolve() == (HERE / "retrieval" / "cases.json").resolve()
+    assert leaderboard.invariant_reason("retrieval_sources") and not leaderboard.invariant_reason("retrieval")
+    assert not (HERE / "retrieval" / "impls" / "notion_pages.py").exists()
 
 
 def test_retrieval_floor_is_far_below_every_adapter():
