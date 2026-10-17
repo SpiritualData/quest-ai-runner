@@ -1,6 +1,6 @@
-"""Offline tests for the persist_cards conformance set: the filesystem and Quest API backends keep every case,
-the embedded Qdrant backend keeps every case but the one pinning its silent card cap (the known gap), and a
-repository that loses or duplicates cards is caught by the cases.
+"""Offline tests for the persist_cards conformance set: the filesystem, Quest API and embedded Qdrant backends keep
+every case (the Qdrant listing once stopped at a silent card cap; the large-collection case pins that it does not),
+and a repository that loses or duplicates cards is caught by the cases.
 Run: .venv/bin/python3 -m pytest evaluation/components/test_persist_cards.py -q -p no:cacheprovider"""
 import importlib
 import json
@@ -15,7 +15,6 @@ import common  # noqa: E402
 from persist_cards.backends import FolderHarness, on_backend  # noqa: E402
 
 CASES = json.loads((HERE / "persist_cards" / "cases.json").read_text())
-CAP_CASE = "PCD-014"  # 2100 cards: the embedded Qdrant repository returns only part of them
 
 
 def failed(fn):
@@ -23,7 +22,7 @@ def failed(fn):
     return {c["id"] for c in CASES if not score.score_case(fn, c)["ok"]}
 
 
-@pytest.mark.parametrize("impl,expected", [("filesystem", set()), ("quest_api", set()), ("qdrant", {CAP_CASE})])
+@pytest.mark.parametrize("impl,expected", [("filesystem", set()), ("quest_api", set()), ("qdrant", set())])
 def test_backend_keeps_the_contract(impl, expected):
     fn = common.load_impl(impl, "persist_cards")(common.CallMeter(max_calls=0))
     assert failed(fn) == expected
