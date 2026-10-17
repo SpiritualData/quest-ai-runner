@@ -5,7 +5,7 @@ Two things live here:
   * ``ChannelSessionStore`` -- a registry of per-``chat_ref`` conversation history, so the
     orchestrator's User Input Understanding step (anaphora resolution: "ok do it", "the first
     one") has something to resolve against on a channel turn, exactly like the interactive
-    terminal session gets. It REUSES ``interactive_session.ChatSessionStore`` (a plain,
+    terminal session gets. It REUSES ``adapters.conversation_session_store.ChatSessionStore`` (a plain,
     console-independent ``ConversationStore`` over an in-memory turn list) rather than
     reimplementing anaphora resolution -- one ``ChatSessionStore`` per chat, and this registry is
     itself a ``ConversationStore`` that dispatches ``current_slice(conv_id, ...)`` to whichever
@@ -53,7 +53,7 @@ from ..core.adapters import (
     ConversationContext,
     OutboundReply,
 )
-from ..interactive_session import ChatSessionStore
+from ..adapters.conversation_session_store import ChatSessionStore
 
 log = logging.getLogger("quest-ai-runner.channel_session")
 
@@ -75,7 +75,7 @@ class ChannelSessionState:
 
     def __init__(self, chat_ref: str):
         self.chat_ref = chat_ref
-        # ChatSessionStore holds this list BY REFERENCE (see interactive_session.py), so appending
+        # ChatSessionStore holds this list BY REFERENCE (see adapters/conversation_session_store.py), so appending
         # here is immediately visible to the store's own current_slice() calls.
         self.history: List[Tuple[str, str]] = []
         self.store = ChatSessionStore(self.history)
