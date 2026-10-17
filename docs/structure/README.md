@@ -12,6 +12,7 @@ the inventory and the automated check.
 | `solutions.csv` | One row per swappable solution: the problem, the ideal, the port, every implementation, the selected one and how it is selected, the metric and its command | people and AI, by hand |
 | `principles.csv` | The 13 principles of the evolvable-structure skill in short, with how each is measured here | people and AI, by hand |
 | `tracker/*.csv` | The ESOI intent network as five tabs (problems, solutions, implementations, ideals, metrics), each with `tracking_*` columns; import each as a Google Sheet tab | generated: `python scripts/build_tracker.py` (tracking columns are hand-edited and preserved) |
+| `audit.csv` | Every component against principles P1 to P13: objective facts (size, unmeasured solutions, waivers) plus a hand-written finding and action; `tracking_*` columns for review | generated: `python scripts/build_audit.py` (finding, action and tracking columns are hand-edited and preserved) |
 | `waivers.csv` | Known, justified exceptions to a structure rule. Each must still apply, so the list only shrinks | people and AI, by hand |
 | `COMPONENTS.md` | A readable table of `components.csv` | generated: `python scripts/check_structure.py --write-docs` |
 
