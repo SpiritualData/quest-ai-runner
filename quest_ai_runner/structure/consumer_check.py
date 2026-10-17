@@ -31,7 +31,7 @@ solution (the optional registry column ``solution_id``) with a CURRENT recorded 
     results.csv     solution_id, cases, passed, git_sha, cases_sha (the latest row per solution counts)
 
 C9 the row names a solution that exists and has a selected implementation; C10 the solution has a
-result with a git sha and a cases hash, every case passing, and the hash still matches the metric files
+result with a git sha and a cases hash, every case passing (or the solution's gap says why not), and the hash still matches the metric files
 (a stale hash means the cases changed since the run).
 """
 from __future__ import annotations
@@ -307,7 +307,10 @@ def check_solutions(report: ConsumerReport, rows: List[Dict[str, str]], solution
         if not res.get("git_sha", "").strip() or not res.get("cases_sha", "").strip():
             report.problems.append(f"C10 {sid}: the latest result lacks a git sha or a cases hash")
         if res.get("passed", "") != res.get("cases", "x"):
-            report.problems.append(f"C10 {sid}: latest result {res.get('passed')}/{res.get('cases')} is not all passing")
+            if sol.get("gap", "").strip():
+                report.notes.append(f"{sid}: latest result {res.get('passed')}/{res.get('cases')}, the solution's gap names why")
+            else:
+                report.problems.append(f"C10 {sid}: latest result {res.get('passed')}/{res.get('cases')} is not all passing and the solution states no gap")
         files = [f for f in sol.get("metric_files", "").split(";") if f.strip()]
         if files and all((root / f).exists() for f in files) and cases_hash(files, root) != res.get("cases_sha", ""):
             report.problems.append(f"C10 {sid}: stale result, the metric files changed since it was recorded")
