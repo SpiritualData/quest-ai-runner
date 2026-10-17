@@ -2,7 +2,6 @@
 model, ``build_persona_resolver``, ``pull_quest_to_folder`` / ``push_folder_to_quest`` / ``quest_for_path``,
 ``local_time.scheduled_moment``, ``lane.load_env_file`` and ``lane.build_arg_parser``. Only the Quest client
 and the model are faked. Zero model calls."""
-import contextlib
 import os
 import tempfile
 from pathlib import Path
@@ -16,27 +15,10 @@ from quest_ai_runner.runner.quest_folder_sync import (
     QuestFolderSyncError, pull_quest_to_folder, push_folder_to_quest, quest_for_path,
 )
 
+from hermetic_env import hermetic_env
 from run_queued_tasks import fakes
 
 QUEST_ID = "quest_000000000001"
-WEB_KEYS = ("QAR_WEB_SEARCH_BACKEND", "SERPER_API_KEY", "BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY", "TAVILY_API_KEY",
-            "WEB_SEARCH_API_KEY", "SEARXNG_URL", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_AI_API_KEY")
-
-
-@contextlib.contextmanager
-def hermetic_env():
-    """No lane or shell setting reaches the run: with Quest credentials in the environment the context
-    assembler would wire the live card backend. The same scrub the repo's test suite applies."""
-    saved = dict(os.environ)
-    for name in [n for n in os.environ if n.startswith("QAR_") or n in WEB_KEYS or n in
-                 ("QUEST_BASE_URL", "QUEST_API_URL", "QUEST_API_KEY")]:
-        del os.environ[name]
-    os.environ.update(QAR_STANDARD_TOOLS="0", QAR_CLAUDE_PATH="qar-eval-no-such-claude", QAR_CLAUDE_LIVE_MODELS="0")
-    try:
-        yield
-    finally:
-        os.environ.clear()
-        os.environ.update(saved)
 
 
 def lifecycle(args):

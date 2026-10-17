@@ -1,0 +1,855 @@
+[
+ {
+  "id": "CFG-001",
+  "kind": "file_fields",
+  "area": "file",
+  "args": {
+   "toml": "team_id = \"team_1\"\npoll_interval_seconds = 123.0\nmax_concurrent_tasks = 4\n",
+   "fields": [
+    "team_id",
+    "quest_base_url",
+    "poll_interval_seconds",
+    "max_concurrent_tasks"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {
+     "team_id": "team_1",
+     "quest_base_url": "",
+     "poll_interval_seconds": 123.0,
+     "max_concurrent_tasks": 4
+    },
+    "personas": null
+   }
+  }
+ },
+ {
+  "id": "CFG-002",
+  "kind": "file_fields",
+  "area": "file",
+  "args": {
+   "toml": "",
+   "fields": [
+    "team_id",
+    "quest_base_url",
+    "poll_interval_seconds",
+    "max_concurrent_tasks"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {
+     "team_id": "",
+     "quest_base_url": "",
+     "poll_interval_seconds": 900.0,
+     "max_concurrent_tasks": 2
+    },
+    "personas": null
+   }
+  }
+ },
+ {
+  "id": "CFG-003",
+  "kind": "file_fields",
+  "area": "file",
+  "args": {
+   "toml": "team_idd = \"typo\"\n",
+   "fields": [
+    "team_id",
+    "quest_base_url",
+    "poll_interval_seconds",
+    "max_concurrent_tasks"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": "ConfigFileError",
+    "fields": {},
+    "personas": null
+   }
+  }
+ },
+ {
+  "id": "CFG-004",
+  "kind": "file_fields",
+  "area": "file",
+  "args": {
+   "toml": "model_provider = \"anthropic\"\n",
+   "fields": [
+    "team_id",
+    "quest_base_url",
+    "poll_interval_seconds",
+    "max_concurrent_tasks"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": "ConfigFileError",
+    "fields": {},
+    "personas": null
+   }
+  }
+ },
+ {
+  "id": "CFG-005",
+  "kind": "file_fields",
+  "area": "file",
+  "args": {
+   "toml": "team_id = \"unterminated\n",
+   "fields": [
+    "team_id",
+    "quest_base_url",
+    "poll_interval_seconds",
+    "max_concurrent_tasks"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": "ConfigFileError",
+    "fields": {},
+    "personas": null
+   }
+  }
+ },
+ {
+  "id": "CFG-006",
+  "kind": "file_fields",
+  "area": "file",
+  "args": {
+   "toml": "[personas]\nskills_root = \"/srv/skills\"\nauto_register = true\n",
+   "fields": [
+    "team_id",
+    "quest_base_url",
+    "poll_interval_seconds",
+    "max_concurrent_tasks"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {
+     "team_id": "",
+     "quest_base_url": "",
+     "poll_interval_seconds": 900.0,
+     "max_concurrent_tasks": 2
+    },
+    "personas": "/srv/skills"
+   }
+  }
+ },
+ {
+  "id": "CFG-007",
+  "kind": "file_fields",
+  "area": "file",
+  "args": {
+   "toml": "[personas]\nskills_root = \"/srv/skills\"\nnot_a_persona_field = 1\n",
+   "fields": [
+    "team_id",
+    "quest_base_url",
+    "poll_interval_seconds",
+    "max_concurrent_tasks"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": "ConfigFileError",
+    "fields": {},
+    "personas": null
+   }
+  }
+ },
+ {
+  "id": "CFG-008",
+  "kind": "file_fields",
+  "area": "file",
+  "args": {
+   "toml": "team_id = \"a\"\n[personas]\nskills_root = \"/s\"\n",
+   "fields": [
+    "team_id",
+    "quest_base_url",
+    "poll_interval_seconds",
+    "max_concurrent_tasks"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {
+     "team_id": "a",
+     "quest_base_url": "",
+     "poll_interval_seconds": 900.0,
+     "max_concurrent_tasks": 2
+    },
+    "personas": "/s"
+   }
+  }
+ },
+ {
+  "id": "CFG-009",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "team_id = \"file_team\"\n",
+   "process": {},
+   "files": {},
+   "probe": [],
+   "fields": [
+    "team_id"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {
+     "team_id": "file_team"
+    },
+    "environ": {}
+   }
+  }
+ },
+ {
+  "id": "CFG-010",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "team_id = \"file_team\"\n",
+   "process": {
+    "QUEST_TEAM_ID": "env_team"
+   },
+   "files": {},
+   "probe": [],
+   "fields": [
+    "team_id"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {
+     "team_id": "env_team"
+    },
+    "environ": {}
+   }
+  }
+ },
+ {
+  "id": "CFG-011",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "quest_base_url = \"https://file.example\"\n",
+   "process": {
+    "QUEST_BASE_URL": "https://env.example"
+   },
+   "files": {},
+   "probe": [],
+   "fields": [
+    "quest_base_url"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {
+     "quest_base_url": "https://env.example"
+    },
+    "environ": {}
+   }
+  }
+ },
+ {
+  "id": "CFG-012",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "env_files = [\"{dir}/a.env\"]\n",
+   "process": {},
+   "files": {
+    "a.env": "QARX_A=from_file\n"
+   },
+   "probe": [
+    "QARX_A"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_A": "from_file"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-013",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "env_files = [\"{dir}/a.env\"]\n",
+   "process": {
+    "QARX_A": "process"
+   },
+   "files": {
+    "a.env": "QARX_A=from_file\n"
+   },
+   "probe": [
+    "QARX_A"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_A": "process"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-014",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "env_files = [\"{dir}/a.env\", \"{dir}/b.env\"]\n",
+   "process": {},
+   "files": {
+    "a.env": "QARX_B=first\n",
+    "b.env": "QARX_B=second\n"
+   },
+   "probe": [
+    "QARX_B"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_B": "first"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-015",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "env_files = [\"{dir}/a.env\", \"{dir}/b.env\"]\n",
+   "process": {},
+   "files": {
+    "a.env": "QARX_C=only_a\n",
+    "b.env": "QARX_B=second\n"
+   },
+   "probe": [
+    "QARX_B",
+    "QARX_C"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_B": "second",
+     "QARX_C": "only_a"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-016",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "env_files = [\"{dir}/a.env\"]\nenv = { QARX_D = \"default_d\" }\n",
+   "process": {},
+   "files": {
+    "a.env": "QARX_D=from_file\n"
+   },
+   "probe": [
+    "QARX_D"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_D": "from_file"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-017",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "env = { QARX_D = \"default_d\" }\n",
+   "process": {},
+   "files": {},
+   "probe": [
+    "QARX_D"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_D": "default_d"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-018",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "env = { QARX_D = \"default_d\" }\n",
+   "process": {
+    "QARX_D": ""
+   },
+   "files": {},
+   "probe": [
+    "QARX_D"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_D": "default_d"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-019",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "env_files = [\"{dir}/a.env\"]\n[env_aliases]\nQARX_E = \"QARX_LANE_E\"\n",
+   "process": {},
+   "files": {
+    "a.env": "QARX_E=shared\nQARX_LANE_E=lane\n"
+   },
+   "probe": [
+    "QARX_E"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_E": "lane"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-020",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "[env_aliases]\nQARX_E = \"QARX_LANE_E\"\n",
+   "process": {
+    "QARX_E": "process",
+    "QARX_LANE_E": "lane"
+   },
+   "files": {},
+   "probe": [
+    "QARX_E"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_E": "process"
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-021",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "[env_aliases]\nQARX_E = \"QARX_LANE_E\"\n",
+   "process": {},
+   "files": {},
+   "probe": [
+    "QARX_E"
+   ],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": null,
+    "fields": {},
+    "environ": {
+     "QARX_E": null
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-022",
+  "kind": "layered",
+  "area": "layering",
+  "args": {
+   "toml": "team_idd = \"typo\"\n",
+   "process": {},
+   "files": {},
+   "probe": [],
+   "fields": []
+  },
+  "expect": {
+   "eq": {
+    "error": "ConfigFileError",
+    "fields": {},
+    "environ": {}
+   }
+  }
+ },
+ {
+  "id": "CFG-023",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {}
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-024",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_READ_OP_TIMEOUT_SECONDS": "15"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 15.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-025",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_READ_OP_TIMEOUT_SECONDS": "not-a-number"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-026",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_READ_OP_TIMEOUT_SECONDS": "-5"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-027",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_VERIFY_CONTEXT_MAX_CHARS": "9000"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 9000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-028",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_VERIFY_CONTEXT_MAX_CHARS": "lots"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-029",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_VERIFY_CONTEXT_MAX_CHARS": "0"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-030",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_NOTE_FLOOR_RELEVANCE_GATED": "off"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": false,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-031",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_NOTE_FLOOR_RELEVANCE_GATED": ""
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-032",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_DEEP_PROMPT_TOKEN_BUDGET": "12000"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": 12000,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-033",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_DEEP_PROMPT_TOKEN_BUDGET": "twelve"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-034",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_DEEP_TIMEOUT_SECONDS": "900"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": 900.0,
+     "deep_review_interval_seconds": 300.0
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-035",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_DEEP_REVIEW_INTERVAL_SECONDS": "0"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": null
+    }
+   }
+  }
+ },
+ {
+  "id": "CFG-036",
+  "kind": "core_settings",
+  "area": "tuning",
+  "args": {
+   "env": {
+    "QAR_DEEP_REVIEW_INTERVAL_SECONDS": "120"
+   }
+  },
+  "expect": {
+   "eq": {
+    "settings": {
+     "read_op_timeout_seconds": 60.0,
+     "context_assembly_timeout_seconds": 30.0,
+     "verify_context_max_chars": 24000,
+     "note_floor_relevance_gated": true,
+     "deep_prompt_token_budget": null,
+     "deep_timeout_seconds": null,
+     "deep_review_interval_seconds": 120.0
+    }
+   }
+  }
+ }
+]
