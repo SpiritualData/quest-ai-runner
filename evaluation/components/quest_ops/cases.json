@@ -208,12 +208,12 @@
  {
   "id": "OPS-015",
   "area": "multi step",
-  "message": "Create two goals: one for this week, five easy kilometres, and one for the month of October, 80 km in total.",
+  "message": "Create two goals: one for this week, an easy 5 km run, and one for the month of October, 80 km in total.",
   "expect": [
    {
     "tool": "create_quest_goal",
     "args_contain": {
-     "title": "5"
+     "title": "5 km"
     }
    },
    {
