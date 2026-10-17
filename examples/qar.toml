@@ -1,11 +1,11 @@
-# Example TOML config for examples/minimal_lane.py — see docs/tutorial-your-first-lane.md.
+# Example TOML config for examples/minimal_lane.py, see docs/tutorial-your-first-lane.md.
 #
 # Keys mirror RunnerConfig field names (RunnerConfig.from_file). This file has NO secrets and NO
 # real ids: the Quest connection (QUEST_BASE_URL / QUEST_API_KEY / QUEST_TEAM_ID) stays in the
 # environment, where a QAR_* env var also always wins over the same field set here.
 #
 # Copy this file, fill in your own values, and keep YOUR copy out of version control if it ever
-# grows real ids or paths — this shipped copy is a placeholder, safe to commit.
+# grows real ids or paths. This shipped copy is a placeholder, safe to commit.
 
 runner_label = "minimal-lane-example"
 

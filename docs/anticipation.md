@@ -9,7 +9,7 @@
 ## The idea
 
 The assistant should feel like it already knows what's coming. `core/anticipation.py` learns
-recurring **ask patterns** — what gets asked, at what time of day, on what day of the week — and
+recurring **ask patterns** (what gets asked, at what time of day, on what day of the week) and
 uses them to predict the user's likely next ask *before* they type it. When a prediction is live,
 its context is precomputed in the background, so if the real ask matches, the turn is seeded with
 a cheap, already-assembled bundle instead of starting cold.
@@ -27,18 +27,18 @@ tied to a short-lived planned prediction:
 
 - **Patterns are the durable store.** A learned pattern persists until it's pruned by miss-decay
   (`PRUNE_WEIGHT`), 30-day inactivity (`PRUNE_AGE_DAYS`), or the per-scope cap
-  (`MAX_PATTERNS_PER_SCOPE`). Nothing else expires a pattern — a user who returns next week or next
+  (`MAX_PATTERNS_PER_SCOPE`). Nothing else expires a pattern: a user who returns next week or next
   month still has every pattern they built.
 - **Chips are recomputed from patterns on every read.** `chips_for_now(patterns, now, recent_texts)`
   (module-level, pure) and `Anticipator.chips_for_now(scope_keys, recent_texts, now)` (the store-backed
   entry point) rank the stored patterns against the CURRENT moment's time signature (hour bucket +
   day of week), softly biased by `recent_texts` as a topic seed, and return the top `K` as chips.
-  This depends only on the patterns, never on a stored live prediction or its TTL — a pattern
+  This depends only on the patterns, never on a stored live prediction or its TTL: a pattern
   learned days ago at this hour/weekday surfaces a chip now, with zero replanning.
 - **Stored predictions are precompute SLOTS, not chip visibility.** `plan_next` still generates and
   persists live `Prediction`s at turn end and, when an assembler is wired, precomputes each one's
   context bundle. `PREDICTION_TTL_SECONDS` (4 hours) now only bounds how long that precomputed
-  BUNDLE stays trusted — it no longer gates whether a chip shows.
+  BUNDLE stays trusted: it no longer gates whether a chip shows.
 - **Exact-id serve.** Each chip `chips_for_now` returns carries a STABLE id, `chip_id(scope, text)`.
   A client can send that id back on the next ask: `Anticipator.observe(actual_text, scope_keys,
   anticipated_id=chip_id)` serves that exact slot's precomputed bundle directly, bypassing keyword
@@ -77,14 +77,14 @@ its own prompt string and still reuse `parse_refresh_response` + `apply_refresh`
 
 A prediction's quality is defined by exactly one number, `score_outcome(predicted_text,
 actual_text)`: the keyword-set **similarity** between what was predicted and what was actually
-asked next, in `[0, 1]`. `similarity` is `0.5 * Jaccard + 0.5 * containment-of-the-smaller-set` —
+asked next, in `[0, 1]`. `similarity` is `0.5 * Jaccard + 0.5 * containment-of-the-smaller-set`:
 Jaccard alone punishes a short ask fully contained in a longer one; containment alone rewards tiny
 overlaps in huge sets; the blend does neither.
 
 That single score drives everything, so online learning optimizes exactly what gets measured:
 
 - **Serving.** A live prediction is only ever served as a hint when its score against the actual
-  message clears `MATCH_SERVE` (0.45). Below that, the prediction still gets scored — a miss is a
+  message clears `MATCH_SERVE` (0.45). Below that, the prediction still gets scored: a miss is a
   learning signal, never user-visible breakage.
 - **Logging.** Every live prediction's outcome (hit or miss) is appended to
   `predictions/prediction_log.jsonl`, so hit rate and mean score are measurable offline from the
@@ -92,7 +92,7 @@ That single score drives everything, so online learning optimizes exactly what g
 - **The EMA weight update.** Each learned pattern keeps one number, its `weight`, updated online via
   `update_weight`: `w <- w + ALPHA * (score - w)` (`ALPHA = 0.3`). A pattern whose predictions keep
   scoring well drifts geometrically toward 1.0; one that keeps missing decays toward 0.0 and is
-  eventually pruned (`PRUNE_WEIGHT = 0.05`) — or once unseen for `PRUNE_AGE_DAYS` (30). A brand-new
+  eventually pruned (`PRUNE_WEIGHT = 0.05`), or once unseen for `PRUNE_AGE_DAYS` (30). A brand-new
   pattern starts at `CONF_FLOOR` (0.35): confident enough to predict immediately, but one bad miss
   drops it below the floor until it recurs.
 
@@ -100,11 +100,11 @@ The two turn-boundary operations:
 
 - **`reinforce_or_create`** (turn end, via `Anticipator.learn`) folds the turn's actual ask into the
   scope's pattern set. If an existing pattern's keywords are at least `SIM_REINFORCE` (0.55) similar,
-  it's REINFORCED (hit counted, weight EMA-updated with score 1.0 — the ask recurring is the
-  strongest evidence the pattern is real — time signature and keyword profile updated to the
+  it's REINFORCED (hit counted, weight EMA-updated with score 1.0, since the ask recurring is the
+  strongest evidence the pattern is real, and time signature and keyword profile updated to the
   latest occurrence). Otherwise a NEW pattern is created at `CONF_FLOOR`. The set is then pruned
   (weight floor, age) and capped (`MAX_PATTERNS_PER_SCOPE = 500`, lowest weight/oldest dropped
-  first) — the pattern just absorbed is never itself pruned by that same pass.
+  first): the pattern just absorbed is never itself pruned by that same pass.
 - **`generate_predictions`** (turn end, via `Anticipator.plan_next`) ranks the scope's patterns by
   `rank_patterns`: `time_proximity * keyword_factor * weight`. `time_proximity` measures how close a
   pattern's hour-bucket/day-of-week signature is to now; `keyword_factor` is a floored blend
@@ -112,7 +112,7 @@ The two turn-boundary operations:
   pattern (the every-morning ask) is damped, never zeroed, by unrelated recent chatter. Patterns
   whose score clears `CONF_FLOOR` become live `Prediction`s (deduped by canonical text, capped at
   `K = 3` per scope), each with a `PREDICTION_TTL_SECONDS` (4 hours) expiry on its precomputed
-  bundle only — as covered above, this TTL no longer gates chip visibility; `chips_for_now` reruns
+  bundle only, as covered above, this TTL no longer gates chip visibility; `chips_for_now` reruns
   this same ranking read-time against the CURRENT moment, independent of any stored live
   prediction's age. `generate_predictions` is also what `chips_for_now` calls under the hood (with
   an empty ask text, so the ranking is driven by time signature + weight, softly topic-seeded by
@@ -174,7 +174,7 @@ predictions/
 
 Each scope's JSON file holds its learned `patterns` and its current live `predictions`; each
 prediction record optionally carries a `context_view` sidecar (the precomputed bundle text, kept
-out of the shared `Prediction` dataclass on purpose — it's a runner-lane persistence detail, not
+out of the shared `Prediction` dataclass on purpose: it's a runner-lane persistence detail, not
 part of the reusable contract). Every store method is best-effort: a missing or corrupt file
 returns `[]`/`""` rather than raising, and writes are atomic (tempfile + `os.replace`, the same
 convention `adapters.card_repository` uses).
@@ -182,7 +182,7 @@ convention `adapters.card_repository` uses).
 ## The never-break-a-turn guarantee
 
 Every method on `Anticipator` and `FilePredictionStore` is wrapped so a failure degrades silently
-to the normal path — a prediction miss, a corrupt file, an assembler exception, all just mean *no
+to the normal path: a prediction miss, a corrupt file, an assembler exception, all just mean *no
 anticipated context this turn*, never a broken one:
 
 - **Off means inert.** With `anticipation_enabled = False` (the default), the orchestrator's
@@ -196,12 +196,12 @@ anticipated context this turn*, never a broken one:
   so `config.shutdown_background_index()` closes and joins it; the returned answer never waits on
   learning.
 - **A failed precompute is just no bundle.** If the wired `ContextAssembler`'s `assemble()` raises
-  for a predicted ask, `plan_next` logs it and moves on — the prediction still exists, it just
+  for a predicted ask, `plan_next` logs it and moves on: the prediction still exists, it just
   carries no `context_view`.
 - **Concurrency is last-writer-wins, by design.** Scope files are read-modify-written without a
   lock; the atomic `os.replace` prevents *corruption*, not *lost updates*. Two concurrent turns
   touching the same scope (the always-present `global` scope, most likely) can silently clobber
-  each other's pattern update — an acceptable loss for a best-effort learning signal that will be
+  each other's pattern update, an acceptable loss for a best-effort learning signal that will be
   re-observed on the next recurrence. Turn-end learn/plan is also **single-flight per
   orchestrator**: while one turn's background thread is still running, the next turn's kickoff is
   skipped (dropped, not queued), so fast turns can't pile up threads racing the assembler. A
@@ -234,7 +234,7 @@ orch = build_orchestrator(cfg)   # resolve_anticipator wires a FilePredictionSto
 ```
 
 `resolve_anticipator(cfg, context_assembler=...)` builds the `Anticipator` over whatever
-`ContextAssembler` `build_orchestrator` already resolved (so it's never constructed twice) —
+`ContextAssembler` `build_orchestrator` already resolved (so it's never constructed twice):
 that's what powers per-prediction precompute; passing `None` still works, predictions then just
 carry no precomputed bundle.
 
@@ -244,7 +244,7 @@ The learning algorithm lives once, as pure functions with no file I/O and no REQ
 `extract_features`, `similarity`, `score_outcome`, `update_weight`, `reinforce_or_create`,
 `rank_patterns`, `generate_predictions`, `match_actual`, `chip_id`, `chips_for_now`. A consumer
 with its own persistence (an async database, a distributed cache) reuses these directly instead of
-porting a duplicate implementation — read/write `Pattern`/`Prediction` dataclasses from your own
+porting a duplicate implementation: read/write `Pattern`/`Prediction` dataclasses from your own
 store, call the same functions, and the online-learning contract (the EMA formula, the pruning
 thresholds, the objective function) stays identical everywhere the module is used.
 `FilePredictionStore` + `Anticipator` are just the runner lane's own wrapper of that same core.

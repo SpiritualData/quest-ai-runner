@@ -47,7 +47,7 @@ Result: Each folder's sample is maximally representative of what makes that fold
 | 500 files | 500 | 10 | **92.9%** savings |
 | 1000 files | 1000 | 20 | **92.8%** savings |
 
-**Note**: Small areas (≤20 files) may see a modest token cost increase because snippet content is richer than just paths. This is intentional—the LLM sees *what files contain*, improving topic card quality.
+**Note**: Small areas (≤20 files) may see a modest token cost increase because snippet content is richer than just paths. This is intentional: the LLM sees *what files contain*, improving topic card quality.
 
 ---
 
@@ -121,7 +121,7 @@ The optimizations scale beautifully:
 | 1000 files | 228 | 3,600 | 3,828 | ~36 tokens/area |
 | 10,000 files | 1,200 | 28,000 | 29,200 | ~280 tokens/area |
 
-Even at 10k files, we're under 30k tokens—well within Claude's context and cost-effective.
+Even at 10k files, we're under 30k tokens, well within Claude's context and cost-effective.
 
 ---
 

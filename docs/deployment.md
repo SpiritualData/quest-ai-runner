@@ -1,7 +1,7 @@
 # Deployment
 
 The executor lane is a single process: `quest-ai-runner` (the installed CLI) or your own script
-around `Poller`. It runs in one of three ways — `--check`, `--once`, or loop forever. Run it
+around `Poller`. It runs in one of three ways: `--check`, `--once`, or loop forever. Run it
 wherever your corpus and the model are reachable.
 
 ## Configuration
@@ -11,7 +11,7 @@ All configuration is environment-driven (see [`.env.example`](../.env.example)):
 | Variable | Required | Purpose |
 |---|---|---|
 | `QUEST_BASE_URL` | yes | Quest API base URL |
-| `QUEST_API_KEY` | yes | executor identity (`qsk_...`) — keep secret |
+| `QUEST_API_KEY` | yes | executor identity (`qsk_...`), keep secret |
 | `QUEST_TEAM_ID` | yes | the lane's HOME team (task claiming/escalation, the environment heartbeat, always required) |
 | `QUEST_TEAM_IDS` | optional | comma-separated team ids this ONE lane discovers work from (`team_a,team_b,team_c`). Unset = single-team mode, unchanged. See [One lane, several teams](#one-lane-several-teams) |
 | `QUEST_ORG_ID` | optional | when set, the environment heartbeat registers at ORG scope instead of team scope, making this runner available to every team in the org, not just `QUEST_TEAM_ID` |
@@ -36,7 +36,7 @@ quest-ai-runner --check     # exits 0 and prints whoami if the key is valid
 The CLI degrades visibly: if a required key/url is missing it logs the problem and exits 0 (so a
 scheduler doesn't error-spam while a key is still being provisioned).
 
-## Option A — cron (`--once`)
+## Option A: cron (`--once`)
 
 Each tick does one scan and exits. Scheduling/timing is Quest's job (the poller only asks "what's
 due now?"), so a frequent, simple cron is all you need:
@@ -46,7 +46,7 @@ due now?"), so a frequent, simple cron is all you need:
 */5 * * * * set -a; . /etc/quest-ai-runner.env; set +a; /usr/local/bin/quest-ai-runner --once >> /var/log/quest-ai-runner.log 2>&1
 ```
 
-## Option B — systemd service (loop forever)
+## Option B: systemd service (loop forever)
 
 `/etc/systemd/system/quest-ai-runner.service`:
 
@@ -62,7 +62,7 @@ EnvironmentFile=/etc/quest-ai-runner.env
 ExecStart=/usr/local/bin/quest-ai-runner
 Restart=always
 RestartSec=10
-# Hardening (the deep-runner spawns a coding agent — scope it):
+# Hardening (the deep-runner spawns a coding agent, so scope it):
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/var/lib/quest-ai-runner
@@ -157,7 +157,7 @@ The same thing in a [config file](a-lane-is-a-config-file.md): `team_ids = ["tea
 The deep-runner spawns a coding agent per task, which is the heaviest thing the lane does. If the
 host can't take more (memory nearly exhausted, load climbing), the runner can pause gracefully
 instead of thrashing. Disabled by default; opt in by setting any of the `QAR_MAX_MEMORY_PERCENT`,
-`QAR_MIN_FREE_MEMORY_MB` (remaining-resource form), or `QAR_MAX_LOAD_PER_CORE` limits — or pass a
+`QAR_MIN_FREE_MEMORY_MB` (remaining-resource form), or `QAR_MAX_LOAD_PER_CORE` limits, or pass a
 `ResourceLimits` on `RunnerConfig.resource_limits` in code.
 
 How it behaves while a limit is tripped:

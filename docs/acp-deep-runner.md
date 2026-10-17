@@ -2,8 +2,8 @@
 
 `AcpDeepRunner` is a **second** `DeepRunner` implementation. It runs the same bounded, goal-driven
 contract as the reference `SubprocessGoalRunner`, but talks to Claude over the
-[Agent Client Protocol](https://agentclientprotocol.com) (ACP) — a live, bidirectional JSON-RPC
-session — instead of shelling out to `claude -p` once and parsing the JSON it prints.
+[Agent Client Protocol](https://agentclientprotocol.com) (ACP), a live, bidirectional JSON-RPC
+session, instead of shelling out to `claude -p` once and parsing the JSON it prints.
 
 **This is additive.** `SubprocessGoalRunner` is unchanged and remains the default. Nothing switches
 to ACP unless a consumer explicitly wires it. The brain cannot tell the two apart: both satisfy
@@ -19,7 +19,7 @@ only moment the orchestrator gets control back (see the `_drain_pending` call in
 The Claude ACP agent advertises a steering extension
 (`InitializeResponse._meta.steering.supported`). Its `_session/steering` request injects a message
 into the turn that is **currently running**, delivered at a priority that pre-empts the current
-generation — it slots in between a multi-step turn's tool calls rather than queueing behind them.
+generation. It slots in between a multi-step turn's tool calls rather than queueing behind them.
 That is the one capability this adapter buys, and it is wired to the mechanism QAR already has for
 mid-run input, `core/inbox.py`'s `InputInbox`.
 
@@ -31,8 +31,8 @@ Nothing else about the deep contract changes. Use `SubprocessGoalRunner` unless 
 |---|---|---|
 | Python client | the `agent-client-protocol` package (imported as `acp`) | `pip install 'quest-ai-runner[acp]'` |
 | The agent | `@agentclientprotocol/claude-agent-acp` (Node, Apache-2.0), which wraps Anthropic's Claude Agent SDK | `npm i -g @agentclientprotocol/claude-agent-acp` |
-| Node | **>= 22** — the agent's `engines` requirement | see below |
-| Auth | none to add: the agent reuses whatever Claude Code / Agent SDK login is already active, the same subscription auth `SubprocessGoalRunner`'s worker uses | — |
+| Node | **>= 22**: the agent's `engines` requirement | see below |
+| Auth | none to add: the agent reuses whatever Claude Code / Agent SDK login is already active, the same subscription auth `SubprocessGoalRunner`'s worker uses | n/a |
 
 The Python import is **lazy**: it happens inside `open_agent_connection`, so importing
 `quest_ai_runner.adapters` never requires the extra, and a deployment that does not use ACP pays
@@ -44,13 +44,13 @@ A distro-packaged Node is frequently older than 22, and on a shared machine you 
 the system one (other tooling depends on it). So the Node used to launch the agent is **config**,
 not a bare PATH lookup:
 
-1. `AcpConfig.node_path` — an explicit path, highest precedence.
-2. `QAR_ACP_NODE_PATH` — the env fallback, for a deployment that configures by environment.
-3. `node` on `PATH` — the default.
+1. `AcpConfig.node_path`: an explicit path, highest precedence.
+2. `QAR_ACP_NODE_PATH`: the env fallback, for a deployment that configures by environment.
+3. `node` on `PATH`: the default.
 
 Whatever is chosen is probed with `node --version` **before** the agent is spawned. Too old, and the
 run fails immediately with a `DeepResult` naming the version it found, the path it found it at, and
-the knob to set — rather than dying inside the child process with an engine warning or a syntax
+the knob to set, rather than dying inside the child process with an engine warning or a syntax
 error. Install a newer Node however this deployment prefers (nvm, a vendor build, a container base
 image); nothing here assumes an install method, and nothing touches the system default.
 
@@ -60,7 +60,7 @@ out to resolves to the same Node that passed the check.
 The agent program itself resolves the same way: `AcpConfig.agent_command`, then
 `QAR_ACP_AGENT_COMMAND`, then `claude-agent-acp` on `PATH`. An npm bin shim is resolved through its
 symlink to the `.js` entry point and launched as `<node> <entry>`, because the shim's shebang would
-otherwise pick up whichever `node` is first on `PATH` — usually the too-old one.
+otherwise pick up whichever `node` is first on `PATH`, usually the too-old one.
 
 ## Wiring it
 
@@ -94,7 +94,7 @@ tool gating, exactly as `SubprocessConfig` does.
 
 ## Session lifecycle
 
-**One agent process and one ACP session per `run_goal` call**, torn down when it returns — the same
+**One agent process and one ACP session per `run_goal` call**, torn down when it returns, the same
 lifetime a `claude -p` spawn gets today.
 
 That is deliberate. The orchestrator's goal loop calls `run_goal` once per attempt and never signals
@@ -112,7 +112,7 @@ injects whatever it finds. This is the same `InputInbox` the orchestrator drains
 so an interface that already calls `inbox.push(conversation_id, message)` needs no new integration.
 
 **The direct route.** `AcpDeepRunner.steer(message, run_id=None)` injects from any thread (it hands
-the coroutine to the run's own event loop). With no `run_id` it goes to every live run — usually
+the coroutine to the run's own event loop). With no `run_id` it goes to every live run, usually
 exactly one. `active_runs()` lists them.
 
 **Nothing is silently swallowed.** The steering request is sent with
@@ -126,8 +126,8 @@ that does not advertise steering is never drained at all.
 ## What the stream looks like
 
 `session/update` notifications are translated into the `EVENT_EXEC` ticks QAR already emits for deep
-runs — same event type, same `data["run_id"]`, same `data["phase"]` convention, same one-line
-texture — so every existing consumer renders this unchanged.
+runs: same event type, same `data["run_id"]`, same `data["phase"]` convention, same one-line
+texture, so every existing consumer renders this unchanged.
 
 | ACP `session/update` | `phase` | Rendered as |
 |---|---|---|
@@ -139,8 +139,8 @@ texture — so every existing consumer renders this unchanged.
 | `tool_call_update` (failed) | `tool_error` | `failed: <title>` |
 | `plan` | `plan` | `Plan: 4 task(s), 1 done` + the entries in `data` |
 | `current_mode_update` | `session` | `Permission mode: …` |
-| `usage_update` | — | accounted as cost on the result, not shown |
-| `user_message_chunk`, `available_commands_update`, `config_option_update`, `session_info_update` | — | dropped (our own echo, and startup chatter) |
+| `usage_update` | n/a | accounted as cost on the result, not shown |
+| `user_message_chunk`, `available_commands_update`, `config_option_update`, `session_info_update` | n/a | dropped (our own echo, and startup chatter) |
 
 A tool finishing deliberately does **not** use the phase strings `core/guard.py` treats as terminal
 (`done` / `completed` / `failed`): a completed `Read` is not a completed subgoal, and reusing those
@@ -152,14 +152,14 @@ liveness rule the subprocess runner's session monitor follows.
 
 The **result** is the last agent message, matching what `claude -p --output-format json` reports as
 `result`; everything before it is narration the live stream already showed. `stop_reason: end_turn`
-is this runner's exit-code-0 — with the same guard against a silent no-op (a clean end that produced
+is this runner's exit-code-0, with the same guard against a silent no-op (a clean end that produced
 no text at all is a failure, not a hollow success). Every other stop reason comes back `met=False`
 with the reason written out.
 
 ## Permissions and the human fork
 
 The agent asks for permission via `session/request_permission`. Answers come from the **existing**
-QAR permission model — there is no second policy system:
+QAR permission model: there is no second policy system:
 
 1. The tool is identified from the structured `toolCall._meta.claudeCode.toolName` field, never from
    the agent-composed `title` (hard rule #3: no control flow gated on words a model wrote).
@@ -171,7 +171,7 @@ QAR permission model — there is no second policy system:
 5. Otherwise it is a human decision. With an `EscalationSink` wired (`AcpConfig.escalation`), the ask
    becomes a real decision-request with `default_on_silence="hold"`, the tool is denied so the turn
    cannot proceed past the unapproved step, and `run_goal` returns
-   `DeepResult(met=False, decision_id=...)` — the exact `needs_you` contract the `QAR-ESCALATED:`
+   `DeepResult(met=False, decision_id=...)`: the exact `needs_you` contract the `QAR-ESCALATED:`
    marker gives the subprocess runner. With no sink wired, the tool is denied (nobody could be
    asked). A sink that raises degrades to a denial.
 
@@ -197,7 +197,7 @@ honored identically.
 
 Like every `DeepRunner` here, this one never raises: a missing `[acp]` extra, a missing agent
 program, a too-old Node, a failed handshake, a session created without an id, a protocol error, a
-turn that blows its timeout — each comes back as a `DeepResult(met=False, error=...)` written for
+turn that blows its timeout: each comes back as a `DeepResult(met=False, error=...)` written for
 the human reading the failed task.
 
 ## Tests

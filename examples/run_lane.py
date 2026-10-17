@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one executor lane built from ``custom_consumer.build_config`` — discover, claim, run, report.
+"""Run one executor lane built from ``custom_consumer.build_config``: discover, claim, run, report.
 
 NOTE: this file predates ``quest_ai_runner.runner.lane.run_lane`` (the library's own shared
 ``--check``/``--once``/loop-forever driver) and duplicates what that function now does. It is kept

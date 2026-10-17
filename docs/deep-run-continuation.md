@@ -35,9 +35,9 @@ nothing") would then be handed to the worker as what it still owed.
 
 Seeing `limit_hit`, the next attempt is handed:
 
-- `resume_session_id` — the worker relaunches with `--resume <id>`, so it still holds everything it
+- `resume_session_id`: the worker relaunches with `--resume <id>`, so it still holds everything it
   read, decided and changed. It does not open a second session.
-- a **larger budget** — `deep_max_turns * (n + 1)`, grown once per continuation and capped at
+- a **larger budget**: `deep_max_turns * (n + 1)`, grown once per continuation and capped at
   `DEEP_CONTINUATION_TURN_MULTIPLIER_CAP` (4x), so a task that simply needed more room gets it
   quickly, while a worker going in circles cannot talk its way into an unbounded run one
   continuation at a time.

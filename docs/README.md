@@ -4,11 +4,11 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 
 ## Tutorials
 
-- **[Quickstart](quickstart.md)** — install the library, ground the brain in-process, then run the
+- **[Quickstart](quickstart.md)**: install the library, ground the brain in-process, then run the
   executor lane against a Quest backend.
-- **[Your first lane](tutorial-your-first-lane.md)** — from nothing to a working executor lane, and
+- **[Your first lane](tutorial-your-first-lane.md)**: from nothing to a working executor lane, and
   what a consumer is NOT supposed to own any more (the CLI/loop shape, `.env` loading, persona
-  resolution — those are library concerns; see [`examples/minimal_lane.py`](../examples/minimal_lane.py)).
+  resolution: those are library concerns; see [`examples/minimal_lane.py`](../examples/minimal_lane.py)).
 
 - **[The terminal chat](chat.md)**: talk to the brain in your terminal. Resume past
   conversations (`--resume`, `--continue`), use the `/` command menu, choose the quest a
@@ -16,27 +16,27 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 
 ## How-to guides
 
-- **[Writing a consumer](writing-a-consumer.md)** — wire the generic library to *your* Quest
+- **[Writing a consumer](writing-a-consumer.md)**: wire the generic library to *your* Quest
   backend, corpus, and persona via `RunnerConfig`; also covers `decision_assignees` (named
   decision-routing roles) and `load_client`, the lightweight sibling of `load_config` for a
   script, notebook, or one-off lookup that only needs a `QuestClient` (see also the README's
   "Scripting the Quest API" and the `quest-ai-runner quest <method>` CLI subcommand).
 - **[Keeping the repository clean](public-hygiene.md)**: the scan that keeps secrets, real machine
   paths and real addresses out of a public repository.
-- **[Implementing adapters](adapters.md)** — the four interfaces (`RetrievalAdapter`,
+- **[Implementing adapters](adapters.md)**: the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
 - **[Direct tools](tools.md)**: actions the brain calls in one planner step with no deep run
   (standard `send_quest_email`, plus your own tools declared in TOML with when to use and when
   not to), shown only when relevant to the request, and callable from a deep run by shell.
-- **[Personas](personas.md)** — run each task AS somebody without writing a resolver: the persona
+- **[Personas](personas.md)**: run each task AS somebody without writing a resolver: the persona
   registry (both file shapes), the four resolution steps (structured field, LLM-judged explicit
   ask, domain-card dominance, structural fallback), auto-registering an unknown persona as a real
   skill, and why a bare name mention must never activate one.
-- **[The ACP deep runner](acp-deep-runner.md)** — the opt-in `DeepRunner` that drives Claude over
+- **[The ACP deep runner](acp-deep-runner.md)**: the opt-in `DeepRunner` that drives Claude over
   the Agent Client Protocol instead of a one-shot `claude -p`, so a message queued mid-run reaches
   the turn already in progress. How to wire it, the Node >= 22 requirement, and why the default
   path is unchanged.
-- **[The fast edit runner](fast-edit-runner.md)** — the opt-in `DeepRunner` that lands a bounded
+- **[The fast edit runner](fast-edit-runner.md)**: the opt-in `DeepRunner` that lands a bounded
   file edit in one model call instead of spawning a full agent, and with it quest-ai-runner's
   first write capability: how the opt-in works, what the write boundary guarantees (containment,
   secret refusal, backups), when it escalates to the full deep runner, and the vendored
@@ -52,17 +52,17 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   doing, why a standing rule is never "done", how a run declares a disposition in its own receipt,
   and how a standing rule becomes a guidance card while the ledger keeps score of whether it is
   actually being followed.
-- **[Continuing a deep run that ran out of turns](deep-run-continuation.md)** — why a worker that
+- **[Continuing a deep run that ran out of turns](deep-run-continuation.md)**: why a worker that
   used its whole turn budget is continued in its own session with a bigger budget instead of being
   re-run from a cold start, what still stops it (the verifier, the token budget), and how an
   unfinished run reports the work it did.
-- **[Deployment](deployment.md)** — run the poller under cron or systemd.
-- **[Corpus playbooks](corpus-playbooks.md)** — distill a corpus's history into playbook files the
+- **[Deployment](deployment.md)**: run the poller under cron or systemd.
+- **[Corpus playbooks](corpus-playbooks.md)**: distill a corpus's history into playbook files the
   shallow loop (context cards) and Claude Code deep runs both pick up automatically.
 - **[Context card stores](context-card-stores.md)**: store identity, read-only mounting instead of
   copy-import, `context move-root` / `migrate-imports` / `merge-into` / `store-info`, read-only vectors for a mount on another Qdrant backend, the access model (what the
   process can read, plus the vector fence), the containment audit and the migration order.
-- **[Guidance cards](guidance-cards.md)** — standing rules that are retrieved per message instead
+- **[Guidance cards](guidance-cards.md)**: standing rules that are retrieved per message instead
   of pasted into one always-on prompt: the card format and tag vocabulary, how selection scores and
   scopes them (rep, team, org, global), serving one rules base to many machines from a host
   database, and turning human corrections into cards automatically.
@@ -72,23 +72,23 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Structure registry](structure/README.md)**: the checked inventory of every component
   (`components.csv`), every swappable solution with its metric (`solutions.csv`), the waivers, and
   `python scripts/check_structure.py` that keeps them true.
-- **[Architecture Standards](ARCHITECTURE_STANDARDS.md)** — the brain / runner / adapters split, why
+- **[Architecture Standards](ARCHITECTURE_STANDARDS.md)**: the brain / runner / adapters split, why
   `core` is called `core`, and the standards code here must follow.
-- **[Streaming & modes](streaming-and-modes.md)** — LIVE vs BACKGROUND, the `ProgressSink`
+- **[Streaming & modes](streaming-and-modes.md)**: LIVE vs BACKGROUND, the `ProgressSink`
   discipline, and the live↔background handoff.
-- **[Quest API contract](quest-api-contract.md)** — the exact endpoints the runner speaks.
-- **[The anticipation engine](anticipation.md)** — learned ask patterns, the objective function and
+- **[Quest API contract](quest-api-contract.md)**: the exact endpoints the runner speaks.
+- **[The anticipation engine](anticipation.md)**: learned ask patterns, the objective function and
   online EMA learning, precomputed context, and the opt-in `QAR_ANTICIPATION` flag.
 - **[Link guard](link-guard.md)**: how every link in a reply is verified before it is sent
   (external URLs fetched, in-app paths matched against the host app's real route table), why
   "could not verify" is treated like "does not exist", and what the policy file configures.
-- **[Answer explanation](answer-explanation.md)** — the user-facing "Explain how I got this" panel:
+- **[Answer explanation](answer-explanation.md)**: the user-facing "Explain how I got this" panel:
   why it is a second call after the answer, the model-free eligibility gate, and which half of the
   payload is a record rather than prose.
 - **[Personal lexicon](personal-lexicon.md)**: ranking one person's distinctive vocabulary by
   TF-DF-IDF, the two background sources and why they are combined with a minimum, and the
   `min_documents` safeguard that stops a mis-recognition feeding back into the recognizer.
-- **[Terminal UX prior art](terminal-ux-prior-art.md)** — how Aider, Crush, Codex CLI, Gemini CLI,
+- **[Terminal UX prior art](terminal-ux-prior-art.md)**: how Aider, Crush, Codex CLI, Gemini CLI,
   Claude Code, and others solve fixed-bottom input, streaming without scrollback corruption, log
   routing, and mid-turn queuing; which Textual primitives to use for each; and an evaluation of
   what's forkable/vendorable versus reference-only (incl. the ACP protocol for pluggable execution
@@ -113,6 +113,6 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 
 ## See also
 
-- [`examples/`](../examples/) — runnable reference consumers.
-- [CONTRIBUTING.md](../CONTRIBUTING.md) and [CLAUDE.md](../CLAUDE.md) — how to contribute, and the
+- [`examples/`](../examples/): runnable reference consumers.
+- [CONTRIBUTING.md](../CONTRIBUTING.md) and [CLAUDE.md](../CLAUDE.md): how to contribute, and the
   rules that keep the library generic.

@@ -1,9 +1,9 @@
-# GOALS.md — the quest's plan, in the folder, editable both ways
+# GOALS.md: the quest's plan, in the folder, editable both ways
 
 `QUEST_SYNC.md` answers *what is this quest and what has been said about it*. It does not answer
 *what are all my goals*. Its state block carries one outcome; its `next_steps` block carries the
-two or three things to do now. The plan itself — the ladder of quarter, month, week and day goals
-— lives only in Quest.
+two or three things to do now. The plan itself (the ladder of quarter, month, week and day goals)
+lives only in Quest.
 
 A folder without it grows a substitute. `goals.yaml`, `todos.md`, `today_tasks.md`, whatever that
 consumer invented. Each one drifts from Quest the moment either side changes, each one is
@@ -53,7 +53,7 @@ The period key rides in a comment next to the human label because a bullet typed
 heading has to be creatable, and `Q3 2026 (Jul - Sep)` is not what the API takes.
 
 Completed goals are kept and ticked rather than dropped. A plan that silently loses its finished
-rows reads, a quarter later, as though the work was never scheduled — and it would also make the
+rows reads, a quarter later, as though the work was never scheduled, and it would also make the
 file disagree with Quest about what exists, which is what breaks push.
 
 ## The three edits that push
@@ -64,7 +64,7 @@ file disagree with Quest about what exists, which is what breaks push.
 | Change the text after an id | The goal is renamed |
 | Add a bullet with **no** id under a period heading | A goal is created in that period, and the bullet is stamped with its new id |
 
-Stamping is what makes a repeated push a no-op — the same trick `quest_folder_sync` uses for note
+Stamping is what makes a repeated push a no-op: the same trick `quest_folder_sync` uses for note
 bullets.
 
 Two things deliberately do not happen:
@@ -80,7 +80,7 @@ Two things deliberately do not happen:
 worth stating because it is easy to "fix" back: the edits live *inside* the managed block, and a
 pull regenerates that block from Quest. Pulling first would erase the tick before it was ever
 sent. Pushing first sends it, and the pull that follows brings back Quest's own view of what just
-happened — so the round trip corrects itself instead of losing work.
+happened, so the round trip corrects itself instead of losing work.
 
 ## The quest state block pushes too
 
@@ -91,8 +91,8 @@ from us. `push_quest_state` runs automatically on `direction="both"`.
 | --- | --- |
 | `**Goal:**` (outcome) | Yes |
 | `**Status:**` (completed) | Yes |
-| `**Current state:**` | **Not from here** — writable by the owner via `edit_quest_field`, but a prose rewrite belongs in a decision-request the person reviews |
-| `**Accepted strategies:**` | **No** — objects with ids and acceptance flags that bare titles cannot reconstruct |
+| `**Current state:**` | **Not from here**: writable by the owner via `edit_quest_field`, but a prose rewrite belongs in a decision-request the person reviews |
+| `**Accepted strategies:**` | **No**: objects with ids and acceptance flags that bare titles cannot reconstruct |
 
 The two that do not push are **reported**, not dropped: the result's `unwritable` list names
 them, so a caller can say so out loud.

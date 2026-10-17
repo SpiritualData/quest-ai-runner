@@ -4,11 +4,11 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
-> The orchestrator **brain** + the queued-task **executor** for Quest AI tasks — generic, with no
+> The orchestrator **brain** + the queued-task **executor** for Quest AI tasks: generic, with no
 > consumer-specific logic.
 
 `quest-ai-runner` is the executor Quest is missing: Quest can *enqueue* AI tasks for a team/org but
-cannot *run* them — no internal worker, no callback contract, no reference client. This library
+cannot *run* them: no internal worker, no callback contract, no reference client. This library
 closes that gap, generically.
 
 It is **domain-free**. The brain knows how to ground, reason, run to a written `/goal` standard,
@@ -134,8 +134,8 @@ client.create_decision("Approve the $250 order", assignee="owner",
 
 `load_client` reads the same TOML config file a lane built with `load_config` uses (including its
 `env_files`/`env_aliases` tables, so a key kept under a deployment's own variable names still
-reaches the client), and builds just the `QuestClient` — no model provider, no vector store, none
-of the optional dependencies, so it starts instantly. It raises `QuestNotConfigured` rather than
+reaches the client), and builds just the `QuestClient` (no model provider, no vector store, none
+of the optional dependencies), so it starts instantly. It raises `QuestNotConfigured` rather than
 falling back to another account's credentials.
 
 For a lookup that doesn't need Python at all, the same client is one shell command away:
@@ -153,55 +153,55 @@ name and prints the JSON result. Read-only methods (`whoami`, `get_*`, `list_*`,
 
 ## Features
 
-- **Smart Context Selection (TF-DF-IDF sampling)** — Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) for details.
-- **Multi-source retrieval** — Composite retrieval adapter lets you query files, databases, Claude conversations, vector stores, etc., all in one orchestrator.
+- **Smart Context Selection (TF-DF-IDF sampling)**: Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) for details.
+- **Multi-source retrieval**: Composite retrieval adapter lets you query files, databases, Claude conversations, vector stores, etc., all in one orchestrator.
 - **Web search (default, no extra key)**: the runner grounds answers on the live web using the model provider's own tool (Claude's `web_search` / Gemini's Google Search grounding), reusing the LLM key, so tasks like "find marathons near Portland" return current, cited results with no separate search key and no Claude Code subprocess. A dedicated Tavily key is supported as an alternative. See [Web search](docs/web-search.md).
 - **Direct tools**: "email me today's plan" runs in one planner step with no deep run. Standard tools (Quest email) sit alongside your own, declared in a TOML file with when to use and when not to; the planner only sees the ones relevant to the request, and a deep run calls the same tools by shell. See [Direct tools](docs/tools.md).
 - **Terminal chat with resume and a `/` command menu**: talk to the brain in your terminal, resume any past conversation (`--resume`, `--continue`) like Claude Code, pick commands and options from menus, and choose the quest a conversation is about. See [The terminal chat](docs/chat.md).
-- **Streaming & live events** — LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
-- **Extensible adapters** — Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
-- **Discovery-driven planning** — The brain learns source structure at runtime, never needing a static schema blob in the prompt.
-- **Minimal-intervention overseer** — An **on-by-default** watcher (set `overseer=False` / `QAR_OVERSEER=false` to opt out): a high-quality model reads a tiny capped digest of the run (never the full gathered text) and almost always says nothing, occasionally sending one small signal (redirect / answer now / escalate) that corrects course. Fails safe on any error. See [The minimal-intervention overseer](docs/overseer.md).
+- **Streaming & live events**: LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
+- **Extensible adapters**: Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
+- **Discovery-driven planning**: The brain learns source structure at runtime, never needing a static schema blob in the prompt.
+- **Minimal-intervention overseer**: An **on-by-default** watcher (set `overseer=False` / `QAR_OVERSEER=false` to opt out): a high-quality model reads a tiny capped digest of the run (never the full gathered text) and almost always says nothing, occasionally sending one small signal (redirect / answer now / escalate) that corrects course. Fails safe on any error. See [The minimal-intervention overseer](docs/overseer.md).
 
 ## Documentation
 
-- [Quickstart tutorial](docs/quickstart.md) — install, ground the brain, run the executor lane.
+- [Quickstart tutorial](docs/quickstart.md): install, ground the brain, run the executor lane.
 - [The terminal chat](docs/chat.md): `quest-ai-runner chat`, resuming conversations (`--resume`,
   `--continue`), the `/` command menu and every command, choosing a quest, keys.
-- [Context assembly](docs/context-assembly.md) — the context engine design of record, including the
+- [Context assembly](docs/context-assembly.md): the context engine design of record, including the
   principled test (not a vibe) for when a message stays on its current topic card vs. opens a new one.
-- [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) — smart context selection: 62% fewer tokens, zero external deps.
-- [Claude conversations integration](docs/claude-conversations-integration.md) — grounding on past
+- [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md): smart context selection: 62% fewer tokens, zero external deps.
+- [Claude conversations integration](docs/claude-conversations-integration.md): grounding on past
   Claude sessions, including how a cross-session recall hit is learned onto the active card and
   gains the same usage-recency boost files and collections already get.
-- [The minimal-intervention overseer](docs/overseer.md) — a cheap, high-quality watcher that almost always stays silent.
-- [Guidance cards](docs/guidance-cards.md) — standing rules (preferences, policies, house standards)
+- [The minimal-intervention overseer](docs/overseer.md): a cheap, high-quality watcher that almost always stays silent.
+- [Guidance cards](docs/guidance-cards.md): standing rules (preferences, policies, house standards)
   retrieved per message rather than pasted into one always-on prompt: tagging and scope, selection,
   one shared rules base across machines, and learning new rules from human corrections.
-- [Answer explanation](docs/answer-explanation.md) — the opt-in, user-facing "Explain how I got this" panel, and why half of it is a record of the run rather than prose about it.
-- [Architecture Standards](docs/ARCHITECTURE_STANDARDS.md) — brain / runner / adapters, why `core` is `core`, and the standards code here must follow.
-- [Writing a consumer](docs/writing-a-consumer.md) — wire the library to your own Quest backend.
-- [Implementing adapters](docs/adapters.md) — the four interfaces and how to build your own.
-- [Streaming & modes](docs/streaming-and-modes.md) — LIVE vs BACKGROUND, sinks, the handoff.
-- [Deployment](docs/deployment.md) — cron and systemd.
-- [Quest API contract](docs/quest-api-contract.md) — the endpoints the runner speaks.
+- [Answer explanation](docs/answer-explanation.md): the opt-in, user-facing "Explain how I got this" panel, and why half of it is a record of the run rather than prose about it.
+- [Architecture Standards](docs/ARCHITECTURE_STANDARDS.md): brain / runner / adapters, why `core` is `core`, and the standards code here must follow.
+- [Writing a consumer](docs/writing-a-consumer.md): wire the library to your own Quest backend.
+- [Implementing adapters](docs/adapters.md): the four interfaces and how to build your own.
+- [Streaming & modes](docs/streaming-and-modes.md): LIVE vs BACKGROUND, sinks, the handoff.
+- [Deployment](docs/deployment.md): cron and systemd.
+- [Quest API contract](docs/quest-api-contract.md): the endpoints the runner speaks.
 
 ## The three consumers
 
 1. **Quest in-process chat (via `core`).** Quest's backend (or a standalone-team brain) imports
    `quest_ai_runner.core`, constructs an `Orchestrator` with its adapters, and calls `run(...)`
-   per message. No poller, no network beyond the model — just the brain in-process.
+   per message. No poller, no network beyond the model, just the brain in-process.
 2. **An integrating org (via the `runner`).** An org that wants its system to execute Quest AI
    tasks for its teams supplies its Quest API key + adapters (its corpus via `FilesAdapter`, its
    live data via `CachedDbAdapter`) and runs the `Poller`. Spiritual Data's own cockpit is exactly
    this: it grounds on its corpus + live Quest data and runs the same engine.
 3. **A single-user personal lane (via the `runner`).** The same engine runs for one person: a
    personal Quest key + a personal corpus root, config-only. The pattern was proven by a bespoke
-   personal "watchdog" loop that generalized cleanly into the `Poller` — same poll → claim → run →
+   personal "watchdog" loop that generalized cleanly into the `Poller`: same poll → claim → run →
    escalate → report loop, just different config.
 
 Because the same engine serves all three, maintenance happens once. Consumers differ only in
-*config* — which key, which adapters, which corpus.
+*config*: which key, which adapters, which corpus.
 
 ## Repo layout
 
@@ -234,8 +234,8 @@ tests/                         # core loop, registry bucketing, runner + example
 
 | Interface | Role | Reference impl |
 |---|---|---|
-| `RetrievalAdapter` | GATHER — `read_section` / `grep` / `query` over the source | `FilesAdapter`, `CachedDbAdapter` |
-| `ModelProvider` | the LLM — `plan` / `answer` / `list_models` | `AnthropicProvider` |
+| `RetrievalAdapter` | GATHER: `read_section` / `grep` / `query` over the source | `FilesAdapter`, `CachedDbAdapter` |
+| `ModelProvider` | the LLM: `plan` / `answer` / `list_models` | `AnthropicProvider` |
 | `DeepRunner` | spawn a bounded, goal-driven run (`/goal --max-turns`) | `SubprocessGoalRunner` |
 | `EscalationSink` | raise a human-only confirm/decision, return its id | `QuestDecisionSink` |
 
@@ -314,7 +314,7 @@ Auth: `Authorization: Bearer qsk_<hex>` (the executor identity).
 
 ## How quest-backend / cockpit import `core` vs. run the `runner`
 
-- **In-process chat** (Quest backend, cockpit chat): import the brain and call it directly —
+- **In-process chat** (Quest backend, cockpit chat): import the brain and call it directly:
   no poller, no Quest task API:
 
   ```python
@@ -347,16 +347,16 @@ Auth: `Authorization: Bearer qsk_<hex>` (the executor identity).
   Or via the console entry (env-driven): `QUEST_BASE_URL=... QUEST_API_KEY=qsk_... \
   QAR_CORPUS_ROOT=... quest-ai-runner --once` (cron) or `quest-ai-runner` (service).
 
-## The two product modes (one brain) — the frozen streaming interface
+## The two product modes (one brain): the frozen streaming interface
 
 Every run is one of two **modes** (`quest_ai_runner.core.Mode`). The brain emits the **same**
 events in both; a **`ProgressSink`** (chosen by mode) decides what surfaces. **The orchestrator
-never decides messaging policy** — it only emits `ProgressEvent`s; the sink applies the rule.
+never decides messaging policy**: it only emits `ProgressEvent`s; the sink applies the rule.
 
 | | **LIVE (attended)** | **BACKGROUND (sent-off / scheduled)** |
 |---|---|---|
 | Who's watching | a human, in real time | nobody |
-| Sink | `StreamSink` — forwards **every** event | `MilestoneSink` — surfaces **only** `result` / `decision` / `milestone` / `done` |
+| Sink | `StreamSink`: forwards **every** event | `MilestoneSink`: surfaces **only** `result` / `decision` / `milestone` / `done` |
 | Surfaces | status ticks, plan/replan, reads, reply, confirm | result, decision-request, real milestone (planning/reading chatter **dropped**) |
 | Called by | quest-backend / cockpit **in-process** | the **poller's** poll-by-due lane |
 
@@ -390,17 +390,17 @@ result = orch.run(msg, mode=Mode.LIVE, sink=live_stream,
 A plain `orch.run(msg)` with **no** mode/sink args still works (non-streaming; legacy `status`
 callback only). The `runner/executor.py` already runs BACKGROUND with a `MilestoneSink` whose
 `on_milestone` posts an optional progress note and whose result/decision flow through the
-existing Quest PATCH path — so live and background report **consistently**.
+existing Quest PATCH path, so live and background report **consistently**.
 
 **Live↔Background handoff (both directions):**
 - **Live → Background** is **core's** job: pass `background_sink` + `detach_check` to `run`; on
   detach the run finishes and delivers its result via the background path (notify/PATCH), not the
   dropped stream. (v1 mechanism: `core.FanoutSink` flips sinks mid-run.)
 - **Background → Live** ("a background result surfaces live when the user returns") is a
-  **consumer/UI** concern — the result is already persisted/reported by the background path; the
+  **consumer/UI** concern: the result is already persisted/reported by the background path; the
   UI just reads it back. Core does nothing extra here.
 
-## Scheduling — Quest scheduling **is** the due time; the runner is timing-agnostic
+## Scheduling: Quest scheduling **is** the due time; the runner is timing-agnostic
 
 There is **no separate scheduling plumbing**. The poller discovers by
 `GET /api/assistant-tasks?status=queued&due_before=<now>`, so:
@@ -419,7 +419,7 @@ scheduling tests in `tests/test_runner.py`.)
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e .            # core + runner are stdlib-only
 pip install -e '.[anthropic,dev]'   # add the Anthropic provider + pytest
-python -m pytest -q         # tests use stub adapters + a mock Quest client — no live network
+python -m pytest -q         # tests use stub adapters + a mock Quest client, no live network
 ```
 
 The tests need no network and no API key: the core loop runs against a stub `ModelProvider` +
@@ -429,8 +429,8 @@ stub `RetrievalAdapter`, and the runner runs against a mock `QuestClient`.
 
 The core design decision behind the context engine is information-theoretic. Shannon's **Data
 Processing Inequality** (1948) proves that every agent-to-agent handoff can only destroy
-information, never create it. The naive alternative — a "context finder" agent that summarizes the
-corpus and hands a compressed summary to the reasoning agent — is a lossy chain by construction,
+information, never create it. The naive alternative, a "context finder" agent that summarizes the
+corpus and hands a compressed summary to the reasoning agent, is a lossy chain by construction,
 regardless of how good the summarizer is. The context engine eliminates that handoff: context
 delivery is library code, not an agent call, so the reasoning agent sees the full relevant context,
 not a compressed version of it. Under equal compute, a single well-contextualized agent matches or
@@ -494,13 +494,13 @@ Re-run: `python evaluation/components/run.py context_selection --impl hybrid_uni
 ## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
-[CLAUDE.md](CLAUDE.md) first — the one rule that matters most: **keep the library generic**
+[CLAUDE.md](CLAUDE.md) first: the one rule that matters most: **keep the library generic**
 (no org names, ids, keys, emails, or absolute paths in the package). By participating you agree to
 the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 
-Found a vulnerability? Please report it privately — see [SECURITY.md](SECURITY.md). Do not open a
+Found a vulnerability? Please report it privately: see [SECURITY.md](SECURITY.md). Do not open a
 public issue for security problems.
 
 ## License

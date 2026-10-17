@@ -1,15 +1,15 @@
 # How to write a consumer
 
-A *consumer* is the thin layer that supplies your specifics — Quest connection, adapters, corpus,
-persona, decision routing — to the generic library. Everything flows through a single
+A *consumer* is the thin layer that supplies your specifics (Quest connection, adapters, corpus,
+persona, decision routing) to the generic library. Everything flows through a single
 `RunnerConfig`. The library hardcodes nothing.
 
 > Keep your real keys and ids in the environment, never in code. The shipped
-> [`examples/`](../examples/) contain only env lookups and placeholders — copy them.
+> [`examples/`](../examples/) contain only env lookups and placeholders: copy them.
 
 > **New to this?** [`tutorial-your-first-lane.md`](tutorial-your-first-lane.md) walks from nothing
 > to a working lane and says plainly what a consumer is NOT supposed to own (the CLI/loop shape,
-> `.env` loading, persona resolution — all library concerns now). This page is the fuller
+> `.env` loading, persona resolution, all library concerns now). This page is the fuller
 > reference once you've done that walkthrough.
 
 ## The shape
@@ -58,16 +58,16 @@ def build_config() -> RunnerConfig:
 | `quest_base_url`, `quest_api_key`, `team_id` | the Quest connection; the key is the executor identity |
 | `org_id` | OPT-IN, `""` by default: when set, the environment heartbeat registers at ORG scope (`/api/orgs/{org_id}/environment/heartbeat`) instead of team scope, so this runner is available to every team in the org, not just `team_id`. `team_id` is still required for task claiming/escalation either way |
 | `runner_label` | human-readable tag sent on the environment heartbeat (team- or org-scoped) |
-| `retrieval` | a `RetrievalAdapter` — how the brain gathers grounding |
-| `model_provider` | a `ModelProvider` — the LLM (plan/answer/list_models) |
-| `deep_runner` | a `DeepRunner` — runs deep, goal-driven work. **On by default**: leave it unset and one is built for you (see below); pass `None` to turn execution off |
+| `retrieval` | a `RetrievalAdapter`: how the brain gathers grounding |
+| `model_provider` | a `ModelProvider`: the LLM (plan/answer/list_models) |
+| `deep_runner` | a `DeepRunner`: runs deep, goal-driven work. **On by default**: leave it unset and one is built for you (see below); pass `None` to turn execution off |
 | `file_writer` | OPT-IN, `None` by default: a `FileWriter` (e.g. `FilesWriter(root)`). The **only** switch that grants this library write access to your files; setting it puts the one-call `FastEditRunner` in front of the deep runner. See [fast-edit-runner.md](fast-edit-runner.md) |
-| `escalation` | an `EscalationSink` — where confirm/decision requests go (defaults from the Quest client) |
+| `escalation` | an `EscalationSink`: where confirm/decision requests go (defaults from the Quest client) |
 | `corpus_root` | the org's files/skills root (generic, optional) |
-| `context_preamble` | org/persona doctrine prepended to every deep-run brief, **without** having to build a `SubprocessConfig` by hand — read by the auto-built default `deep_runner` (see below). An explicit `deep_runner` instance's own `context_preamble` still wins |
+| `context_preamble` | org/persona doctrine prepended to every deep-run brief, **without** having to build a `SubprocessConfig` by hand, read by the auto-built default `deep_runner` (see below). An explicit `deep_runner` instance's own `context_preamble` still wins |
 | `discovery_team_id` | a separate team scope for task DISCOVERY only (heartbeat/escalation keep using `team_id`). `None` (default) falls back to `team_id`; `""` means owner-scoped discovery (a personal/single-user lane whose tasks carry no `team_id`) |
 | `rep_sync_resolver` | OPT-IN: map a task to `(user_id, skill_dir)` to run it AS that AI rep (off by default) |
-| `personas` | a declarative alternative to writing `rep_sync_resolver` by hand — see [personas.md](personas.md) and [`runner/personas.py`](../quest_ai_runner/runner/personas.py). An explicit `rep_sync_resolver` always wins over this |
+| `personas` | a declarative alternative to writing `rep_sync_resolver` by hand, see [personas.md](personas.md) and [`runner/personas.py`](../quest_ai_runner/runner/personas.py). An explicit `rep_sync_resolver` always wins over this |
 | `rep_sync_direction` | `"pull"` (default) / `"push"` / `"both"`: controls Quest <-> skill-file sync for reps |
 | `default_assignee_user_id` | who human-only decisions route to by default |
 | `lane_user_id` | the Quest user id this lane's API key authenticates AS (env `QAR_LANE_USER_ID`). Work the lane creates on a quest somebody ELSE owns is assigned to this account, so the lane owns it and can discover it (discovery is owner-scoped, and a goal-linked task otherwise belongs to the quest's owner). Configured, not discovered: an API key cannot ask the backend who it is |
@@ -76,7 +76,7 @@ def build_config() -> RunnerConfig:
 | `autopilot_pass_time`, `autopilot_adopt_recurring` | per-deployment defaults for opted-in quests that don't state their own (see `runner/autopilot.py`) |
 | `extra` | a free-form dict for your own needs |
 
-Building `RunnerConfig` by hand isn't the only option any more — see **File-based config** below
+Building `RunnerConfig` by hand isn't the only option any more, see **File-based config** below
 for the same fields expressed as a TOML file, and **Running the lane** for the entry point that
 turns a built config into a running poll loop with no hand-written CLI at all.
 
@@ -105,7 +105,7 @@ so there is one set of switches and not two:
 | `QAR_DEEP_AUTO_MODEL` | `0`/`false`/`off` turns off the automatic starting model (on by default, see below) |
 | `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL`, `QAR_DEEP_MODEL_HARD` | the model a deep run starts on per planner-rated difficulty (defaults `haiku`, `sonnet`, `sonnet`) |
 | `QAR_DEEP_MAX_TURNS` | hard per-attempt turn cap (`OrchestratorConfig.deep_max_turns`, default 30) |
-| `QAR_CONTEXT_PREAMBLE_FILE` | a file whose contents become `RunnerConfig.context_preamble` (org/persona doctrine on every deep-run brief) — preferred over the inline `QAR_CONTEXT_PREAMBLE` (still supported) since multi-line prose is miserable as a bare env var |
+| `QAR_CONTEXT_PREAMBLE_FILE` | a file whose contents become `RunnerConfig.context_preamble` (org/persona doctrine on every deep-run brief), preferred over the inline `QAR_CONTEXT_PREAMBLE` (still supported) since multi-line prose is miserable as a bare env var |
 
 Resolution happens in `config.resolve_deep_runner`, which `build_orchestrator` calls and then
 **writes back onto your config**: after `build_orchestrator(cfg)`, `cfg.deep_runner` is always a
@@ -157,7 +157,7 @@ runs pinned to that model without touching the lane's own `QAR_DEEP_MODELS` ladd
 ### Fast in-process edits (opt-in, and the only way to grant write access)
 
 Deep execution is not the only rung. Wire a `FileWriter` and the deep runner is resolved as an
-ordered ladder — a one-call in-process editor first, the full worker behind it — so a small file
+ordered ladder (a one-call in-process editor first, the full worker behind it), so a small file
 edit costs one round trip instead of an agent spawn, and escalates to the full worker whenever the
 goal loop's verification is not satisfied:
 
@@ -200,7 +200,7 @@ Poller(cfg, state_path="qar_state.json").run_forever()   # for the executor lane
 
 The four lines above are still exactly what an executor lane does, but you should not write the
 `--check` / `--once` / loop-forever dispatch, the logging setup, or the `.env` loading around them
-by hand — that is generic, and it is now in the library:
+by hand: that is generic, and it is now in the library:
 
 ```python
 from quest_ai_runner.runner.lane import run_lane
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-That is the whole entry point — `build_config` (above) is the only thing genuinely yours. See
+That is the whole entry point: `build_config` (above) is the only thing genuinely yours. See
 [tutorial-your-first-lane.md](tutorial-your-first-lane.md) for the full walkthrough and
 [`examples/minimal_lane.py`](../examples/minimal_lane.py) for a runnable one, and `run_lane`'s own
 docstring for `env_file`/`state_path`/`not_configured_keywords`.
@@ -221,7 +221,7 @@ docstring for `env_file`/`state_path`/`not_configured_keywords`.
 ## File-based config
 
 `RunnerConfig.from_file(path)` builds a config from a TOML file whose keys mirror `RunnerConfig`
-field names (stdlib `tomllib`, Python 3.11+ — no new dependency):
+field names (stdlib `tomllib`, Python 3.11+, no new dependency):
 
 ```toml
 # qar.toml
@@ -236,20 +236,20 @@ llm_explicit_ask = true
 ```
 
 Fields that hold a live object (`retrieval`, `model_provider`, `deep_runner`, `rep_sync_resolver`,
-...) cannot be expressed this way — `from_file` refuses those by name, loudly, rather than silently
+...) cannot be expressed this way: `from_file` refuses those by name, loudly, rather than silently
 building a config with the wrong thing in that field. `[personas]` is the one nested table, built
 into a `PersonaResolverConfig` (see [personas.md](personas.md)).
 
-The stock CLI layers this under your environment variables, never over them — pass `--config
+The stock CLI layers this under your environment variables, never over them: pass `--config
 <path>` (the `poll`/`chat`/`channel` subcommands) or set `QAR_CONFIG_FILE`, and any `QUEST_*` /
 `QAR_*` env var that also sets a field still wins. A missing file, invalid TOML, or an unknown key
-raises `config.ConfigFileError` (a `ValueError`) at startup — this repo has scar tissue about a
+raises `config.ConfigFileError` (a `ValueError`) at startup. This repo has scar tissue about a
 config field that silently did nothing because nobody validated the key that set it, so a config
 file is refused rather than partially applied.
 
 `config.load_config(path)` is the full front door built on top of this (a `RunnerConfig`, adapter
 stack included, layered under the environment exactly as described above). When a caller only
-wants a `QuestClient` — no model provider, no vector store, none of the optional dependencies —
+wants a `QuestClient` (no model provider, no vector store, none of the optional dependencies):
 `quest_ai_runner.load_client(path)` is its lightweight sibling: same file, same `env_files`/
 `env_aliases` layering, but it builds just the API client. See the README's "Scripting the Quest
 API" section, or the `quest-ai-runner quest <method>` CLI subcommand for a lookup that needs no
@@ -257,7 +257,7 @@ Python at all.
 
 ## Capabilities are derived, not asserted
 
-`config.derive_capabilities(cfg)` reports `{web, corpus, code}` straight off your wired adapters —
+`config.derive_capabilities(cfg)` reports `{web, corpus, code}` straight off your wired adapters:
 `corpus` when a file/corpus retrieval adapter is set, `code` when a `DeepRunner` is set, and `web`
 when the deep-runner can actually browse (the reference `SubprocessGoalRunner` derives this from its
 tool gating via `web_enabled()`). The runner sends this on its heartbeat so Quest's router only

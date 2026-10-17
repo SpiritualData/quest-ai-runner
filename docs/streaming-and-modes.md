@@ -2,13 +2,13 @@
 
 Every run is one of two **modes**. The brain emits the **same** `ProgressEvent`s in both; a
 **`ProgressSink`** (chosen by mode) decides what surfaces. The orchestrator never decides messaging
-policy — it only emits events; the sink applies the rule. This keeps the surfacing policy in exactly
+policy: it only emits events; the sink applies the rule. This keeps the surfacing policy in exactly
 one place.
 
 | | **LIVE** (attended) | **BACKGROUND** (sent-off / scheduled) |
 |---|---|---|
 | Who's watching | a human, in real time | nobody |
-| Sink | `StreamSink` — forwards **every** event | `MilestoneSink` — surfaces only `result` / `decision` / `milestone` / `done` |
+| Sink | `StreamSink`: forwards **every** event | `MilestoneSink`: surfaces only `result` / `decision` / `milestone` / `done` |
 | Surfaces | status ticks, plan/replan, reads, reply, confirm | result, decision-request, real milestones (planning/reading chatter dropped) |
 | Driven by | a chat backend / cockpit, **in-process** | the **poller's** poll-by-due lane |
 
@@ -39,7 +39,7 @@ A plain `orch.run(msg)` with no mode/sink still works (non-streaming; legacy `st
 ## Live → Background handoff (consumer disconnected)
 
 If a live viewer disconnects mid-run, the run **continues** and its remaining events (including the
-final result) are delivered via a background sink instead of the dropped stream — this is the
+final result) are delivered via a background sink instead of the dropped stream. This is the
 brain's job:
 
 ```python
@@ -83,5 +83,5 @@ section for the full contract).
 
 `runner/executor.py` already runs BACKGROUND with a `MilestoneSink` whose `on_milestone` posts an
 optional progress note and whose result/decision flow through the Quest PATCH path. So a task run by
-the poller and a message streamed live report **consistently** — same events, same surfacing rule,
+the poller and a message streamed live report **consistently**: same events, same surfacing rule,
 different sink.

@@ -1,6 +1,6 @@
 # Multi-Source Retrieval: Query Files, Databases, and Conversations in Parallel
 
-By default, `quest-ai-runner` takes a single `RetrievalAdapter` that grounds on one source (files, a database, etc.). **You can now wire multiple adapters to query them all in parallel** — files AND databases AND Claude conversations AND task memory, all at once.
+By default, `quest-ai-runner` takes a single `RetrievalAdapter` that grounds on one source (files, a database, etc.). **You can now wire multiple adapters to query them all in parallel**: files AND databases AND Claude conversations AND task memory, all at once.
 
 ## Quick Start
 
@@ -36,10 +36,10 @@ result = orch.run("How have we discussed this topic in past conversations?")
 
 `CompositeRetrievalAdapter` runs all adapters in parallel using a thread pool:
 
-- **`read_section(path)`** — tries adapters in order until one succeeds (no error).
-- **`grep(pattern)`** — searches all adapters in parallel, deduplicates hits by line + source.
-- **`query(spec)`** — queries all adapters in parallel, combines results with source attribution (`_source` field on each hit).
-- **Discovery methods** — `list_sources()`, `describe_source()`, etc. merge results from all adapters.
+- **`read_section(path)`**: tries adapters in order until one succeeds (no error).
+- **`grep(pattern)`**: searches all adapters in parallel, deduplicates hits by line + source.
+- **`query(spec)`**: queries all adapters in parallel, combines results with source attribution (`_source` field on each hit).
+- **Discovery methods**: `list_sources()`, `describe_source()`, etc. merge results from all adapters.
 
 ## Available Adapters
 
@@ -120,7 +120,7 @@ When the orchestrator's planner needs context:
 3. **Results**: merged with source attribution (files from `FilesAdapter`, db rows from `CachedDbAdapter`, conversation excerpts from `ClaudeConversationsAdapter`).
 4. **Replan**: if more context is needed, repeats the gather phase.
 
-This follows Shannon's **Data Processing Inequality** — no lossy summarization step between sources and reasoning. The brain sees the full relevant context from all sources together.
+This follows Shannon's **Data Processing Inequality**: no lossy summarization step between sources and reasoning. The brain sees the full relevant context from all sources together.
 
 ## Example: Claude Conversations as Context
 

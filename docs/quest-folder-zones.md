@@ -1,4 +1,4 @@
-# Quest folder zones — keeping "who decided this?" answerable
+# Quest folder zones: keeping "who decided this?" answerable
 
 A quest with a local working folder ends up holding two kinds of material: what the person said,
 and what the AI came up with. Both are markdown. Both are confident. Nothing on the page records
@@ -6,13 +6,13 @@ which is which.
 
 The failure that follows is not dramatic, which is why it survives so long:
 
-1. A run analyses the work and produces something reasonable — a gap list, a risk register, a
-   proposed re-sequencing.
+1. A run analyses the work and produces something reasonable (a gap list, a risk register, a
+   proposed re-sequencing).
 2. The next run reads that file. It is in the folder, it is specific, it is clearly the product of
    real work. The run treats it as the brief.
 3. The run after that builds on the resolutions.
 4. Ten runs later the plan rests on a premise the person never agreed to. When they finally read
-   it, they say — correctly — "all of that is from AI, you should be confirming every point with
+   it, they say, correctly, "all of that is from AI, you should be confirming every point with
    me."
 
 Nothing malfunctioned. The record simply never distinguished a proposal from an instruction.
@@ -55,7 +55,7 @@ contract all derive from them.
 ## Capturing their words
 
 Every pull runs `capture_human_input(folder, notes)`, which writes each human-authored Quest note
-into `human_context/from_quest/` verbatim — no wrapping, no summary line, no markdown
+into `human_context/from_quest/` verbatim, with no wrapping, no summary line, no markdown
 normalisation. A file in the human zone whose text has been improved is no longer evidence of
 anything.
 
@@ -65,7 +65,7 @@ Two decisions in that function are load-bearing:
   single pull rewrites nothing.
 - **An unknown author is never human.** `is_human_note` requires either an explicit human
   `author_kind` or a `source` only a person can post through (mail, sms). An absent or
-  unrecognised kind falls to non-human on purpose. A missed capture is recoverable — the note is
+  unrecognised kind falls to non-human on purpose. A missed capture is recoverable: the note is
   still in Quest and still in the sync file. An AI note filed as the person's words is not, and it
   is unfalsifiable afterwards, because it reads as a quote.
 
@@ -107,7 +107,7 @@ the same for one call.
 
 The run-context contract is gated on the folder actually being **mapped**, not merely on the
 feature being on: a run with no folder, told to check a ledger, goes looking for a file that does
-not exist — and a run that cannot find what the prompt promised starts inventing a substitute.
+not exist, and a run that cannot find what the prompt promised starts inventing a substitute.
 
 ## What a run is told
 

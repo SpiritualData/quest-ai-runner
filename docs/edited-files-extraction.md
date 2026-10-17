@@ -8,9 +8,9 @@ After a deep runner completes execution (Claude Code, Managed Agents, direct API
 
 The system uses **three fallback strategies** to maximize compatibility with different deep runners:
 
-1. **Structured metadata** — if the runner returns `result.data["edited_files"]` (explicit, clean)
-2. **Output parsing** — if the runner's text output contains the standard format
-3. **Claude Code session parsing** — if running via Claude Code, parse the JSONL transcript
+1. **Structured metadata**: if the runner returns `result.data["edited_files"]` (explicit, clean)
+2. **Output parsing**: if the runner's text output contains the standard format
+3. **Claude Code session parsing**: if running via Claude Code, parse the JSONL transcript
 
 ## For Non-Claude-Code Deep Runners
 
@@ -44,9 +44,9 @@ EDITED_FILES:
 ```
 
 Key guidelines:
-- **Only list files you directly modified** — don't include read-only files or files merely referenced
-- **Empty edits are OK** — write `EDITED_FILES:` with nothing after it if no files were modified
-- **Placement** — can appear anywhere in output; the parser extracts it
+- **Only list files you directly modified**: don't include read-only files or files merely referenced
+- **Empty edits are OK**: write `EDITED_FILES:` with nothing after it if no files were modified
+- **Placement**: can appear anywhere in output; the parser extracts it
 
 ## For Claude Code
 
@@ -56,7 +56,7 @@ When running via Claude Code, the system automatically:
 2. Parses `~/.claude/projects/<project>/<session_id>/messages.jsonl`
 3. Extracts all Edit tool calls to build the file list
 
-No additional work needed — it's transparent.
+No additional work needed: it's transparent.
 
 ## Integration in Orchestrator
 
@@ -149,8 +149,8 @@ Tests cover:
 
 **Existing functions (unchanged):**
 
-- `categorize_files_with_llm()` — LLM-based file categorization
-- `update_context_cards()` — idempotent card updates
+- `categorize_files_with_llm()`: LLM-based file categorization
+- `update_context_cards()`: idempotent card updates
 
 ### `quest_ai_runner.core.orchestrator`
 
@@ -166,7 +166,7 @@ Tests cover:
 ### Claude Code (Automatic)
 
 ```python
-# No changes needed — session JSONL parsing is automatic
+# No changes needed: session JSONL parsing is automatic
 result = orchestrator.run(user_message, ...)
 # → Files are discovered and cards updated automatically
 ```
@@ -207,10 +207,10 @@ orchestrator._update_context_cards_after_deep(result, context_meta)
 
 **Why multiple strategies?**
 
-1. **Claude Code transparency** — no changes to the runner; just parse its existing transcript
-2. **Structured metadata** — fastest, most reliable when available
-3. **Output parsing** — works with any runner that follows the standard format
-4. **Flexibility** — runners can use whichever fits their architecture
+1. **Claude Code transparency**: no changes to the runner; just parse its existing transcript
+2. **Structured metadata**: fastest, most reliable when available
+3. **Output parsing**: works with any runner that follows the standard format
+4. **Flexibility**: runners can use whichever fits their architecture
 
 **Why background threading?**
 
@@ -251,7 +251,7 @@ orchestrator._update_context_cards_after_deep(result, context_meta)
 
 Possible enhancements:
 
-1. **Custom discovery plugins** — allow runners to register custom file-discovery logic
-2. **Batch categorization** — when many tasks complete in parallel, batch LLM calls
-3. **Confidence scoring** — categorizer could score how confident it is in each placement
-4. **Distributed card updates** — when multiple agents run in parallel, coordinate updates to avoid conflicts
+1. **Custom discovery plugins**: allow runners to register custom file-discovery logic
+2. **Batch categorization**: when many tasks complete in parallel, batch LLM calls
+3. **Confidence scoring**: categorizer could score how confident it is in each placement
+4. **Distributed card updates**: when multiple agents run in parallel, coordinate updates to avoid conflicts

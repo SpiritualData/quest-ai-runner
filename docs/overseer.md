@@ -25,8 +25,8 @@ points in a run, BOTH now non-blocking:
 
    > **Why it is not fully non-blocking.** It was, briefly. Reusing hook A's `0.0` poll removed hook
    > B's latency cost and, with it, its authority: no provider call resolves in zero seconds, so the
-   > draft always won the race and every verdict arrived too late to change the answer it was judging
-   > — a checkpoint that cannot stop anything. The bound is the compromise: a judge that answers in a
+   > draft always won the race and every verdict arrived too late to change the answer it was judging,
+   > a checkpoint that cannot stop anything. The bound is the compromise: a judge that answers in a
    > beat corrects this turn, a slow one still cannot hang it. Set the timeout to `0.0` to restore
    > the fully non-blocking behavior.
 

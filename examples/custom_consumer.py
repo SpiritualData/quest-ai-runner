@@ -1,11 +1,11 @@
-"""Example consumer — build a RunnerConfig for your own org/team, all from the environment.
+"""Example consumer: build a RunnerConfig for your own org/team, all from the environment.
 
 `quest-ai-runner` is domain-free: it bakes in NO org, key, team, corpus, or persona. A *consumer*
 supplies those specifics by constructing a `RunnerConfig`. This module is a reference for doing
-that — copy it, adapt it, point it at your own Quest backend.
+that: copy it, adapt it, point it at your own Quest backend.
 
 Everything is read from environment variables so the SAME module serves dev and prod unchanged.
-There are NO real keys, ids, or paths in this file — only env lookups with safe placeholders.
+There are NO real keys, ids, or paths in this file, only env lookups with safe placeholders.
 
 Required env:
   QUEST_BASE_URL    your Quest API base, e.g. https://api.example.org
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     cfg = build_config(with_model_provider=False)
     problems = cfg.validate()
     if problems:
-        print("RunnerConfig is incomplete — set the missing env vars:")
+        print("RunnerConfig is incomplete: set the missing env vars:")
         for p in problems:
             print(f"  - {p}")
     else:

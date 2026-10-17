@@ -10,16 +10,16 @@ any domain.
 
 ## The two halves
 
-- **`core/` — the brain.** The reasoning engine every consumer shares: a bounded
+- **`core/`: the brain.** The reasoning engine every consumer shares: a bounded
   `plan → gather → re-plan → answer/deep/confirm` loop. It imports nothing in the package but the
   interfaces it defines. Called *core* because it's the stable center; everything else feeds or
   deploys it.
-- **`runner/` — the executor.** The worker Quest lacks: `poll → claim → run → escalate → report`.
+- **`runner/`: the executor.** The worker Quest lacks: `poll → claim → run → escalate → report`.
   Quest enqueues AI tasks but can't run them; the runner closes that gap.
 
 ## The dependency rule (why `core` is `core`)
 
-`core/adapters.py` (a module) defines the **interfaces** — abstract `Protocol`/`ABC` ports the brain
+`core/adapters.py` (a module) defines the **interfaces**: abstract `Protocol`/`ABC` ports the brain
 needs. `adapters/` (a package) provides the **concrete implementations**. Dependencies point only
 **inward**: `core` declares the boundary and imports none of the fill-ins; `runner`, `adapters`, and
 `config` depend on `core`. That's the classic ports-and-adapters shape, and why `core` stays the same
@@ -55,7 +55,7 @@ The authoritative, checked inventory is `docs/structure/components.csv` (rendere
 | `runner/quest_client.py` | the Quest HTTP client (`qsk_` auth) + `QuestDecisionSink` |
 | `runner/poller.py` | event-driven, signature-deduped poll loop; bounded concurrency |
 | `runner/executor.py` | run one claimed task through the brain → report |
-| `config.py` | `RunnerConfig` + `build_orchestrator()` — the one seam for consumer specifics |
+| `config.py` | `RunnerConfig` + `build_orchestrator()`: the one seam for consumer specifics |
 | `cli.py` | the `quest-ai-runner` console entry point (env-driven) |
 
 ## The bounded brain loop
@@ -63,11 +63,11 @@ The authoritative, checked inventory is `docs/structure/components.csv` (rendere
 A fast **planner** (one cheap structured model call) picks the next step from the message plus
 everything gathered so far. It returns one action:
 
-- **read** — targeted reads/greps via the `RetrievalAdapter` (concurrent), then re-plan with what it saw.
-- **answer** — reply now, grounded in what's gathered (may fan out sub-questions).
-- **deep** — author a checkable `goal` + brief and hand it to the `DeepRunner`.
-- **confirm** — a human-only/risky step: raise it via the `EscalationSink` and stop.
-- **clarify** — ask the user a bounded question when the request is genuinely ambiguous.
+- **read**: targeted reads/greps via the `RetrievalAdapter` (concurrent), then re-plan with what it saw.
+- **answer**: reply now, grounded in what's gathered (may fan out sub-questions).
+- **deep**: author a checkable `goal` + brief and hand it to the `DeepRunner`.
+- **confirm**: a human-only/risky step: raise it via the `EscalationSink` and stop.
+- **clarify**: ask the user a bounded question when the request is genuinely ambiguous.
 
 The loop is bounded by a max step count plus wall-clock and gathered-size budgets; on the cap it
 makes a best-effort grounded answer or escalates.
@@ -75,7 +75,7 @@ makes a best-effort grounded answer or escalates.
 ## The adapter roles
 
 A consumer satisfies these (via `Protocol` or the parallel `*Base` ABC) and wires them through
-`RunnerConfig`. First four required; the rest additive — omit one and you get the prior behavior.
+`RunnerConfig`. First four required; the rest additive: omit one and you get the prior behavior.
 
 | Role | What it does | Required? |
 |---|---|---|
@@ -96,18 +96,18 @@ Each maps to a one-line check in `CLAUDE.md`.
 ## 1. The generic boundary holds (load-bearing)
 
 The brain stays ignorant of who calls it. A new capability goes **behind an adapter interface or into
-`RunnerConfig`** — never as a special case in `core/`. No org name, persona, corpus, collection,
+`RunnerConfig`**, never as a special case in `core/`. No org name, persona, corpus, collection,
 user/team id, key, or absolute path appears in `core/`, `runner/`, `adapters/`, the docs, or the git
-history — that's all **consumer config**, supplied at runtime (see `examples/` and `.env.example`).
+history: that's all **consumer config**, supplied at runtime (see `examples/` and `.env.example`).
 This is what lets one engine serve in-process chat, an integrating org, and a single-user lane
-unchanged. Prefer additive changes; a breaking `core` API change is fine when it's the right shape —
+unchanged. Prefer additive changes; a breaking `core` API change is fine when it's the right shape, so
 keep it generic, update `CHANGELOG.md` (Unreleased), keep tests green.
 
 ## 2. Adapters never raise from their public surface
 
 Every adapter method is a boundary the brain trusts not to throw: `read_section` returns
 `Observation(kind="error", ...)`, `VectorStore.search` returns `[]`, `GuidanceProvider` returns
-`[]`/`None`, a `ProgressSink` swallows forward failures. Wrap internals in `try/except` and degrade —
+`[]`/`None`, a `ProgressSink` swallows forward failures. Wrap internals in `try/except` and degrade:
 a missing or broken adapter must fall back, not stall the loop. The `*Base` ABCs document this
 per-method; honor it.
 
@@ -116,15 +116,15 @@ per-method; honor it.
 The most common source of bugs here. Four rules, in order:
 
 1. **Route through `MultiProvider`, never a raw provider** (a raw `AnthropicProvider` 404s on Gemini
-   models, and vice versa). In entry-point code call `build_orchestrator(cfg)` first — it wraps
-   `cfg.model_provider` with `MultiProvider` in place — then use `cfg.model_provider`.
+   models, and vice versa). In entry-point code call `build_orchestrator(cfg)` first: it wraps
+   `cfg.model_provider` with `MultiProvider` in place, then use `cfg.model_provider`.
 2. **Resolve by tier, never hardcode.** Use
    `ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")`. Never a
    hardcoded id, never `list_models()[0]` (the current provider may not route it). Tiers: `"fast"`
    cheap lookups, `"balanced"` filtering/judgment, `"best"` high-stakes reasoning.
 3. **Retry transient errors** (503/429/timeout) with the helpers in `adapters/retry_utils.py`
    (the retry decorator; `parse_json_with_retry` when the call must yield valid JSON).
-4. **Strip fences before `json.loads`** — LLM JSON often arrives in ```` ```json ```` fences. Use a
+4. **Strip fences before `json.loads`**: LLM JSON often arrives in ```` ```json ```` fences. Use a
    helper like `_extract_json()` in `core/card_filter.py`, never `json.loads(raw)`.
 
 ```python
@@ -141,18 +141,18 @@ result = provider.answer([{"role": "user", "content": prompt}], model=model)
 ## 4. Modes and sinks own all messaging policy
 
 **Two product modes, one brain.** The orchestrator emits the *same* `ProgressEvent`s in both; the
-`Mode` only selects which `ProgressSink` is wired, and **the sink — never the orchestrator — decides
+`Mode` only selects which `ProgressSink` is wired, and **the sink, never the orchestrator, decides
 what surfaces**. `Mode.LIVE` → `StreamSink` forwards every event; `Mode.BACKGROUND` → `MilestoneSink`
 drops planning/reading/status chatter and forwards only `SURFACING_EVENTS` (result, decision,
 milestone, context, done, tokens). A new event gets an `EVENT_*` constant in `core/adapters.py` and a
 deliberate choice: in `SURFACING_EVENTS` (always shown) or LIVE-only texture (like `EVENT_EXEC`).
-Never branch the orchestrator on mode for visibility — that policy lives in the sink, once.
+Never branch the orchestrator on mode for visibility: that policy lives in the sink, once.
 
 ## 5. Config is the only place specifics enter
 
 `RunnerConfig` is the single seam for the Quest key, adapters, corpus, deep-runner, model provider,
 and decision routing. Anything environment-specific (team id, executor user, API key, collection) is
-read from env into config — never hardcoded or guessed. Document the env var in a comment at the read
+read from env into config, never hardcoded or guessed. Document the env var in a comment at the read
 site, and fall back safely when it's unset rather than erroring.
 
 ## 6. Tests run offline; secrets never land
@@ -165,7 +165,7 @@ keys/PII (the snippet in `CLAUDE.md`). Never commit a real `.env`, `qar_state.js
 ## 7. Concurrency and process hygiene
 
 Multiple AIs share this working copy: stage only files you changed (never `git add -A`), and never
-run destructive git ops (`git restore`, `reset --hard`, `checkout .`) over uncommitted changes —
+run destructive git ops (`git restore`, `reset --hard`, `checkout .`) over uncommitted changes, since it is
 likely another agent's WIP. The runner deploys as systemd `--user` services; restart with
 `systemctl --user restart quest-ai-runner-*.service`, don't kill processes directly.
 

@@ -1,7 +1,7 @@
 # Your first lane
 
-This walks from nothing to a working executor lane, then adds the things a real lane needs — a
-persona roster, a corpus, a deep-run preamble, a folder map — each as a few lines of config, not
+This walks from nothing to a working executor lane, then adds the things a real lane needs (a
+persona roster, a corpus, a deep-run preamble, a folder map), each as a few lines of config, not
 code. By the end, a lane is **config plus one call**, not a Python program.
 
 ## What a lane is
@@ -13,27 +13,27 @@ poll  ->  claim  ->  run  ->  report
 ```
 
 It asks Quest "what's due for me right now", claims a task so nothing else picks it up, runs it
-through the brain (grounding, planning, and — for real work — a bounded deep agent run), and
+through the brain (grounding, planning, and, for real work, a bounded deep agent run), and
 reports the result back (`done`, `needs_you` with a decision attached, or `failed`). `Poller` is
 that loop; `runner.lane.run_lane` is the `--check` / `--once` / loop-forever entry point around it.
 
 ## What you do NOT own
 
 Three separate consumers of this library each wrote their own version of the following before it
-moved into the library. If you find yourself writing any of these, stop — it's a bug, not a
+moved into the library. If you find yourself writing any of these, stop: it's a bug, not a
 feature, and the thing you need almost certainly already exists:
 
 - **The CLI / loop shape** (`--check`, `--once`, loop-forever, logging setup). That's
-  `runner.lane.run_lane` — call it, don't rewrite it.
+  `runner.lane.run_lane`: call it, don't rewrite it.
 - **`.env` file loading.** That's `runner.lane.load_env_file` (which `run_lane` already calls for
   you when you pass it an `env_file`).
 - **Persona resolution** (a registry of ids/names to skill folders, plus a policy for picking one
-  from a task — a structured field, an LLM-judged explicit ask, domain-card dominance, or an
+  from a task: a structured field, an LLM-judged explicit ask, domain-card dominance, or an
   unknown id becoming a real skill). That's `RunnerConfig.personas` /
-  `runner.personas.build_persona_resolver` — see [personas.md](personas.md).
+  `runner.personas.build_persona_resolver`, see [personas.md](personas.md).
 
-Everything else — your Quest credentials, your corpus, your persona's voice, which quest folders
-sync where — is genuinely yours, and it lives in `RunnerConfig` (built from environment variables,
+Everything else (your Quest credentials, your corpus, your persona's voice, which quest folders
+sync where) is genuinely yours, and it lives in `RunnerConfig` (built from environment variables,
 a TOML file, or both together).
 
 ## The minimal working version
@@ -47,14 +47,14 @@ runner_label = "my-first-lane"
 ```
 
 And your credentials in the environment (never in the file, unless the file itself is kept out of
-version control and off shared disks — see the note in `writing-a-consumer.md`'s file-based-config
+version control and off shared disks: see the note in `writing-a-consumer.md`'s file-based-config
 section):
 
 ```bash
 export QUEST_BASE_URL=https://api.example.org
 export QUEST_API_KEY=qsk_...          # keep this secret
 export QAR_CORPUS_ROOT=/path/to/your/corpus
-export ANTHROPIC_API_KEY=sk-ant-...   # or run keyless — see quickstart.md
+export ANTHROPIC_API_KEY=sk-ant-...   # or run keyless, see quickstart.md
 ```
 
 Then the entire entry point is:
@@ -85,20 +85,20 @@ python my_lane.py --once    # one scan then exit (good for cron)
 python my_lane.py           # loop forever (good for a systemd service)
 ```
 
-That's it — see [`examples/minimal_lane.py`](../examples/minimal_lane.py) and
+That's it, see [`examples/minimal_lane.py`](../examples/minimal_lane.py) and
 [`examples/qar.toml`](../examples/qar.toml) for this exact lane, runnable as-is. Compare its size
 to the ~500-870 line hand-rolled consumers this replaces (each independently wrote its own
 `--check`/`--once`/loop driver, and one of them also wrote its own persona-resolution machinery
-from scratch) — the contrast is the whole point.
+from scratch): the contrast is the whole point.
 
 If you'd rather stay purely env-driven (no file at all), drop the `build_config=lambda: ...` above
 to `build_config=load_config` and set everything via `QUEST_*`/`QAR_*` environment variables
-instead — see `writing-a-consumer.md`'s full env-var reference. The two are freely mixable: a
+instead, see `writing-a-consumer.md`'s full env-var reference. The two are freely mixable: a
 `QAR_*` env var always wins over the same field in the file.
 
 ## Adding what a real lane needs
 
-Everything below is still config — add it to `qar.toml` (or the matching env var) as you need it,
+Everything below is still config: add it to `qar.toml` (or the matching env var) as you need it,
 with no code change to `my_lane.py` above.
 
 ### A corpus
@@ -113,7 +113,7 @@ becomes the deep runner's working directory unless you override that separately
 
 ### A deep-run preamble
 
-Org or persona doctrine to prepend to every deep-run brief — "you are executing a task for this
+Org or persona doctrine to prepend to every deep-run brief: "you are executing a task for this
 team; ground on the corpus; surface any human-only step as a decision-request", or similar:
 
 ```toml
@@ -121,15 +121,15 @@ context_preamble = "You are executing a task for this team. Ground on the corpus
 ```
 
 For anything longer than a couple of sentences, write it to a file instead and point
-`QAR_CONTEXT_PREAMBLE_FILE` at it — multi-line org doctrine is miserable to maintain as a single
+`QAR_CONTEXT_PREAMBLE_FILE` at it: multi-line org doctrine is miserable to maintain as a single
 TOML string or environment variable line.
 
 ### A persona roster
 
-Two shapes, both expressible as one `[personas]` table — see [personas.md](personas.md) for the
+Two shapes, both expressible as one `[personas]` table, see [personas.md](personas.md) for the
 full reference:
 
-**Structural** (the task already names its owner — a Quest AI rep running as a real team member):
+**Structural** (the task already names its owner: a Quest AI rep running as a real team member):
 
 ```toml
 [personas]
@@ -172,11 +172,11 @@ export QAR_QUEST_FOLDER_SYNC_DIRECTION=both   # pull (default) | push | both
 Config covers the large majority of what a lane needs. Two things it deliberately does NOT cover,
 because they need a live Python object, not data:
 
-- **A custom `ContextAssembler`** — e.g. one that layers a rep's own learned preferences on top of
+- **A custom `ContextAssembler`**: e.g. one that layers a rep's own learned preferences on top of
   the default `FileContextStore`, or pushes newly-learned context back to your own backend after a
   run. This is exactly what the `ContextAssembler` adapter role is *for* (see
   [adapters.md](adapters.md)); write one and set `RunnerConfig.context_assembler` in code.
-- **A credentialed `MCPServerSpec`** — e.g. one whose `token_provider` derives a live OAuth token
+- **A credentialed `MCPServerSpec`**: e.g. one whose `token_provider` derives a live OAuth token
   from a service-account key file. `mcp_servers` holds real objects (a callable token provider
   among them), so it is one of the fields `RunnerConfig.from_file` refuses by name rather than
   silently mis-typing; wire it in code alongside your other adapters.

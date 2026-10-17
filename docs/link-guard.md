@@ -54,7 +54,7 @@ worst case; checked back to back that is minutes, sitting between the answer and
 seam, `fetcher`, is still called per URL, so tests stay offline), and the WHOLE call is held to
 `LinkPolicy.overall_timeout` (default 8s) rather than each link individually. Whatever has not
 settled when that budget runs out is recorded `unknown` and stripped, same as any other link the
-guard could not stand behind — the reply ships on time rather than waiting on a straggler.
+guard could not stand behind: the reply ships on time rather than waiting on a straggler.
 
 ## Configuring it
 

@@ -189,7 +189,7 @@ When the planner selects this card, it gets **all sources** together:
 - The tests (test)
 - Any external docs (quest_doc)
 
-**No compression, no summarization** — full context from all sources.
+**No compression, no summarization**: full context from all sources.
 
 ## Built-in CardBuilders
 
@@ -235,11 +235,11 @@ When the planner finds this card for "How do we handle errors?", it gets:
 
 ## Benefits
 
-1. **Complete Context** — all related sources available, not compressed
-2. **Flexible Source Types** — add new types as needed (Slack transcripts, GitHub issues, etc.)
-3. **Trackable Outcomes** — cards record whether they helped on the task
-4. **Discoverable** — keywords + summary make cards findable by topic
-5. **Composable** — one card can pull from many sources
+1. **Complete Context**: all related sources available, not compressed
+2. **Flexible Source Types**: add new types as needed (Slack transcripts, GitHub issues, etc.)
+3. **Trackable Outcomes**: cards record whether they helped on the task
+4. **Discoverable**: keywords + summary make cards findable by topic
+5. **Composable**: one card can pull from many sources
 
 ## Next Steps
 

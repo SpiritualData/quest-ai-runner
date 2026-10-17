@@ -68,7 +68,7 @@ constructed a writer or it did not.
 else that opens a file for writing writes QAR's own state (context cards, conversation archives,
 bootstrap metadata).
 
-**Containment.** Every path goes through `adapters.files_adapter.resolve_in_tree` — deliberately
+**Containment.** Every path goes through `adapters.files_adapter.resolve_in_tree`, deliberately
 the *same function* the read adapter resolves through, because two independent implementations of
 one security boundary is itself the risk: they drift, and only one of them gets the fix. It joins a
 relative path onto the root, `Path.resolve()`s it (which both normalizes `..` and **follows
@@ -83,7 +83,7 @@ provably untouched:
 | a symlinked *file* inside the root pointing outside it | refused |
 | an absolute path outside the root | refused |
 | an absolute path inside the root | allowed |
-| a path that does not exist yet | **allowed** — this is the ordinary create case |
+| a path that does not exist yet | **allowed**: this is the ordinary create case |
 
 **Secret refusal.** A write refuses exactly what a read already refuses: `.env*`, `*.key`, `*.pem`,
 and anything whose name contains `secret` / `credential` / `password`. Being inside the root is not
@@ -91,7 +91,7 @@ enough to be writable.
 
 **Recoverability.** Before an existing file is replaced, its current content is copied to a backup,
 and a backup that was asked for but could not be written **refuses the overwrite** rather than
-proceeding — silently proceeding would convert a recoverable edit into a destructive one.
+proceeding: silently proceeding would convert a recoverable edit into a destructive one.
 
 Backups live *outside* the corpus, under `~/.quest-ai-runner/file-backups/` (override with
 `QAR_FILE_BACKUP_DIR` or the `backup_dir=` argument), named `<epoch-ms>__<flattened-rel-path>`. Two
@@ -135,8 +135,8 @@ hard rule #3), and the failure direction is toward the more capable path, not to
 One call emits one format, so the choice is per call, decided by the largest candidate file.
 
 **At or below `whole_file_max_lines` (400): whole-file rewrite.** The model returns the file's
-complete new content and applying it is a `write_text`. That apply step *cannot fail to apply* —
-there is no matching involved — which for a small documentation fix makes it strictly more reliable
+complete new content and applying it is a `write_text`. That apply step *cannot fail to apply*:
+there is no matching involved, which for a small documentation fix makes it strictly more reliable
 than any matching scheme. The cost is output tokens proportional to file size, which is exactly why
 it is bounded by line count. (400 lines is a few thousand output tokens: cents.)
 
@@ -173,7 +173,7 @@ A partially applied chain is the one outcome worse than no edit at all.
 ## When it escalates, and how
 
 It does not decide. The orchestrator's goal loop already ran an attempt, verified it against the
-written done-standard with `_verify_goal`, and retried on failure — escalating up a **model**
+written done-standard with `_verify_goal`, and retried on failure, escalating up a **model**
 ladder. The only change this feature made to that loop is that the **runner** is now resolved as an
 ordered list and indexed by attempt with the same `min(index, len - 1)` shape the model ladder
 already used:
@@ -258,8 +258,8 @@ whole-file parser ported from `WholeFileCoder.get_edits`.
 
 ## Tests
 
-- `tests/test_file_write_containment.py` — the security boundary, one case per way out of the root.
-- `tests/test_fast_edit_runner.py` — both wire formats, the indent near-miss, a genuine no-match
+- `tests/test_file_write_containment.py`: the security boundary, one case per way out of the root.
+- `tests/test_fast_edit_runner.py`: both wire formats, the indent near-miss, a genuine no-match
   that must leave the file byte-for-byte unchanged, the allow-list, and declining.
-- `tests/test_fast_edit_ladder.py` — the opt-in wiring and escalation driven through the real
+- `tests/test_fast_edit_ladder.py`: the opt-in wiring and escalation driven through the real
   goal loop.

@@ -1,6 +1,6 @@
 # Conversation Cards: Making Conversations Discoverable
 
-When you have Claude conversations in your corpus, you can turn them into **context cards** so the orchestrator's planner can discover and select them during context assembly — not just raw text retrieval.
+When you have Claude conversations in your corpus, you can turn them into **context cards** so the orchestrator's planner can discover and select them during context assembly, not just raw text retrieval.
 
 ## The Problem
 
@@ -119,7 +119,7 @@ cfg = RunnerConfig(
 orch = build_orchestrator(cfg)
 ```
 
-### 3. Ask Questions — Conversations Are Auto-Selected
+### 3. Ask Questions: Conversations Are Auto-Selected
 
 ```python
 # The planner now sees both file docs and conversation cards

@@ -1,15 +1,15 @@
-# Context assembly — guaranteed, reusable context for every run
+# Context assembly: guaranteed, reusable context for every run
 
 > Status: design-of-record for the `ContextAssembler` capability. Implemented behind an
 > adapter interface; **off by default** (a consumer opts in by wiring one). The brain stays
 > domain-free (hard rule #2): no corpus layout, no card format, and no git logic lives in
-> `core/orchestrator.py` — only the `ContextAssembler` Protocol does.
+> `core/orchestrator.py`, only the `ContextAssembler` Protocol does.
 
 ## The problem
 
 The brain gathers context **reactively**: the planner asks "read what?", the `RetrievalAdapter`
 greps/reads, the loop re-plans. That is correct for novelty, but it means every task **re-discovers
-the same context from scratch** — the same files, the same conventions — at real token and latency
+the same context from scratch** (the same files, the same conventions) at real token and latency
 cost, and non-deterministically (a run may miss what a prior run already found).
 
 Two existing mechanisms each fail the other's test:
@@ -19,8 +19,8 @@ Two existing mechanisms each fail the other's test:
 - Reactive exploration is **task-specific** but **expensive** and **thrown away** after each run.
 
 The missing middle is **task-specific context that is also guaranteed and not re-discovered**. The
-runner owns the one place that can deliver it: it assembles the prompt, so it — not the agent's
-discretion — can pre-load the right context and pin the model tier before the loop starts.
+runner owns the one place that can deliver it: it assembles the prompt, so it (not the agent's
+discretion) can pre-load the right context and pin the model tier before the loop starts.
 
 ## Why this is the right shape: Shannon's Data Processing Inequality
 
@@ -33,7 +33,7 @@ I(X ; Z) ≤ I(X ; Y)
 
 Processing can only destroy information; it cannot create it. Applied to agents: if an intermediate
 agent summarizes a corpus and hands that summary to a reasoning agent, the reasoning agent is
-strictly less informed than if it had seen the corpus directly — regardless of how good the
+strictly less informed than if it had seen the corpus directly, regardless of how good the
 summarizer is.
 
 The naive alternative to a context engine is a **"context finder" agent** that reads the corpus and
@@ -52,7 +52,7 @@ corpus → [context engine (library code) → full relevant context] → reasoni
 
 This also explains why **parallel fan-out is safe but sequential chaining is expensive**. When the
 orchestrator fans out sub-questions, each branch receives the SAME original context (no handoff
-loss). When it chains (plan → gather → re-plan), it accumulates original-content observations — it
+loss). When it chains (plan → gather → re-plan), it accumulates original-content observations. It
 never asks one step to summarize another step's findings for the next hop. Both patterns hold
 because the raw sources are preserved at every step.
 
@@ -88,7 +88,7 @@ caller gave none. After a terminal result the brain calls `record(...)` (best-ef
 Because this lives in `run()`, it applies to **every** task routed through the brain. A consumer
 that wires no assembler gets exactly today's behavior.
 
-## The reference implementation — `FileContextStore` (stdlib only)
+## The reference implementation: `FileContextStore` (stdlib only)
 
 Cards are the **source of truth**, as plain files; everything else is a rebuildable accelerator.
 Matches the repo's zero-dependency rule (core + runner import only the stdlib).
@@ -116,7 +116,7 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
     "last_outcome": "met|failed|unknown"
   }
   ```
-- **No-LLM summary (initial pass).** Bootstrap extracts the code's **own docstrings** — no
+- **No-LLM summary (initial pass).** Bootstrap extracts the code's **own docstrings** with no
   LLM call.  For `.py` files: module docstring first line + top-level class/function names
   with their docstring first lines (``ast`` module only).  For `.md`/`.rst`/`.txt`: first
   heading + first paragraph.  For other code: leading block comment.  The result is stored
@@ -128,18 +128,18 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
   Test-file cards are down-weighted by their `weight` (0.5) so a source file ranks above its
   test file when both match.  For each pinned file, check freshness, then render fresh cards'
   `summary` + file list into `context_view`, flag stale ones.  No LLM call.
-- **Staleness (no LLM):** per file, compare a stored fingerprint to the current one —
+- **Staleness (no LLM):** per file, compare a stored fingerprint to the current one:
   **git blob SHA** (`git hash-object <path>` / last-commit lookup) for committed state, **mtime**
   and **sha256** (`hashlib`) for the working tree (catches other agents' uncommitted edits git
   doesn't see yet). Any mismatch → the card's file entry is stale; the store re-reads just that file
   and refreshes the entry. A `path -> cards` index makes invalidation O(1).
-- **`record(task, outcome)`:** create or update the card for this task — re-pin file fingerprints,
+- **`record(task, outcome)`:** create or update the card for this task: re-pin file fingerprints,
   bump `usage_count`, set `last_outcome`. This is the learning loop: a one-time exploration becomes
   a durable card the next similar task reuses for free.
 - **Per-source usage recency (`last_used_ts` / `use_count`).** A file entry's `mtime`/`sha256` are
   FINGERPRINTS (has the file changed), not usage; `usage_count` is CARD-level (was the card used).
-  Neither can say WHICH of a card's sources actually carried the value. So every source — a file
-  entry AND every typed content item (file, collection, conversation, query, note) — also carries
+  Neither can say WHICH of a card's sources actually carried the value. So every source (a file
+  entry AND every typed content item: file, collection, conversation, query, note) also carries
   `last_used_ts` + `use_count`, stamped at the seam where assembly RESOLVES AND RENDERS that source
   into the context view (`_bump_source_usage`; the public seam for other assemblers is
   `mark_sources_used`). A source the card merely holds is never stamped, so it goes cold, and the
@@ -148,7 +148,7 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
   identical turns render byte-identically (prompt-cache prefixes are safe), and it is debounced
   (`_SOURCE_USAGE_MIN_INTERVAL_SECONDS`) because one turn assembles context several times. Missing
   fields mean "never used": legacy cards need no migration. `conversation`-type items reach this
-  same seam through `ClaudeConversationsAdapter`'s cross-session recall learning — see
+  same seam through `ClaudeConversationsAdapter`'s cross-session recall learning: see
   [Cross-session recall becomes card-scoped learning](claude-conversations-integration.md#card-scoped-learning-cross-session-recall-joins-the-card-system)
   for how a recall hit is chosen and attached in the first place.
 
@@ -158,14 +158,14 @@ Centralized so every agent in the chain acts the same way. The brain's `PLANNER_
 (always applied for the orchestrator); the same text is exported for a consumer to prepend to a deep
 runner's `context_preamble`.
 
-- **Sufficiency gate (proceed vs explore):** a checklist, not a vibe — can I name and have I *read*
+- **Sufficiency gate (proceed vs explore):** a checklist, not a vibe: can I name and have I *read*
   the files I'll change? Are the applicable conventions in front of me? For "does X handle Y?" can I
   trace the real path or am I inferring? Is there a verification I can run? It is a **sufficiency**
   check ("can the assembled context plausibly complete and verify this task"), **not a presence**
   check. Explore in cheap passes; stop on the context-dry signal (a pass adds no new load-bearing
   file) or a budget; then escalate the model rather than looping.
 - **Model-tier gate (cheap by default):** Haiku to find/gather, Sonnet for clear implementation,
-  Opus for review/quality/ambiguity/irreversible — **and escalate one tier on a failed verification
+  Opus for review/quality/ambiguity/irreversible, **and escalate one tier on a failed verification
   rather than re-running identically.**
 
 ### The sufficiency gate has a structural half too
@@ -205,20 +205,20 @@ Inert unless an item declares `full_ref`: no declaration means nothing to fetch,
 byte-identical turn. The card updater is instructed to attach `full_ref` whenever it writes a note
 that only summarizes something still fetchable.
 
-A third gate, `CARD_THREAD_GATE`, governs a different decision — not proceed-vs-explore or which
-model tier, but *which card a message belongs to*. It's injected alongside the two gates above and
+A third gate, `CARD_THREAD_GATE`, governs a different decision (not proceed-vs-explore or which
+model tier, but *which card a message belongs to*). It's injected alongside the two gates above and
 is documented on its own below because it is the one that determines whether a turn's context (and
-any cross-session recall learned onto that turn — see
+any cross-session recall learned onto that turn: see
 [Cross-session recall becomes card-scoped learning](claude-conversations-integration.md#card-scoped-learning-cross-session-recall-joins-the-card-system))
 lands on the right card at all.
 
 ### Card assignment: the independent-recall test
 
 Every message needs a `card_thread` decision: continue the current topic card, switch to a known
-one, or open a new one (`CARD_THREAD_GATE` in `quest_ai_runner/core/context_doctrine.py` — read
+one, or open a new one (`CARD_THREAD_GATE` in `quest_ai_runner/core/context_doctrine.py`; read
 that constant for the exact, current prompt text). The gate used to say "match on meaning, not
 shared words," which is true but untestable, and it let one specific failure mode through
-repeatedly: a **sub-decision inside a plan** — a price, a timeline, a vendor pick, a channel — often
+repeatedly: a **sub-decision inside a plan** (a price, a timeline, a vendor pick, a channel) often
 *sounds* like its own subject in isolation, so the model filed it onto its own new card instead of
 leaving it with the effort it actually serves. Surface novelty was being mistaken for genuine
 independence.
@@ -228,17 +228,17 @@ The fix replaces the vibe with one falsifiable question:
 > If the CURRENT card were deleted tomorrow, would anyone still want to look THIS up on its own,
 > unconnected to what the current card was for?
 
-- **NO** — it's a sub-decision that only exists in service of the current effort. It stays on the
+- **NO**: it's a sub-decision that only exists in service of the current effort. It stays on the
   current card (`continue`), no matter how different or how much "its own subject" the surface
   words sound.
-- **YES** — it's a distinct, standalone thing with a future of its own: worth recalling even if the
+- **YES**: it's a distinct, standalone thing with a future of its own: worth recalling even if the
   current card had never mattered. It gets its own card (`switch_to:<card_id>` when it matches a
   KNOWN TOPIC already listed, `new:<short label>` otherwise).
 
 Worked examples from the gate (a few of the five; see the constant for the full set):
 
 - *"what should we charge for the launch?"*, asked mid launch planning → **continue**: pricing here
-  is only ever looked up in service of "how did we launch this" — delete the launch card and no one
+  is only ever looked up in service of "how did we launch this": delete the launch card and no one
   goes looking for this number on its own.
 - *"how's Sarah's onboarding going"*, asked mid launch planning → **new**: a different person with
   her own independent trajectory, one that would be asked about even if the launch had never
@@ -248,7 +248,7 @@ Worked examples from the gate (a few of the five; see the constant for the full 
 - *"thanks, that's helpful"* → stays on the current/general topic: chit-chat never opens a card.
 
 **Why this is the right test, not just a stricter one.** Cards are the unit the rest of the context
-engine builds on — usage-recency (`last_used_ts`/`use_count`), staleness, retrieval ranking, and now
+engine builds on: usage-recency (`last_used_ts`/`use_count`), staleness, retrieval ranking, and now
 cross-session recall learning all key off *which card* a piece of context landed on. Misfiling a
 sub-decision onto its own card fragments the plan it belongs to across two cards permanently; the
 independent-recall test targets the actual failure (surface distinctness vs. genuine independence)
@@ -257,8 +257,8 @@ old wording drift.
 
 A sibling gate, `CARD_LIFECYCLE_GATE` (immediately below `CARD_THREAD_GATE` in the same file),
 covers a related but separate failure: treating a card's already-finished work as if it were still
-open. A **"graduation" mechanism** — a recurring sub-decision that keeps resurfacing eventually
-earning its own card — is intentionally out of scope for this per-turn gate; each turn's assignment
+open. A **"graduation" mechanism** (a recurring sub-decision that keeps resurfacing eventually
+earning its own card) is intentionally out of scope for this per-turn gate; each turn's assignment
 is a fresh, independent decision with no memory of how often a sub-topic has come up before.
 
 ## Three retrieval arms and how they divide the problem
@@ -707,9 +707,9 @@ user_message --> STEP 1: Understand input --> goal_condition --> STEP 2: select 
 **`ConversationStore` (a storage-agnostic adapter, `core.adapters`).** Conversation history lives in
 different places for different consumers (local Claude session JSON under `~/.claude/sessions`; a
 Mongo collection in a server). The store hides that behind two methods, both of which NEVER raise:
-- `current_slice(conv_id, query, *, recent_turns=4, max_chars)` — a relevant slice of THE current
+- `current_slice(conv_id, query, *, recent_turns=4, max_chars)`: a relevant slice of THE current
   conversation.
-- `related_slices(query, scope, *, exclude_conv_id, max_convs, max_chars)` — relevant slices from
+- `related_slices(query, scope, *, exclude_conv_id, max_convs, max_chars)`: relevant slices from
   OTHER conversations within `scope` (`{user_id, team_ids, since, participant_id}`, interpreted by
   the implementation).
 
@@ -735,7 +735,7 @@ any other backend. Wire it via `RunnerConfig.conversation_store`; `run()` takes 
 session file is a candidate on every call, so an old-but-relevant conversation is always reachable.
 It stays cheap as conversations accumulate via a two-stage scan:
 1. **Stage 1 (cheap, all files):** each file gets a compact digest (first/last message snippets)
-   cached per file and invalidated by `(mtime, size)` — after the first pass, a call costs one
+   cached per file and invalidated by `(mtime, size)`. After the first pass, a call costs one
    `stat` per file. All candidates are ranked by digest relevance to the query
    (`conversation_format.rank_candidates_by_digest`: query-overlap-boosted TF-DF-IDF, length
    normalized, recency only a small tie-break boost). Candidates whose digest shares no word with
@@ -766,34 +766,34 @@ last week"). Relevance-only ranking under-serves these: a plain TF-DF-IDF search
 can rank a wrong-period match above the right one. So the SAME goal-condition-derivation call that
 already runs for a self-contained message (`Orchestrator._derive_goal_condition`, see "User Input
 Understanding" above) ALSO parses OPTIONAL structured **retrieval constraints** out of its one
-reply — no new LLM call.
+reply, with no new LLM call.
 
 **The reply shape.** The prompt (`DERIVE_GOAL_CONDITION_PROMPT`) asks for one or two lines: line 1
 is the restated goal condition (unchanged from before); an OPTIONAL line 2 is a single JSON object
 naming any of `time_range` (`{"start", "end"}`, resolved against a `CURRENT DATE` line built from
 the caller's `now`), `topic_terms` (a few keywords), `actor` (`"me"|"rep"|"team"`), and
 `content_kind` (`"tasks_done"|"decisions"|"conversations"|"files"`). `parse_goal_condition_reply`
-splits the two, and keeps ONLY whitelisted keys/values — an unrecognized key or an out-of-enum
-value is dropped rather than passed through, so a hallucinated filter can never reach a store.
+splits the two, and keeps ONLY whitelisted keys/values (an unrecognized key or an out-of-enum
+value is dropped) rather than passed through, so a hallucinated filter can never reach a store.
 Absent or unparseable constraints yield `constraints=None`: today's behavior, byte for byte.
 
 **`run(..., now=...)`.** The caller's notion of "now" (an ISO date/datetime string) threads into
 `_derive_goal_condition` so relative expressions ("Wednesday", "last week") resolve against the
-caller's real clock. Absent/None falls back to the process's own clock — relative-date resolution
+caller's real clock. Absent/None falls back to the process's own clock: relative-date resolution
 still works, just against this process's time.
 
 **Routing (constraints present → filter first, relevance within).** When
 `_derive_goal_condition` returns constraints AND a `conversation_store` is wired, `run()` makes ONE
 bounded, best-effort `conversation_store.related_slices(goal_condition, conv_scope,
 filters=constraints)` call and folds the result into `context_view` under a labeled
-`=== FILTERED CONVERSATION SEARCH ===` block — so "what did we do last Wednesday" is answered from
+`=== FILTERED CONVERSATION SEARCH ===` block, so "what did we do last Wednesday" is answered from
 conversations that actually happened then, not from whatever the plain-relevance search surfaced.
 `OrchestratorResult.retrieval_constraints` carries the parsed constraints for the caller's own use
 (tracing, UI, a follow-up turn). This is additive: when constraints are absent, no extra store call
 happens and behavior is unchanged.
 
 **Filter-capable stores (`ConversationStore.related_slices(..., filters=...)`).** `filters` is an
-OPAQUE dict — core never reads its keys; each implementation interprets what it recognizes and
+OPAQUE dict: core never reads its keys; each implementation interprets what it recognizes and
 ignores the rest, so a consumer can even add its own domain keys (e.g. a list of quest ids) without
 core knowing about them. The two rules every implementation follows:
 1. **Hard filter first, relevance within.** A recognized filter (e.g. `time_range`) narrows the
@@ -805,7 +805,7 @@ core knowing about them. The two rules every implementation follows:
 
 `SessionFileConversationStore.related_slices` applies `time_range` as a hard filter over each
 file's cached digest timestamp (stage 1, before the relevance gate), folds `topic_terms` into the
-query used for ranking, and accepts (but does not enforce) `content_kind`/`actor` — a local session
+query used for ranking, and accepts (but does not enforce) `content_kind`/`actor`: a local session
 file has no structural "kind"; a backend with real conversation metadata (e.g. a Mongo-backed
 store) can enforce them. `current_slice` accepts `filters` for protocol symmetry but does not use
 it (there is only one conversation to filter at that granularity).
@@ -838,13 +838,13 @@ are unaffected.
 **Planner-visible filtered queries (mid-run widening).** The SAME `time_range` / `topic_terms` /
 `actor` / `content_kind` keys are also generic, optional properties the planner may set alongside a
 `query` in a `reads[]` item (`DECIDE_TOOL`'s schema). `_exec_one_read` already forwards the WHOLE
-read spec to `RetrievalAdapter.query(spec)` unchanged, so no new dispatch path was needed — a
+read spec to `RetrievalAdapter.query(spec)` unchanged, so no new dispatch path was needed: a
 `RetrievalAdapter` that fronts conversation history (e.g. quest-backend's
 `MongoConversationRetrievalAdapter`, or the reference `ClaudeConversationsAdapter.query` here, which
 applies the same `time_range` hard-filter-then-degrade rule over local session files) simply reads
 the same filter keys off `spec`. This lets the brain make a TARGETED, filtered retriever call mid-
 run ("search conversations, content_kind=conversations, time_range=last Wednesday") when the
-up-front assembly wasn't enough — the same widening loop that already exists for plain reads.
+up-front assembly wasn't enough: the same widening loop that already exists for plain reads.
 
 ## Per-goal context and verifier-driven iteration (deep runs)
 
@@ -854,7 +854,7 @@ with its OWN selected context: `_run_deep` builds a per-goal block from
 threads it into that goal's `context_preamble`. The goal verifier returns, alongside `met`, three
 fields that close the loop: `need_more_context` (+ a `context_query` naming what is missing) and an
 optional `next_tier`. When a goal is not met and more context is requested, the next iteration pulls
-**more** (a fresh assembler read, wider `related_slices`, a targeted retrieval grep — strictly more
+**more** (a fresh assembler read, wider `related_slices`, a targeted retrieval grep, strictly more
 than the prior round) and runs at `registry.resolve_tier(next_tier)`, bounded by the existing
 `deep_goal_max_iterations` / token budget. This makes the reviewer, not a fixed plan, decide both
 what additional context the expensive step needs and how much model to spend on it.

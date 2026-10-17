@@ -7,8 +7,8 @@ can satisfy them structurally (just match the methods) or subclass the provided 
 
 | Interface | Role | Reference impl |
 |---|---|---|
-| `RetrievalAdapter` | GATHER — read/grep/query your source of truth | `FilesAdapter`, `CachedDbAdapter` |
-| `ModelProvider` | the LLM — plan / answer / list models | `AnthropicProvider` |
+| `RetrievalAdapter` | GATHER: read/grep/query your source of truth | `FilesAdapter`, `CachedDbAdapter` |
+| `ModelProvider` | the LLM: plan / answer / list models | `AnthropicProvider` |
 | `DeepRunner` | run a bounded, goal-driven autonomous task | `SubprocessGoalRunner` |
 | `FileWriter` (optional) | write a file inside a confined root, with backups | `FilesWriter` |
 | `EscalationSink` | raise a human-only confirm/decision | `QuestDecisionSink` |
@@ -121,7 +121,7 @@ class MyProvider:
 
 The reference `AnthropicProvider` wraps the Anthropic SDK and is installed via the `[anthropic]`
 extra. Swap in any provider (OpenAI, a local model, a deterministic stub for tests) by matching this
-shape — see the stub providers in `tests/conftest.py` and `examples/e2e_demo.py`.
+shape: see the stub providers in `tests/conftest.py` and `examples/e2e_demo.py`.
 
 ## DeepRunner
 
@@ -149,8 +149,8 @@ leaves you with no runner rather than a runner that would fail on every spawn. S
 [writing-a-consumer.md](writing-a-consumer.md#deep-execution-is-on-by-default).
 
 A second implementation ships alongside it: **[`AcpDeepRunner`](acp-deep-runner.md)** runs the same
-contract over the Agent Client Protocol — a live session with the Claude ACP agent rather than a
-one-shot subprocess — which is what makes MID-TURN STEERING possible (a message queued while the
+contract over the Agent Client Protocol: a live session with the Claude ACP agent rather than a
+one-shot subprocess, which is what makes MID-TURN STEERING possible (a message queued while the
 deep turn is running is injected into that turn, not held until the next attempt). It is opt-in and
 purely additive: `SubprocessGoalRunner` is unchanged and remains the default, and selecting the
 other one is just `RunnerConfig.deep_runner`. It needs the `[acp]` extra and Node >= 22.
@@ -160,7 +160,7 @@ anything: it lands a bounded file edit in ONE model call, applied in process thr
 (whole-file rewrite for short files, SEARCH/REPLACE above a line threshold). It is off by default
 and appears only when you wire `RunnerConfig.file_writer`, which is also the only way anything in
 this library gains write access to your files. When it is wired the deep runner is resolved as an
-ORDERED LADDER — `[FastEditRunner, SubprocessGoalRunner]` — indexed by attempt, so a fast edit that
+ORDERED LADDER (`[FastEditRunner, SubprocessGoalRunner]`), indexed by attempt, so a fast edit that
 fails the goal loop's existing verification escalates to the full worker with no new control flow.
 A consumer that wires no writer gets a one-rung ladder and unchanged behaviour.
 
@@ -214,7 +214,7 @@ lets a `"proceed"` decision auto-resolve at its deadline instead of blocking for
 A sixth, OPTIONAL role: retrievable **use-case-specific instructions**. It lets a host app shrink
 its ALWAYS-ON core prompt to only what applies to *every* input, moving everything else (product
 facts, feature-flow guides, behavior policies) into a corpus of opaque **guidance cards** the brain
-retrieves on demand. Cards are opaque text to the runner — it stays app-agnostic.
+retrieves on demand. Cards are opaque text to the runner, so it stays app-agnostic.
 
 ```python
 from quest_ai_runner.core.adapters import GuidanceCard, GuidanceProviderBase

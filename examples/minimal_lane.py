@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""A minimal quest-ai-runner lane — see docs/tutorial-your-first-lane.md for the walkthrough.
+"""A minimal quest-ai-runner lane, see docs/tutorial-your-first-lane.md for the walkthrough.
 
 This is deliberately small. The point is the CONTRAST with a hand-rolled consumer: three separate
 consumers of this library each wrote their own ~40-line ``--check``/``--once``/loop-forever driver
-around ``Poller`` (two of them then extracted a shared copy — but OUTSIDE the library, so the third
+around ``Poller`` (two of them then extracted a shared copy, but OUTSIDE the library, so the third
 had nowhere to find it), and the biggest of the three also wrote ~250 lines of persona-resolution
 machinery from scratch. None of that is a lane's job any more: the driver is
 ``runner.lane.run_lane``, and persona resolution is ``RunnerConfig.personas`` (see
-``docs/personas.md``). What is left, below, is what is ACTUALLY specific to this lane — which for
+``docs/personas.md``). What is left, below, is what is ACTUALLY specific to this lane, which for
 the minimal case is nothing beyond "read config from a file plus the environment".
 
 Config comes from ``qar.toml`` (in this directory) layered under whatever ``QUEST_*``/``QAR_*``
-environment variables are set — an env var always wins on any field both set. NO secrets, real ids,
+environment variables are set (an env var always wins on any field both set). NO secrets, real ids,
 or absolute paths are baked in here or in ``qar.toml``; the Quest connection is read from the
 environment (see ``.env.example`` at the repo root).
 

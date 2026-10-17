@@ -1,6 +1,6 @@
 # Personas: running a task AS somebody, from config
 
-A lane that runs queued Quest tasks usually wants each task to run **as somebody** — an AI rep
+A lane that runs queued Quest tasks usually wants each task to run **as somebody**: an AI rep
 standing in for a team member, or a named character with its own domain. The library already syncs
 that identity: give `RunnerConfig` a `rep_sync_resolver` (`task -> (id, skill_dir) | None`) and the
 poller pulls that persona's Quest AI profile into the local `SKILL.md` before the run and injects
@@ -43,11 +43,11 @@ file in either of the two shapes real lanes use, deciding by the value type:
 Both normalize to the same `PersonaEntry(id, slug, display_name, aliases)`. In the rich shape the
 key stays matchable (as an alias) even when a different `display_name` is given, and
 `display_name` falls back to the key. A missing, unreadable or invalid file yields an **empty**
-registry, logged — never an exception, because a persona problem must never stop a task running.
+registry, logged, never an exception, because a persona problem must never stop a task running.
 
 `PersonaRegistry.match(value)` is **exact and case-insensitive, never a substring**: a field whose
 whole value is the persona's id, slug, display name or one of its aliases matches; a sentence that
-merely contains the name does not. That rule is load-bearing — see below.
+merely contains the name does not. That rule is load-bearing (see below).
 
 ## The four steps
 
@@ -55,23 +55,23 @@ merely contains the name does not. That rule is load-bearing — see below.
 is off is never entered, so a lane pays nothing (no model call, no file read) for a policy it did
 not ask for.
 
-1. **Structured assignment** — a task field in `assignment_fields` whose value matches the registry
+1. **Structured assignment**: a task field in `assignment_fields` whose value matches the registry
    exactly. No model call. The default field list is the union real lanes use, most specific first
    (`assignee_rep_id`, `assignee_user_id`, `assignee`, `assigned_to`, `rep_id`, `user_id`,
    `persona`, `character`, `handled_by`), so the rep a task is *for* beats whoever filed it.
-2. **Explicit ask, LLM-judged** (`llm_explicit_ask=True` and a `provider`) — one cheap structured
+2. **Explicit ask, LLM-judged** (`llm_explicit_ask=True` and a `provider`): one cheap structured
    call on `judge_tier` decides whether the requester is *explicitly asking* a persona to do this
    work ("as X ...", "have X do it"). The verdict is JSON (`{"persona": "<slug>"|null}`); bad JSON,
    an unknown slug or a provider failure all mean "not explicit". No phrase or regex matching
    anywhere: whether somebody was asked for is a judgment, so a model makes it.
-3. **Domain-card dominance** (`card_activation=True` and a `cards_dir`) — content-based activation
+3. **Domain-card dominance** (`card_activation=True` and a `cards_dir`): content-based activation
    from the personas' own domain cards. Each card contributes the `keywords` that appear as whole
    tokens in the task text; a persona wins only on clear dominance (at least `card_min_hits`
    distinct hits AND at least `card_dominance`× the runner-up). A card belongs to a persona either
    by naming it outright (a `persona`/`character`/`rep_id`/`owner` field) or by carrying that
    persona's identity as a whole token in its `id`/filename; a card two personas could claim is
    ambiguous and counts for neither.
-4. **Structural fallback** — an id read from `assignment_fields` that the registry does not know:
+4. **Structural fallback**: an id read from `assignment_fields` that the registry does not know:
    with `auto_register` it becomes a real, invocable skill (below); else it resolves to
    `cache_dir/<id>` so the profile pull still has somewhere to land; else nothing resolves and the
    task runs as the plain assistant.
@@ -98,7 +98,7 @@ a restart.
 `on_resolved` is called with `{"task", "user_id", "skill_dir"}` on every successful resolution and
 with `None` when nothing resolves. It exists because a consumer's `ContextAssembler` is called with
 the caller's scope, not the task, so it cannot otherwise tell which rep a run is for. The library
-deliberately keeps no such state itself — the callback lets the consumer own it (a thread-local
+deliberately keeps no such state itself: the callback lets the consumer own it (a thread-local
 works, since the poller resolves and executes one task per worker thread):
 
 ```python
@@ -110,7 +110,7 @@ A raising callback is logged and ignored, like everything else here: **the resol
 
 ## The two policies, side by side
 
-A **structural lane** — the task already names its owner, so resolution is a lookup and costs
+A **structural lane**: the task already names its owner, so resolution is a lookup and costs
 nothing else. Unknown reps become real skills:
 
 ```python
@@ -122,7 +122,7 @@ PersonaResolverConfig(
 )
 ```
 
-A **character lane** — the task is prose from a human, so a persona activates only when it is asked
+A **character lane**: the task is prose from a human, so a persona activates only when it is asked
 for, and otherwise the plain assistant runs:
 
 ```python

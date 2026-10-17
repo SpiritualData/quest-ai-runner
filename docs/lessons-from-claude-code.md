@@ -13,7 +13,7 @@ Source files referenced below are paths within that repo.
 **Source:** `src/query/tokenBudget.ts`
 
 After 3+ consecutive loop iterations, if token output delta drops below ~500 tokens, the model
-is spinning — regenerating without adding substance. This is detected independently from the
+is spinning: regenerating without adding substance. This is detected independently from the
 "budget exhausted" condition, because they have different fixes: spinning calls for escalation
 to deep, not just a hard stop.
 
@@ -65,10 +65,10 @@ The narration layer speaks different lines per outcome. The runner makes routing
 Four tiers tried in order before escalating to the next:
 
 1. **Time-based micro-compact** (free): if time since last assistant message exceeds threshold,
-   the server cache is cold anyway — replace old tool results with sentinel text, no LLM call.
+   the server cache is cold anyway: replace old tool results with sentinel text, no LLM call.
 2. **Cache-editing micro-compact**: use the API's cache-editing endpoint to delete old tool
    outputs without invalidating the cached prefix. Only tool outputs (grep, bash, reads) are
-   cleared — conversation text is never touched.
+   cleared; conversation text is never touched.
 3. **Session-memory compaction**: replace history before `lastSummarizedMessageId` with the
    incremental rolling summary; keep recent messages intact (min 10K tokens, 5+ text messages).
 4. **Full LLM compaction**: last resort, sends entire history to a summarization agent.
@@ -82,7 +82,7 @@ compaction output itself.
 - Tier 1: If > 10 minutes since the last answer, drop context card raw content and keep only
   title/summary before the next iteration.
 - Tier 2: After each deep run, strip the deep run's tool outputs from context passed back to the
-  goal loop — keep only the final answer the deep agent produced.
+  goal loop: keep only the final answer the deep agent produced.
 - Tier 3: QAR's rolling goal-notes is the equivalent of session memory; make it the primary
   compaction target rather than an appendage.
 - Circuit breaker: if `ContextAssembler.assemble()` fails 3 times in a row, skip assembly and
@@ -104,7 +104,7 @@ the sentinel string.
 
 **QAR application:** QAR context cards are the direct analogue. After the answer loop runs once,
 replace the raw content of context cards older than the current iteration with
-`'[Context card content cleared — topic: {topic}]'`, keeping the last 3 intact. Card metadata
+`'[Context card content cleared, topic: {topic}]'`, keeping the last 3 intact. Card metadata
 (source, title, type, file refs) stays so the model still knows what exists.
 
 ---
@@ -118,7 +118,7 @@ minimum, AND (2) tool call count since last extraction exceeds minimum. OR: toke
 AND the current turn has no tool calls (a natural break point).
 
 The forked summarization agent is given write permission to exactly one file and nothing else.
-Extraction runs through a sequential lock — no concurrent summarization runs.
+Extraction runs through a sequential lock, so no concurrent summarization runs.
 
 **QAR application:** QAR's post-answer notes update should use the same dual threshold: update
 rolling goal-notes only when (token delta > 5K OR a deep run completed) AND at least 2 tool
@@ -166,7 +166,7 @@ Each sub-agent gets its own read-file cache clone so it never sees the parent's 
 - Strip goal-notes and prior-run history from fast-path retrieval agents (they only need the
   current query and the context card list).
 - Before passing QAR conversation history to a Claude Code deep run, filter out any partial
-  tool exchanges — assistant blocks with tool_use but no corresponding tool_result.
+  tool exchanges: assistant blocks with tool_use but no corresponding tool_result.
 - Give each parallel retrieval adapter its own isolated working state rather than sharing
   QAR's global context object.
 
@@ -184,7 +184,7 @@ After each LLM turn, a hook chain fires in two categories:
   `{preventContinuation: true}`.
 
 A single `isBareMode()` guard (set for `-p` scripted calls) skips all background bookkeeping.
-The abort signal is checked after each hook batch — user interrupts terminate the chain
+The abort signal is checked after each hook batch: user interrupts terminate the chain
 immediately.
 
 **QAR application:** Add `post_answer_hooks` as a list of async callables on
@@ -209,7 +209,7 @@ state and triggering unnecessary retries.
 
 **QAR application:** When QAR's retrieval adapters return empty results, treat "no results
 found" as a valid answer, not as a failure requiring retry. More broadly: define explicit
-`RetrievalOutcome` semantics — `found`, `empty` (valid, not an error), `error` (retry-eligible).
+`RetrievalOutcome` semantics: `found`, `empty` (valid, not an error), `error` (retry-eligible).
 "Empty" should flow to the goal verifier as context ("searched X, found nothing") not as a
 missing input.
 
@@ -217,7 +217,7 @@ missing input.
 
 ## 10. Compaction Boundary Integrity
 
-**Source:** `src/services/compact/sessionMemoryCompact.ts` — `adjustIndexToPreserveAPIInvariants()`
+**Source:** `src/services/compact/sessionMemoryCompact.ts`: `adjustIndexToPreserveAPIInvariants()`
 
 When slicing conversation history for compaction, an extra scan ensures no orphaned tool pairs
 cross the boundary. If a kept `tool_result` ID is found, its originating `tool_use` (which may
@@ -267,7 +267,7 @@ tests, and prevents the loop from observing config changes mid-run.
 
 **Source:** `src/tools/AgentTool/runAgent.ts`
 
-Async (background) agents get their own `AbortController` — they run independently and are not
+Async (background) agents get their own `AbortController`; they run independently and are not
 cancelled when the parent is cancelled. Sync agents share the parent's controller. A
 `killShellTasksForAgent(agentId)` call in `finally` ensures background shell tasks die with
 their spawning agent even when the agent itself exits normally.
@@ -288,15 +288,15 @@ adapter that terminates background fetches on normal exit.
 
 | # | Lesson | Effort | Impact |
 |---|--------|--------|--------|
-| 1 | Typed loop transitions (L2) | 1 day | High — enables narration differentiation + testability |
-| 2 | Empty-result semantics (L9) | 2 hours | High — stops false-error retries from retrieval |
-| 3 | filterIncompleteToolCalls before deep spawn (L7) | 2 hours | High — prevents a class of context-passing errors |
-| 4 | Diminishing-returns detection (L1) | 0.5 day | Medium-high — stops spinning, triggers escalation |
-| 5 | Post-answer hooks + bare_mode (L8) | 1 day | Medium — decouples narration from blocking verification |
-| 6 | Config snapshot at run entry (L11) | 0.5 day | Medium — testability + drift prevention |
-| 7 | Context card clearing (L4) | 0.5 day | Medium — token efficiency in long goal loops |
-| 8 | Identical prefix for parallel retrievals (L6) | 1 day | Medium — cache hit rate for parallel context assembly |
-| 9 | Multi-tier compression pipeline (L3) | 2 days | Medium — handles long-running / large-context runs |
-| 10 | Compaction boundary integrity (L10) | 0.5 day | Low-medium — prevents edge-case context corruption |
-| 11 | Dual-threshold summarization (L5) | 1 day | Low-medium — more efficient notes updates |
-| 12 | Async cancellation isolation (L12) | 1 day | Low-medium — cleaner parallel retrieval lifecycle |
+| 1 | Typed loop transitions (L2) | 1 day | High: enables narration differentiation + testability |
+| 2 | Empty-result semantics (L9) | 2 hours | High: stops false-error retries from retrieval |
+| 3 | filterIncompleteToolCalls before deep spawn (L7) | 2 hours | High: prevents a class of context-passing errors |
+| 4 | Diminishing-returns detection (L1) | 0.5 day | Medium-high: stops spinning, triggers escalation |
+| 5 | Post-answer hooks + bare_mode (L8) | 1 day | Medium: decouples narration from blocking verification |
+| 6 | Config snapshot at run entry (L11) | 0.5 day | Medium: testability + drift prevention |
+| 7 | Context card clearing (L4) | 0.5 day | Medium: token efficiency in long goal loops |
+| 8 | Identical prefix for parallel retrievals (L6) | 1 day | Medium: cache hit rate for parallel context assembly |
+| 9 | Multi-tier compression pipeline (L3) | 2 days | Medium: handles long-running / large-context runs |
+| 10 | Compaction boundary integrity (L10) | 0.5 day | Low-medium: prevents edge-case context corruption |
+| 11 | Dual-threshold summarization (L5) | 1 day | Low-medium: more efficient notes updates |
+| 12 | Async cancellation isolation (L12) | 1 day | Low-medium: cleaner parallel retrieval lifecycle |

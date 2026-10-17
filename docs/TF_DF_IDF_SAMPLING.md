@@ -127,7 +127,7 @@ Because TF-DF-IDF scores by *distinctiveness*, you naturally get a diverse sampl
 | 5000 files | 5000 | 120 | 98% |
 | 10k+ files | 10k+ | ~200 | 98%+ |
 
-At 10,000 files, you're still under 30k tokens—costs are *sublinear* in corpus size.
+At 10,000 files, you're still under 30k tokens, and costs are *sublinear* in corpus size.
 
 ---
 
@@ -219,7 +219,7 @@ The approach is grounded in decades of NLP and IR research:
 - **Distinctive term selection**: Used in query expansion, summarization, and clustering
 - **Recency weighting**: Standard in recommendation systems and conversation ranking
 
-This isn't new—it's *proven*.
+This isn't new, it's *proven*.
 
 ---
 
@@ -265,8 +265,8 @@ A: ~62% on bootstrap + ~27% per conversation query on a typical codebase. Exact 
 
 ## See Also
 
-- `docs/BOOTSTRAP_TOKEN_SAVINGS.md` — Detailed token analysis
-- `quest_ai_runner/adapters/tfidf_sampling.py` — Implementation
-- `tests/test_bootstrap_token_savings.py` — Benchmarks
-- `FileContextStore` — Stage 1 & 2 optimizations
-- `ClaudeConversationsAdapter` — Conversation sampling
+- `docs/BOOTSTRAP_TOKEN_SAVINGS.md`: Detailed token analysis
+- `quest_ai_runner/adapters/tfidf_sampling.py`: Implementation
+- `tests/test_bootstrap_token_savings.py`: Benchmarks
+- `FileContextStore`: Stage 1 & 2 optimizations
+- `ClaudeConversationsAdapter`: Conversation sampling

@@ -37,7 +37,7 @@ HUMAN_ONLY_MARKER = "[HUMAN-ONLY]"
 
 
 class StubProvider:
-    """Deterministic ModelProvider — the ONLY stubbed surface."""
+    """Deterministic ModelProvider, the ONLY stubbed surface."""
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
         if HUMAN_ONLY_MARKER in prompt:

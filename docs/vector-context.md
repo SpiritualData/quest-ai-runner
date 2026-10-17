@@ -1,4 +1,4 @@
-# Vector context layer — semantic orientation for every run
+# Vector context layer: semantic orientation for every run
 
 > Status: design-of-record for the vector search capability added alongside
 > the existing keyword/IDF ``FileContextStore``.  Implemented behind the
@@ -78,7 +78,7 @@ store = QdrantVectorStore(path="/data/my-project/.quest-context/qdrant")
 ```
 
 The default embedder is ``fastembed`` (``BAAI/bge-small-en-v1.5``, 384-d).
-It runs locally via ONNX — no API key, no network call at embed time.
+It runs locally via ONNX, with no API key and no network call at embed time.
 
 Install the extra:
 
@@ -322,7 +322,7 @@ store.sync(items, scope=scope)
 ```
 
 All points of a store live in ONE Qdrant collection,
-``{collection_prefix}_default_{vector_size}`` — keyed on the embedder's true
+``{collection_prefix}_default_{vector_size}``, keyed on the embedder's true
 dimension (adopted from real embedder output, not just the declared
 ``vector_size``) so two stores with different embedder configurations sharing
 one server never collide on a collection.  Mixed vector sizes in a single
@@ -331,8 +331,8 @@ never-raises contract would otherwise hide.  A bare legacy
 ``{collection_prefix}_default`` collection is reused as-is when its configured
 size matches the embedder, so pre-existing data needs no migration.
 The store hashes the sorted scope items to a short digest stored on each point
-as the ``_scope`` payload field, and searches filter on it — the payload-filter
-multitenancy model Qdrant recommends over collection-per-tenant.
+as the ``_scope`` payload field, and searches filter on it (the payload-filter
+multitenancy model Qdrant recommends over collection-per-tenant).
 
 Visibility rules:
 
@@ -343,7 +343,7 @@ Visibility rules:
 
 Read operations (``search`` / ``count`` / ``evict_oldest``) never create a
 collection; only writes do.  (An earlier version created one collection per
-unique scope — including on mere search — which sprawled into hundreds of
+unique scope, including on mere search, which sprawled into hundreds of
 permanently empty collections on a long-lived shared server, each adding
 startup shard-recovery time.  Deployments that ran that version can call
 ``store.prune_scope_collections()`` once to delete the empty leftovers.)
@@ -365,7 +365,7 @@ document embeddings (for stored items) from query embeddings (for search
 queries); both land in the same 1024-d space.
 
 To share the same Qdrant collection and achieve cross-compatible similarity
-scores, wire ``QdrantVectorStore`` with **two separate Voyage embedders** — one
+scores, wire ``QdrantVectorStore`` with **two separate Voyage embedders**, one
 per role:
 
 ```python

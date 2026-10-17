@@ -44,7 +44,7 @@ to stream events as it works.
 ## 3. Run the executor lane (poll Quest for due tasks)
 
 The **runner** discovers due AI tasks from Quest, claims them, runs them through the brain, and
-reports results back — escalating human-only steps as decision-requests.
+reports results back, escalating human-only steps as decision-requests.
 
 The installed CLI builds everything from environment variables:
 
@@ -63,7 +63,7 @@ quest-ai-runner            # loop forever (good for a service)
 
 Prefer to see the wiring in code, or drive it from a config file instead of env vars? Copy
 [`examples/minimal_lane.py`](../examples/minimal_lane.py) + [`examples/qar.toml`](../examples/qar.toml)
-— see [Your first lane](tutorial-your-first-lane.md) for the walkthrough. For a bigger reference with
+(see [Your first lane](tutorial-your-first-lane.md) for the walkthrough). For a bigger reference with
 every adapter wired by hand, see [`examples/custom_consumer.py`](../examples/custom_consumer.py) and
 [`examples/run_lane.py`](../examples/run_lane.py) (the latter predates `runner.lane.run_lane` and is
 kept for reference, not as the recommended starting point any more). To prove the full round-trip

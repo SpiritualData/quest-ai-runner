@@ -10,7 +10,7 @@ Quest-compatible backend, these are the endpoints it must provide.
 Authorization: Bearer qsk_<hex>
 ```
 
-The key **is** the executor identity. The acting identity is derived server-side from the key — you
+The key **is** the executor identity. The acting identity is derived server-side from the key, so you
 never pass the actor in a request body. Targets (a decision assignee, etc.) are passed explicitly.
 
 Task **discovery is owner-scoped**: a `GET` returns only tasks in the queue of the user the `qsk_`
@@ -22,7 +22,7 @@ key authenticates as. Keep each lane on its own key/owner so lanes stay isolated
 ```
 GET /api/assistant-tasks?status=queued&due_before=<ISO-now>
 ```
-Returns queued tasks whose `due` DATE has arrived — a superset, not an exact answer. The backend
+Returns queued tasks whose `due` DATE has arrived: a superset, not an exact answer. The backend
 compares only the date portion of `due_before` against `scheduled_date` and never reads
 `scheduled_time`, so a task set for 06:30 is returned from the instant that calendar date begins in
 UTC. West of UTC that is the previous afternoon (17:00 in US/Pacific), which is how a daily 06:30
@@ -32,7 +32,7 @@ needed.
 The runner closes that gap on its side: `Poller._due_now_locally` narrows the returned set to what
 the LOCAL wall clock says has actually arrived (missing `scheduled_time` means midnight, an
 unscheduled task is always due), and holding one back is lossless because it stays `queued` for a
-later scan. **So do not read a returned task as "due now"** — it is due today, and the hour is the
+later scan. **So do not read a returned task as "due now"**. It is due today, and the hour is the
 runner's to enforce. Sending a local-time `due_before` instead would not fix it either: the
 comparison would still drop the clock. The task document carries no timezone of its own, so a
 runner in a different tz than the schedule's author remains a real limitation.
@@ -83,9 +83,9 @@ The claim step; the backend is the source of truth for who owns a task.
 PATCH /api/assistant-tasks/{id}    { "status": "done" | "needs_you" | "failed",
                                      "result": "...", "decision_id": "..." (optional) }
 ```
-- `done` — answered, or a deep run that met its goal.
-- `failed` — a deep run hit its limit or errored.
-- `needs_you` — a human-only step; carries the `decision_id` of the raised request.
+- `done`: answered, or a deep run that met its goal.
+- `failed`: a deep run hit its limit or errored.
+- `needs_you`: a human-only step; carries the `decision_id` of the raised request.
 
 The runner never PATCHes `"cancelled"` itself (see Cancellation below): once a task is cancelled
 the backend already owns that terminal status, and a PATCH against it returns `409`.
@@ -246,7 +246,7 @@ GET /api/assistant-tasks?status=queued&due_before=<ISO-now>&env_id=<env>
 so a multi-environment team's runners each discover only their own pinned work (plus any unpinned
 task) -- the backend already scoped this; the client/poller just pass `env_id` through.
 
-### Create a goal (the real, typed kind — distinct from a task)
+### Create a goal (the real, typed kind, distinct from a task)
 
 ```
 POST /api/planning/goals    { "title": "...", "period": "...", "quest_id": "..." (optional), ... }
@@ -254,7 +254,7 @@ POST /api/planning/goals    { "title": "...", "period": "...", "quest_id": "..."
 ```
 A **task** (above) is a unit of AI work to run; a **goal** is a real, period-scoped item with a
 deadline that shows up on a quest's plan (or standalone, on the caller's own account, when
-`quest_id` is omitted). These are different objects with different endpoints — creating a task
+`quest_id` is omitted). These are different objects with different endpoints, so creating a task
 does not create a goal, and vice versa. `quest_id` is optional but preferred: a goal without one
 only shows up on the caller's own account, not on any quest's shared plan.
 
@@ -288,7 +288,7 @@ rejects (`runner/autopilot.py`, `_maybe_create_goal`), which is where the "an AI
 signal actually lives.
 
 Like `create_task`, `create_goal` raises `QuestApiError`/`QuestNotConfigured` on failure instead
-of swallowing it — a caller that acknowledges "goal added" must know it actually was. CLI:
+of swallowing it: a caller that acknowledges "goal added" must know it actually was. CLI:
 `quest-ai-runner create-goal "<title>" [--quest-id ID] [--period P] [--description ...] [...]`.
 
 ### Read the person's own reflections
@@ -306,7 +306,7 @@ GET /api/period-review/{week|month|quarter|year}/current[?use_previous=true&time
 Both are **user-scoped**: they authenticate as the caller and take no team id and no quest id.
 `yesterday_review` is what the person wrote about how the previous day went (they write it while
 planning the day named in `date`); `reflection_past` / `reflection_future` are the same two
-questions asked of a whole period. `get_period_reflection` returns the `review` block only — the
+questions asked of a whole period. `get_period_reflection` returns the `review` block only. The
 `stats` half of the response is a separate, much larger concern, and this method exists to read what
 the *person* wrote. A missing entry (`has_plan: false`) or an unsubmitted review (`has_review:
 false`) is an ordinary state, not an error: both methods return `{}` or the bare flag rather than
@@ -325,17 +325,17 @@ ctx.one_line()     # one condensed line, for an artifact that holds a single not
 It takes today's daily entry, or walks back a couple of days when today's is not written yet (the
 morning case), then the first period in `periods` with a submitted, non-empty review, retrying the
 *previous* period when no current one has been submitted. Nothing there presumes which period type
-matters — the caller passes the order. Every read is best-effort: a client without these methods, a
+matters: the caller passes the order. Every read is best-effort: a client without these methods, a
 404, or a transport failure all degrade to an empty context.
 
 Two consumers use it, and neither could see a reflection before:
 
-- **The attended chat**, via `QuestRetrievalAdapter`'s new `reflection_context` query kind —
+- **The attended chat**, via `QuestRetrievalAdapter`'s new `reflection_context` query kind:
   `query({"kind": "reflection_context", "periods": ["week", "month"], "include_daily": true,
   "use_previous": false})`, advertised to the planner as `get_reflection_context` in
   `list_operations` / `describe_operation` exactly like `goal_context`. All spec fields are
   optional and no ids are needed. When nothing is on record it returns `kind="query"` with a plain
-  statement to that effect, **not** `kind="error"` — an error reads as "this lookup is broken" and
+  statement to that effect, **not** `kind="error"`, since an error reads as "this lookup is broken" and
   sends the planner back to asking the person to paste text it just verified does not exist. This
   is the gap it closes: asked to choose work "based on my daily reflection", the assistant had no
   action that could go and read one, so the best it could do was say so and ask for a paste.
@@ -373,7 +373,7 @@ pass that never reads it composes its brief as if the capture never happened.
 Three facts about the wire shape, each one a place an assumed contract would fail quietly:
 
 - The entries route is **generic and unfiltered**. There is no server-side date filter and no
-  field filter, so "recent" and "not yet acted on" are both the caller's to apply client-side —
+  field filter, so "recent" and "not yet acted on" are both the caller's to apply client-side:
   the same client-side selection quest-backend does for itself in `_get_recent_unacted_insights`.
 - Items come back **newest first** (`created_at` descending), which is what lets paging stop at the
   first entry past the cutoff instead of walking a person's whole history.
@@ -399,14 +399,14 @@ a client without these methods, a 404, or a transport failure all degrade to an 
 **The category tags are context for the reader, never a filter in this code.** Nothing compares a
 tag to a quest name, a goal title, or any other string. Each insight is rendered with its tags as
 the person typed them and the block ends by saying plainly that the tags are their labels for their
-own thinking rather than a routing rule, so the model composing the run decides what applies — the
+own thinking rather than a routing rule, so the model composing the run decides what applies, the
 same judgment it already makes about goals and reflections. A hardcoded tag match is a fixed string
 rule that silently drops every wording it did not anticipate ("dissertation" vs. "thesis" vs. no
 tag at all), which is what hard rule #3 in `CLAUDE.md` forbids.
 
 **Autopilot** (`runner/autopilot.py`) reads them once per pass (user-scoped, like reflections) over
 the widest window it could need, then narrows that one result per quest against that quest's own
-`autopilot.last_pass_at` — the same stamp the cadence gate reads, so "what has the person captured
+`autopilot.last_pass_at`, the same stamp the cadence gate reads, so "what has the person captured
 since I last ran" needs no separate freshness tracker that could drift out of step with it. A quest
 with no `last_pass_at` sees the whole window, because on a first pass everything recent is new.
 `next_steps_from_pass` puts one condensed line in the artifact's `note` slot; an insight is never
@@ -414,7 +414,7 @@ promoted to a *step*, since the person captured it rather than committing to it.
 
 **On `mark_insight_acted_on`:** the method exists and is the documented way to close the loop, but
 the autopilot pass deliberately does **not** call it. A pass creates a task, it does not do the
-work — so ticking the box at pass time would claim an action that has not happened, and since a
+work, so ticking the box at pass time would claim an action that has not happened, and since a
 ticked insight drops out of every unacted list (including the one the person's weekly review is
 built from), an insight marked acted-on for a task that is then never approved, or that fails, has
 been silently removed from their list with nothing to show for it. Call it from a surface that
@@ -478,6 +478,6 @@ failed write all leave the session exactly as it was.
 
 ## Don't hand-roll HTTP
 
-Use `QuestClient` — it covers discover / claim / report / escalate / loop-close / whoami / heartbeat
+Use `QuestClient`: it covers discover / claim / report / escalate / loop-close / whoami / heartbeat
 and is what the `Poller` and `TaskExecutor` call. The runner tests drive a mock client
 (`tests/test_runner.py`) so you can verify behavior offline.
