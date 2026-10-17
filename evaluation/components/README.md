@@ -243,3 +243,39 @@ Six components score the repo's own plumbing, all offline with zero model calls.
 Why `verify_offline` does not run the tests: a full run is slow, parts of the suite reach real model providers, and
 one run was killed mid-flight for spend (CLAUDE.md, 2026-09-19). Collection proves every file imports and
 parametrises and that no test vanished; whether a test passes is shown by running the files a change touches.
+
+## `esoi_behavior`: the judge, the two settings, and what the numbers can and cannot say
+
+`esoi_behavior` scores whether an AI's reply follows the evolvable-structure (ESOI) principle a case tests
+(60 cases, P1 to P13, traps where adding structure is wrong, a quarter held out). Four live arms, all
+through the keyless claude CLI at the cheapest tier (`QAR_EVAL_MODEL`, default haiku):
+
+| Arm | Setting | Instructions |
+| --- | --- | --- |
+| `standing_instructions` / `plain` | chat: the scenario as the user message, a bare completion | the shipped `prompts/evolvable_structure.md` as system text / "You are a helpful assistant." |
+| `insitu_standing_instructions` / `insitu_plain` | the deep-run path: the scenario as the TASK of QAR's own `compose_goal_prompt`, run by headless `claude -p` with `--tools ""` (nothing can read, edit or run) | the standing-instructions layer as the deep run composes it / the layer emptied |
+
+**Scoring.** A reply that matches a case's `must_not` regex fails with no model call (the regex is a cheap
+prefilter only). Every other reply is graded by the model judge (`esoi_behavior/judge.py`): its rubric is the
+case's `expected_behavior` and `failure_mode`, it never sees the regexes or the reference replies, and it
+returns pass or fail with a one-line reason. `must_have` is not a gate for a judged arm; the run prints how often
+the regex and the judge disagree. The offline arms `reference_good` and `reference_bad` stay regex-only and
+free. A judged arm is any implementation whose function carries a `judge` attribute.
+
+**The judge has its own metric** (`esoi_judge`, 120 cheap calls): it grades each case's `good_reference` and
+`bad_reference` and is scored on agreement with the label (good passes, bad fails). Those labels come from the
+case author, who also wrote the regexes, so a high agreement shows the judge is not broken and can tell an obvious
+good reply from an obvious bad one; it does not show the judge matches Joshua's reading.
+**Calibration against Joshua's verdicts is pending his review of `cases.csv` in the sheet:** `reviewer_verdict` is
+empty on all 60 cases and nothing here invents one. When he fills it in, add his verdicts as labels and re-run.
+
+**In-situ limits.** The deep worker normally has tools and real files; here it has neither, so the reply is the
+stated plan and edits, not a diff, and the judge is told that a stated edit counts as doing it. The lane's org
+preamble (context cards, persona) and the goal loop are not reproduced. This is the nearest tool-free
+reproduction of the shipped path, not a measurement of real deep runs on real tasks; scoring real diffs from
+actual tasks is still open.
+
+**Reading the numbers.** The judge and the replies are the same small model, which may favour its own phrasing,
+and one judge wording change moved arm totals by up to four cases of thirty, so differences of a few cases are
+noise. Run the two arms of a setting on the same ids, compare paired (cases only one arm passes), and call a
+winner only on a clear margin. Recorded rows in `results.csv` are stratified 30-case samples with `--only`.
