@@ -1,0 +1,118 @@
+[
+ {
+  "id": "CNV-001",
+  "area": "old_relevant",
+  "user": "alice",
+  "query": "What did we decide about renewing the dock lease?",
+  "relevant": [
+   "a-dock-lease"
+  ],
+  "forbidden": [
+   "b-dock-lease"
+  ],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-002",
+  "area": "relevant",
+  "user": "alice",
+  "query": "How much were the trawl nets from the sailmaker?",
+  "relevant": [
+   "a-net-order"
+  ],
+  "forbidden": [],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-003",
+  "area": "relevant",
+  "user": "alice",
+  "query": "Who is on the early boat in week two of the rota?",
+  "relevant": [
+   "a-crew-rota"
+  ],
+  "forbidden": [],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-004",
+  "area": "relevant",
+  "user": "alice",
+  "query": "Who quoted the repair of the cracked flue?",
+  "relevant": [
+   "a-smoker-repair"
+  ],
+  "forbidden": [],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-005",
+  "area": "relevant",
+  "user": "alice",
+  "query": "Which documents does the tax filing need?",
+  "relevant": [
+   "a-tax-filing"
+  ],
+  "forbidden": [],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-006",
+  "area": "relevant",
+  "user": "alice",
+  "query": "What was the forecast for sailing to the outer reef?",
+  "relevant": [
+   "a-weather"
+  ],
+  "forbidden": [],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-007",
+  "area": "leak",
+  "user": "alice",
+  "query": "Who is the surprise party for and where is it?",
+  "relevant": [],
+  "forbidden": [
+   "b-surprise-party"
+  ],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-008",
+  "area": "leak",
+  "user": "alice",
+  "query": "Which spare parts does the diesel engine need before winter?",
+  "relevant": [],
+  "forbidden": [
+   "b-engine-parts"
+  ],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-009",
+  "area": "other_user",
+  "user": "bob",
+  "query": "What did we put in the dock lease renewal letter?",
+  "relevant": [
+   "b-dock-lease"
+  ],
+  "forbidden": [
+   "a-dock-lease"
+  ],
+  "world_sha": "5b58a6f4"
+ },
+ {
+  "id": "CNV-010",
+  "area": "paraphrase",
+  "user": "alice",
+  "query": "How long a commitment did we sign for the mooring?",
+  "relevant": [
+   "a-dock-lease"
+  ],
+  "forbidden": [
+   "b-dock-lease"
+  ],
+  "world_sha": "5b58a6f4"
+ }
+]

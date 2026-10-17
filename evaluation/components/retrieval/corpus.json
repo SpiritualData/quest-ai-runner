@@ -1,0 +1,308 @@
+{
+ "name": "Harbor Cooperative handbook (synthetic)",
+ "docs": [
+  {
+   "id": "ferry-timetable",
+   "title": "Ferry timetable",
+   "summary": "Departure times for the island ferry.",
+   "sections": [
+    {
+     "heading": "Weekdays",
+     "text": "The island ferry leaves the north pier at 07:15 and 17:40."
+    },
+    {
+     "heading": "Weekends",
+     "text": "On weekends the ferry runs once, leaving at 10:00 from the south pier."
+    }
+   ]
+  },
+  {
+   "id": "ferry-breakdown",
+   "title": "Ferry breakdown procedure",
+   "summary": "What to do when the ferry stops mid crossing.",
+   "sections": [
+    {
+     "heading": "First steps",
+     "text": "The skipper radios the harbor office on channel 12."
+    },
+    {
+     "heading": "Passengers",
+     "text": "The purser hands out blankets and logs the incident in the breakdown ledger."
+    }
+   ]
+  },
+  {
+   "id": "dock-fees",
+   "title": "Dock fees",
+   "summary": "Mooring prices per night.",
+   "sections": [
+    {
+     "heading": "Visitors",
+     "text": "Visiting boats pay 18 credits per night at the guest dock."
+    },
+    {
+     "heading": "Members",
+     "text": "Members moor free for seven nights a year, then pay 6 credits."
+    }
+   ]
+  },
+  {
+   "id": "net-mending",
+   "title": "Net mending guide",
+   "summary": "How the cooperative repairs fishing nets.",
+   "sections": [
+    {
+     "heading": "Tools",
+     "text": "A netting needle and tarred twine are kept in the loft above the smokehouse."
+    },
+    {
+     "heading": "Schedule",
+     "text": "Mending happens every Thursday morning."
+    }
+   ]
+  },
+  {
+   "id": "smokehouse-safety",
+   "title": "Smokehouse safety",
+   "summary": "Fire rules for the smokehouse.",
+   "sections": [
+    {
+     "heading": "Fire",
+     "text": "Keep the alder chips away from the flue. A sand bucket hangs by the door."
+    },
+    {
+     "heading": "Hours",
+     "text": "The smokehouse is closed after dusk."
+    }
+   ]
+  },
+  {
+   "id": "tide-tables",
+   "title": "Tide tables",
+   "summary": "Where the tide charts are posted.",
+   "sections": [
+    {
+     "heading": "Posting",
+     "text": "The tide chart is pinned to the harbor office door each Monday."
+    },
+    {
+     "heading": "Spring tides",
+     "text": "Spring tides flood the lower slipway and the boat lift stays locked."
+    }
+   ]
+  },
+  {
+   "id": "boat-lift",
+   "title": "Boat lift operation",
+   "summary": "Rules for lifting boats out of the water.",
+   "sections": [
+    {
+     "heading": "Booking",
+     "text": "Book the boat lift with the yard foreman two days ahead."
+    },
+    {
+     "heading": "Limits",
+     "text": "The lift carries a maximum of eight tonnes."
+    }
+   ]
+  },
+  {
+   "id": "member-dues",
+   "title": "Membership dues",
+   "summary": "Yearly dues for cooperative members.",
+   "sections": [
+    {
+     "heading": "Amounts",
+     "text": "Full members pay 120 credits each January. Apprentices pay 40 credits."
+    },
+    {
+     "heading": "Late payment",
+     "text": "Dues unpaid by March lose their vote at the spring assembly."
+    }
+   ]
+  },
+  {
+   "id": "spring-assembly",
+   "title": "Spring assembly",
+   "summary": "Annual meeting agenda.",
+   "sections": [
+    {
+     "heading": "Agenda",
+     "text": "The assembly elects the treasurer and approves the season budget."
+    },
+    {
+     "heading": "Voting",
+     "text": "Each member with paid dues has one vote; proxies are not allowed."
+    }
+   ]
+  },
+  {
+   "id": "fish-pricing",
+   "title": "Fish pricing",
+   "summary": "How landed catch is priced.",
+   "sections": [
+    {
+     "heading": "Daily price",
+     "text": "The quay clerk posts the cod price every morning at six."
+    },
+    {
+     "heading": "Quality grades",
+     "text": "Grade A fish must be iced within one hour of landing."
+    }
+   ]
+  },
+  {
+   "id": "ice-plant",
+   "title": "Ice plant maintenance",
+   "summary": "Servicing the ice machine.",
+   "sections": [
+    {
+     "heading": "Service",
+     "text": "The ice plant compressor is serviced every March by the refrigeration contractor."
+    },
+    {
+     "heading": "Faults",
+     "text": "If the ice plant trips, reset the breaker in the cold store, never the pump room."
+    }
+   ]
+  },
+  {
+   "id": "volunteer-rota",
+   "title": "Volunteer rota",
+   "summary": "Who staffs the harbor office.",
+   "sections": [
+    {
+     "heading": "Shifts",
+     "text": "Volunteers cover the harbor office from 09:00 to 13:00 on Saturdays."
+    },
+    {
+     "heading": "Swaps",
+     "text": "Swap shifts by writing on the whiteboard in the net loft."
+    }
+   ]
+  },
+  {
+   "id": "lost-property",
+   "title": "Lost property",
+   "summary": "Handling found items.",
+   "sections": [
+    {
+     "heading": "Found items",
+     "text": "Found items go into the blue crate in the harbor office for thirty days."
+    },
+    {
+     "heading": "Unclaimed",
+     "text": "Unclaimed items are given to the charity shop in the village."
+    }
+   ]
+  },
+  {
+   "id": "fuel-dock",
+   "title": "Fuel dock",
+   "summary": "Diesel purchase rules.",
+   "sections": [
+    {
+     "heading": "Hours",
+     "text": "The fuel dock sells diesel from 08:00 to 16:00."
+    },
+    {
+     "heading": "Payment",
+     "text": "Pay by credit card at the pump; no cash is taken on the pier."
+    }
+   ]
+  },
+  {
+   "id": "storm-warning",
+   "title": "Storm warning plan",
+   "summary": "Steps when a gale is forecast.",
+   "sections": [
+    {
+     "heading": "Signals",
+     "text": "A red flag on the signal mast means a gale warning; all small boats return."
+    },
+    {
+     "heading": "Moorings",
+     "text": "Double the mooring lines on the guest dock when the red flag flies."
+    }
+   ]
+  },
+  {
+   "id": "apprentice-program",
+   "title": "Apprentice program",
+   "summary": "Training for new fishers.",
+   "sections": [
+    {
+     "heading": "Duration",
+     "text": "Apprentices train for two seasons under a named mentor."
+    },
+    {
+     "heading": "Assessment",
+     "text": "The mentor signs off knots, navigation and net mending before the apprentice becomes a full member."
+    }
+   ]
+  },
+  {
+   "id": "pier-inspection-manual",
+   "title": "Pier inspection manual",
+   "summary": "The full round of weekly pier checks.",
+   "sections": [
+    {
+     "heading": "Round 1",
+     "text": "Item 1 of the round is checked, signed and filed in the inspection binder before the next walk. Item 1 of the round is checked, signed and filed in the inspection binder before the next walk. Item 1 of the round is checked, signed and filed in the inspection binder before the next walk. Item 1 of the round is checked, signed and filed in the inspection binder before the next walk. Item 1 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 2",
+     "text": "Item 2 of the round is checked, signed and filed in the inspection binder before the next walk. Item 2 of the round is checked, signed and filed in the inspection binder before the next walk. Item 2 of the round is checked, signed and filed in the inspection binder before the next walk. Item 2 of the round is checked, signed and filed in the inspection binder before the next walk. Item 2 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 3",
+     "text": "Item 3 of the round is checked, signed and filed in the inspection binder before the next walk. Item 3 of the round is checked, signed and filed in the inspection binder before the next walk. Item 3 of the round is checked, signed and filed in the inspection binder before the next walk. Item 3 of the round is checked, signed and filed in the inspection binder before the next walk. Item 3 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 4",
+     "text": "Item 4 of the round is checked, signed and filed in the inspection binder before the next walk. Item 4 of the round is checked, signed and filed in the inspection binder before the next walk. Item 4 of the round is checked, signed and filed in the inspection binder before the next walk. Item 4 of the round is checked, signed and filed in the inspection binder before the next walk. Item 4 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 5",
+     "text": "Item 5 of the round is checked, signed and filed in the inspection binder before the next walk. Item 5 of the round is checked, signed and filed in the inspection binder before the next walk. Item 5 of the round is checked, signed and filed in the inspection binder before the next walk. Item 5 of the round is checked, signed and filed in the inspection binder before the next walk. Item 5 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 6",
+     "text": "Item 6 of the round is checked, signed and filed in the inspection binder before the next walk. Item 6 of the round is checked, signed and filed in the inspection binder before the next walk. Item 6 of the round is checked, signed and filed in the inspection binder before the next walk. Item 6 of the round is checked, signed and filed in the inspection binder before the next walk. Item 6 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 7",
+     "text": "Item 7 of the round is checked, signed and filed in the inspection binder before the next walk. Item 7 of the round is checked, signed and filed in the inspection binder before the next walk. Item 7 of the round is checked, signed and filed in the inspection binder before the next walk. Item 7 of the round is checked, signed and filed in the inspection binder before the next walk. Item 7 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 8",
+     "text": "Item 8 of the round is checked, signed and filed in the inspection binder before the next walk. Item 8 of the round is checked, signed and filed in the inspection binder before the next walk. Item 8 of the round is checked, signed and filed in the inspection binder before the next walk. Item 8 of the round is checked, signed and filed in the inspection binder before the next walk. Item 8 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 9",
+     "text": "Item 9 of the round is checked, signed and filed in the inspection binder before the next walk. Item 9 of the round is checked, signed and filed in the inspection binder before the next walk. Item 9 of the round is checked, signed and filed in the inspection binder before the next walk. Item 9 of the round is checked, signed and filed in the inspection binder before the next walk. Item 9 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 10",
+     "text": "Item 10 of the round is checked, signed and filed in the inspection binder before the next walk. Item 10 of the round is checked, signed and filed in the inspection binder before the next walk. Item 10 of the round is checked, signed and filed in the inspection binder before the next walk. Item 10 of the round is checked, signed and filed in the inspection binder before the next walk. Item 10 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 11",
+     "text": "Item 11 of the round is checked, signed and filed in the inspection binder before the next walk. Item 11 of the round is checked, signed and filed in the inspection binder before the next walk. Item 11 of the round is checked, signed and filed in the inspection binder before the next walk. Item 11 of the round is checked, signed and filed in the inspection binder before the next walk. Item 11 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 12",
+     "text": "Item 12 of the round is checked, signed and filed in the inspection binder before the next walk. Item 12 of the round is checked, signed and filed in the inspection binder before the next walk. Item 12 of the round is checked, signed and filed in the inspection binder before the next walk. Item 12 of the round is checked, signed and filed in the inspection binder before the next walk. Item 12 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Round 13",
+     "text": "Item 13 of the round is checked, signed and filed in the inspection binder before the next walk. Item 13 of the round is checked, signed and filed in the inspection binder before the next walk. Item 13 of the round is checked, signed and filed in the inspection binder before the next walk. Item 13 of the round is checked, signed and filed in the inspection binder before the next walk. Item 13 of the round is checked, signed and filed in the inspection binder before the next walk."
+    },
+    {
+     "heading": "Emergencies",
+     "text": "The muster point for a fire is the green shed beside the slipway."
+    }
+   ]
+  }
+ ]
+}

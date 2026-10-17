@@ -1,0 +1,258 @@
+[
+ {
+  "id": "RET-001",
+  "area": "exact",
+  "question": "When does the island ferry leave on weekdays?",
+  "relevant": [
+   "ferry-timetable"
+  ],
+  "answers": {
+   "ferry-timetable": "07:15"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-002",
+  "area": "exact",
+  "question": "What happens when the ferry breaks down mid crossing?",
+  "relevant": [
+   "ferry-breakdown"
+  ],
+  "answers": {
+   "ferry-breakdown": "channel 12"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-003",
+  "area": "exact",
+  "question": "How much does a visiting boat pay to moor for a night?",
+  "relevant": [
+   "dock-fees"
+  ],
+  "answers": {
+   "dock-fees": "18 credits"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-004",
+  "area": "exact",
+  "question": "Where are the netting needle and twine kept?",
+  "relevant": [
+   "net-mending"
+  ],
+  "answers": {
+   "net-mending": "loft above the smokehouse"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-005",
+  "area": "exact",
+  "question": "What do I do if the ice plant trips?",
+  "relevant": [
+   "ice-plant"
+  ],
+  "answers": {
+   "ice-plant": "breaker in the cold store"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-006",
+  "area": "exact",
+  "question": "Who prices the cod each morning?",
+  "relevant": [
+   "fish-pricing"
+  ],
+  "answers": {
+   "fish-pricing": "quay clerk"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-007",
+  "area": "exact",
+  "question": "How many tonnes can the boat lift carry?",
+  "relevant": [
+   "boat-lift"
+  ],
+  "answers": {
+   "boat-lift": "eight tonnes"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-008",
+  "area": "distractor",
+  "question": "What do members lose if dues are unpaid by March?",
+  "relevant": [
+   "member-dues"
+  ],
+  "answers": {
+   "member-dues": "lose their vote"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-009",
+  "area": "distractor",
+  "question": "Can proxies vote at the spring assembly?",
+  "relevant": [
+   "spring-assembly"
+  ],
+  "answers": {
+   "spring-assembly": "proxies are not allowed"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-010",
+  "area": "exact",
+  "question": "What does the red flag on the signal mast mean?",
+  "relevant": [
+   "storm-warning"
+  ],
+  "answers": {
+   "storm-warning": "gale warning"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-011",
+  "area": "exact",
+  "question": "What time does the fuel dock stop selling diesel?",
+  "relevant": [
+   "fuel-dock"
+  ],
+  "answers": {
+   "fuel-dock": "16:00"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-012",
+  "area": "distractor",
+  "question": "Where do found items go in the harbor office?",
+  "relevant": [
+   "lost-property"
+  ],
+  "answers": {
+   "lost-property": "blue crate"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-013",
+  "area": "distractor",
+  "question": "How do I swap a volunteer shift?",
+  "relevant": [
+   "volunteer-rota"
+  ],
+  "answers": {
+   "volunteer-rota": "whiteboard"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-014",
+  "area": "distractor",
+  "question": "How long do apprentices train before becoming full members?",
+  "relevant": [
+   "apprentice-program"
+  ],
+  "answers": {
+   "apprentice-program": "two seasons"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-015",
+  "area": "two_docs",
+  "question": "Which day is net mending done and who signs it off for apprentices?",
+  "relevant": [
+   "net-mending",
+   "apprentice-program"
+  ],
+  "answers": {
+   "net-mending": "Thursday",
+   "apprentice-program": "mentor signs off"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-016",
+  "area": "two_docs",
+  "question": "How should the guest dock be secured in a gale and what does it cost to stay there?",
+  "relevant": [
+   "storm-warning",
+   "dock-fees"
+  ],
+  "answers": {
+   "storm-warning": "Double the mooring lines",
+   "dock-fees": "18 credits"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-017",
+  "area": "body_only",
+  "question": "Where is the tide chart posted and what happens at spring tides?",
+  "relevant": [
+   "tide-tables"
+  ],
+  "answers": {
+   "tide-tables": "pinned to the harbor office door"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-018",
+  "area": "body_only",
+  "question": "Is there a rule about alder chips and the flue?",
+  "relevant": [
+   "smokehouse-safety"
+  ],
+  "answers": {
+   "smokehouse-safety": "sand bucket"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-019",
+  "area": "paraphrase",
+  "question": "Who do I phone when the boat gets stuck at sea?",
+  "relevant": [
+   "ferry-breakdown"
+  ],
+  "answers": {
+   "ferry-breakdown": "channel 12"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-020",
+  "area": "paraphrase",
+  "question": "What are the opening times for buying petrol?",
+  "relevant": [
+   "fuel-dock"
+  ],
+  "answers": {
+   "fuel-dock": "08:00 to 16:00"
+  },
+  "corpus_sha": "7b98923f"
+ },
+ {
+  "id": "RET-021",
+  "area": "long_document",
+  "question": "Where is the muster point for a fire?",
+  "relevant": [
+   "pier-inspection-manual"
+  ],
+  "answers": {
+   "pier-inspection-manual": "green shed beside the slipway"
+  },
+  "corpus_sha": "7b98923f"
+ }
+]

@@ -1,0 +1,169 @@
+{
+ "name": "Synthetic session files (invented)",
+ "conversations": [
+  {
+   "id": "a-dock-lease",
+   "user_id": "alice",
+   "title": "Dock lease renewal",
+   "updated_at": 1769632000,
+   "messages": [
+    {
+     "role": "user",
+     "text": "Should we renew the dock lease for another five years?"
+    },
+    {
+     "role": "assistant",
+     "text": "The lease renewal costs 900 credits a year; the harbor board wants an answer by June."
+    },
+    {
+     "role": "user",
+     "text": "Let us renew the dock lease but ask for a rent cap."
+    }
+   ]
+  },
+  {
+   "id": "a-net-order",
+   "user_id": "alice",
+   "title": "Net order",
+   "updated_at": 1774816000,
+   "messages": [
+    {
+     "role": "user",
+     "text": "Order two trawl nets from the sailmaker in Brevik."
+    },
+    {
+     "role": "assistant",
+     "text": "Two trawl nets with tarred twine come to 340 credits and ship in three weeks."
+    }
+   ]
+  },
+  {
+   "id": "a-crew-rota",
+   "user_id": "alice",
+   "title": "Crew rota",
+   "updated_at": 1776544000,
+   "messages": [
+    {
+     "role": "user",
+     "text": "Draft the crew rota for the autumn herring season."
+    },
+    {
+     "role": "assistant",
+     "text": "Week one: Ines and Tomas on the early boat; week two: Ines and Pavel."
+    }
+   ]
+  },
+  {
+   "id": "a-smoker-repair",
+   "user_id": "alice",
+   "title": "Smoker repair",
+   "updated_at": 1777840000,
+   "messages": [
+    {
+     "role": "user",
+     "text": "The smokehouse flue is cracked, who can repair it?"
+    },
+    {
+     "role": "assistant",
+     "text": "A mason named Ragna quoted 210 credits to rebuild the flue."
+    }
+   ]
+  },
+  {
+   "id": "a-tax-filing",
+   "user_id": "alice",
+   "title": "Tax filing",
+   "updated_at": 1779136000,
+   "messages": [
+    {
+     "role": "user",
+     "text": "Remind me what documents the annual tax filing needs."
+    },
+    {
+     "role": "assistant",
+     "text": "You need the ledger export, the fuel receipts and the signed crew contracts."
+    }
+   ]
+  },
+  {
+   "id": "a-lunch",
+   "user_id": "alice",
+   "title": "Lunch ideas",
+   "updated_at": 1779740800,
+   "messages": [
+    {
+     "role": "user",
+     "text": "What should I cook for the crew lunch on Friday?"
+    },
+    {
+     "role": "assistant",
+     "text": "Fish stew with rye bread feeds twelve for about 30 credits."
+    }
+   ]
+  },
+  {
+   "id": "a-weather",
+   "user_id": "alice",
+   "title": "Weather window",
+   "updated_at": 1779913600,
+   "messages": [
+    {
+     "role": "user",
+     "text": "Is Thursday a safe day to sail to the outer reef?"
+    },
+    {
+     "role": "assistant",
+     "text": "Forecast shows light winds Thursday morning, building by afternoon."
+    }
+   ]
+  },
+  {
+   "id": "b-surprise-party",
+   "user_id": "bob",
+   "title": "Surprise party",
+   "updated_at": 1777408000,
+   "messages": [
+    {
+     "role": "user",
+     "text": "Plan a surprise party for Marta at the old cannery."
+    },
+    {
+     "role": "assistant",
+     "text": "Book the cannery hall, order a cake and keep the guest list secret."
+    }
+   ]
+  },
+  {
+   "id": "b-dock-lease",
+   "user_id": "bob",
+   "title": "Dock lease",
+   "updated_at": 1775680000,
+   "messages": [
+    {
+     "role": "user",
+     "text": "Draft our own dock lease renewal letter to the harbor board."
+    },
+    {
+     "role": "assistant",
+     "text": "Dear board, we ask to renew the lease at the current rent."
+    }
+   ]
+  },
+  {
+   "id": "b-engine-parts",
+   "user_id": "bob",
+   "title": "Engine parts",
+   "updated_at": 1779827200,
+   "messages": [
+    {
+     "role": "user",
+     "text": "Which spare parts does the diesel engine need before winter?"
+    },
+    {
+     "role": "assistant",
+     "text": "Order a fuel filter, two impellers and a belt."
+    }
+   ]
+  }
+ ]
+}
