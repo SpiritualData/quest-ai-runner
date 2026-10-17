@@ -88,5 +88,331 @@
   "area": "package",
   "task": "Where are bundled resource files like prompt templates loaded from package data?",
   "target": "quest_ai_runner/resources.py"
+ },
+ {
+  "id": "CTX-016",
+  "area": "symptom",
+  "task": "The planner keeps picking answer when a tool call was needed; where do I change the decision rubric text?",
+  "target": "quest_ai_runner/core/planner_prompt.py"
+ },
+ {
+  "id": "CTX-017",
+  "area": "symptom",
+  "task": "A usage-limit error from the Claude subscription pauses everything; where is the reset time parsed?",
+  "target": "quest_ai_runner/core/usage_limit.py"
+ },
+ {
+  "id": "CTX-018",
+  "area": "symptom",
+  "task": "The reply contained a link that was never opened and I want to know where links get blocked",
+  "target": "quest_ai_runner/core/link_guard.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-019",
+  "area": "symptom",
+  "task": "Mid-run user messages should reach the next planner step, where is the queue for them?",
+  "target": "quest_ai_runner/core/inbox.py"
+ },
+ {
+  "id": "CTX-020",
+  "area": "symptom",
+  "task": "Tool schemas for creating and deleting experiments are defined in which module?",
+  "target": "quest_ai_runner/core/tools_quest_experiments.py"
+ },
+ {
+  "id": "CTX-021",
+  "area": "symptom",
+  "task": "The overseer decides to nudge a stalled run; I need the code that reads its digest and hint",
+  "target": "quest_ai_runner/core/overseer.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-022",
+  "area": "symptom",
+  "task": "Where does a repeated request skip the planner and replay a saved operation?",
+  "target": "quest_ai_runner/core/recipes.py"
+ },
+ {
+  "id": "CTX-023",
+  "area": "symptom",
+  "task": "Tasks stuck in claimed state after a crash; which code releases the claim and requeues them?",
+  "target": "quest_ai_runner/runner/quest_client_tasks.py"
+ },
+ {
+  "id": "CTX-024",
+  "area": "symptom",
+  "task": "Autopilot ran twice for one quest at the same time, which lock prevents that?",
+  "target": "quest_ai_runner/runner/autopilot_result.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-025",
+  "area": "symptom",
+  "task": "The daily budget for autopilot passes was exceeded, where are eligibility and backpressure decided?",
+  "target": "quest_ai_runner/runner/autopilot_gates.py"
+ },
+ {
+  "id": "CTX-026",
+  "area": "symptom",
+  "task": "Escalations to a human must carry a deadline and a review link; which client call creates the ask?",
+  "target": "quest_ai_runner/runner/quest_client_decisions.py"
+ },
+ {
+  "id": "CTX-027",
+  "area": "symptom",
+  "task": "Search hits from different web providers are cached on disk with an LRU, where?",
+  "target": "quest_ai_runner/adapters/web_cache.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-028",
+  "area": "symptom",
+  "task": "Pasted Google Docs links should be read without a search; where is that reader?",
+  "target": "quest_ai_runner/adapters/google_link_reader.py"
+ },
+ {
+  "id": "CTX-029",
+  "area": "symptom",
+  "task": "Page text is extracted for focus passages and private IPs are refused, where is that done?",
+  "target": "quest_ai_runner/adapters/web_page_extract.py"
+ },
+ {
+  "id": "CTX-030",
+  "area": "symptom",
+  "task": "Secrets such as API keys must be hidden before file content is sent out; which module masks them?",
+  "target": "quest_ai_runner/adapters/files_redaction.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-031",
+  "area": "symptom",
+  "task": "A rate limit or 503 from a provider should retry with backoff; where is the helper?",
+  "target": "quest_ai_runner/adapters/retry_utils.py"
+ },
+ {
+  "id": "CTX-032",
+  "area": "symptom",
+  "task": "Qdrant collection stores embedded cards and answers nearest-neighbour search, which class?",
+  "target": "quest_ai_runner/adapters/qdrant_vector_store.py"
+ },
+ {
+  "id": "CTX-033",
+  "area": "symptom",
+  "task": "Cards are written to the Quest backend over HTTP instead of local disk; which repository does that?",
+  "target": "quest_ai_runner/adapters/quest_api_card_repository.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-034",
+  "area": "symptom",
+  "task": "Score a candidate for how specifically it matches the request, no model involved",
+  "target": "quest_ai_runner/adapters/specificity.py"
+ },
+ {
+  "id": "CTX-035",
+  "area": "symptom",
+  "task": "Which module builds the prompt budget for the deep worker, spent by priority?",
+  "target": "quest_ai_runner/core/prompt_budget.py"
+ },
+ {
+  "id": "CTX-036",
+  "area": "symptom",
+  "task": "Model ids like claude-opus map to a tier; where do I update the newest top model?",
+  "target": "quest_ai_runner/core/model_registry.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-037",
+  "area": "paraphrase",
+  "task": "How do I make the brain call a different model implementation by name from config instead of an if statement?",
+  "target": "quest_ai_runner/core/resolve.py"
+ },
+ {
+  "id": "CTX-038",
+  "area": "paraphrase",
+  "task": "Stripping scratch reasoning tags before a user sees the reply",
+  "target": "quest_ai_runner/core/scaffolding.py"
+ },
+ {
+  "id": "CTX-039",
+  "area": "paraphrase",
+  "task": "A planner decision comes back malformed; where is it normalized into a PlanDecision?",
+  "target": "quest_ai_runner/core/orchestrator_decisions.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-040",
+  "area": "paraphrase",
+  "task": "Which file handles the CLI flags for polling tasks versus a chat session?",
+  "target": "quest_ai_runner/cli_parser.py"
+ },
+ {
+  "id": "CTX-041",
+  "area": "paraphrase",
+  "task": "the textual terminal UI input prompt and key bindings",
+  "target": "quest_ai_runner/textual_ui_prompt.py"
+ },
+ {
+  "id": "CTX-042",
+  "area": "paraphrase",
+  "task": "Rendering the Explain how I got this answer panel for the user",
+  "target": "quest_ai_runner/core/answer_explanation.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-043",
+  "area": "paraphrase",
+  "task": "Which provider talks to Gemini and lists its models?",
+  "target": "quest_ai_runner/adapters/gemini_provider.py"
+ },
+ {
+  "id": "CTX-044",
+  "area": "paraphrase",
+  "task": "Compute which edited files should be recarded after a deep run finishes",
+  "target": "quest_ai_runner/adapters/context_card_updater.py"
+ },
+ {
+  "id": "CTX-045",
+  "area": "paraphrase",
+  "task": "Sync a quest's goals with a file that can be edited in both directions",
+  "target": "quest_ai_runner/runner/quest_goal_sync.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-046",
+  "area": "paraphrase",
+  "task": "Which module decides which persona runs a queued task from configuration?",
+  "target": "quest_ai_runner/runner/personas.py"
+ },
+ {
+  "id": "CTX-047",
+  "area": "paraphrase",
+  "task": "Detects a provider outage and waits it out before retrying a run",
+  "target": "quest_ai_runner/core/provider_outage.py"
+ },
+ {
+  "id": "CTX-048",
+  "area": "paraphrase",
+  "task": "Time zone handling for a user's local day, the only place zoneinfo is used",
+  "target": "quest_ai_runner/runner/local_time.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-049",
+  "area": "paraphrase",
+  "task": "Where are the deep run attempts, continuation and verification coordinated?",
+  "target": "quest_ai_runner/core/orchestrator_deep_run.py"
+ },
+ {
+  "id": "CTX-050",
+  "area": "paraphrase",
+  "task": "Choosing a starting model for a deep run based on the planner's difficulty rating",
+  "target": "quest_ai_runner/core/deep_model_selection.py"
+ },
+ {
+  "id": "CTX-051",
+  "area": "hard",
+  "task": "the thing that decides whether a request needs the open web or only our own data before the planner runs",
+  "target": "quest_ai_runner/core/reach_judge.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-052",
+  "area": "hard",
+  "task": "why does a card for a recently used topic keep reappearing at the start of the next turn",
+  "target": "quest_ai_runner/core/recent_context.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-053",
+  "area": "hard",
+  "task": "reorder or drop the cards that were found by both search arms in one consolidated pass",
+  "target": "quest_ai_runner/adapters/hybrid_context_assembler.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-054",
+  "area": "hard",
+  "task": "the person's frequent words ranked so replies sound like them",
+  "target": "quest_ai_runner/adapters/personal_lexicon.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-055",
+  "area": "hard",
+  "task": "closest path suggestions when the agent asks for a file that does not exist",
+  "target": "quest_ai_runner/adapters/files_index.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-056",
+  "area": "hard",
+  "task": "mounting one card store inside another without copying it",
+  "target": "quest_ai_runner/adapters/card_store_mounts.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-057",
+  "area": "hard",
+  "task": "predict what the user will ask next at this time of day and precompute the context",
+  "target": "quest_ai_runner/core/anticipation_engine.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-058",
+  "area": "hard",
+  "task": "a notification email once a month when the first scan of a corpus completes",
+  "target": "quest_ai_runner/adapters/bootstrap_reporter.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-059",
+  "area": "hard",
+  "task": "which runner runs a workflow step's requested action with no model call",
+  "target": "quest_ai_runner/runner/requested_action.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-060",
+  "area": "hard",
+  "task": "a small strong-model second opinion on a few risky routing decisions",
+  "target": "quest_ai_runner/core/planner_cascade.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-061",
+  "area": "hard",
+  "task": "splitting a long reply's attachments, images and uploaded files for the model",
+  "target": "quest_ai_runner/core/attachments.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-062",
+  "area": "hard",
+  "task": "the layered stable-head prompt shape that keeps provider caching working",
+  "target": "quest_ai_runner/core/prompt_layers.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-063",
+  "area": "hard",
+  "task": "wait until the person's own insights are gathered into one tagged block for the prompt",
+  "target": "quest_ai_runner/runner/insights.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-064",
+  "area": "hard",
+  "task": "weights the words a person uses by how rare they are in general English",
+  "target": "quest_ai_runner/adapters/english_word_bands.py",
+  "heldout": true
+ },
+ {
+  "id": "CTX-065",
+  "area": "hard",
+  "task": "the seam where the agent connection is opened so tests can fake it",
+  "target": "quest_ai_runner/adapters/acp_deep_runner_session.py",
+  "heldout": true
  }
 ]

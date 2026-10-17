@@ -7,8 +7,9 @@ local part is the embedder (bge-small, offline, cached; see ``embedder.py``) and
 order, labelled sections and deadline logic are the live class's. No provider is wired, so the consolidating
 model pass is off and the harness stays at zero model calls.
 
-Each arm is capped at 3 cards, so the union is at most 6 files, declared with ``select.budget = 6``: the
-scorer reports the strict top-3 (live order: keyword cards first, then vector cards) and recall within 6.
+Each arm is capped at 3 cards, so the union is at most 6 files, returned in the live class's fused relevance
+order (``fused_card_order``). The scorer reads the strict top 3, the solution's ideal: a union that only
+helps at 6 files has not ranked anything better.
 """
 import tempfile
 
@@ -77,5 +78,4 @@ def build(meter):  # noqa: ARG001
                 if f["path"] not in paths:
                     paths.append(f["path"])
         return paths
-    select.budget = 2 * ARM_CARDS
     return select

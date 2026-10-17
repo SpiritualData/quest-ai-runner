@@ -58,6 +58,46 @@ logger = logging.getLogger(__name__)
 CONSOLIDATE_MIN_REMAINING_SECONDS = 1.0
 
 
+
+#: Reciprocal-rank-fusion constant: how fast a lower rank loses weight. 60 is the published default.
+RRF_K = 60
+#: How much a vector hit's rank counts against a keyword card's (1.0 is plain RRF). Measured on the
+#: context_selection component (65 tasks, dev/held-out split): plain RRF dropped strict top-3 below the
+#: keyword arm alone, because the semantic arm is the noisier one there; 0.5 keeps the keyword order
+#: and lets a card both arms found lead, with no loss on either split.
+VECTOR_RANK_WEIGHT = 0.5
+
+
+def arm_scores(result: AssembledContext, *, by_metadata_score: bool) -> Dict[str, float]:
+    """Each card id -> its arm's relevance score. The vector arm lists cards sorted by id for prompt
+    caching, so its order says nothing; its ``effective_score`` (similarity x specificity x recency)
+    does. The keyword arm lists cards best first already, so its position is the rank."""
+    ids = list(result.card_ids or [])
+    if by_metadata_score:
+        scores = {m.get("id"): float(m.get("effective_score") or m.get("relevance_score") or 0.0)
+                  for m in (result.card_metadata or []) if m.get("id")}
+        if scores:
+            return {cid: scores.get(cid, 0.0) for cid in ids}
+    return {cid: float(len(ids) - i) for i, cid in enumerate(ids)}
+
+
+def fused_card_order(kw_result: AssembledContext, vec_result: AssembledContext,
+                     priority: Optional[List[str]] = None) -> List[str]:
+    """Union of both arms' card ids, best first: reciprocal-rank fusion of the arm rankings, so a card
+    both arms found beats one only a single arm found, and each arm's own best stays near the top.
+    Priority cards (the caller's pinned ones) lead; ties fall back to keyword-first, then arm order."""
+    kw_scores = arm_scores(kw_result, by_metadata_score=False)
+    vec_scores = arm_scores(vec_result, by_metadata_score=True)
+    fused: Dict[str, float] = {}
+    first_seen: Dict[str, int] = {}
+    for weight, scores in ((1.0, kw_scores), (VECTOR_RANK_WEIGHT, vec_scores)):
+        for rank, cid in enumerate(sorted(scores, key=lambda c: -scores[c]), start=1):
+            fused[cid] = fused.get(cid, 0.0) + weight / (RRF_K + rank)
+            first_seen.setdefault(cid, len(first_seen))
+    pinned = [str(p) for p in (priority or [])]
+    return sorted(fused, key=lambda c: (c not in pinned, -fused[c], first_seen[c]))
+
+
 class HybridContextAssembler(ContextAssemblerBase):
     """Fuses a keyword/IDF assembler and a vector assembler in parallel.
 
@@ -268,13 +308,10 @@ class HybridContextAssembler(ContextAssemblerBase):
             )
         combined_view = "\n\n---\n\n".join(view_parts)
 
-        # Union card_ids (keyword first, then vector), deduped preserving order.
-        seen: set = set()
-        merged_ids: List[str] = []
-        for cid in kw_result.card_ids + vec_result.card_ids:
-            if cid not in seen:
-                seen.add(cid)
-                merged_ids.append(cid)
+        # Union card_ids, deduped and ORDERED BY RELEVANCE (see ``fused_card_order``). The rendered
+        # sections above keep their arm order and stable-by-id cards, so the prompt text stays cache
+        # friendly; only the ranking a consumer reads from ``card_ids`` and ``card_metadata`` changes.
+        merged_ids = fused_card_order(kw_result, vec_result, priority=(meta or {}).get("priority_card_ids"))
 
         # Union stale lists, deduped.
         seen_stale: set = set()
@@ -310,6 +347,8 @@ class HybridContextAssembler(ContextAssemblerBase):
             if card_id and card_id not in seen_card_ids:
                 seen_card_ids.add(card_id)
                 merged_metadata.append(card_meta)
+        position = {cid: i for i, cid in enumerate(merged_ids)}
+        merged_metadata.sort(key=lambda m: position.get(m.get("id"), len(position)))
 
         mechanical = AssembledContext(
             context_view=combined_view,
