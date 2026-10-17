@@ -79,11 +79,11 @@ def test_long_text_is_truncated_for_the_embedder_but_kept_whole_in_the_payload(m
 
 def test_a_bad_batch_size_falls_back_to_the_default(monkeypatch):
     monkeypatch.setenv("QAR_EMBED_BATCH", "not-a-number")
-    assert qvs._embed_batch_size() == qvs._EMBED_BATCH_DEFAULT
+    assert qvs.embed_batch_size() == qvs.EMBED_BATCH_DEFAULT
     monkeypatch.setenv("QAR_EMBED_BATCH", "0")       # would make range() produce nothing
-    assert qvs._embed_batch_size() == qvs._EMBED_BATCH_DEFAULT
+    assert qvs.embed_batch_size() == qvs.EMBED_BATCH_DEFAULT
     monkeypatch.setenv("QAR_EMBED_BATCH", "-5")
-    assert qvs._embed_batch_size() == qvs._EMBED_BATCH_DEFAULT
+    assert qvs.embed_batch_size() == qvs.EMBED_BATCH_DEFAULT
 
 
 def test_an_embedder_failure_stops_the_upsert_without_raising(monkeypatch):
