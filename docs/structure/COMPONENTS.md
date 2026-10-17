@@ -1,7 +1,7 @@
 # Components
 
-Generated from `docs/structure/components.csv` by `python scripts/check_structure.py --write-docs`.
-Edit the CSV, never this file. The rules are the numbered list in `docs/structure/README.md`.
+Generated from `docs/structure/components.csv` by `esoi check --write-docs`.
+Edit the CSV, never this file. The rules are listed by `esoi rules`.
 
 | Component | Layer | Role | Serves |
 |---|---|---|---|
