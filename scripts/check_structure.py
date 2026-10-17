@@ -164,7 +164,7 @@ def render_docs(components: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-ALTERNATIVE_MARKERS = ("ALTERNATIVE", "BASELINE", "ABLATION", "FLOOR")
+ALTERNATIVE_MARKERS = ("ALTERNATIVE", "BASELINE", "ABLATION", "FLOOR", "VALIDITY")
 
 
 def impl_kind(path: Path) -> str:
@@ -349,7 +349,7 @@ def check() -> list[str]:
         if kinds[rel] == "unclear" and not waived("S12", rel):
             bad.append(f"S12 {rel}: neither wraps a live {PKG} class or function nor declares itself an "
                        "alternative (set ALTERNATIVE = True, or open the docstring with ALTERNATIVE/BASELINE/"
-                       "ABLATION/FLOOR): the number would not measure the live code")
+                       "ABLATION/FLOOR/VALIDITY): the number would not measure the live code")
     for r in solutions:
         sel = r["selected"].split("::")[0]
         if sel in kinds and kinds[sel] == "alternative" and not waived("S12", f"{r['solution_id']}:{Path(sel).stem}"):

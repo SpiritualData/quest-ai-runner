@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STRUCT = ROOT / "docs" / "structure"
 TRACKER = STRUCT / "tracker"
 TRACKING = ["tracking_status", "tracking_owner", "tracking_updated", "tracking_notes"]
-ALTERNATIVE_MARKERS = ("ALTERNATIVE", "BASELINE", "ABLATION", "FLOOR")
+ALTERNATIVE_MARKERS = ("ALTERNATIVE", "BASELINE", "ABLATION", "FLOOR", "VALIDITY")
 SEP = ";"
 
 COLUMNS = {

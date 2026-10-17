@@ -13,7 +13,7 @@ solution; the numbered rules that enforce it are a reference in [README.md](READ
 | Selection | `quest_ai_runner/core/selection_table.py` (S14) | `name -> "module:Class"` and a default; `resolve(solution_id, name)` returns the class |
 | Evaluation | `evaluation/components/<solution_id with underscores>/` | `interface.py` (one function with a fixed signature), `cases.json`, `score.py`, `impls/<impl>.py` driving LIVE code (S12) |
 | Result | `evaluation/components/results.csv` | one row per `run.py <component> --impl <impl> --record`, with `git_sha` and `cases_sha` (S16) |
-| Decision | `evaluation/components/leaderboard.py` | the winner on the same cases; S10 fails when the selected implementation loses without a waiver |
+| Decision | `evaluation/components/leaderboard.py` | the winner on the same cases, and a verdict per solution: WIN (the metric chose it), TIE (the same pass rate at spend within the tolerance: kept for the reason in `selected_by`, not by the number), LOSS or UNMEASURED (no rival compared); ablation and baseline arms are tagged; S10 fails when the selected implementation loses without a waiver |
 | Place | `docs/structure/components.csv` | `component_id`, `layer`, `path` globs, `role`, `solutions`: which files serve the solution; a file in no component, or a component serving no solution, fails the check (S1, S19) |
 
 Whether "best" can vary decides the kind. An `eval` solution has implementations that differ on the metric, so they are

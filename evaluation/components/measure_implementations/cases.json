@@ -1253,5 +1253,40 @@
     }
    }
   }
+ },
+ {
+  "id": "MEA-044",
+  "kind": "verdict",
+  "area": "a validity arm is no rival",
+  "args": {
+   "rows": [
+    {
+     "impl": "dev_quest_chat",
+     "passed": 1,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x",
+     "component": "chat_quality"
+    },
+    {
+     "impl": "reference_replies",
+     "passed": 10,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x",
+     "component": "chat_quality"
+    }
+   ],
+   "selected": "dev_quest_chat"
+  },
+  "expect": {
+   "eq": {
+    "verdict": "UNMEASURED",
+    "arms": {
+     "dev_quest_chat": "",
+     "reference_replies": "validity"
+    }
+   }
+  }
  }
 ]

@@ -193,7 +193,7 @@ The graded arm is drawn with `--sample N` and counts its spend when run in proce
 
 Every implementation measures live code or says it does not (check S12 in `docs/structure/README.md`): it
 imports or drives `quest_ai_runner`, or declares `ALTERNATIVE = True` (or a docstring opening `ALTERNATIVE`,
-`BASELINE`, `ABLATION`, `FLOOR`). A row recorded without `cases_sha` shows as `unverified` in `leaderboard.py`
+`BASELINE`, `ABLATION`, `FLOOR`, `VALIDITY`). The leaderboard tags these arms and never offers an `ABLATION` or a `VALIDITY` arm as the thing to adopt. A row recorded without `cases_sha` shows as `unverified` in `leaderboard.py`
 and is never compared against a verified one (check S16).
 
 ## prompt_size: budgets derived from the model limit and cost

@@ -113,13 +113,15 @@ def comparable(a, b):
     return (a.get("cases_sha") or "") == (b.get("cases_sha") or "")
 
 
-ARM_MARKER = re.compile(r'\s*"""\s*(ABLATION|BASELINE|FLOOR|ALTERNATIVE)')
+ARM_MARKER = re.compile(r'\s*"""\s*(ABLATION|BASELINE|FLOOR|ALTERNATIVE|VALIDITY)')
+NOT_RIVALS = ("ablation", "validity")   # shown and tagged, never offered as the thing to adopt
 
 
 def arm_kind(row):
     """What an implementation is for, from the first word of its module docstring: ``ablation`` (a part of a
     candidate measured alone: the cheap call without the planner behind it), ``baseline`` (a floor someone
-    would plausibly ship; ``FLOOR`` counts), ``alternative``, or ``""`` for live code. Shown beside every row so a
+    would plausibly ship; ``FLOOR`` counts), ``validity`` (the metric's own offline check that it can tell good from
+    bad, which no implementation can lose to), ``alternative``, or ``""`` for live code. Shown beside every row so a
     reader can tell a rival from a reference point."""
     path = HERE / row.get("component", "") / "impls" / (row["impl"] + ".py")
     if not path.is_file():
@@ -131,9 +133,10 @@ def arm_kind(row):
 
 
 def is_ablation(row):
-    """True when the implementation's module opens with ABLATION: it returns less than the whole job, so it is
-    shown in the ranking and never offered as the thing to adopt."""
-    return arm_kind(row) == "ablation"
+    """True when the implementation is no rival: an ABLATION returns less than the whole job, and a VALIDITY arm
+    checks the metric rather than competing on it, so both are shown in the ranking and never offered as the
+    thing to adopt."""
+    return arm_kind(row) in NOT_RIVALS
 
 
 COST_TIE_TOLERANCE = 0.10  # costs within 10% are a tie: run-to-run noise must not flip a selection

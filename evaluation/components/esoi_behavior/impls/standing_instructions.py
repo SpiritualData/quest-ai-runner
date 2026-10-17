@@ -1,8 +1,9 @@
-"""LIVE chat arm: one model call per case with QAR's shipped standing ESOI instructions
+"""ABLATION chat arm: one model call per case with QAR's shipped standing ESOI instructions
 (``quest_ai_runner/prompts/evolvable_structure.md``) as the system prompt, then the model judge (regex
 ``must_not`` as a prefilter). Costs real money; run on a subset (``--only``) and with ``--max-calls``.
-Compare with ``plain`` on the same cases. The setting is a bare chat completion, not the deep-run path:
-``insitu_standing_instructions`` is that."""
+Compare with ``plain`` on the same cases. The setting is a bare chat completion, not the deep-run path the
+instructions ship in: ``insitu_standing_instructions`` is that, so this arm measures the instruction layer alone and
+is never the thing to adopt."""
 import os
 from pathlib import Path
 

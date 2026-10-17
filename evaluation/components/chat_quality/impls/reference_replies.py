@@ -1,4 +1,4 @@
-"""BASELINE (offline validity arm, no Quest and no model): proves the end-to-end metric itself is sound before any
+"""VALIDITY (offline arm, no Quest and no model): proves the end-to-end metric itself is sound before any
 dev-Quest spend. For each case it checks that the case validates against the dataset schema, that the
 deterministic pre-checks (``judge.precheck``) accept a reference reply built from the case's own expected phrases
 with the routing the case expects, and that they reject an empty reply. A case whose checks cannot tell a good
