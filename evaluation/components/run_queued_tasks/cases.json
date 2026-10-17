@@ -1,0 +1,1280 @@
+[
+ {
+  "id": "RQT-001",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "task-1"
+    ],
+    "claimed": [
+     "task-1"
+    ],
+    "reports": [
+     [
+      "task-1",
+      "done"
+     ]
+    ],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-002",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    },
+    {
+     "id": "task-2",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    },
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "task-1",
+     "task-2"
+    ],
+    "claimed": [
+     "task-1",
+     "task-2"
+    ],
+    "reports": [
+     [
+      "task-1",
+      "done"
+     ],
+     [
+      "task-2",
+      "done"
+     ]
+    ],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-003",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    },
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ],
+   "scans": 2
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "task-1"
+    ],
+    "claimed": [
+     "task-1"
+    ],
+    "reports": [
+     [
+      "task-1",
+      "done"
+     ]
+    ],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-004",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ],
+   "claim": "fail",
+   "scans": 2
+  },
+  "expect": {
+   "eq": {
+    "handled": [],
+    "claimed": [
+     "task-1",
+     "task-1"
+    ],
+    "reports": [],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-005",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "confirm",
+     "confirm_question": "approve the purchase?",
+     "rationale": "money"
+    }
+   ],
+   "escalation_id": "dec_1"
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "task-1"
+    ],
+    "claimed": [
+     "task-1"
+    ],
+    "reports": [
+     [
+      "task-1",
+      "needs_you"
+     ]
+    ],
+    "decision_ids": [
+     "dec_1"
+    ]
+   }
+  }
+ },
+ {
+  "id": "RQT-006",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "deep",
+     "goal": "do X",
+     "deep_brief": "x",
+     "rationale": "work"
+    },
+    {
+     "met": true,
+     "reason": "verified"
+    }
+   ],
+   "deep": {
+    "met": true,
+    "output": "X done",
+    "error": null
+   }
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "task-1"
+    ],
+    "claimed": [
+     "task-1"
+    ],
+    "reports": [
+     [
+      "task-1",
+      "done"
+     ]
+    ],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-007",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "deep",
+     "goal": "do X",
+     "deep_brief": "x",
+     "rationale": "work"
+    }
+   ],
+   "deep": {
+    "met": false,
+    "output": "",
+    "error": "hit turn limit"
+   }
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "task-1"
+    ],
+    "claimed": [
+     "task-1"
+    ],
+    "reports": [
+     [
+      "task-1",
+      "failed"
+     ]
+    ],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-008",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "later",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1",
+     "due_in_minutes": 120
+    },
+    {
+     "id": "now",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "now"
+    ],
+    "claimed": [
+     "now"
+    ],
+    "reports": [
+     [
+      "now",
+      "done"
+     ]
+    ],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-009",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "past",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1",
+     "due_in_minutes": -1
+    }
+   ],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "past"
+    ],
+    "claimed": [
+     "past"
+    ],
+    "reports": [
+     [
+      "past",
+      "done"
+     ]
+    ],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-010",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    },
+    {
+     "id": "other",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team2"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "handled": [
+     "task-1"
+    ],
+    "claimed": [
+     "task-1"
+    ],
+    "reports": [
+     [
+      "task-1",
+      "done"
+     ]
+    ],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-011",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [
+    {
+     "id": "task-1",
+     "text": "summarize the readme",
+     "status": "queued",
+     "team_id": "team1"
+    }
+   ],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ],
+   "configured": false
+  },
+  "expect": {
+   "eq": {
+    "handled": [],
+    "claimed": [],
+    "reports": [],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-012",
+  "kind": "task_lifecycle",
+  "area": "lifecycle",
+  "args": {
+   "tasks": [],
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ok"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "handled": [],
+    "claimed": [],
+    "reports": [],
+    "decision_ids": []
+   }
+  }
+ },
+ {
+  "id": "RQT-013",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "assignee_user_id": "rep_ada"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": "rep_ada",
+    "skill": "ada-skill"
+   }
+  }
+ },
+ {
+  "id": "RQT-014",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "assignee": "ada lovelace"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": "rep_ada",
+    "skill": "ada-skill"
+   }
+  }
+ },
+ {
+  "id": "RQT-015",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "persona": "ADA-L"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": "rep_ada",
+    "skill": "ada-skill"
+   }
+  }
+ },
+ {
+  "id": "RQT-016",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "persona": "Ada"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": "rep_ada",
+    "skill": "ada-skill"
+   }
+  }
+ },
+ {
+  "id": "RQT-017",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "assignee_user_id": "rep_bo"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": "rep_bo",
+    "skill": "bo-skill"
+   }
+  }
+ },
+ {
+  "id": "RQT-018",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "text": "please ask Ada Lovelace to review this"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": null,
+    "skill": null
+   }
+  }
+ },
+ {
+  "id": "RQT-019",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "assignee_user_id": "rep_bo",
+    "user_id": "rep_ada"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": "rep_bo",
+    "skill": "bo-skill"
+   }
+  }
+ },
+ {
+  "id": "RQT-020",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "user_id": "stranger"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": null,
+    "skill": null
+   }
+  }
+ },
+ {
+  "id": "RQT-021",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "user_id": "stranger"
+   },
+   "cache_dir": "/cache"
+  },
+  "expect": {
+   "eq": {
+    "persona": "stranger",
+    "skill": "stranger"
+   }
+  }
+ },
+ {
+  "id": "RQT-022",
+  "kind": "persona_select",
+  "area": "personas",
+  "args": {
+   "registry": {
+    "Ada": {
+     "rep_id": "rep_ada",
+     "skill": "ada-skill",
+     "display_name": "Ada Lovelace",
+     "aliases": [
+      "ada-l"
+     ]
+    },
+    "rep_bo": "bo-skill"
+   },
+   "task": {
+    "text": "no assignment at all"
+   }
+  },
+  "expect": {
+   "eq": {
+    "persona": null,
+    "skill": null
+   }
+  }
+ },
+ {
+  "id": "RQT-023",
+  "kind": "folder_sync",
+  "area": "folder",
+  "args": {
+   "state": {
+    "outcome": "Reach 100 paying clients",
+    "completed": false,
+    "current_state": "Site is live."
+   },
+   "notes": [
+    {
+     "note_id": "note_1",
+     "text": "tested with friends",
+     "author_kind": "ai",
+     "created_at": "2026-07-01T00:00:00"
+    },
+    {
+     "note_id": "note_2",
+     "text": "second note",
+     "author_kind": "ai",
+     "created_at": "2026-07-02T00:00:00"
+    }
+   ],
+   "script": [
+    "pull"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     2
+    ],
+    "error": null
+   },
+   "contains": [
+    "Reach 100 paying clients",
+    "tested with friends",
+    "<!-- id:note_1 -->"
+   ]
+  }
+ },
+ {
+  "id": "RQT-024",
+  "kind": "folder_sync",
+  "area": "folder",
+  "args": {
+   "state": {
+    "outcome": "Reach 100 paying clients",
+    "completed": false,
+    "current_state": "Site is live."
+   },
+   "notes": [
+    {
+     "note_id": "note_1",
+     "text": "tested with friends",
+     "author_kind": "ai",
+     "created_at": "2026-07-01T00:00:00"
+    },
+    {
+     "note_id": "note_2",
+     "text": "second note",
+     "author_kind": "ai",
+     "created_at": "2026-07-02T00:00:00"
+    }
+   ],
+   "script": [
+    "pull",
+    "pull"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     2,
+     2
+    ],
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "RQT-025",
+  "kind": "folder_sync",
+  "area": "folder",
+  "args": {
+   "state": {
+    "outcome": "Reach 100 paying clients",
+    "completed": false,
+    "current_state": "Site is live."
+   },
+   "notes": [
+    {
+     "note_id": "note_1",
+     "text": "tested with friends",
+     "author_kind": "ai",
+     "created_at": "2026-07-01T00:00:00"
+    },
+    {
+     "note_id": "note_2",
+     "text": "second note",
+     "author_kind": "ai",
+     "created_at": "2026-07-02T00:00:00"
+    }
+   ],
+   "script": [
+    "pull",
+    {
+     "append": "My own paragraph that must survive."
+    },
+    "pull"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": null
+   },
+   "contains": [
+    "My own paragraph that must survive.",
+    "tested with friends"
+   ]
+  }
+ },
+ {
+  "id": "RQT-026",
+  "kind": "folder_sync",
+  "area": "folder",
+  "args": {
+   "state": {
+    "outcome": "Reach 100 paying clients",
+    "completed": false,
+    "current_state": "Site is live."
+   },
+   "notes": [
+    {
+     "note_id": "note_1",
+     "text": "tested with friends",
+     "author_kind": "ai",
+     "created_at": "2026-07-01T00:00:00"
+    },
+    {
+     "note_id": "note_2",
+     "text": "second note",
+     "author_kind": "ai",
+     "created_at": "2026-07-02T00:00:00"
+    }
+   ],
+   "script": [
+    "pull",
+    {
+     "bullet": "alpha idea"
+    },
+    {
+     "bullet": "beta idea"
+    },
+    "push"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     2,
+     2
+    ],
+    "error": null
+   },
+   "contains": [
+    "alpha idea"
+   ]
+  }
+ },
+ {
+  "id": "RQT-027",
+  "kind": "folder_sync",
+  "area": "folder",
+  "args": {
+   "state": {
+    "outcome": "Reach 100 paying clients",
+    "completed": false,
+    "current_state": "Site is live."
+   },
+   "notes": [
+    {
+     "note_id": "note_1",
+     "text": "tested with friends",
+     "author_kind": "ai",
+     "created_at": "2026-07-01T00:00:00"
+    },
+    {
+     "note_id": "note_2",
+     "text": "second note",
+     "author_kind": "ai",
+     "created_at": "2026-07-02T00:00:00"
+    }
+   ],
+   "script": [
+    "pull",
+    {
+     "bullet": "alpha idea"
+    },
+    "push",
+    "push"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     2,
+     1,
+     0
+    ],
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "RQT-028",
+  "kind": "folder_sync",
+  "area": "folder",
+  "args": {
+   "state": {},
+   "notes": [
+    {
+     "note_id": "note_1",
+     "text": "tested with friends",
+     "author_kind": "ai",
+     "created_at": "2026-07-01T00:00:00"
+    },
+    {
+     "note_id": "note_2",
+     "text": "second note",
+     "author_kind": "ai",
+     "created_at": "2026-07-02T00:00:00"
+    }
+   ],
+   "script": [
+    "pull"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": "QuestFolderSyncError",
+    "results": []
+   }
+  }
+ },
+ {
+  "id": "RQT-029",
+  "kind": "folder_sync",
+  "area": "folder",
+  "args": {
+   "state": {
+    "outcome": "Reach 100 paying clients",
+    "completed": false,
+    "current_state": "Site is live."
+   },
+   "notes": [
+    {
+     "note_id": "note_1",
+     "text": "tested with friends",
+     "author_kind": "ai",
+     "created_at": "2026-07-01T00:00:00"
+    },
+    {
+     "note_id": "note_2",
+     "text": "second note",
+     "author_kind": "ai",
+     "created_at": "2026-07-02T00:00:00"
+    }
+   ],
+   "script": [
+    "push"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "error": "QuestFolderSyncError",
+    "results": []
+   }
+  }
+ },
+ {
+  "id": "RQT-030",
+  "kind": "folder_owner",
+  "area": "folder",
+  "args": {
+   "map": {
+    "q_outer": "stories",
+    "q_inner": "stories/sub"
+   },
+   "path": "stories/sub/deep/file"
+  },
+  "expect": {
+   "eq": {
+    "quest": "q_inner"
+   }
+  }
+ },
+ {
+  "id": "RQT-031",
+  "kind": "folder_owner",
+  "area": "folder",
+  "args": {
+   "map": {
+    "q_outer": "stories",
+    "q_inner": "stories/sub"
+   },
+   "path": "stories/other"
+  },
+  "expect": {
+   "eq": {
+    "quest": "q_outer"
+   }
+  }
+ },
+ {
+  "id": "RQT-032",
+  "kind": "folder_owner",
+  "area": "folder",
+  "args": {
+   "map": {
+    "q_outer": "stories"
+   },
+   "path": "elsewhere"
+  },
+  "expect": {
+   "eq": {
+    "quest": null
+   }
+  }
+ },
+ {
+  "id": "RQT-033",
+  "kind": "folder_owner",
+  "area": "folder",
+  "args": {
+   "map": {
+    "q_outer": "stories"
+   },
+   "path": "stories-extra"
+  },
+  "expect": {
+   "eq": {
+    "quest": null
+   }
+  }
+ },
+ {
+  "id": "RQT-034",
+  "kind": "lane_clock",
+  "area": "lane",
+  "args": {
+   "date": "2026-05-10",
+   "time": "06:30",
+   "zone": "America/Los_Angeles"
+  },
+  "expect": {
+   "eq": {
+    "iso": "2026-05-10T06:30:00-07:00",
+    "aware": true
+   }
+  }
+ },
+ {
+  "id": "RQT-035",
+  "kind": "lane_clock",
+  "area": "lane",
+  "args": {
+   "date": "2026-05-10",
+   "time": "06:30",
+   "zone": "Not/AZone"
+  },
+  "expect": {
+   "eq": {
+    "iso": "2026-05-10T06:30:00",
+    "aware": false
+   }
+  }
+ },
+ {
+  "id": "RQT-036",
+  "kind": "lane_clock",
+  "area": "lane",
+  "args": {
+   "date": "2026-05-10",
+   "time": "",
+   "zone": "Europe/London"
+  },
+  "expect": {
+   "eq": {
+    "iso": "2026-05-10T00:00:00+01:00",
+    "aware": true
+   }
+  }
+ },
+ {
+  "id": "RQT-037",
+  "kind": "lane_clock",
+  "area": "lane",
+  "args": {
+   "date": "garbage",
+   "time": "06:30",
+   "zone": "Europe/London"
+  },
+  "expect": {
+   "eq": {
+    "iso": null,
+    "aware": false
+   }
+  }
+ },
+ {
+  "id": "RQT-038",
+  "kind": "lane_env_file",
+  "area": "lane",
+  "args": {
+   "lines": [
+    "QARX_ONE=1",
+    "# comment",
+    "QARX_TWO = 'two'  # trailing"
+   ],
+   "preset": {}
+  },
+  "expect": {
+   "eq": {
+    "env": {
+     "QARX_ONE": "1",
+     "QARX_TWO": "two"
+    }
+   }
+  }
+ },
+ {
+  "id": "RQT-039",
+  "kind": "lane_env_file",
+  "area": "lane",
+  "args": {
+   "lines": [
+    "QARX_ONE=file"
+   ],
+   "preset": {
+    "QARX_ONE": "process"
+   }
+  },
+  "expect": {
+   "eq": {
+    "env": {
+     "QARX_ONE": "process"
+    }
+   }
+  }
+ },
+ {
+  "id": "RQT-040",
+  "kind": "lane_env_file",
+  "area": "lane",
+  "args": {
+   "lines": [
+    "no equals sign",
+    "QARX_THREE=3"
+   ],
+   "preset": {}
+  },
+  "expect": {
+   "eq": {
+    "env": {
+     "QARX_THREE": "3"
+    }
+   }
+  }
+ },
+ {
+  "id": "RQT-041",
+  "kind": "lane_args",
+  "area": "lane",
+  "args": {
+   "argv": []
+  },
+  "expect": {
+   "eq": {
+    "once": false,
+    "check": false,
+    "verbose": false
+   }
+  }
+ },
+ {
+  "id": "RQT-042",
+  "kind": "lane_args",
+  "area": "lane",
+  "args": {
+   "argv": [
+    "--once",
+    "-v"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "once": true,
+    "check": false,
+    "verbose": true
+   }
+  }
+ },
+ {
+  "id": "RQT-043",
+  "kind": "lane_args",
+  "area": "lane",
+  "args": {
+   "argv": [
+    "--check"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "once": false,
+    "check": true,
+    "verbose": false
+   }
+  }
+ }
+]
