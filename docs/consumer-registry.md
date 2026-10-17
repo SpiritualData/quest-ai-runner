@@ -1,0 +1,42 @@
+# Consumer registry: adopting QAR in any system
+
+A system built on QAR (a backend that implements QAR ports, passes config, calls the library) keeps
+one CSV that lists every integration point. QAR ships the check, so adopting it is one file and one
+test.
+
+## 1. Write the registry
+
+One row per integration point. Columns (extra columns such as `tracking_status`, `tracking_owner`,
+`tracking_updated` and `tracking_notes` are ignored by the check, use them for review):
+
+| Column | Meaning |
+|---|---|
+| `integration_id` | unique id |
+| `module`, `symbol` | the consumer's dotted module and its class or function |
+| `qar_solution_id` | a `solution_id` from QAR's `docs/structure/solutions.csv`, or empty |
+| `qar_port` | for an implementation: the Protocol class it claims (`RetrievalAdapter`, `EscalationSink`, ...) |
+| `qar_symbol` | for a call or config row: the `quest_ai_runner.module:Name` the consumer uses |
+| `kind` | `implementation` (a consumer class for a QAR port), `config` (config passed to a QAR object), `call` (the consumer calls a QAR symbol), `duplicate` (library plumbing copied or patched in the consumer: must name the action that removes it) |
+| `selected_by` | how the piece is chosen: a config key, a selection-table entry, or hand-wired |
+| `metric` | an existing eval or live proof; empty means the gap and action must say what proof is missing |
+| `tests` | `;`-separated test paths under the root |
+| `status`, `gap`, `action` | `done`, `partial` or `gap`; the last two are required unless `done` |
+
+## 2. Run the check
+
+    python -m quest_ai_runner.structure check-consumer --registry docs/structure/qar_integration.csv \
+        --root . --requirements requirements.txt [--fail-on-lag]
+
+It verifies that every implementation imports and has every public method of the port it claims
+(accepting the port's parameter names), that every solution id exists in the installed QAR, that every
+`qar_symbol` resolves, that no duplicate row lacks an action, that tests exist, and it reports pin lag
+(the commit pinned in the requirements file against the installed checkout). Exit 0 clean, 1 violations.
+Call `quest_ai_runner.structure.consumer_check.check_consumer(registry, root, requirements)` from a
+test so drift fails a normal test run.
+
+## 3. Do not copy library plumbing
+
+Shared helpers belong in the library. Two a consumer would otherwise copy:
+`quest_ai_runner.core.async_bridge` (`run_coro_sync`, `run_detached`: one persistent background loop for
+sync adapter code calling async I/O) and `quest_ai_runner.core.signature_probe` (`accepted_keywords`,
+`accepted_fields`, `filter_keywords`: drop keywords an older installed library lacks).

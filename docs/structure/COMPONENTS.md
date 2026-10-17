@@ -46,6 +46,8 @@ Edit the CSV, never this file. Rules are the numbered ideals in `docs/structure/
 | `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | python scripts/check_structure.py | check exits 0 | docs/structure/README.md | done |
 | `docs-and-meta` | docs | Documentation and repo-level project files | docs/README.md index | exempt: prose,  checked for existence by S2 | docs/README.md | done |
 | `core-selection` | core | Selection as data: resolve(solution_id, name) turns a name into the implementation from the selection table, so switching an implementation is a data or config change | resolve / resolve_config / chosen_name / register,  SELECTION table keyed by solutions.csv solution_id | tests/test_resolve.py (every table entry imports,  precedence name, override, default,  unknown names fail loudly) | docs/structure/README.md, docs/adapters.md | done |
+| `consumer-structure-check` | tools | The generic check any system built on QAR runs on its own integration registry (implementations satisfy their ports, solution ids exist, duplicates carry an action, pin lag) | python -m quest_ai_runner.structure check-consumer --registry <csv> | tests/test_consumer_check.py | docs/consumer-registry.md | done |
+| `core-consumer-helpers` | core | Plumbing every consumer needs and must not copy: one persistent background loop for sync adapters calling async I/O, and signature probes that drop keywords an older installed library lacks | run_coro_sync(), run_detached(),  accepted_keywords(), accepted_fields(), filter_keywords() | tests/test_consumer_helpers.py | docs/consumer-registry.md | done |
 
 ## Open gaps
 

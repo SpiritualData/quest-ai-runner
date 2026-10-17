@@ -63,7 +63,7 @@ watch-a-run:digest_probe,watch-a-run,evaluation/components/overseer_signals/impl
 watch-a-run:live_model,watch-a-run,evaluation/components/overseer_signals/impls/live_model.py,live,,,,,unmeasured,,,,
 detect-stale-cards:store_sha256,detect-stale-cards,evaluation/components/staleness/impls/store_sha256.py,live,yes,4/6,0.0,d9998d31,selected,,,,
 detect-stale-cards:mtime_size,detect-stale-cards,evaluation/components/staleness/impls/mtime_size.py,alternative,,4/6,0.0,d9998d31,measured,,,,
-assemble-a-prompt:live,assemble-a-prompt,evaluation/components/prompt_size/impls/live.py,live,yes,8/8,0.0,8934ae26,selected,,,,
+assemble-a-prompt:live,assemble-a-prompt,evaluation/components/prompt_size/impls/live.py,live,yes,10/11,0.0,14255946,selected,,,,
 search-backends:web_search_backends,search-backends,quest_ai_runner/adapters/web_search_backends.py,live,yes,,,,selected,,,,
 judge-a-decision:qar_judges,judge-a-decision,evaluation/components/judges/impls/qar_judges.py,live,yes,60/61,0.0,61e13f5e,selected,,,,
 judge-a-decision:trust_raw,judge-a-decision,evaluation/components/judges/impls/trust_raw.py,alternative,,15/61,0.0,61e13f5e,measured,,,,
