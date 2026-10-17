@@ -1,0 +1,681 @@
+[
+ {
+  "id": "SEC-001",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: an Anthropic API key",
+  "args": {
+   "parts": [
+    "sk-an",
+    "t-api03-",
+    "AbCdEfGhIjKlMnOpQrStUv"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "anthropic-key"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-002",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: an OpenAI project key",
+  "args": {
+   "parts": [
+    "sk-pro",
+    "j-",
+    "Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56Qr78"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "openai-key"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-003",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a Quest API key",
+  "args": {
+   "parts": [
+    "qs",
+    "k_",
+    "a1b2c3d4e5f6a7b8c9d0e1f2a3b4"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "quest-key"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-004",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: an AWS access key id",
+  "args": {
+   "parts": [
+    "AK",
+    "IAIOSFODNN7",
+    "EXAMPLE"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "aws-key"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-005",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a GitHub token",
+  "args": {
+   "parts": [
+    "gh",
+    "p_",
+    "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "github-token"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-006",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a bearer token in a header",
+  "args": {
+   "parts": [
+    "Authorization: Be",
+    "arer ",
+    "abcdEFGH1234abcdEFGH1234abcd"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "bearer-token"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-007",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a private key block with a real-length body",
+  "args": {
+   "parts": [
+    "-----BEGIN RSA PRI",
+    "VATE KEY-----\n",
+    "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3",
+    "\n-----END RSA PRIVATE KEY-----"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "private-key"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-008",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a Linux home path",
+  "args": {
+   "parts": [
+    "/ho",
+    "me/jane/",
+    "projects/x"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "machine-path"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-009",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a macOS home path",
+  "args": {
+   "parts": [
+    "/Us",
+    "ers/jane/",
+    "Documents"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "machine-path"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-010",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a Windows home path",
+  "args": {
+   "parts": [
+    "C:\\Us",
+    "ers\\jane\\",
+    "x"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "machine-path"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-011",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a Mongo object id",
+  "args": {
+   "parts": [
+    "507f1f77bcf8",
+    "6cd799439011"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "object-id"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-012",
+  "area": "text",
+  "kind": "text",
+  "description": "planted: a real-looking email address",
+  "args": {
+   "parts": [
+    "jane.doe@",
+    "acme-corp.com"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": [
+     "email"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SEC-013",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: a key shape in prose",
+  "args": {
+   "parts": [
+    "Quest keys look like qs",
+    "k_... and Anthropic keys like sk-an",
+    "t-..."
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-014",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: a placeholder home path",
+  "args": {
+   "parts": [
+    "cd /ho",
+    "me/user/project"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-015",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: an angle-bracket home path",
+  "args": {
+   "parts": [
+    "/ho",
+    "me/<name>/x"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-016",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: an example.org address",
+  "args": {
+   "parts": [
+    "write to name@",
+    "example.org"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-017",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: a one-letter test domain",
+  "args": {
+   "parts": [
+    "a@",
+    "x.org"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-018",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: a role mailbox",
+  "args": {
+   "parts": [
+    "security@",
+    "spiritualdata.org"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-019",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: a 40-hex commit id",
+  "args": {
+   "parts": [
+    "5dc9490bb35f9729ef2c",
+    "95d00a19ccd30c26339c"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-020",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: a key header over a stub body",
+  "args": {
+   "parts": [
+    "-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-021",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: a filler object id",
+  "args": {
+   "parts": [
+    "000000000000",
+    "000000000000"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-022",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: a short fake key in a test",
+  "args": {
+   "parts": [
+    "qs",
+    "k_basefallback"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-023",
+  "area": "text",
+  "kind": "text",
+  "description": "placeholder stays quiet: the attribution address",
+  "args": {
+   "parts": [
+    "noreply@",
+    "anthropic.com"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "patterns": []
+   }
+  }
+ },
+ {
+  "id": "SEC-024",
+  "area": "repo",
+  "kind": "repo",
+  "description": "the repo is clean: library code",
+  "args": {
+   "include": [
+    "quest_ai_runner/*"
+   ],
+   "exclude": []
+  },
+  "expect": {
+   "eq": {
+    "findings": []
+   }
+  }
+ },
+ {
+  "id": "SEC-025",
+  "area": "repo",
+  "kind": "repo",
+  "description": "the repo is clean: tests",
+  "args": {
+   "include": [
+    "tests/*"
+   ],
+   "exclude": []
+  },
+  "expect": {
+   "eq": {
+    "findings": []
+   }
+  }
+ },
+ {
+  "id": "SEC-026",
+  "area": "repo",
+  "kind": "repo",
+  "description": "the repo is clean: docs",
+  "args": {
+   "include": [
+    "docs/*"
+   ],
+   "exclude": []
+  },
+  "expect": {
+   "eq": {
+    "findings": []
+   }
+  }
+ },
+ {
+  "id": "SEC-027",
+  "area": "repo",
+  "kind": "repo",
+  "description": "the repo is clean: examples and scripts",
+  "args": {
+   "include": [
+    "examples/*",
+    "scripts/*"
+   ],
+   "exclude": []
+  },
+  "expect": {
+   "eq": {
+    "findings": []
+   }
+  }
+ },
+ {
+  "id": "SEC-028",
+  "area": "repo",
+  "kind": "repo",
+  "description": "the repo is clean: evaluation harness",
+  "args": {
+   "include": [
+    "evaluation/*"
+   ],
+   "exclude": []
+  },
+  "expect": {
+   "eq": {
+    "findings": []
+   }
+  }
+ },
+ {
+  "id": "SEC-029",
+  "area": "repo",
+  "kind": "repo",
+  "description": "the repo is clean: repo root files",
+  "args": {
+   "include": [
+    "[!/]*"
+   ],
+   "exclude": [
+    "*/*"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "findings": []
+   }
+  }
+ },
+ {
+  "id": "SEC-030",
+  "area": "cli",
+  "kind": "cli",
+  "description": "the command exits 1 and names a planted key",
+  "args": {
+   "files": {
+    "notes.md": [
+     "sk-an",
+     "t-api03-",
+     "AbCdEfGhIjKlMnOpQrStUv"
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "anthropic-key",
+    "notes.md:1"
+   ]
+  }
+ },
+ {
+  "id": "SEC-031",
+  "area": "cli",
+  "kind": "cli",
+  "description": "the command never prints the whole secret",
+  "args": {
+   "files": {
+    "notes.md": [
+     "sk-an",
+     "t-api03-",
+     "AbCdEfGhIjKlMnOpQrStUv"
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "not_contains": [
+    "AbCdEfGhIjKlMnOpQrStUv"
+   ]
+  }
+ },
+ {
+  "id": "SEC-032",
+  "area": "cli",
+  "kind": "cli",
+  "description": "the command exits 0 on a clean repository",
+  "args": {
+   "files": {
+    "notes.md": [
+     "Quest keys look like qs",
+     "k_... in prose"
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "clean"
+   ]
+  }
+ },
+ {
+  "id": "SEC-033",
+  "area": "cli",
+  "kind": "cli",
+  "description": "an ignored file is not scanned",
+  "args": {
+   "files": {
+    "local.env": [
+     "qs",
+     "k_",
+     "a1b2c3d4e5f6a7b8c9d0e1f2a3b4"
+    ]
+   },
+   "gitignore": "local.env\n"
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   }
+  }
+ },
+ {
+  "id": "SEC-034",
+  "area": "cli",
+  "kind": "cli",
+  "description": "--staged scans only what is staged",
+  "args": {
+   "files": {
+    "a.md": [
+     "qs",
+     "k_",
+     "a1b2c3d4e5f6a7b8c9d0e1f2a3b4"
+    ],
+    "b.md": [
+     "fine"
+    ]
+   },
+   "stage": [
+    "b.md"
+   ],
+   "argv": [
+    "--staged"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   }
+  }
+ },
+ {
+  "id": "SEC-035",
+  "area": "cli",
+  "kind": "cli",
+  "description": "--staged catches a staged secret",
+  "args": {
+   "files": {
+    "a.md": [
+     "qs",
+     "k_",
+     "a1b2c3d4e5f6a7b8c9d0e1f2a3b4"
+    ]
+   },
+   "stage": [
+    "a.md"
+   ],
+   "argv": [
+    "--staged"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "quest-key"
+   ]
+  }
+ }
+]

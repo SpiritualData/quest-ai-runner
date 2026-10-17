@@ -21,6 +21,8 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   decision-routing roles) and `load_client`, the lightweight sibling of `load_config` for a
   script, notebook, or one-off lookup that only needs a `QuestClient` (see also the README's
   "Scripting the Quest API" and the `quest-ai-runner quest <method>` CLI subcommand).
+- **[Keeping the repository clean](public-hygiene.md)**: the scan that keeps secrets, real machine
+  paths and real addresses out of a public repository.
 - **[Implementing adapters](adapters.md)** — the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
 - **[Direct tools](tools.md)**: actions the brain calls in one planner step with no deep run

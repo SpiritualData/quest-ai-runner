@@ -130,6 +130,8 @@ and keep the tests green.
      && echo "^^ REVIEW: possible secret/PII — do not commit until cleared" || echo "scan clean"
    ```
    (`[0-9a-f]{24}` catches Mongo-style ObjectIds. A hit isn't always a problem — review it.)
+   The scan is also a command, with placeholders (`qsk_...`, `/home/user/`, `name@example.org`) let through:
+   `.venv/bin/python3 -m quest_ai_runner.structure.hygiene --staged` (see `docs/public-hygiene.md`).
 3. Never commit a real `.env`, `qar_state.json`, or any `*_state.json` (all gitignored).
 4. Keep `CHANGELOG.md` (Unreleased) and docs in sync with behavior changes.
 

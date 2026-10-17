@@ -1209,13 +1209,13 @@ def test_one_person_is_several_google_accounts():
     bundle = engine.collect(
         {"quest_id": "q1",
          "context_sources": [{"source": "drive_comments",
-                              "owner": ["work@example.org", "old@gmail.com"]}]},
+                              "owner": ["work@example.org", "old@example.net"]}]},
         card_id="q1")
 
-    assert client.owners_asked == ["work@example.org", "old@gmail.com"]
+    assert client.owners_asked == ["work@example.org", "old@example.net"]
     assert len(bundle.updates) == 2
     assert {u.location for u in bundle.updates} == {
-        "Doc for work@example.org", "Doc for old@gmail.com"}
+        "Doc for work@example.org", "Doc for old@example.net"}
 
 
 def test_a_bare_owner_string_still_works():
