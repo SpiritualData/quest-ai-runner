@@ -8,6 +8,7 @@ declarative edits; ``consumer_repo(dest)`` writes a minimal consumer registry fo
 ``python -m quest_ai_runner.structure check-consumer``.
 """
 import csv
+import hashlib
 import io
 import os
 import shutil
@@ -26,6 +27,7 @@ SOLUTION_COLS = ["solution_id", "problem", "ideal", "port", "implementations", "
                  "metric_command", "gap", "action"]
 RESULT_COLS = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls", "tokens_in",
                "tokens_out", "cost_usd", "seconds", "git_sha", "cases_sha", "model"]
+CASES_SHA = hashlib.sha256(b"[]\n").hexdigest()[:8]   # what the S20 check recomputes from greet/cases.json
 METRIC = "evaluation/components/run.py greet --impl live"
 PYTHON_SOURCES = {
     "quest_ai_runner/__init__.py": '"""Fixture package root."""\n',
@@ -85,7 +87,7 @@ def solution_row():
                 selected_by="selection table", metric="names the person", metric_command=METRIC, gap="", action="")
 
 
-def result_row(impl, passed, cases_sha="1234abcd"):
+def result_row(impl, passed, cases_sha=CASES_SHA):
     return dict(date="2026-10-16", component="greet", impl=impl, cases="2", passed=str(passed), dev=f"{passed}/2",
                 heldout="0/0", model_calls="0", tokens_in="0", tokens_out="0", cost_usd="0.0", seconds="0.0",
                 git_sha="abc1234", cases_sha=cases_sha, model="none")

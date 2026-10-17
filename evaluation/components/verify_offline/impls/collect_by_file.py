@@ -5,6 +5,7 @@ a module that raises on import. The size ceiling is read from ``docs/structure/w
 Zero model calls."""
 import csv
 import tempfile
+import uuid
 from pathlib import Path
 
 from quest_ai_runner import resources  # noqa: F401  (the suite is collected against the live package)
@@ -23,8 +24,9 @@ def shard(args):
 
 def fixture(args):
     with tempfile.TemporaryDirectory() as tmp:
+        unique = uuid.uuid4().hex[:8]   # a module name already imported by an earlier case would clash
         for name, source in args["files"].items():
-            (Path(tmp) / name).write_text(source)
+            (Path(tmp) / f"test_{unique}_{name[5:]}").write_text(source)
         total, errors = collector.collect_files(sorted(Path(tmp).glob("test_*.py")), tmp)
     return {"collected": total, "errors": len(errors)}
 

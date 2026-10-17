@@ -779,8 +779,99 @@
    ]
   },
   "expect": {
-   "rule": "S11",
-   "contains": "no solution"
+   "rule": "S19",
+   "contains": "serves no solution"
+  }
+ },
+ {
+  "id": "CTS-034",
+  "area": "repo",
+  "kind": "repo",
+  "description": "cases changed since the recorded run",
+  "args": {
+   "edits": [
+    {
+     "op": "write",
+     "path": "evaluation/components/greet/cases.json",
+     "content": "[1]\n"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S20",
+   "contains": "other cases"
+  }
+ },
+ {
+  "id": "CTS-035",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a recorded run with no git sha",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "evaluation/components/results.csv",
+     "key_col": "impl",
+     "key": "live",
+     "col": "git_sha",
+     "value": ""
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S20",
+   "contains": "no git_sha"
+  }
+ },
+ {
+  "id": "CTS-036",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a solution with no ideal",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "ideal",
+     "value": ""
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S20",
+   "contains": "ideal"
+  }
+ },
+ {
+  "id": "CTS-037",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a metric that is not a recorded harness run",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "metric_command",
+     "value": "tests/test_greet.py"
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S20",
+   "contains": "not an evaluation/components/run.py command"
   }
  },
  {
