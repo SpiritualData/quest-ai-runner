@@ -157,5 +157,159 @@
     }
    }
   ]
+ },
+ {
+  "id": "OPS-013",
+  "area": "multi step",
+  "message": "Add a goal for this week of three 5K runs, a daily habit of stretching, and a measurable outcome of 55 minutes for the 10K.",
+  "expect": [
+   {
+    "tool": "create_quest_goal",
+    "args_contain": {
+     "title": "5K"
+    }
+   },
+   {
+    "tool": "create_quest_habit",
+    "args_contain": {
+     "name": "stretch"
+    }
+   },
+   {
+    "tool": "add_quest_measurable_outcome",
+    "args_contain": {
+     "text": "55"
+    }
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "OPS-014",
+  "area": "multi step",
+  "message": "Update my current state to say I run 10K in 56 minutes, and conclude my sleep experiment: it helped.",
+  "expect": [
+   {
+    "tool": "update_quest_current_state",
+    "args_contain": {
+     "value": "56"
+    }
+   },
+   {
+    "tool": "update_quest_experiment",
+    "args_contain": {
+     "research_question_id": "rq_sleep",
+     "conclusion": "helped"
+    }
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "OPS-015",
+  "area": "multi step",
+  "message": "Create two goals: one for this week, five easy kilometres, and one for the month of October, 80 km in total.",
+  "expect": [
+   {
+    "tool": "create_quest_goal",
+    "args_contain": {
+     "title": "5"
+    }
+   },
+   {
+    "tool": "create_quest_goal",
+    "args_contain": {
+     "title": "80"
+    }
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "OPS-016",
+  "area": "ambiguous",
+  "message": "Update it to the new number.",
+  "expect": [
+   {
+    "no_writes": true
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "OPS-017",
+  "area": "ambiguous",
+  "message": "Add that to my goals.",
+  "expect": [
+   {
+    "no_writes": true
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "OPS-018",
+  "area": "destructive",
+  "message": "Delete my sleep experiment.",
+  "expect": [
+   {
+    "state_contains": {
+     "experiments": "rq_sleep"
+    }
+   }
+  ],
+  "allowed_calls": [
+   "delete_quest_experiment"
+  ]
+ },
+ {
+  "id": "OPS-019",
+  "area": "unrequested write",
+  "message": "I ran 10K in 57 minutes this morning and felt great!",
+  "expect": [
+   {
+    "no_writes": true
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "OPS-020",
+  "area": "unrequested write",
+  "message": "Maybe I should add a stretching habit someday.",
+  "expect": [
+   {
+    "no_writes": true
+   }
+  ],
+  "heldout": true
+ },
+ {
+  "id": "OPS-021",
+  "area": "exact edit",
+  "message": "Rename my sleep experiment to 'Does a stretching routine help me fall asleep?'",
+  "expect": [
+   {
+    "tool": "update_quest_experiment",
+    "args_contain": {
+     "research_question_id": "rq_sleep",
+     "question": "routine"
+    }
+   }
+  ]
+ },
+ {
+  "id": "OPS-022",
+  "area": "exact edit",
+  "message": "Add a goal for this week: three 5K runs. Do not add any habits or outcomes.",
+  "expect": [
+   {
+    "tool": "create_quest_goal",
+    "args_contain": {
+     "title": "5K"
+    }
+   }
+  ],
+  "heldout": true
  }
 ]

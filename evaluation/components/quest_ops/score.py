@@ -2,7 +2,8 @@
   {"tool": name, "args_contain": {arg: substring}}  -> exactly such a write happened (once)
   {"no_writes": true}                               -> nothing was written at all
   {"state_contains": {"current_state": "58"}}       -> a state field still/now contains text
-Also fails on any write the case did not ask for (``allowed_extra``)."""
+Also fails on any write the case did not ask for, except tool names listed in the case's ``allowed_calls``
+(a preview call that changes nothing, such as an unconfirmed delete, which the state check then pins)."""
 from quest_ops.fake_quest import WORLD
 
 
@@ -10,6 +11,8 @@ def score_case(fn, case):
     WORLD.reset()
     out = fn(case["message"], WORLD)
     writes = WORLD.mutations()
+    allowed = set(case.get("allowed_calls", []))
+    writes = [w for w in writes if w[0] not in allowed]
     problems, used = [], set()
     for chk in case["expect"]:
         if chk.get("no_writes"):
