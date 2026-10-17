@@ -99,7 +99,7 @@ PORT_MODULES = ("quest_ai_runner.core.adapters", "quest_ai_runner.adapters.card_
                 "quest_ai_runner.adapters.reference_resolver", "quest_ai_runner.adapters.quest_api_card_repository",
                 "quest_ai_runner.adapters.web_search_backends", "quest_ai_runner.runner.feedback_ledger",
                 "quest_ai_runner.runner.context_sources_base", "quest_ai_runner.core.inbox",
-                "quest_ai_runner.core.recent_context")
+                "quest_ai_runner.core.recent_context", "quest_ai_runner.core.anticipation_store")
 
 
 def resolve_port(port: str) -> Any:
