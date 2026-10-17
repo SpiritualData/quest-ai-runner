@@ -7,6 +7,7 @@ store class fills the slot is chosen by ``core.resolve`` through ``cfg.selection
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import threading
 from typing import TYPE_CHECKING, Callable, Optional
@@ -111,6 +112,13 @@ def _resolve_context_assembler_base(
             try:
                 from .adapters.quest_api_card_repository import (
                     QuestApiCardRepository, QuestApiCardVectorStore)
+                # The offline listing cache is the "cache-cards" selection (durable file cache by
+                # default), kept apart per backend and scope so lanes never share a listing.
+                lane_key = hashlib.sha256("|".join((
+                    _qs["base_url"], card_scope["team_id"], card_scope["org_id"],
+                    _qs["user_hint"])).encode()).hexdigest()[:16]
+                _card_cache = resolve("cache-cards", overrides=cfg.selections)(
+                    os.path.join(cards_dir, ".api-card-cache", lane_key))
                 _card_repository = QuestApiCardRepository(
                     base_url=_qs["base_url"],
                     api_key=_qs["api_key"],
@@ -118,6 +126,7 @@ def _resolve_context_assembler_base(
                     team_id=card_scope["team_id"],
                     org_id=card_scope["org_id"],
                     on_error=notify,
+                    cache=_card_cache,
                 )
                 _user = _card_repository.resolve_user_id()
                 _quest_cards_active = True

@@ -482,12 +482,15 @@ sources, which the orchestrator emits as a status event. A failed listing serves
 an error. If whoami fails the repository is still the Quest backend (a lane does not quietly split
 into local cards), the error is logged, and the identity is retried on the next call.
 
-### Offline cache: a seam only
+### Offline cache
 
-`CardCache` (`adapters/quest_api_card_repository.py`) is the interface an offline listing cache and
-write outbox would implement (`load_listing`, `store_listing`, `enqueue_write`, `pending_writes`).
-The default `NullCardCache` stores nothing. Nothing else is implemented; failed writes are reported and
-dropped.
+`CardCache` (`adapters/quest_api_card_repository.py`) is the interface for an offline listing cache and
+write outbox (`load_listing`, `store_listing`, `enqueue_write`, `pending_writes`). The default is
+`FileCardCache` (`adapters/card_cache_file.py`), chosen through the `cache-cards` row of the selection
+table (`RunnerConfig.selections`, `null` for none): two atomic JSON files per lane under
+`<cards_dir>/.api-card-cache/<lane>/`. When the backend cannot be reached on a cold start, the repository
+serves the stored listing (the error stays loud and counted) and does a full refresh on the next
+successful call. Failed writes are queued, oldest first; nothing replays them yet.
 
 ### Opting out
 

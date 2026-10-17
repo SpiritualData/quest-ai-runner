@@ -31,8 +31,9 @@ backend's own reason, counted (``error_count``), kept (``last_error``), reported
 the orchestrator emits as a status event. A failed read serves the last good listing (or nothing if
 there never was one) but is never silent: the lane keeps running and every failure is visible.
 
-OFFLINE CACHE SEAM. ``CardCache`` is an interface only; the default ``NullCardCache`` stores nothing.
-A future offline cache/outbox implements it and is passed as ``cache=``. See ``CardCache``.
+OFFLINE CACHE SEAM. ``CardCache`` is the interface; ``NullCardCache`` stores nothing and ``FileCardCache``
+(``card_cache_file.py``) is the durable one. On a cold start with the backend down the repository serves
+the cache's stored listing. A cache is passed as ``cache=``. See ``CardCache``.
 """
 from __future__ import annotations
 
@@ -266,9 +267,9 @@ class QuestCardApiError(Exception):
 
 
 class CardCache(Protocol):
-    """INTERFACE SEAM for an offline card cache and write outbox. Nothing implements it yet.
+    """INTERFACE SEAM for an offline card cache and write outbox (``FileCardCache`` is the durable one).
 
-    A future implementation lets a lane keep working when the backend is unreachable: ``load_listing``
+    An implementation lets a lane keep working when the backend is unreachable: ``load_listing``
     seeds a cold start, ``store_listing`` is called after every successful full or delta refresh,
     and ``enqueue_write`` is offered every write that FAILED so it can be replayed later
     (``pending_writes``). The repository never depends on a cache for correctness: with the default
@@ -289,7 +290,11 @@ class CardCache(Protocol):
 
 
 class NullCardCache:
-    """The default ``CardCache``: stores nothing, queues nothing."""
+    """Stores nothing, queues nothing. ``directory`` is accepted (and ignored) so it is built the same way
+    as ``FileCardCache``."""
+
+    def __init__(self, directory: str = "") -> None:
+        self.directory = directory
 
     def load_listing(self) -> Optional[Tuple[Dict[str, Dict[str, Any]], float]]:
         return None
@@ -334,7 +339,7 @@ class QuestApiCardRepository:
         Optional ``callable(message)`` invoked (de-duplicated) when a call fails, so the host can
         surface it in its own status channel.
     cache:
-        A ``CardCache`` (seam only; default ``NullCardCache``).
+        A ``CardCache`` (default ``NullCardCache``; ``FileCardCache`` is durable).
     """
 
     def __init__(
@@ -370,6 +375,7 @@ class QuestApiCardRepository:
         self._cards: Optional[Dict[str, Dict[str, Any]]] = None
         self._max_updated = 0.0
         self._count_offset = 0
+        self._warm_only = False
         self._listing_at = 0.0
         self._stamp: Optional[Dict[str, Any]] = None
         self._stamp_at = 0.0
@@ -654,25 +660,43 @@ class QuestApiCardRepository:
         if (self._cards is not None and self._listing_at
                 and (time.monotonic() - self._listing_at) < _LISTING_TTL_S):
             return self._cards
-        stamp = self._fetch_stamp(max_age_s=_LISTING_TTL_S)
         if self._cards is None:
-            warm = self._cache.load_listing()
-            self._full_refresh(stamp)
-            del warm
-        elif float(stamp.get("max_updated_at") or 0.0) != self._max_updated or (
-                isinstance(stamp.get("count"), int)
-                and len(self._cards) - self._count_offset != stamp["count"]):
-            delta = self._fetch_pages({"updated_after": repr(self._max_updated)})
-            for cid, card in delta.items():
-                self._cards[cid] = card
-            self._max_updated = float(stamp.get("max_updated_at") or self._max_updated)
-            if isinstance(stamp.get("count"), int) and (
-                    len(self._cards) - self._count_offset != stamp["count"]):
+            # Cold start. If the backend cannot be reached, serve the stored listing (still loud: the
+            # error was logged and counted) and force a full refresh on the next successful call.
+            try:
+                self._full_refresh(self._fetch_stamp(max_age_s=_LISTING_TTL_S))
+            except QuestCardApiError:
+                warm = self._cache.load_listing()
+                if warm:
+                    self._cards, self._max_updated = dict(warm[0]), warm[1]
+                    self._scope_of = {cid: (str(c.get("team_id") or ""), str(c.get("org_id") or ""))
+                                      for cid, c in self._cards.items()}
+                    self._warm_only = True
+                raise
+        else:
+            stamp = self._fetch_stamp(max_age_s=_LISTING_TTL_S)
+            if self._warm_only:
                 self._full_refresh(stamp)
-            else:
-                self._cache.store_listing(self._cards, self._max_updated)
+                self._warm_only = False
+            elif float(stamp.get("max_updated_at") or 0.0) != self._max_updated or (
+                    isinstance(stamp.get("count"), int)
+                    and len(self._cards) - self._count_offset != stamp["count"]):
+                self._delta_refresh(stamp)
         self._listing_at = time.monotonic()
         return self._cards
+
+    def _delta_refresh(self, stamp: Dict[str, Any]) -> None:
+        """Merge the cards written since the last ``max_updated_at``; one full refresh if the count
+        still disagrees (something was deleted)."""
+        delta = self._fetch_pages({"updated_after": repr(self._max_updated)})
+        for cid, card in delta.items():
+            self._cards[cid] = card
+        self._max_updated = float(stamp.get("max_updated_at") or self._max_updated)
+        if isinstance(stamp.get("count"), int) and (
+                len(self._cards) - self._count_offset != stamp["count"]):
+            self._full_refresh(stamp)
+        else:
+            self._cache.store_listing(self._cards, self._max_updated)
 
     def load_all(self) -> Dict[str, Dict[str, Any]]:
         """Every readable card as ``{card_id: card}``. On a backend failure the error is logged and

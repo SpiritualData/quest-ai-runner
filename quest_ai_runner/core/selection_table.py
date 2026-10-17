@@ -94,7 +94,7 @@ SELECTION = {
     "persist-predictions": {"default": "file", "implementations": {"file": _C + "anticipation_store:FilePredictionStore"}},
     "receive-input-mid-run": {"default": "in_memory", "implementations": {"in_memory": _C + "inbox:InMemoryInbox"}},
     "resolve-references": {"default": "note", "implementations": {"note": _A + "reference_resolver:NoteResolver"}},
-    "cache-cards": {"default": "null", "implementations": {
-        "quest_api": _A + "quest_api_card_repository:CardCache",
+    "cache-cards": {"default": "file", "implementations": {
+        "file": _A + "card_cache_file:FileCardCache",
         "null": _A + "quest_api_card_repository:NullCardCache"}},
 }
