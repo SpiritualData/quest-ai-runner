@@ -85,3 +85,35 @@ def test_solutions_and_results_gate(tmp_path):
     assert problems == ["C9 b: the integration point sits in no solution (solution_id is empty)"]
     (tmp_path / "t.py").write_text("x = 2\n")
     assert any("C10 s1: stale" in p for p in check_consumer(path, tmp_path, solutions=sols, results=res).problems)
+
+
+def test_eval_and_invariant_solutions_are_checked(tmp_path):
+    (tmp_path / "t.py").write_text("x = 1\n")
+    make_module(tmp_path, "good_escalation3", """
+        from quest_ai_runner.core.adapters import EscalationSinkBase
+        class Sink(EscalationSinkBase):
+            def escalate(self, escalation):
+                return None
+    """)
+    reg = tmp_path / "reg.csv"
+    with reg.open("w", newline="") as handle:
+        w = csv.DictWriter(handle, fieldnames=list(REQUIRED_COLUMNS) + ["solution_id"])
+        w.writeheader()
+        base = {**BASE, "module": "good_escalation3", "symbol": "Sink", "qar_solution_id": "escalate-to-a-human",
+                "qar_port": "EscalationSink", "kind": "implementation"}
+        for i, sid in enumerate(("e", "i", "bad")):
+            w.writerow({**base, "integration_id": f"r{i}", "solution_id": sid})
+    sols = tmp_path / "sols.csv"
+    sols.write_text("solution_id,selected,metric_files,metric_kind,invariant_reason,component,component_impl\n"
+                    "e,S,t.py,eval,,routing,haiku\ni,S,t.py,invariant,holds or not,,\nbad,S,t.py,invariant,,,\n")
+    from quest_ai_runner.structure.consumer_check import cases_hash
+    sha = cases_hash(["t.py"], tmp_path)
+    res = tmp_path / "res.csv"
+    res.write_text("solution_id,component,impl,kind,cases,passed,git_sha,cases_sha\n"
+                   f"e,e,e,offline,1,1,abc,{sha}\ni,i,i,offline,1,1,abc,{sha}\nbad,b,b,offline,1,1,abc,{sha}\n")
+    problems = check_consumer(reg, tmp_path, solutions=sols, results=res).problems
+    assert any("C11 e: no recorded component run" in p for p in problems)
+    assert any("C11 bad: an invariant solution states why" in p for p in problems)
+    assert not any("C11 i:" in p for p in problems)
+    res.write_text(res.read_text() + f"e,routing,haiku,component,41,36,abc,{sha}\n")
+    assert not any("C11 e" in p for p in check_consumer(reg, tmp_path, solutions=sols, results=res).problems)

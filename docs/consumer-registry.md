@@ -42,6 +42,13 @@ Every integration point must sit in a solution with a current result. Give the c
 selected implementation, a missing, failing or stale result (the case files changed since the run)
 fails. The solution/problem/ideal/metric shape is QAR's own `docs/structure/` standard.
 
+Two more optional solution columns say what kind of metric a solution has, as QAR's own standard does:
+`metric_kind` is `eval` (a scored component where the best implementation can vary; name its `component` and
+`component_impl`, and record a `kind=component` row in `results.csv` for them) or `invariant` (a rule that holds
+or does not; `invariant_reason` says why best cannot vary). A consumer can run a QAR component against its own
+implementation without copying the component: the harness accepts `--impl module:build` for an implementation
+that lives outside the library.
+
 ## 3. Do not copy library plumbing
 
 Shared helpers belong in the library. Two a consumer would otherwise copy:

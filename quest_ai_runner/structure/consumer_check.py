@@ -34,6 +34,12 @@ solution (the optional registry column ``solution_id``) with a CURRENT recorded 
 C9 the row names a solution that exists and has a selected implementation; C10 the solution has a
 result with a git sha and a cases hash, every case passing (or the solution's gap says why not), and the hash still matches the metric files
 (a stale hash means the cases changed since the run).
+
+Optional solution columns state what KIND of metric each solution has, the way QAR's own standard does:
+``metric_kind`` is ``eval`` (a scored component where the best implementation can vary) or ``invariant`` (a
+rule that holds or does not, with ``invariant_reason`` saying why "best" cannot vary); an ``eval`` solution names
+its ``component`` and ``component_impl`` and C11 requires a recorded ``kind=component`` result row for them
+with a git sha and a cases hash.
 """
 from __future__ import annotations
 
@@ -317,6 +323,26 @@ def check_solutions(report: ConsumerReport, rows: List[Dict[str, str]], solution
         files = [f for f in sol.get("metric_files", "").split(";") if f.strip()]
         if files and all((root / f).exists() for f in files) and cases_hash(files, root) != res.get("cases_sha", ""):
             report.problems.append(f"C10 {sid}: stale result, the metric files changed since it was recorded")
+    for sid in sorted(used):
+        sol = sols[sid]
+        kind = sol.get("metric_kind", "").strip()
+        if not kind:
+            continue
+        if kind == "invariant":
+            if not sol.get("invariant_reason", "").strip():
+                report.problems.append(f"C11 {sid}: an invariant solution states why best cannot vary (invariant_reason)")
+        elif kind == "eval":
+            comp, impl = sol.get("component", "").strip(), sol.get("component_impl", "").strip()
+            row = next((r for r in reversed(read_rows(results)) if r.get("kind") == "component"
+                        and r.get("solution_id") == sid and r.get("component") == comp and r.get("impl") == impl), None)
+            if not comp or not impl:
+                report.problems.append(f"C11 {sid}: an eval solution names its component and component_impl")
+            elif row is None:
+                report.problems.append(f"C11 {sid}: no recorded component run for {comp}/{impl}")
+            elif not row.get("git_sha", "").strip() or not row.get("cases_sha", "").strip():
+                report.problems.append(f"C11 {sid}: the component run {comp}/{impl} lacks a git sha or a cases hash")
+        else:
+            report.problems.append(f"C11 {sid}: metric_kind {kind!r} is not eval or invariant")
     report.notes.append(f"{len(used)} solutions carry integration points; {len(sols) - len(used)} defined without one")
 
 
