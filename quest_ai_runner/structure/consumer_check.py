@@ -23,10 +23,21 @@ Checks: C1 columns and kinds; C2 solution ids exist; C3 an implementation import
 public method of the port it claims, accepting the port's parameter names; C4 a call or config row's
 ``qar_symbol`` resolves in the installed library; C5 duplicate rows state an action; C6 status, gap and
 action; C7 tests exist; C8 pin lag (reported, never a violation unless the caller asks).
+
+With ``solutions=`` and ``results=`` CSVs the check also enforces that every integration point sits in a
+solution (the optional registry column ``solution_id``) with a CURRENT recorded result:
+
+    solutions.csv   solution_id, selected, metric_files (';'-separated paths under the root hashed as the cases)
+    results.csv     solution_id, cases, passed, git_sha, cases_sha (the latest row per solution counts)
+
+C9 the row names a solution that exists and has a selected implementation; C10 the solution has a
+result with a git sha and a cases hash, every case passing, and the hash still matches the metric files
+(a stale hash means the cases changed since the run).
 """
 from __future__ import annotations
 
 import csv
+import hashlib
 import importlib
 import inspect
 import re
@@ -84,6 +95,27 @@ def resolve_symbol(dotted: str) -> Any:
     return obj
 
 
+PORT_MODULES = ("quest_ai_runner.core.adapters", "quest_ai_runner.adapters.card_repository",
+                "quest_ai_runner.adapters.reference_resolver", "quest_ai_runner.adapters.quest_api_card_repository",
+                "quest_ai_runner.adapters.web_search_backends", "quest_ai_runner.runner.feedback_ledger",
+                "quest_ai_runner.runner.context_sources_base", "quest_ai_runner.core.inbox",
+                "quest_ai_runner.core.recent_context")
+
+
+def resolve_port(port: str) -> Any:
+    """A port by ``module:Name``, or by bare name searched in the modules that define QAR's ports."""
+    if ":" in port or "." in port:
+        return resolve_symbol(port)
+    for module_name in PORT_MODULES:
+        try:
+            found = getattr(importlib.import_module(module_name), port, None)
+        except Exception:  # noqa: BLE001 - an optional dependency may be absent
+            continue
+        if found is not None:
+            return found
+    raise AttributeError(f"{port} is not defined in any of {', '.join(PORT_MODULES)}")
+
+
 def port_methods(port: Any) -> Dict[str, inspect.Signature]:
     """The public callable members of a Protocol class, with signatures."""
     methods: Dict[str, inspect.Signature] = {}
@@ -98,7 +130,11 @@ def port_methods(port: Any) -> Dict[str, inspect.Signature]:
 
 
 def conformance_problems(cls: Any, port: Any) -> List[str]:
-    """Why ``cls`` does not satisfy ``port``: a missing method, or a parameter name it cannot accept."""
+    """Why ``cls`` does not satisfy ``port``: a missing method, or a REQUIRED parameter name it cannot accept.
+
+    A port parameter with a default is an optional capability the library passes only after inspecting
+    the implementation's signature, so an implementation that lacks it is behind, not wrong.
+    """
     problems: List[str] = []
     for name, wanted in port_methods(port).items():
         have = getattr(cls, name, None)
@@ -115,6 +151,8 @@ def conformance_problems(cls: Any, port: Any) -> List[str]:
         for pname, param in wanted.parameters.items():
             if pname in ("self", "cls") or param.kind in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL):
                 continue
+            if param.default is not inspect.Parameter.empty:
+                continue  # optional capability: the library probes the signature before passing it
             if pname not in accepted:
                 problems.append(f"{name} does not accept parameter {pname!r}")
     return problems
@@ -190,14 +228,15 @@ def check_row(row: Dict[str, str], root: Path, solutions: set, report: ConsumerR
                 cls = None
             if cls is not None and port:
                 try:
-                    port_cls = resolve_symbol(f"quest_ai_runner.core.adapters:{port}")
+                    port_cls = resolve_port(port)
                 except Exception:  # noqa: BLE001
-                    report.problems.append(f"C3 {rid}: port {port!r} is not defined in quest_ai_runner.core.adapters")
+                    report.problems.append(f"C3 {rid}: port {port!r} is not defined by the library")
                 else:
                     for why in conformance_problems(cls, port_cls):
                         report.problems.append(f"C3 {rid}: {row['symbol']} does not satisfy {port}: {why}")
-            elif cls is not None:
-                report.problems.append(f"C3 {rid}: an implementation row must name the port it claims")
+            elif cls is not None and not (row["gap"].strip() and row["action"].strip()):
+                report.problems.append(f"C3 {rid}: an implementation row must name the port it claims, or state the gap "
+                                       f"(the library has no Protocol for it) and the action")
     elif kind in ("call", "config"):
         qar_symbol = row["qar_symbol"].strip()
         if not qar_symbol:
@@ -226,7 +265,57 @@ def check_row(row: Dict[str, str], root: Path, solutions: set, report: ConsumerR
             report.problems.append(f"C7 {rid}: test {test} does not exist under {root}")
 
 
-def check_consumer(registry: Path, root: Path, requirements: Optional[Path] = None) -> ConsumerReport:
+def cases_hash(files: List[str], root: Path) -> str:
+    """sha256 (first 12 hex) over the named files' bytes, in sorted order: the identity of a case set."""
+    digest = hashlib.sha256()
+    for name in sorted(files):
+        digest.update(name.encode())
+        digest.update((Path(root) / name).read_bytes())
+    return digest.hexdigest()[:12]
+
+
+def read_rows(path: Path) -> List[Dict[str, str]]:
+    """A CSV as a list of dicts with empty-string defaults."""
+    with Path(path).open(newline="", encoding="utf-8") as handle:
+        return [{k: (v or "") for k, v in row.items() if k} for row in csv.DictReader(handle)]
+
+
+def check_solutions(report: ConsumerReport, rows: List[Dict[str, str]], solutions: Path, results: Path, root: Path) -> None:
+    """C9 and C10: every integration point sits in a solution with a current recorded result."""
+    sols = {r["solution_id"]: r for r in read_rows(solutions)}
+    latest: Dict[str, Dict[str, str]] = {}
+    for r in read_rows(results):
+        latest[r["solution_id"]] = r
+    used = set()
+    for row in rows:
+        sid = row.get("solution_id", "").strip()
+        rid = row["integration_id"]
+        if not sid:
+            report.problems.append(f"C9 {rid}: the integration point sits in no solution (solution_id is empty)")
+        elif sid not in sols:
+            report.problems.append(f"C9 {rid}: solution {sid!r} is not in {solutions.name}")
+        else:
+            used.add(sid)
+    for sid in sorted(used):
+        sol = sols[sid]
+        if not sol.get("selected", "").strip():
+            report.problems.append(f"C9 {sid}: no selected implementation")
+        res = latest.get(sid)
+        if res is None:
+            report.problems.append(f"C10 {sid}: no recorded result")
+            continue
+        if not res.get("git_sha", "").strip() or not res.get("cases_sha", "").strip():
+            report.problems.append(f"C10 {sid}: the latest result lacks a git sha or a cases hash")
+        if res.get("passed", "") != res.get("cases", "x"):
+            report.problems.append(f"C10 {sid}: latest result {res.get('passed')}/{res.get('cases')} is not all passing")
+        files = [f for f in sol.get("metric_files", "").split(";") if f.strip()]
+        if files and all((root / f).exists() for f in files) and cases_hash(files, root) != res.get("cases_sha", ""):
+            report.problems.append(f"C10 {sid}: stale result, the metric files changed since it was recorded")
+    report.notes.append(f"{len(used)} solutions carry integration points; {len(sols) - len(used)} defined without one")
+
+
+def check_consumer(registry: Path, root: Path, requirements: Optional[Path] = None,
+                   solutions: Optional[Path] = None, results: Optional[Path] = None) -> ConsumerReport:
     """Check every row of a consumer registry against the installed QAR; optionally report pin lag."""
     report = ConsumerReport()
     root = root.resolve()
@@ -239,7 +328,7 @@ def check_consumer(registry: Path, root: Path, requirements: Optional[Path] = No
             report.problems.append(f"C1 {registry}: missing columns {', '.join(missing)}")
             return report
         rows = [{k: (v or "") for k, v in row.items() if k} for row in reader]
-    solutions, full = known_solution_ids()
+    known, full = known_solution_ids()
     if not full:
         report.notes.append("solutions.csv not found next to the library; solution ids checked against the selection table only")
     seen = set()
@@ -248,7 +337,9 @@ def check_consumer(registry: Path, root: Path, requirements: Optional[Path] = No
         if rid in seen:
             report.problems.append(f"C1 {rid}: duplicate integration_id")
         seen.add(rid)
-        check_row(row, root, solutions, report)
+        check_row(row, root, known, report)
+    if solutions is not None and results is not None:
+        check_solutions(report, rows, Path(solutions), Path(results), root)
     if requirements is not None:
         check_pin(report, Path(requirements))
     return report

@@ -57,3 +57,31 @@ def test_read_pin_parses_a_git_pin(tmp_path):
     req = tmp_path / "requirements.txt"
     req.write_text("quest-ai-runner @ git+https://example.com/x.git@61d93e6e4eb09ae926b23ee704c91912cefbc331\n")
     assert read_pin(req) == "61d93e6e4eb09ae926b23ee704c91912cefbc331"
+
+
+def test_solutions_and_results_gate(tmp_path):
+    from quest_ai_runner.structure.consumer_check import cases_hash
+    (tmp_path / "t.py").write_text("x = 1\n")
+    make_module(tmp_path, "good_escalation2", """
+        from quest_ai_runner.core.adapters import EscalationSinkBase
+        class Sink(EscalationSinkBase):
+            def escalate(self, escalation):
+                return None
+    """)
+    path = tmp_path / "reg.csv"
+    cols = list(REQUIRED_COLUMNS) + ["solution_id"]
+    with path.open("w", newline="") as handle:
+        w = csv.DictWriter(handle, fieldnames=cols)
+        w.writeheader()
+        base = {**BASE, "module": "good_escalation2", "symbol": "Sink", "qar_solution_id": "escalate-to-a-human",
+                "qar_port": "EscalationSink", "kind": "implementation"}
+        w.writerow({**base, "integration_id": "a", "solution_id": "s1"})
+        w.writerow({**base, "integration_id": "b", "solution_id": ""})
+    sols = tmp_path / "sols.csv"
+    sols.write_text("solution_id,selected,metric_files\ns1,Sink,t.py\n")
+    res = tmp_path / "res.csv"
+    res.write_text(f"solution_id,cases,passed,git_sha,cases_sha\ns1,3,3,abc1234,{cases_hash(['t.py'], tmp_path)}\n")
+    problems = check_consumer(path, tmp_path, solutions=sols, results=res).problems
+    assert problems == ["C9 b: the integration point sits in no solution (solution_id is empty)"]
+    (tmp_path / "t.py").write_text("x = 2\n")
+    assert any("C10 s1: stale" in p for p in check_consumer(path, tmp_path, solutions=sols, results=res).problems)

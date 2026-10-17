@@ -90,6 +90,11 @@ def _point_id(scope: Dict[str, Any], card_id: str) -> int:
     return int(digest[:15], 16)
 
 
+# The public name for a consumer that must compute the same point id (for example to delete a card it
+# stored through this repository) without importing a private function.
+scope_point_id = _point_id
+
+
 def _connect(
     *,
     client: Any = None,

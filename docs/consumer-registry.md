@@ -12,6 +12,7 @@ One row per integration point. Columns (extra columns such as `tracking_status`,
 | Column | Meaning |
 |---|---|
 | `integration_id` | unique id |
+| `solution_id` | the consumer's own solution this point belongs to (needed with `--solutions`/`--results`) |
 | `module`, `symbol` | the consumer's dotted module and its class or function |
 | `qar_solution_id` | a `solution_id` from QAR's `docs/structure/solutions.csv`, or empty |
 | `qar_port` | for an implementation: the Protocol class it claims (`RetrievalAdapter`, `EscalationSink`, ...) |
@@ -33,6 +34,13 @@ It verifies that every implementation imports and has every public method of the
 (the commit pinned in the requirements file against the installed checkout). Exit 0 clean, 1 violations.
 Call `quest_ai_runner.structure.consumer_check.check_consumer(registry, root, requirements)` from a
 test so drift fails a normal test run.
+
+Every integration point must sit in a solution with a current result. Give the check
+`--solutions solutions.csv --results results.csv`: `solutions.csv` has `solution_id`, `selected`, and
+`metric_files` (the case files); `results.csv` has `solution_id`, `cases`, `passed`, `git_sha`,
+`cases_sha` (use `consumer_check.cases_hash(files, root)`). A point in no solution, a solution with no
+selected implementation, a missing, failing or stale result (the case files changed since the run)
+fails. The solution/problem/ideal/metric shape is QAR's own `docs/structure/` standard.
 
 ## 3. Do not copy library plumbing
 

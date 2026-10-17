@@ -35,3 +35,11 @@ def test_signature_probes():
     assert accepted_fields(Cfg) == {"x", "y"}
     assert filter_keywords({"a": 1, "z": 2}, {"a"}, "t") == {"a": 1}
     assert filter_keywords({"z": 2}, None, "t") == {"z": 2}
+
+
+def test_scaffolding_strip_cuts_the_tail_and_reasoning_markup():
+    from quest_ai_runner.core.scaffolding import sanitize_user_text, strip_future_context
+    text = "Done.\n=== FUTURE CONTEXT (for similar requests by this user) ===\n- a"
+    assert strip_future_context(text) == "Done."
+    assert sanitize_user_text("<think>hmm</think>Answer") == "Answer"
+    assert sanitize_user_text("```\n<think>x</think>\n```") == "```\n<think>x</think>\n```"
