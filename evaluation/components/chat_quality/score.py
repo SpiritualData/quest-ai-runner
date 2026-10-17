@@ -19,5 +19,7 @@ def score_case(fn, case):
         return dict(ok=False, got="error", note=str(record["error"])[:200])
     hard = (record.get("precheck") or {}).get("hard_failures") or []
     score = record.get("score")
-    note = "; ".join(hard) if hard else ((record.get("judged") or {}).get("summary") or "")[:120]
+    judged = record.get("judged") or {}
+    summary = judged.get("summary") or (judged.get("verdict") or {}).get("summary") or ""
+    note = "; ".join(hard) if hard else summary[:160]
     return dict(ok=bool(record.get("passed")), got="score " + ("n/a" if score is None else f"{score:.2f}"), note=note)

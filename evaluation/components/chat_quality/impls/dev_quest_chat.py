@@ -58,6 +58,7 @@ def build(meter):
             raise BudgetExceeded(f"model-call budget {meter.max_calls} reached before {case['id']}")
         before = inprocess.usage_totals() if INPROCESS else None
         record, holder["world"] = runner.run_serial_case(case, holder["world"])
+        runner.save_result(record)  # the transcript and the judge's reasons, for reading why a case failed
         if INPROCESS:
             after = inprocess.usage_totals()
             meter.record(after[0] - before[0])

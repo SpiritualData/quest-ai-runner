@@ -25,6 +25,11 @@ def test_scorer_reads_pass_flag_hard_failures_and_errors():
     assert not err["ok"] and err["got"] == "error"
 
 
+def test_the_note_is_the_judges_reason_when_there_is_no_hard_failure():
+    record = {"passed": False, "score": 0.4, "judged": {"verdict": {"summary": "never connected the preference"}}}
+    assert score.score_case(lambda c: record, {})["note"] == "never connected the preference"
+
+
 def test_smoke_cases_are_valid_dataset_cases():
     cases = runner.load_example_cases()
     assert [c["id"] for c in cases] == ["EX-READ-1", "EX-WRITE-1"]
