@@ -218,3 +218,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-16,chat_quality,reference_replies,2,2,2/2,0/0,0,0,0,0.0,0.0,1ef426e-dirty,d885d6df,none
 2026-10-16,select_an_implementation,live_resolver,36,36,28/28,8/8,0,0,0,0.0,0.0,1ef426e-dirty,bbbb529a,none
 2026-10-16,check_the_structure,live_checker,63,63,63/63,0/0,0,0,0,0.0,11.9,1ef426e-dirty,c8d5ba7e,none
+2026-10-16,check_the_structure,live_checker,57,57,57/57,0/0,0,0,0,0.0,10.5,fbe1773,2c93cbe3,none
+2026-10-16,explain_qar,shipped_docs,407,407,407/407,0/0,0,0,0,0.0,0.2,fbe1773,e63b74ab,none
