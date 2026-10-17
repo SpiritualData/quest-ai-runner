@@ -1,0 +1,489 @@
+[
+ {
+  "id": "OFF-001",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_a*.py (22 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_a*.py",
+   "min_collected": 630
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-002",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_b*.py (7 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_b*.py",
+   "min_collected": 97
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-003",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_c*.py (53 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_c*.py",
+   "min_collected": 825
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-004",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_d*.py (19 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_d*.py",
+   "min_collected": 226
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-005",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_e*.py (6 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_e*.py",
+   "min_collected": 95
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-006",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_f*.py (11 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_f*.py",
+   "min_collected": 283
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-007",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_g*.py (14 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_g*.py",
+   "min_collected": 177
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-008",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_h*.py (2 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_h*.py",
+   "min_collected": 16
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-009",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_i*.py (7 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_i*.py",
+   "min_collected": 88
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-010",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_l*.py (8 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_l*.py",
+   "min_collected": 111
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-011",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_m*.py (11 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_m*.py",
+   "min_collected": 165
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-012",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_n*.py (7 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_n*.py",
+   "min_collected": 115
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-013",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_o*.py (7 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_o*.py",
+   "min_collected": 191
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-014",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_p*.py (22 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_p*.py",
+   "min_collected": 355
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-015",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_q*.py (34 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_q*.py",
+   "min_collected": 571
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-016",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_r*.py (23 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_r*.py",
+   "min_collected": 387
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-017",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_s*.py (13 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_s*.py",
+   "min_collected": 128
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-018",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_t*.py (9 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_t*.py",
+   "min_collected": 84
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-019",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_u*.py (5 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_u*.py",
+   "min_collected": 88
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-020",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_v*.py (8 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_v*.py",
+   "min_collected": 203
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-021",
+  "area": "shard",
+  "kind": "shard",
+  "description": "tests/test_w*.py (12 files) collects with no error and no lost test",
+  "args": {
+   "pattern": "tests/test_w*.py",
+   "min_collected": 297
+  },
+  "expect": {
+   "eq": {
+    "errors": 0,
+    "meets_floor": true
+   }
+  }
+ },
+ {
+  "id": "OFF-022",
+  "area": "coverage",
+  "kind": "coverage",
+  "description": "every tests/test_*.py file belongs to a shard",
+  "args": {
+   "shards": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "l",
+    "m",
+    "n",
+    "o",
+    "p",
+    "q",
+    "r",
+    "s",
+    "t",
+    "u",
+    "v",
+    "w"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "uncovered": []
+   }
+  }
+ },
+ {
+  "id": "OFF-023",
+  "area": "size",
+  "kind": "size",
+  "description": "no test file is over the module-size ceiling without an S4 waiver",
+  "args": {},
+  "expect": {
+   "eq": {
+    "oversize": []
+   }
+  }
+ },
+ {
+  "id": "OFF-024",
+  "area": "fixture",
+  "kind": "fixture",
+  "description": "a clean file collects its four tests",
+  "args": {
+   "files": {
+    "test_ok.py": "import pytest\n\n\n@pytest.mark.parametrize('x', [1, 2, 3])\ndef test_a(x):\n    assert x\n\n\ndef test_b():\n    assert True\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "collected": 4,
+    "errors": 0
+   }
+  }
+ },
+ {
+  "id": "OFF-025",
+  "area": "fixture",
+  "kind": "fixture",
+  "description": "an import error is a collection error",
+  "args": {
+   "files": {
+    "test_bad.py": "import module_that_does_not_exist_zzz\n\n\ndef test_a():\n    pass\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "collected": 0,
+    "errors": 1
+   }
+  }
+ },
+ {
+  "id": "OFF-026",
+  "area": "fixture",
+  "kind": "fixture",
+  "description": "a syntax error is a collection error",
+  "args": {
+   "files": {
+    "test_bad.py": "def test_a(:\n    pass\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "collected": 0,
+    "errors": 1
+   }
+  }
+ },
+ {
+  "id": "OFF-027",
+  "area": "fixture",
+  "kind": "fixture",
+  "description": "a parametrisation over an undeclared argument is a collection error",
+  "args": {
+   "files": {
+    "test_bad.py": "import pytest\n\n\n@pytest.mark.parametrize('nope', [1])\ndef test_a():\n    pass\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "collected": 0,
+    "errors": 1
+   }
+  }
+ },
+ {
+  "id": "OFF-028",
+  "area": "fixture",
+  "kind": "fixture",
+  "description": "a module that raises on import is a collection error",
+  "args": {
+   "files": {
+    "test_bad.py": "raise RuntimeError('boom')\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "collected": 0,
+    "errors": 1
+   }
+  }
+ },
+ {
+  "id": "OFF-029",
+  "area": "fixture",
+  "kind": "fixture",
+  "description": "one broken file does not hide the clean one beside it",
+  "args": {
+   "files": {
+    "test_ok.py": "import pytest\n\n\n@pytest.mark.parametrize('x', [1, 2, 3])\ndef test_a(x):\n    assert x\n\n\ndef test_b():\n    assert True\n",
+    "test_bad.py": "import module_that_does_not_exist_zzz\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "collected": 4,
+    "errors": 1
+   }
+  }
+ }
+]
