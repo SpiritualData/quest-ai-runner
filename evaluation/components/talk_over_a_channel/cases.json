@@ -1,0 +1,485 @@
+[
+ {
+  "id": "CHN-001",
+  "kind": "receive",
+  "area": "receive",
+  "args": {
+   "content": {
+    "events": [
+     {
+      "type": "message",
+      "message_id": "m1",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "first"
+     },
+     {
+      "type": "message",
+      "message_id": "m2",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "second"
+     },
+     {
+      "type": "message",
+      "message_id": "m3",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "third"
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "ids": [
+     "m1",
+     "m2",
+     "m3"
+    ],
+    "texts": [
+     "first",
+     "second",
+     "third"
+    ],
+    "healthy": true
+   }
+  }
+ },
+ {
+  "id": "CHN-002",
+  "kind": "receive",
+  "area": "receive",
+  "args": {
+   "content": [
+    {
+     "type": "message",
+     "message_id": "m1",
+     "conversation_id": "c1",
+     "sender_id": "u1",
+     "text": "hi"
+    },
+    {
+     "type": "message",
+     "message_id": "m2",
+     "conversation_id": "c2",
+     "sender_id": "u1",
+     "text": "hi"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "ids": [
+     "m1",
+     "m2"
+    ],
+    "chats": [
+     "c1",
+     "c2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "CHN-003",
+  "kind": "receive",
+  "area": "receive",
+  "args": {
+   "content": {
+    "events": [
+     {
+      "kind": "message.received",
+      "id": "m9",
+      "conversationId": "c7",
+      "senderId": "u2",
+      "body": "drifted keys"
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "ids": [
+     "m9"
+    ],
+    "chats": [
+     "c7"
+    ],
+    "texts": [
+     "drifted keys"
+    ]
+   }
+  }
+ },
+ {
+  "id": "CHN-004",
+  "kind": "receive",
+  "area": "receive",
+  "args": {
+   "content": {
+    "events": [
+     {
+      "type": "message",
+      "message_id": "m1",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "hi"
+     },
+     {
+      "type": "typing",
+      "conversation_id": "c1"
+     },
+     {
+      "type": "message",
+      "message_id": "m2",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "hi"
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "ids": [
+     "m1",
+     "m2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "CHN-005",
+  "kind": "receive",
+  "area": "receive",
+  "args": {
+   "content": {
+    "events": [
+     {
+      "type": "message",
+      "text": "no ids"
+     },
+     {
+      "type": "message",
+      "message_id": "m2",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "hi"
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "ids": [
+     "m2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "CHN-006",
+  "kind": "receive",
+  "area": "receive",
+  "args": {
+   "content": {
+    "events": [
+     "junk",
+     7,
+     {
+      "type": "message",
+      "message_id": "m1",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "hi"
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "ids": [
+     "m1"
+    ]
+   }
+  }
+ },
+ {
+  "id": "CHN-007",
+  "kind": "receive",
+  "area": "robust",
+  "args": {
+   "error": "gateway unreachable"
+  },
+  "expect": {
+   "eq": {
+    "ids": [],
+    "healthy": false,
+    "error": true
+   }
+  }
+ },
+ {
+  "id": "CHN-008",
+  "kind": "receive",
+  "area": "robust",
+  "args": {
+   "raises": true
+  },
+  "expect": {
+   "eq": {
+    "ids": [],
+    "healthy": false,
+    "error": true
+   }
+  }
+ },
+ {
+  "id": "CHN-009",
+  "kind": "receive",
+  "area": "robust",
+  "args": {
+   "content": "not json at all"
+  },
+  "expect": {
+   "eq": {
+    "ids": [],
+    "healthy": true,
+    "error": false
+   }
+  }
+ },
+ {
+  "id": "CHN-010",
+  "kind": "receive",
+  "area": "poll",
+  "args": {
+   "content": {
+    "events": []
+   },
+   "timeout": 900
+  },
+  "expect": {
+   "eq": {
+    "wait": 300.0,
+    "ids": []
+   }
+  }
+ },
+ {
+  "id": "CHN-011",
+  "kind": "receive",
+  "area": "poll",
+  "args": {
+   "content": {
+    "events": []
+   },
+   "timeout": 20
+  },
+  "expect": {
+   "eq": {
+    "wait": 20.0
+   }
+  }
+ },
+ {
+  "id": "CHN-012",
+  "kind": "receive",
+  "area": "attachments",
+  "args": {
+   "content": {
+    "events": [
+     {
+      "type": "message",
+      "message_id": "m1",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "hi",
+      "attachments": [
+       {
+        "id": "a1",
+        "filename": "p.png",
+        "mime_type": "image/png"
+       }
+      ]
+     }
+    ]
+   },
+   "fetch_attachments": true,
+   "attachment": {
+    "data_base64": "MTIzNDU="
+   }
+  },
+  "expect": {
+   "eq": {
+    "att_bytes": [
+     5
+    ],
+    "only_allowed": true
+   }
+  }
+ },
+ {
+  "id": "CHN-013",
+  "kind": "receive",
+  "area": "attachments",
+  "args": {
+   "content": {
+    "events": [
+     {
+      "type": "message",
+      "message_id": "m1",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "hi",
+      "attachments": [
+       {
+        "id": "a1",
+        "filename": "p.png"
+       }
+      ]
+     }
+    ]
+   },
+   "fetch_attachments": false
+  },
+  "expect": {
+   "eq": {
+    "att_bytes": [
+     0
+    ]
+   }
+  }
+ },
+ {
+  "id": "CHN-014",
+  "kind": "receive",
+  "area": "safety",
+  "args": {
+   "content": {
+    "events": [
+     {
+      "type": "message",
+      "message_id": "m1",
+      "conversation_id": "c1",
+      "sender_id": "u1",
+      "text": "hi"
+     }
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "only_allowed": true
+   }
+  }
+ },
+ {
+  "id": "CHN-015",
+  "kind": "send",
+  "area": "send",
+  "args": {
+   "chat_ref": "c1",
+   "text": "hello",
+   "content": {
+    "message_id": "out1"
+   }
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "message_id": "out1",
+    "tool": "messages_send",
+    "sent": {
+     "conversation_id": "c1",
+     "text": "hello"
+    }
+   }
+  }
+ },
+ {
+  "id": "CHN-016",
+  "kind": "send",
+  "area": "send",
+  "args": {
+   "chat_ref": "c1",
+   "text": "hello",
+   "reply_to": "m4",
+   "content": {
+    "id": "out2"
+   }
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "message_id": "out2",
+    "sent": {
+     "conversation_id": "c1",
+     "text": "hello",
+     "reply_to_message_id": "m4"
+    }
+   }
+  }
+ },
+ {
+  "id": "CHN-017",
+  "kind": "send",
+  "area": "send",
+  "args": {
+   "chat_ref": "c1",
+   "text": "x",
+   "error": "rate limited"
+  },
+  "expect": {
+   "eq": {
+    "ok": false
+   }
+  }
+ },
+ {
+  "id": "CHN-018",
+  "kind": "send",
+  "area": "send",
+  "args": {
+   "chat_ref": "c1",
+   "text": "x",
+   "raises": true
+  },
+  "expect": {
+   "eq": {
+    "ok": false
+   }
+  }
+ },
+ {
+  "id": "CHN-019",
+  "kind": "send",
+  "area": "send",
+  "args": {
+   "chat_ref": "c1",
+   "text": "x",
+   "content": "not json"
+  },
+  "expect": {
+   "eq": {
+    "ok": true,
+    "message_id": null,
+    "only_allowed": true
+   }
+  }
+ },
+ {
+  "id": "CHN-020",
+  "kind": "close",
+  "area": "close",
+  "args": {
+   "raises": true
+  },
+  "expect": {
+   "eq": {
+    "survived": true
+   }
+  }
+ }
+]

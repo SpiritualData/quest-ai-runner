@@ -1,0 +1,564 @@
+[
+ {
+  "id": "REF-001",
+  "kind": "render",
+  "area": "builtin",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "note",
+     "locator": {
+      "text": "Remember the plan."
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "n": 1,
+    "types": [
+     "note"
+    ]
+   },
+   "contains": [
+    "Remember the plan."
+   ]
+  }
+ },
+ {
+  "id": "REF-002",
+  "kind": "render",
+  "area": "builtin",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "file",
+     "locator": {
+      "path": "docs/a.md"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ],
+   "files": {
+    "docs/a.md": "fresh file body"
+   }
+  },
+  "expect": {
+   "eq": {
+    "n": 1,
+    "pointer": [
+     true
+    ]
+   },
+   "contains": [
+    "fresh file body"
+   ]
+  }
+ },
+ {
+  "id": "REF-003",
+  "kind": "render",
+  "area": "unresolved",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "file",
+     "locator": {
+      "path": "gone.md"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "n": 1
+   },
+   "contains": [
+    "(unresolved)",
+    "gone.md"
+   ]
+  }
+ },
+ {
+  "id": "REF-004",
+  "kind": "render",
+  "area": "unresolved",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "collection",
+     "locator": {
+      "name": "Goals",
+      "id": "c1"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "n": 1,
+    "pointer": [
+     false
+    ]
+   },
+   "contains": [
+    "[collection ref: Goals/c1 (unresolved)]"
+   ]
+  }
+ },
+ {
+  "id": "REF-005",
+  "kind": "render",
+  "area": "unresolved",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "query",
+     "locator": {
+      "query": "open tasks"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "contains": [
+    "[query ref: open tasks (unresolved)]"
+   ]
+  }
+ },
+ {
+  "id": "REF-006",
+  "kind": "render",
+  "area": "unresolved",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "chat_thread",
+     "locator": {
+      "thread_or_message_id": "t9",
+      "space": "sp1"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "contains": [
+    "chat_thread ref: t9 in sp1 (unresolved)"
+   ]
+  }
+ },
+ {
+  "id": "REF-007",
+  "kind": "render",
+  "area": "unresolved",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "mystery",
+     "locator": {
+      "name": "thing"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "n": 1
+   },
+   "contains": [
+    "[mystery ref: thing (unresolved)]"
+   ]
+  }
+ },
+ {
+  "id": "REF-008",
+  "kind": "render",
+  "area": "consumer",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "collection",
+     "locator": {
+      "name": "Goals"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ],
+   "consumer": {
+    "collection": {
+     "mode": "text",
+     "text": "3 goals live"
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "n": 1
+   },
+   "contains": [
+    "3 goals live"
+   ],
+   "not_contains": [
+    "unresolved"
+   ]
+  }
+ },
+ {
+  "id": "REF-009",
+  "kind": "render",
+  "area": "consumer",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "collection",
+     "locator": {
+      "name": "Goals"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ],
+   "consumer": {
+    "collection": {
+     "mode": "text",
+     "text": "via callable",
+     "style": "callable"
+    }
+   }
+  },
+  "expect": {
+   "contains": [
+    "via callable"
+   ]
+  }
+ },
+ {
+  "id": "REF-010",
+  "kind": "render",
+  "area": "consumer",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "file",
+     "locator": {
+      "path": "a.md"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ],
+   "files": {
+    "a.md": "builtin"
+   },
+   "consumer": {
+    "file": {
+     "mode": "text",
+     "text": "consumer wins"
+    }
+   }
+  },
+  "expect": {
+   "contains": [
+    "consumer wins"
+   ],
+   "not_contains": [
+    "builtin"
+   ]
+  }
+ },
+ {
+  "id": "REF-011",
+  "kind": "render",
+  "area": "robust",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "collection",
+     "locator": {
+      "name": "Goals"
+     },
+     "ts": 2.0,
+     "why": "because"
+    },
+    {
+     "id": "i2",
+     "type": "note",
+     "locator": {
+      "text": "still here"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ],
+   "consumer": {
+    "collection": {
+     "mode": "raise"
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "n": 2
+   },
+   "contains": [
+    "Goals (unresolved)",
+    "still here"
+   ]
+  }
+ },
+ {
+  "id": "REF-012",
+  "kind": "render",
+  "area": "robust",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "conversation",
+     "locator": {
+      "conv_id": "k1"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ],
+   "consumer": {
+    "conversation": {
+     "mode": "empty"
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "n": 1
+   },
+   "contains": [
+    "[conversation ref: k1 (unresolved)]"
+   ]
+  }
+ },
+ {
+  "id": "REF-013",
+  "kind": "render",
+  "area": "abridged",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "note",
+     "locator": {
+      "text": "Short summary.",
+      "full_ref": {
+       "query": {
+        "kind": "goal_context",
+        "goal_id": "g1"
+       }
+      }
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "contains": [
+    "Short summary.",
+    "[abridged:",
+    "goal_context"
+   ]
+  }
+ },
+ {
+  "id": "REF-014",
+  "kind": "render",
+  "area": "abridged",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "note",
+     "locator": {
+      "text": "Flagged summary.",
+      "abridged": true
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "contains": [
+    "stored summary, not the full text"
+   ]
+  }
+ },
+ {
+  "id": "REF-015",
+  "kind": "render",
+  "area": "budget",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "note",
+     "locator": {
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     "ts": 1.0,
+     "why": "because"
+    }
+   ],
+   "max_ref_chars": 60
+  },
+  "expect": {
+   "max_len": 60
+  }
+ },
+ {
+  "id": "REF-016",
+  "kind": "render",
+  "area": "budget",
+  "args": {
+   "items": [
+    {
+     "id": "i1",
+     "type": "note",
+     "locator": {
+      "text": "n1"
+     },
+     "ts": 1.0,
+     "why": "because"
+    },
+    {
+     "id": "i2",
+     "type": "note",
+     "locator": {
+      "text": "n2"
+     },
+     "ts": 2.0,
+     "why": "because"
+    },
+    {
+     "id": "i3",
+     "type": "note",
+     "locator": {
+      "text": "n3"
+     },
+     "ts": 3.0,
+     "why": "because"
+    },
+    {
+     "id": "i4",
+     "type": "note",
+     "locator": {
+      "text": "n4"
+     },
+     "ts": 4.0,
+     "why": "because"
+    },
+    {
+     "id": "i5",
+     "type": "note",
+     "locator": {
+      "text": "n5"
+     },
+     "ts": 5.0,
+     "why": "because"
+    },
+    {
+     "id": "i6",
+     "type": "note",
+     "locator": {
+      "text": "n6"
+     },
+     "ts": 6.0,
+     "why": "because"
+    },
+    {
+     "id": "i7",
+     "type": "note",
+     "locator": {
+      "text": "n7"
+     },
+     "ts": 7.0,
+     "why": "because"
+    },
+    {
+     "id": "i8",
+     "type": "note",
+     "locator": {
+      "text": "n8"
+     },
+     "ts": 8.0,
+     "why": "because"
+    },
+    {
+     "id": "i9",
+     "type": "note",
+     "locator": {
+      "text": "n9"
+     },
+     "ts": 9.0,
+     "why": "because"
+    },
+    {
+     "id": "i10",
+     "type": "note",
+     "locator": {
+      "text": "n10"
+     },
+     "ts": 10.0,
+     "why": "because"
+    },
+    {
+     "id": "i11",
+     "type": "note",
+     "locator": {
+      "text": "n11"
+     },
+     "ts": 11.0,
+     "why": "because"
+    },
+    {
+     "id": "i12",
+     "type": "note",
+     "locator": {
+      "text": "n12"
+     },
+     "ts": 12.0,
+     "why": "because"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "n": 8
+   }
+  }
+ }
+]

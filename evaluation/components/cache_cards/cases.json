@@ -1,0 +1,331 @@
+[
+ {
+  "id": "CAC-001",
+  "kind": "scenario",
+  "area": "behaviour",
+  "args": {
+   "steps": [
+    [
+     "put",
+     "a"
+    ],
+    [
+     "put",
+     "b"
+    ],
+    [
+     "load"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cards": [
+     "a",
+     "b"
+    ],
+    "loud": false
+   }
+  }
+ },
+ {
+  "id": "CAC-002",
+  "kind": "scenario",
+  "area": "behaviour",
+  "args": {
+   "steps": [
+    [
+     "put",
+     "a"
+    ],
+    [
+     "load"
+    ],
+    [
+     "write",
+     "b"
+    ],
+    [
+     "load"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cards": [
+     "a",
+     "b"
+    ],
+    "write_ok": true,
+    "loud": false
+   }
+  }
+ },
+ {
+  "id": "CAC-003",
+  "kind": "scenario",
+  "area": "behaviour",
+  "args": {
+   "steps": [
+    [
+     "down"
+    ],
+    [
+     "write",
+     "x"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "write_ok": false,
+    "loud": true
+   }
+  }
+ },
+ {
+  "id": "CAC-004",
+  "kind": "scenario",
+  "area": "behaviour",
+  "args": {
+   "steps": [
+    [
+     "put",
+     "a"
+    ],
+    [
+     "load"
+    ],
+    [
+     "down"
+    ],
+    [
+     "load"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cards": [
+     "a"
+    ]
+   }
+  }
+ },
+ {
+  "id": "CAC-005",
+  "kind": "scenario",
+  "area": "behaviour",
+  "args": {
+   "steps": [
+    [
+     "down"
+    ],
+    [
+     "load"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cards": [],
+    "loud": true
+   }
+  }
+ },
+ {
+  "id": "CAC-006",
+  "kind": "scenario",
+  "area": "behaviour",
+  "args": {
+   "steps": [
+    [
+     "put",
+     "a"
+    ],
+    [
+     "load"
+    ],
+    [
+     "write",
+     "b"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cache_pending": 0
+   }
+  }
+ },
+ {
+  "id": "CAC-007",
+  "kind": "scenario",
+  "area": "stores",
+  "args": {
+   "steps": [
+    [
+     "put",
+     "a"
+    ],
+    [
+     "put",
+     "b"
+    ],
+    [
+     "load"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cache_stored": 2
+   }
+  }
+ },
+ {
+  "id": "CAC-008",
+  "kind": "scenario",
+  "area": "stores",
+  "args": {
+   "steps": [
+    [
+     "put",
+     "a"
+    ],
+    [
+     "load"
+    ],
+    [
+     "write",
+     "b"
+    ],
+    [
+     "load"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cache_stored": 2
+   }
+  }
+ },
+ {
+  "id": "CAC-009",
+  "kind": "scenario",
+  "area": "outbox",
+  "args": {
+   "steps": [
+    [
+     "down"
+    ],
+    [
+     "write",
+     "x"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cache_pending": 1
+   }
+  }
+ },
+ {
+  "id": "CAC-010",
+  "kind": "scenario",
+  "area": "outbox",
+  "args": {
+   "steps": [
+    [
+     "down"
+    ],
+    [
+     "write",
+     "x"
+    ],
+    [
+     "write",
+     "y"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cache_pending": 2,
+    "write_ok": false
+   }
+  }
+ },
+ {
+  "id": "CAC-011",
+  "kind": "scenario",
+  "area": "cold_start",
+  "args": {
+   "steps": [
+    [
+     "put",
+     "a"
+    ],
+    [
+     "put",
+     "b"
+    ],
+    [
+     "load"
+    ],
+    [
+     "new_repo"
+    ],
+    [
+     "down"
+    ],
+    [
+     "load"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cards": [
+     "a",
+     "b"
+    ]
+   }
+  }
+ },
+ {
+  "id": "CAC-012",
+  "kind": "scenario",
+  "area": "cold_start",
+  "args": {
+   "steps": [
+    [
+     "put",
+     "a"
+    ],
+    [
+     "load"
+    ],
+    [
+     "new_repo"
+    ],
+    [
+     "down"
+    ],
+    [
+     "load"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cards": [
+     "a"
+    ],
+    "loud": true
+   }
+  }
+ }
+]

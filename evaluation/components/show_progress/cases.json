@@ -1,0 +1,351 @@
+[
+ {
+  "id": "PRG-001",
+  "kind": "surface",
+  "area": "live",
+  "args": {
+   "mode": "live",
+   "events": [
+    "status",
+    "plan",
+    "read",
+    "replan",
+    "partial",
+    "exec",
+    "result",
+    "done"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "status",
+     "plan",
+     "read",
+     "replan",
+     "partial",
+     "exec",
+     "result",
+     "done"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-002",
+  "kind": "surface",
+  "area": "live",
+  "args": {
+   "mode": "live",
+   "events": [
+    "status",
+    "partial",
+    "partial",
+    "result"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "status",
+     "partial",
+     "partial",
+     "result"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-003",
+  "kind": "surface",
+  "area": "live",
+  "args": {
+   "mode": "live",
+   "events": [
+    "plan",
+    "decision",
+    "done"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "plan",
+     "decision",
+     "done"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-004",
+  "kind": "surface",
+  "area": "background",
+  "args": {
+   "mode": "background",
+   "events": [
+    "status",
+    "plan",
+    "read",
+    "replan",
+    "partial",
+    "exec",
+    "result",
+    "done"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "result",
+     "done"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-005",
+  "kind": "surface",
+  "area": "background",
+  "args": {
+   "mode": "background",
+   "events": [
+    "status",
+    "plan",
+    "read",
+    "replan"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": []
+   }
+  }
+ },
+ {
+  "id": "PRG-006",
+  "kind": "surface",
+  "area": "background",
+  "args": {
+   "mode": "background",
+   "events": [
+    "plan",
+    "decision",
+    "done"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "decision",
+     "done"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-007",
+  "kind": "surface",
+  "area": "background",
+  "args": {
+   "mode": "background",
+   "events": [
+    "read",
+    "milestone",
+    "partial",
+    "milestone",
+    "result"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "milestone",
+     "milestone",
+     "result"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-008",
+  "kind": "surface",
+  "area": "background",
+  "args": {
+   "mode": "background",
+   "events": [
+    "exec",
+    "exec",
+    "result"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "result"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-009",
+  "kind": "surface",
+  "area": "background",
+  "args": {
+   "mode": "background",
+   "events": [
+    "context",
+    "plan",
+    "tokens",
+    "done"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "context",
+     "tokens",
+     "done"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-010",
+  "kind": "handoff",
+  "area": "handoff",
+  "args": {
+   "events": [
+    "status",
+    "plan",
+    "read",
+    "replan",
+    "partial",
+    "exec",
+    "result",
+    "done"
+   ],
+   "detach_after": 4
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "status",
+     "plan",
+     "read",
+     "replan",
+     "result",
+     "done"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-011",
+  "kind": "handoff",
+  "area": "handoff",
+  "args": {
+   "events": [
+    "status",
+    "plan",
+    "read",
+    "replan",
+    "partial",
+    "exec",
+    "result",
+    "done"
+   ],
+   "detach_after": 0
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "result",
+     "done"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-012",
+  "kind": "handoff",
+  "area": "handoff",
+  "args": {
+   "events": [
+    "status",
+    "plan",
+    "read",
+    "replan",
+    "partial",
+    "exec",
+    "result",
+    "done"
+   ],
+   "detach_after": 8
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [
+     "status",
+     "plan",
+     "read",
+     "replan",
+     "partial",
+     "exec",
+     "result",
+     "done"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PRG-013",
+  "kind": "surface",
+  "area": "robust",
+  "args": {
+   "mode": "live",
+   "events": [
+    "status",
+    "plan",
+    "read",
+    "replan",
+    "partial",
+    "exec",
+    "result",
+    "done"
+   ],
+   "broken": true
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [],
+    "survived": true
+   }
+  }
+ },
+ {
+  "id": "PRG-014",
+  "kind": "surface",
+  "area": "robust",
+  "args": {
+   "mode": "background",
+   "events": [
+    "status",
+    "plan",
+    "read",
+    "replan",
+    "partial",
+    "exec",
+    "result",
+    "done"
+   ],
+   "broken": true
+  },
+  "expect": {
+   "eq": {
+    "surfaced": [],
+    "survived": true
+   }
+  }
+ }
+]
