@@ -48,9 +48,11 @@ falls back to in-app IDF over ``load_all()``.
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import logging
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -75,6 +77,17 @@ _INTERNAL_FIELDS = {"card_id", _SEARCH_TEXT_FIELD, "updated_at"}
 # near-duplicate ranks at the very top, and a few extra rows absorb other tenants' cards interleaved
 # in a shared (unscoped) collection before this user's best candidate.
 _SIMILAR_CARD_TOP_K = 16
+
+
+def serialized(method):
+    """Run a repository method under the instance lock. An embedded (local-path) Qdrant client is not safe for
+    concurrent callers (writes from two threads fail and the cards are lost); a server client is, and pays only
+    an uncontended lock."""
+    @functools.wraps(method)
+    def locked(self, *args, **kwargs):
+        with self.lock:
+            return method(self, *args, **kwargs)
+    return locked
 
 
 def _point_id(scope: Dict[str, Any], card_id: str) -> int:
@@ -170,6 +183,7 @@ class QdrantCardRepository:
         # process even before the Qdrant-side ``updated_at`` stamp is observed on a re-scroll.
         self._local_rev: int = 0
         self._index_ensured = False
+        self.lock = threading.RLock()
 
     # ------------------------------------------------------------------
     # Collection + index + filter management (best-effort).
@@ -265,6 +279,7 @@ class QdrantCardRepository:
     # CardRepository implementation (all best-effort, never raise).
     # ------------------------------------------------------------------
 
+    @serialized
     def write(self, card_id: str, card: Dict[str, Any]) -> bool:
         """Embed the card text and upsert ONE point {id, vector, payload}. Returns True on success.
 
@@ -315,6 +330,7 @@ class QdrantCardRepository:
             logger.warning("QdrantCardRepository.write failed for %r: %s", card_id, e)
             return False
 
+    @serialized
     def read(self, card_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve THIS tenant's card by id (scoped). Returns the card dict or None. Never raises."""
         try:
@@ -336,6 +352,7 @@ class QdrantCardRepository:
             logger.debug("QdrantCardRepository.read failed for %r: %s", card_id, e)
             return None
 
+    @serialized
     def load_all(self) -> Dict[str, Dict[str, Any]]:
         """Scroll THIS tenant's card points -> ``{card_id: card_dict}``. Returns {} on error."""
         out: Dict[str, Dict[str, Any]] = {}
@@ -367,6 +384,7 @@ class QdrantCardRepository:
             logger.debug("QdrantCardRepository.load_all failed: %s", e)
             return {}
 
+    @serialized
     def delete(self, card_id: str) -> bool:
         """Delete THIS tenant's card point. Returns True when it is gone afterwards. Never raises."""
         try:
@@ -387,6 +405,7 @@ class QdrantCardRepository:
         """True when THIS tenant has a card under ``card_id``. Never raises."""
         return self.read(card_id) is not None
 
+    @serialized
     def revision(self) -> Any:
         """A cheap scoped change-stamp: ``(local_write_counter, scope_card_count, max_updated_at)``.
 

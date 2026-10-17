@@ -1,0 +1,243 @@
+[
+ {
+  "id": "PCD-001",
+  "kind": "roundtrip",
+  "area": "roundtrip",
+  "args": {},
+  "expect": {
+   "eq": {
+    "writes_ok": true,
+    "read_equal": true,
+    "load_all_ids": [
+     "alpha",
+     "beta",
+     "gamma"
+    ],
+    "load_all_equal": true,
+    "exists": true
+   }
+  }
+ },
+ {
+  "id": "PCD-002",
+  "kind": "overwrite",
+  "area": "overwrite",
+  "args": {},
+  "expect": {
+   "eq": {
+    "count": 2,
+    "ids": [
+     "a",
+     "b"
+    ],
+    "newest": true,
+    "newest_in_listing": true,
+    "neighbour_untouched": true
+   }
+  }
+ },
+ {
+  "id": "PCD-003",
+  "kind": "no_loss",
+  "area": "no_loss",
+  "args": {
+   "n": 25
+  },
+  "expect": {
+   "eq": {
+    "writes_ok": true,
+    "lost": 0,
+    "extra": 0,
+    "count": 25
+   }
+  }
+ },
+ {
+  "id": "PCD-004",
+  "kind": "no_loss",
+  "area": "no_loss",
+  "args": {
+   "n": 300,
+   "page": 50
+  },
+  "expect": {
+   "eq": {
+    "writes_ok": true,
+    "lost": 0,
+    "extra": 0,
+    "count": 300
+   }
+  }
+ },
+ {
+  "id": "PCD-014",
+  "kind": "no_loss",
+  "area": "no_loss",
+  "args": {
+   "n": 2100,
+   "page": 500
+  },
+  "expect": {
+   "eq": {
+    "writes_ok": true,
+    "lost": 0,
+    "extra": 0,
+    "count": 2100
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "PCD-005",
+  "kind": "no_duplicate",
+  "area": "no_duplicate",
+  "args": {
+   "repeats": 3
+  },
+  "expect": {
+   "eq": {
+    "count": 2,
+    "ids": [
+     "other",
+     "same"
+    ],
+    "same_once": 1
+   }
+  }
+ },
+ {
+  "id": "PCD-006",
+  "kind": "no_duplicate",
+  "area": "no_duplicate",
+  "args": {
+   "repeats": 12
+  },
+  "expect": {
+   "eq": {
+    "count": 2,
+    "ids": [
+     "other",
+     "same"
+    ],
+    "same_once": 1
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "PCD-007",
+  "kind": "delete",
+  "area": "delete",
+  "args": {},
+  "expect": {
+   "eq": {
+    "delete_true": true,
+    "read_none": true,
+    "exists_false": true,
+    "listing_ids": [
+     "a",
+     "c"
+    ],
+    "missing_ok": true,
+    "twice_ok": true,
+    "restart_ids": [
+     "a",
+     "c"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PCD-008",
+  "kind": "concurrent",
+  "area": "concurrent",
+  "args": {
+   "threads": 4,
+   "per_thread": 10
+  },
+  "expect": {
+   "eq": {
+    "write_failures": 0,
+    "lost": 0,
+    "extra": 0,
+    "shared_once": 1,
+    "shared_whole": true
+   }
+  }
+ },
+ {
+  "id": "PCD-009",
+  "kind": "concurrent",
+  "area": "concurrent",
+  "args": {
+   "threads": 8,
+   "per_thread": 5
+  },
+  "expect": {
+   "eq": {
+    "write_failures": 0,
+    "lost": 0,
+    "extra": 0,
+    "shared_once": 1,
+    "shared_whole": true
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "PCD-010",
+  "kind": "restart",
+  "area": "restart",
+  "args": {
+   "n": 5
+  },
+  "expect": {
+   "eq": {
+    "ids_equal": true,
+    "fields_equal": true,
+    "read_after_restart": true
+   }
+  }
+ },
+ {
+  "id": "PCD-011",
+  "kind": "restart",
+  "area": "restart",
+  "args": {
+   "n": 40
+  },
+  "expect": {
+   "eq": {
+    "ids_equal": true,
+    "fields_equal": true,
+    "read_after_restart": true
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "PCD-012",
+  "kind": "revision",
+  "area": "revision",
+  "args": {},
+  "expect": {
+   "eq": {
+    "changes_on_write": true,
+    "changes_on_delete": true
+   }
+  }
+ },
+ {
+  "id": "PCD-013",
+  "kind": "tolerance",
+  "area": "tolerance",
+  "args": {},
+  "expect": {
+   "eq": {
+    "read_missing": null,
+    "exists_missing": false,
+    "empty_listing": {}
+   }
+  }
+ }
+]
