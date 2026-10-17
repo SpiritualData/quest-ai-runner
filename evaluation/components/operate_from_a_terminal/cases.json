@@ -1,0 +1,1004 @@
+[
+ {
+  "id": "CLI-001",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner",
+    "chat",
+    "quest",
+    "context",
+    "poll"
+   ]
+  }
+ },
+ {
+  "id": "CLI-002",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "chat",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner chat"
+   ]
+  }
+ },
+ {
+  "id": "CLI-003",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "quest",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner quest"
+   ]
+  }
+ },
+ {
+  "id": "CLI-004",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "send",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner send"
+   ]
+  }
+ },
+ {
+  "id": "CLI-005",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "create-goal",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner create-goal"
+   ]
+  }
+ },
+ {
+  "id": "CLI-006",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "bootstrap",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner bootstrap"
+   ]
+  }
+ },
+ {
+  "id": "CLI-007",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "paste-context",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner paste-context"
+   ]
+  }
+ },
+ {
+  "id": "CLI-008",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "search-context",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner search-context"
+   ]
+  }
+ },
+ {
+  "id": "CLI-009",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "sync-quest-folder",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner sync-quest-folder"
+   ]
+  }
+ },
+ {
+  "id": "CLI-010",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "poll",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner poll"
+   ]
+  }
+ },
+ {
+  "id": "CLI-011",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "channel",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner channel"
+   ]
+  }
+ },
+ {
+  "id": "CLI-012",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "serve-files",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner serve-files"
+   ]
+  }
+ },
+ {
+  "id": "CLI-013",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "reconcile-plan",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "usage: quest-ai-runner reconcile-plan"
+   ]
+  }
+ },
+ {
+  "id": "CLI-014",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "context",
+    "move-root",
+    "--help"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "--cards-dir",
+    "--new-root"
+   ]
+  }
+ },
+ {
+  "id": "CLI-015",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "bogus-command"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "invalid choice"
+   ]
+  }
+ },
+ {
+  "id": "CLI-016",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "--no-such-flag"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "unrecognized arguments"
+   ]
+  }
+ },
+ {
+  "id": "CLI-017",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "chat",
+    "--resume",
+    "a",
+    "b",
+    "c"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   }
+  }
+ },
+ {
+  "id": "CLI-018",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "context",
+    "move-root",
+    "--cards-dir",
+    "{dir}/cards"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "--new-root"
+   ]
+  }
+ },
+ {
+  "id": "CLI-019",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "quest"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "usage: quest-ai-runner quest <method>"
+   ]
+  }
+ },
+ {
+  "id": "CLI-020",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "quest",
+    "whoami",
+    "--kw",
+    "nokv"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "not NAME=VALUE"
+   ]
+  }
+ },
+ {
+  "id": "CLI-021",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "quest",
+    "create_goal"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "can modify Quest",
+    "--write"
+   ],
+   "not_contains": [
+    "Traceback"
+   ]
+  }
+ },
+ {
+  "id": "CLI-022",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "create-goal"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "required"
+   ]
+  }
+ },
+ {
+  "id": "CLI-023",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "quest",
+    "--list"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "whoami",
+    "WRITE  create_goal"
+   ]
+  }
+ },
+ {
+  "id": "CLI-024",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "quest",
+    "--describe",
+    "whoami"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "whoami()",
+    "[read]"
+   ]
+  }
+ },
+ {
+  "id": "CLI-025",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "quest",
+    "whoami"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "QUEST_BASE_URL",
+    "QUEST_API_KEY"
+   ],
+   "not_contains": [
+    "Traceback"
+   ]
+  }
+ },
+ {
+  "id": "CLI-026",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "context",
+    "store-info",
+    "--cards-dir",
+    "{dir}/cards"
+   ],
+   "env": {},
+   "files": {
+    "cards/.keep": ""
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "not a bootstrapped store"
+   ]
+  }
+ },
+ {
+  "id": "CLI-027",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "context",
+    "store-info",
+    "--cards-dir",
+    "{dir}/cards"
+   ],
+   "env": {},
+   "files": {
+    "cards/bootstrap_meta.json": "{\"root\": \"{dir}\"}"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "store_id: None",
+    "root: {dir}",
+    "mounts: []"
+   ]
+  }
+ },
+ {
+  "id": "CLI-028",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "qar",
+   "argv": [
+    "context",
+    "move-root",
+    "--cards-dir",
+    "{dir}/cards",
+    "--new-root",
+    "{dir}/new"
+   ],
+   "env": {},
+   "files": {
+    "cards/.keep": ""
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "dry run: nothing was changed"
+   ]
+  }
+ },
+ {
+  "id": "CLI-029",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "required"
+   ]
+  }
+ },
+ {
+  "id": "CLI-030",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "list"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "no tools matched"
+   ]
+  }
+ },
+ {
+  "id": "CLI-031",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "show",
+    "nothere"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "No tool named 'nothere'"
+   ]
+  }
+ },
+ {
+  "id": "CLI-032",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "call",
+    "nothere"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "unknown tool"
+   ]
+  }
+ },
+ {
+  "id": "CLI-033",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "call",
+    "nothere",
+    "--args",
+    "[1,2]"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "Bad --args/--kw"
+   ]
+  }
+ },
+ {
+  "id": "CLI-034",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "call",
+    "nothere",
+    "--kw",
+    "novalue"
+   ],
+   "env": {},
+   "files": {}
+  },
+  "expect": {
+   "eq": {
+    "exit": 2
+   },
+   "contains": [
+    "not NAME=VALUE"
+   ]
+  }
+ },
+ {
+  "id": "CLI-035",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "list"
+   ],
+   "env": {
+    "QAR_TOOLS_FILE": "{dir}/tools.toml"
+   },
+   "files": {
+    "tools.toml": "[[tool]]\nname = \"make_note\"\ndescription = \"File a note for review.\"\nwhen_to_use = \"Anything worth remembering.\"\nwhen_not_to_use = \"Secrets.\"\ncommand = [\"{python}\", \"{dir}/note.py\", \"create\"]\n[tool.parameters]\ntype = \"object\"\nrequired = [\"subject\"]\n[tool.parameters.properties.subject]\ntype = \"string\"\n",
+    "note.py": "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "make_note"
+   ]
+  }
+ },
+ {
+  "id": "CLI-036",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "list",
+    "--json"
+   ],
+   "env": {
+    "QAR_TOOLS_FILE": "{dir}/tools.toml"
+   },
+   "files": {
+    "tools.toml": "[[tool]]\nname = \"make_note\"\ndescription = \"File a note for review.\"\nwhen_to_use = \"Anything worth remembering.\"\nwhen_not_to_use = \"Secrets.\"\ncommand = [\"{python}\", \"{dir}/note.py\", \"create\"]\n[tool.parameters]\ntype = \"object\"\nrequired = [\"subject\"]\n[tool.parameters.properties.subject]\ntype = \"string\"\n",
+    "note.py": "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "\"name\": \"make_note\"",
+    "\"mutates\""
+   ]
+  }
+ },
+ {
+  "id": "CLI-037",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "list",
+    "--query",
+    "remember a note"
+   ],
+   "env": {
+    "QAR_TOOLS_FILE": "{dir}/tools.toml"
+   },
+   "files": {
+    "tools.toml": "[[tool]]\nname = \"make_note\"\ndescription = \"File a note for review.\"\nwhen_to_use = \"Anything worth remembering.\"\nwhen_not_to_use = \"Secrets.\"\ncommand = [\"{python}\", \"{dir}/note.py\", \"create\"]\n[tool.parameters]\ntype = \"object\"\nrequired = [\"subject\"]\n[tool.parameters.properties.subject]\ntype = \"string\"\n",
+    "note.py": "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "make_note"
+   ]
+  }
+ },
+ {
+  "id": "CLI-038",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "show",
+    "make_note"
+   ],
+   "env": {
+    "QAR_TOOLS_FILE": "{dir}/tools.toml"
+   },
+   "files": {
+    "tools.toml": "[[tool]]\nname = \"make_note\"\ndescription = \"File a note for review.\"\nwhen_to_use = \"Anything worth remembering.\"\nwhen_not_to_use = \"Secrets.\"\ncommand = [\"{python}\", \"{dir}/note.py\", \"create\"]\n[tool.parameters]\ntype = \"object\"\nrequired = [\"subject\"]\n[tool.parameters.properties.subject]\ntype = \"string\"\n",
+    "note.py": "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "make_note",
+    "Secrets."
+   ]
+  }
+ },
+ {
+  "id": "CLI-039",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "show",
+    "make_not"
+   ],
+   "env": {
+    "QAR_TOOLS_FILE": "{dir}/tools.toml"
+   },
+   "files": {
+    "tools.toml": "[[tool]]\nname = \"make_note\"\ndescription = \"File a note for review.\"\nwhen_to_use = \"Anything worth remembering.\"\nwhen_not_to_use = \"Secrets.\"\ncommand = [\"{python}\", \"{dir}/note.py\", \"create\"]\n[tool.parameters]\ntype = \"object\"\nrequired = [\"subject\"]\n[tool.parameters.properties.subject]\ntype = \"string\"\n",
+    "note.py": "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "Did you mean: make_note"
+   ]
+  }
+ },
+ {
+  "id": "CLI-040",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "call",
+    "make_note",
+    "--kw",
+    "subject=Weekly plan"
+   ],
+   "env": {
+    "QAR_TOOLS_FILE": "{dir}/tools.toml"
+   },
+   "files": {
+    "tools.toml": "[[tool]]\nname = \"make_note\"\ndescription = \"File a note for review.\"\nwhen_to_use = \"Anything worth remembering.\"\nwhen_not_to_use = \"Secrets.\"\ncommand = [\"{python}\", \"{dir}/note.py\", \"create\"]\n[tool.parameters]\ntype = \"object\"\nrequired = [\"subject\"]\n[tool.parameters.properties.subject]\ntype = \"string\"\n",
+    "note.py": "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "Weekly plan"
+   ]
+  }
+ },
+ {
+  "id": "CLI-041",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "call",
+    "make_note",
+    "--args",
+    "{\"subject\": \"From JSON\"}"
+   ],
+   "env": {
+    "QAR_TOOLS_FILE": "{dir}/tools.toml"
+   },
+   "files": {
+    "tools.toml": "[[tool]]\nname = \"make_note\"\ndescription = \"File a note for review.\"\nwhen_to_use = \"Anything worth remembering.\"\nwhen_not_to_use = \"Secrets.\"\ncommand = [\"{python}\", \"{dir}/note.py\", \"create\"]\n[tool.parameters]\ntype = \"object\"\nrequired = [\"subject\"]\n[tool.parameters.properties.subject]\ntype = \"string\"\n",
+    "note.py": "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 0
+   },
+   "contains": [
+    "From JSON"
+   ]
+  }
+ },
+ {
+  "id": "CLI-042",
+  "kind": "run_cli",
+  "area": "cli",
+  "args": {
+   "entry": "tools",
+   "argv": [
+    "call",
+    "make_note"
+   ],
+   "env": {
+    "QAR_TOOLS_FILE": "{dir}/tools.toml"
+   },
+   "files": {
+    "tools.toml": "[[tool]]\nname = \"make_note\"\ndescription = \"File a note for review.\"\nwhen_to_use = \"Anything worth remembering.\"\nwhen_not_to_use = \"Secrets.\"\ncommand = [\"{python}\", \"{dir}/note.py\", \"create\"]\n[tool.parameters]\ntype = \"object\"\nrequired = [\"subject\"]\n[tool.parameters.properties.subject]\ntype = \"string\"\n",
+    "note.py": "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n"
+   }
+  },
+  "expect": {
+   "eq": {
+    "exit": 1
+   },
+   "contains": [
+    "subject"
+   ]
+  }
+ }
+]
