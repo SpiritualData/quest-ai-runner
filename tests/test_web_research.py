@@ -13,7 +13,7 @@ from quest_ai_runner.adapters.web_cache import WebCache
 from quest_ai_runner.adapters.web_research import (
     UnsupportedContentTypeError,
     WebResearchAdapter,
-    _DailyLimiter,
+    DailyLimiter,
     build_web_research_from_env,
     canonicalize_url,
     estimate_tokens,
@@ -446,7 +446,7 @@ def test_build_from_env_no_fallback_without_gemini_key():
 
 
 # ---------------------------------------------------------------------------
-# _default_page_fetcher: redirects are re-checked by the SSRF guard, and the page's
+# default_page_fetcher: redirects are re-checked by the SSRF guard, and the page's
 # declared charset is honored
 # ---------------------------------------------------------------------------
 
@@ -496,7 +496,7 @@ def test_default_fetcher_refuses_a_redirect_into_a_private_address(monkeypatch):
     """follow_redirects=True would have walked straight past check_url_is_safe: the guard only
     ever saw the URL the planner asked for, so a public URL that 302s to localhost or a cloud
     metadata endpoint was fetched anyway."""
-    from quest_ai_runner.adapters.web_research import PageFetchError, _default_page_fetcher
+    from quest_ai_runner.adapters.web_research import PageFetchError, default_page_fetcher
 
     script = {
         "https://public.example/go": _FakeStream(
@@ -505,14 +505,14 @@ def test_default_fetcher_refuses_a_redirect_into_a_private_address(monkeypatch):
     }
     seen = _patch_stream(monkeypatch, script)
     with pytest.raises(PageFetchError) as excinfo:
-        _default_page_fetcher("https://public.example/go")
+        default_page_fetcher("https://public.example/go")
     assert "169.254.169.254" in str(excinfo.value)
     assert "private/loopback/link-local" in str(excinfo.value)
     assert seen == ["https://public.example/go"]  # the metadata endpoint was never opened
 
 
 def test_default_fetcher_follows_a_safe_relative_redirect(monkeypatch):
-    from quest_ai_runner.adapters.web_research import _default_page_fetcher
+    from quest_ai_runner.adapters.web_research import default_page_fetcher
 
     script = {
         "https://public.example/a": _FakeStream(301, {"location": "/b"}),
@@ -521,27 +521,27 @@ def test_default_fetcher_follows_a_safe_relative_redirect(monkeypatch):
         ),
     }
     seen = _patch_stream(monkeypatch, script)
-    page = _default_page_fetcher("https://public.example/a")
+    page = default_page_fetcher("https://public.example/a")
     assert page.status_code == 200
     assert "hi" in page.html
     assert seen == ["https://public.example/a", "https://public.example/b"]
 
 
 def test_default_fetcher_stops_after_too_many_redirects(monkeypatch):
-    from quest_ai_runner.adapters.web_research import PageFetchError, _default_page_fetcher
+    from quest_ai_runner.adapters.web_research import PageFetchError, default_page_fetcher
 
     url = "https://public.example/loop"
     script = {url: _FakeStream(302, {"location": url})}
     _patch_stream(monkeypatch, script)
     with pytest.raises(PageFetchError) as excinfo:
-        _default_page_fetcher(url)
+        default_page_fetcher(url)
     assert "too many redirects" in str(excinfo.value)
 
 
 def test_default_fetcher_decodes_the_declared_charset_not_assumed_utf8(monkeypatch):
     """A windows-1252 page decoded as UTF-8 turns every accented character into U+FFFD, which
     then poisons the focus scoring as well as the text the model reads."""
-    from quest_ai_runner.adapters.web_research import _default_page_fetcher
+    from quest_ai_runner.adapters.web_research import default_page_fetcher
 
     body = "<html><body><p>café résumé naïve</p></body></html>".encode("windows-1252")
     script = {
@@ -550,13 +550,13 @@ def test_default_fetcher_decodes_the_declared_charset_not_assumed_utf8(monkeypat
         ),
     }
     _patch_stream(monkeypatch, script)
-    page = _default_page_fetcher("https://public.example/p")
+    page = default_page_fetcher("https://public.example/p")
     assert "café résumé naïve" in page.html
     assert "�" not in page.html
 
 
 def test_default_fetcher_sniffs_a_meta_charset_when_the_header_omits_one(monkeypatch):
-    from quest_ai_runner.adapters.web_research import _default_page_fetcher
+    from quest_ai_runner.adapters.web_research import default_page_fetcher
 
     body = (
         "<html><head><meta charset='iso-8859-1'></head><body><p>naïve</p></body></html>"
@@ -565,7 +565,7 @@ def test_default_fetcher_sniffs_a_meta_charset_when_the_header_omits_one(monkeyp
         "https://public.example/m": _FakeStream(200, {"content-type": "text/html"}, body),
     }
     _patch_stream(monkeypatch, script)
-    page = _default_page_fetcher("https://public.example/m")
+    page = default_page_fetcher("https://public.example/m")
     assert "naïve" in page.html
 
 
@@ -650,18 +650,18 @@ def test_fetch_error_names_a_failing_fallback_fetcher():
 
 
 # ---------------------------------------------------------------------------
-# _DailyLimiter: cross-process persisted counter
+# DailyLimiter: cross-process persisted counter
 # ---------------------------------------------------------------------------
 #
 # The persisted file is shared by every process that points at the same QAR_WEB_CACHE_DIR
 # (two runner lanes, a terminal session and a web backend, all sharing one search API quota).
-# Each `_DailyLimiter` instance below stands in for a separate process's own in-memory object,
+# Each `DailyLimiter` instance below stands in for a separate process's own in-memory object,
 # all talking to the same on-disk state.
 
 
 def test_two_limiters_sharing_a_dir_see_one_combined_count(tmp_path):
-    a = _DailyLimiter(3, state_dir=tmp_path)
-    b = _DailyLimiter(3, state_dir=tmp_path)
+    a = DailyLimiter(3, state_dir=tmp_path)
+    b = DailyLimiter(3, state_dir=tmp_path)
 
     a.record()
     a.record()
@@ -678,8 +678,8 @@ def test_two_limiters_sharing_a_dir_see_one_combined_count(tmp_path):
 def test_two_limiters_sharing_a_dir_do_not_undercount_below_the_true_total(tmp_path):
     # The bug this replaces: each process persisted its OWN in-memory count, so two processes
     # recording concurrently could clobber each other and the guard never reached the real limit.
-    a = _DailyLimiter(10, state_dir=tmp_path)
-    b = _DailyLimiter(10, state_dir=tmp_path)
+    a = DailyLimiter(10, state_dir=tmp_path)
+    b = DailyLimiter(10, state_dir=tmp_path)
 
     for _ in range(4):
         a.record()
@@ -703,16 +703,16 @@ def data_count(tmp_path) -> int:
 
 
 def test_day_rollover_resets_the_shared_count(tmp_path, monkeypatch):
-    limiter = _DailyLimiter(2, state_dir=tmp_path)
-    monkeypatch.setattr(_DailyLimiter, "_today", staticmethod(lambda: "2026-01-01"))
+    limiter = DailyLimiter(2, state_dir=tmp_path)
+    monkeypatch.setattr(DailyLimiter, "_today", staticmethod(lambda: "2026-01-01"))
     limiter.record()
     limiter.record()
     assert limiter.exhausted() is True
 
     # A new day arrives; a second process (or the same one, later) sharing the directory
     # should see the count rolled back to zero rather than carrying yesterday's total.
-    monkeypatch.setattr(_DailyLimiter, "_today", staticmethod(lambda: "2026-01-02"))
-    other = _DailyLimiter(2, state_dir=tmp_path)
+    monkeypatch.setattr(DailyLimiter, "_today", staticmethod(lambda: "2026-01-02"))
+    other = DailyLimiter(2, state_dir=tmp_path)
     assert other.exhausted() is False
 
     other.record()
@@ -726,19 +726,19 @@ def test_corrupt_file_reads_as_zero_and_is_repaired_on_next_record(tmp_path):
     state_path = tmp_path / "web_search_daily_count.json"
     state_path.write_text("{not valid json")
 
-    limiter = _DailyLimiter(2, state_dir=tmp_path)
+    limiter = DailyLimiter(2, state_dir=tmp_path)
     assert limiter.exhausted() is False  # corrupt file -> reads as 0, not exhausted
 
     limiter.record()
     # The corrupt file is now repaired with a valid, atomically-written count.
     assert data_count(tmp_path) == 1
-    assert json.loads(state_path.read_text())["day"] == _DailyLimiter._today()
+    assert json.loads(state_path.read_text())["day"] == DailyLimiter._today()
 
 
 def test_memory_only_limiter_is_unaffected_by_other_instances(tmp_path):
     # No state_dir: behavior must stay exactly the old per-process, in-memory counter.
-    a = _DailyLimiter(1, state_dir=None)
-    b = _DailyLimiter(1, state_dir=None)
+    a = DailyLimiter(1, state_dir=None)
+    b = DailyLimiter(1, state_dir=None)
 
     a.record()
     assert a.exhausted() is True
@@ -747,7 +747,7 @@ def test_memory_only_limiter_is_unaffected_by_other_instances(tmp_path):
 
 def _record_many(state_dir: str, n: int) -> None:
     """Module-level so it can be pickled as a ``multiprocessing`` target (spawn-safe)."""
-    limiter = _DailyLimiter(10_000, state_dir=Path(state_dir))
+    limiter = DailyLimiter(10_000, state_dir=Path(state_dir))
     for _ in range(n):
         limiter.record()
 

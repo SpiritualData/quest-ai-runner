@@ -23,7 +23,7 @@ from quest_ai_runner.adapters.web_research import (
     PageFetchError,
     UnsupportedContentTypeError,
     WebResearchAdapter,
-    _default_page_fetcher,
+    default_page_fetcher,
 )
 from quest_ai_runner.core import orchestrator as orch
 from quest_ai_runner.core.link_detect import describe_link, extract_urls
@@ -230,7 +230,7 @@ EXPORT = f"https://docs.google.com/document/d/{ID}/export?format=txt"
 def reason_of(monkeypatch, script, url=EXPORT):
     patch_stream(monkeypatch, script)
     with pytest.raises(PageFetchError) as exc:
-        _default_page_fetcher(url)
+        default_page_fetcher(url)
     return exc.value.reason
 
 
@@ -238,7 +238,7 @@ def test_signin_redirect_is_not_shared_and_is_not_followed(monkeypatch):
     script = {EXPORT: FakeStream(307, {"location": "https://accounts.google.com/ServiceLogin?continue=x"})}
     seen = patch_stream(monkeypatch, script)
     with pytest.raises(PageFetchError) as exc:
-        _default_page_fetcher(EXPORT)
+        default_page_fetcher(EXPORT)
     assert exc.value.reason == wla.REASON_NOT_SHARED
     assert seen == [EXPORT]  # the sign-in page was never opened
 
@@ -281,19 +281,19 @@ def test_octet_stream_binary_is_unsupported(monkeypatch):
 
 
 def test_pdf_over_the_size_cap_is_too_large(monkeypatch):
-    body = b"%PDF-1.4 " + b"a" * (wr._MAX_PDF_BYTES + 10)
+    body = b"%PDF-1.4 " + b"a" * (wr.MAX_PDF_BYTES + 10)
     assert reason_of(monkeypatch, {EXPORT: FakeStream(200, {"content-type": "application/pdf"}, body)}) == wla.REASON_TOO_LARGE
 
 
 def test_declared_length_over_the_cap_is_too_large_without_reading(monkeypatch):
-    headers = {"content-type": "application/pdf", "content-length": str(wr._MAX_PDF_BYTES + 1)}
+    headers = {"content-type": "application/pdf", "content-length": str(wr.MAX_PDF_BYTES + 1)}
     assert reason_of(monkeypatch, {EXPORT: FakeStream(200, headers, b"%PDF")}) == wla.REASON_TOO_LARGE
 
 
 def test_text_over_the_cap_is_truncated_with_a_note(monkeypatch):
-    body = (b"word " * (wr._MAX_PAGE_BYTES // 5 + 100))
+    body = (b"word " * (wr.MAX_PAGE_BYTES // 5 + 100))
     patch_stream(monkeypatch, {EXPORT: FakeStream(200, {"content-type": "text/plain"}, body)})
-    page = _default_page_fetcher(EXPORT)
+    page = default_page_fetcher(EXPORT)
     assert page.truncated is True
     assert wr._with_truncation_note("hello", page).endswith("only the start was read.]")
 
@@ -302,7 +302,7 @@ def test_redirect_from_the_export_url_into_a_private_address_is_refused(monkeypa
     script = {EXPORT: FakeStream(302, {"location": "http://169.254.169.254/latest/meta-data/"})}
     seen = patch_stream(monkeypatch, script)
     with pytest.raises(PageFetchError) as exc:
-        _default_page_fetcher(EXPORT)
+        default_page_fetcher(EXPORT)
     assert "169.254.169.254" in str(exc.value)
     assert seen == [EXPORT]
 
@@ -314,7 +314,7 @@ def test_a_googleusercontent_download_redirect_is_followed(monkeypatch):
         dl: FakeStream(200, {"content-type": "text/plain; charset=utf-8"}, "hello doc".encode()),
     }
     patch_stream(monkeypatch, script)
-    assert _default_page_fetcher(EXPORT).html == "hello doc"
+    assert default_page_fetcher(EXPORT).html == "hello doc"
 
 
 # ---------------------------------------------------------------------------

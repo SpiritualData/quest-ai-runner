@@ -24,43 +24,32 @@ and wires a Gemini ``url_context`` fallback for pages that resist direct extract
 from __future__ import annotations
 
 import concurrent.futures
-import json
 import logging
 import os
-import re
-import tempfile
-import threading
-import time
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path
+
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from ..core.adapters import Observation
-from ..core.file_modes import match_umask
-from .web_cache import WebCache, normalize_query
+from .web_cache import normalize_query, WebCache
 from .web_link_access import (
+    classify_thin_page,
+    drive_download_is_too_big,
+    extract_pdf_text,
     FOLDER_MESSAGE,
     FORM_MESSAGE,
     KIND_DRIVE_FOLDER,
     KIND_FORM,
+    link_not_read_error,
     LinkReadError,
     LinkTarget,
+    looks_like_pdf,
     REASON_BLOCKED,
     REASON_JS_SHELL,
     REASON_MESSAGES,
-    REASON_NOT_FOUND,
     REASON_NOT_SHARED,
     REASON_TOO_LARGE,
     REASON_UNREACHABLE,
     REASON_UNSUPPORTED_TYPE,
-    classify_thin_page,
-    drive_download_is_too_big,
-    extract_pdf_text,
-    is_login_host,
-    link_not_read_error,
-    looks_like_pdf,
     rewrite_for_export,
 )
 from .web_page_extract import (
@@ -70,8 +59,17 @@ from .web_page_extract import (
     select_passages,
     split_passages,
 )
+from .web_research_fetch import (
+    canonicalize_url,
+    collapse_ws,
+    default_page_fetcher,
+    HARD_FAILURE_REASONS,
+    MAX_PAGE_BYTES,
+    PageFetchError,
+    trim_chars,
+)
+from .web_research_limiter import DailyLimiter
 from .web_search_backends import (
-    SearchBackend,
     SearchBackendError,
     SearchHit,
     SearchResponse,
@@ -87,16 +85,6 @@ _DEFAULT_PAGE_TOKEN_BUDGET = 3000
 _DEFAULT_FULL_PAGE_TOKEN_BUDGET = 12000
 _DEFAULT_SEARCH_TTL = 86400
 _DEFAULT_PAGE_TTL = 604800
-_FETCH_TIMEOUT = 8.0
-_MAX_PAGE_BYTES = 2 * 1024 * 1024
-#: A PDF is binary and its text is a fraction of its size, so it gets a larger byte cap than a
-#: web page (the extracted text is capped separately, see ``web_link_access.PDF_MAX_TEXT_CHARS``).
-_MAX_PDF_BYTES = 15 * 1024 * 1024
-_MAX_REDIRECTS = 5
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-)
 _SNIPPET_MAX_CHARS = 240
 _SUMMARY_MAX_CHARS = 400
 _MIN_EXTRACTED_CHARS = 200
@@ -112,437 +100,6 @@ _DAILY_LIMIT_FALLBACK_MESSAGE = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Small helpers
-# ---------------------------------------------------------------------------
-
-
-def canonicalize_url(url: str) -> str:
-    """Drop the fragment and any ``utm_*`` tracking params, for stable cache/dedupe keys."""
-    try:
-        parts = urlsplit(url)
-        kept = [
-            (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
-            if not k.lower().startswith("utm_")
-        ]
-        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(kept), ""))
-    except Exception:  # noqa: BLE001
-        return url
-
-
-def _collapse_ws(s: str) -> str:
-    return " ".join((s or "").split())
-
-
-def _trim(s: str, n: int) -> str:
-    s = _collapse_ws(s)
-    if len(s) <= n:
-        return s
-    return s[:n].rsplit(" ", 1)[0] + "..."
-
-
-# ---------------------------------------------------------------------------
-# Page fetching (injectable for tests)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class FetchedPage:
-    html: str
-    content_type: str
-    status_code: int
-    #: Raw bytes, kept only for binary bodies (a PDF) that ``html`` cannot represent.
-    data: bytes = b""
-    #: True when the body was cut at the size cap (text bodies only; a cut PDF is ``too_large``).
-    truncated: bool = False
-    #: The URL the body came from after redirects.
-    final_url: str = ""
-
-
-class PageFetchError(Exception):
-    """The page could not be retrieved at all (network/timeout/HTTP error). Retryable via a
-    ``url_fetch_fallback`` unless ``reason`` is one a fallback cannot change (see
-    ``HARD_FAILURE_REASONS``).
-
-    ``reason`` is one of ``web_link_access.ALL_REASONS`` (``unreachable`` when not set) and
-    ``user_message`` optionally replaces that reason's standard sentence.
-    """
-
-    def __init__(self, message: str, reason: str = REASON_UNREACHABLE,
-                 user_message: Optional[str] = None) -> None:
-        super().__init__(message)
-        self.reason = reason
-        self.user_message = user_message
-
-
-class UnsupportedContentTypeError(PageFetchError):
-    """The content-type is one we deliberately don't extract (e.g. a video). NOT retried via
-    ``url_fetch_fallback`` -- a fallback fetch would hit the same file."""
-
-    def __init__(self, message: str, reason: str = REASON_UNSUPPORTED_TYPE,
-                 user_message: Optional[str] = None) -> None:
-        super().__init__(message, reason, user_message)
-
-
-#: Failures a paid ``url_fetch_fallback`` cannot fix: the file is private, missing, too big or the
-#: wrong kind. ``blocked``, ``unreachable`` and a thin page still get the fallback.
-HARD_FAILURE_REASONS = frozenset({
-    REASON_NOT_SHARED, REASON_NOT_FOUND, REASON_TOO_LARGE, REASON_UNSUPPORTED_TYPE,
-})
-
-#: Types read as text. ``text/*`` covers html, plain, csv and markdown.
-_TEXT_CONTENT_PREFIXES = ("text/", "application/xhtml", "application/json", "application/xml")
-_UNREADABLE_PREFIXES = ("video/", "audio/", "image/", "font/")
-
-
-def _charset_from_content_type(header: str) -> str:
-    """The ``charset=`` parameter of a content-type header, lowercased, or ``""``."""
-    for part in (header or "").split(";")[1:]:
-        name, _, value = part.partition("=")
-        if name.strip().lower() == "charset":
-            return value.strip().strip("\"'").lower()
-    return ""
-
-
-def _sniff_meta_charset(raw: bytes) -> str:
-    """The charset declared in the document's own ``<meta>``, from the first 4 KB, or ``""``.
-
-    Sniffed as ASCII-ish bytes because that is all a charset declaration can legally be, and we
-    do not yet know the encoding of the rest of the document.
-    """
-    head = raw[:4096].decode("ascii", errors="ignore")
-    match = re.search(r"<meta[^>]+charset\s*=\s*[\"']?\s*([A-Za-z0-9_.:-]+)", head, re.I)
-    return match.group(1).strip().lower() if match else ""
-
-
-def _decode_page(raw: bytes, content_type_header: str) -> str:
-    """Decode page bytes with the charset the page actually declares, not an assumed UTF-8.
-
-    Before this, every page was decoded as UTF-8 with ``errors="replace"``, so a windows-1252 /
-    latin-1 / Shift-JIS page arrived as U+FFFD soup: every non-ASCII character in it (names,
-    prices, quotes, every accented word) became a replacement character, which then also poisoned
-    the BM25 focus scoring. The declared charset wins, the document's own ``<meta>`` is the
-    fallback, and UTF-8 with replacement is the last resort so this still never raises.
-    """
-    candidates = [
-        _charset_from_content_type(content_type_header),
-        _sniff_meta_charset(raw),
-    ]
-    for charset in candidates:
-        if not charset or charset in ("utf-8", "utf8"):
-            continue
-        try:
-            return raw.decode(charset, errors="replace")
-        except (LookupError, UnicodeDecodeError, ValueError):
-            continue
-    return raw.decode("utf-8", errors="replace")
-
-
-def _status_failure(status_code: int, current: str) -> PageFetchError:
-    """The typed failure for an HTTP error status. A Google host answering 401/403 means the file
-    is not shared with everyone; the same status from another site is a bot wall or a login."""
-    host = (urlsplit(current).hostname or "").lower()
-    google = host.endswith("google.com") or host.endswith("googleusercontent.com")
-    msg = f"web fetch: HTTP {status_code} for {current}"
-    if status_code == 401 or (status_code == 403 and google):
-        return PageFetchError(msg, REASON_NOT_SHARED)
-    if status_code in (404, 410):
-        return PageFetchError(msg, REASON_NOT_FOUND)
-    if status_code in (403, 429, 451):
-        return PageFetchError(msg, REASON_BLOCKED)
-    return PageFetchError(msg, REASON_UNREACHABLE)
-
-
-def _default_page_fetcher(url: str) -> FetchedPage:
-    """GET ``url`` with bounded size/time/content-type. Raises ``PageFetchError`` on failure, with
-    a typed ``reason`` (see ``web_link_access``).
-
-    Redirects are followed BY HAND, re-running ``check_url_is_safe`` on every hop, because
-    ``follow_redirects=True`` would have walked straight past the SSRF guard: the guard only ever
-    saw the URL the planner asked for, so any public URL that 302s to ``http://127.0.0.1:9000/``
-    or ``http://169.254.169.254/latest/meta-data/`` was fetched anyway, and the guard's promise
-    (checked "before we ever open a socket") held only for the first hop. The same loop is what
-    makes a private Google file visible: its export URL answers with a redirect to a sign-in host,
-    which is reported as ``not_shared`` instead of being followed.
-    """
-    import httpx
-
-    headers = {"User-Agent": _USER_AGENT}
-    current = url
-    try:
-        for _hop in range(_MAX_REDIRECTS + 1):
-            with httpx.stream(
-                "GET", current, headers=headers, timeout=_FETCH_TIMEOUT, follow_redirects=False
-            ) as resp:
-                status_code = resp.status_code
-                content_type_header = resp.headers.get("content-type") or ""
-                if status_code in (301, 302, 303, 307, 308):
-                    location = resp.headers.get("location") or ""
-                    if not location:
-                        raise PageFetchError(
-                            f"web fetch: HTTP {status_code} with no Location for {current}")
-                    current = str(httpx.URL(current).join(location))
-                    safety_error = check_url_is_safe(current)
-                    if safety_error:
-                        raise PageFetchError(f"web fetch: redirect to {current} {safety_error}",
-                                             REASON_BLOCKED)
-                    if is_login_host(urlsplit(current).hostname or ""):
-                        raise PageFetchError(
-                            f"web fetch: {url} redirects to a sign-in page ({current})",
-                            REASON_NOT_SHARED)
-                    continue
-                content_type = content_type_header.split(";")[0].strip().lower()
-                if status_code >= 400:
-                    raise _status_failure(status_code, current)
-                if any(content_type.startswith(p) for p in _UNREADABLE_PREFIXES):
-                    raise UnsupportedContentTypeError(
-                        f"web fetch: unsupported content-type {content_type!r} for {url}")
-                is_text = any(content_type.startswith(p) for p in _TEXT_CONTENT_PREFIXES)
-                is_pdf = "pdf" in content_type
-                sniff = not content_type or content_type == "application/octet-stream"
-                if not (is_text or is_pdf or sniff):
-                    raise UnsupportedContentTypeError(
-                        f"web fetch: unsupported content-type {content_type!r} for {url}")
-                declared = resp.headers.get("content-length") or ""
-                # A declared PDF may be large; an undeclared type is read up to the PDF cap too and
-                # cut back to the page cap below if it turns out not to be a PDF.
-                byte_cap = _MAX_PDF_BYTES if (is_pdf or sniff) else _MAX_PAGE_BYTES
-                if (is_pdf or sniff) and declared.isdigit() and int(declared) > byte_cap:
-                    raise PageFetchError(
-                        f"web fetch: {url} is {declared} bytes, over the {byte_cap} byte cap",
-                        REASON_TOO_LARGE)
-                chunks: List[bytes] = []
-                total = 0
-                truncated = False
-                for chunk in resp.iter_bytes():
-                    total += len(chunk)
-                    if total > byte_cap:
-                        truncated = True
-                        break
-                    chunks.append(chunk)
-                raw = b"".join(chunks)
-            if is_pdf or (sniff and looks_like_pdf(raw)):
-                if truncated:
-                    raise PageFetchError(
-                        f"web fetch: {url} is over the {_MAX_PDF_BYTES} byte cap", REASON_TOO_LARGE)
-                return FetchedPage(html="", content_type="application/pdf", status_code=status_code,
-                                   data=raw, final_url=current)
-            if sniff and len(raw) > _MAX_PAGE_BYTES:
-                raw = raw[:_MAX_PAGE_BYTES]
-                truncated = True
-            if sniff and (b"\x00" in raw[:2048]):
-                if truncated:
-                    raise PageFetchError(
-                        f"web fetch: {url} is over the {_MAX_PAGE_BYTES} byte cap", REASON_TOO_LARGE)
-                raise UnsupportedContentTypeError(
-                    f"web fetch: {url} is a binary file ({content_type or 'unknown type'})")
-            return FetchedPage(
-                html=_decode_page(raw, content_type_header),
-                content_type=content_type or "text/plain",
-                status_code=status_code,
-                truncated=truncated,
-                final_url=current,
-            )
-        raise PageFetchError(f"web fetch: too many redirects for {url}")
-    except (PageFetchError, UnsupportedContentTypeError):
-        raise
-    except httpx.TimeoutException as exc:
-        raise PageFetchError(f"web fetch: request timed out for {current}: {exc}") from exc
-    except httpx.HTTPError as exc:
-        raise PageFetchError(f"web fetch: request failed for {current}: {exc}") from exc
-
-
-# ---------------------------------------------------------------------------
-# Daily cost guard
-# ---------------------------------------------------------------------------
-
-
-#: Bounded wait for the cross-process advisory lock, so a contended lock degrades to "proceed
-#: without it" rather than hanging a turn.
-_LOCK_TIMEOUT_SECONDS = 2.0
-_LOCK_POLL_INTERVAL_SECONDS = 0.05
-
-try:
-    import fcntl  # type: ignore
-except ImportError:  # Windows: no advisory file locking.
-    fcntl = None  # type: ignore[assignment]
-
-
-class _DailyLimiter:
-    """UTC-day counter of REAL, PAID calls: backend searches and ``url_fetch_fallback`` (Gemini
-    url_context) fetches that are actually issued. Cache hits and direct HTML fetches never
-    count; they are free.
-
-    Thread-safe within one process. When ``state_dir`` is set, the persisted file (not the
-    in-memory count) is the source of truth ACROSS processes: every other process pointed at the
-    same ``QAR_WEB_CACHE_DIR`` shares one spend. ``record()`` takes an exclusive advisory lock,
-    re-reads the file, rolls the day, increments, and writes atomically, so concurrent processes
-    (two runner lanes, a terminal session and a web backend, all sharing one search API quota)
-    add up instead of each overwriting the other's count with its own stale in-memory value --
-    the bug this replaces undercounted by up to the number of processes sharing the directory.
-    ``exhausted()`` re-reads the file too (a few hundred bytes), so one process sees another's
-    spend, without taking a lock (see ``exhausted`` for why a plain read is safe here).
-
-    A limit of ``None``/``0`` disables the guard entirely (no file I/O either). Without
-    ``state_dir`` behavior is unchanged: a plain in-memory, per-process counter.
-    """
-
-    def __init__(self, limit: Optional[int], *, state_dir: Optional[Path] = None) -> None:
-        self._limit = int(limit) if limit else 0
-        self._state_path = (state_dir / "web_search_daily_count.json") if state_dir else None
-        self._lock_path = (
-            (state_dir / "web_search_daily_count.lock") if state_dir else None
-        )
-        self._lock = threading.Lock()
-        self._day = self._today()
-        self._count = 0
-        if self._state_path is not None:
-            self._load()
-
-    @staticmethod
-    def _today() -> str:
-        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    def _load(self) -> None:
-        """Read the persisted count into the in-memory cache. Best-effort: a missing or corrupt
-        file reads as 0 (today) rather than raising, and gets repaired on the next ``record()``."""
-        try:
-            raw = json.loads(self._state_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
-            day = raw.get("day")
-            count = int(raw.get("count", 0))
-        except (OSError, ValueError, KeyError, TypeError):
-            return
-        if day == self._today():
-            self._day = day
-            self._count = count
-        # A stale day on disk is not rolled here: the in-memory default (today, 0) already
-        # reflects a fresh day, and the next record() will roll-and-write it for real.
-
-    def _save_locked(self) -> None:
-        """Atomic write of the in-memory ``(day, count)``. Caller holds ``self._lock`` and,
-        when persisted, the cross-process file lock."""
-        if self._state_path is None:
-            return
-        tmp_path: Optional[str] = None
-        try:
-            fd, tmp_path = tempfile.mkstemp(
-                dir=str(self._state_path.parent), prefix=".webcount-", suffix=".tmp"
-            )
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump({"day": self._day, "count": self._count}, fh)
-                fh.flush()
-                match_umask(fh.fileno())
-            os.replace(tmp_path, self._state_path)
-            tmp_path = None
-        except OSError:
-            logger.debug("web search daily limiter: could not persist count", exc_info=True)
-        finally:
-            if tmp_path is not None:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-
-    def _roll_day_locked(self) -> None:
-        today = self._today()
-        if today != self._day:
-            self._day = today
-            self._count = 0
-
-    def _acquire_cross_process_lock(self):
-        """Open (creating if needed) and exclusively lock the sidecar lock file, bounded by
-        ``_LOCK_TIMEOUT_SECONDS``. Returns the open fd on success, or ``None`` if locking is
-        unavailable (no ``fcntl``, e.g. Windows) or the lock could not be acquired in time --
-        callers must proceed without it rather than block a turn."""
-        if fcntl is None or self._lock_path is None:
-            return None
-        try:
-            fd = os.open(str(self._lock_path), os.O_CREAT | os.O_RDWR, 0o666)
-            match_umask(fd)
-        except OSError:
-            logger.debug("web search daily limiter: could not open lock file", exc_info=True)
-            return None
-        deadline = datetime.now(timezone.utc).timestamp() + _LOCK_TIMEOUT_SECONDS
-        try:
-            while True:
-                try:
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    return fd
-                except OSError:
-                    if datetime.now(timezone.utc).timestamp() >= deadline:
-                        logger.debug(
-                            "web search daily limiter: lock acquisition timed out; "
-                            "proceeding without it"
-                        )
-                        os.close(fd)
-                        return None
-                    time.sleep(_LOCK_POLL_INTERVAL_SECONDS)
-        except Exception:  # noqa: BLE001
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-            return None
-
-    @staticmethod
-    def _release_cross_process_lock(fd: Optional[int]) -> None:
-        if fd is None:
-            return
-        try:
-            if fcntl is not None:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-        except OSError:
-            pass
-        finally:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-
-    def exhausted(self) -> bool:
-        """Whether today's count has reached the limit. When persisted, re-reads the file under
-        NO lock: the file is only ever replaced via ``os.replace`` (atomic on POSIX), so a plain
-        read always sees either the previous complete write or the next one, never a partial
-        one -- the simpler option, and correct, so a second lock here would only add contention
-        for no safety benefit. Falls back to the in-memory count if the file is missing, corrupt,
-        or (when locking is unavailable) simply not re-read.
-        """
-        if self._limit <= 0:
-            return False
-        with self._lock:
-            self._roll_day_locked()
-            if self._state_path is not None:
-                self._load()
-            return self._count >= self._limit
-
-    def record(self) -> None:
-        """Record one real, paid call (a backend search, or a url_fetch_fallback fetch that was
-        actually issued). No-op when the guard is disabled.
-
-        When persisted, the FILE is the source of truth across processes: this takes an exclusive
-        cross-process lock, re-reads the latest count, rolls the day if the stored day is stale,
-        increments, and writes atomically before releasing the lock -- so two processes recording
-        concurrently both land (never one clobbering the other's increment). Never raises: a lock
-        that can't be acquired in time (no ``fcntl``, or genuine contention) degrades to the old
-        in-process-only behavior for this call rather than blocking the turn.
-        """
-        if self._limit <= 0:
-            return
-        with self._lock:
-            lock_fd = self._acquire_cross_process_lock() if self._state_path is not None else None
-            try:
-                if lock_fd is not None:
-                    # Another process may have advanced the count (or rolled the day) since our
-                    # last read; the lock guarantees this read is current.
-                    self._load()
-                self._roll_day_locked()
-                self._count += 1
-                self._save_locked()
-            finally:
-                self._release_cross_process_lock(lock_fd)
-
-
-# ---------------------------------------------------------------------------
 # WebResearchAdapter
 # ---------------------------------------------------------------------------
 
@@ -577,10 +134,10 @@ class WebResearchAdapter:
         self._cache = cache if cache is not None else WebCache()
         self._search_ttl = search_ttl_seconds
         self._page_ttl = page_ttl_seconds
-        self._page_fetcher = page_fetcher or _default_page_fetcher
+        self._page_fetcher = page_fetcher or default_page_fetcher
         self._url_fetch_fallback = url_fetch_fallback
         self._max_parallel = max(1, max_parallel)
-        self._limiter = _DailyLimiter(daily_limit, state_dir=self._cache.directory)
+        self._limiter = DailyLimiter(daily_limit, state_dir=self._cache.directory)
 
     @property
     def backend_name(self) -> str:
@@ -648,7 +205,7 @@ class WebResearchAdapter:
                 f'WEB RESULTS for "{q}" (via {self.backend_name}; cite facts inline as [title](url)):'
             ]
             if resp.answer:
-                lines.append(f"Summary: {_trim(resp.answer, _SUMMARY_MAX_CHARS)}")
+                lines.append(f"Summary: {trim_chars(resp.answer, _SUMMARY_MAX_CHARS)}")
             # A backend whose per-hit "snippet" is a SPAN OF ITS OWN SUMMARY bills the same words
             # twice. Gemini grounding does exactly that (its snippets come from the answer's
             # grounding supports): measured live, the summary and the first two snippets were the
@@ -659,7 +216,7 @@ class WebResearchAdapter:
             # Compared against the summary AS RENDERED (trimmed), never the full answer, so a
             # snippet whose text falls past the trim point is kept rather than dropped as a
             # duplicate of something the planner never sees.
-            shown_answer = _trim(resp.answer, _SUMMARY_MAX_CHARS) if resp.answer else ""
+            shown_answer = trim_chars(resp.answer, _SUMMARY_MAX_CHARS) if resp.answer else ""
 
             shown = 0
             for hit in resp.hits:
@@ -671,10 +228,10 @@ class WebResearchAdapter:
                 shown += 1
                 date_part = f" | {hit.date}" if hit.date else ""
                 lines.append(f"{shown}. {hit.title} | {hit.url}{date_part}")
-                snippet = _trim(hit.snippet, _SNIPPET_MAX_CHARS)
+                snippet = trim_chars(hit.snippet, _SNIPPET_MAX_CHARS)
                 # An already-truncated snippet carries a trailing ellipsis that the summary does
                 # not, so the containment check compares the part before it.
-                collapsed_snippet = _collapse_ws(hit.snippet).rstrip(".… ")
+                collapsed_snippet = collapse_ws(hit.snippet).rstrip(".… ")
                 if snippet and not (
                     shown_answer and collapsed_snippet and collapsed_snippet in shown_answer
                 ):
@@ -993,7 +550,7 @@ def paginate_text(text: str, max_chars: int) -> List[str]:
 def _with_truncation_note(text: str, page: Any) -> str:
     """Say so when the body was cut at the size cap, so a partial read is never silent."""
     if getattr(page, "truncated", False) and text:
-        return text + f"\n\n[Note: this file is larger than {_MAX_PAGE_BYTES // (1024 * 1024)} MB; only the start was read.]"
+        return text + f"\n\n[Note: this file is larger than {MAX_PAGE_BYTES // (1024 * 1024)} MB; only the start was read.]"
     return text
 
 
@@ -1091,3 +648,32 @@ def build_web_research_from_env(
         url_fetch_fallback=url_fetch_fallback,
         daily_limit=daily_limit,
     )
+
+
+# The module is split by role; these names stay importable from here.
+from .web_research_fetch import (  # noqa: F401  (kept importable from here)
+    FETCH_TIMEOUT,
+    FetchedPage,
+    HARD_FAILURE_REASONS,
+    MAX_PAGE_BYTES,
+    MAX_PDF_BYTES,
+    MAX_REDIRECTS,
+    PageFetchError,
+    TEXT_CONTENT_PREFIXES,
+    UNREADABLE_PREFIXES,
+    USER_AGENT,
+    UnsupportedContentTypeError,
+    canonicalize_url,
+    charset_from_content_type,
+    collapse_ws,
+    decode_page,
+    default_page_fetcher,
+    sniff_meta_charset,
+    status_failure,
+    trim_chars,
+)
+from .web_research_limiter import (  # noqa: F401  (kept importable from here)
+    DailyLimiter,
+    LOCK_POLL_INTERVAL_SECONDS,
+    LOCK_TIMEOUT_SECONDS,
+)
