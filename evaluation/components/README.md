@@ -55,13 +55,16 @@ Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the mod
 | `deep_review/` | `review(elapsed, idle, tail) -> {"stop", "reason"}` on 39 labelled live logs | `stop` equals the label; false stops counted apart from missed stops |
 | `reply_guards/` | `guard(kind, args) -> dict` for the link guard, link extraction, recipe match and learn, anticipation chips, match and weight | declarative `expect`; fake HTTP probe and fixed clock |
 | `model_providers/` | `call(kind, args) -> dict` for prefix routing, quota tier fallback, retry, dry-run tokens, price lookups, estimate arithmetic | declarative `expect`; fake and dry-run providers |
-| `web_search/` | `search(case) -> {"urls", "text", "error", ...}` through one backend over fixture payloads | gold page in top k, cap, dedupe, tags, summary, failover, cache; tokens added |
-| `card_quality/` | `select(query, world) -> {"view", "titles"}` after learning three tasks | labelled collection resolved, no spraying, no leak |
+| `web_search/` | `search(case) -> {"urls", "text", "error", ...}` through one backend over fixture payloads (the offline invariant of search-the-web) | gold page in top k, cap, dedupe, tags, summary, failover, cache; tokens added |
+| `web_search_live/` | the same result dict from the PRODUCTION `WebResearchAdapter` built from the environment, through `scripts/web_search_bench.py`, cache bypassed (opt-in: `QAR_EVAL_LIVE_SEARCH=1` and a configured backend, else SKIPPED) | an answer phrase in the observation the planner would see, no error, unique urls; spend counted in real backend calls at the list price in `pricing.py` |
+| `card_quality/` | `select(query, world) -> {"view", "titles"}` after learning three tasks (the outcome arm of select-context: choosing cards for a query) | labelled collection resolved, no spraying, no leak |
+| `persist_cards/` | `persist(kind, args) -> dict` through a `CardRepository`: roundtrip, overwrite, loss at volume and across pages, duplication, delete, concurrent writers, restart, change stamp, tolerance; one case set run on the filesystem, embedded Qdrant and Quest API backends (fake Quest card API) | declarative `expect`: every case must hold on every backend (no lost or duplicated card, same behaviour) |
 | `claude_code_ab/` | `locate(case) -> {"answer", "turns"}` for seven "which file" tasks | labelled path in the answer |
-| `retrieval/` | `retrieve(question, corpus) -> {"ids", "texts"}` through one LIVE retrieval adapter over a synthetic handbook | recall@3 of the labelled document, and its answer phrase in the text the adapter read |
+| `retrieval/` | `retrieve(question, corpus) -> {"ids", "texts"}` through a complete retrieval STACK (the composite and its floor) over a synthetic handbook | recall@3 of the labelled document, and its answer phrase in the text the adapter read |
+| `retrieval_sources/` | the same function through ONE source adapter alone (files, DB rows, MCP, Notion, Drive, Chat, remote files); same cases (a link to `retrieval/cases.json`), policy and scorer | the same bar per source; an invariant arm (`invariant.txt`): listed, never ranked |
 | `conversation_recall/` | `recall(query, user, world) -> {"ids"}` through the live `SessionFileConversationStore` | labelled past conversation returned, none of another user's |
 | `recent_context/` | `recall(case) -> {"ids"}` through the live `FileRecentContextStore` and `filter_relevant` | right cards warm-started, no stale or cross-quest card |
-| `vector_recall/` | `search(query, corpus) -> {"ids"}` through the live embedded `QdrantVectorStore` | labelled card in the top 3 (mostly paraphrases) |
+| `vector_recall/` | `search(query, corpus) -> {"ids"}` through the live embedded `QdrantVectorStore` | labelled card in the top 3 (mostly paraphrases), and p50/p95 query milliseconds at a fixed corpus size against the caps in the case data |
 
 Add a solution: create `<component>/impls/<name>.py` exposing `build(meter) -> function`, count any
 model call with `meter.record()` (or `meter.wrap(provider)`), and run it with `--impl <name>`.
@@ -102,8 +105,8 @@ provider finds on its own, so a live run is possible once someone approves the (
 | `deep_review` | `rule_floor` 38/39 | `live_reviewer` (39 one-shot `claude -p` calls) | the rule floor was written with the cases in view: an optimistic ceiling for a rule, not a blind result |
 | `reply_guards` | `qar_guards` 54/54 vs `passthrough` 18/54: fabricated vs real links, extraction, recipe near misses and scope fence, chips and weights | the replay engine through a model is `recipe_fast_path` (unchanged, waived) | the HTTP probe and clock are faked |
 | `model_providers` | `multi_provider` 54/56 vs `single_provider` 19/56 | latency and pass rate per tier (needs real calls) | two real gaps pinned: `pricing.py` prices `claude-opus-4`/`-4-8` at $3 but the `opus` family at $15 (MPR-080, MPR-101); the table is input tokens only |
-| `web_search` | all five backends 15/15; mean observation about 147 to 162 tokens | live relevance and freshness (vendor keys) | payloads are WRITTEN fixtures in each vendor's response shape, not recordings; the operator tool `scripts/web_search_bench.py` is reused for measurement |
-| `card_quality` | `seeded_keyword_store` 2/5, `seeded_keyword_open` 1/5 | `live_updater_hybrid` (model-learned cards, Voyage vector arm, embedded Qdrant) | the offline arm measures selection and fresh resolution, not the model's learning of cards; a mistaken live run on 2026-10-15 scored 5/5 (two runs, about $0.08 CLI-reported) but is NOT in `results.csv` |
+| `web_search` | every backend and the chain on the 15 fixture queries | live relevance and spend: `web_search_live` (opt-in, real calls) | payloads are WRITTEN fixtures in each vendor's response shape, not recordings, so this proves identical handling, not relevance; the operator tool `scripts/web_search_bench.py` is reused for measurement |
+| `card_quality` | `seeded_keyword_store`, `seeded_keyword_open` | `live_updater_hybrid` (model-learned cards, Voyage vector arm, embedded Qdrant) | the offline arm measures selection and fresh resolution, not the model's learning of cards; an earlier live run was made by mistake and is NOT in `results.csv` |
 | `claude_code_ab` | `idf_hint` 5/7: what the warm hint would contain | `cold_claude`, `warm_claude` | the old script's warm hint was always empty (no model provider means zero cards) so it fell back to the correct answer; the component takes its hint from `idf_hint` instead |
 
 `expect.py` is the shared declarative check (`eq`, `contains`, `not_contains`, `max_len`, `min_len`, `approx`) used by
@@ -191,17 +194,35 @@ imports or drives `quest_ai_runner`, or declares `ALTERNATIVE = True` (or a docs
 `BASELINE`, `ABLATION`, `FLOOR`). A row recorded without `cases_sha` shows as `unverified` in `leaderboard.py`
 and is never compared against a verified one (check S16).
 
-## prompt_size: production-sized ceilings
+## prompt_size: budgets derived from the model limit and cost
 
 `prompt_size/` has `healthy` and `incident` fixtures plus a `production` fixture (PSZ-009 to PSZ-011) that sweeps 20
 deterministic samples from a light day to the heaviest seen, so the headline reports a real p95 beside the max. The
 sizes (20 context-update refs of about 1.9K chars, standing instructions about 6.8K, goal frame, last run, next steps)
-come from sizes measured in the 2026-10-06 incident; the text is generated filler, no real content. Measured against
-the ceilings (chars): autopilot batch max 61,131 / p95 58,323 vs 105,000; context-update bundle max 40,533 / p95
-38,288 vs 60,000; deep prompt max 83,374 / p95 80,366 vs 210,000. All three hold with headroom, so no ceiling was
-changed. The planner ceiling was raised from 60,000 to 66,000 on 2026-10-16: the incident-sized planner view measured
-62,349 after that day's shipped planner rules and tools (pending reads, workflow, file-source and document-read
-rules), so 60,000 was a stale initial value, not a regression to hide; trimming the rubric is the open action. The ceilings are the assembler budgets (the hard caps), not forecasts: they stay where the budget is.
+come from sizes measured in the 2026-10-06 incident; the text is generated filler, no real content.
+
+A case passes when its prompt is within the assembly point's BUDGET and holds no duplicated block. The budget is
+computed, not typed in beside the number it must beat (an earlier ceiling was raised after a measurement rather
+than derived, so it could not show better or worse). `prompt_size/budgets.py` derives it:
+
+```
+window_tokens = context window of the CHEAPEST tier in the model registry (prompt_budget.context_window_tokens)
+window_bound  = window_tokens * window_share              (deep prompt: window_tokens - WORKER_RESERVED_TOKENS)
+cost_bound    = usd_cap_per_run / calls_per_run / price_per_token of the point's own tier
+budget_tokens = min(window_bound, cost_bound)
+budget_chars  = budget_tokens * CHARS_PER_TOKEN
+```
+
+The cheapest tier is the window because a prompt must still fit after a tier downgrade (`TIER_DOWNGRADE_ORDER`).
+The planner and the deep prompt are derived this way; the autopilot batch and the context-update bundle are sections
+of a deep prompt and take a stated share of its budget. Every constant is read from the code that owns it: the window
+and `CHARS_PER_TOKEN` from `core/prompt_budget.py`, the tier models from `core/model_registry.py`, input prices from
+`pricing.py`, and `calls_per_run` from `OrchestratorConfig` (`max_steps` for the planner, `deep_goal_max_iterations`
+for a goal). Only the shares and the dollar caps are policy; they are in `prompt_size/budget_inputs.json`, each with
+the reason for it, and a human changes a budget by changing one of them or the model data, never by raising a limit
+to clear a measurement. Each row also reports `headroom`, the share of the budget left unused, and the headline shows
+the smallest headroom per point, so a prompt creeping toward its budget is visible before it fails. The budgets are
+the assembler's hard caps, not forecasts.
 
 ## Retrieval, conversation, recent-context and vector recall (offline, zero model calls)
 
@@ -211,13 +232,20 @@ rules), so 60,000 was a stale initial value, not a regression to hide; trimming 
   seam for MCP, the transport for `RemoteFilesAdapter` (answered by the real `serve-files` `FileOperations`
   dispatch). The gather policy (`policy.py`: question terms, one adapter search per term, rarity-weighted rank)
   is shared, so a score differs only by what the adapter can find and read. Implementations: `files_adapter`,
-  `cached_db`, `composite` (selected), `mcp_server`, `notion_pages`, `drive_files`, `chat_threads`,
-  `remote_files`, and the `first_three` floor. Not driven: `quest_retrieval_adapter`, which is keyed by goal and
+  `composite` (selected) and the `first_three` floor are the complete STACKS ranked here. The per-source adapters
+  (`files_adapter`, `cached_db`, `mcp_server`, `notion_pages`, `drive_files`, `chat_threads`, `remote_files`) are
+  complementary sources, not alternatives, so they run in the separate `retrieval_sources/` arm (same cases, policy
+  and scorer; `invariant.txt` makes the leaderboard list them without ranking). Not driven: `quest_retrieval_adapter`, which is keyed by goal and
   quest ids against the Quest API rather than by a question (pinned by `tests/test_quest_retrieval_decisions.py`).
   Honest limits: the MCP number measures plumbing (the fake server does the search); Drive has no search, so its
   policy lists and reads every file; Notion's `grep` sees rows (title, properties), not page bodies; a paraphrase
   with no shared word is a miss for all (RET-019, RET-020). `remote_files` takes about 35 s because the real file
   server runs each search in a child process.
+* `vector_recall/` also times queries. A latency case pads the handbook with deterministic filler cards to a fixed
+  size, indexes it once (timed apart as `index_ms`), then times every labelled query several times with the model
+  embedding the query for real (no text cache). It passes when p50 and p95 are within the caps in the case, which are
+  an interactive budget with their basis written in `cap_basis`, not a fitted number. `results.csv` has no latency
+  column: the p50/p95 headline is printed by the run and kept in its json; the recorded pass count includes the case.
 * `conversation_recall/` covers `remember-conversations`: synthetic session files for two users, `related_slices`
   with the user in scope, and a leak check. `current_slice` and database-backed stores are not driven.
 * `recent_context/` covers `recall-recent-context`: ten multi-turn scenarios (follow-up free pass, scope fence
