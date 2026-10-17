@@ -10,6 +10,8 @@ template_source = "../../.claude/skills/evolvable-structure/SKILL.md"
 # live_calls: evaluation implementations that drive the real orchestrator through the shared offline builder
 live_calls = ["common.build_offline_orchestrator", "hygiene.scan_text"]
 plugins = ["scripts/esoi_rules.py"]
+# measured code for staleness: the package and the evaluation drivers, not their prose
+code_paths = ["quest_ai_runner", "evaluation/components", ":(exclude,glob)**/*.md"]
 
 # the overall network (qar_solution.md is its readable version), and the one column QAR keeps on its tracker
 # tabs after the key column: the grouping of detailed solutions into the ten areas of qar_solution.md

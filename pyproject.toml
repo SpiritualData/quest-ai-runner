@@ -89,7 +89,7 @@ all = [
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
-    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@9a60f6c#subdirectory=implementations/python",
+    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@3a23f94#subdirectory=implementations/python",
 ]
 
 [project.urls]
