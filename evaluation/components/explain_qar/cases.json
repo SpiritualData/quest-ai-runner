@@ -5889,6 +5889,90 @@
   }
  },
  {
+  "id": "DOC-408",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/structure/metric-run-policy.md: every relative link resolves",
+  "args": {
+   "file": "docs/structure/metric-run-policy.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-409",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/structure/metric-run-policy.md: no em dash",
+  "args": {
+   "file": "docs/structure/metric-run-policy.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-410",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/structure/qar_solution.md: every relative link resolves",
+  "args": {
+   "file": "docs/structure/qar_solution.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-411",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/structure/qar_solution.md: no em dash",
+  "args": {
+   "file": "docs/structure/qar_solution.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
+  "id": "DOC-412",
+  "area": "links",
+  "kind": "links",
+  "description": "docs/structure/structure_network.md: every relative link resolves",
+  "args": {
+   "file": "docs/structure/structure_network.md"
+  },
+  "expect": {
+   "eq": {
+    "broken": []
+   }
+  }
+ },
+ {
+  "id": "DOC-413",
+  "area": "em_dash",
+  "kind": "em_dash",
+  "description": "docs/structure/structure_network.md: no em dash",
+  "args": {
+   "file": "docs/structure/structure_network.md"
+  },
+  "expect": {
+   "eq": {
+    "count": 0
+   }
+  }
+ },
+ {
   "id": "DOC-407",
   "area": "coverage",
   "kind": "coverage",

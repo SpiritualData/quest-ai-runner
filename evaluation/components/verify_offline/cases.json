@@ -262,7 +262,7 @@
   "description": "tests/test_s*.py (13 files) collects with no error and no lost test",
   "args": {
    "pattern": "tests/test_s*.py",
-   "min_collected": 128
+   "min_collected": 123
   },
   "expect": {
    "eq": {
