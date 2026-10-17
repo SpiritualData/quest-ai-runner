@@ -46,13 +46,12 @@ def latest_results(path=RESULTS):
 
 
 def selected_impls(path=SOLUTIONS):
-    """{component: selected impl name} for solutions whose metric is a harness command."""
+    """{component: selected impl name} for solutions whose metric is one or more harness commands."""
     out = {}
     with open(path, newline="") as fh:
         for row in csv.DictReader(fh):
-            m = re.search(r"components/run\.py (\w+) --impl (\w+)", row["metric_command"])
-            if m:
-                out[m.group(1)] = m.group(2)
+            for m in re.finditer(r"components/run\.py (\w+) --impl (\w+)", row["metric_command"]):
+                out.setdefault(m.group(1), m.group(2))   # a row may name more than one arm: each is that arm's selection
     return out
 
 
