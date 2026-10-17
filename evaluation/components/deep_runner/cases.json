@@ -1,0 +1,236 @@
+[
+ {
+  "id": "DPR-001",
+  "kind": "run_worker",
+  "area": "clean",
+  "args": {
+   "scenario": {
+    "output": "Updated two files.",
+    "exit": 0
+   },
+   "want": "Updated two files."
+  },
+  "expect": {
+   "eq": {
+    "met": true,
+    "has_want": true,
+    "decision_id": null,
+    "error_kind": "none",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-002",
+  "kind": "run_worker",
+  "area": "clean_multiline",
+  "args": {
+   "scenario": {
+    "output": "Step one done.\nStep two done.\nAll finished.",
+    "exit": 0
+   },
+   "want": "All finished."
+  },
+  "expect": {
+   "eq": {
+    "met": true,
+    "has_want": true,
+    "decision_id": null,
+    "error_kind": "none",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-003",
+  "kind": "run_worker",
+  "area": "clean_with_stderr_noise",
+  "args": {
+   "scenario": {
+    "output": "Done.",
+    "stderr": "warning: slow disk",
+    "exit": 0
+   },
+   "want": "Done."
+  },
+  "expect": {
+   "eq": {
+    "met": true,
+    "has_want": true,
+    "decision_id": null,
+    "error_kind": "none",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-004",
+  "kind": "run_worker",
+  "area": "silent_whitespace",
+  "args": {
+   "scenario": {
+    "output": "   \n",
+    "exit": 0
+   },
+   "want": null
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "has_want": false,
+    "decision_id": null,
+    "error_kind": "no_output",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-005",
+  "kind": "run_worker",
+  "area": "silent_empty",
+  "args": {
+   "scenario": {
+    "output": "",
+    "exit": 0
+   },
+   "want": null
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "has_want": false,
+    "decision_id": null,
+    "error_kind": "no_output",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-006",
+  "kind": "run_worker",
+  "area": "escalated",
+  "args": {
+   "scenario": {
+    "output": "Drafted it; sending needs approval.\nQAR-ESCALATED: dec_77",
+    "exit": 0
+   },
+   "want": "Drafted it"
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "has_want": true,
+    "decision_id": "dec_77",
+    "error_kind": "none",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-007",
+  "kind": "run_worker",
+  "area": "escalated_other_id",
+  "args": {
+   "scenario": {
+    "output": "Need a human.\nQAR-ESCALATED: dec_123\n",
+    "exit": 0
+   },
+   "want": "Need a human."
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "has_want": true,
+    "decision_id": "dec_123",
+    "error_kind": "none",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-008",
+  "kind": "run_worker",
+  "area": "partial_output",
+  "args": {
+   "scenario": {
+    "output": "Got halfway through the docs.",
+    "exit": 1,
+    "stop": "max_tokens",
+    "stderr": "stopped"
+   },
+   "want": "halfway"
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "has_want": true,
+    "decision_id": null,
+    "error_kind": "failed",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-009",
+  "kind": "run_worker",
+  "area": "stopped_no_output",
+  "args": {
+   "scenario": {
+    "output": "",
+    "exit": 1,
+    "stop": "max_tokens",
+    "stderr": "stopped"
+   },
+   "want": null
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "has_want": false,
+    "decision_id": null,
+    "error_kind": "failed",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-010",
+  "kind": "run_worker",
+  "area": "missing_binary",
+  "args": {
+   "scenario": {
+    "spawn_error": "missing"
+   },
+   "want": null
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "has_want": false,
+    "decision_id": null,
+    "error_kind": "missing_binary",
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "DPR-011",
+  "kind": "run_worker",
+  "area": "crash_mid_run",
+  "args": {
+   "scenario": {
+    "crash": true
+   },
+   "want": null
+  },
+  "expect": {
+   "eq": {
+    "met": false,
+    "has_want": false,
+    "decision_id": null,
+    "error_kind": "failed",
+    "raised": false
+   }
+  }
+ }
+]

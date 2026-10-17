@@ -212,9 +212,13 @@ class SubprocessGoalRunner(DeepRunner):
                  working_dir: Optional[str] = None,
                  resume_session_id: Optional[str] = None) -> DeepResult:
         """Run the goal, then stamp the result with the model id Claude Code resolved it to."""
-        res = self.run_goal_once(goal=goal, brief=brief, model=model, max_turns=max_turns,
-                                 emit=emit, context_preamble=context_preamble, run_id=run_id,
-                                 working_dir=working_dir, resume_session_id=resume_session_id)
+        try:
+            res = self.run_goal_once(goal=goal, brief=brief, model=model, max_turns=max_turns,
+                                     emit=emit, context_preamble=context_preamble, run_id=run_id,
+                                     working_dir=working_dir, resume_session_id=resume_session_id)
+        except Exception as e:  # noqa: BLE001 — the DeepRunner port never raises (adapters_deep.py)
+            _log.error("deep worker failed unexpectedly: %s: %s", type(e).__name__, e, exc_info=True)
+            return DeepResult(met=False, error=f"The deep worker failed unexpectedly: {type(e).__name__}: {e}")
         if res.resolved_model is None and res.session_id:
             res.resolved_model = resolved_model_from_session(
                 self.cfg.working_dir if working_dir is None else working_dir, res.session_id)
