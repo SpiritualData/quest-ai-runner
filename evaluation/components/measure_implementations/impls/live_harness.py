@@ -11,6 +11,7 @@ from pathlib import Path
 
 import common
 import leaderboard
+import quest_ai_runner
 from measure_implementations.fixtures import mini_component, write_results, write_solutions
 
 
@@ -49,7 +50,7 @@ def record(args):
             summary = dict(component=name, impl="good", cases=3, passed=3, dev="2/2", heldout="1/1", model_calls=0,
                            tokens_in=0, tokens_out=0, cli_reported_cost_usd=0.0, seconds=0.1)
             if args.get("dirty"):
-                (root / "quest_ai_runner" / "live.py").write_text("X = 2\n")
+                (root / quest_ai_runner.__name__ / "live.py").write_text("X = 2\n")
             common.record_result(summary, date="2026-10-16", path=out_csv)
             first = list(csv.DictReader(out_csv.open()))[-1]
             cases_path = comps / name / ("cases.json" if args.get("cases_file", "json") == "json" else "cases.csv")
