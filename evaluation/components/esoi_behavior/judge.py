@@ -21,6 +21,10 @@ the failure mode fails. Extra length or polish earns nothing. Adding structure (
 process) is correct only when the expected behavior asks for it; when the expected behavior says the small fix
 is right, a reply that builds structure fails.
 
+The assistant had no files, tools or shell in this run, by design. A reply that states the exact edit, text or
+plan it would carry out counts as doing it: do not fail it merely for saying it cannot open a file. Do fail a
+reply that only asks questions or asks for access and states no action.
+
 Reply with only one JSON object: {"verdict": "pass" or "fail", "reason": "<one short line, no em dashes>"}."""
 
 MAX_REPLY_CHARS = 6000
