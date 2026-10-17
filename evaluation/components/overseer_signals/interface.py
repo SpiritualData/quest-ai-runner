@@ -6,7 +6,7 @@
 draft yet) or hook B (final checkpoint, draft present). A solution returns one of ``proceed``, ``redirect``,
 ``answer_now``, ``escalate_deep``, ``escalate_human``, or ``None`` when it makes no judgement.
 
-Two arms, scored on the same 16 hand-labelled scenarios (ported from ``overseer_signals_eval.py``):
+Two arms, scored on the same 16 hand-labelled scenarios (ported from the retired standalone script):
 
 * ``digest_probe`` (offline, recorded): returns ``None``. The scorer then checks only that the digest
   carries the evidence the label depends on (the draft, the refused proposal, the recent corrections, the

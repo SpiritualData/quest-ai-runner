@@ -488,8 +488,8 @@ and a confidence gate falls back to plain Claude Code when nothing is confident,
 makes a run worse, and the task-memory makes it better over time.
 
 Full methodology, dataset, and honest limitations: see [evaluation/README.md](evaluation/README.md).
-Re-run: `python evaluation/eval_deterministic.py` (free) and
-`python evaluation/eval_vs_claude_code.py` (spends a little Haiku token, runs on a repo copy).
+Re-run: `python evaluation/components/run.py context_selection --impl hybrid_union` (free) and
+`python evaluation/components/run.py claude_code_ab --impl warm_claude` (spends a little Haiku token, runs on a repo copy).
 
 ## Contributing
 

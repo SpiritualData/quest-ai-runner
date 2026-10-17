@@ -1,4 +1,4 @@
-"""LIVE ARM: the original ``card_quality_eval.py`` flow behind the component interface. (1) The real async card
+"""LIVE ARM: the original standalone-script flow behind the component interface. (1) The real async card
 updater (``Orchestrator._update_cards_after_deep``, a model call per learned task) writes cards into a Qdrant
 card repository; (2) the store is the production backend recipe: a keyword ``FileContextStore`` over that
 repository fused with a query-only Voyage vector arm (``HybridContextAssembler``, vector floor 0.45), both

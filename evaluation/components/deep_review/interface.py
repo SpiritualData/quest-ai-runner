@@ -9,7 +9,7 @@ limit, a block on a human, or the same complete action repeated; slow-but-alive 
 monitoring, downloads) must come back False, because a wrong stop loses work that was about to land.
 ``None`` means no verdict (production then leaves the run alone).
 
-39 hand-labelled logs, ported from ``deep_review_eval.py`` (20 keep-running, 19 stop). Two arms:
+39 hand-labelled logs, ported from the retired standalone script (20 keep-running, 19 stop). Two arms:
 
 * ``rule_floor`` (offline, recorded): a keyword-and-threshold rule, no model. The floor a model must beat.
 * ``live_reviewer`` (needs the ``claude`` CLI, waived in waivers.csv S10): the production prompt, parser

@@ -20,7 +20,7 @@ Two arms:
   selection and fresh resolution of the persisted-card path; it does NOT measure the learning step, which is the
   model's part.
 * ``live_updater_hybrid`` (needs a model, Voyage and an embedded Qdrant; waived in waivers.csv S10): the original
-  ``card_quality_eval.py`` flow: the real async updater learns the cards, a Qdrant card repository plus a Voyage query
+  retired standalone-script flow: the real async updater learns the cards, a Qdrant card repository plus a Voyage query
   vector arm are fused with the keyword arm (the backend recipe).
 
 An implementation module in ``impls/`` exposes ``build(meter) -> select``.

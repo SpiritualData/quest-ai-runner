@@ -1,5 +1,5 @@
 """Score one recipe-fast-path case from the world's recorded tool calls (never the reply text). Ported from
-``evaluation/recipe_fast_path_eval.py``: ``correct`` = the expected single tool call with the expected
+the retired standalone script: ``correct`` = the expected single tool call with the expected
 argument values and no extra mutating call (or no call at all when ``expect_tool`` is null);
 ``wrong_op`` = a forbidden lookalike tool ran. ``ok`` = correct and not wrong_op.
 

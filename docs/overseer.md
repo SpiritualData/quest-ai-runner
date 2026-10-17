@@ -192,7 +192,7 @@ zero.
 
 There is no production A/B data on redirect/escalate precision (false-positive rate, tokens saved
 per run) yet; the feature is new (on by default since the change below, previously opt-in). A first labeled signal eval exists:
-`evaluation/overseer_signals_eval.py` feeds 11 hand-labeled hook-A/hook-B digests through
+`evaluation/components/overseer_signals/` feeds 11 hand-labeled hook-A/hook-B digests through
 `oversee()` with a real model, including CONTRAST PAIRS (same fix-and-commit request with a
 describes-the-fix draft vs a reports-it-done-with-evidence draft; the same subject phrased as a
 question vs an instruction) and no reuse of `OVERSEER_PROMPT`'s own exemplar phrasings, so a pass

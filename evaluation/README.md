@@ -10,36 +10,36 @@ $PY evaluation/components/run.py context_selection --impl idf_docstrings   # als
                                                                            #       vector_bge_small, hybrid_union
 $PY evaluation/components/run.py staleness --impl store_sha256            # also: mtime_size
 $PY evaluation/components/run.py recipe_fast_path --impl recipe_replay     # also: planner_only (real model)
-$PY evaluation/eval_deterministic.py [--all]                               # wrapper: cold start + both zero-model components
+$PY evaluation/components/run.py claude_code_ab --impl idf_hint             # the A/B hint arm, offline (cold_claude / warm_claude spend haiku tokens)
 ```
 
-See `components/README.md` for the interface of each. Script status:
+See `components/README.md` for the interface of each. There are no standalone scripts in `evaluation/` any more. The retired ones, and where they went:
 
-- **Now components** (the old commands remain as thin wrappers): `eval_deterministic.py` ->
-  `context_selection/` + `staleness/`; `recipe_fast_path_eval.py` -> `recipe_fast_path/`
+- `eval_deterministic.py` -> `context_selection/` + `staleness/`; `recipe_fast_path_eval.py` -> `recipe_fast_path/`
   (its dataset is `components/recipe_fast_path/cases.json`).
-- **Also now components** (thin wrappers): `overseer_signals_eval.py` -> `overseer_signals/`,
-  `deep_review_eval.py` -> `deep_review/`, `card_quality_eval.py` -> `card_quality/`.
-  `eval_vs_claude_code.py` stays as the live engine of `claude_code_ab/` (which fixes its always-empty warm hint).
+- `overseer_signals_eval.py` -> `overseer_signals/`, `deep_review_eval.py` -> `deep_review/`,
+  `card_quality_eval.py` -> `card_quality/`.
+- `eval_vs_claude_code.py` -> `claude_code_ab/` (its CLI runner, prompts and repo copy are `claude_code_ab/live_support.py`;
+  the component fixes the old always-empty warm hint).
 - **Also now a component:** `chat_quest_ops_routing_eval.py` is gone; its 50 cases (plus 8 recipe cases) are the
   opt-in dev arm of `quest_ops/` (`quest_ops/dev_run.py`, see `components/README.md`).
 
-Two scripts' worth of methodology is described below:
+Two components' worth of methodology is described below:
 
-- **`eval_deterministic.py`** (now `context_selection/` and `staleness/`) — zero-LLM, zero-token, free to run.
-- **`eval_vs_claude_code.py`** — A/B harness comparing Claude Code alone vs Claude Code
+- **`context_selection/` and `staleness/`** (formerly `eval_deterministic.py`) — zero-LLM, zero-token, free to run.
+- **`claude_code_ab/`** (formerly `eval_vs_claude_code.py`) — A/B harness comparing Claude Code alone vs Claude Code
   + context, using the `claude` CLI (spends a small amount of Haiku tokens; opt-in only).
 
 ## Methodology
 
-### Why two scripts?
+### Why two components?
 
-The context layer makes two kinds of claims. The deterministic script tests the
+The context layer makes two kinds of claims. The deterministic components test the
 **mechanical properties** the store guarantees without any model: how fast does it bootstrap,
 do the IDF keyword scores route tasks to the right files, and does staleness detection
 reliably flag changed files? These properties can be measured with zero LLM calls.
 
-The A/B script tests the **agent behavior** claim: does pre-loading a context hint into
+The A/B component tests the **agent behavior** claim: does pre-loading a context hint into
 the model's prompt reduce the number of tool-call rounds it takes to locate the relevant
 file? That claim requires actually running an agent, so it uses the `claude` CLI headless.
 
@@ -56,7 +56,7 @@ Grep does not use tools and does not pay a round-trip cost; it cannot serve as t
 cold arm in an A/B that measures tool-call rounds. Claude Code alone is the correct cold
 arm because it represents actual production behavior with no context pre-loading.
 
-### Deterministic checks (`context_selection/`, `staleness/`; wrapper `eval_deterministic.py`)
+### Deterministic checks (`context_selection/`, `staleness/`)
 
 1. `context_selection/corpus.py` walks the checkout (read-only, nothing is copied or modified) and
    builds one card per `.py` file with the store's own extractors: symbols, module and class/function
@@ -71,7 +71,7 @@ arm because it represents actual production behavior with no context pre-loading
    with the mtime restored, deletion), then reports precision / recall of `stale_cards_for` against a
    plain (mtime, size) baseline.
 
-### A/B script (`eval_vs_claude_code.py`)
+### A/B component (`claude_code_ab/`)
 
 1. Copies the repo to a temp dir (same exclusions as above).
 2. Bootstraps a `FileContextStore` to generate the context hints.
@@ -123,7 +123,11 @@ case (hint names `poller.py`; correct answer is `config.py`).
 
 ## LLM judge (qualitative, principled)
 
-The A/B harness includes an opt-in LLM judge that evaluates each sample qualitatively
+Status: the opt-in judge below belonged to the retired `eval_vs_claude_code.py` and was not carried into
+`claude_code_ab/`, which scores by whether the labelled path appears in the answer (deterministic, no judge calls).
+The section is kept as the written rubric a judge arm would use if one is added back.
+
+The old A/B harness included an opt-in LLM judge that evaluated each sample qualitatively
 against four explicit written principles, replacing the brittle path-substring correctness
 check with a principled rubric. The judge is invoked once per sample after both arms have
 run, using the same `claude` CLI already required by the harness.
@@ -446,11 +450,11 @@ The measured wins are:
 These three properties together justify the context layer as a **cache with correctness
 guarantees** — not as a retrieval engine that must beat grep on every cold query.
 
-## `deep_review_eval.py` — deep-run liveness review (real Haiku, 39 cases)
+## `deep_review/` — deep-run liveness review (real Haiku, 39 cases)
 
 Every new LLM call needs a labeled classification eval of at least 30 cases that must score 100%.
 This one runs the production liveness-review prompt and CLI call over 39 hand-labeled log tails
 (stop vs keep running) and exits non-zero on any miss. Makes one small Haiku call per case, about
-5 minutes per run: `python evaluation/deep_review_eval.py [--runs N]`. Re-run it after any edit to
+5 minutes per run: `python evaluation/components/run.py deep_review --impl live_reviewer`. Re-run it after any edit to
 `DEEP_REVIEW_PROMPT`.
 

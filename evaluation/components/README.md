@@ -67,8 +67,8 @@ Notes on the three newer components:
   matching mtime for speed), and a deleted file is not reported stale.
 * `recipe_fast_path/` spends real model calls (`QAR_EVAL_MODEL`). One solution instance sees the whole
   run in order, so the recipe store learns between cases; the scorer sends each tool's TEACH message once
-  before its first ask. `--only` selects a subset (the old 1 / 10 / 30 subsets are in
-  `../recipe_fast_path_eval.py`). It was ported without a live model run in the session that wrote it
+  before its first ask. `--only` selects a subset (the old 1-case smoke is `--only RH1`; the 10-case
+  subset is `--only RH1,RH2,RN1,RN2,RT1,RS1,RG1,NM1,NM3,U1`; all 30 is no `--only`). It was ported without a live model run in the session that wrote it
   (no `claude` CLI there): the world, scoring and wiring are covered offline, the model path is not.
 
 ## Offline arms, live arms, and what each number means
@@ -95,9 +95,10 @@ provider finds on its own, so a live run is possible once someone approves the (
 the case-driven components, so a new case is data only. Offline tests: `test_core_adapter_components.py`
 (it pins each component's known-gap case ids, so a fix shows up as a test to update).
 
-Legacy scripts: `overseer_signals_eval.py`, `deep_review_eval.py` and `card_quality_eval.py` are thin wrappers over the
-live arms. `eval_vs_claude_code.py` stays as the live engine `claude_code_ab` imports. The old
-`chat_quest_ops_routing_eval.py` is gone: its 50 cases (plus its 8 recipe cases) are `quest_ops/dev_cases.json`, run by
+There are no standalone eval scripts left in `evaluation/`: every measurement is a component here (the old
+`overseer_signals_eval.py`, `deep_review_eval.py`, `card_quality_eval.py`, `eval_deterministic.py`,
+`recipe_fast_path_eval.py` and `eval_vs_claude_code.py` were folded in; the last is now `claude_code_ab/live_support.py`).
+The old `chat_quest_ops_routing_eval.py` is gone: its 50 cases (plus its 8 recipe cases) are `quest_ops/dev_cases.json`, run by
 the dev arm below.
 
 ### `quest_ops` dev arm (opt-in, needs a dev Quest backend)

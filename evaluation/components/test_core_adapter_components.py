@@ -141,7 +141,6 @@ def test_claude_code_ab_targets_are_real_files():
     assert sum(1 for c in cases("claude_code_ab") if c["wrong_hint"]) == 1
 
 
-def test_legacy_scripts_are_thin_wrappers():
-    for name in ("overseer_signals_eval", "deep_review_eval", "card_quality_eval"):
-        text = (HERE.parent / f"{name}.py").read_text()
-        assert "components" in text and "run.py" in text and len(text.splitlines()) < 30
+def test_no_standalone_eval_scripts_remain():
+    """Every evaluation lives behind a component folder; a loose script in evaluation/ would be a second, unregistered way to measure."""
+    assert sorted(p.name for p in HERE.parent.glob("*.py")) == []

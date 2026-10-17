@@ -33,4 +33,4 @@ is learned from a failure, from a queued brief, or from a request with fewer tha
 ## Not covered
 
 Quest's chat runs most writes as generated Python over its own data, not as tools, so those
-operations are not recipes yet. See `evaluation/recipe_fast_path_eval.py` for the measurement.
+operations are not recipes yet. See `evaluation/components/recipe_fast_path/` for the measurement.
