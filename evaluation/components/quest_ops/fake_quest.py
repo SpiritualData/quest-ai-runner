@@ -55,6 +55,10 @@ class FakeQuest:
                     if e["id"] == args.get("research_question_id"):
                         e.update({k: v for k, v in args.items()
                                   if k not in ("research_question_id", "user_asked_for_this_field")})
+            elif name == "delete_quest_experiment":
+                if args.get("confirm_delete"):
+                    s["experiments"] = [e for e in s["experiments"]
+                                        if e["id"] != args.get("research_question_id")]
             elif name == "find_quest_experiments":
                 q = (args.get("query") or "").lower()
                 rows = [e for e in s["experiments"] if not q or any(w in e["question"].lower() for w in q.split())]

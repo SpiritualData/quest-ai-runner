@@ -145,6 +145,20 @@ def load_impl(spec, component):
     return mod.build
 
 
+def load_cases(component):
+    """The component's cases: ``cases.json``, or ``cases.csv`` when the dataset is reviewed as a sheet
+    (a ``heldout`` cell of ``yes`` marks a held-out case)."""
+    folder = HERE / component
+    if (folder / "cases.json").exists():
+        return json.loads((folder / "cases.json").read_text())
+    import csv
+    with (folder / "cases.csv").open(newline="") as fh:
+        cases = list(csv.DictReader(fh))
+    for case in cases:
+        case["heldout"] = (case.get("heldout") or "").strip().lower() == "yes"
+    return cases
+
+
 def run_component(component, fn_scorer, argv):
     import argparse
     ap = argparse.ArgumentParser(description=f"Evaluate the {component} component on its own.")
@@ -155,7 +169,7 @@ def run_component(component, fn_scorer, argv):
     ap.add_argument("--record", action="store_true",
                     help="append the summary to results.csv (the committed record leaderboard.py reads)")
     args = ap.parse_args(argv)
-    cases = json.loads((HERE / component / "cases.json").read_text())
+    cases = load_cases(component)
     if args.only:
         keep = {c.strip() for c in args.only.split(",")}
         cases = [c for c in cases if c["id"] in keep]

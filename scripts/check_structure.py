@@ -35,6 +35,9 @@ Rules checked:
                  an alternative (module-level ALTERNATIVE = True, or a docstring opening ALTERNATIVE,
                  BASELINE, ABLATION or FLOOR); a solution's selected harness implementation must be
                  a live one, or carry an `S12 <solution_id>:<impl>` waiver
+  S17 tracker    docs/structure/tracker/{problems,solutions,implementations,ideals,metrics}.csv match what
+                 solutions.csv, components.csv, principles.csv and results.csv now produce (only the
+                 tracking_* columns are hand-edited; scripts/build_tracker.py rewrites the rest)
   S14 selection table   every solutions.csv row with a port has an entry in core/selection_table.py
                  (and no entry is for an unknown row); each default is one of its implementations;
                  each implementation's module is listed in the row's `implementations`
@@ -497,6 +500,14 @@ def check() -> list[str]:
     if env_vars.without_explained_in(doc_text) != env_vars.without_explained_in(env_vars.render_env_doc(ROOT)):
         bad.append("S15 docs/configuration.md: out of date (run scripts/check_structure.py --write-docs)")
 
+    # S17 tracker tabs match the registry (tracking_* columns are free)
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("qar_build_tracker", ROOT / "scripts" / "build_tracker.py")
+    _bt = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_bt)
+    for tab in _bt.stale():
+        bad.append(f"S17 docs/structure/tracker/{tab}.csv: out of date (run scripts/build_tracker.py)")
+
     # S9 waivers still apply
     for w in waivers:
         if (w["rule"], w["path"]) not in used_waivers:
@@ -510,6 +521,9 @@ def main(argv: list[str]) -> int:
     if "--write-docs" in argv:
         (STRUCT / "COMPONENTS.md").write_text(render_docs(read_csv(STRUCT / "components.csv")))
         (ROOT / "docs" / "configuration.md").write_text(env_vars.render_env_doc(ROOT))
+        import subprocess
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "build_tracker.py")], check=True,
+                       stdout=subprocess.DEVNULL)
     bad = check()
     for line in bad:
         print(line)

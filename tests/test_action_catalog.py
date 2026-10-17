@@ -401,7 +401,7 @@ def test_outward_and_user_attested_tools_are_not_published_or_lose_the_attestati
     from quest_ai_runner.core.tools import build_tool_registry
     registry = build_tool_registry({"QUEST_BASE_URL": "http://x", "QUEST_API_KEY": "qsk_t"})
     published = {a["action_id"]: [f["name"] for f in a["params_schema"]] for a in build_actions(registry)}
-    for withheld in ("create_quest_goal", "add_quest_strategy", "create_quest_habit", "create_quest_experiment", "update_quest_experiment"):
+    for withheld in ("create_quest_goal", "add_quest_strategy", "create_quest_habit", "create_quest_experiment", "update_quest_experiment", "delete_quest_experiment"):
         assert f"tool:{withheld}" not in published
     assert all("user_asked_for_this_field" not in names and "rep_id" not in names for names in published.values())
     assert "to" not in published["tool:send_quest_email"] and "tool:file_email_draft" in published

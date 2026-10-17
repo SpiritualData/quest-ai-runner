@@ -1,4 +1,4 @@
-"""The Experiments section as registry tools: find, create and change a quest's experiments.
+"""The Experiments section as registry tools: find, create, change and delete a quest's experiments.
 
 Split out of ``tools`` by role (that module passed its size limit); the names are re-exported
 from ``tools`` so every existing import keeps working. Registers its three builders into
@@ -411,6 +411,83 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
     )
 
 
+def delete_quest_experiment_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    """Permanently remove one experiment through ``DELETE /api/quests/{id}/research-questions/{rid}``.
+
+    Two-step by design: without ``confirm_delete`` nothing is removed and the result describes what
+    WOULD be deleted, for the model to put to the person; the backend never deletes a quest's own
+    default question, so neither does this."""
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = _quest_id(args, ctx)
+        rid = str(args.get("research_question_id") or "").strip()
+        if not quest_id or not rid:
+            return ToolResult(ok=False, text="Deleting an experiment needs a quest and the "
+                                             "experiment's id (find_quest_experiments); nothing "
+                                             "was deleted.")
+        if not args.get("user_asked_for_this_field"):
+            return ToolResult(ok=False, text=(f"Not deleted: the user did not ask to delete "
+                                              f"experiment {rid}. Suggest it in your reply instead."))
+        try:
+            target = next((r for r in factory().list_experiments(quest_id)
+                           if r.get("research_question_id") == rid), None)
+        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
+            return ToolResult(ok=False, text=f"Nothing was deleted: could not read experiment {rid}: {e}")
+        if target is None:
+            return ToolResult(ok=False, text=f"Nothing was deleted: quest {quest_id} has no "
+                                             f"experiment {rid}; find its id with find_quest_experiments.")
+        if target.get("kind") == "default":
+            return ToolResult(ok=False, text=(f"Not deleted: {rid} is the quest's own default "
+                                              f"question, which cannot be deleted. It can be "
+                                              f"concluded or re-dated with update_quest_experiment."))
+        line = _experiment_line(target)
+        if not args.get("confirm_delete"):
+            return ToolResult(ok=True, data=target, text=(
+                f"NOT deleted yet. This would permanently remove: {line}. Deleting cannot be undone "
+                f"and its linked goals and habits stay. Ask the person to confirm deleting this "
+                f"exact experiment, then call again with confirm_delete=true."))
+        try:
+            factory().delete_experiment(quest_id, rid)
+        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
+            return ToolResult(ok=False, text=f"Nothing was deleted: {e}")
+        return ToolResult(ok=True, data=target, text=f"Deleted the experiment: {line}.")
+
+    return ToolSpec(
+        name="delete_quest_experiment",
+        handler=handler,
+        description=("Permanently delete one experiment from a quest. Two steps: call it first "
+                     "without confirm_delete to see exactly what would go, tell the person, and "
+                     "call again with confirm_delete=true only after they confirm THAT experiment. "
+                     "The quest's own default question cannot be deleted. Returns the deleted "
+                     "experiment's details."),
+        when_to_use=("The user asked to delete or remove an experiment. If they only want it "
+                     "finished, use update_quest_experiment (status concluded). " + _NEVER_CODE),
+        when_not_to_use=("Concluding, editing or reopening an experiment. Goals or habits. A "
+                         "deletion the user did not ask for."),
+        parameters={
+            "type": "object",
+            "required": ["research_question_id"],
+            "properties": {
+                "quest_id": _QUEST_ID_PARAM,
+                "research_question_id": {"type": "string",
+                                         "description": "The experiment's id, from find_quest_experiments."},
+                "confirm_delete": {"type": "boolean",
+                                   "description": ("True ONLY after the person confirmed deleting "
+                                                   "this exact experiment in their own reply. "
+                                                   "False or omitted only previews it.")},
+                "user_asked_for_this_field": _EXPERIMENT_ASKED_PARAM,
+            },
+        },
+        mutates=True,
+        workflow_step=False,  # needs the user's own say-so and confirmation; a scheduled step cannot assert them
+        origin="standard",
+        keywords=("experiment", "experiments", "delete", "remove", "discard", "drop", "get rid"),
+        context_args={"quest_id": "quest_id"},
+        timeout_seconds=45.0,
+    )
+
+
 def with_credentials(build):
     return lambda env: build(env) if quest_credentials_present(env) else None
 
@@ -419,4 +496,5 @@ STANDARD_TOOL_BUILDERS.update({
     "find_quest_experiments": with_credentials(find_quest_experiments_spec),
     "create_quest_experiment": with_credentials(create_quest_experiment_spec),
     "update_quest_experiment": with_credentials(update_quest_experiment_spec),
+    "delete_quest_experiment": with_credentials(delete_quest_experiment_spec),
 })

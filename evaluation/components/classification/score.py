@@ -5,7 +5,7 @@ from classification.interface import ROUTES
 CONTEXT = {"quest": {"title": "Run a 10K under 55 minutes", "outcome": "Run a 10K in under 55 minutes by December"},
            "tools": ["create_quest_goal", "update_quest_current_state", "add_quest_measurable_outcome",
                      "create_quest_habit", "find_quest_experiments", "create_quest_experiment",
-                     "update_quest_experiment"]}
+                     "update_quest_experiment", "delete_quest_experiment"]}
 
 
 def score_case(fn, case):

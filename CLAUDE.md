@@ -59,11 +59,16 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 The repo's structure is data, not folklore. `docs/structure/` holds `components.csv` (every functional
 component: where it lives, its role, interface, metric, docs, tests, gap and status), `solutions.csv`
 (each swappable solution: problem, ideal, port, implementations, the selected one, its metric command)
-and `waivers.csv` (justified exceptions that can only shrink). Read `docs/structure/README.md` first.
+and `waivers.csv` (justified exceptions that can only shrink). `principles.csv` is the evolvable-structure
+skill's 13 principles (P1..P13; the `rules` column of `components.csv` uses them). `tracker/` is the ESOI
+intent network as five CSV tabs (problems, solutions, implementations, ideals, metrics) with hand-edited
+`tracking_*` columns; `python scripts/build_tracker.py` rebuilds the rest (check S17). Read
+`docs/structure/README.md` first. `evaluation/components/esoi_behavior/` scores whether an AI's replies
+follow ESOI (`cases.csv` is reviewed as a sheet).
 
 - **Before you commit:** `.venv/bin/python3 scripts/check_structure.py` (it also runs as `tests/test_structure_registry.py`).
   It fails when a file belongs to no component, a module passes 1,500 lines, a module has no docstring,
-  `core/` imports outward, a layer is imported from below it (S6), `core/` reads the environment (S13), an environment variable is missing from `docs/configuration.md` (S15), a port has no `solutions.csv` row, a selected implementation is beaten in `results.csv` without a waiver, a `done` component has no metric kind, an `invariant` component gives no `invariant_reason`, a solution is linked from no component, or `COMPONENTS.md` / `docs/configuration.md` is stale
+  `core/` imports outward, a layer is imported from below it (S6), `core/` reads the environment (S13), an environment variable is missing from `docs/configuration.md` (S15), a port has no `solutions.csv` row, a selected implementation is beaten in `results.csv` without a waiver, a `done` component has no metric kind, an `invariant` component gives no `invariant_reason`, a solution is linked from no component, or `COMPONENTS.md` / `docs/configuration.md` / `tracker/*.csv` is stale
   (`--write-docs` regenerates them).
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only

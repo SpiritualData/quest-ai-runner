@@ -386,7 +386,7 @@ QUEST_DATA_WRITE_SURFACE_INSTRUCTION = (
     "Make this change through Quest's own quest-data tool for that exact field or item (one tool "
     "per field, for example `update_quest_outcome` or `update_quest_current_state`, plus "
     "`add_quest_measurable_outcome`, `create_quest_goal`, `add_quest_strategy` and "
-    "`create_quest_habit`; for experiments `create_quest_experiment` and `update_quest_experiment`, with"
+    "`create_quest_habit`; for experiments `create_quest_experiment`, `update_quest_experiment` and `delete_quest_experiment`, with"
     " `find_quest_experiments` to read or search them first; listed in the DIRECT TOOLS block below), and write the value to the "
     "standard that tool's description gives. Never write code, edit files, or hand-edit data. If "
     "no such tool is available to you, stop and report that back instead of improvising a file "

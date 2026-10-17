@@ -440,3 +440,29 @@ def test_experiment_purpose_sub_questions_and_assumptions_flow_through_create_up
     assert "assumptions: Meditating" in hit.text
     plain = found.handler({"quest_id": "q1"}, ToolContext())
     assert "rq_b" in plain.text
+
+
+def test_delete_experiment_previews_then_needs_confirmation_and_spares_the_default():
+    from quest_ai_runner.core.tools_quest_experiments import delete_quest_experiment_spec
+    class Deleting(FakeQuestClient):
+        def delete_experiment(self, quest_id, rid):
+            self.calls.append(("delete_experiment", quest_id, rid))
+            return True
+    client = Deleting()
+    spec = delete_quest_experiment_spec({}, client_factory=factory(client))
+    base = {"quest_id": "q1", "research_question_id": "rq_sleep"}
+    assert not spec.handler(base, ToolContext()).ok                      # no ask
+    preview = spec.handler({**base, "user_asked_for_this_field": True}, ToolContext())
+    assert preview.ok and "NOT deleted yet" in preview.text and "cold shower" in preview.text
+    assert not [c for c in client.calls if c[0] == "delete_experiment"]
+    done = spec.handler({**base, "user_asked_for_this_field": True, "confirm_delete": True},
+                        ToolContext())
+    assert done.ok and done.data["research_question_id"] == "rq_sleep" and "Deleted" in done.text
+    assert ("delete_experiment", "q1", "rq_sleep") in client.calls
+    default = spec.handler({"quest_id": "q1", "research_question_id": "rq_default",
+                            "user_asked_for_this_field": True, "confirm_delete": True}, ToolContext())
+    assert not default.ok and "default question" in default.text
+    assert not spec.handler({"quest_id": "q1", "research_question_id": "nope",
+                             "user_asked_for_this_field": True, "confirm_delete": True},
+                            ToolContext()).ok
+    assert [c for c in client.calls if c[0] == "delete_experiment"] == [("delete_experiment", "q1", "rq_sleep")]

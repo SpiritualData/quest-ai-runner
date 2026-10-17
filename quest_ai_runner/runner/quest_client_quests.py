@@ -368,6 +368,15 @@ class QuestsMixin:
             "PATCH", f"/api/quests/{quest_id}/research-questions/{research_question_id}",
             body=changes) or {}
 
+    def delete_experiment(self, quest_id: str, research_question_id: str) -> bool:
+        """DELETE /api/quests/{quest_id}/research-questions/{id}: permanently remove one experiment.
+
+        Irreversible, and the backend refuses the quest's default question. A caller acting for a
+        person needs their explicit confirmation first. Raises like ``create_habit``.
+        """
+        self._request("DELETE", f"/api/quests/{quest_id}/research-questions/{research_question_id}")
+        return True
+
     def get_my_quest(self, quest_id: str) -> Dict[str, Any]:
         """GET /api/quests/{quest_id}/state — fetch one account-wide quest's full state.
 

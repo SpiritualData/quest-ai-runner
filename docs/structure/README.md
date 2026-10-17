@@ -10,6 +10,8 @@ the inventory and the automated check.
 |---|---|---|
 | `components.csv` | One row per functional component: path globs, role, interface, metric, docs, tests, ideals met, gap, action, status | people and AI, by hand |
 | `solutions.csv` | One row per swappable solution: the problem, the ideal, the port, every implementation, the selected one and how it is selected, the metric and its command | people and AI, by hand |
+| `principles.csv` | The 13 principles of the evolvable-structure skill in short, with how each is measured here | people and AI, by hand |
+| `tracker/*.csv` | The ESOI intent network as five tabs (problems, solutions, implementations, ideals, metrics), each with `tracking_*` columns; import each as a Google Sheet tab | generated: `python scripts/build_tracker.py` (tracking columns are hand-edited and preserved) |
 | `waivers.csv` | Known, justified exceptions to a structure rule. Each must still apply, so the list only shrinks | people and AI, by hand |
 | `COMPONENTS.md` | A readable table of `components.csv` | generated: `python scripts/check_structure.py --write-docs` |
 
@@ -23,21 +25,24 @@ deep work). A **solution** is a named port plus the implementations behind it. T
 problems and solutions is `solutions.csv`. A **component** is a place in the tree that owns a role;
 `components.csv` is where each one is defined, found and measured.
 
-| Ideal | How QAR meets it | Where it is enforced |
+| Principle (evolvable-structure skill) | How QAR meets it | Where it is enforced |
 |---|---|---|
-| 1 Ontology of solutions | Ports (`Protocol`/`ABC`) in `core/adapters.py`; one solution row per problem whose "best" differs | S7 (every port has a row) |
-| 2 An ideal and a metric per solution | `ideal` and `metric_command` columns; a missing metric must state its gap and action | S7 |
-| 3 Best implementation used automatically | `selected` and `selected_by` name the one live choice. Today it is set by config or by hand; the evaluation harness produces the number that decides it | partial (see gaps in `COMPONENTS.md`) |
-| 4 Principles applied proactively | This folder plus the S rules apply the philosophy to the architecture itself | the check |
-| 5 One source of truth | `solutions.csv` (which implementation) and `components.csv` (where) | S1, S7 |
-| 6 Structure improves over time | `status`, `gap`, `action` columns; waivers can only shrink | S2, S9 |
-| 7 Minimalism | The goal is that configuration enters through `RunnerConfig` only; a lane is a config file. True of `core/` (it reads no environment; its tunables arrive as `CoreSettings`) and checked by S13; every variable the package reads is listed in `docs/configuration.md` (S15) | CLAUDE.md hard rule 2, S13 |
-| 8 Leverage existing structure | Reference adapters, vendored code listed, providers behind `MultiProvider` | S1 (`vendor` is a component) |
-| 9 Humility | Metrics decide, not opinion; unmeasured solutions are flagged rather than assumed good | S7 |
-| 10 Clarity | Module names state a role; every module opens with a docstring; each component lists its docs | S5, S2 |
-| 11 No duplication | Role mixins and helper modules instead of copies; a port is defined once | S1 |
-| 12 Keep only what is useful | One registry, iterated in place; no per-session files; scratch lives in `scratch/` | S3 |
-| 13 Long-term outcomes down to tasks | Real behaviour is measured by the evaluation harness, not only unit tests | `evaluation/components/` |
+| P1 Practical evolvable structure first | One registry of components; AI scales the structure | S1, S2 |
+| P2 Ontology of solutions, ideals, metrics | Ports (`Protocol`/`ABC`); one solution row per problem whose "best" differs, each with an `ideal` and a `metric_command` or a stated gap | S7, S11 |
+| P3 Source of truth for solutions | `solutions.csv` (which implementation), `components.csv` (where), `tracker/` (problems, solutions, implementations, ideals, metrics with tracking) | S1, S7, S17 |
+| P4 Automatic use of the best implementation | `selected` and `selected_by` name the live choice; `core/selection_table.py` resolves it; the leaderboard produces the deciding number | S10, S14 |
+| P5 Structure improves over time | `status`, `gap`, `action` columns; waivers can only shrink | S2, S9 |
+| P6 High-level principles get the same treatment | This folder applies the philosophy to the architecture; `evaluation/components/esoi_behavior/` scores whether the AI's behaviour follows ESOI | the check, esoi_behavior |
+| P7 Humility | Metrics decide, not opinion; unmeasured solutions are flagged | S7, S16 |
+| P8 Leverage existing structure | Reference adapters, vendored code listed, providers behind `MultiProvider` | S1 |
+| P9 No duplication | Role mixins and helper modules instead of copies; a port is defined once | S4 |
+| P10 Long-term outcomes cascade to tasks | Real behaviour is measured by the evaluation harness, not only unit tests | `evaluation/components/` |
+| P11 Avoid retaining what is not useful | One registry, iterated in place; no per-session files | S3 |
+| P12 Minimalism | Configuration enters through `RunnerConfig` only; a lane is a config file | S13, S15 |
+| P13 Clarity | Module names state a role; every module opens with a docstring; each component lists its docs | S2, S5 |
+
+The `rules` column of `components.csv` uses these P-numbers (the skill was renamed from adaptable-structure
+on 2026-10-15 and its principles were renumbered; the old list is retired).
 
 ## Rules the check enforces
 

@@ -1117,7 +1117,7 @@ STANDARD_TOOL_BUILDERS: Dict[str, Callable[[Mapping[str, str]], Optional[ToolSpe
 QUEST_DATA_TOOLS: Tuple[str, ...] = (*QUEST_FIELD_TOOLS.values(), "add_quest_measurable_outcome",
                                      "create_quest_goal", "add_quest_strategy",
                                      "create_quest_habit", "create_quest_experiment",
-                                     "update_quest_experiment")
+                                     "update_quest_experiment", "delete_quest_experiment")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1237,5 +1237,6 @@ def build_tool_registry(env: Optional[Mapping[str, str]] = None) -> ToolRegistry
 # under the size limit and to give those operations one place.
 from . import tools_quest_ops  # noqa: E402,F401
 from .tools_quest_experiments import (  # noqa: E402,F401  (kept importable from here)
-    EXPERIMENT_STATUSES, create_quest_experiment_spec, find_quest_experiments_spec,
+    EXPERIMENT_STATUSES, create_quest_experiment_spec, delete_quest_experiment_spec,
+    find_quest_experiments_spec,
     search_experiments, update_quest_experiment_spec)

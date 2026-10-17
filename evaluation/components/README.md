@@ -19,6 +19,9 @@ $PY evaluation/components/run.py staleness --impl store_sha256                 #
 $PY evaluation/components/run.py staleness --impl mtime_size                   # baseline
 $PY evaluation/components/run.py recipe_fast_path --impl recipe_replay         # selected per solutions.csv (real model)
 $PY evaluation/components/run.py recipe_fast_path --impl planner_only          # baseline (real model)
+$PY evaluation/components/run.py esoi_behavior --impl reference_good   # offline validity: must pass all 42
+$PY evaluation/components/run.py esoi_behavior --impl reference_bad    # offline validity: must fail all 42
+$PY evaluation/components/run.py esoi_behavior --impl standing_instructions --max-calls 42   # live, costs model calls
 $PY -m pytest evaluation/components/test_components.py                  # offline, no model calls
 ```
 Flags: `--only ID,ID`, `--max-calls N` (aborts when model calls exceed N), `--out path`.
