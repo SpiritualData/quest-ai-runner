@@ -1,0 +1,1636 @@
+[
+ {
+  "id": "API-001",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core is public",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "core"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-002",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.adapters is public",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "adapters"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-003",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.runner is public",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "runner"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-004",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.config is public",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "config"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-005",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.resources is public",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "resources"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-006",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.load_config is public",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "load_config"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-007",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.load_client is public",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "load_client"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-008",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.__version__ is public",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "__version__"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-009",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.load_everything is not invented",
+  "args": {
+   "module": "quest_ai_runner",
+   "name": "load_everything"
+  },
+  "expect": {
+   "eq": {
+    "found": false
+   }
+  }
+ },
+ {
+  "id": "API-010",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.Mode is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "Mode"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-011",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.StreamSink is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "StreamSink"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-012",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.MilestoneSink is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "MilestoneSink"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-013",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.ProgressEvent is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "ProgressEvent"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-014",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.Orchestrator is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "Orchestrator"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-015",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.RetrievalAdapter is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "RetrievalAdapter"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-016",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.ModelProvider is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "ModelProvider"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-017",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.DeepRunner is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "DeepRunner"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-018",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.EscalationSink is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "EscalationSink"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-019",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.Observation is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "Observation"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-020",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.PlanDecision is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "PlanDecision"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-021",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.DeepResult is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "DeepResult"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-022",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.Escalation is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "Escalation"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-023",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.FanoutSink is public",
+  "args": {
+   "module": "quest_ai_runner.core",
+   "name": "FanoutSink"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-024",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.config.RunnerConfig is public",
+  "args": {
+   "module": "quest_ai_runner.config",
+   "name": "RunnerConfig"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-025",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.config.build_orchestrator is public",
+  "args": {
+   "module": "quest_ai_runner.config",
+   "name": "build_orchestrator"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-026",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.config.load_quest_client is public",
+  "args": {
+   "module": "quest_ai_runner.config",
+   "name": "load_quest_client"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-027",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.async_bridge.run_coro_sync is public",
+  "args": {
+   "module": "quest_ai_runner.core.async_bridge",
+   "name": "run_coro_sync"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-028",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.async_bridge.run_detached is public",
+  "args": {
+   "module": "quest_ai_runner.core.async_bridge",
+   "name": "run_detached"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-029",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.signature_probe.accepted_keywords is public",
+  "args": {
+   "module": "quest_ai_runner.core.signature_probe",
+   "name": "accepted_keywords"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-030",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.signature_probe.accepted_fields is public",
+  "args": {
+   "module": "quest_ai_runner.core.signature_probe",
+   "name": "accepted_fields"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-031",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.signature_probe.filter_keywords is public",
+  "args": {
+   "module": "quest_ai_runner.core.signature_probe",
+   "name": "filter_keywords"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-032",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.scaffolding.strip_future_context is public",
+  "args": {
+   "module": "quest_ai_runner.core.scaffolding",
+   "name": "strip_future_context"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-033",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.scaffolding.strip_reasoning_markup is public",
+  "args": {
+   "module": "quest_ai_runner.core.scaffolding",
+   "name": "strip_reasoning_markup"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-034",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.core.scaffolding.sanitize_user_text is public",
+  "args": {
+   "module": "quest_ai_runner.core.scaffolding",
+   "name": "sanitize_user_text"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-035",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.bootstrap_email.should_send_monthly_email is public",
+  "args": {
+   "module": "quest_ai_runner.bootstrap_email",
+   "name": "should_send_monthly_email"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-036",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.bootstrap_email.generate_bootstrap_email_body is public",
+  "args": {
+   "module": "quest_ai_runner.bootstrap_email",
+   "name": "generate_bootstrap_email_body"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-037",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.bootstrap_email.send_monthly_bootstrap_email is public",
+  "args": {
+   "module": "quest_ai_runner.bootstrap_email",
+   "name": "send_monthly_bootstrap_email"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-038",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.bootstrap_email.load_bootstrap_state is public",
+  "args": {
+   "module": "quest_ai_runner.bootstrap_email",
+   "name": "load_bootstrap_state"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-039",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.vendor.aider_editblock.apply_edit is public",
+  "args": {
+   "module": "quest_ai_runner.vendor.aider_editblock",
+   "name": "apply_edit"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-040",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.vendor.aider_editblock.find_original_update_blocks is public",
+  "args": {
+   "module": "quest_ai_runner.vendor.aider_editblock",
+   "name": "find_original_update_blocks"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-041",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.vendor.aider_editblock.find_whole_file_blocks is public",
+  "args": {
+   "module": "quest_ai_runner.vendor.aider_editblock",
+   "name": "find_whole_file_blocks"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-042",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.structure.consumer_check.check_consumer is public",
+  "args": {
+   "module": "quest_ai_runner.structure.consumer_check",
+   "name": "check_consumer"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-043",
+  "area": "name",
+  "kind": "name",
+  "description": "quest_ai_runner.structure.consumer_check.cases_hash is public",
+  "args": {
+   "module": "quest_ai_runner.structure.consumer_check",
+   "name": "cases_hash"
+  },
+  "expect": {
+   "eq": {
+    "found": true
+   }
+  }
+ },
+ {
+  "id": "API-044",
+  "area": "version",
+  "kind": "version",
+  "description": "the version is a semantic version and exported",
+  "args": {},
+  "expect": {
+   "eq": {
+    "semver": true,
+    "exported": true
+   }
+  }
+ },
+ {
+  "id": "API-045",
+  "area": "hook",
+  "kind": "hook",
+  "description": "the package root registers the Claude CLI model translator with core",
+  "args": {
+   "hook": "translator"
+  },
+  "expect": {
+   "eq": {
+    "is_cli_model": true
+   }
+  }
+ },
+ {
+  "id": "API-046",
+  "area": "hook",
+  "kind": "hook",
+  "description": "the package root registers the Quest client factory the standard tools use",
+  "args": {
+   "hook": "client_factory"
+  },
+  "expect": {
+   "eq": {
+    "client": "QuestClient"
+   }
+  }
+ },
+ {
+  "id": "API-047",
+  "area": "hook",
+  "kind": "hook",
+  "description": "the config layer's builders are installed for the runner",
+  "args": {
+   "hook": "config_builders"
+  },
+  "expect": {
+   "eq": {
+    "registered": [
+     "derive_capabilities",
+     "resolve_tool_registry"
+    ]
+   }
+  }
+ },
+ {
+  "id": "API-048",
+  "area": "front_door",
+  "kind": "front_door",
+  "description": "load_client builds a QuestClient from the environment alone",
+  "args": {
+   "door": "load_client",
+   "env": {
+    "QUEST_BASE_URL": "http://quest.invalid",
+    "QUEST_API_KEY": "synthetic-key",
+    "QUEST_TEAM_ID": "team-1"
+   }
+  },
+  "expect": {
+   "eq": {
+    "client": "QuestClient"
+   }
+  }
+ },
+ {
+  "id": "API-049",
+  "area": "front_door",
+  "kind": "front_door",
+  "description": "load_client without credentials raises QuestNotConfigured, never another account's key",
+  "args": {
+   "door": "load_client",
+   "env": {}
+  },
+  "expect": {
+   "eq": {
+    "raised": "QuestNotConfigured"
+   }
+  }
+ },
+ {
+  "id": "API-050",
+  "area": "front_door",
+  "kind": "front_door",
+  "description": "load_client with a base URL but no key raises",
+  "args": {
+   "door": "load_client",
+   "env": {
+    "QUEST_BASE_URL": "http://quest.invalid"
+   }
+  },
+  "expect": {
+   "eq": {
+    "raised": "QuestNotConfigured"
+   }
+  }
+ },
+ {
+  "id": "API-051",
+  "area": "front_door",
+  "kind": "front_door",
+  "description": "load_config reads the base URL from the environment",
+  "args": {
+   "door": "load_config",
+   "env": {
+    "QUEST_BASE_URL": "http://quest.invalid",
+    "QUEST_API_KEY": "synthetic-key",
+    "QUEST_TEAM_ID": "team-1"
+   }
+  },
+  "expect": {
+   "eq": {
+    "base_url": "http://quest.invalid"
+   }
+  }
+ },
+ {
+  "id": "API-052",
+  "area": "front_door",
+  "kind": "front_door",
+  "description": "load_config with a malformed file fails at startup with ConfigFileError",
+  "args": {
+   "door": "load_config_bad_file",
+   "env": {
+    "QUEST_BASE_URL": "http://quest.invalid",
+    "QUEST_API_KEY": "synthetic-key",
+    "QUEST_TEAM_ID": "team-1"
+   }
+  },
+  "expect": {
+   "eq": {
+    "raised": "ConfigFileError"
+   }
+  }
+ },
+ {
+  "id": "API-053",
+  "area": "loop",
+  "kind": "loop",
+  "description": "run_coro_sync runs every call on one named background thread and propagates errors",
+  "args": {},
+  "expect": {
+   "eq": {
+    "same_thread": true,
+    "thread": "qar-background-loop",
+    "propagates": true
+   }
+  }
+ },
+ {
+  "id": "API-054",
+  "area": "detached",
+  "kind": "detached",
+  "description": "run_detached runs a blocking function off the caller's thread",
+  "args": {
+   "fail": false
+  },
+  "expect": {
+   "eq": {
+    "ran": true,
+    "raised": false
+   }
+  }
+ },
+ {
+  "id": "API-055",
+  "area": "detached",
+  "kind": "detached",
+  "description": "run_detached never surfaces a failure to the caller",
+  "args": {
+   "fail": true
+  },
+  "expect": {
+   "eq": {
+    "ran": true
+   }
+  }
+ },
+ {
+  "id": "API-056",
+  "area": "keywords",
+  "kind": "keywords",
+  "description": "accepted_keywords of a plain callable",
+  "args": {
+   "fixture": "plain"
+  },
+  "expect": {
+   "eq": {
+    "names": [
+     "a",
+     "b",
+     "c"
+    ]
+   }
+  }
+ },
+ {
+  "id": "API-057",
+  "area": "keywords",
+  "kind": "keywords",
+  "description": "accepted_keywords of a kwargs callable",
+  "args": {
+   "fixture": "kwargs"
+  },
+  "expect": {
+   "eq": {
+    "names": null
+   }
+  }
+ },
+ {
+  "id": "API-058",
+  "area": "keywords",
+  "kind": "keywords",
+  "description": "accepted_keywords of a builtin callable",
+  "args": {
+   "fixture": "builtin"
+  },
+  "expect": {
+   "eq": {
+    "names": []
+   }
+  }
+ },
+ {
+  "id": "API-059",
+  "area": "keywords",
+  "kind": "keywords",
+  "description": "accepted_keywords of a bound_method callable",
+  "args": {
+   "fixture": "bound_method"
+  },
+  "expect": {
+   "eq": {
+    "names": [
+     "a",
+     "b",
+     "c"
+    ]
+   }
+  }
+ },
+ {
+  "id": "API-060",
+  "area": "fields",
+  "kind": "fields",
+  "description": "accepted_fields of dataclass_with_init_false",
+  "args": {
+   "fixture": "dataclass_with_init_false"
+  },
+  "expect": {
+   "eq": {
+    "names": [
+     "other",
+     "shown"
+    ]
+   }
+  }
+ },
+ {
+  "id": "API-061",
+  "area": "fields",
+  "kind": "fields",
+  "description": "accepted_fields of plain_init",
+  "args": {
+   "fixture": "plain_init"
+  },
+  "expect": {
+   "eq": {
+    "names": [
+     "x",
+     "y"
+    ]
+   }
+  }
+ },
+ {
+  "id": "API-062",
+  "area": "fields",
+  "kind": "fields",
+  "description": "accepted_fields of init_kwargs",
+  "args": {
+   "fixture": "init_kwargs"
+  },
+  "expect": {
+   "eq": {
+    "names": null
+   }
+  }
+ },
+ {
+  "id": "API-063",
+  "area": "filter",
+  "kind": "filter",
+  "description": "unsupported keywords are dropped",
+  "args": {
+   "kwargs": {
+    "a": 1,
+    "b": 2,
+    "new": 3
+   },
+   "allowed": [
+    "a",
+    "b"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "kept": {
+     "a": 1,
+     "b": 2
+    }
+   }
+  }
+ },
+ {
+  "id": "API-064",
+  "area": "filter",
+  "kind": "filter",
+  "description": "None allowed means full support",
+  "args": {
+   "kwargs": {
+    "a": 1,
+    "new": 3
+   },
+   "allowed": null
+  },
+  "expect": {
+   "eq": {
+    "kept": {
+     "a": 1,
+     "new": 3
+    }
+   }
+  }
+ },
+ {
+  "id": "API-065",
+  "area": "filter",
+  "kind": "filter",
+  "description": "nothing allowed keeps nothing",
+  "args": {
+   "kwargs": {
+    "a": 1
+   },
+   "allowed": []
+  },
+  "expect": {
+   "eq": {
+    "kept": {}
+   }
+  }
+ },
+ {
+  "id": "API-066",
+  "area": "scrub",
+  "kind": "scrub",
+  "description": "a future-context section is cut from the tail",
+  "args": {
+   "fn": "strip_future_context",
+   "text": "The answer is 4.\n\n=== FUTURE CONTEXT (for similar requests) ===\n- remember x"
+  },
+  "expect": {
+   "eq": {
+    "text": "The answer is 4."
+   }
+  }
+ },
+ {
+  "id": "API-067",
+  "area": "scrub",
+  "kind": "scrub",
+  "description": "a future-context ask is cut from a brief",
+  "args": {
+   "fn": "strip_future_context",
+   "text": "Do the thing.\n--- PREPARE FUTURE CONTEXT (OUT OF BAND) ---\nlist bullets"
+  },
+  "expect": {
+   "eq": {
+    "text": "Do the thing."
+   }
+  }
+ },
+ {
+  "id": "API-068",
+  "area": "scrub",
+  "kind": "scrub",
+  "description": "prose that mentions future context is untouched",
+  "args": {
+   "fn": "strip_future_context",
+   "text": "We discussed future context handling in prose."
+  },
+  "expect": {
+   "eq": {
+    "text": "We discussed future context handling in prose."
+   }
+  }
+ },
+ {
+  "id": "API-069",
+  "area": "scrub",
+  "kind": "scrub",
+  "description": "empty input is empty output",
+  "args": {
+   "fn": "strip_future_context",
+   "text": ""
+  },
+  "expect": {
+   "eq": {
+    "text": ""
+   }
+  }
+ },
+ {
+  "id": "API-070",
+  "area": "scrub",
+  "kind": "scrub",
+  "description": "an inline reasoning block is removed",
+  "args": {
+   "fn": "strip_reasoning_markup",
+   "text": "<think>the user wants X</think>Here is X."
+  },
+  "expect": {
+   "eq": {
+    "text": "Here is X."
+   }
+  }
+ },
+ {
+  "id": "API-071",
+  "area": "scrub",
+  "kind": "scrub",
+  "description": "an unclosed reasoning opener is cut",
+  "args": {
+   "fn": "strip_reasoning_markup",
+   "text": "Answer.<thinking>and then I should"
+  },
+  "expect": {
+   "eq": {
+    "text": "Answer."
+   }
+  }
+ },
+ {
+  "id": "API-072",
+  "area": "scrub",
+  "kind": "scrub",
+  "description": "a reasoning tag inside a code fence survives",
+  "args": {
+   "fn": "strip_reasoning_markup",
+   "text": "Use it like:\n```\n<think>x</think>\n```\n"
+  },
+  "expect": {
+   "contains": [
+    "<think>x</think>"
+   ]
+  }
+ },
+ {
+  "id": "API-073",
+  "area": "scrub",
+  "kind": "scrub",
+  "description": "sanitize applies both strips",
+  "args": {
+   "fn": "sanitize_user_text",
+   "text": "<think>hm</think>Done.\n=== FUTURE CONTEXT (for x) ===\nsecret"
+  },
+  "expect": {
+   "eq": {
+    "text": "Done."
+   }
+  }
+ },
+ {
+  "id": "API-074",
+  "area": "email_due",
+  "kind": "email_due",
+  "description": "no record yet: send",
+  "args": {
+   "days_ago": null,
+   "form": "missing",
+   "months": 1
+  },
+  "expect": {
+   "eq": {
+    "due": true
+   }
+  }
+ },
+ {
+  "id": "API-075",
+  "area": "email_due",
+  "kind": "email_due",
+  "description": "empty record: send",
+  "args": {
+   "days_ago": null,
+   "form": "empty",
+   "months": 1
+  },
+  "expect": {
+   "eq": {
+    "due": true
+   }
+  }
+ },
+ {
+  "id": "API-076",
+  "area": "email_due",
+  "kind": "email_due",
+  "description": "unreadable record: send",
+  "args": {
+   "days_ago": null,
+   "form": "garbage",
+   "months": 1
+  },
+  "expect": {
+   "eq": {
+    "due": true
+   }
+  }
+ },
+ {
+  "id": "API-077",
+  "area": "email_due",
+  "kind": "email_due",
+  "description": "10 days ago: not due",
+  "args": {
+   "days_ago": 10,
+   "form": "iso",
+   "months": 1
+  },
+  "expect": {
+   "eq": {
+    "due": false
+   }
+  }
+ },
+ {
+  "id": "API-078",
+  "area": "email_due",
+  "kind": "email_due",
+  "description": "40 days ago: due",
+  "args": {
+   "days_ago": 40,
+   "form": "iso",
+   "months": 1
+  },
+  "expect": {
+   "eq": {
+    "due": true
+   }
+  }
+ },
+ {
+  "id": "API-079",
+  "area": "email_due",
+  "kind": "email_due",
+  "description": "naive timestamp 40 days ago: due",
+  "args": {
+   "days_ago": 40,
+   "form": "naive",
+   "months": 1
+  },
+  "expect": {
+   "eq": {
+    "due": true
+   }
+  }
+ },
+ {
+  "id": "API-080",
+  "area": "email_due",
+  "kind": "email_due",
+  "description": "40 days ago with a 3 month interval: not due",
+  "args": {
+   "days_ago": 40,
+   "form": "iso",
+   "months": 3
+  },
+  "expect": {
+   "eq": {
+    "due": false
+   }
+  }
+ },
+ {
+  "id": "API-081",
+  "area": "email_body",
+  "kind": "email_body",
+  "description": "the report states cards, tokens, cost, elapsed time, model and provider",
+  "args": {
+   "cards_created": 1234,
+   "corpus_path": "/data/corpus",
+   "tokens_used": 56789,
+   "cost_usd": 0.0123,
+   "elapsed_seconds": 125.0,
+   "model": "model-x",
+   "provider": "provider-y"
+  },
+  "expect": {
+   "contains": [
+    "Cards created: 1,234",
+    "Tokens used: 56,789",
+    "Cost: $0.0123",
+    "Time elapsed: 2m 5s",
+    "Model: model-x",
+    "Provider: provider-y",
+    "Corpus: /data/corpus"
+   ]
+  }
+ },
+ {
+  "id": "API-082",
+  "area": "email_body",
+  "kind": "email_body",
+  "description": "the report body has no em dash and no placeholder",
+  "args": {
+   "cards_created": 0,
+   "corpus_path": "c",
+   "tokens_used": 0,
+   "cost_usd": 0,
+   "elapsed_seconds": 0,
+   "model": "m",
+   "provider": "p"
+  },
+  "expect": {
+   "not_contains": [
+    "\u2014",
+    "{",
+    "TODO"
+   ]
+  }
+ },
+ {
+  "id": "API-083",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-084",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.core imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.core"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-085",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.adapters imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.adapters"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-086",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.runner imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.runner"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-087",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.config imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.config"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-088",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.cli imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.cli"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-089",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.structure imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.structure"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-090",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.vendor.aider_editblock imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.vendor.aider_editblock"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-091",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.core.async_bridge imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.core.async_bridge"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-092",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.core.signature_probe imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.core.signature_probe"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-093",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.core.scaffolding imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.core.scaffolding"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-094",
+  "area": "offline_import",
+  "kind": "offline_import",
+  "description": "quest_ai_runner.bootstrap_email imports with every socket call refusing",
+  "args": {
+   "module": "quest_ai_runner.bootstrap_email"
+  },
+  "expect": {
+   "eq": {
+    "imported": true
+   }
+  }
+ },
+ {
+  "id": "API-095",
+  "area": "edit",
+  "kind": "edit",
+  "description": "an exact SEARCH block is replaced",
+  "args": {
+   "content": "a\nb\nc\n",
+   "before": "b\n",
+   "after": "B\n"
+  },
+  "expect": {
+   "eq": {
+    "text": "a\nB\nc\n",
+    "ok": true
+   }
+  }
+ },
+ {
+  "id": "API-096",
+  "area": "edit",
+  "kind": "edit",
+  "description": "a uniform indent drift is absorbed and the indent kept",
+  "args": {
+   "content": "    a\n    b\n    c\n",
+   "before": "b\n",
+   "after": "B\n"
+  },
+  "expect": {
+   "eq": {
+    "text": "    a\n    B\n    c\n",
+    "ok": true
+   }
+  }
+ },
+ {
+  "id": "API-097",
+  "area": "edit",
+  "kind": "edit",
+  "description": "a SEARCH block that is not present fails cleanly (None, no partial write)",
+  "args": {
+   "content": "a\nb\nc\n",
+   "before": "zzz\n",
+   "after": "B\n"
+  },
+  "expect": {
+   "eq": {
+    "ok": false
+   }
+  }
+ },
+ {
+  "id": "API-098",
+  "area": "edit",
+  "kind": "edit",
+  "description": "an empty SEARCH against a missing file creates it",
+  "args": {
+   "content": null,
+   "before": "",
+   "after": "new\n"
+  },
+  "expect": {
+   "eq": {
+    "text": "new\n",
+    "ok": true
+   }
+  }
+ },
+ {
+  "id": "API-099",
+  "area": "edit",
+  "kind": "edit",
+  "description": "a non-empty SEARCH against a missing file fails",
+  "args": {
+   "content": null,
+   "before": "x\n",
+   "after": "new\n"
+  },
+  "expect": {
+   "eq": {
+    "ok": false
+   }
+  }
+ },
+ {
+  "id": "API-100",
+  "area": "edit",
+  "kind": "edit",
+  "description": "an empty SEARCH appends to an existing file",
+  "args": {
+   "content": "a\nb\n",
+   "before": "",
+   "after": "c\n"
+  },
+  "expect": {
+   "eq": {
+    "text": "a\nb\nc\n",
+    "ok": true
+   }
+  }
+ },
+ {
+  "id": "API-101",
+  "area": "edit",
+  "kind": "edit",
+  "description": "an elided middle (...) is honoured",
+  "args": {
+   "content": "a\nx\ny\nz\nb\n",
+   "before": "a\n...\nb\n",
+   "after": "a\n...\nB\n"
+  },
+  "expect": {
+   "eq": {
+    "text": "a\nx\ny\nz\nB\n",
+    "ok": true
+   }
+  }
+ },
+ {
+  "id": "API-102",
+  "area": "edit_blocks",
+  "kind": "edit_blocks",
+  "description": "a fenced SEARCH/REPLACE block yields file, before and after",
+  "args": {
+   "fn": "search_replace",
+   "content": "Here you go.\n\napp.py\n```python\n<<<<<<< SEARCH\nx = 1\n=======\nx = 2\n>>>>>>> REPLACE\n```\n"
+  },
+  "expect": {
+   "eq": {
+    "blocks": [
+     [
+      "app.py",
+      "x = 1\n",
+      "x = 2\n"
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "API-103",
+  "area": "edit_blocks",
+  "kind": "edit_blocks",
+  "description": "prose with no block yields nothing",
+  "args": {
+   "fn": "search_replace",
+   "content": "No changes needed.\n"
+  },
+  "expect": {
+   "eq": {
+    "blocks": []
+   }
+  }
+ },
+ {
+  "id": "API-104",
+  "area": "edit_blocks",
+  "kind": "edit_blocks",
+  "description": "a filename line above a fenced whole file is trusted",
+  "args": {
+   "fn": "whole_file",
+   "content": "app.py\n```python\nprint(1)\n```\n",
+   "valid": [
+    "app.py"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "blocks": [
+     [
+      "app.py",
+      "print(1)\n"
+     ]
+    ]
+   }
+  }
+ }
+]
