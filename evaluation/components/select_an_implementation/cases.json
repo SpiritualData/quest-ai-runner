@@ -1,0 +1,570 @@
+[
+ {
+  "id": "SEL-001",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "call-a-model",
+   "name": "anthropic"
+  },
+  "expect": {
+   "eq": {
+    "cls": "AnthropicProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-002",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "call-a-model",
+   "name": "gemini"
+  },
+  "expect": {
+   "eq": {
+    "cls": "GeminiProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-003",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "call-a-model",
+   "name": "openai"
+  },
+  "expect": {
+   "eq": {
+    "cls": "OpenAIProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-004",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "call-a-model",
+   "name": "deepseek"
+  },
+  "expect": {
+   "eq": {
+    "cls": "DeepSeekProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-005",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "call-a-model",
+   "name": "claude_cli"
+  },
+  "expect": {
+   "eq": {
+    "cls": "ClaudeCliProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-006",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "call-a-model",
+   "name": "  Gemini "
+  },
+  "expect": {
+   "eq": {
+    "cls": "GeminiProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-007",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "run-deep-work",
+   "name": "acp"
+  },
+  "expect": {
+   "eq": {
+    "cls": "AcpDeepRunner",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-008",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "run-deep-work",
+   "name": "subprocess"
+  },
+  "expect": {
+   "eq": {
+    "cls": "SubprocessGoalRunner",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-009",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "search-backends",
+   "name": "brave"
+  },
+  "expect": {
+   "eq": {
+    "cls": "BraveBackend",
+    "error": null
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "SEL-010",
+  "kind": "by_name",
+  "area": "name",
+  "args": {
+   "solution": "select-context",
+   "name": "bm25"
+  },
+  "expect": {
+   "eq": {
+    "cls": "BM25ContentStore",
+    "error": null
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "SEL-011",
+  "kind": "by_override",
+  "area": "override",
+  "args": {
+   "solution": "call-a-model",
+   "overrides": {
+    "call-a-model": "gemini"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cls": "GeminiProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-012",
+  "kind": "by_override",
+  "area": "override",
+  "args": {
+   "solution": "call-a-model",
+   "overrides": {
+    "call-a-model": "gemini"
+   },
+   "name": "openai"
+  },
+  "expect": {
+   "eq": {
+    "cls": "OpenAIProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-013",
+  "kind": "by_override",
+  "area": "override",
+  "args": {
+   "solution": "call-a-model",
+   "overrides": {}
+  },
+  "expect": {
+   "eq": {
+    "cls": "ClaudeCliProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-014",
+  "kind": "by_override",
+  "area": "override",
+  "args": {
+   "solution": "run-deep-work",
+   "overrides": {
+    "run-deep-work": "acp"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cls": "AcpDeepRunner",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-015",
+  "kind": "by_override",
+  "area": "override",
+  "args": {
+   "solution": "call-a-model",
+   "overrides": {
+    "search-backends": "brave"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cls": "ClaudeCliProvider",
+    "error": null
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "SEL-016",
+  "kind": "by_default",
+  "area": "default",
+  "args": {
+   "solution": "call-a-model"
+  },
+  "expect": {
+   "eq": {
+    "cls": "ClaudeCliProvider",
+    "default": "claude_cli",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-017",
+  "kind": "by_default",
+  "area": "default",
+  "args": {
+   "solution": "run-deep-work"
+  },
+  "expect": {
+   "eq": {
+    "cls": "SubprocessGoalRunner",
+    "default": "subprocess",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-018",
+  "kind": "by_default",
+  "area": "default",
+  "args": {
+   "solution": "search-backends"
+  },
+  "expect": {
+   "eq": {
+    "cls": "SerperBackend",
+    "default": "serper",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-019",
+  "kind": "by_default",
+  "area": "default",
+  "args": {
+   "solution": "index-by-meaning"
+  },
+  "expect": {
+   "eq": {
+    "cls": "QdrantVectorStore",
+    "default": "qdrant",
+    "error": null
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "SEL-020",
+  "kind": "typo",
+  "area": "typo",
+  "args": {
+   "solution": "call-a-model",
+   "name": "antropic"
+  },
+  "expect": {
+   "eq": {
+    "error": "ValueError",
+    "lists_choices": true
+   }
+  }
+ },
+ {
+  "id": "SEL-021",
+  "kind": "typo",
+  "area": "typo",
+  "args": {
+   "solution": "run-deep-work",
+   "name": "acpp"
+  },
+  "expect": {
+   "eq": {
+    "error": "ValueError",
+    "lists_choices": true
+   }
+  }
+ },
+ {
+  "id": "SEL-022",
+  "kind": "typo",
+  "area": "typo",
+  "args": {
+   "solution": "not-a-solution",
+   "name": "x"
+  },
+  "expect": {
+   "eq": {
+    "error": "ValueError",
+    "lists_choices": true
+   }
+  }
+ },
+ {
+  "id": "SEL-023",
+  "kind": "by_override",
+  "area": "typo",
+  "args": {
+   "solution": "call-a-model",
+   "overrides": {
+    "call-a-model": "geminii"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cls": null,
+    "error": "ValueError"
+   }
+  }
+ },
+ {
+  "id": "SEL-024",
+  "kind": "by_name",
+  "area": "typo",
+  "args": {
+   "solution": "not-a-solution",
+   "name": "x"
+  },
+  "expect": {
+   "eq": {
+    "cls": null,
+    "error": "ValueError"
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "SEL-025",
+  "kind": "integrity",
+  "area": "table",
+  "args": {},
+  "expect": {
+   "approx": {
+    "solutions": [
+     26,
+     12
+    ]
+   },
+   "eq": {
+    "unresolvable": [],
+    "bad_defaults": []
+   }
+  }
+ },
+ {
+  "id": "SEL-026",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "model_provider",
+   "backend": "anthropic"
+  },
+  "expect": {
+   "eq": {
+    "cls": "AnthropicProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-027",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "model_provider",
+   "backend": "gemini"
+  },
+  "expect": {
+   "eq": {
+    "cls": "GeminiProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-028",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "model_provider",
+   "backend": "openai"
+  },
+  "expect": {
+   "eq": {
+    "cls": "OpenAIProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-029",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "model_provider",
+   "backend": "deepseek"
+  },
+  "expect": {
+   "eq": {
+    "cls": "DeepSeekProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-030",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "model_provider",
+   "backend": "claude_cli"
+  },
+  "expect": {
+   "eq": {
+    "cls": "ClaudeCliProvider",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-031",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "deep_runner",
+   "selections": {}
+  },
+  "expect": {
+   "eq": {
+    "cls": "SubprocessGoalRunner",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-032",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "deep_runner",
+   "selections": {
+    "run-deep-work": "acp"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cls": "AcpDeepRunner",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-033",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "deep_runner",
+   "selections": {
+    "run-deep-work": "subprocess"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cls": "SubprocessGoalRunner",
+    "error": null
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "SEL-034",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "deep_runner",
+   "selections": {
+    "run-deep-work": "acpp"
+   }
+  },
+  "expect": {
+   "eq": {
+    "cls": null,
+    "error": null
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "SEL-035",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "search_backend",
+   "backend": "brave"
+  },
+  "expect": {
+   "eq": {
+    "cls": "BraveBackend",
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "SEL-036",
+  "kind": "live_switch",
+  "area": "switch",
+  "args": {
+   "site": "search_backend",
+   "backend": "tavily"
+  },
+  "expect": {
+   "eq": {
+    "cls": "TavilyBackend",
+    "error": null
+   }
+  },
+  "heldout": true
+ }
+]

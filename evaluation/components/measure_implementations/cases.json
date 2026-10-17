@@ -1,0 +1,893 @@
+[
+ {
+  "id": "MEA-001",
+  "kind": "rank",
+  "area": "winner",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 6,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "a"
+    ],
+    "beats": [
+     "b"
+    ],
+    "unverified": []
+   }
+  }
+ },
+ {
+  "id": "MEA-002",
+  "kind": "rank",
+  "area": "winner",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "c",
+     "passed": 7,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "c"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "c",
+     "a"
+    ],
+    "beats": [
+     "b"
+    ],
+    "unverified": []
+   }
+  }
+ },
+ {
+  "id": "MEA-003",
+  "kind": "rank",
+  "area": "winner",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.05,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "a"
+    ],
+    "beats": [
+     "b"
+    ],
+    "unverified": []
+   }
+  }
+ },
+ {
+  "id": "MEA-004",
+  "kind": "rank",
+  "area": "winner",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 3,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "a",
+     "b"
+    ],
+    "beats": [],
+    "unverified": []
+   }
+  }
+ },
+ {
+  "id": "MEA-005",
+  "kind": "rank",
+  "area": "tie",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "a",
+     "b"
+    ],
+    "beats": [],
+    "unverified": []
+   }
+  }
+ },
+ {
+  "id": "MEA-006",
+  "kind": "rank",
+  "area": "tie",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "b",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "c",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "c"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "a",
+     "b",
+     "c"
+    ],
+    "beats": [],
+    "unverified": []
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-007",
+  "kind": "rank",
+  "area": "provenance",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "y"
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "a"
+    ],
+    "beats": [],
+    "unverified": []
+   }
+  }
+ },
+ {
+  "id": "MEA-008",
+  "kind": "rank",
+  "area": "provenance",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": ""
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "a"
+    ],
+    "beats": [],
+    "unverified": [
+     "b"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MEA-009",
+  "kind": "rank",
+  "area": "provenance",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": ""
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "a"
+    ],
+    "beats": [],
+    "unverified": [
+     "a"
+    ]
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-010",
+  "kind": "rank",
+  "area": "provenance",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": ""
+    },
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": ""
+    }
+   ],
+   "selected": "a"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b",
+     "a"
+    ],
+    "beats": [
+     "b"
+    ],
+    "unverified": [
+     "b",
+     "a"
+    ]
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-011",
+  "kind": "rank",
+  "area": "winner",
+  "args": {
+   "rows": [
+    {
+     "impl": "b",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "x"
+    }
+   ],
+   "selected": "missing"
+  },
+  "expect": {
+   "eq": {
+    "ranked": [
+     "b"
+    ],
+    "beats": [],
+    "unverified": []
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-012",
+  "kind": "board",
+  "area": "board",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    },
+    {
+     "impl": "b",
+     "passed": 8,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    }
+   ],
+   "selected": "a",
+   "strict": true
+  },
+  "expect": {
+   "contains": [
+    "selected: a",
+    "! b beats the selected a"
+   ],
+   "eq": {
+    "exit": 1,
+    "beats": [
+     "b"
+    ],
+    "incomparable": []
+   }
+  }
+ },
+ {
+  "id": "MEA-013",
+  "kind": "board",
+  "area": "board",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    },
+    {
+     "impl": "b",
+     "passed": 8,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    }
+   ],
+   "selected": "a",
+   "strict": false
+  },
+  "expect": {
+   "eq": {
+    "exit": 0,
+    "beats": [
+     "b"
+    ],
+    "incomparable": []
+   }
+  }
+ },
+ {
+  "id": "MEA-014",
+  "kind": "board",
+  "area": "board",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    },
+    {
+     "impl": "b",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.1,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    }
+   ],
+   "selected": "a",
+   "strict": true
+  },
+  "expect": {
+   "not_contains": [
+    "beats the selected"
+   ],
+   "eq": {
+    "exit": 0,
+    "beats": [],
+    "incomparable": []
+   }
+  }
+ },
+ {
+  "id": "MEA-015",
+  "kind": "board",
+  "area": "board",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    },
+    {
+     "impl": "b",
+     "passed": 8,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "bbbb2222",
+     "date": "2026-10-16"
+    }
+   ],
+   "selected": "a",
+   "strict": true
+  },
+  "expect": {
+   "contains": [
+    "not comparable"
+   ],
+   "eq": {
+    "exit": 0,
+    "beats": [],
+    "incomparable": [
+     "b"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MEA-016",
+  "kind": "board",
+  "area": "board",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    },
+    {
+     "impl": "b",
+     "passed": 8,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "",
+     "date": "2026-10-16"
+    }
+   ],
+   "selected": "a",
+   "strict": true
+  },
+  "expect": {
+   "contains": [
+    "unverified"
+   ],
+   "eq": {
+    "exit": 0,
+    "beats": [],
+    "incomparable": [
+     "b"
+    ]
+   }
+  }
+ },
+ {
+  "id": "MEA-017",
+  "kind": "board",
+  "area": "board",
+  "args": {
+   "rows": [
+    {
+     "impl": "a",
+     "passed": 5,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-16"
+    },
+    {
+     "impl": "b",
+     "passed": 9,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-10"
+    },
+    {
+     "impl": "b",
+     "passed": 2,
+     "cases": 10,
+     "cost_usd": 0.0,
+     "cases_sha": "aaaa1111",
+     "date": "2026-10-15"
+    }
+   ],
+   "selected": "a",
+   "strict": true
+  },
+  "expect": {
+   "eq": {
+    "exit": 0,
+    "beats": [],
+    "incomparable": []
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-018",
+  "kind": "record",
+  "area": "record",
+  "args": {
+   "cases_file": "json",
+   "dirty": false,
+   "edit_cases": true
+  },
+  "expect": {
+   "eq": {
+    "git_sha": true,
+    "dirty": false,
+    "cases_sha_matches": true,
+    "cases_sha_changes": true,
+    "rows": 2
+   }
+  }
+ },
+ {
+  "id": "MEA-019",
+  "kind": "record",
+  "area": "record",
+  "args": {
+   "cases_file": "csv",
+   "dirty": false,
+   "edit_cases": true
+  },
+  "expect": {
+   "eq": {
+    "git_sha": true,
+    "dirty": false,
+    "cases_sha_matches": true,
+    "cases_sha_changes": true,
+    "rows": 2
+   }
+  }
+ },
+ {
+  "id": "MEA-020",
+  "kind": "record",
+  "area": "record",
+  "args": {
+   "cases_file": "json",
+   "dirty": true
+  },
+  "expect": {
+   "eq": {
+    "git_sha": true,
+    "dirty": true,
+    "cases_sha_matches": true,
+    "cases_sha_changes": false,
+    "rows": 1
+   }
+  }
+ },
+ {
+  "id": "MEA-021",
+  "kind": "record",
+  "area": "record",
+  "args": {
+   "cases_file": "csv",
+   "dirty": true
+  },
+  "expect": {
+   "eq": {
+    "git_sha": true,
+    "dirty": true,
+    "cases_sha_matches": true,
+    "cases_sha_changes": false,
+    "rows": 1
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-022",
+  "kind": "run",
+  "area": "run",
+  "args": {
+   "impl": "good"
+  },
+  "expect": {
+   "eq": {
+    "cases": 3,
+    "passed": 3,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MEA-023",
+  "kind": "run",
+  "area": "run",
+  "args": {
+   "impl": "bad"
+  },
+  "expect": {
+   "eq": {
+    "cases": 3,
+    "passed": 0,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MEA-024",
+  "kind": "run",
+  "area": "budget",
+  "args": {
+   "impl": "good",
+   "argv": [
+    "--only",
+    "M1,M3"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cases": 2,
+    "passed": 2,
+    "error": null
+   }
+  }
+ },
+ {
+  "id": "MEA-025",
+  "kind": "run",
+  "area": "budget",
+  "args": {
+   "impl": "good",
+   "argv": [
+    "--only",
+    "M2"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cases": 1,
+    "passed": 1,
+    "error": null
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-026",
+  "kind": "run",
+  "area": "budget",
+  "args": {
+   "impl": "spender",
+   "argv": []
+  },
+  "expect": {
+   "eq": {
+    "cases": 3,
+    "passed": 3,
+    "error": null,
+    "model_calls": 3
+   }
+  }
+ },
+ {
+  "id": "MEA-027",
+  "kind": "run",
+  "area": "budget",
+  "args": {
+   "impl": "spender",
+   "argv": [
+    "--max-calls",
+    "3"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cases": 3,
+    "passed": 3,
+    "error": null,
+    "model_calls": 3
+   }
+  }
+ },
+ {
+  "id": "MEA-028",
+  "kind": "run",
+  "area": "budget",
+  "args": {
+   "impl": "spender",
+   "argv": [
+    "--max-calls",
+    "2"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cases": 0,
+    "passed": 0,
+    "error": "BudgetExceeded"
+   }
+  }
+ },
+ {
+  "id": "MEA-029",
+  "kind": "run",
+  "area": "budget",
+  "args": {
+   "impl": "spender",
+   "argv": [
+    "--max-calls",
+    "0"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cases": 0,
+    "passed": 0,
+    "error": "BudgetExceeded"
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-030",
+  "kind": "run",
+  "area": "budget",
+  "args": {
+   "impl": "spender",
+   "argv": [
+    "--only",
+    "M1",
+    "--max-calls",
+    "1"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "cases": 1,
+    "passed": 1,
+    "error": null,
+    "model_calls": 1
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "MEA-031",
+  "kind": "validity",
+  "area": "validity",
+  "args": {},
+  "expect": {
+   "eq": {
+    "cases": 3,
+    "good_passed": 3,
+    "bad_passed": 0
+   }
+  }
+ }
+]

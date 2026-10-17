@@ -43,6 +43,8 @@ def score_kind_case(fn, case):
     try:
         out = fn(case["kind"], case["args"])
     except Exception as e:  # noqa: BLE001  a solution that raises where the contract says "degrade" fails the case
+        if type(e).__name__ == "BudgetExceeded":  # the call budget aborts the run; it is not a failed case
+            raise
         return dict(ok=False, got=case["kind"], note=f"raised {type(e).__name__}: {e}")
     problems = check(out, case["expect"])
     return dict(ok=not problems, got=case["kind"], note="ok" if not problems else "; ".join(problems))
