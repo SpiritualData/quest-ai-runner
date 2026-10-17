@@ -56,3 +56,11 @@ def test_live_planner_healthy_fixture_passes():
     meter = common.CallMeter()
     case = next(c for c in CASES if c["id"] == "PSZ-001")
     assert score_case(live.build(meter), case)["ok"] and meter.calls == 0
+
+
+@pytest.mark.parametrize("case", [c for c in CASES if c["fixture"] == "production"], ids=lambda c: c["id"])
+def test_production_sized_sweep_has_a_real_p95_under_the_ceiling(case):
+    from prompt_size.impls import live
+    r = score_case(live.build(common.CallMeter()), case)
+    assert r["ok"], r["note"]
+    assert r["p95_chars"] < r["chars"] <= case["ceiling_chars"]

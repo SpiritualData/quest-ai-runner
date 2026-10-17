@@ -19,8 +19,25 @@ def duplicate_blocks(text):
     return max(0, count_blocks(text) - 1), sum(n - 1 for n in seen.values() if n > 1)
 
 
+def score_sweep(fn, case):
+    """A production case runs ``sweep`` samples from a light day to the heaviest; the ceiling must hold for all."""
+    from prompt_size import fixtures
+    sweep = case["sweep"]
+    rows = [score_case(fn, dict(case, sweep=sweep, sample=i, sweep_run=True)) for i in range(sweep)]
+    sizes = [r["chars"] for r in rows]
+    dups = sum(r["dups"] for r in rows)
+    ceiling = case["ceiling_chars"]
+    ok = max(sizes) <= ceiling and dups == 0
+    note = (f"{sweep} production samples: median {sorted(sizes)[len(sizes) // 2]}, p95 {p95(sizes)}, max {max(sizes)} "
+            f"chars (ceiling {ceiling}), {dups} duplicated blocks")
+    return dict(ok=ok, chars=max(sizes), p95_chars=p95(sizes), dups=dups, point=case["point"],
+                got=f"max {max(sizes)} chars", note=note)
+
+
 def score_case(fn, case):
     from prompt_size import fixtures
+    if case.get("sweep") and not case.get("sweep_run"):
+        return score_sweep(fn, case)
     text = fn(case["point"], fixtures.build_inputs(case))
     chars = len(text)
     blocks, paras = duplicate_blocks(text)
@@ -41,11 +58,14 @@ def p95(values):
 
 
 def aggregate(rows):
+    """Per assembly point: the max and p95 of the fixed fixtures, and of the production sweep on its own line."""
     by = {}
     for r in rows:
-        by.setdefault(r.get("point"), []).append(r)
+        key = f"{r.get('point')}{' (production sweep)' if 'p95_chars' in r else ''}"
+        by.setdefault(key, []).append(r)
     parts = []
-    for p, rs in sorted(by.items(), key=lambda kv: str(kv[0])):
+    for p, rs in sorted(by.items()):
         sizes = [r.get("chars", 0) for r in rs]
-        parts.append(f"{p}: max {max(sizes)} chars, p95 {p95(sizes)} chars, {sum(r.get('dups', 0) for r in rs)} dups")
+        p95s = [r["p95_chars"] for r in rs if "p95_chars" in r] or [p95(sizes)]
+        parts.append(f"{p}: max {max(sizes)} chars, p95 {max(p95s)} chars, {sum(r.get('dups', 0) for r in rs)} dups")
     return "; ".join(parts)

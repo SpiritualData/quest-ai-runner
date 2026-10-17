@@ -33,7 +33,7 @@ Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the mod
 | Component | Function | Scored by |
 | --- | --- | --- |
 | `classification/` | `classify(message, context) -> {"route": answer\|tool\|deep, "tool": name}` | route (and tool) match `expect` in `cases.json` |
-| `quest_ops/` | `run_operation(message, world) -> {"reply"}` | the in-memory quest's state afterwards, plus no unrequested writes |
+| `quest_ops/` | `run_operation(message, world) -> {"reply"}` | the in-memory quest's state afterwards, plus no unrequested writes; the opt-in dev arm (`dev_run.py`) scores route and real dev-Quest state on 58 chat cases |
 | `context_selection/` | `select(task, corpus) -> [file paths, best first]` | the labelled file's rank: top-1, top-3 (or within the solution's declared `budget`) |
 | `staleness/` | `changed(before, after) -> {stale paths}` | exact set of edited or deleted files; precision and recall over all cases |
 | `recipe_fast_path/` | `handle(message, world) -> {"reply", "exit_reason"}` | the fake tool world's recorded calls: right tool and args on a repeat, no lookalike write on a near miss, no tool on chat |
@@ -96,8 +96,59 @@ the case-driven components, so a new case is data only. Offline tests: `test_cor
 (it pins each component's known-gap case ids, so a fix shows up as a test to update).
 
 Legacy scripts: `overseer_signals_eval.py`, `deep_review_eval.py` and `card_quality_eval.py` are thin wrappers over the
-live arms. `eval_vs_claude_code.py` stays as the live engine `claude_code_ab` imports.
-`chat_quest_ops_routing_eval.py` is not ported: its 50 cases and in-app arm need the dev Quest backend, not only a model.
+live arms. `eval_vs_claude_code.py` stays as the live engine `claude_code_ab` imports. The old
+`chat_quest_ops_routing_eval.py` is gone: its 50 cases (plus its 8 recipe cases) are `quest_ops/dev_cases.json`, run by
+the dev arm below.
+
+### `quest_ops` dev arm (opt-in, needs a dev Quest backend)
+
+The offline arms score the in-memory `FakeQuest`. The dev arm sends each message through the real in-app chat
+(`POST /api/quest-ai/conversations/{id}/messages/stream`, the surface a subscriber uses, which runs the
+production brain) against a disposable fixture quest on the dev backend, and scores two things: ROUTING (a plain
+quest operation must not leave the process; a case that needs a machine or files must be delegated) and
+EXECUTION (the case's `verify` data, checked against what the app really shows: Today's Actions, the timer
+route, entries, goals, notes, the decision ledger; never the reply alone). It is skipped, exit 0, unless
+`QAR_EVAL_DEV_ENV_FILE` names the dev lane's env file (with `QAR_EVAL_DEV_HOST`); nothing runs in the default
+offline test or run.
+
+```
+PY=.venv/bin/python3
+$PY evaluation/components/quest_ops/dev_run.py --selftest                 # verifier controls, no chat
+$PY evaluation/components/quest_ops/dev_run.py --sample 12 --seed 1       # stratified draw
+$PY evaluation/components/quest_ops/dev_run.py --only R1,H1,G3,X1
+$PY evaluation/components/quest_ops/dev_run.py --stratum write --auto-run off   # approval-card arm
+$PY evaluation/components/quest_ops/dev_run.py --recipes-subset 10 --recipes on # recipe store on
+```
+
+* `dev_cases.json`: 58 cases. Each has `id`, `stratum` (`read` 12, `list` 6, `write` 23, `inform` 4, `contrast` 5, `recipe` 8; draw a
+  sample by stratum), `area`, `message`, `expect_route` (`inline` or `deep`), a declarative `verify` (`kind` in
+  `dev_verify.py`), optional `prelude` turns and a `before` precondition (SC1 adds a goal between two listings;
+  T2 starts the timer it will stop; RN2 counts notes), and for writes a `control`: REST steps that make the
+  verifier true, used by `--selftest` (it must be False on the untouched fixture and True after the control).
+  The 50 chat cases keep the old ids (R1..X5); `RP1..RP6`, `RN1`, `RN2` are the recipe cases, and
+  `dev_recipe_subsets.json` holds the old 1, 10 and 30 teach-then-score sets.
+* `dev_world.py` (fixture and cleanup, verified gone), `dev_arm.py` (the arm: same `run_operation(message, world)`
+  signature, route classification), `dev_verify.py` (verifiers), `dev_run.py` (scoring, sampling, CLI). The
+  REST and SSE plumbing is `evaluation/qualitative/devclient.py`, not a copy.
+* Quest creation is gated for API keys: set `QAR_EVAL_QUEST_ID` (one approved quest, one run) or
+  `QAR_EVAL_QUEST_FACTORY` (a command printing a new quest id; `QAR_EVAL_QUEST_FACTORY_CWD`,
+  `QAR_EVAL_QUEST_DELETE` with `{quest_id}`), and optionally `QAR_EVAL_CATEGORY_ID`.
+* Spend: a pass is real model tokens on dev, so draw a sample and run it once (single passes are noisy; a case
+  that flips once is a signal, not proof). One thing the port changed: a case now passes only when routing AND
+  execution both pass (the old script printed them as two columns, still in the row).
+* Not carried over: the old script's QAR-library arm (`run`, which drove the library Orchestrator with the deep
+  runner off) is `quest_ops --impl qar_orchestrator`; its markdown summary writer and `--repeat` passes (loop the command).
+
+Last measured, 2026-10-06, on dev (the old script, one pass each, a paired 24-case subset): correct 7/24 before the
+fixes, 16/24 after one pass and 20/24 after the last fixes and verifier corrections; routing 23/24 then 24/24;
+writes 1/12 then 11/12; median turn 16.1 s then 13.6 s (max 497 s then 34 s). The baseline over all 50 was routing
+47/50 with only 7/23 writes landing. The lessons that stayed true: judge a write by what the app shows (a habit
+"done" must appear in Today's Actions), not the reply; scope habit and collection lookups to the quest; delete the
+fixture's conversations (left behind they become context for later runs); and a field write on an autopilot-off
+quest legitimately parks on an approval, so it passes when the decision proposes the value and the reply does
+not claim it happened. Still open then: one flip of D3 (a reflection with "weekend" handed off as a task),
+account-wide rep learned notes colouring other quests' replies, and a raw insert not being safe to retry after a
+partial write. Fixes are in quest-backend history.
 
 ## Why it cannot start a deep run
 
@@ -121,3 +172,13 @@ Every implementation measures live code or says it does not (check S12 in `docs/
 imports or drives `quest_ai_runner`, or declares `ALTERNATIVE = True` (or a docstring opening `ALTERNATIVE`,
 `BASELINE`, `ABLATION`, `FLOOR`). A row recorded without `cases_sha` shows as `unverified` in `leaderboard.py`
 and is never compared against a verified one (check S16).
+
+## prompt_size: production-sized ceilings
+
+`prompt_size/` has `healthy` and `incident` fixtures plus a `production` fixture (PSZ-009 to PSZ-011) that sweeps 20
+deterministic samples from a light day to the heaviest seen, so the headline reports a real p95 beside the max. The
+sizes (20 context-update refs of about 1.9K chars, standing instructions about 6.8K, goal frame, last run, next steps)
+come from sizes measured in the 2026-10-06 incident; the text is generated filler, no real content. Measured against
+the ceilings (chars): autopilot batch max 61,131 / p95 58,323 vs 105,000; context-update bundle max 40,533 / p95
+38,288 vs 60,000; deep prompt max 83,374 / p95 80,366 vs 210,000. All three hold with headroom, so no ceiling was
+changed. The ceilings are the assembler budgets (the hard caps), not forecasts: they stay where the budget is.

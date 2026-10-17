@@ -39,8 +39,54 @@ def _task(i, result):
                 worked_at=f"2026-10-0{1 + i % 9}T08:00:00+00:00", text=f"pass {i}")
 
 
+# Production SIZES, synthetic content. Counts and characters per section were read off the 2026-10-06
+# incident as sizes only (one context-updates block of 20 refs about 38K chars, standing instructions
+# about 6.8K, goal frame about 1K, last-run excerpt about 2.3K, next steps about 1.3K); nothing else from
+# that data is here. A "production" case sweeps ``sweep`` samples from a light day to the heaviest seen,
+# so the scorer reports a real p95 beside the max.
+PRODUCTION_MAX_REFS = 20
+
+
+def production_scale(index, sweep):
+    """The fraction of the heaviest production day that sample ``index`` of ``sweep`` carries (0.2 to 1.0)."""
+    return 0.2 + 0.8 * (index + 1) / max(1, sweep)
+
+
+def production_inputs(point, index, sweep):
+    f = production_scale(index, sweep)
+    refs = max(2, round(PRODUCTION_MAX_REFS * f))
+    bundle_block = update_bundle(refs, int(1700 * f) + 300).as_prompt_block()
+    if point == "context_update_bundle":
+        return dict(bundle=update_bundle(refs, int(1700 * f) + 300))
+    if point == "autopilot_batch":
+        ladder = [dict(scope=s, period="2026-10", more=int(f * 3),
+                       goals=[dict(name=prose(900 + k, 70), deadline="2026-10-31") for k in range(8)])
+                  for s in ("day", "week", "month")]
+        return dict(quest_outcome=prose(1, 140), persona="a careful research partner",
+                    scope_label="week of October 12",
+                    adopted_tasks=[dict(id="a0", text="Do the weekly review.")],
+                    instructions=prose(910, int(6800 * f)),
+                    next_steps=prose(700, int(1300 * f)), last_run=prose(710, int(2300 * f)),
+                    reflection=prose(720, int(1200 * f)), insights=prose(730, int(1000 * f)),
+                    context_updates=bundle_block, goal_ladder=ladder,
+                    experiments=prose(740, 900), asked=prose(750, int(1500 * f)))
+    if point == "deep_prompt":
+        auto = production_inputs("autopilot_batch", index, sweep)
+        from quest_ai_runner.runner.autopilot_briefs import compose_batch_text
+        brief = compose_batch_text(**auto)
+        # standing preamble: doctrine, persona block, a few past-turn excerpts clipped to 600 chars,
+        # vector and keyword hits (a few K), as the context engine renders them today
+        preamble = "\n\n".join(["=== CONTEXT DOCTRINE ===\n" + prose(800, 3000),
+                                "=== RELEVANT PAST CONVERSATIONS ===\n" + "\n".join(prose(810 + k, 600) for k in range(5)),
+                                "=== CONTEXT SELECTED FOR THIS GOAL ===\n" + prose(820, int(5000 * f))])
+        return dict(goal="Produce this week's plan and flag what slipped.", brief=brief, preamble=preamble)
+    raise ValueError(f"no production fixture for assembly point: {point}")
+
+
 def build_inputs(case):
     point, fx = case["point"], case["fixture"]
+    if fx == "production":
+        return production_inputs(point, case.get("sample", 0), case.get("sweep", 1))
     big = fx == "incident"
     if point == "context_update_bundle":
         return dict(bundle=update_bundle(20 if big else 8, 6000 if big else 400))
