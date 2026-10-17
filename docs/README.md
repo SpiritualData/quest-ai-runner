@@ -71,7 +71,7 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 
 - **[Structure registry](structure/README.md)**: the checked inventory of every component
   (`components.csv`), every swappable solution with its metric (`solutions.csv`), the waivers, and
-  `python scripts/check_structure.py` that keeps them true.
+  `esoi check` that keeps them true.
 - **[Architecture Standards](ARCHITECTURE_STANDARDS.md)**: the brain / runner / adapters split, why
   `core` is called `core`, and the standards code here must follow.
 - **[Streaming & modes](streaming-and-modes.md)**: LIVE vs BACKGROUND, the `ProgressSink`

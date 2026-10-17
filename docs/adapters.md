@@ -256,7 +256,7 @@ register("search-the-web", "mine", "my_pkg.search:MyBackend")   # your own imple
 
 In a lane's config file: `[selections]` then `"run-deep-work" = "acp"`. An unknown name raises with the list of
 choices. A new built-in implementation is one line in the table plus its file in the solution's
-`implementations` column; `scripts/check_structure.py` (S14) keeps the two in step. The name is chosen by the
+`implementations` column; `esoi check` (S14) keeps the two in step. The name is chosen by the
 config layer (environment variables such as `QAR_MODEL_BACKEND` are read there), never inside `core`.
 
 ## Wiring them up

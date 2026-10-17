@@ -29,7 +29,7 @@ no matter who uses it.
 `adapters/` never imports from `runner/`, `config.py` or the CLI. A lazy (in-function) import counts. If
 the brain seems to need something concrete, add a new *interface* in `core/adapters*.py`, put the fill-in
 under `adapters/`, and wire it via `RunnerConfig`; if it needs a helper that lives outward, move the helper
-inward and let the outer module re-export it. `scripts/check_structure.py` enforces this (rule S6); the
+inward and let the outer module re-export it. `esoi check` enforces this (rule S6); the
 justified exceptions are in `docs/structure/waivers.csv`.
 
 ## Module map

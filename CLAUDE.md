@@ -56,17 +56,20 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 
 ## Evolvable structure (ESOI): the registry and the check
 
-The repo's structure is data, not folklore. `docs/structure/` holds `components.csv` (placement only: id, layer,
-path globs, role, the solutions each serves), `problems.csv`, `ideals.csv`, `solutions.csv`, `implementations.csv` and `metrics.csv` (the intent records, each with the fields of the evolvable-structure skill's template in `esoi_template.csv`; a solution also has its port, implementations, the selected one, `eval` or `invariant`, gap and action, and a metric its command) and `waivers.csv` (justified exceptions
-that can only shrink). `tracker/` is the generated, committed Sheet view of the registry (check S17;
-`python scripts/build_tracker.py`). To add a solution, read `docs/structure/STANDARD.md`; the numbered rules S1 to S27 are
-a reference in `docs/structure/README.md`. Nothing lives outside a solution: a component that serves none (S19), or a
-solution with no current recorded run (S20), fails the check, and the code is removed rather than waived.
+The repo's structure is data, not folklore, and the checking, running and measuring of it is Joshua's `esoi` package
+(a dev dependency pinned in `pyproject.toml`; `esoi rules` lists its rules, so they are not restated here). `docs/structure/`
+holds `components.csv` (placement only), the five intent record files, `overall/` (the overall network; `qar_solution.md` is
+its readable version), `waivers.csv` and `metric-run-policy.md`; `esoi.toml` configures esoi for this repo and
+`scripts/esoi_rules.py` adds QAR's one rule (S15, environment variables are documented). To add a solution, read
+`docs/structure/STANDARD.md`. Nothing lives outside a solution: a component that serves none (S19), or a solution with no
+current recorded run (S20), fails the check, and the code is removed rather than waived.
 `evaluation/components/esoi_behavior/` scores whether an AI's replies follow ESOI (`cases.csv` is reviewed as a sheet).
 
-- **Before you commit:** `.venv/bin/python3 scripts/check_structure.py` (it also runs as `tests/test_structure_registry.py`;
-  `--write-docs` regenerates `COMPONENTS.md`, `docs/configuration.md` and `tracker/*.csv`). Each problem line starts with
-  the id of the rule it breaks; the list is in `docs/structure/README.md`.
+- **Before you commit:** `.venv/bin/esoi check` (it also runs as `tests/test_structure_registry.py`; `esoi check --write-docs`
+  regenerates `COMPONENTS.md`, `docs/configuration.md` and `tracker/*.csv`) and `.venv/bin/esoi hygiene`. Each problem line
+  starts with the id of the rule it breaks. After committing measured code or cases (`quest_ai_runner/`,
+  `evaluation/components/`), run `esoi run --stale` and commit `evaluation/components/results.csv`, then `esoi check --strict`.
+  Offline arms only: a live arm (model calls) is run only by decision, per `docs/structure/metric-run-policy.md`.
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
   when its metric wins on the same cases.
@@ -128,7 +131,7 @@ and keep the tests green.
    ```
    (`[0-9a-f]{24}` catches Mongo-style ObjectIds. A hit isn't always a problem. Review it.)
    The scan is also a command, with placeholders (`qsk_...`, `/home/user/`, `name@example.org`) let through:
-   `.venv/bin/python3 -m quest_ai_runner.structure.hygiene --staged` (see `docs/public-hygiene.md`).
+   `.venv/bin/esoi hygiene --staged` (see `docs/public-hygiene.md`).
 3. Never commit a real `.env`, `qar_state.json`, or any `*_state.json` (all gitignored).
 4. Keep `CHANGELOG.md` (Unreleased) and docs in sync with behavior changes.
 

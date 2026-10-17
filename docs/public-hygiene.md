@@ -2,12 +2,13 @@
 
 This repository is public, and so may be a consumer's mirror of its own integration. Nothing
 consumer specific or secret may be in the files or the history: API keys and tokens, real machine
-paths, object ids, addresses of real people. `quest_ai_runner.structure.hygiene` is the scan that
+paths, object ids, addresses of real people. `esoi hygiene` (the `esoi` package, a dev dependency) is the scan that
 enforces it.
 
-    python -m quest_ai_runner.structure.hygiene            # every file git knows about under the current folder
-    python -m quest_ai_runner.structure.hygiene --staged   # only what is staged, for a pre-commit hook
-    python -m quest_ai_runner.structure.hygiene --root path/to/repo
+    esoi hygiene            # every file git knows about under the current folder
+    esoi hygiene --staged   # only what is staged, for a pre-commit hook
+    esoi hygiene --root path/to/repo
+    esoi hygiene --history  # also every line ever added in git history
 
 Exit 0 means clean, 1 means findings. Each finding prints `path:line: pattern: first characters...`;
 the whole secret is never printed.
@@ -27,6 +28,6 @@ body, and filler ids of repeated digits.
 
 ## What it cannot do
 
-It reads the working files, not the git history. A secret that was ever committed must be rotated;
-removing it from the files is not enough. A new kind of secret is a new pattern in `hygiene.py` and a
+It reads the working files unless `--history` is given. A secret that was ever committed must be rotated;
+removing it from the files is not enough. A new kind of secret is a new pattern in esoi's hygiene scanner and a
 new planted case in `evaluation/components/keep_secrets_out/cases.json`, in the same change.

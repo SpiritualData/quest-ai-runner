@@ -25,20 +25,20 @@ One row per integration point. Columns (extra columns such as `tracking_status`,
 
 ## 2. Run the check
 
-    python -m quest_ai_runner.structure check-consumer --registry docs/structure/qar_integration.csv \
+    esoi consumer check --registry docs/structure/qar_integration.csv \
         --root . --requirements requirements.txt [--fail-on-lag]
 
 It verifies that every implementation imports and has every public method of the port it claims
 (accepting the port's parameter names), that every solution id exists in the installed QAR, that every
 `qar_symbol` resolves, that no duplicate row lacks an action, that tests exist, and it reports pin lag
 (the commit pinned in the requirements file against the installed checkout). Exit 0 clean, 1 violations.
-Call `quest_ai_runner.structure.consumer_check.check_consumer(registry, root, requirements)` from a
-test so drift fails a normal test run.
+Call `esoi.consumer.check_consumer` from a
+test (see esoi's `docs/guides/apply-with-tools.md`; the `[consumer]` table of `esoi.toml` configures it) so drift fails a normal test run.
 
 Every integration point must sit in a solution with a current result. Give the check
 `--solutions solutions.csv --results results.csv`: `solutions.csv` has `solution_id`, `selected`, and
 `metric_files` (the case files); `results.csv` has `solution_id`, `cases`, `passed`, `git_sha`,
-`cases_sha` (use `consumer_check.cases_hash(files, root)`). A point in no solution, a solution with no
+`cases_sha` (use `esoi.consumer.cases_hash(files, root)`). A point in no solution, a solution with no
 selected implementation, a missing, failing or stale result (the case files changed since the run)
 fails. The solution/problem/ideal/metric shape is QAR's own `docs/structure/` standard.
 
