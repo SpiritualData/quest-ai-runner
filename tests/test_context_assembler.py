@@ -627,6 +627,28 @@ class TestStaleCardsFor:
         stale = store.stale_cards_for(str(real_file))
         assert "changing-card" in stale
 
+    def test_card_stale_when_pinned_file_deleted(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        gone = tmp_path / "gone.py"
+        _write_card(cards_dir, _make_card(
+            "gone-card", ["gone"],
+            files=[{"path": str(gone), "sha256": "abc" + "0" * 61, "mtime": 1.0, "git_sha": ""}]
+        ))
+        store = FileContextStore(str(cards_dir))
+        assert store.stale_cards_for(str(gone)) == {"gone-card"}
+
+    def test_entry_without_stored_sha_is_not_stale_when_missing(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        gone = tmp_path / "never_pinned.py"
+        _write_card(cards_dir, _make_card(
+            "nosha-card", ["nosha"],
+            files=[{"path": str(gone), "sha256": "", "mtime": 0.0, "git_sha": ""}]
+        ))
+        store = FileContextStore(str(cards_dir))
+        assert store.stale_cards_for(str(gone)) == set()
+
 
 # ---------------------------------------------------------------------------
 # Orchestrator integration: pre-flight injection and write-back

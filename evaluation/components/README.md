@@ -75,9 +75,9 @@ Notes on the three newer components:
   store's own extractors, because the production bootstrap needs a model. `vector_bge_small` (a baseline) and
   `hybrid_union` (which wraps the live `HybridContextAssembler`, `FileContextStore` and `VectorContextAssembler`, with only the embedder and an in-memory cosine store local) need the `BAAI/bge-small-en-v1.5` model in the fastembed cache (`/tmp/fastembed_cache`)
   and run with `HF_HUB_OFFLINE=1`; if it is missing they fail loudly instead of scoring 0%.
-* `staleness/` is zero-model and builds its own tiny trees in `/tmp`. Two of its cases are known gaps of
+* `staleness/` is zero-model and builds its own tiny trees in `/tmp`. One of its cases is a known gap of
   the current store, kept on purpose: an edit that restores the mtime is missed (`_current_sha` trusts a
-  matching mtime for speed), and a deleted file is not reported stale.
+  matching mtime for speed); a deleted file is reported stale.
 * `recipe_fast_path/` spends real model calls (`QAR_EVAL_MODEL`). One solution instance sees the whole
   run in order, so the recipe store learns between cases; the scorer sends each tool's TEACH message once
   before its first ask. `--only` selects a subset (the old 1-case smoke is `--only RH1`; the 10-case

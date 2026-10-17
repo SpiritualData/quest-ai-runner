@@ -45,7 +45,7 @@ class BootstrapMixin:
     # ------------------------------------------------------------------
 
     def stale_cards_for(self, path: str) -> Set[str]:
-        """Return card ids that pin ``path`` AND whose fingerprint for it is now stale.
+        """Return card ids that pin ``path`` AND whose fingerprint for it is now stale (changed or deleted).
 
         The index is rebuilt on each call from the on-disk cards (bypasses the
         in-memory cache so concurrent writes from other agents are always
@@ -57,7 +57,10 @@ class BootstrapMixin:
                 for fe in card.get("files", []):
                     if fe.get("path") == path:
                         cur = self._current_sha(path, fe)
-                        if cur and fe.get("sha256") != cur:
+                        stored = fe.get("sha256", "")
+                        # A pinned file that is gone (no current sha) is stale too, matching
+                        # the render path in assemble; an entry with no stored sha is unknown.
+                        if stored and stored != cur:
                             card_ids.add(card["id"])
             return card_ids
         except Exception:  # noqa: BLE001
