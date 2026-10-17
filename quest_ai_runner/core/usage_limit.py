@@ -315,12 +315,6 @@ def active_limit(now: Optional[datetime] = None) -> Optional[UsageLimit]:
         return None
 
 
-def pause_until(now: Optional[datetime] = None) -> Optional[datetime]:
-    """When the lane pause ends, or None when not paused."""
-    limit = active_limit(now)
-    return limit.resume_at(now=now) if limit else None
-
-
 def seen_since(started: float) -> Optional[UsageLimit]:
     """The limit, if one was recorded at or after ``started`` (a ``time.time()`` value)."""
     with _lock:

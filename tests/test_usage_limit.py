@@ -135,7 +135,6 @@ def test_note_is_active_until_the_reset_and_survives_a_restart(tmp_path):
     soon = datetime.now(timezone.utc) + timedelta(hours=1)
     usage_limit.record(usage_limit.UsageLimit(message=WEEKLY, kind="weekly", resets_at=soon))
     assert usage_limit.active_limit() is not None
-    assert usage_limit.pause_until() == soon + usage_limit.RESUME_GRACE
 
     # A restarted lane reads it back.
     usage_limit.reset_for_tests()

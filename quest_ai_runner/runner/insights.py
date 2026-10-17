@@ -38,7 +38,6 @@ log = logging.getLogger("quest-ai-runner.insights")
 INSIGHT_FIELD_ID = "insight"
 INSIGHT_CATEGORIES_FIELD_ID = "categories"
 INSIGHT_ACTED_ON_FIELD_ID = "acted_on"
-INSIGHT_ACTION_TAKEN_FIELD_ID = "action_taken"
 
 # How far back to look when the caller gives no explicit cutoff, and the outer bound on any cutoff.
 # An insight from three months ago that is still unacted is a fact about the person's backlog, not

@@ -60,10 +60,6 @@ def week_start(day: dt.date) -> dt.date:
     return day - dt.timedelta(days=day.weekday())
 
 
-def next_week_key(day: dt.date) -> str:
-    return iso_week_key(week_start(day) + dt.timedelta(days=7))
-
-
 def validate_decision(raw: Optional[Dict[str, Any]], member_ids: set) -> Optional[Dict[str, Any]]:
     """Turn the model's structured answer into a decision the code will apply, or None.
 

@@ -71,7 +71,6 @@ WORKER_RESERVED_TOKENS = 80_000
 # healthy autopilot pass needs (about 60K characters of brief plus selected context), and well
 # under any window, so the budget only bites when something has started to accumulate.
 DEFAULT_DEEP_PROMPT_TOKEN_BUDGET = 60_000
-DEEP_PROMPT_BUDGET_ENV = "QAR_DEEP_PROMPT_TOKEN_BUDGET"
 
 # The smallest budget anything here will shrink to, so a retry that halves the budget cannot
 # halve it into uselessness.

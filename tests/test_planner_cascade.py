@@ -2,7 +2,7 @@
 
 Pinned here:
 
-  * escalation_spec/escalation_levels parse the operator's comma list of confidence levels and
+  * escalation_spec parses the operator's comma list of confidence levels and
     "action:<name>" entries, dropping anything unrecognised rather than raising;
   * should_escalate: an action match always escalates; a confidence match escalates only when
     levels were named AND the decision actually reported one (the fail-safe: no reported
@@ -39,7 +39,6 @@ from quest_ai_runner.core.planner_cascade import (
     apply_review,
     build_review_digest,
     describe_decision,
-    escalation_levels,
     escalation_spec,
     should_escalate,
     truncate_keep_both_ends,
@@ -50,7 +49,7 @@ from .conftest import StubRetrieval
 
 
 # ---------------------------------------------------------------------------
-# escalation_spec / escalation_levels
+# escalation_spec
 # ---------------------------------------------------------------------------
 
 def test_escalation_spec_parses_confidence_levels():
@@ -76,10 +75,6 @@ def test_escalation_spec_is_case_insensitive():
 def test_escalation_spec_handles_none_and_empty_string():
     assert escalation_spec(None) == {"levels": frozenset(), "actions": frozenset()}
     assert escalation_spec("") == {"levels": frozenset(), "actions": frozenset()}
-
-
-def test_escalation_levels_returns_just_the_levels():
-    assert escalation_levels("low,action:read,medium") == frozenset({"low", "medium"})
 
 
 # ---------------------------------------------------------------------------

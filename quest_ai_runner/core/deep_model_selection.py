@@ -121,14 +121,3 @@ def select_deep_start(difficulty: Optional[str],
         return start_ladder, selection
     except Exception:  # noqa: BLE001 (selection must never break a deep run)
         return None
-
-
-def parse_difficulty_models(simple: Optional[str], normal: Optional[str],
-                            hard: Optional[str]) -> Dict[str, str]:
-    """Build a difficulty -> model map from three optional values (unset keeps the default)."""
-    models = dict(DEFAULT_DIFFICULTY_MODELS)
-    for level, value in (("simple", simple), ("normal", normal), ("hard", hard)):
-        v = (value or "").strip()
-        if v:
-            models[level] = v
-    return models

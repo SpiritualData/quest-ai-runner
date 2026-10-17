@@ -76,16 +76,6 @@ Do NOT use em dashes.
 """
 
 
-def answer_format_instruction() -> str:
-    """The JSON answer shape for a providers that take no tool schema, derived from
-    ``QUEST_RANKING_TOOL`` so the shape is defined once."""
-    row = QUEST_RANKING_TOOL["input_schema"]["properties"]["results"]["items"]["properties"]
-    example = {"results": [{"item": 1, "quest_id": "<id or empty string>", "ranking": ["<id>"]}]}
-    return ("Answer with ONE JSON object only, no prose, no markdown fences, with one entry per "
-            f"numbered message ({', '.join(row)}): " + json.dumps(example)
-            + " Every ranking lists each shown quest id once, most relevant first.")
-
-
 def clip_text(text: str, limit: int) -> str:
     """``text`` cut to about ``limit`` chars keeping its START and its END (the newest words of a
     message matter as much as its opening)."""

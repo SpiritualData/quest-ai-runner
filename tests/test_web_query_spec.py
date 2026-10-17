@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import pytest
 
-from quest_ai_runner.adapters.web_query_spec import coerce_web_query, coerce_web_query_text
+from quest_ai_runner.adapters.web_query_spec import coerce_web_query
+
+
+def coerce_web_query_text(spec):
+    return coerce_web_query(spec)["q"]
 
 Q = "Portland Marathon 2026 date registration cost"
 

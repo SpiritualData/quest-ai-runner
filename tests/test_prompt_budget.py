@@ -85,13 +85,13 @@ def test_the_request_is_clipped_only_as_the_last_resort():
 
 
 def test_the_budget_never_exceeds_what_the_model_window_holds(monkeypatch):
-    monkeypatch.setenv(prompt_budget.DEEP_PROMPT_BUDGET_ENV, "5000000")
+    monkeypatch.setenv("QAR_DEEP_PROMPT_TOKEN_BUDGET", "5000000")
     assert prompt_budget.resolve_deep_prompt_budget(model="opus") == \
         prompt_budget.max_prompt_tokens_for("opus") < prompt_budget.DEFAULT_CONTEXT_WINDOW_TOKENS
-    monkeypatch.setenv(prompt_budget.DEEP_PROMPT_BUDGET_ENV, "20000")
+    monkeypatch.setenv("QAR_DEEP_PROMPT_TOKEN_BUDGET", "20000")
     assert prompt_budget.resolve_deep_prompt_budget(model="opus") == 20_000
     assert prompt_budget.resolve_deep_prompt_budget(30_000, model="opus") == 30_000
-    monkeypatch.delenv(prompt_budget.DEEP_PROMPT_BUDGET_ENV)
+    monkeypatch.delenv("QAR_DEEP_PROMPT_TOKEN_BUDGET")
     assert prompt_budget.resolve_deep_prompt_budget() == \
         prompt_budget.DEFAULT_DEEP_PROMPT_TOKEN_BUDGET
 

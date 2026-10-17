@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 log = logging.getLogger(__name__)
 
@@ -226,32 +226,6 @@ def _parse_edited_files_from_output(output_text: str) -> List[str]:
                 break
 
     return edited_files
-
-
-def categorize_files_into_cards(
-    edited_files: List[str],
-    card_metadata: List[Dict[str, Any]],
-    categorizer_fn: Callable[[List[str], List[Dict[str, Any]]], Dict[str, List[str]]],
-) -> Dict[str, List[str]]:
-    """Use an LLM to map edited files to relevant context cards.
-
-    Args:
-        edited_files: File paths that were modified (passed from deep runner result)
-        card_metadata: The context cards that were used for this task
-        categorizer_fn: A callable(file_paths, card_metadata) -> {card_id: [files]}
-
-    Returns:
-        Mapping of card_id -> list of file paths to add
-    """
-    if not edited_files or not card_metadata:
-        return {}
-
-    try:
-        categorization = categorizer_fn(edited_files, card_metadata)
-        return categorization or {}
-    except Exception as e:
-        log.error(f"File categorization failed: {type(e).__name__}: {e}", exc_info=True)
-        return {}
 
 
 def update_context_cards(

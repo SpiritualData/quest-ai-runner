@@ -76,10 +76,6 @@ def read_meta(cards_dir: str) -> Dict[str, Any]:
         return {}
 
 
-def meta_exists(cards_dir: str) -> bool:
-    return (Path(cards_dir) / BOOTSTRAP_META_FILE).is_file()
-
-
 def write_meta(cards_dir: str, meta: Dict[str, Any]) -> bool:
     """Atomically replace ``bootstrap_meta.json`` with ``meta``. True on success."""
     try:

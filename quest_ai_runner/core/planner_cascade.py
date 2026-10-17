@@ -164,11 +164,6 @@ def escalation_spec(spec: Optional[str]) -> Dict[str, FrozenSet[str]]:
     return {"levels": frozenset(levels), "actions": frozenset(actions)}
 
 
-def escalation_levels(spec: Optional[str]) -> FrozenSet[str]:
-    """The confidence levels named in ``spec``. Kept as its own helper for readability."""
-    return escalation_spec(spec)["levels"]
-
-
 def should_escalate(decision: PlanDecision, spec: Any) -> bool:
     """True when this decision matches a signal the operator asked to have reviewed.
 

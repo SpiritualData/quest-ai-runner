@@ -64,8 +64,3 @@ def coerce_web_query(spec: Any) -> Dict[str, Any]:
 
     visit(spec)
     return out
-
-
-def coerce_web_query_text(spec: Any) -> str:
-    """Convenience: just the query string (empty if none found)."""
-    return coerce_web_query(spec)["q"]
