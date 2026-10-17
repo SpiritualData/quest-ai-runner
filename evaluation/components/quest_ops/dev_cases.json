@@ -1,0 +1,1000 @@
+[
+ {
+  "id": "R1",
+  "stratum": "read",
+  "area": "read quest fields",
+  "message": "What is the outcome of this quest?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "sub-50",
+    "10k"
+   ]
+  }
+ },
+ {
+  "id": "R2",
+  "stratum": "read",
+  "area": "read quest fields",
+  "message": "What are the measurable outcomes on this quest?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "eight consecutive weeks",
+    "52:00"
+   ]
+  }
+ },
+ {
+  "id": "R3",
+  "stratum": "read",
+  "area": "read quest fields",
+  "message": "Where am I right now on this quest? What does it say my current state is?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "58 minutes"
+   ]
+  }
+ },
+ {
+  "id": "R4",
+  "stratum": "read",
+  "area": "read quest fields",
+  "message": "What are the acceptance criteria on this quest?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "50:00",
+    "watch"
+   ]
+  }
+ },
+ {
+  "id": "FR1",
+  "stratum": "read",
+  "area": "read quest fields",
+  "message": "Remind me what I'm aiming for on this quest.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "sub-50",
+    "10k"
+   ]
+  }
+ },
+ {
+  "id": "FR2",
+  "stratum": "read",
+  "area": "read quest fields",
+  "message": "How will I know this quest is done?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "50:00",
+    "watch"
+   ]
+  }
+ },
+ {
+  "id": "R5",
+  "stratum": "read",
+  "area": "read quest fields",
+  "message": "What category is this quest in?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "fitness"
+   ]
+  }
+ },
+ {
+  "id": "L1",
+  "stratum": "list",
+  "area": "list quest data",
+  "message": "List the goals on this quest.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "mileage",
+    "tempo",
+    "long-run"
+   ]
+  }
+ },
+ {
+  "id": "L2",
+  "stratum": "list",
+  "area": "list quest data",
+  "message": "Which habits am I tracking for this quest?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "morning run"
+   ]
+  }
+ },
+ {
+  "id": "L3",
+  "stratum": "list",
+  "area": "list quest data",
+  "message": "How many kilometres did I log in my Run Log over the last few days?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "8.2",
+    "12.5"
+   ]
+  }
+ },
+ {
+  "id": "LA1",
+  "stratum": "list",
+  "area": "list quest data",
+  "message": "Show me every goal on this quest, including the monthly ones.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "mileage",
+    "tempo",
+    "long-run"
+   ]
+  }
+ },
+ {
+  "id": "LA2",
+  "stratum": "list",
+  "area": "list quest data",
+  "message": "Which collections are linked to this quest?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "morning run",
+    "run log"
+   ]
+  }
+ },
+ {
+  "id": "LA3",
+  "stratum": "read",
+  "area": "list quest data",
+  "message": "What was my hardest-effort run in the Run Log?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "12.5"
+   ]
+  }
+ },
+ {
+  "id": "LA4",
+  "stratum": "read",
+  "area": "list quest data",
+  "message": "What is the total distance in my Run Log?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "25.7"
+   ]
+  }
+ },
+ {
+  "id": "LA5",
+  "stratum": "read",
+  "area": "list quest data",
+  "message": "How many times did I do my morning run in the last three days?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_number",
+   "number": "3"
+  }
+ },
+ {
+  "id": "LA6",
+  "stratum": "read",
+  "area": "list quest data",
+  "message": "How many entries are in my Run Log?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_number",
+   "number": "3"
+  }
+ },
+ {
+  "id": "SC1",
+  "stratum": "list",
+  "area": "stale-context listing",
+  "message": "List the goals on this quest again.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_has",
+   "needles": [
+    "recovery week"
+   ]
+  },
+  "prelude": [
+   "List the goals on this quest."
+  ],
+  "before": "sc1_new_goal",
+  "note": "Stale-context probe: a prior read in the same conversation must not stand in for a fresh one after the data changed."
+ },
+ {
+  "id": "C1",
+  "stratum": "inform",
+  "area": "inform only",
+  "message": "In Quest, what is the difference between a goal and a habit?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_nonempty"
+  }
+ },
+ {
+  "id": "C2",
+  "stratum": "inform",
+  "area": "inform only",
+  "message": "How do habit timers work in Quest?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_nonempty"
+  }
+ },
+ {
+  "id": "C3",
+  "stratum": "inform",
+  "area": "inform only",
+  "message": "What is a collection in Quest?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_nonempty"
+  }
+ },
+ {
+  "id": "C4",
+  "stratum": "inform",
+  "area": "inform only",
+  "message": "Can Quest AI create goals for me automatically?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "reply_nonempty"
+  }
+ },
+ {
+  "id": "D1",
+  "stratum": "write",
+  "area": "daily reflection",
+  "message": "Here is my daily reflection. Yesterday I ran 8.2km and felt strong, my legs held up well. Today I am planning a tempo run. Please record it.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "daily_reflection",
+   "needles": [
+    "8.2"
+   ]
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/daily-plan",
+    "body": {
+     "goals": [],
+     "yesterday_review": "ran 8.2 km",
+     "today_plan": ""
+    }
+   }
+  ]
+ },
+ {
+  "id": "D2",
+  "stratum": "read",
+  "area": "daily reflection",
+  "message": "What did I write in my most recent week review?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "week_review_scope"
+  },
+  "note": "Passes when the reply is non-empty and does not say cannot; the verifier prints the account's real latest week review so a human can spot cross-quest bleed."
+ },
+ {
+  "id": "D3",
+  "stratum": "write",
+  "area": "daily reflection",
+  "message": "Here's today's reflection: my sleep was great and I'm feeling fresh heading into the weekend taper. Nothing else to add.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "daily_reflection",
+   "needles": [
+    "taper"
+   ]
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/daily-plan",
+    "body": {
+     "goals": [],
+     "yesterday_review": "",
+     "today_plan": "weekend taper"
+    }
+   }
+  ]
+ },
+ {
+  "id": "H1",
+  "stratum": "write",
+  "area": "habit completion",
+  "message": "Mark my morning run habit complete for today.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "habit_done",
+   "target": "habit"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/data/entries",
+    "body": {
+     "collection_id": "{habit}",
+     "field_values": {
+      "completionType": "yes",
+      "entry_date": "{today}"
+     },
+     "linked_quest_ids": [
+      "{quest}"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "id": "H2",
+  "stratum": "write",
+  "area": "habit completion",
+  "message": "I stretched for 15 minutes just now, log that against my stretching habit.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "habit_done",
+   "target": "timer"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/data/entries",
+    "body": {
+     "collection_id": "{timer}",
+     "field_values": {
+      "completionType": "yes",
+      "entry_date": "{today}",
+      "session": {
+       "duration_seconds_total": 900
+      }
+     },
+     "linked_quest_ids": [
+      "{quest}"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "id": "H3",
+  "stratum": "write",
+  "area": "habit completion",
+  "message": "I did my evening walk today.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "habit_done",
+   "target": "evening_walk"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/data/entries",
+    "body": {
+     "collection_id": "{evening_walk}",
+     "field_values": {
+      "completionType": "yes",
+      "entry_date": "{today}"
+     },
+     "linked_quest_ids": [
+      "{quest}"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "id": "H4",
+  "stratum": "write",
+  "area": "habit completion",
+  "message": "Log 20 minutes of meditation for today.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "habit_done",
+   "target": "meditation"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/data/entries",
+    "body": {
+     "collection_id": "{meditation}",
+     "field_values": {
+      "completionType": "yes",
+      "entry_date": "{today}",
+      "session": {
+       "duration_seconds_total": 1200
+      }
+     },
+     "linked_quest_ids": [
+      "{quest}"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "id": "T1",
+  "stratum": "write",
+  "area": "habit timer",
+  "message": "Start the timer on my stretching habit now.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "timer",
+   "target": "timer",
+   "running": true
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/planning/habits/{timer}/timer",
+    "body": {
+     "action": "start",
+     "mode": "stopwatch",
+     "startedAt": "{now}"
+    }
+   }
+  ]
+ },
+ {
+  "id": "T2",
+  "stratum": "write",
+  "area": "habit timer",
+  "message": "Stop the stretching timer.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "timer",
+   "target": "timer",
+   "running": false
+  },
+  "before": "t2_start_timer",
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/planning/habits/{timer}/timer",
+    "body": {
+     "action": "start",
+     "mode": "stopwatch",
+     "startedAt": "{now}"
+    }
+   },
+   {
+    "method": "POST",
+    "path": "/api/planning/habits/{timer}/timer",
+    "body": {
+     "action": "stop",
+     "mode": "stopwatch"
+    }
+   }
+  ]
+ },
+ {
+  "id": "E1",
+  "stratum": "write",
+  "area": "collection entry",
+  "message": "Add an entry to my Run Log collection: distance 10.4 km, effort 4, notes 'felt easy all the way round'.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "journal_distance",
+   "accept": [
+    "10.4",
+    "10.4000",
+    "10"
+   ]
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/data/entries",
+    "body": {
+     "collection_id": "{journal}",
+     "field_values": {
+      "distance_km": 10.4,
+      "effort": 4,
+      "notes": "felt easy"
+     },
+     "linked_quest_ids": [
+      "{quest}"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "id": "E2",
+  "stratum": "write",
+  "area": "collection entry",
+  "message": "Log a run: 6.3 km, effort 3.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "journal_distance",
+   "accept": [
+    "6.3",
+    "6.3000"
+   ]
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/data/entries",
+    "body": {
+     "collection_id": "{journal}",
+     "field_values": {
+      "distance_km": 6.3,
+      "effort": 3,
+      "notes": ""
+     },
+     "linked_quest_ids": [
+      "{quest}"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "id": "E3",
+  "stratum": "write",
+  "area": "collection entry",
+  "message": "I ran 7 km this morning, put it in my run log.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "journal_distance",
+   "accept": [
+    "7",
+    "7.0",
+    "7.00",
+    "7.000"
+   ]
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/data/entries",
+    "body": {
+     "collection_id": "{journal}",
+     "field_values": {
+      "distance_km": 7,
+      "effort": 3,
+      "notes": "morning run"
+     },
+     "linked_quest_ids": [
+      "{quest}"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "id": "G1",
+  "stratum": "write",
+  "area": "goal create",
+  "message": "Add a goal to this quest: do two track sessions a week through October.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "new_goal",
+   "keyword": "track"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/planning/goals",
+    "body": {
+     "quest_id": "{quest}",
+     "name": "{tag}-GOAL-TRACK: two track sessions a week",
+     "period": "2026_W41",
+     "time_scope": "week"
+    }
+   }
+  ]
+ },
+ {
+  "id": "G2",
+  "stratum": "write",
+  "area": "goal update",
+  "message": "Mark the tempo session goal on this quest as complete.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "goal_complete",
+   "goal": "B"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/planning/goals/{goal_B}/complete",
+    "body": {}
+   }
+  ]
+ },
+ {
+  "id": "G3",
+  "stratum": "write",
+  "area": "quest note",
+  "message": "Add a note to this quest: I am travelling next week so my mileage will drop.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "note",
+   "keyword": "travel"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/quests/{quest}/notes",
+    "body": {
+     "text": "travelling next week"
+    }
+   }
+  ]
+ },
+ {
+  "id": "G4",
+  "stratum": "write",
+  "area": "goal create",
+  "message": "Create a goal for this week: one hill session.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "new_goal",
+   "keyword": "hill"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/planning/goals",
+    "body": {
+     "quest_id": "{quest}",
+     "name": "{tag}-GOAL-HILL: one hill session",
+     "period": "2026_W41",
+     "time_scope": "week"
+    }
+   }
+  ]
+ },
+ {
+  "id": "G5",
+  "stratum": "write",
+  "area": "goal update",
+  "message": "Rename the mileage goal to 'Build weekly mileage to 45km'.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "goal_renamed",
+   "goal": "A",
+   "marker": "45km"
+  },
+  "control": [
+   {
+    "method": "PUT",
+    "path": "/api/planning/goals/{goal_A}",
+    "body": {
+     "name": "Build weekly mileage to 45km"
+    }
+   }
+  ]
+ },
+ {
+  "id": "G6",
+  "stratum": "write",
+  "area": "goal update",
+  "message": "Mark the October long-run block goal as done.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "goal_complete",
+   "goal": "C"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/planning/goals/{goal_C}/complete",
+    "body": {}
+   }
+  ]
+ },
+ {
+  "id": "G7",
+  "stratum": "write",
+  "area": "quest note",
+  "message": "Note on this quest: new shoes arrived.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "note",
+   "keyword": "shoes"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/quests/{quest}/notes",
+    "body": {
+     "text": "new shoes arrived"
+    }
+   }
+  ]
+ },
+ {
+  "id": "G8",
+  "stratum": "write",
+  "area": "quest note",
+  "message": "Add a note to this quest: hydration matters a lot this week.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "note",
+   "keyword": "hydrat"
+  },
+  "control": [
+   {
+    "method": "POST",
+    "path": "/api/quests/{quest}/notes",
+    "body": {
+     "text": "hydration matters"
+    }
+   }
+  ]
+ },
+ {
+  "id": "F1",
+  "stratum": "write",
+  "area": "quest field write",
+  "message": "Update the current state on this quest: I am now running 10K in 55 minutes.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "field_write",
+   "field": "current_state",
+   "marker": "55"
+  },
+  "control": [
+   {
+    "method": "PATCH",
+    "path": "/api/quests/{quest}/field",
+    "body": {
+     "fieldName": "current_state",
+     "value": "running 10K in 55 minutes"
+    }
+   }
+  ],
+  "note": "Subject to the ai_field_writes gate: on an autopilot-off quest the write may park on a decision instead of applying; the verifier accepts a pending decision only if the reply does not claim it is done."
+ },
+ {
+  "id": "F2",
+  "stratum": "write",
+  "area": "quest field write",
+  "message": "Change this quest's outcome to running a sub-48-minute 10K.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "field_write",
+   "field": "outcome",
+   "marker": "48"
+  },
+  "control": [
+   {
+    "method": "PATCH",
+    "path": "/api/quests/{quest}/field",
+    "body": {
+     "fieldName": "outcome",
+     "value": "sub-48-minute 10K"
+    }
+   }
+  ]
+ },
+ {
+  "id": "F3",
+  "stratum": "write",
+  "area": "quest field write",
+  "message": "Set my preferences on this quest to: I prefer morning runs.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "field_write",
+   "field": "preferences",
+   "marker": "morning runs"
+  },
+  "control": [
+   {
+    "method": "PATCH",
+    "path": "/api/quests/{quest}/field",
+    "body": {
+     "fieldName": "preferences_text",
+     "value": "I prefer morning runs"
+    }
+   }
+  ]
+ },
+ {
+  "id": "F4",
+  "stratum": "write",
+  "area": "quest field write",
+  "message": "Update the acceptance criteria to: an official chip-timed result under 49:30.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "field_write",
+   "field": "acceptance_criteria",
+   "marker": "49:30"
+  },
+  "control": [
+   {
+    "method": "PATCH",
+    "path": "/api/quests/{quest}/field",
+    "body": {
+     "fieldName": "acceptance_criteria",
+     "value": "chip-timed result under 49:30"
+    }
+   }
+  ]
+ },
+ {
+  "id": "X1",
+  "stratum": "contrast",
+  "area": "contrast: code",
+  "message": "Fix the back button on the quest detail screen in the quest-frontend repo so it returns to the goals list instead of the home screen.",
+  "expect_route": "deep",
+  "verify": {
+   "kind": "contrast_honest"
+  }
+ },
+ {
+  "id": "X2",
+  "stratum": "contrast",
+  "area": "contrast: files",
+  "message": "Research the best 12-week training plans for a sub-50 10K and write me a summary document in my corpus.",
+  "expect_route": "deep",
+  "verify": {
+   "kind": "contrast_honest"
+  }
+ },
+ {
+  "id": "X3",
+  "stratum": "contrast",
+  "area": "contrast: machine",
+  "message": "Run the quest-backend test suite on my machine and tell me which tests are failing right now.",
+  "expect_route": "deep",
+  "verify": {
+   "kind": "contrast_honest"
+  }
+ },
+ {
+  "id": "X4",
+  "stratum": "contrast",
+  "area": "contrast: machine (harmless)",
+  "message": "On the dev server, check how much free disk space there is and tell me.",
+  "expect_route": "deep",
+  "verify": {
+   "kind": "contrast_honest"
+  }
+ },
+ {
+  "id": "X5",
+  "stratum": "contrast",
+  "area": "contrast: files (harmless)",
+  "message": "Search my corpus files for notes about 10K training and summarize them.",
+  "expect_route": "deep",
+  "verify": {
+   "kind": "contrast_honest"
+  }
+ },
+ {
+  "id": "RP1",
+  "stratum": "recipe",
+  "area": "recipe repeat: habit",
+  "message": "Mark my evening walk habit complete for today.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "habit_done",
+   "target": "evening_walk"
+  },
+  "recipe_role": "repeat"
+ },
+ {
+  "id": "RN1",
+  "stratum": "recipe",
+  "area": "recipe near-miss: habit",
+  "message": "Is my meditation habit complete for today?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "habit_not_done_answered",
+   "target": "meditation"
+  },
+  "recipe_role": "near_miss"
+ },
+ {
+  "id": "RP2",
+  "stratum": "recipe",
+  "area": "recipe repeat: habit",
+  "message": "Mark my meditation habit complete for today.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "habit_done",
+   "target": "meditation"
+  },
+  "recipe_role": "repeat"
+ },
+ {
+  "id": "RP3",
+  "stratum": "recipe",
+  "area": "recipe repeat: note",
+  "message": "Add a note to this quest: my left knee felt sore after Sunday's run.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "note",
+   "keyword": "knee"
+  },
+  "recipe_role": "repeat"
+ },
+ {
+  "id": "RN2",
+  "stratum": "recipe",
+  "area": "recipe near-miss: note",
+  "message": "What notes have I added to this quest so far?",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "no_new_note"
+  },
+  "recipe_role": "near_miss",
+  "before": "note_count"
+ },
+ {
+  "id": "RP4",
+  "stratum": "recipe",
+  "area": "recipe repeat: note",
+  "message": "Add a note to this quest: race registration closes on Friday.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "note",
+   "keyword": "registration"
+  },
+  "recipe_role": "repeat"
+ },
+ {
+  "id": "RP5",
+  "stratum": "recipe",
+  "area": "recipe repeat: goal",
+  "message": "Add a goal to this quest: stretch for ten minutes every evening in October.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "new_goal",
+   "keyword": "stretch"
+  },
+  "recipe_role": "repeat"
+ },
+ {
+  "id": "RP6",
+  "stratum": "recipe",
+  "area": "recipe repeat: entry",
+  "message": "Add an entry to my Run Log collection: distance 5.5 km, effort 2, notes 'easy recovery jog'.",
+  "expect_route": "inline",
+  "verify": {
+   "kind": "journal_distance",
+   "accept": [
+    "5.5",
+    "5.5000"
+   ]
+  },
+  "recipe_role": "repeat"
+ }
+]

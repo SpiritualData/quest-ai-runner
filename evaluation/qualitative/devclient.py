@@ -1,6 +1,6 @@
 """Dev-only Quest REST + in-app chat client shared by world.py, judge.py and runner.py.
 
-Copies the minimal helpers from evaluation/chat_quest_ops_routing_eval.py (which is left untouched)
+Holds the minimal REST and chat helpers (also used by the quest_ops dev arm, evaluation/components/quest_ops/dev_world.py)
 so this package has no import-time dependency on a repo .env. Credentials come from the dev lane's
 env file, found relative to this checkout (product/setup/sd-dev-runner/.env) or via
 QUAL_DEV_ENV_FILE. The module refuses to load unless the base URL is the dev backend.

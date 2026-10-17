@@ -2,7 +2,7 @@
 
 Goal: measure whether Quest AI in the real app chat makes good, grounded, correctly routed, safely
 side-effecting decisions on a rich realistic account, not just which planner action it picks (that
-is `evaluation/chat_quest_ops_routing_eval.py`, left untouched). Three datasets (73 / 44 / 48):
+is the dev arm of `evaluation/components/quest_ops/`). Three datasets (73 / 44 / 48):
 
 * `explicit`: the conversation is pinned to the case's quest (the assistant knows which quest).
 * `implicit`: no quest pinned; the assistant must work out which of five quests is meant.
