@@ -19,6 +19,11 @@ $PY evaluation/components/run.py staleness --impl store_sha256                 #
 $PY evaluation/components/run.py staleness --impl mtime_size                   # baseline
 $PY evaluation/components/run.py recipe_fast_path --impl recipe_replay         # selected per solutions.csv (real model)
 $PY evaluation/components/run.py recipe_fast_path --impl planner_only          # baseline (real model)
+$PY evaluation/components/run.py recipe_fast_path --impl recipe_replay_offline # OFFLINE arm: rule model instead of the claude CLI, recorded
+$PY evaluation/components/run.py recipe_fast_path --impl planner_only_offline  # offline baseline
+$PY evaluation/components/run.py feedback_loop --impl ledger_guidance          # live ledger + guidance provider, scripted model
+$PY evaluation/components/run.py feed_context_sources --impl update_engine     # live UpdateEngine quest channels, fake Quest client
+$PY evaluation/components/run.py receive_input_mid_run --impl in_memory        # live inbox wired into the live Orchestrator
 $PY evaluation/components/run.py esoi_behavior --impl reference_good   # offline validity: must pass all 42
 $PY evaluation/components/run.py esoi_behavior --impl reference_bad    # offline validity: must fail all 42
 $PY evaluation/components/run.py esoi_behavior --impl standing_instructions --max-calls 42   # live, costs model calls
@@ -39,6 +44,9 @@ Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the mod
 | `recipe_fast_path/` | `handle(message, world) -> {"reply", "exit_reason"}` | the fake tool world's recorded calls: right tool and args on a repeat, no lookalike write on a near miss, no tool on chat |
 | `chat_quality/` | `converse(case) -> record` | the dev Quest chat's judged pass flag per case (opt-in, SKIPs offline): routing, grounding on pivot facts, database side effects, rubric |
 
+| `feedback_loop/` | `replay(steps) -> {"turns": [guidance shown per turn]}` for a synthetic correction sequence (serves `store-feedback` and `guide-by-feedback`, many-to-one) | each relevant turn shows its stored correction (repeat-correction rate), irrelevant ones stay out; floor `no_memory`, baseline `dump_all` |
+| `feed_context_sources/` | `feed(kind, world) -> {"offered", "needs_response"}` for the quest channels (notes, goal updates, decisions) | declarative `expect`; baseline `dump_all` |
+| `receive_input_mid_run/` | `receive(kind, args) -> dict` for mid-run messages through the inbox and the live Orchestrator, plus the inbox port contract | message reaches the next decision once, to the right conversation, never lost; floor `no_inbox`, baseline `shared_list` |
 | `judges/` | `judge(kind, args) -> dict` for overseer parsing and digest, reach verdict and block, quest ranking, sufficiency gate | declarative `expect` per case (`expect.py`); per-kind pass counts |
 | `overseer_signals/` | `signal(digest) -> {"signal", "reason", "hint"}` on 16 labelled scenarios | digest shows the label's evidence (offline); signal in `want` (live) |
 | `deep_run/` | `contract(kind, args) -> dict` for the deep-run rules (review parse and fail-open, markers, envelopes, headless prompt, met-vs-limit, the goal loop) | declarative `expect`; zero worker, zero model |
@@ -48,6 +56,10 @@ Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the mod
 | `web_search/` | `search(case) -> {"urls", "text", "error", ...}` through one backend over fixture payloads | gold page in top k, cap, dedupe, tags, summary, failover, cache; tokens added |
 | `card_quality/` | `select(query, world) -> {"view", "titles"}` after learning three tasks | labelled collection resolved, no spraying, no leak |
 | `claude_code_ab/` | `locate(case) -> {"answer", "turns"}` for seven "which file" tasks | labelled path in the answer |
+| `retrieval/` | `retrieve(question, corpus) -> {"ids", "texts"}` through one LIVE retrieval adapter over a synthetic handbook | recall@3 of the labelled document, and its answer phrase in the text the adapter read |
+| `conversation_recall/` | `recall(query, user, world) -> {"ids"}` through the live `SessionFileConversationStore` | labelled past conversation returned, none of another user's |
+| `recent_context/` | `recall(case) -> {"ids"}` through the live `FileRecentContextStore` and `filter_relevant` | right cards warm-started, no stale or cross-quest card |
+| `vector_recall/` | `search(query, corpus) -> {"ids"}` through the live embedded `QdrantVectorStore` | labelled card in the top 3 (mostly paraphrases) |
 
 Add a solution: create `<component>/impls/<name>.py` exposing `build(meter) -> function`, count any
 model call with `meter.record()` (or `meter.wrap(provider)`), and run it with `--impl <name>`.
@@ -185,4 +197,30 @@ sizes (20 context-update refs of about 1.9K chars, standing instructions about 6
 come from sizes measured in the 2026-10-06 incident; the text is generated filler, no real content. Measured against
 the ceilings (chars): autopilot batch max 61,131 / p95 58,323 vs 105,000; context-update bundle max 40,533 / p95
 38,288 vs 60,000; deep prompt max 83,374 / p95 80,366 vs 210,000. All three hold with headroom, so no ceiling was
-changed. The ceilings are the assembler budgets (the hard caps), not forecasts: they stay where the budget is.
+changed. The planner ceiling was raised from 60,000 to 66,000 on 2026-10-16: the incident-sized planner view measured
+62,349 after that day's shipped planner rules and tools (pending reads, workflow, file-source and document-read
+rules), so 60,000 was a stale initial value, not a regression to hide; trimming the rubric is the open action. The ceilings are the assembler budgets (the hard caps), not forecasts: they stay where the budget is.
+
+## Retrieval, conversation, recent-context and vector recall (offline, zero model calls)
+
+* `retrieval/` exposes ONE invented 17-document handbook (`corpus.json`) through each source type and asks 21
+  fixed questions (`cases.json`, each pinned to the corpus by `corpus_sha`). Every implementation drives the real
+  adapter class and fakes only the network edge: `urlopen` for Notion, Drive and Chat, the `open_mcp_session`
+  seam for MCP, the transport for `RemoteFilesAdapter` (answered by the real `serve-files` `FileOperations`
+  dispatch). The gather policy (`policy.py`: question terms, one adapter search per term, rarity-weighted rank)
+  is shared, so a score differs only by what the adapter can find and read. Implementations: `files_adapter`,
+  `cached_db`, `composite` (selected), `mcp_server`, `notion_pages`, `drive_files`, `chat_threads`,
+  `remote_files`, and the `first_three` floor. Not driven: `quest_retrieval_adapter`, which is keyed by goal and
+  quest ids against the Quest API rather than by a question (pinned by `tests/test_quest_retrieval_decisions.py`).
+  Honest limits: the MCP number measures plumbing (the fake server does the search); Drive has no search, so its
+  policy lists and reads every file; Notion's `grep` sees rows (title, properties), not page bodies; a paraphrase
+  with no shared word is a miss for all (RET-019, RET-020). `remote_files` takes about 35 s because the real file
+  server runs each search in a child process.
+* `conversation_recall/` covers `remember-conversations`: synthetic session files for two users, `related_slices`
+  with the user in scope, and a leak check. `current_slice` and database-backed stores are not driven.
+* `recent_context/` covers `recall-recent-context`: ten multi-turn scenarios (follow-up free pass, scope fence
+  across quests, unrelated question, lexical reuse). A paraphrase gap is pinned (RCT-010).
+* `vector_recall/` covers `index-by-meaning`: the live embedded Qdrant store with the local bge-small model
+  (fastembed cache, offline) versus an in-memory cosine baseline, on the same handbook cards. It is its own
+  component rather than extra `context_selection` cases because those labels are repo files and rank whole
+  pipelines, which would put one arm against the full hybrid under check S10.

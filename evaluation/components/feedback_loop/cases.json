@@ -1,0 +1,683 @@
+[
+ {
+  "id": "FL-01",
+  "area": "recall",
+  "description": "One standing correction, then the same kind of work",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "From now on never use bullet points in the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "write the weekly report for the team",
+    "want": [
+     "never use bullet points"
+    ],
+    "avoid": []
+   }
+  ]
+ },
+ {
+  "id": "FL-02",
+  "area": "recall",
+  "description": "Correction on a different quest-wide topic comes back on its own topic",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "Always sign customer emails with the support team name, not a personal name",
+    "location": "customer emails",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "draft the customer emails for the launch",
+    "want": [
+     "sign customer emails with the support team"
+    ],
+    "avoid": []
+   }
+  ]
+ },
+ {
+  "id": "FL-03",
+  "area": "timing",
+  "description": "Work done BEFORE the correction cannot show it",
+  "steps": [
+   {
+    "op": "turn",
+    "message": "write the weekly report for the team",
+    "want": [],
+    "avoid": [
+     "never use bullet points"
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "From now on never use bullet points in the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "write the weekly report again",
+    "want": [
+     "never use bullet points"
+    ],
+    "avoid": []
+   }
+  ]
+ },
+ {
+  "id": "FL-04",
+  "area": "recall",
+  "description": "The correction still comes back after unrelated turns in between",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "Schedule internal meetings only after noon on Tuesdays",
+    "location": "internal meetings",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "what is on my calendar today",
+    "want": [],
+    "avoid": []
+   },
+   {
+    "op": "turn",
+    "message": "summarise this note about gardening",
+    "want": [],
+    "avoid": []
+   },
+   {
+    "op": "turn",
+    "message": "schedule the internal meetings for next week",
+    "want": [
+     "internal meetings only after noon"
+    ],
+    "avoid": []
+   }
+  ]
+ },
+ {
+  "id": "FL-05",
+  "area": "recall",
+  "description": "Five standing corrections; the relevant one is found among them",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "From now on never use bullet points in the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Always sign customer emails with the support team name, not a personal name",
+    "location": "customer emails",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Schedule internal meetings only after noon on Tuesdays",
+    "location": "internal meetings",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "When you create an invoice always include the purchase order number",
+    "location": "invoices",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "For travel booking prefer trains over flights under four hours",
+    "location": "travel booking",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "create the invoices for last month",
+    "want": [
+     "include the purchase order number"
+    ],
+    "avoid": []
+   }
+  ]
+ },
+ {
+  "id": "FL-06",
+  "area": "precision",
+  "description": "Five standing corrections; an unrelated one is not shown on a specific turn",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "From now on never use bullet points in the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Always sign customer emails with the support team name, not a personal name",
+    "location": "customer emails",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Schedule internal meetings only after noon on Tuesdays",
+    "location": "internal meetings",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "When you create an invoice always include the purchase order number",
+    "location": "invoices",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "For travel booking prefer trains over flights under four hours",
+    "location": "travel booking",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "book travel to the conference by train",
+    "want": [
+     "prefer trains over flights"
+    ],
+    "avoid": [
+     "never use bullet points"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "FL-07",
+  "area": "precision",
+  "description": "A one-time request is not turned into a permanent rule",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "Fix the typo in the third paragraph of the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "done",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "write the weekly report for the team",
+    "want": [],
+    "avoid": [
+     "typo in the third paragraph"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "FL-08",
+  "area": "precision",
+  "description": "A one-time request does not displace the standing rule from the same note stream",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "Fix the typo in the third paragraph of the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "done",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "From now on never use bullet points in the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "write the weekly report for the team",
+    "want": [
+     "never use bullet points"
+    ],
+    "avoid": [
+     "typo in the third paragraph"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "FL-09",
+  "area": "precision",
+  "description": "A lone correction is not shown on a turn it has nothing to do with",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "From now on never use bullet points in the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "what is the weather like in Lisbon",
+    "want": [],
+    "avoid": [
+     "never use bullet points"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "FL-10",
+  "area": "precision",
+  "description": "Two corrections; each turn gets its own and not the other",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "In code review start with what is good before listing problems",
+    "location": "code review",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Translate product names never, keep them in English",
+    "location": "translation",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "review the code change for the login page",
+    "want": [
+     "start with what is good"
+    ],
+    "avoid": [
+     "keep them in English"
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "translate the help page into Spanish",
+    "want": [
+     "keep them in English"
+    ],
+    "avoid": [
+     "start with what is good"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "FL-11",
+  "area": "recall",
+  "description": "A second correction on the same topic adds to the first, both come back",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "From now on never use bullet points in the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Put the summary line at the top of the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "write the weekly report for the team",
+    "want": [
+     "never use bullet points",
+     "summary line at the top"
+    ],
+    "avoid": []
+   }
+  ]
+ },
+ {
+  "id": "FL-12",
+  "area": "mixed",
+  "description": "A note with a fix to make now and a rule for later: only the rule is kept",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "Add a Status column to the tracker and from now on show owners as full names",
+    "location": "the tracker",
+    "dispositions": [
+     [
+      "done",
+      ""
+     ],
+     [
+      "standing",
+      "from now on show owners as full names"
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "update the tracker for this sprint",
+    "want": [
+     "show owners as full names"
+    ],
+    "avoid": [
+     "Add a Status column"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "FL-13",
+  "area": "mixed",
+  "description": "A mixed note with no words for the standing half is not turned into a rule",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "Add a Status column to the tracker and from now on show owners as full names",
+    "location": "the tracker",
+    "dispositions": [
+     [
+      "done",
+      ""
+     ],
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "update the tracker for this sprint",
+    "want": [],
+    "avoid": [
+     "Add a Status column",
+     "full names"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "FL-14",
+  "area": "recall",
+  "description": "Habit rule comes back on a habit turn after many other rules",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "Log every habit in the evening summary, never in the morning one",
+    "location": "habit logging",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "In code review start with what is good before listing problems",
+    "location": "code review",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Translate product names never, keep them in English",
+    "location": "translation",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Schedule internal meetings only after noon on Tuesdays",
+    "location": "internal meetings",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Always sign customer emails with the support team name, not a personal name",
+    "location": "customer emails",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "log my habit for the evening summary",
+    "want": [
+     "never in the morning"
+    ],
+    "avoid": []
+   }
+  ]
+ },
+ {
+  "id": "FL-15",
+  "area": "recall",
+  "description": "The same correction is never needed twice: three later relevant turns all show it",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "When you create an invoice always include the purchase order number",
+    "location": "invoices",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "create the invoices for last month",
+    "want": [
+     "include the purchase order number"
+    ],
+    "avoid": []
+   },
+   {
+    "op": "turn",
+    "message": "send the invoices to the client",
+    "want": [
+     "include the purchase order number"
+    ],
+    "avoid": []
+   },
+   {
+    "op": "turn",
+    "message": "fix the invoices that were rejected",
+    "want": [
+     "include the purchase order number"
+    ],
+    "avoid": []
+   }
+  ]
+ },
+ {
+  "id": "FL-16",
+  "area": "precision",
+  "description": "Unrelated chat after many corrections is not buried in them",
+  "steps": [
+   {
+    "op": "correct",
+    "text": "From now on never use bullet points in the weekly report",
+    "location": "the weekly report",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Always sign customer emails with the support team name, not a personal name",
+    "location": "customer emails",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "Schedule internal meetings only after noon on Tuesdays",
+    "location": "internal meetings",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "correct",
+    "text": "When you create an invoice always include the purchase order number",
+    "location": "invoices",
+    "dispositions": [
+     [
+      "standing",
+      ""
+     ]
+    ]
+   },
+   {
+    "op": "turn",
+    "message": "how many days until the end of the quarter",
+    "want": [],
+    "avoid": [
+     "never use bullet points",
+     "sign customer emails with the support team",
+     "internal meetings only after noon",
+     "include the purchase order number"
+    ]
+   }
+  ]
+ }
+]

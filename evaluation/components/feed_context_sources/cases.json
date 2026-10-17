@@ -1,0 +1,789 @@
+[
+ {
+  "id": "FCS-01",
+  "kind": "notes",
+  "area": "notes",
+  "description": "A person's unanswered note is offered and is an open ask",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": null,
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-09T09:00:00+00:00",
+     "author_kind": "user"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "n1"
+    ],
+    "needs_response": [
+     "n1"
+    ]
+   }
+  }
+ },
+ {
+  "id": "FCS-02",
+  "kind": "notes",
+  "area": "notes",
+  "description": "The assistant's own note is not echoed back as news",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": null,
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-09T09:00:00+00:00",
+     "author_kind": "ai"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-03",
+  "kind": "notes",
+  "area": "notes",
+  "description": "A note with no author kind is never assumed to be the person's",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": null,
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-09T09:00:00+00:00"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-04",
+  "kind": "notes",
+  "area": "notes",
+  "description": "A note an assistant note follows is answered (first look: history, not offered)",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": null,
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-08T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n2",
+     "text": "a note",
+     "created_at": "2026-03-08T10:00:00+00:00",
+     "author_kind": "ai"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-05",
+  "kind": "notes",
+  "area": "notes",
+  "description": "A note answered after the last look but never seen is offered once, without the ask flag",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-09T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n2",
+     "text": "a note",
+     "created_at": "2026-03-09T10:00:00+00:00",
+     "author_kind": "ai"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "n1"
+    ],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-06",
+  "kind": "notes",
+  "area": "notes",
+  "description": "A note seen on an earlier look and answered is not offered again",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-06T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n2",
+     "text": "a note",
+     "created_at": "2026-03-07T09:00:00+00:00",
+     "author_kind": "ai"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-07",
+  "kind": "notes",
+  "area": "notes",
+  "description": "A note a run delivered its result after is answered, not an open ask",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-09T09:00:00+00:00",
+     "author_kind": "user"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": [
+    {
+     "status": "done",
+     "result": "Here is the answer",
+     "worked_at": "2026-03-09T20:00:00+00:00"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "n1"
+    ],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-08",
+  "kind": "notes",
+  "area": "notes",
+  "description": "An open note from months ago is dropped by the age bound",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": null,
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2025-10-01T09:00:00+00:00",
+     "author_kind": "user"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-09",
+  "kind": "notes",
+  "area": "notes",
+  "description": "Only the newest six open notes are offered when a burst arrives",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": null,
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-02T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n2",
+     "text": "a note",
+     "created_at": "2026-03-03T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n3",
+     "text": "a note",
+     "created_at": "2026-03-04T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n4",
+     "text": "a note",
+     "created_at": "2026-03-05T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n5",
+     "text": "a note",
+     "created_at": "2026-03-06T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n6",
+     "text": "a note",
+     "created_at": "2026-03-07T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n7",
+     "text": "a note",
+     "created_at": "2026-03-08T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n8",
+     "text": "a note",
+     "created_at": "2026-03-09T09:00:00+00:00",
+     "author_kind": "user"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "n3",
+     "n4",
+     "n5",
+     "n6",
+     "n7",
+     "n8"
+    ],
+    "needs_response": [
+     "n3",
+     "n4",
+     "n5",
+     "n6",
+     "n7",
+     "n8"
+    ]
+   }
+  }
+ },
+ {
+  "id": "FCS-10",
+  "kind": "notes",
+  "area": "notes",
+  "description": "A user note after the assistant's reply is open again, the earlier one is not",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-06T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n2",
+     "text": "a note",
+     "created_at": "2026-03-07T09:00:00+00:00",
+     "author_kind": "ai"
+    },
+    {
+     "id": "n3",
+     "text": "a note",
+     "created_at": "2026-03-09T09:00:00+00:00",
+     "author_kind": "user"
+    }
+   ],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "n3"
+    ],
+    "needs_response": [
+     "n3"
+    ]
+   }
+  }
+ },
+ {
+  "id": "FCS-11",
+  "kind": "goal_updates",
+  "area": "goal_updates",
+  "description": "A new check-in on a goal is offered, an old one is not",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [],
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Ship the report"
+    }
+   ],
+   "goal_updates": [
+    {
+     "updateId": "u1",
+     "goal": "g1",
+     "note": "progress",
+     "createdAt": "2026-03-09T08:00:00+00:00"
+    },
+    {
+     "updateId": "u2",
+     "goal": "g1",
+     "note": "progress",
+     "createdAt": "2026-03-05T08:00:00+00:00"
+    }
+   ],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "u1"
+    ],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-12",
+  "kind": "goal_updates",
+  "area": "goal_updates",
+  "description": "An empty check-in is not offered",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [],
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Ship the report"
+    }
+   ],
+   "goal_updates": [
+    {
+     "updateId": "u1",
+     "goal": "g1",
+     "note": "  ",
+     "createdAt": "2026-03-09T08:00:00+00:00"
+    }
+   ],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-13",
+  "kind": "goal_updates",
+  "area": "goal_updates",
+  "description": "On a first look every check-in inside the window is offered",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": null,
+   "notes": [],
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Ship the report"
+    }
+   ],
+   "goal_updates": [
+    {
+     "updateId": "u1",
+     "goal": "g1",
+     "note": "progress",
+     "createdAt": "2026-03-09T08:00:00+00:00"
+    },
+    {
+     "updateId": "u2",
+     "goal": "g1",
+     "note": "progress",
+     "createdAt": "2026-03-05T08:00:00+00:00"
+    }
+   ],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "u1",
+     "u2"
+    ],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-14",
+  "kind": "goal_updates",
+  "area": "goal_updates",
+  "description": "Check-ins on two goals are both offered",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [],
+   "goals": [
+    {
+     "id": "g1",
+     "name": "A"
+    },
+    {
+     "id": "g2",
+     "name": "B"
+    }
+   ],
+   "goal_updates": [
+    {
+     "updateId": "u1",
+     "goal": "g1",
+     "note": "progress",
+     "createdAt": "2026-03-09T08:00:00+00:00"
+    },
+    {
+     "updateId": "u2",
+     "goal": "g2",
+     "note": "progress",
+     "createdAt": "2026-03-09T08:00:00+00:00"
+    }
+   ],
+   "decisions": [],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "u1",
+     "u2"
+    ],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-15",
+  "kind": "decisions",
+  "area": "decisions",
+  "description": "An open ask is offered on every look however old, and is an open ask",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [
+    {
+     "decision_id": "d1",
+     "status": "open",
+     "summary": "Approve the plan",
+     "created_at": "2026-01-02T09:00:00+00:00"
+    }
+   ],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "d1"
+    ],
+    "needs_response": [
+     "d1"
+    ]
+   }
+  }
+ },
+ {
+  "id": "FCS-16",
+  "kind": "decisions",
+  "area": "decisions",
+  "description": "An ask resolved before the last look is not offered again",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [
+    {
+     "decision_id": "d1",
+     "status": "resolved",
+     "summary": "Approve the plan",
+     "created_at": "2026-03-01T09:00:00+00:00",
+     "resolved_at": "2026-03-02T09:00:00+00:00"
+    }
+   ],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-17",
+  "kind": "decisions",
+  "area": "decisions",
+  "description": "An ask resolved since the last look is offered once, not as an open ask",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [
+    {
+     "decision_id": "d1",
+     "status": "resolved",
+     "summary": "Approve the plan",
+     "created_at": "2026-03-01T09:00:00+00:00",
+     "resolved_at": "2026-03-09T09:00:00+00:00"
+    }
+   ],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "d1"
+    ],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-18",
+  "kind": "decisions",
+  "area": "decisions",
+  "description": "On a first look a resolved ask is history, not offered",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": null,
+   "notes": [],
+   "goals": [],
+   "goal_updates": [],
+   "decisions": [
+    {
+     "decision_id": "d1",
+     "status": "resolved",
+     "summary": "Approve the plan",
+     "created_at": "2026-03-01T09:00:00+00:00",
+     "resolved_at": "2026-03-09T09:00:00+00:00"
+    }
+   ],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ },
+ {
+  "id": "FCS-19",
+  "kind": "mixed",
+  "area": "mixed",
+  "description": "Three channels together: each contributes its own, the assistant's note is left out",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-09T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n2",
+     "text": "a note",
+     "created_at": "2026-03-09T10:00:00+00:00",
+     "author_kind": "ai"
+    },
+    {
+     "id": "n3",
+     "text": "a note",
+     "created_at": "2026-03-09T11:00:00+00:00",
+     "author_kind": "user"
+    }
+   ],
+   "goals": [
+    {
+     "id": "g1",
+     "name": "A"
+    }
+   ],
+   "goal_updates": [
+    {
+     "updateId": "u1",
+     "goal": "g1",
+     "note": "progress",
+     "createdAt": "2026-03-09T08:00:00+00:00"
+    }
+   ],
+   "decisions": [
+    {
+     "decision_id": "d1",
+     "status": "open",
+     "summary": "Approve the plan",
+     "created_at": "2026-03-05T09:00:00+00:00"
+    }
+   ],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [
+     "d1",
+     "n1",
+     "n3",
+     "u1"
+    ],
+    "needs_response": [
+     "d1",
+     "n3"
+    ]
+   }
+  }
+ },
+ {
+  "id": "FCS-20",
+  "kind": "mixed",
+  "area": "mixed",
+  "description": "A quiet quest: nothing new on any channel offers nothing",
+  "args": {
+   "now": "2026-03-10T12:00:00+00:00",
+   "since": "2026-03-08T00:00:00+00:00",
+   "notes": [
+    {
+     "id": "n1",
+     "text": "a note",
+     "created_at": "2026-03-06T09:00:00+00:00",
+     "author_kind": "user"
+    },
+    {
+     "id": "n2",
+     "text": "a note",
+     "created_at": "2026-03-07T09:00:00+00:00",
+     "author_kind": "ai"
+    }
+   ],
+   "goals": [
+    {
+     "id": "g1",
+     "name": "A"
+    }
+   ],
+   "goal_updates": [
+    {
+     "updateId": "u1",
+     "goal": "g1",
+     "note": "progress",
+     "createdAt": "2026-03-05T08:00:00+00:00"
+    }
+   ],
+   "decisions": [
+    {
+     "decision_id": "d1",
+     "status": "resolved",
+     "summary": "Approve the plan",
+     "created_at": "2026-03-01T09:00:00+00:00",
+     "resolved_at": "2026-03-02T09:00:00+00:00"
+    }
+   ],
+   "tasks": []
+  },
+  "expect": {
+   "eq": {
+    "offered": [],
+    "needs_response": []
+   }
+  }
+ }
+]

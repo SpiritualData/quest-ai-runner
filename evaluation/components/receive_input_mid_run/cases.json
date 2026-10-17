@@ -1,0 +1,446 @@
+[
+ {
+  "id": "RIM-01",
+  "kind": "run",
+  "area": "run",
+  "description": "A message queued before the run starts is in the first decision",
+  "args": {
+   "conv": "conv1",
+   "reads": 1,
+   "pushes": [
+    {
+     "at": -1,
+     "conv": "conv1",
+     "text": "also check the staging copy"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "first_seen": {
+     "also check the staging copy": 0
+    },
+    "copies": {
+     "also check the staging copy": 1
+    },
+    "lost": [],
+    "leaked": []
+   }
+  }
+ },
+ {
+  "id": "RIM-02",
+  "kind": "run",
+  "area": "run",
+  "description": "A message sent while the first step works is in the next decision",
+  "args": {
+   "conv": "conv1",
+   "reads": 2,
+   "pushes": [
+    {
+     "at": 0,
+     "conv": "conv1",
+     "text": "use the shorter title"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "first_seen": {
+     "use the shorter title": 1
+    },
+    "copies": {
+     "use the shorter title": 1
+    },
+    "lost": [],
+    "leaked": []
+   }
+  }
+ },
+ {
+  "id": "RIM-03",
+  "kind": "run",
+  "area": "run",
+  "description": "A message sent while the second step works is in the one after",
+  "args": {
+   "conv": "conv1",
+   "reads": 3,
+   "pushes": [
+    {
+     "at": 1,
+     "conv": "conv1",
+     "text": "skip the appendix"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "first_seen": {
+     "skip the appendix": 2
+    },
+    "copies": {
+     "skip the appendix": 1
+    },
+    "lost": [],
+    "leaked": []
+   }
+  }
+ },
+ {
+  "id": "RIM-04",
+  "kind": "run",
+  "area": "run",
+  "description": "Another conversation's message never reaches this run",
+  "args": {
+   "conv": "conv1",
+   "reads": 2,
+   "pushes": [
+    {
+     "at": 0,
+     "conv": "conv2",
+     "text": "private note for someone else"
+    },
+    {
+     "at": 0,
+     "conv": "conv1",
+     "text": "mine for this run"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "first_seen": {
+     "mine for this run": 1
+    },
+    "copies": {
+     "mine for this run": 1
+    },
+    "lost": [],
+    "leaked": []
+   }
+  }
+ },
+ {
+  "id": "RIM-05",
+  "kind": "run",
+  "area": "run",
+  "description": "Three messages at different steps are each seen once, in order",
+  "args": {
+   "conv": "conv1",
+   "reads": 3,
+   "pushes": [
+    {
+     "at": -1,
+     "conv": "conv1",
+     "text": "first message"
+    },
+    {
+     "at": 0,
+     "conv": "conv1",
+     "text": "second message"
+    },
+    {
+     "at": 1,
+     "conv": "conv1",
+     "text": "third message"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "first_seen": {
+     "first message": 0,
+     "second message": 1,
+     "third message": 2
+    },
+    "copies": {
+     "first message": 1,
+     "second message": 1,
+     "third message": 1
+    },
+    "lost": [],
+    "leaked": []
+   }
+  }
+ },
+ {
+  "id": "RIM-06",
+  "kind": "run",
+  "area": "run",
+  "description": "A message sent while the last step works is never silently lost",
+  "args": {
+   "conv": "conv1",
+   "reads": 1,
+   "pushes": [
+    {
+     "at": 1,
+     "conv": "conv1",
+     "text": "one more thing at the end"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "lost": [],
+    "leaked": []
+   }
+  }
+ },
+ {
+  "id": "RIM-07",
+  "kind": "run",
+  "area": "run",
+  "description": "Two messages in the same step arrive together, neither repeated",
+  "args": {
+   "conv": "conv1",
+   "reads": 2,
+   "pushes": [
+    {
+     "at": 0,
+     "conv": "conv1",
+     "text": "alpha detail"
+    },
+    {
+     "at": 0,
+     "conv": "conv1",
+     "text": "beta detail"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "first_seen": {
+     "alpha detail": 1,
+     "beta detail": 1
+    },
+    "copies": {
+     "alpha detail": 1,
+     "beta detail": 1
+    },
+    "lost": [],
+    "leaked": []
+   }
+  }
+ },
+ {
+  "id": "RIM-08",
+  "kind": "run",
+  "area": "run",
+  "description": "A blank message is not delivered as an instruction",
+  "args": {
+   "conv": "conv1",
+   "reads": 2,
+   "pushes": [
+    {
+     "at": 0,
+     "conv": "conv1",
+     "text": "   "
+    },
+    {
+     "at": 0,
+     "conv": "conv1",
+     "text": "real instruction"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "first_seen": {
+     "real instruction": 1
+    },
+    "copies": {
+     "real instruction": 1
+    },
+    "lost": [],
+    "leaked": []
+   }
+  }
+ },
+ {
+  "id": "RIM-09",
+  "kind": "inbox_ops",
+  "area": "port",
+  "description": "First in, first out, and drain clears",
+  "args": {
+   "ops": [
+    [
+     "push",
+     "c1",
+     "one"
+    ],
+    [
+     "push",
+     "c1",
+     "two"
+    ],
+    [
+     "drain",
+     "c1"
+    ],
+    [
+     "drain",
+     "c1"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     null,
+     null,
+     [
+      "one",
+      "two"
+     ],
+     []
+    ]
+   }
+  }
+ },
+ {
+  "id": "RIM-10",
+  "kind": "inbox_ops",
+  "area": "port",
+  "description": "Peek shows the queue without clearing it",
+  "args": {
+   "ops": [
+    [
+     "push",
+     "c1",
+     "one"
+    ],
+    [
+     "peek",
+     "c1"
+    ],
+    [
+     "peek",
+     "c1"
+    ],
+    [
+     "drain",
+     "c1"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     null,
+     [
+      "one"
+     ],
+     [
+      "one"
+     ],
+     [
+      "one"
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RIM-11",
+  "kind": "inbox_ops",
+  "area": "port",
+  "description": "Conversations never mix",
+  "args": {
+   "ops": [
+    [
+     "push",
+     "c1",
+     "for one"
+    ],
+    [
+     "push",
+     "c2",
+     "for two"
+    ],
+    [
+     "drain",
+     "c2"
+    ],
+    [
+     "drain",
+     "c1"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     null,
+     null,
+     [
+      "for two"
+     ],
+     [
+      "for one"
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RIM-12",
+  "kind": "inbox_ops",
+  "area": "port",
+  "description": "Blank messages are ignored and text is trimmed",
+  "args": {
+   "ops": [
+    [
+     "push",
+     "c1",
+     "  "
+    ],
+    [
+     "push",
+     "c1",
+     "  padded  "
+    ],
+    [
+     "drain",
+     "c1"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     null,
+     null,
+     [
+      "padded"
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RIM-13",
+  "kind": "inbox_ops",
+  "area": "port",
+  "description": "Draining a conversation nobody wrote to is empty",
+  "args": {
+   "ops": [
+    [
+     "drain",
+     "nobody"
+    ],
+    [
+     "peek",
+     "nobody"
+    ]
+   ]
+  },
+  "expect": {
+   "eq": {
+    "results": [
+     [],
+     []
+    ]
+   }
+  }
+ }
+]
