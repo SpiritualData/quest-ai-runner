@@ -194,6 +194,7 @@ def find_quest_experiments_spec(env: Mapping[str, str], client_factory=None) -> 
 
     return ToolSpec(
         name="find_quest_experiments",
+        direct=True,
         handler=handler,
         description=("List a quest's experiments (the Experiments section: questions the person "
                      "is testing, with status, expectation, dates and conclusion), or search "
@@ -257,6 +258,7 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
 
     return ToolSpec(
         name="create_quest_experiment",
+        direct=True,
         handler=handler,
         description=("Create one experiment on a quest: a question the person wants to answer "
                      "by testing it in their own life. Use their words for the question; add a "

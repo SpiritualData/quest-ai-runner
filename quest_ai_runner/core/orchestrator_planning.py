@@ -5,6 +5,7 @@ A mixin of ``Orchestrator`` (see ``orchestrator.py``): methods only, state lives
 from __future__ import annotations
 
 import copy
+import datetime
 import threading
 from typing import Any, Dict, List, Optional, Sequence
 from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
@@ -73,6 +74,10 @@ class PlanningMixin:
               user_vetoed_task: bool = False,
               card_thread_block: str = "",
               tool_pins: Sequence[str] = ()) -> PlanDecision:
+        if step == 0 and not (narrate or brainstorm or user_vetoed_task):
+            settled = self.pre_route_plan(user_message, transcript, context_view, tool_pins)
+            if settled is not None:
+                return settled
         # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
         # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
         # short reference note — the planner's job there is to react to the NEW gathered
@@ -272,6 +277,38 @@ class PlanningMixin:
         decision = normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None,
                                       web_enabled=self.web is not None)
         return self.cascade_review(decision, user_message, plan_context, gathered)
+
+    # --- the pre-route (see core/pre_route.py) --------------------------------
+
+    PRE_ROUTE_RECENT_CHARS = 600
+    PRE_ROUTE_KNOWN_CHARS = 1500
+    PRE_ROUTE_TOOLS_SHOWN = 6
+
+    def pre_route_plan(self, user_message: str, transcript: str, context_view: str = "",
+                       tool_pins: Sequence[str] = ()) -> Optional[PlanDecision]:
+        """A tool decision settled by the cheap pre-route, or None to let the planner decide.
+        Costs nothing without a pre-router class or a ``direct`` tool, and never raises."""
+        if self.pre_router_cls is None or self.tools is None:
+            return None
+        direct = self.tools.direct_names()
+        if not direct:
+            return None
+        try:
+            model = self.registry.resolve_tier("fast")
+            router = self.pre_router_cls(self.get_provider_for_model(model), model, direct)
+            shown = self.tools.select(user_message, self.PRE_ROUTE_TOOLS_SHOWN, tool_pins)
+            pre = router.route(user_message, self.tools.render_catalog(shown),
+                               today=datetime.date.today().isoformat(),
+                               recent=(transcript or "")[-self.PRE_ROUTE_RECENT_CHARS:],
+                               known=(context_view or "")[:self.PRE_ROUTE_KNOWN_CHARS])
+            if not router.settles(pre):
+                return None
+            log.info("Pre-route settled the turn: %s", [c["name"] for c in pre.calls])
+            return PlanDecision(action="tool", tool_calls=pre.calls,
+                                rationale="A clear request for a direct tool.")
+        except Exception:  # noqa: BLE001  the planner is the fallback for any failure here
+            log.warning("Pre-route failed; the planner decides", exc_info=True)
+            return None
 
     # --- the reach judge (opt in; see core/reach_judge.py) --------------------
 

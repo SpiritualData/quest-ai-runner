@@ -78,6 +78,12 @@ SELECTION = {
         "rep": _A + "rep_context_assembler:RepContextAssembler",
         "composite": _C + "composite_assembler:CompositeContextAssembler",
     }},
+    # The default is the winner on the classification component (whole job: route, tool, arguments,
+    # confirm or clarify): the pre-route fronts the planner; "planner" is the planner alone.
+    "route-a-message": {"default": "pre_route", "implementations": {
+        "planner": _C + "pre_route:NoPreRoute",
+        "pre_route": _C + "pre_route:PreRouter",
+    }},
     "persist-cards": {"default": "quest_api", "implementations": {
         "filesystem": _A + "card_repository:FilesystemCardRepository",
         "qdrant": _A + "qdrant_card_repository:QdrantCardRepository",

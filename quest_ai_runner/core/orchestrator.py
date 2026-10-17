@@ -228,6 +228,7 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         tools: Optional[ToolRegistry] = None,
         web: Optional[Any] = None,
         recipes: Optional[RecipeStore] = None,
+        pre_router_cls: Optional[Any] = None,
         edited_files_card_updater: Optional[Callable[..., None]] = None,
         background_thread_registrar: Optional[Callable[[threading.Thread, Any], None]] = None,
     ):
@@ -325,6 +326,11 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         self.web: Optional[Any] = web
         # Operations learned from earlier turns, replayed before any context search (core/recipes.py).
         self.recipes: Optional[RecipeStore] = recipes
+        # The cheap first look at a message (``core/pre_route.py``, solution route-a-message): a class
+        # built as ``cls(provider, model, direct_tools)``. It may settle a clear request for a
+        # ``ToolSpec.direct`` tool without the planner; None (the default, and what quest-backend
+        # passes) means the planner decides every message, exactly as before.
+        self.pre_router_cls: Optional[Any] = pre_router_cls
         # Injected by ``config.build_orchestrator`` (core imports neither adapters nor config).
         # ``edited_files_card_updater(deep_result, context_meta, *, project_path, session_id,
         # model_provider, registry)`` folds a deep run's edited files into the cards it used; None

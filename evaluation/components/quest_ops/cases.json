@@ -213,7 +213,7 @@
    {
     "tool": "create_quest_goal",
     "args_contain": {
-     "title": "5 km"
+     "title": "5"
     }
    },
    {

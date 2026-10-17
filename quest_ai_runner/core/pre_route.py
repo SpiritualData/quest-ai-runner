@@ -6,7 +6,8 @@ calls with their arguments. The pre-route SETTLES the turn only when all of thes
 
 * the route is ``tool`` and it named at least one call;
 * it says it is sure;
-* every call is on the caller's ``direct_tools`` list (never a destructive or outward tool);
+* every call is on the caller's ``direct_tools`` list (tools flagged ``ToolSpec.direct``: plain,
+  reversible creates and finds, never a destructive, outward or id-dependent tool);
 * no call carries an argument that confirms something (``confirm_delete`` and the like).
 
 Everything else (an answer, which needs the planner's reads; a deep run, which needs its brief; a
@@ -20,7 +21,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Protocol
 
 ROUTES = ("answer", "tool", "deep", "confirm", "clarify")
 
@@ -36,7 +37,9 @@ SYSTEM = (
     "confirm: an irreversible, destructive or outward act (deleting, emailing, posting publicly) "
     "that a person must approve first.\n"
     "clarify: the request refers to something unnamed (it, that) so nothing can be done yet.\n"
-    "sure: false when the message is ambiguous, risky, or could be read two ways.")
+    "sure: false when the message is ambiguous, risky, could be read two ways, or leans on an earlier "
+    "turn you cannot see. Use the argument names and formats the tool listing shows; when a tool has "
+    "a user_asked_for_this_field argument, set it to true on every write the user asked for.")
 
 
 @dataclass
@@ -64,19 +67,52 @@ def confirms_something(args: Dict[str, Any]) -> bool:
     return any(key.startswith("confirm") and bool(value) for key, value in args.items())
 
 
+class MessageRouter(Protocol):
+    """The port: a first, cheap look at a message that may settle a clear tool request."""
+
+    def route(self, message: str, catalog: str, *, today: str = "", recent: str = "",
+              known: str = "") -> Optional[PreRoute]: ...
+
+    def settles(self, pre: Optional[PreRoute]) -> bool: ...
+
+
+class NoPreRoute:
+    """The planner alone: never looks, never settles. Costs no call."""
+
+    def __init__(self, provider: Any = None, model: str = "", direct_tools: Iterable[str] = ()) -> None:
+        self.direct_tools = frozenset(direct_tools)
+
+    def route(self, message: str, catalog: str, *, today: str = "", recent: str = "",
+              known: str = "") -> Optional[PreRoute]:
+        return None
+
+    def settles(self, pre: Optional[PreRoute]) -> bool:
+        return False
+
+
 class PreRouter:
-    """``route(message, tool_names)`` asks the model once. ``direct_tools`` are the tools a sure
-    pre-route may call without the planner."""
+    """``route(message, catalog)`` asks the model once. ``catalog`` is the rendered listing of the
+    tools relevant to the message (``ToolRegistry.render_catalog``); ``direct_tools`` are the tools a
+    sure pre-route may call without the planner."""
 
     def __init__(self, provider: Any, model: str, direct_tools: Iterable[str] = ()) -> None:
         self.provider = provider
         self.model = model
         self.direct_tools = frozenset(direct_tools)
 
-    def route(self, message: str, tool_names: Iterable[str]) -> Optional[PreRoute]:
-        prompt = f"Tools: {', '.join(tool_names)}\nMessage: {message}"
+    def route(self, message: str, catalog: str, *, today: str = "", recent: str = "",
+              known: str = "") -> Optional[PreRoute]:
+        parts = [f"Tools:\n{catalog}"]
+        if known:
+            parts.append(f"Already on record (do not duplicate it; sure is false if it is there already):\n{known}")
+        if today:
+            parts.append(f"Today is {today}.")
+        if recent:
+            parts.append(f"Recent conversation (newest last):\n{recent}")
+        parts.append(f"Message: {message}")
         try:
-            text = self.provider.answer([{"role": "user", "content": prompt}], model=self.model, system=SYSTEM)
+            text = self.provider.answer([{"role": "user", "content": "\n".join(parts)}],
+                                        model=self.model, system=SYSTEM)
         except Exception:  # noqa: BLE001  a failed pre-route must cost nothing: the planner decides
             return None
         return parse(text)

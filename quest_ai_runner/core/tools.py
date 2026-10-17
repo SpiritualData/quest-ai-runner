@@ -138,6 +138,12 @@ class ToolSpec:
     # "search the catalog" read, so a chat turn cannot drift into it; a run whose context lists it
     # in ``tool_pins`` is shown it, and it stays callable by name.
     on_request_only: bool = False
+    # A plain, reversible create, change or find that the pre-route (``core/pre_route.py``) may call
+    # on a sure reading of the user's message, without the planner. Only for a tool whose every
+    # argument the message itself can supply: never a destructive, outward or confirm-gated tool,
+    # never one that must merge into a value only the planner's context shows, and never one that
+    # needs an id from a read. False (the default) always goes through the planner.
+    direct: bool = False
 
     def required(self) -> List[str]:
         return list((self.parameters or {}).get("required") or [])
@@ -245,6 +251,10 @@ class ToolRegistry:
 
     def names(self) -> List[str]:
         return list(self._specs)
+
+    def direct_names(self) -> List[str]:
+        """Tools a sure pre-route may call without the planner (``ToolSpec.direct``)."""
+        return [n for n, spec in self._specs.items() if spec.direct]
 
     def __len__(self) -> int:
         return len(self._specs)
