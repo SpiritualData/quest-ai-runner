@@ -111,7 +111,7 @@ def test_context_selection_offline_impls_rank_a_toy_corpus(tmp_path):
 def test_context_selection_cases_point_at_real_files():
     import json
     cases = json.loads((Path(__file__).parent / "context_selection" / "cases.json").read_text())
-    assert len(cases) == 15 and len({c["id"] for c in cases}) == 15
+    assert len(cases) >= 60 and len({c["id"] for c in cases}) == len(cases)
     assert all((common.REPO / c["target"]).is_file() for c in cases)
 
 

@@ -74,16 +74,27 @@ def comparable(a, b):
     return (a.get("cases_sha") or "") == (b.get("cases_sha") or "")
 
 
+def is_ablation(row):
+    """True when the implementation's module opens with ABLATION: a part of a candidate measured alone (the
+    cheap call without the planner behind it). It returns less than the whole job, so it is shown in the
+    ranking and never offered as the thing to adopt."""
+    path = HERE / row.get("component", "") / "impls" / (row["impl"] + ".py")
+    if not path.is_file():
+        return False
+    return path.read_text().lstrip().startswith('"' * 3 + "ABLATION")
+
+
 def challengers(rows, selected):
     """Implementations that beat the selected one on pass rate, or tie it at lower cost.
     Rows scored on a different ``cases_sha`` than the selected one are skipped, and so is an unverified
-    challenger against a verified selection (and the reverse): provenance-free numbers are not evidence."""
+    challenger against a verified selection (and the reverse): provenance-free numbers are not evidence.
+    An ABLATION implementation (see ``is_ablation``) is never a challenger."""
     cur = rows.get(selected)
     if cur is None:
         return []
     better = []
     for r in rows.values():
-        if r["impl"] == selected or not comparable(r, cur):
+        if r["impl"] == selected or not comparable(r, cur) or is_ablation(r):
             continue
         higher = pass_rate(r) > pass_rate(cur)
         cheaper_tie = pass_rate(r) == pass_rate(cur) and float(r["cost_usd"] or 0) < float(cur["cost_usd"] or 0)
