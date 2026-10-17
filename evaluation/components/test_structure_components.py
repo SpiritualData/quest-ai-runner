@@ -1,5 +1,6 @@
-"""Offline pins for the infrastructure components: each live implementation passes a few of its own cases and its
-baseline fails the ones the live code exists for. Whole case files are run by ``run.py``, not here."""
+"""Offline pins for the infrastructure components: each live implementation passes a few of its own cases. The
+broken baselines of these invariant components live in ``broken/`` and are failed by test_components.py. Whole case
+files are run by ``run.py``, not here."""
 
 import common
 import pytest
@@ -22,7 +23,3 @@ def run(component, impl, ids):
 def test_live_implementation_passes_its_cases(component, impl, ids):
     assert all(run(component, impl, ids).values())
 
-
-def test_baselines_fail_what_the_live_code_exists_for():
-    assert not run("check_the_structure", "coverage_only", ["CTS-004"])["CTS-004"]
-    assert not run("keep_secrets_out", "grep_oneliner", ["SEC-013"])["SEC-013"]

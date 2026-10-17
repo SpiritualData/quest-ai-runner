@@ -9,6 +9,11 @@ the same pass rate at a lower cost. ``--strict`` exits 1 when one does, so a pip
 "a better implementation exists" without a human reading the implementations (ESOI
 principle 4). The harness only ranks; switching the live implementation stays a deliberate decision.
 
+A solution whose ``metric_kind`` is ``invariant`` in solutions.csv (a rule that holds or does not, with an
+``invariant_reason`` saying why "best" cannot vary) is listed apart, under "Invariant solutions", with its
+recorded run and never ranked: there is no challenger to flag. So is a component that carries an ``invariant.txt``
+(complementary arms of an evaluated solution).
+
 Only rows with the same ``cases_sha`` as the selected row are compared: a score on a different case
 file is not evidence. Rows recorded before ``cases_sha`` existed have it blank and compare as one group,
 and are FLAGGED ``unverified``: no case file or code version is pinned to them, so they are shown but never
@@ -25,9 +30,24 @@ RESULTS = HERE / "results.csv"
 SOLUTIONS = HERE.parents[1] / "docs" / "structure" / "solutions.csv"
 
 
-def invariant_reason(component):
-    """The reason in ``<component>/invariant.txt`` when the component's implementations are complementary
-    (not alternatives): the leaderboard shows them but never ranks them or flags a challenger."""
+def invariant_components(path=SOLUTIONS):
+    """{component: invariant_reason} for every component named by the metric_command of an ``invariant`` solution."""
+    out = {}
+    with open(path, newline="") as fh:
+        for row in csv.DictReader(fh):
+            if (row.get("metric_kind") or "").strip() != "invariant":
+                continue
+            for m in re.finditer(r"components/run\.py (\w+) --impl \w+", row["metric_command"]):
+                out[m.group(1)] = row["invariant_reason"].strip()
+    return out
+
+
+def invariant_reason(component, solution_invariants=None):
+    """Why the component is not ranked: the ``invariant_reason`` of its invariant solution, or the reason in
+    ``<component>/invariant.txt`` when its implementations are complementary (not alternatives). The leaderboard
+    shows them but never ranks them or flags a challenger."""
+    if solution_invariants and component in solution_invariants:
+        return solution_invariants[component]
     note = HERE / component / "invariant.txt"
     return note.read_text().strip() if note.is_file() else ""
 
@@ -103,21 +123,25 @@ def challengers(rows, selected):
     return better
 
 
+def print_rows(rows, sel):
+    for r in rank(rows):
+        mark = "*" if r["impl"] == sel else " "
+        flag = "  [unverified: no cases_sha, recorded before provenance]" if unverified(r) else ""
+        print(f"  {mark} {r['impl']:<20} {r['passed']}/{r['cases']} (held-out {r['heldout']}) "
+              f"calls={r['model_calls']} cost=${float(r['cost_usd'] or 0):.4f}  {r['date']}{flag}")
+
+
 def main(argv):
     results, selected = latest_results(RESULTS), selected_impls()
+    invariants = invariant_components()
     flagged = 0
+    apart = {c: rows for c, rows in results.items() if invariant_reason(c, invariants)}
     for component, rows in sorted(results.items()):
-        sel = selected.get(component)
-        reason = invariant_reason(component)
-        print(f"{component} (selected: {sel or 'none recorded'})" if not reason else
-              f"{component} (invariant, not ranked: {reason})")
-        for r in rank(rows):
-            mark = "*" if r["impl"] == sel else " "
-            flag = "  [unverified: no cases_sha, recorded before provenance]" if unverified(r) else ""
-            print(f"  {mark} {r['impl']:<20} {r['passed']}/{r['cases']} (held-out {r['heldout']}) "
-                  f"calls={r['model_calls']} cost=${float(r['cost_usd'] or 0):.4f}  {r['date']}{flag}")
-        if reason:
+        if component in apart:
             continue
+        sel = selected.get(component)
+        print(f"{component} (selected: {sel or 'none recorded'})")
+        print_rows(rows, sel)
         cur = rows.get(sel)
         for r in rows.values():
             if cur is not None and r["impl"] != sel and not comparable(r, cur):
@@ -127,6 +151,11 @@ def main(argv):
             flagged += 1
             print(f"  ! {r['impl']} beats the selected {sel}: decide whether to adopt it "
                   f"(update solutions.csv `selected` and the live default together)")
+    if apart:
+        print("\nInvariant solutions (a rule that holds or does not; listed with their recorded run, never ranked)")
+        for component, rows in sorted(apart.items()):
+            print(f"{component}: {invariant_reason(component, invariants)}")
+            print_rows(rows, selected.get(component))
     return 1 if flagged and "--strict" in argv else 0
 
 

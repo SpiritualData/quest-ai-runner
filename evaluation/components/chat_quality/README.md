@@ -1,7 +1,7 @@
 # chat_quality: qualitative Quest AI chat evaluation
 
-This is the `chat_quality` component of `evaluation/components/` (solution `route-a-message`: does the chat
-route, ground and act correctly). Its function is `converse(case) -> record` (`interface.py`), scored by
+This is the `chat_quality` component of `evaluation/components/` (the metric of solution `answer-a-turn`: does the chat
+answer a user's question in a grounded, correctly routed, side-effect-safe way). Its function is `converse(case) -> record` (`interface.py`), scored by
 `score.py` from the record's pass flag; the one implementation, `impls/dev_quest_chat.py`, drives the dev Quest
 chat and SKIPs (exit 0) when no dev Quest is configured, so `components/run.py chat_quality --impl dev_quest_chat`
 is safe offline. The offline tests are `test_*.py` here. The full harness below (world lifecycle, datasets, judge)

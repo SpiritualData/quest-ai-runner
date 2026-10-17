@@ -229,3 +229,24 @@ def test_hybrid_union_wraps_the_live_assembler(tmp_path, monkeypatch):
     cs = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cs)
     assert cs.impl_kind(Path(hybrid_union.__file__)) == "live"
+
+
+BROKEN = sorted(Path(__file__).resolve().parent.glob("*/broken/*.py"))
+
+
+@pytest.mark.parametrize("path", [b for b in BROKEN if b.name != "__init__.py"], ids=lambda b: f"{b.parts[-3]}/{b.stem}")
+def test_a_deliberately_broken_implementation_fails_the_cases(path):
+    """The cases of an invariant solution discriminate: a broken implementation (the shortcut a first draft would
+    write) must fail some of them. These files are not alternatives and have no leaderboard row; this test is the
+    proof the cases are not satisfied by anything."""
+    import importlib
+    component = path.parts[-3]
+    score = importlib.import_module(f"{component}.score")
+    fn = common.load_impl(f"{component}.broken.{path.stem}:build", component)(common.CallMeter(max_calls=0))
+    failed = 0
+    for case in common.load_cases(component):
+        try:
+            failed += not score.score_case(fn, case)["ok"]
+        except Exception:  # noqa: BLE001 - a crash on a case is a failure of that case
+            failed += 1
+    assert failed, f"{component}/{path.stem} passes every case, so the cases cannot tell it from the live code"

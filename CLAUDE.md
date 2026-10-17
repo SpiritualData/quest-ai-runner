@@ -58,7 +58,7 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 
 The repo's structure is data, not folklore. `docs/structure/` holds `components.csv` (every functional
 component: where it lives, its role, interface, metric, docs, tests, gap and status), `solutions.csv`
-(each swappable solution: problem, ideal, port, implementations, the selected one, its metric command)
+(each solution: problem, ideal, port, implementations, the selected one (the selection-table name when it has a port), `eval` or `invariant`, its metric command)
 and `waivers.csv` (justified exceptions that can only shrink). `principles.csv` is the evolvable-structure
 skill's 13 principles (P1..P13; the `rules` column of `components.csv` uses them). `tracker/` is the ESOI
 intent network as five CSV tabs (problems, solutions, implementations, ideals, metrics) with hand-edited

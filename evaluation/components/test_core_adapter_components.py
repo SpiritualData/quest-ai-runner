@@ -15,15 +15,15 @@ import expect  # noqa: E402
 
 # component -> (selected/offline solution, baseline, ids that fail BY DESIGN because they pin a known gap)
 OFFLINE = {
-    "judges": ("qar_judges", "trust_raw", {"JUD-029"}),
-    "deep_run": ("goal_contract", "naive", set()),
-    "reply_guards": ("qar_guards", "passthrough", set()),
-    "model_providers": ("multi_provider", "single_provider", {"MPR-080", "MPR-101"}),
+    "judges": ("qar_judges", None, set()),
+    "deep_run": ("goal_contract", None, set()),
+    "reply_guards": ("qar_guards", None, set()),
+    "model_providers": ("multi_provider", "single_provider", set()),
     "web_search": ("fallback_chain", "serper", set()),
     "deep_review": ("rule_floor", None, {"DRV-037"}),
     "overseer_signals": ("digest_probe", None, set()),
     "card_quality": ("seeded_keyword_store", "seeded_keyword_open", {"CRD-001", "CRD-002", "CRD-004"}),
-    "claude_code_ab": ("idf_hint", None, {"CAB-002", "CAB-004"}),
+    "claude_code_ab": ("idf_hint", None, {"CAB-002", "CAB-004", "CAB-005"}),
 }
 LIVE = {"overseer_signals": "live_model", "deep_review": "live_reviewer", "card_quality": "live_updater_hybrid",
         "claude_code_ab": "cold_claude"}
@@ -88,14 +88,14 @@ def test_every_new_impl_module_exposes_build_and_live_arms_are_not_run_here():
         assert (HERE / comp / "impls" / f"{impl}.py").is_file()
 
 
-def test_judges_pin_the_prior_escalation_shedding_gap():
+def test_judges_keep_prior_escalations_under_a_tight_budget():
     row = run("judges", "qar_judges", only={"JUD-029"})[0]
-    assert not row["ok"] and "outcome: refused" in row["note"]    # tight budget sheds the refusal history first
+    assert row["ok"], row["note"]    # the digest sheds history operations first, so the refusal rule keeps its evidence
 
 
-def test_pricing_family_gap_is_the_opus_spelling():
+def test_opus_spellings_are_priced_at_the_family_rate():
     rows = {r["id"]: r for r in run("model_providers", "multi_provider", only={"MPR-080", "MPR-101"})}
-    assert not rows["MPR-080"]["ok"] and not rows["MPR-101"]["ok"]
+    assert rows["MPR-080"]["ok"] and rows["MPR-101"]["ok"]
 
 
 def test_deep_review_scorer_splits_false_stops_from_missed_stops():

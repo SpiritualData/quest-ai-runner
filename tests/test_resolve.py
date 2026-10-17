@@ -33,15 +33,15 @@ def test_every_table_entry_imports():
 
 
 def test_default_is_used_when_nothing_asks_for_another():
-    assert chosen_name("call-a-model") == default_name("call-a-model") == "claude_cli"
-    assert resolve("call-a-model").__name__ == "ClaudeCliProvider"
+    assert chosen_name("call-a-model") == default_name("call-a-model") == "multi_provider"
+    assert resolve("call-a-model").__name__ == "MultiProvider"
 
 
 def test_precedence_is_name_then_override_then_default():
     over = {"call-a-model": "gemini"}
     assert resolve("call-a-model", overrides=over).__name__ == "GeminiProvider"
     assert resolve("call-a-model", "openai", overrides=over).__name__ == "OpenAIProvider"
-    assert resolve("call-a-model", overrides={}).__name__ == "ClaudeCliProvider"
+    assert resolve("call-a-model", overrides={}).__name__ == "MultiProvider"
     assert chosen_name("call-a-model", "  Anthropic ") == "anthropic"
 
 

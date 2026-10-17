@@ -8,13 +8,18 @@ solution is not done until a recorded run says how well it works. The rules that
 
 | Part | Where | Holds |
 |---|---|---|
-| Row | `docs/structure/solutions.csv` | `solution_id`, the problem, the ideal, the port, every implementation, `selected` and `selected_by`, the metric and its `metric_command`, any `gap` and `action` |
+| Row | `docs/structure/solutions.csv` | `solution_id`, the problem, the ideal, the port, every implementation, `selected` (the selection-table name when there is a port, S23) and `selected_by`, `metric_kind` (`eval`, or `invariant` with `invariant_reason`), the metric and its `metric_command`, any `gap` and `action`; no numbers in prose (S22) |
 | Port | `quest_ai_runner/core/adapters*.py` (a `Protocol`), only when implementations are swappable | the interface; callers depend on it, never on an implementation |
 | Selection | `quest_ai_runner/core/selection_table.py` (S14) | `name -> "module:Class"` and a default; `resolve(solution_id, name)` returns the class |
 | Evaluation | `evaluation/components/<solution_id with underscores>/` | `interface.py` (one function with a fixed signature), `cases.json`, `score.py`, `impls/<impl>.py` driving LIVE code (S12) |
 | Result | `evaluation/components/results.csv` | one row per `run.py <component> --impl <impl> --record`, with `git_sha` and `cases_sha` (S16) |
 | Decision | `evaluation/components/leaderboard.py` | the winner on the same cases; S10 fails when the selected implementation loses without a waiver |
 | Place | `docs/structure/components.csv` | which files serve the solution (`solutions` column); a file in no component, or a component serving no solution, fails the check (S1, S19) |
+
+Whether "best" can vary decides the kind. An `eval` solution has implementations that differ on the metric, so they are
+ranked on the same cases. An `invariant` solution is a rule that holds or does not (a write stays inside its root); it keeps
+its cases and a recorded run, is listed apart on the leaderboard, and has no floor on it: a deliberately broken
+implementation sits in `<component>/broken/` and one test proves it fails the cases.
 
 Eval folder names equal solution ids with underscores. Where one folder deliberately serves several
 solutions (for example one retrieval corpus scoring several sources), its README says so and each
@@ -32,8 +37,9 @@ Say QAR must `summarize-a-thread`, and two ways exist: a rule-based cut and a mo
    `core/selection_table.py`; list each implementation file in the row.
 3. **Evaluation.** Create `evaluation/components/summarize_a_thread/`: `interface.py` with
    `summarize(case) -> str`, `cases.json` (synthetic threads, a share held out), `score.py`, and
-   `impls/rule_cut.py` and `impls/model_call.py` that call the live code. Add a `BASELINE` impl if a naive
-   floor helps show the metric discriminates.
+   `impls/rule_cut.py` and `impls/model_call.py` that call the live code. Add a `BASELINE` impl only for a floor
+   someone would plausibly ship; if "best" cannot vary, mark the row `invariant` instead and put any broken
+   baseline in `broken/`.
 4. **Record.** `python evaluation/components/run.py summarize_a_thread --impl rule_cut --record`, once per
    implementation. Commit `results.csv` after the code, so `git_sha` is clean.
 5. **Place.** Put the new module under the component that owns its role in `components.csv` (add a row

@@ -20,86 +20,89 @@ that every port row appears here and that the two lists agree.
 """
 from __future__ import annotations
 
-_A = "quest_ai_runner.adapters."
-_C = "quest_ai_runner.core."
-_R = "quest_ai_runner.runner."
+ADAPTERS = "quest_ai_runner.adapters."
+CORE = "quest_ai_runner.core."
+RUNNER = "quest_ai_runner.runner."
 
 SELECTION = {
     "gather-evidence": {"default": "composite", "implementations": {
-        "files": _A + "files_adapter:FilesAdapter",
-        "cached_db": _A + "cached_db_adapter:CachedDbAdapter",
-        "composite": _A + "composite_retrieval_adapter:CompositeRetrievalAdapter",
-        "mcp": _A + "mcp_retrieval_adapter:MCPRetrievalAdapter",
-        "notion": _A + "notion_adapter:NotionAdapter",
-        "google_drive": _A + "google_drive_adapter:GoogleDriveAdapter",
-        "google_chat": _A + "google_chat_adapter:GoogleChatAdapter",
-        "quest": _A + "quest_retrieval_adapter:QuestRetrievalAdapter",
+        "files": ADAPTERS + "files_adapter:FilesAdapter",
+        "cached_db": ADAPTERS + "cached_db_adapter:CachedDbAdapter",
+        "composite": ADAPTERS + "composite_retrieval_adapter:CompositeRetrievalAdapter",
+        "mcp": ADAPTERS + "mcp_retrieval_adapter:MCPRetrievalAdapter",
+        "notion": ADAPTERS + "notion_adapter:NotionAdapter",
+        "google_drive": ADAPTERS + "google_drive_adapter:GoogleDriveAdapter",
+        "google_chat": ADAPTERS + "google_chat_adapter:GoogleChatAdapter",
+        "quest": ADAPTERS + "quest_retrieval_adapter:QuestRetrievalAdapter",
     }},
     "search-the-web": {"default": "web_research", "implementations": {
-        "web_research": _A + "web_research:WebResearchAdapter",
-        "web_search": _A + "web_search_adapter:WebSearchAdapter",
-        "provider_web_search": _A + "provider_web_search_adapter:ProviderWebSearchAdapter",
+        "web_research": ADAPTERS + "web_research:WebResearchAdapter",
+        "web_search": ADAPTERS + "web_search_adapter:WebSearchAdapter",
+        "provider_web_search": ADAPTERS + "provider_web_search_adapter:ProviderWebSearchAdapter",
         # The search backends are this solution's implementations too (select_search_backend resolves them here).
-        "serper": _A + "web_search_backends:SerperBackend",
-        "brave": _A + "web_search_backends:BraveBackend",
-        "tavily": _A + "web_search_backends:TavilyBackend",
-        "searxng": _A + "web_search_backends:SearxngBackend",
-        "gemini": _A + "web_search_backends:GeminiGroundingBackend",
-        "provider": _A + "web_search_backends:ProviderNativeBackend",
+        "serper": ADAPTERS + "web_search_backends:SerperBackend",
+        "brave": ADAPTERS + "web_search_backends:BraveBackend",
+        "tavily": ADAPTERS + "web_search_backends:TavilyBackend",
+        "searxng": ADAPTERS + "web_search_backends:SearxngBackend",
+        "gemini": ADAPTERS + "web_search_backends:GeminiGroundingBackend",
+        "provider": ADAPTERS + "web_search_backends:ProviderNativeBackend",
     }},
-    # The default is the keyless one; the env-driven chooser in cli_config picks by API keys first.
-    "call-a-model": {"default": "claude_cli", "implementations": {
-        "anthropic": _A + "anthropic_provider:AnthropicProvider",
-        "gemini": _A + "gemini_provider:GeminiProvider",
-        "openai": _A + "openai_provider:OpenAIProvider",
-        "deepseek": _A + "deepseek_provider:DeepSeekProvider",
-        "claude_cli": _A + "claude_cli_provider:ClaudeCliProvider",
+    # Every model call goes through MultiProvider (prefix routing, tier fallback, retry): build_orchestrator wraps
+    # whichever primary vendor below the environment picks (cli_config._model_provider_from_env: API keys first, the
+    # keyless claude_cli last) in it. So the router is the default and the vendors are the primaries it wraps.
+    "call-a-model": {"default": "multi_provider", "implementations": {
+        "multi_provider": ADAPTERS + "multi_provider:MultiProvider",
+        "anthropic": ADAPTERS + "anthropic_provider:AnthropicProvider",
+        "gemini": ADAPTERS + "gemini_provider:GeminiProvider",
+        "openai": ADAPTERS + "openai_provider:OpenAIProvider",
+        "deepseek": ADAPTERS + "deepseek_provider:DeepSeekProvider",
+        "claude_cli": ADAPTERS + "claude_cli_provider:ClaudeCliProvider",
     }},
     # "config" is the dataclass the runner is built from (working_dir and context_preamble are common to both).
     "run-deep-work": {"default": "subprocess", "implementations": {
-        "subprocess": {"target": _C + "goal_runner:SubprocessGoalRunner", "config": _C + "goal_runner:SubprocessConfig"},
-        "acp": {"target": _A + "acp_deep_runner:AcpDeepRunner", "config": _A + "acp_deep_runner:AcpConfig"},
-        "fast_edit": _A + "fast_edit_runner:FastEditRunner",
-        "mcp_write": _A + "mcp_write_runner:MCPOperationRunner",
+        "subprocess": {"target": CORE + "goal_runner:SubprocessGoalRunner", "config": CORE + "goal_runner:SubprocessConfig"},
+        "acp": {"target": ADAPTERS + "acp_deep_runner:AcpDeepRunner", "config": ADAPTERS + "acp_deep_runner:AcpConfig"},
+        "fast_edit": ADAPTERS + "fast_edit_runner:FastEditRunner",
+        "mcp_write": ADAPTERS + "mcp_write_runner:MCPOperationRunner",
     }},
-    "write-files": {"default": "files", "implementations": {"files": _A + "files_writer:FilesWriter"}},
-    "write-through-mcp": {"default": "mcp", "implementations": {"mcp": _A + "mcp_write_adapter:MCPWriteAdapter"}},
+    "write-files": {"default": "files", "implementations": {"files": ADAPTERS + "files_writer:FilesWriter"}},
+    "write-through-mcp": {"default": "mcp", "implementations": {"mcp": ADAPTERS + "mcp_write_adapter:MCPWriteAdapter"}},
     "escalate-to-a-human": {"default": "quest_decision", "implementations": {
-        "quest_decision": _R + "quest_client:QuestDecisionSink"}},
+        "quest_decision": RUNNER + "quest_client:QuestDecisionSink"}},
     "show-progress": {"default": "stream", "implementations": {
-        "stream": _C + "adapters:StreamSink", "milestone": _C + "adapters:MilestoneSink"}},
+        "stream": CORE + "adapters:StreamSink", "milestone": CORE + "adapters:MilestoneSink"}},
     "remember-conversations": {"default": "session_file", "implementations": {
-        "session_file": _A + "session_file_conversation_store:SessionFileConversationStore"}},
+        "session_file": ADAPTERS + "session_file_conversation_store:SessionFileConversationStore"}},
     "select-context": {"default": "hybrid", "implementations": {
-        "file": _A + "file_context_store:FileContextStore",
-        "vector": _A + "vector_context_assembler:VectorContextAssembler",
-        "hybrid": _A + "hybrid_context_assembler:HybridContextAssembler",
-        "bm25": _A + "bm25_content_store:BM25ContentStore",
-        "rep": _A + "rep_context_assembler:RepContextAssembler",
-        "composite": _C + "composite_assembler:CompositeContextAssembler",
+        "file": ADAPTERS + "file_context_store:FileContextStore",
+        "vector": ADAPTERS + "vector_context_assembler:VectorContextAssembler",
+        "hybrid": ADAPTERS + "hybrid_context_assembler:HybridContextAssembler",
+        "bm25": ADAPTERS + "bm25_content_store:BM25ContentStore",
+        "rep": ADAPTERS + "rep_context_assembler:RepContextAssembler",
+        "composite": CORE + "composite_assembler:CompositeContextAssembler",
     }},
     # operate-a-quest: the pre-route may carry out a clear tool request without the planner;
     # "orchestrator" is the planner path alone. The default is the quest_ops winner.
     "operate-a-quest": {"default": "pre_route", "implementations": {
-        "orchestrator": _C + "pre_route:NoPreRoute",
-        "pre_route": _C + "pre_route:PreRouter",
+        "orchestrator": CORE + "pre_route:NoPreRoute",
+        "pre_route": CORE + "pre_route:PreRouter",
     }},
     "persist-cards": {"default": "quest_api", "implementations": {
-        "filesystem": _A + "card_repository:FilesystemCardRepository",
-        "qdrant": _A + "qdrant_card_repository:QdrantCardRepository",
-        "quest_api": _A + "quest_api_card_repository:QuestApiCardRepository",
+        "filesystem": ADAPTERS + "card_repository:FilesystemCardRepository",
+        "qdrant": ADAPTERS + "qdrant_card_repository:QdrantCardRepository",
+        "quest_api": ADAPTERS + "quest_api_card_repository:QuestApiCardRepository",
     }},
-    "index-by-meaning": {"default": "qdrant", "implementations": {"qdrant": _A + "qdrant_vector_store:QdrantVectorStore"}},
+    "index-by-meaning": {"default": "qdrant", "implementations": {"qdrant": ADAPTERS + "qdrant_vector_store:QdrantVectorStore"}},
     "guide-by-feedback": {"default": "universal", "implementations": {
-        "universal": _C + "guidance_provider:UniversalGuidanceProvider"}},
-    "talk-over-a-channel": {"default": "openclaw", "implementations": {"openclaw": _A + "openclaw_channel:OpenClawChannel"}},
-    "feed-context-sources": {"default": "base", "implementations": {"base": _R + "context_sources_base:ContextSource"}},
-    "store-feedback": {"default": "ledger", "implementations": {"ledger": _R + "feedback_ledger:FeedbackLedger"}},
-    "recall-recent-context": {"default": "file", "implementations": {"file": _C + "recent_context:FileRecentContextStore"}},
-    "persist-predictions": {"default": "file", "implementations": {"file": _C + "anticipation_store:FilePredictionStore"}},
-    "receive-input-mid-run": {"default": "in_memory", "implementations": {"in_memory": _C + "inbox:InMemoryInbox"}},
-    "resolve-references": {"default": "note", "implementations": {"note": _A + "reference_resolver:NoteResolver"}},
+        "universal": CORE + "guidance_provider:UniversalGuidanceProvider"}},
+    "talk-over-a-channel": {"default": "openclaw", "implementations": {"openclaw": ADAPTERS + "openclaw_channel:OpenClawChannel"}},
+    "feed-context-sources": {"default": "base", "implementations": {"base": RUNNER + "context_sources_base:ContextSource"}},
+    "store-feedback": {"default": "ledger", "implementations": {"ledger": RUNNER + "feedback_ledger:FeedbackLedger"}},
+    "recall-recent-context": {"default": "file", "implementations": {"file": CORE + "recent_context:FileRecentContextStore"}},
+    "persist-predictions": {"default": "file", "implementations": {"file": CORE + "anticipation_store:FilePredictionStore"}},
+    "receive-input-mid-run": {"default": "in_memory", "implementations": {"in_memory": CORE + "inbox:InMemoryInbox"}},
+    "resolve-references": {"default": "note", "implementations": {"note": ADAPTERS + "reference_resolver:NoteResolver"}},
     "cache-cards": {"default": "file", "implementations": {
-        "file": _A + "card_cache_file:FileCardCache",
-        "null": _A + "quest_api_card_repository:NullCardCache"}},
+        "file": ADAPTERS + "card_cache_file:FileCardCache",
+        "null": ADAPTERS + "quest_api_card_repository:NullCardCache"}},
 }

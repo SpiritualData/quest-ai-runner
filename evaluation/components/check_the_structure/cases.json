@@ -12,6 +12,221 @@
   }
  },
  {
+  "id": "CTS-038",
+  "area": "repo",
+  "kind": "repo",
+  "description": "an evaluation folder that no solution names",
+  "args": {
+   "edits": [
+    {
+     "op": "write",
+     "path": "evaluation/components/orphan/score.py",
+     "content": "\"\"\"Scores nothing.\"\"\"\n"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S21",
+   "contains": "evaluation/components/orphan"
+  }
+ },
+ {
+  "id": "CTS-039",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a score written into a gap",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "gap",
+     "value": "The live greeter passes 12/16 of the cases."
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S22",
+   "contains": "12/16"
+  }
+ },
+ {
+  "id": "CTS-040",
+  "area": "repo",
+  "kind": "repo",
+  "description": "selected differs from the selection table default",
+  "args": {
+   "edits": [
+    {
+     "op": "write",
+     "path": "quest_ai_runner/core/selection_table.py",
+     "content": "\"\"\"Selection as data.\"\"\"\nSELECTION = {\"greet\": {\"default\": \"loud\", \"implementations\": {\"plain\": \"quest_ai_runner.adapters.plain:PlainGreeter\", \"loud\": \"quest_ai_runner.adapters.plain:PlainGreeter\"}}}\n"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S23",
+   "contains": "differs from the selection table default"
+  }
+ },
+ {
+  "id": "CTS-041",
+  "area": "repo",
+  "kind": "repo",
+  "description": "an id listed twice in one solutions cell",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/components.csv",
+     "key_col": "component_id",
+     "key": "core",
+     "col": "solutions",
+     "value": "greet;greet"
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S18",
+   "contains": "lists greet 2 times"
+  }
+ },
+ {
+  "id": "CTS-042",
+  "area": "repo",
+  "kind": "repo",
+  "description": "an invariant solution with no reason",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "metric_kind",
+     "value": "invariant"
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S11",
+   "contains": "invariant_reason"
+  }
+ },
+ {
+  "id": "CTS-043",
+  "area": "repo",
+  "kind": "repo",
+  "description": "an invariant solution is never ranked, so a better row is no challenger (clean)",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "metric_kind",
+     "value": "invariant"
+    },
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "invariant_reason",
+     "value": "A greeting names the person or it does not."
+    },
+    {
+     "op": "csv_cell",
+     "path": "evaluation/components/results.csv",
+     "key_col": "impl",
+     "key": "live",
+     "col": "passed",
+     "value": "1"
+    },
+    {
+     "op": "csv_cell",
+     "path": "evaluation/components/results.csv",
+     "key_col": "impl",
+     "key": "shout",
+     "col": "passed",
+     "value": "2"
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "clean": true
+  }
+ },
+ {
+  "id": "CTS-044",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a second port listed in a solution's port cell needs no row of its own (clean)",
+  "args": {
+   "edits": [
+    {
+     "op": "append",
+     "path": "quest_ai_runner/core/adapters.py",
+     "content": "\n\nclass Farewell(Protocol):\n    \"\"\"Says goodbye.\"\"\"\n\n    def bye(self, name: str) -> str: ...\n"
+    },
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "port",
+     "value": "Greeter;Farewell"
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "clean": true
+  }
+ },
+ {
+  "id": "CTS-045",
+  "area": "repo",
+  "kind": "repo",
+  "description": "a solution with no metric kind",
+  "args": {
+   "edits": [
+    {
+     "op": "csv_cell",
+     "path": "docs/structure/solutions.csv",
+     "key_col": "solution_id",
+     "key": "greet",
+     "col": "metric_kind",
+     "value": ""
+    },
+    {
+     "op": "regen"
+    }
+   ]
+  },
+  "expect": {
+   "rule": "S11",
+   "contains": "metric_kind"
+  }
+ },
+ {
   "id": "CTS-100",
   "area": "consumer",
   "kind": "consumer",
@@ -229,7 +444,7 @@
   "id": "CTS-011",
   "area": "repo",
   "kind": "repo",
-  "description": "selected implementation not among the listed ones",
+  "description": "selected implementation is not a name in the selection table",
   "args": {
    "edits": [
     {
@@ -247,7 +462,7 @@
   },
   "expect": {
    "rule": "S7",
-   "contains": "not among its implementations"
+   "contains": "not an implementation name in the selection table"
   }
  },
  {

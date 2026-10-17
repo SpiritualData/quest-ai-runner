@@ -1,6 +1,7 @@
 """Offline tests for feedback_loop, feed_context_sources, receive_input_mid_run and the offline arm of
 recipe_fast_path. No model call, no network. Pins each live implementation's score, the known gaps it keeps on
-purpose, and that the floor/baseline discriminate.
+purpose, and that the floor/baseline discriminate (the floors of the invariant components are in ``broken/`` and
+are failed by test_components.py).
 Run: .venv/bin/python3 -m pytest evaluation/components/test_loop_components.py -q -p no:cacheprovider"""
 import importlib
 import json
@@ -21,8 +22,7 @@ EXPECTED_FAILS = {
     ("recipe_fast_path", "recipe_replay_offline"): set(),
     ("recipe_fast_path", "planner_only_offline"): set(),
 }
-BASELINES = {"feedback_loop": ("no_memory", "dump_all"), "feed_context_sources": ("dump_all",),
-             "receive_input_mid_run": ("no_inbox", "shared_list")}
+BASELINES = {"feedback_loop": ("no_memory", "dump_all")}
 
 
 def run(comp, impl):
@@ -44,8 +44,7 @@ def test_live_implementation_fails_only_its_known_gaps(comp, impl):
 
 @pytest.mark.parametrize("comp", sorted(BASELINES))
 def test_floors_and_baselines_discriminate(comp):
-    live = {"feedback_loop": "ledger_guidance", "feed_context_sources": "update_engine",
-            "receive_input_mid_run": "in_memory"}[comp]
+    live = {"feedback_loop": "ledger_guidance"}[comp]
     live_passed = sum(r["ok"] for r in run(comp, live))
     for impl in BASELINES[comp]:
         assert sum(r["ok"] for r in run(comp, impl)) < live_passed

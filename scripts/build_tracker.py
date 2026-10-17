@@ -27,7 +27,7 @@ SEP = ";"
 COLUMNS = {
     "problems": ["problem_id", "problem", "solution_ids", "component_ids", "auto_status"],
     "solutions": ["solution_id", "port", "problem_id", "ideal_ids", "metric_ids", "implementation_ids",
-                  "selected_implementation_id", "selected_by", "component_ids", "auto_status"],
+                  "selected_implementation_id", "selected_by", "metric_kind", "component_ids", "auto_status"],
     "implementations": ["implementation_id", "solution_id", "path", "kind", "selected", "latest_result",
                         "latest_cost_usd", "cases_sha", "auto_status"],
     "ideals": ["ideal_id", "scope", "statement", "applies_to", "metric_ids", "auto_status"],
@@ -58,6 +58,28 @@ def _kind(path: str) -> str:
     return "live"
 
 
+def selection_table() -> dict:
+    """core/selection_table.py is pure data, so it is loaded on its own (no package import)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("qar_selection_table", ROOT / "quest_ai_runner" / "core" / "selection_table.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.SELECTION
+
+
+def selected_path(solution: dict, table: dict) -> str:
+    """The implementation path a solution's `selected` cell stands for: a selection-table name is resolved to
+    its module file, any other value is already a path."""
+    entry = table.get(solution["solution_id"])
+    if not entry:
+        return solution["selected"]
+    ref = entry["implementations"].get(solution["selected"])
+    if ref is None:
+        return solution["selected"]
+    target = ref["target"] if isinstance(ref, dict) else ref
+    return target.partition(":")[0].replace(".", "/") + ".py"
+
+
 def _latest_results() -> dict:
     out = {}
     for row in read_csv(ROOT / "evaluation" / "components" / "results.csv"):
@@ -75,6 +97,7 @@ def build() -> dict[str, list[dict]]:
     components = read_csv(STRUCT / "components.csv")
     principles = read_csv(STRUCT / "principles.csv")
     results = _latest_results()
+    table = selection_table()
     by_solution: dict[str, list[str]] = {}
     for comp in components:
         for sid in filter(None, comp["solutions"].split(SEP)):
@@ -89,10 +112,11 @@ def build() -> dict[str, list[dict]]:
                          "component_ids": SEP.join(by_solution.get(sid, [])),
                          "auto_status": "open: " + s["action"][:80] if s["gap"] else "served"})
         impl_ids, selected_id = [], ""
+        chosen = selected_path(s, table)
         for path in filter(None, s["implementations"].split(SEP)):
             iid = f"{sid}:{_stem(path)}"
             impl_ids.append(iid)
-            is_sel = path == s["selected"]
+            is_sel = path == chosen
             selected_id = iid if is_sel else selected_id
             res = results.get((comp, _stem(path))) if comp else None
             impls.append({
@@ -105,11 +129,11 @@ def build() -> dict[str, list[dict]]:
         ideals.append({"ideal_id": f"ideal-{sid}", "scope": "solution", "statement": s["ideal"],
                        "applies_to": sid, "metric_ids": f"metric-{sid}", "auto_status":
                        "measured" if has_metric else "unmeasured"})
-        sel_res = results.get((comp, _stem(s["selected"]))) if comp else None
+        sel_res = results.get((comp, _command_target(s["metric_command"])[1])) if comp else None
         metrics.append({
             "metric_id": f"metric-{sid}", "solution_id": sid, "metric": s["metric"],
             "command": s["metric_command"],
-            "kind": "eval" if has_metric else ("invariant-tests" if s["metric"] == "tests" else "none"),
+            "kind": s["metric_kind"] or ("eval" if has_metric else ("invariant-tests" if s["metric"] == "tests" else "none")),
             "latest_result": f"{sel_res['passed']}/{sel_res['cases']}" if sel_res else "",
             "gap": s["gap"], "action": s["action"],
             "auto_status": "measured" if sel_res else ("needs_run" if has_metric else
@@ -118,8 +142,9 @@ def build() -> dict[str, list[dict]]:
             "solution_id": sid, "port": s["port"], "problem_id": f"prob-{sid}", "ideal_ids": f"ideal-{sid}",
             "metric_ids": f"metric-{sid}", "implementation_ids": SEP.join(impl_ids),
             "selected_implementation_id": selected_id, "selected_by": s["selected_by"],
-            "component_ids": SEP.join(by_solution.get(sid, [])),
-            "auto_status": "decided-by-metric" if sel_res else "decided-by-hand"})
+            "metric_kind": s["metric_kind"], "component_ids": SEP.join(by_solution.get(sid, [])),
+            "auto_status": "invariant" if s["metric_kind"] == "invariant"
+            else ("decided-by-metric" if sel_res else "decided-by-hand")})
     for p in principles:
         covered = [c["component_id"] for c in components if p["principle_id"][1:] in c["rules"].split(SEP)]
         ideals.append({"ideal_id": p["principle_id"].lower(), "scope": "principle",

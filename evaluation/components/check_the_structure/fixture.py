@@ -23,8 +23,8 @@ COPIED = ["scripts/check_structure.py", "scripts/env_vars.py", "scripts/build_tr
           "evaluation/components/leaderboard.py"]
 COMPONENT_COLS = ["component_id", "layer", "path", "role", "interface", "metric", "docs", "tests", "rules", "gap",
                   "action", "status", "solutions", "metric_kind", "invariant_reason"]
-SOLUTION_COLS = ["solution_id", "problem", "ideal", "port", "implementations", "selected", "selected_by", "metric",
-                 "metric_command", "gap", "action"]
+SOLUTION_COLS = ["solution_id", "problem", "ideal", "port", "implementations", "selected", "selected_by",
+                 "metric_kind", "invariant_reason", "metric", "metric_command", "gap", "action"]
 RESULT_COLS = ["date", "component", "impl", "cases", "passed", "dev", "heldout", "model_calls", "tokens_in",
                "tokens_out", "cost_usd", "seconds", "git_sha", "cases_sha", "model"]
 CASES_SHA = hashlib.sha256(b"[]\n").hexdigest()[:8]   # what the S20 check recomputes from greet/cases.json
@@ -83,8 +83,9 @@ def component_row(cid, layer, path):
 def solution_row():
     return dict(solution_id="greet", problem="Greet a person", ideal="The greeting names the person",
                 port="Greeter", implementations="quest_ai_runner/adapters/plain.py;evaluation/components/greet/impls/live.py;"
-                "evaluation/components/greet/impls/shout.py", selected="quest_ai_runner/adapters/plain.py",
-                selected_by="selection table", metric="names the person", metric_command=METRIC, gap="", action="")
+                "evaluation/components/greet/impls/shout.py", selected="plain",
+                selected_by="selection table", metric_kind="eval", invariant_reason="", metric="names the person",
+                metric_command=METRIC, gap="", action="")
 
 
 def result_row(impl, passed, cases_sha=CASES_SHA):

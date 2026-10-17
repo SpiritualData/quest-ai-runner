@@ -44,22 +44,22 @@ Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the mod
 | `context_selection/` | `select(task, corpus) -> [file paths, best first]` | the labelled file's rank: top-1, top-3 (or within the solution's declared `budget`) |
 | `staleness/` | `changed(before, after) -> {stale paths}` | exact set of edited or deleted files; precision and recall over all cases |
 | `recipe_fast_path/` | `handle(message, world) -> {"reply", "exit_reason"}` | the fake tool world's recorded calls: right tool and args on a repeat, no lookalike write on a near miss, no tool on chat |
-| `chat_quality/` | `converse(case) -> record` | the dev Quest chat's judged pass flag per case (opt-in, SKIPs offline): routing, grounding on pivot facts, database side effects, rubric |
+| `chat_quality/` | `converse(case) -> record` (the metric of `answer-a-turn`) | the dev Quest chat's judged pass flag per case (opt-in, SKIPs offline): routing, grounding on pivot facts, database side effects, rubric; the offline arm `reference_replies` checks that the schema validates and the deterministic pre-checks accept a reference reply and reject an empty one |
 
 | `feedback_loop/` | `replay(steps) -> {"turns": [guidance shown per turn]}` for a synthetic correction sequence (serves `store-feedback` and `guide-by-feedback`, many-to-one) | each relevant turn shows its stored correction (repeat-correction rate), irrelevant ones stay out; floor `no_memory`, baseline `dump_all` |
-| `feed_context_sources/` | `feed(kind, world) -> {"offered", "needs_response"}` for the quest channels (notes, goal updates, decisions) | declarative `expect`; baseline `dump_all` |
-| `receive_input_mid_run/` | `receive(kind, args) -> dict` for mid-run messages through the inbox and the live Orchestrator, plus the inbox port contract | message reaches the next decision once, to the right conversation, never lost; floor `no_inbox`, baseline `shared_list` |
+| `feed_context_sources/` | `feed(kind, world) -> {"offered", "needs_response"}` for the quest channels (notes, goal updates, decisions) | declarative `expect`; broken baseline `dump_all` in `broken/` |
+| `receive_input_mid_run/` | `receive(kind, args) -> dict` for mid-run messages through the inbox and the live Orchestrator, plus the inbox port contract | message reaches the next decision once, to the right conversation, never lost; broken baselines `no_inbox` and `shared_list` in `broken/` |
 | `judges/` | `judge(kind, args) -> dict` for overseer parsing and digest, reach verdict and block, quest ranking, sufficiency gate | declarative `expect` per case (`expect.py`); per-kind pass counts |
 | `overseer_signals/` | `signal(digest) -> {"signal", "reason", "hint"}` on 16 labelled scenarios | digest shows the label's evidence (offline); signal in `want` (live) |
 | `deep_run/` | `contract(kind, args) -> dict` for the deep-run rules (review parse and fail-open, markers, envelopes, headless prompt, met-vs-limit, the goal loop) | declarative `expect`; zero worker, zero model |
-| `deep_review/` | `review(elapsed, idle, tail) -> {"stop", "reason"}` on 39 labelled live logs | `stop` equals the label; false stops counted apart from missed stops |
+| `deep_review/` | `review(elapsed, idle, tail) -> {"stop", "reason"}` on labelled live logs (the metric of `detect-a-stalled-run`) | `stop` equals the label; false stops counted apart from missed stops |
 | `reply_guards/` | `guard(kind, args) -> dict` for the link guard, link extraction, recipe match and learn, anticipation chips, match and weight | declarative `expect`; fake HTTP probe and fixed clock |
 | `model_providers/` | `call(kind, args) -> dict` for prefix routing, quota tier fallback, retry, dry-run tokens, price lookups, estimate arithmetic | declarative `expect`; fake and dry-run providers |
 | `web_search/` | `search(case) -> {"urls", "text", "error", ...}` through one backend over fixture payloads (the offline invariant of search-the-web) | gold page in top k, cap, dedupe, tags, summary, failover, cache; tokens added |
 | `web_search_live/` | the same result dict from the PRODUCTION `WebResearchAdapter` built from the environment, through `scripts/web_search_bench.py`, cache bypassed (opt-in: `QAR_EVAL_LIVE_SEARCH=1` and a configured backend, else SKIPPED) | an answer phrase in the observation the planner would see, no error, unique urls; spend counted in real backend calls at the list price in `pricing.py` |
 | `card_quality/` | `select(query, world) -> {"view", "titles"}` after learning three tasks (the outcome arm of select-context: choosing cards for a query) | labelled collection resolved, no spraying, no leak |
 | `persist_cards/` | `persist(kind, args) -> dict` through a `CardRepository`: roundtrip, overwrite, loss at volume and across pages, duplication, delete, concurrent writers, restart, change stamp, tolerance; one case set run on the filesystem, embedded Qdrant and Quest API backends (fake Quest card API) | declarative `expect`: every case must hold on every backend (no lost or duplicated card, same behaviour) |
-| `claude_code_ab/` | `locate(case) -> {"answer", "turns"}` for seven "which file" tasks | labelled path in the answer |
+| `claude_code_ab/` | `locate(case) -> {"answer", "turns"}` for seven "which file" tasks (the second outcome arm of `select-context`) | labelled path in the answer |
 | `retrieval/` | `retrieve(question, corpus) -> {"ids", "texts"}` through a complete retrieval STACK (the composite and its floor) over a synthetic handbook | recall@3 of the labelled document, and its answer phrase in the text the adapter read |
 | `retrieval_sources/` | the same function through ONE source adapter alone (files, DB rows, MCP, Notion, Drive, Chat, remote files); same cases (a link to `retrieval/cases.json`), policy and scorer | the same bar per source; an invariant arm (`invariant.txt`): listed, never ranked |
 | `conversation_recall/` | `recall(query, user, world) -> {"ids"}` through the live `SessionFileConversationStore` | labelled past conversation returned, none of another user's |
@@ -99,12 +99,12 @@ provider finds on its own, so a live run is possible once someone approves the (
 
 | Component | Recorded (offline) | Not recorded (live) | Honest limits |
 | --- | --- | --- | --- |
-| `judges` | `qar_judges` 60/61 vs `trust_raw` 15/61: the deterministic halves of the four judges with a scripted provider | what the models decide: `overseer_signals --impl live_model` | JUD-029 is a real gap kept on purpose: a 900-char digest budget sheds PRIOR ESCALATIONS before RECENT CONVERSATION |
+| `judges` | `qar_judges`: the deterministic halves of the four judges with a scripted provider (a trusting `trust_raw` is in `broken/`) | what the models decide: `overseer_signals --impl live_model` | JUD-029 pins that a tight digest budget sheds history operations first and prior escalations last |
 | `overseer_signals` | `digest_probe` 16/16: the digest shows the draft, the refused proposal, the corrections and the operations each label turns on | `live_model` (16 small calls): signal in `want` | the offline arm cannot say whether the judge is RIGHT, only that it can see the evidence |
-| `deep_run` | `goal_contract` 52/52 vs `naive` 14/52: met-vs-limit, goal-loop stop rules (exhausted, deferred, decision, cap), escalation and resume markers, envelopes, headless prompt | none needed (no model in these rules) | the real Orchestrator loop runs with a scripted runner and verifier; no worker is started |
+| `deep_run` | `goal_contract` (a trusting `naive` is in `broken/`): met-vs-limit, goal-loop stop rules (exhausted, deferred, decision, cap), escalation and resume markers, envelopes, headless prompt | none needed (no model in these rules) | the real Orchestrator loop runs with a scripted runner and verifier; no worker is started |
 | `deep_review` | `rule_floor` 38/39 | `live_reviewer` (39 one-shot `claude -p` calls) | the rule floor was written with the cases in view: an optimistic ceiling for a rule, not a blind result |
-| `reply_guards` | `qar_guards` 54/54 vs `passthrough` 18/54: fabricated vs real links, extraction, recipe near misses and scope fence, chips and weights | the replay engine through a model is `recipe_fast_path` (unchanged, waived) | the HTTP probe and clock are faked |
-| `model_providers` | `multi_provider` 54/56 vs `single_provider` 19/56 | latency and pass rate per tier (needs real calls) | two real gaps pinned: `pricing.py` prices `claude-opus-4`/`-4-8` at $3 but the `opus` family at $15 (MPR-080, MPR-101); the table is input tokens only |
+| `reply_guards` | `qar_guards` (a `passthrough` with no guard is in `broken/`): fabricated vs real links, extraction, recipe near misses and scope fence, chips and weights | the replay engine through a model is `recipe_fast_path` (unchanged, waived) | the HTTP probe and clock are faked |
+| `model_providers` | `multi_provider` vs `single_provider`: routing, tier fallback, retry, cost arithmetic | latency and pass rate per tier (needs real calls) | the price table is input tokens only; the opus spellings (MPR-080, MPR-101) now price at the family rate |
 | `web_search` | every backend and the chain on the 15 fixture queries | live relevance and spend: `web_search_live` (opt-in, real calls) | payloads are WRITTEN fixtures in each vendor's response shape, not recordings, so this proves identical handling, not relevance; the operator tool `scripts/web_search_bench.py` is reused for measurement |
 | `card_quality` | `seeded_keyword_store`, `seeded_keyword_open` | `live_updater_hybrid` (model-learned cards, Voyage vector arm, embedded Qdrant) | the offline arm measures selection and fresh resolution, not the model's learning of cards; an earlier live run was made by mistake and is NOT in `results.csv` |
 | `claude_code_ab` | `idf_hint` 5/7: what the warm hint would contain | `cold_claude`, `warm_claude` | the old script's warm hint was always empty (no model provider means zero cards) so it fell back to the correct answer; the component takes its hint from `idf_hint` instead |
@@ -185,9 +185,10 @@ partial write. Fixes are in quest-backend history.
 Scoring is deterministic (no judge), so a run costs exactly the implementation's own model calls,
 which the harness counts. Cases 23-30 of classification are held out (the keyword baseline was
 written seeing 1-22 only), so a baseline gap between the two groups shows over-fitting.
-`chat_quality/` is the end-to-end chat metric (formerly `evaluation/qualitative/`): `converse(case) -> record`, scored from the
-record's pass flag. It needs a built dev Quest world, so its one implementation (`impls/dev_quest_chat.py`) SKIPs offline with
-exit 0; the full datasets, world lifecycle and judge are driven by `chat_quality/runner.py` (see its README).
+`chat_quality/` is the end-to-end chat metric (formerly `evaluation/qualitative/`) and the metric of the solution `answer-a-turn`:
+`converse(case) -> record`, scored from the record's pass flag. It needs a built dev Quest world, so its graded implementation
+(`impls/dev_quest_chat.py`) SKIPs offline with exit 0; the full datasets, world lifecycle and judge are driven by
+`chat_quality/runner.py` (see its README). The offline arm `impls/reference_replies.py` is recorded: it shows the metric is sound.
 
 Every implementation measures live code or says it does not (check S12 in `docs/structure/README.md`): it
 imports or drives `quest_ai_runner`, or declares `ALTERNATIVE = True` (or a docstring opening `ALTERNATIVE`,
@@ -259,7 +260,7 @@ the assembler's hard caps, not forecasts.
 
 Six components score the repo's own plumbing, all offline with zero model calls. Each has a declared baseline.
 
-| Component | Function | Scored by | Baseline |
+| Component | Function | Scored by | Broken baseline (`broken/`) |
 | --- | --- | --- | --- |
 | `check_the_structure/` | `check(kind, args) -> {"exit", "problems"}` | mutation detection: one known violation injected per case into a synthetic fixture repo (and a consumer registry), rule and path must be reported; clean fixtures must not be flagged | `coverage_only` (file coverage alone) |
 | `expose_the_public_api/` | `surface(kind, args) -> dict` | documented names import, registrations take effect, front doors and helpers behave, vendored code imports with sockets refusing | `import_smoke` |
@@ -268,9 +269,26 @@ Six components score the repo's own plumbing, all offline with zero model calls.
 | `explain_qar/` | `explain(kind, args) -> dict` | 452 cases generated from the repo by `generate_cases.py` (links, em dashes, index, env variables, subcommands, public names) | `readme_only` |
 | `keep_secrets_out/` | `scan(kind, args) -> dict` | planted secrets found, placeholders quiet, the repo clean, the command's exit code | `grep_oneliner` |
 
+These are `invariant` solutions (see below): a rule holds or it does not, so the baseline is not a rival on a leaderboard.
+
 Why `verify_offline` does not run the tests: a full run is slow, parts of the suite reach real model providers, and
 one run was killed mid-flight for spend (CLAUDE.md, 2026-09-19). Collection proves every file imports and
 parametrises and that no test vanished; whether a test passes is shown by running the files a change touches.
+
+## Invariant solutions and `broken/`
+
+A solution whose `metric_kind` in `docs/structure/solutions.csv` is `invariant` is a rule that holds or does not (a write stays
+inside its root, a message is delivered once, a name resolves to one class). Its case suite and recorded run stay, because
+they pin the behaviour, but "best" cannot vary, so `leaderboard.py` lists it apart under "Invariant solutions" and never
+ranks it, and the tracker labels it `invariant`, not `decided-by-metric`. The floor a first draft would write (naive open
+and write, passthrough, flat rate) is not an `impls/` arm: it lives in `<component>/broken/<name>.py`, and
+`test_components.py::test_a_deliberately_broken_implementation_fails_the_cases` proves each one fails some of the cases,
+which is the only job such a floor has (to show the cases discriminate). Only a floor someone would plausibly ship
+(`dump_all`, `most_recent`, `keyword_rules`) remains an `impls/` arm of an `eval` solution.
+
+Every folder here is named by a solution (check S21): the metric of a solution is its `metric_command`; an arm that another
+solution reads is declared in that solution's `metric` text (for example `retrieval_sources` under `gather-evidence`,
+`claude_code_ab` under `select-context`).
 
 ## `esoi_behavior`: the judge, the two settings, and what the numbers can and cannot say
 

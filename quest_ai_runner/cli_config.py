@@ -45,6 +45,9 @@ def _model_provider_from_env() -> ModelProvider:
         else:
             backend = "claude_cli"
 
+    if backend == "multi_provider":
+        raise ValueError("QAR_MODEL_BACKEND names the primary vendor; multi_provider is the router build_orchestrator "
+                         "wraps around it, so choose anthropic, claude_cli, gemini, openai or deepseek.")
     try:
         provider_cls = resolve("call-a-model", backend)   # the selection table, core/selection_table.py
     except ValueError as e:

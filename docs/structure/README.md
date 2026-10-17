@@ -9,7 +9,7 @@ the inventory and the automated check.
 | File | What it holds | Edited by |
 |---|---|---|
 | `components.csv` | One row per functional component: path globs, role, interface, metric, docs, tests, ideals met, gap, action, status | people and AI, by hand |
-| `solutions.csv` | One row per swappable solution: the problem, the ideal, the port, every implementation, the selected one and how it is selected, the metric and its command | people and AI, by hand |
+| `solutions.csv` | One row per solution: the problem, the ideal, the port, every implementation, the selected one (the selection-table name when the solution has a port) and how it is selected, the `metric_kind` (`eval`, or `invariant` with its reason) and the metric and its command | people and AI, by hand |
 | `principles.csv` | The 13 principles of the evolvable-structure skill in short, with how each is measured here | people and AI, by hand |
 | `tracker/*.csv` | The ESOI intent network as five tabs (problems, solutions, implementations, ideals, metrics), each with `tracking_*` columns; import each as a Google Sheet tab | generated: `python scripts/build_tracker.py` (tracking columns are hand-edited and preserved) |
 | `audit.csv` | Every component against principles P1 to P13: objective facts (size, unmeasured solutions, waivers) plus a hand-written finding and action; `tracking_*` columns for review | generated: `python scripts/build_audit.py` (finding, action and tracking columns are hand-edited and preserved) |
@@ -72,9 +72,11 @@ on 2026-10-15 and its principles were renumbered; the old list is retired).
   `docs/configuration.md`, which `--write-docs` generates from the code (`scripts/env_vars.py`) with
   descriptions from `docs/structure/env_descriptions.csv`. A variable with no description and no doc that
   explains it fails; a rare exemption is an `S15,<VARIABLE>` waiver.
-* **S7 solutions.** Every `Protocol` class under `quest_ai_runner/` (and `CardRepository`) has a row; the selected
-  implementation is one of the listed ones; implementation paths and metric scripts exist; a solution
-  without a metric states its gap and action.
+* **S7 solutions.** Every `Protocol` class under `quest_ai_runner/` (and `CardRepository`) is listed in the `port`
+  cell of some solution row. A row may list several ports separated by `;`, so a port needs no row of its own, and
+  a row exists only for a problem a user has. For a solution with a selection-table entry `selected` is one of the
+  table's names; for any other it is one of the listed implementations. Implementation paths and metric scripts
+  exist; a solution without a metric states its gap and action.
 * **S8 generated docs.** `COMPONENTS.md` matches `components.csv`.
 * **S18 ids.** Solution, component and tracker ids are unique (a duplicated id silently merged two things).
 * **S19 serves.** Every component names at least one solution it serves. Infrastructure counts: configuration,
@@ -100,10 +102,12 @@ on 2026-10-15 and its principles were renumbered; the old list is retired).
   data go in the quest working folder, not here.
 * **New exception:** add a row to `waivers.csv` with a reason. Prefer fixing the cause.
 * **Always:** run `python scripts/check_structure.py` before committing.
-* **S10 selection.** The selected implementation of a measured solution must be the leaderboard winner
+* **S10 selection.** The selected implementation of an `eval` solution must be the leaderboard winner
   (`evaluation/components/leaderboard.py`), and must have a recorded row in `results.csv`. A challenger
   that wins, or an unrecorded selection, needs a waiver naming the pending decision and its owner, so
-  a better implementation cannot sit unnoticed (ESOI principle 4).
+  a better implementation cannot sit unnoticed (ESOI principle 4). An `invariant` solution is never ranked
+  (there is nothing to beat), but its selected implementation still needs a recorded run, and the leaderboard
+  lists it apart under "Invariant solutions".
 * **S11 metric kind.** Every component row has `metric_kind`: `eval` (a `components/run.py` command with a
   recorded result), `invariant` (pinned by named tests), `exempt` (metric text starts `exempt:` with the
   reason) or `none` (never `done`; state gap and action). `solutions` links a component to its
@@ -111,6 +115,13 @@ on 2026-10-15 and its principles were renumbered; the old list is retired).
   `score.py` and an `impls/<impl>.py`.
 * **Ports.** S7 finds every `Protocol` class under `quest_ai_runner/` (not only `core/adapters*.py`);
   each needs a `solutions.csv` row.
+* **Solution kinds (S11).** Every solution row has `metric_kind`: `eval` (the best implementation can vary, so
+  implementations are ranked on the same cases) or `invariant` (a rule that holds or does not, such as a write
+  staying inside its root; `invariant_reason` says in one line why "best" cannot vary). An invariant solution keeps
+  its cases and recorded run but has no leaderboard floor: a deliberately broken implementation lives in
+  `evaluation/components/<x>/broken/` and a test (`evaluation/components/test_components.py`) proves it fails the
+  cases. Only a floor someone would plausibly ship (`dump_all`, `most_recent`, `keyword_rules`) stays an `impls/`
+  arm of an `eval` solution.
 * **Invariant reason (S11).** `metric_kind=invariant` needs `invariant_reason`: one line on why "best"
   cannot vary for that component. A component whose quality can vary (prompt size, for one) is `partial`
   with `metric_kind=none`, not an invariant. Every solution must be linked from some component's
@@ -119,13 +130,27 @@ on 2026-10-15 and its principles were renumbered; the old list is retired).
   the model for runs that make model calls. `leaderboard.py` compares rows only when `cases_sha` matches;
   rows from before the column existed have it blank and compare as one group. The committed record is
   `evaluation/components/results.csv`; per-run JSON goes to `/tmp/qar_components/`. `evaluation/components` is in pytest `testpaths`.
+* **S18 ids.** Solution, component and tracker ids are unique, and no id repeats inside one cell (a `solutions`,
+  `port`, `implementations` or `path` list). (Listed here beside the rules it extends.)
 * **S12 measured code.** Every `evaluation/components/*/impls/*.py` either imports or drives live
   `quest_ai_runner` code, or declares itself an alternative (`ALTERNATIVE = True`, or a docstring that opens
   with `ALTERNATIVE`, `BASELINE`, `ABLATION` or `FLOOR`). An implementation that does neither would put a
-  re-implementation's number on the leaderboard, not the live code's. A solution's `selected` harness
-  implementation must be a live one, or carry an `S12 <solution_id>:<impl>` waiver. (`context_selection`'s
+  re-implementation's number on the leaderboard, not the live code's. A solution's `selected` implementation, and the
+  harness implementation its `metric_command` measures, must be live ones, or carry an `S12 <solution_id>:<impl>`
+  waiver. (`context_selection`'s
   `hybrid_union` wraps the live `HybridContextAssembler`, `FileContextStore` and `VectorContextAssembler`;
   `vector_bge_small`, `blind_grep` and `idf_paths_only` are declared baselines.)
+* **S23 selected is the table default.** For a solution with a selection-table entry, `selected` in `solutions.csv`
+  is that entry's default implementation name, so the registry, the table and the live default cannot name three
+  different things. (`call-a-model` selects `multi_provider`, the router every model call goes through; the vendors
+  are the primaries it wraps.)
+* **S21 evaluation folders.** Every `evaluation/components/<x>/` folder is named by some solution: a `metric_command`
+  (`run.py <x>`), or an `evaluation/components/<x>` mention in a `metric` (a declared arm of that solution), or it is
+  shared infrastructure listed in `SHARED_EVAL_DIRS` in `scripts/check_structure.py`. An orphan eval folder is deleted.
+* **S22 numbers.** No score, percentage, dollar amount or case count in a solution's `metric`, `gap` or `action`, a
+  component's `gap` or `action`, a waiver reason or an audit `finding` or `action`. A number there is stale the next
+  time the code or the cases change. Numbers live only in `results.csv`, read through the leaderboard; the prose names
+  what was measured and what is missing.
 * **S14 selection table.** Selection is data. `quest_ai_runner/core/selection_table.py` maps each
   `solutions.csv` id that has a port to its implementations (`name -> "module:Class"`) and a default;
   `core/resolve.py` turns `resolve(solution_id, name)` into the class (name, then

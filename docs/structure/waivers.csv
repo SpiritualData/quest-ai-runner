@@ -5,3 +5,6 @@ S4,tests/test_context_assembler.py,Test file grouped by subject; split by assemb
 S4,tests/test_orchestrator.py,"Test file grouped by subject; per-role files (test_orchestrator_*.py) exist, move cases there as they are touched"
 S4,tests/test_runner.py,Test file grouped by subject; split by poller/executor role when next touched
 S4,tests/test_vector_context.py,"Test file grouped by subject; split by arm (vector, hybrid, seed source) when next touched"
+S12,watch-a-run:digest_probe,"digest_probe returns no signal by design; the scorer builds the live digest with quest_ai_runner.core.overseer.build_digest, so the recorded number is the live digest's. It is the offline arm; the signal arm (live_model) needs a model."
+S10,answer-a-turn:unmeasured,"The graded arm drives the app chat on a dev Quest backend and spends model tokens, so it is opt-in and skipped offline. Owner: the lead's final re-record on a clean commit, when a dev Quest that serves this tree is available; delete this waiver then."
+S10,detect-a-stalled-run:unmeasured,"The production reviewer arm needs the claude CLI and one small call per log, so it is not recorded offline. Owner: the lead's final re-record on a clean commit; delete this waiver then."

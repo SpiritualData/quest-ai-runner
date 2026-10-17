@@ -196,7 +196,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "ClaudeCliProvider",
+    "cls": "MultiProvider",
     "error": null
    }
   }
@@ -230,7 +230,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "ClaudeCliProvider",
+    "cls": "MultiProvider",
     "error": null
    }
   },
@@ -245,8 +245,8 @@
   },
   "expect": {
    "eq": {
-    "cls": "ClaudeCliProvider",
-    "default": "claude_cli",
+    "cls": "MultiProvider",
+    "default": "multi_provider",
     "error": null
    }
   }
