@@ -25,6 +25,31 @@ from .planner_prompt import NOT_QUEUED_NOTE
 class RunCloseMixin:
     """Closing a turn: deferred deep work, goal verification of the answer, and the final result."""
 
+    def keep_landed_work_reported(self, rs: SimpleNamespace, text: str) -> str:
+        """Never let a reply deny work the execution record proves landed.
+
+        After a deferred run that really changed something, the reply is a model's rewrite (the
+        post-run synthesis, and any goal-loop regeneration steered by the verifier). Both read the
+        pre-work proposal, which says nothing has been made yet, and a rewrite that trusts it
+        tells the person the landed change was not made. The run's own account of what landed
+        (``rs.landed_account``) is code-written from the write receipts, so it wins: when the
+        record shows a mutation succeeded and none failed, and a judge says the rewrite denies the
+        account, the account itself is the reply. Judged on structure plus one contradiction
+        verdict, never on keywords; a judge that cannot run keeps the reply. Never raises."""
+        try:
+            account = (getattr(rs, "landed_account", "") or "").strip()
+            exec_record = rs.exec_record
+            if (not account or not (text or "").strip() or exec_record is None
+                    or not exec_record.any_success or exec_record.any_failure):
+                return text
+            if self.reply_denies_landed_work(rs.user_message, text, account) is True:
+                log.warning("reply denied work the execution record proves landed; "
+                            "reporting the run's own account instead")
+                return account
+        except Exception:  # noqa: BLE001 — a guard must never break the turn
+            log.warning("landed-work guard failed", exc_info=True)
+        return text
+
     def _run_deferred_work(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
         """Hand deferred deep work off (or run it inline) when the answer turn calls for it."""
         _ctx_meta = rs._ctx_meta
@@ -175,6 +200,8 @@ class RunCloseMixin:
                     _deep_block = "--- WHAT WAS JUST EXECUTED (deep run output) ---\n" + deep_output
                     rs.context_view = (rs.context_view + "\n\n" + _deep_block) if rs.context_view else _deep_block
                     rs._deferred_deep_grounded = True
+                    rs.landed_account = deep_output
+                    rs.text = self.keep_landed_work_reported(rs, rs.text)
                     if unconfirmed_text and unconfirmed_text not in rs.text:
                         # A sibling that did NOT land: its own honest text, verbatim, after the
                         # landed work and never through the synthesis above.
@@ -489,7 +516,7 @@ class RunCloseMixin:
                              f"Do this now: {verdict.get('next_action') or 'address the gap and answer fully.'}\n\n"
                              + (_new + "\n\n" if _new else "")
                              + f"--- YOUR PREVIOUS ANSWER ---\n{rs.text}")
-                    rs.text = _gen_answer(steer)
+                    rs.text = self.keep_landed_work_reported(rs, _gen_answer(steer))
                     _attempt += 1
             except Exception:  # noqa: BLE001 — answer verification must never break the turn
                 log.warning("answer goal verification failed", exc_info=True)

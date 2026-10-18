@@ -20,6 +20,8 @@ from .guard import ExecutionRecord
 from .runtime_settings import core_settings
 from .auxiliary_prompts import (
     INTENT_DIRECTIVE_PROMPT,
+    LANDED_WORK_DENIAL_PROMPT,
+    LANDED_WORK_DENIAL_TOOL,
     INTENT_DIRECTIVE_TOOL,
     MODE_RELEASE_PROMPT,
     MODE_RELEASE_TOOL,
@@ -399,6 +401,53 @@ class JudgesMixin:
         if not has_renderable_content(payload):
             return None
         return payload
+
+    def reply_denies_landed_work(self, request: str, reply: str, account: str) -> Optional[bool]:
+        """ONE structured LLM judgment: does ``reply`` deny a change that ``account`` (the run's own
+        code-written report) says landed? Used only after the execution record shows a mutation
+        succeeded, to catch a rewrite that contradicts the receipts. Returns True (denies), False
+        (reports it), or None when the judgment could not run (the caller then keeps the reply, so
+        an outage never changes what a turn says). Hard-capped by ``intent_judge_timeout_seconds()``
+        and never raises."""
+        if not (reply or "").strip() or not (account or "").strip():
+            return None
+        try:
+            model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Landed-work denial judge: could not resolve tier %r (%s)",
+                        self.cfg.intent_judge_tier, e)
+            return None
+        if not model:
+            return None
+        prompt = LANDED_WORK_DENIAL_PROMPT.format(
+            request=clip_head_and_tail(request or "", 1000),
+            account=(account or "").strip()[:3000],
+            reply=(reply or "").strip()[:3000],
+        )
+
+        def call_judge() -> Dict[str, Any]:
+            provider = self.get_provider_for_model(model)
+            raw = plan_with_step(provider, prompt, model=model, tool_schema=LANDED_WORK_DENIAL_TOOL,
+                                 step=STEP_JUDGE)
+            if isinstance(raw, str):
+                raw = json.loads(_extract_json(raw) or "{}")
+            return raw if isinstance(raw, dict) else {}
+
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            result = pool.submit(call_judge).result(timeout=intent_judge_timeout_seconds())
+        except FuturesTimeoutError:
+            log.warning("Landed-work denial judge timed out; keeping the reply.")
+            return None
+        except Exception as e:  # noqa: BLE001 — a judgment call must never break the turn
+            log.warning("Landed-work denial judge failed (%s: %s); keeping the reply.",
+                        type(e).__name__, e)
+            return None
+        finally:
+            pool.shutdown(wait=False)
+        if not isinstance(result, dict) or "denies_landed_work" not in result:
+            return None
+        return bool(result.get("denies_landed_work"))
 
     def judge_execution_directive(self, user_message: str, answer_text: str) -> Tuple[bool, str]:
         """ONE structured LLM judgment of whether the user ordered work, used ONLY when the

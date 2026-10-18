@@ -536,6 +536,8 @@ class RunAnswerMixin:
         # final answer. Gates the post-deep goal-verification loop below so a deferred-deep turn is
         # still held to the overall goal (grounded in what the deep run actually produced).
         rs._deferred_deep_grounded = False
+        # The landed deferred run's own code-written account; see ``keep_landed_work_reported``.
+        rs.landed_account = ""
         # True once a QUEUED deployment's deferred hand-off is CONFIRMED (the deep runner enqueued
         # the work and returned a deferred met result). Gates the goal-verification loop below off
         # for this turn: the deferred contract trusts met and never re-verifies a hand-off sentinel

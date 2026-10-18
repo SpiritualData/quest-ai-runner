@@ -176,6 +176,55 @@ VERIFY_RUN_OBSERVATIONS_NOTE = (
     "something, solely because the OUTPUT TEXT did not restate what the record already proves.\n"
 )
 
+# The reply after a deferred run that REALLY changed something (the execution record shows a
+# mutation succeeded) is rewritten by a model from the run's own account and the pre-work proposal.
+# Live finding (2026-10-18, dev, 1 turn in about 8): the fast-tier rewrite took the proposal's
+# "nothing has been created yet" as the truth and told the person the landed change was wrong or
+# never made, and the goal loop's steered regeneration then rewrote a correct reply the same way.
+# This judge reads only the reply and the run's own account and says whether the reply denies the
+# change the account reports. It is asked about contradiction, never about quality.
+LANDED_WORK_DENIAL_TOOL: Dict[str, Any] = {
+    "name": "landed_work_denial_verdict",
+    "description": "Judge whether a reply to the user denies, doubts or contradicts a change that "
+                   "the system's own account says was made.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "denies_landed_work": {
+                "type": "boolean",
+                "description": "True when the REPLY says the change was not made, is still only "
+                               "proposed, still needs the user's approval or answer before it "
+                               "happens, failed, or that the account of it is wrong. False when "
+                               "the reply reports the change as done, even if it words it "
+                               "differently, or adds caveats and open items about other things.",
+            },
+            "reason": {"type": "string", "description": "One short sentence: why."},
+        },
+        "required": ["denies_landed_work"],
+    },
+}
+
+LANDED_WORK_DENIAL_PROMPT = """\
+The system's own record shows that the work below was carried out and changed something. The
+ACCOUNT is the system's code-written report of what landed. It is the truth about what happened.
+Decide whether the REPLY that the user will read denies it.
+
+Set denies_landed_work=true when the reply says or implies that the change was not made, is only
+a proposal, still waits for the user's approval or an answer before it happens, failed, could not
+be done, or that the account of it is wrong.
+Set it false when the reply reports the change as done, in any wording, including when it adds
+caveats or open items about other things.
+
+=== REQUEST ===
+{request}
+
+=== ACCOUNT OF WHAT LANDED ===
+{account}
+
+=== REPLY ===
+{reply}
+"""
+
 INTENT_DIRECTIVE_TOOL: Dict[str, Any] = {
     "name": "execution_directive_verdict",
     "description": "Judge whether the user's message is a DIRECTIVE to actually make a change "
