@@ -152,7 +152,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
     ``list_quests``, ``get_quest_autopilot``, ``list_quest_goals``, ``list_tasks``,
     ``list_open_decisions_for_quest``, ``create_task``, ``update_task``,
     ``update_quest_autopilot``, and optionally ``create_goal``, ``get_daily_reflection``,
-    ``get_period_reflection``, ``get_insights_collection`` and ``list_collection_entries`` -- a
+    ``get_period_reflection`` and ``list_quest_insights`` -- a
     client missing the optional ones simply composes a batch without that material, exactly as
     before they existed).
 

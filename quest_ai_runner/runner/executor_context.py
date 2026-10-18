@@ -146,8 +146,8 @@ class ContextViewMixin:
             updates_text = insights_text = ""
             if self._update_engine is not None:
                 # What is NEW or still OPEN on this quest's channels, through the same engine an
-                # autopilot pass asks: the person's unanswered notes, their captures judged for
-                # this card, comments on its documents, a collection it watches. Each carries a
+                # autopilot pass asks: the person's unanswered notes, the captures assigned to
+                # this quest, comments on its documents, a collection it watches. Each carries a
                 # ref, and the result closes with a receipt on every one. The engine owns the
                 # captures either way: a batch the pass composed already carries them, judged,
                 # in its own text, so nothing is fetched unjudged here beside them.

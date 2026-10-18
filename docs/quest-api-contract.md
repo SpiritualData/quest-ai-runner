@@ -364,7 +364,9 @@ GET   /api/data/insights/by-quest?quest_id=Q&limit=10&include_acted=false   (lis
   -> { "collection_id": "...", "has_quests_field": true,
        "items": [ same entry shape as above, newest first, only insights assigned to Q, unacted ] }
      (a collection with no quests field answers items [] and has_quests_field false;
-      an older backend without the route answers 404, which the client reports as {})
+      an older backend without the route answers 404, which the client reports as {};
+      the items are the CALLER's own insights only, so a lane whose key belongs to a separate
+      service account reads none for a quest owned by someone else)
 
 PATCH /api/data/insights/mark-acted-on           (mark_insight_acted_on)
   body { "entry_id": "...", "collection_id": "...", "action_taken_description": "..." }

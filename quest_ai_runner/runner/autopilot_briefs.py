@@ -363,16 +363,16 @@ def compose_batch_text(quest_outcome: str,
     period's goal completion and task outcomes in makes continuity the default.
 
     ``reflection`` is the person's own latest daily/period reflection (``runner.reflections``), and
-    ``insights`` the captures they have made and not yet acted on since the last pass
-    (``runner.insights``). Those two are the only inputs here written BY them rather than derived
+    ``insights`` the captures assigned to THIS quest that they have not yet acted on since the last
+    pass (``runner.insights``). Those two are the only inputs here written BY them rather than derived
     from rows: everything else describes what the system recorded, while these say what the person
     made of it and what occurred to them in between, so they are what should break ties about what
     actually matters this run.
 
-    The insights block carries each capture's own category tags and asks the READER to judge which
-    apply to this quest. That is deliberate: matching a tag against a quest or goal name in code
-    would be a fixed string rule that silently drops every insight whose wording it did not
-    anticipate, which is exactly what this repository's hard rule #3 forbids.
+    The insights block carries only captures assigned to this quest when they were made (the
+    backend's quest picker, or the person), each with its own category tags shown as their words.
+    No code here matches a tag against a quest or goal name: that would be a fixed string rule,
+    which this repository's hard rule #3 forbids.
 
     ``instructions``, when the quest carries any, is the block right after ``Scope:``: verbatim,
     never summarized/reflowed/rewritten (it is the one input here the person authored as a
