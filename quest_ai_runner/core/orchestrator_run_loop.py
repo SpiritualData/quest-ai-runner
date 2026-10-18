@@ -138,7 +138,12 @@ class RunLoopMixin:
                     guard = self.resolve_link_guard()
                     if guard is not None:
                         if res.text:
-                            res.text, _lv = guard.sanitize(res.text)
+                            # Provenance (policy.require_provenance) judges the reply against what
+                            # THIS turn had. A deep worker's output below is exempt: what that
+                            # worker read is not visible to the brain, so only reachability applies.
+                            _evidence = (self.link_evidence_for(rs, res)
+                                         if guard.policy.require_provenance else None)
+                            res.text, _lv = guard.sanitize(res.text, evidence=_evidence)
                             res.link_checks.extend(v.to_dict() for v in _lv)
                         for _d in res.deep_results:
                             if getattr(_d, "output", None):

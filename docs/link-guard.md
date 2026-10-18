@@ -22,11 +22,36 @@ sanitized text. It applies to both terminal kinds that carry prose (`answer` and
 | `dead` | proven not to exist | stripped, with "(link removed: that address does not exist)" |
 | `unknown` | could not be settled | stripped, with "(link removed: could not verify it)" |
 
-A link is `ok` when it is an external URL that answered (2xx/3xx, or 401/403, which prove the
-endpoint is there and is merely gated), a host on the configured trusted list, an in-app
+A link is `ok` when it is an external URL that answered (2xx/3xx, or a 401/403 that is itself a
+PAGE: an HTML sign-in wall or a private document a person can open), a host on the configured trusted list, an in-app
 pseudo-scheme the consumer declared, a `mailto:` or `tel:` address (never fetched, kept as-is), or
 an internal path that matches the host app's real route table. It is `dead` on 404/410, a host that
-does not resolve, a refused connection, or an internal path with no matching route.
+does not resolve, a refused connection, a 401/403 that is not HTML, or an internal path with no
+matching route.
+
+**"Verified" means a page a person can open.** A JSON (or other non-HTML) 401/403 is an API
+answering "who are you", not a page: it is `dead` ("that address is not a web page"). This is the
+exact shape of the fabricated `/api/tasks/<id>` links the guard was written for. The probe reads the
+content type of a real GET (a 401 on HEAD is retried as GET for that reason), and a consumer's own
+`fetcher` may return `(status, detail, {"content_type": ...})`; a fetcher that reports no content
+type keeps the earlier trusting reading.
+
+## Provenance: the AI must have seen the link
+
+Reachable is not real: a model can invent an address that happens to resolve. Set
+`"require_provenance": true` in the policy (off by default in the library) and an external link is
+`ok` only if it is both reachable AND present in material this turn actually had: the user's
+messages and the conversation, the context shown to the planner and answerer (cards, recalled turns,
+the consumer's grounding such as quest data), every gathered observation (reads, greps, web searches,
+`web_page` fetches), attachments, and deep output that fed the reply. Comparison ignores case, scheme,
+a leading `www.`, fragments and trailing slashes, and a query string must match. A host that was seen
+does not vouch for an invented path on it. An unseen link is never fetched; it is stripped with
+"I did not find this address in anything I read". In-app links (route table), `mailto:`, `tel:` and
+declared schemes are exempt. A deep worker's own output is exempt too, since what that worker read is
+not visible to the brain (reachability and the route table still apply). The orchestrator builds the
+evidence from the run itself (`link_evidence_for`) and passes it to `sanitize(text, evidence=...)`.
+A consumer that builds its policy in code sets `OrchestratorConfig.link_policy` (a `LinkPolicy`),
+which wins over `link_policy_file`.
 
 **Unverified is treated like dead on purpose.** A link nobody can stand behind is not worth sending,
 and a short honest note beats a dead tap. The author's own label survives as plain text, so the
@@ -82,7 +107,8 @@ Two environment variables (both read in `cli.py`'s `_config_from_env`, both also
   "max_urls": 25,
   "cache_ttl": 3600,
   "concurrency": 8,
-  "overall_timeout": 8.0
+  "overall_timeout": 8.0,
+  "require_provenance": false
 }
 ```
 

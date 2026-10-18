@@ -9,12 +9,13 @@ other link in the thread.
 So every terminal reply is run through ``LinkGuard.sanitize`` before it is emitted. Each link it
 finds gets one of three verdicts:
 
-* ``ok``      -- proven to exist. An external URL that answered (2xx/3xx, or 401/403, which prove
-                 the endpoint is there and merely gated), a host on the trusted list, an in-app
+* ``ok``      -- proven to exist. An external URL that answered (2xx/3xx, or a 401/403 that is
+                 itself a PAGE: HTML such as a sign-in wall or a private document, never a JSON or
+                 other API answer, which no reader can open), a host on the trusted list, an in-app
                  pseudo-scheme the consumer declared, or an internal path that matches the host
                  app's REAL route table.
 * ``dead``    -- proven not to exist: 404/410, a host that does not resolve, a refused connection,
-                 or an internal path with no matching route.
+                 a 401/403 that is not a page, or an internal path with no matching route.
 * ``unknown`` -- could not be settled this pass (timeout, 5xx, network down, or no route table
                  configured to check an internal path against).
 
@@ -34,6 +35,13 @@ handled the ones it happened to see.
 Everything is stdlib (``urllib``), matching the rest of the core, and every network call is
 bounded by ``policy.timeout`` with a per-instance result cache so a long-lived poller checks the
 same URL once, not once per turn.
+
+PROVENANCE (opt-in, ``LinkPolicy.require_provenance``). Reachable is not the same as real: a model
+can invent a URL that happens to resolve (a home page, a search page) and present it as the answer.
+With the flag on, an external link is ``ok`` only if it is both reachable AND appears in the material
+the turn actually had (``sanitize(text, evidence=...)``): the user's words, the conversation, what
+was read, searched or fetched, and the context in the prompt. In-app links are judged by the route
+table and are exempt, as are mailto/tel and declared schemes.
 
 GENERIC BY CONSTRUCTION: this module knows nothing about Quest. The route table, the app's own
 origins, the trusted hosts, the in-app schemes and the rewrite rules all come from a consumer-
@@ -110,6 +118,11 @@ class LinkPolicy:
     # together). Whatever has not settled when it elapses is treated as ``unknown`` (stripped, same
     # as any other unverified link) rather than making the reply wait on it.
     overall_timeout: float = 8.0
+    # Opt-in provenance rule: an EXTERNAL link counts as ``ok`` only if it is reachable AND was
+    # present in the evidence passed to ``sanitize`` (compared case-insensitively, ignoring scheme,
+    # a leading ``www.``, fragments and trailing slashes). Off by default: a library consumer that
+    # cannot supply the turn's material would otherwise strip every external link.
+    require_provenance: bool = False
 
     @staticmethod
     def from_dict(data: Dict[str, Any], *, base_dir: Optional[Path] = None) -> "LinkPolicy":
@@ -160,6 +173,7 @@ class LinkPolicy:
             cache_ttl=float(data.get("cache_ttl", 3600.0)),
             concurrency=max(1, int(data.get("concurrency", 8))),
             overall_timeout=float(data.get("overall_timeout", 8.0)),
+            require_provenance=bool(data.get("require_provenance", False)),
         )
 
     @staticmethod
@@ -181,6 +195,7 @@ class LinkVerdict:
     verdict: str            # OK | DEAD | UNKNOWN
     reason: str = ""
     replaced_with: Optional[str] = None   # set when a rewrite rule redirected it to a real address
+    note: str = ""          # the reader-facing stand-in when this link is stripped (else a default)
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {"url": self.url, "verdict": self.verdict}
@@ -241,6 +256,57 @@ def route_to_regex(pattern: str) -> re.Pattern:
     return re.compile(rf"^/{body}/?$" if body else r"^/$")
 
 
+
+# ---------------------------------------------------------------------------------------------
+# Provenance: was this address in material the turn actually had?
+# ---------------------------------------------------------------------------------------------
+
+EVIDENCE_URL_RE = re.compile(r"(?:https?://|www\.)[^\s<>()\[\]\"'`]+", re.IGNORECASE)
+
+
+def normalize_url_for_match(url: str) -> str:
+    """The comparison key for provenance: case, scheme, ``www.``, fragment and trailing slash fold."""
+    t = (url or "").strip().strip("<>").lower()
+    t = re.sub(r"^https?://", "", t)
+    t = re.sub(r"^www\.", "", t)
+    t = t.split("#", 1)[0]
+    return t.rstrip("/")
+
+
+def evidence_text(*sources: Any) -> str:
+    """Flatten whatever the turn held (strings, dicts, lists, anything with ``__str__``) to one text.
+
+    Walks containers rather than JSON-encoding them, so an address is never escaped on the way in.
+    """
+    out: List[str] = []
+
+    def walk(x: Any, depth: int = 0) -> None:
+        if x is None or depth > 12:
+            return
+        if isinstance(x, str):
+            out.append(x)
+        elif isinstance(x, dict):
+            for k, v in x.items():
+                walk(k, depth + 1)
+                walk(v, depth + 1)
+        elif isinstance(x, (list, tuple, set)):
+            for v in x:
+                walk(v, depth + 1)
+        elif isinstance(x, (int, float, bool)):
+            return
+        else:
+            out.append(str(x))
+
+    for src in sources:
+        walk(src)
+    return "\n".join(out)
+
+
+def evidence_urls(text: str) -> frozenset:
+    """Every address mentioned in ``text``, normalised for matching."""
+    return frozenset(normalize_url_for_match(trim_url(m.group(0)))
+                     for m in EVIDENCE_URL_RE.finditer(text or ""))
+
 # ---------------------------------------------------------------------------------------------
 # The guard
 # ---------------------------------------------------------------------------------------------
@@ -249,12 +315,13 @@ class LinkGuard:
     """Verify every link in a reply and strip the ones that do not check out.
 
     ``fetcher`` is the one network seam: a callable ``(url, timeout) -> (status, reason)`` where
-    ``status`` is an int HTTP status or None when the request never got one. Tests pass a fake and
+    ``status`` is an int HTTP status or None when the request never got one. For a 401/403 it may add
+    a third item, ``{"content_type": ...}``, which decides whether the gated answer is a page. Tests pass a fake and
     never touch the network.
     """
 
     def __init__(self, policy: Optional[LinkPolicy] = None,
-                 *, fetcher: Optional[Callable[[str, float], Tuple[Optional[int], str]]] = None):
+                 *, fetcher: Optional[Callable[[str, float], Tuple[Any, ...]]] = None):
         self.policy = policy or LinkPolicy()
         self.fetch = fetcher or http_probe
         self.routes = [route_to_regex(r) for r in self.policy.routes]
@@ -270,8 +337,21 @@ class LinkGuard:
                 return rx.sub(repl, url)
         return url
 
-    def verify(self, url: str) -> LinkVerdict:
-        """Judge one URL. Re-checks an ``unknown`` up to ``policy.passes`` times before settling."""
+    def unseen(self, url: str, target: str, seen_urls: Optional[frozenset]) -> Optional[LinkVerdict]:
+        """The provenance verdict for an external link, or None when the rule does not apply."""
+        if seen_urls is None or not self.policy.require_provenance:
+            return None
+        if normalize_url_for_match(url) in seen_urls or normalize_url_for_match(target) in seen_urls:
+            return None
+        return LinkVerdict(url, UNKNOWN, "not found in anything read this turn",
+                           note="(link removed: I did not find this address in anything I read)")
+
+    def verify(self, url: str, seen_urls: Optional[frozenset] = None) -> LinkVerdict:
+        """Judge one URL. Re-checks an ``unknown`` up to ``policy.passes`` times before settling.
+
+        ``seen_urls`` (from ``evidence_urls``) is the set of addresses the turn actually had; it only
+        matters when ``policy.require_provenance`` is on, and only for external links.
+        """
         rewritten = self.apply_rewrites(url)
         replaced = rewritten if rewritten != url else None
         target = rewritten
@@ -303,17 +383,25 @@ class LinkGuard:
                 else:
                     path_display = path
                 return self.verify_path(path_display, url, replaced)
+            unseen = self.unseen(url, target, seen_urls)
+            if unseen is not None:
+                unseen.replaced_with = replaced
+                return unseen
             if host in self.policy.trusted_hosts:
                 return LinkVerdict(url, OK, "trusted host", replaced)
             if not self.policy.check_external:
                 return LinkVerdict(url, UNKNOWN, "external checking is off", replaced)
             verdict, reason = self.check_external(target)
-            return LinkVerdict(url, verdict, reason, replaced)
+            return LinkVerdict(url, verdict, reason, replaced, note_for_reason(reason))
         if target.lower().startswith("www."):
+            unseen = self.unseen(url, target, seen_urls)
+            if unseen is not None:
+                unseen.replaced_with = replaced
+                return unseen
             if not self.policy.check_external:
                 return LinkVerdict(url, UNKNOWN, "external checking is off", replaced)
             verdict, reason = self.check_external("https://" + target)
-            return LinkVerdict(url, verdict, reason, replaced)
+            return LinkVerdict(url, verdict, reason, replaced, note_for_reason(reason))
 
         # Anything else (a bare word in link position, an unknown scheme) is not something we can
         # stand behind.
@@ -331,20 +419,30 @@ class LinkGuard:
 
     def check_external(self, url: str) -> Tuple[str, str]:
         """Fetch a URL (cached, multi-pass) and turn the outcome into a verdict."""
+        url = url.split("#", 1)[0]   # a fragment never reaches a server; one verdict per page
         hit = self.cache.get(url)
         now = time.time()
         if hit and (now - hit[2]) < self.policy.cache_ttl:
             return hit[0], hit[1]
         verdict, reason = UNKNOWN, "no response"
         for attempt in range(self.policy.passes):
-            status, detail = self.fetch(url, self.policy.timeout)
+            probed = self.fetch(url, self.policy.timeout)
+            status, detail = probed[0], probed[1]
+            info = probed[2] if len(probed) > 2 and isinstance(probed[2], dict) else None
             if status is not None and 200 <= status < 400:
                 verdict, reason = OK, f"HTTP {status}"
                 break
             if status in (401, 403):
-                # The endpoint is there, it just will not serve US. That proves existence, which is
-                # the only claim a link makes.
-                verdict, reason = OK, f"HTTP {status} (exists, access controlled)"
+                # The endpoint is there, it just will not serve US. That proves a PAGE exists only
+                # when the answer is itself a page: a sign-in wall or a private document is HTML a
+                # person can open, while a JSON 401 from an API is something nobody can open at all
+                # (the exact shape of a fabricated /api/... address). A fetcher that reports no
+                # content type (a consumer's own) keeps the earlier, trusting reading.
+                ctype = str((info or {}).get("content_type") or "").lower()
+                if info is None or "html" in ctype:
+                    verdict, reason = OK, f"HTTP {status} (exists, access controlled)"
+                else:
+                    verdict, reason = DEAD, f"HTTP {status} {NOT_A_PAGE} ({ctype or 'no content type'})"
                 break
             if status in (404, 410):
                 verdict, reason = DEAD, f"HTTP {status}"
@@ -362,8 +460,13 @@ class LinkGuard:
 
     # -- rewriting a whole reply ---------------------------------------------------------------
 
-    def sanitize(self, text: str) -> Tuple[str, List[LinkVerdict]]:
+    def sanitize(self, text: str, *, evidence: Optional[str] = None) -> Tuple[str, List[LinkVerdict]]:
         """Return ``(safe_text, verdicts)``. Repeats until a scan finds nothing left to strip.
+
+        ``evidence`` is the text of everything the turn actually had (see ``evidence_text``). It is
+        consulted only when ``policy.require_provenance`` is on; ``None`` means "no evidence is
+        available for this text", which exempts it from the provenance rule (reachability and the
+        route table still apply).
 
         The whole call is held to ``policy.overall_timeout``: a reply full of slow links must not
         hold up a turn for minutes, so whatever is still unresolved when the budget runs out is
@@ -375,14 +478,16 @@ class LinkGuard:
         seen: Dict[str, LinkVerdict] = {}
         current = text
         deadline = time.time() + self.policy.overall_timeout
+        seen_urls = evidence_urls(evidence) if evidence is not None else None
         for _round in range(self.policy.passes):
-            current, changed = self.sanitize_once(current, seen, verdicts, deadline)
+            current, changed = self.sanitize_once(current, seen, verdicts, deadline, seen_urls)
             if not changed:
                 break
         return current, verdicts
 
     def _judge_pending(self, urls: List[str], seen: Dict[str, LinkVerdict],
-                        verdicts: List[LinkVerdict], deadline: float) -> None:
+                        verdicts: List[LinkVerdict], deadline: float,
+                        seen_urls: Optional[frozenset] = None) -> None:
         """Judge every URL in ``urls`` (none yet in ``seen``), concurrently, within ``deadline``.
 
         Checking links one at a time is what let a reply full of slow hosts stall a turn: up to
@@ -394,7 +499,7 @@ class LinkGuard:
         if remaining > 0 and urls:
             workers = min(len(urls), max(1, self.policy.concurrency))
             pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
-            futures = {pool.submit(self.verify, url): url for url in urls}
+            futures = {pool.submit(self.verify, url, seen_urls): url for url in urls}
             try:
                 for fut in concurrent.futures.as_completed(futures, timeout=remaining):
                     url = futures[fut]
@@ -416,7 +521,8 @@ class LinkGuard:
                 verdicts.append(v)
 
     def sanitize_once(self, text: str, seen: Dict[str, LinkVerdict],
-                      verdicts: List[LinkVerdict], deadline: float) -> Tuple[str, bool]:
+                      verdicts: List[LinkVerdict], deadline: float,
+                      seen_urls: Optional[frozenset] = None) -> Tuple[str, bool]:
         """One scan-and-rewrite pass. ``changed`` says whether anything was stripped or rewritten."""
         changed = False
 
@@ -437,7 +543,7 @@ class LinkGuard:
 
         SCAN_RE.sub(collect, text)
         if pending:
-            self._judge_pending(pending, seen, verdicts, deadline)
+            self._judge_pending(pending, seen, verdicts, deadline, seen_urls)
 
         def judge(url: str) -> LinkVerdict:
             if url in seen:
@@ -489,8 +595,20 @@ def looks_like_url(s: str) -> bool:
     return bool(re.match(r"^(?:https?://|www\.|/|[a-zA-Z][\w+.-]*:)", t))
 
 
+NOT_A_PAGE = "not a page"
+
+
+def note_for_reason(reason: str) -> str:
+    """A specific reader-facing note for the one dead reason that deserves its own words."""
+    if NOT_A_PAGE in (reason or ""):
+        return "(link removed: that address is not a web page)"
+    return ""
+
+
 def note_for(v: LinkVerdict) -> str:
     """The short, honest stand-in that replaces a link we could not stand behind."""
+    if v.note:
+        return v.note
     if v.verdict == DEAD:
         return "(link removed: that address does not exist)"
     return "(link removed: could not verify it)"
@@ -511,8 +629,11 @@ def strip_link(label: str, v: LinkVerdict) -> str:
 BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 
 
-def http_probe(url: str, timeout: float) -> Tuple[Optional[int], str]:
+def http_probe(url: str, timeout: float) -> Tuple[Any, ...]:
     """HEAD a URL, falling back to GET, and report ``(status, detail)``. Never raises.
+
+    A 401/403 answer carries a third item, ``{"content_type": ...}``, so the guard can tell a page
+    (HTML) from an API error (JSON) without a second request.
 
     ``detail`` is "dns" or "refused" for the two failures that PROVE absence; anything else is a
     description the caller treats as unsettled.
@@ -530,9 +651,13 @@ def http_probe(url: str, timeout: float) -> Tuple[Optional[int], str]:
                 return int(getattr(resp, "status", 0) or resp.getcode() or 0), method
         except urllib.error.HTTPError as e:
             code = int(e.code)
-            # Plenty of servers reject HEAD with 405/501 while serving the page fine on GET.
-            if method == "HEAD" and code in (400, 403, 405, 501):
+            # Plenty of servers reject HEAD with 405/501 while serving the page fine on GET. A 401
+            # also retries as GET, because the guard needs the content type of a real answer to tell
+            # a sign-in page from an API's JSON error.
+            if method == "HEAD" and code in (400, 401, 403, 405, 501):
                 continue
+            if code in (401, 403):
+                return code, f"HTTP {code}", {"content_type": e.headers.get("Content-Type", "") if e.headers else ""}
             return code, f"HTTP {code}"
         except urllib.error.URLError as e:
             reason = getattr(e, "reason", None)
@@ -550,14 +675,17 @@ def http_probe(url: str, timeout: float) -> Tuple[Optional[int], str]:
     return None, "no response"
 
 
-def build_link_guard(policy_file: str = "", *, enabled: bool = True) -> Optional[LinkGuard]:
+def build_link_guard(policy_file: str = "", *, enabled: bool = True,
+                     policy: Optional[LinkPolicy] = None) -> Optional[LinkGuard]:
     """Build the guard a consumer configured, or None when it is switched off.
 
     With no policy file the guard still runs: external URLs are checked over the network, and an
     internal path has no route table to be checked against, so it comes back unverified and is
-    stripped. Configure ``routes``/``routes_file`` to let real in-app links through.
+    stripped. Configure ``routes``/``routes_file`` to let real in-app links through. A consumer that
+    builds its policy in code passes ``policy`` (it wins over ``policy_file``).
     """
     if not enabled:
         return None
-    policy = LinkPolicy.from_file(policy_file) if policy_file else None
+    if policy is None:
+        policy = LinkPolicy.from_file(policy_file) if policy_file else None
     return LinkGuard(policy or LinkPolicy())

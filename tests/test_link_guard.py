@@ -16,6 +16,7 @@ from quest_ai_runner.core.link_guard import (
     LinkGuard,
     LinkPolicy,
     build_link_guard,
+    evidence_text,
     route_to_regex,
     trim_url,
 )
@@ -107,8 +108,9 @@ def test_reachable_url_survives_and_a_404_is_stripped():
 
 
 @pytest.mark.parametrize("status", [401, 403])
-def test_an_auth_gated_endpoint_counts_as_existing(status):
-    guard = LinkGuard(APP, fetcher=fetcher_for({"https://api.example.com/x": (status, "")}))
+def test_an_auth_gated_page_counts_as_existing(status):
+    guard = LinkGuard(APP, fetcher=fetcher_for({
+        "https://api.example.com/x": (status, "", {"content_type": "text/html"})}))
     out, verdicts = guard.sanitize("[api](https://api.example.com/x)")
     assert verdicts[0].verdict == OK
     assert "https://api.example.com/x" in out
@@ -422,3 +424,179 @@ def test_http_probe_asks_for_html_like_the_browser_that_will_open_the_link(monke
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     assert link_guard.http_probe("https://example.org/reports?x=1", 1.0) == (200, "HEAD")
     assert seen["accept"].startswith("text/html")
+
+
+# --- "verified" means a page a person can open: the HTML-vs-JSON 401/403 rule ----------------------
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_gated_answer_that_is_html_is_a_page_and_stays(status):
+    """A sign-in wall or a private document is something a person can open."""
+    guard = LinkGuard(APP, fetcher=fetcher_for({
+        "https://docs.example.com/private": (status, f"HTTP {status}", {"content_type": "text/html; charset=utf-8"})}))
+    out, verdicts = guard.sanitize("[the doc](https://docs.example.com/private)")
+    assert verdicts[0].verdict == OK
+    assert "https://docs.example.com/private" in out
+
+
+@pytest.mark.parametrize("status", [401, 403])
+@pytest.mark.parametrize("ctype", ["application/json", "text/plain", ""])
+def test_a_gated_answer_that_is_not_html_is_not_a_page_and_is_stripped(status, ctype):
+    guard = LinkGuard(APP, fetcher=fetcher_for({
+        "https://api.example.com/api/tasks/1": (status, f"HTTP {status}", {"content_type": ctype})}))
+    out, verdicts = guard.sanitize("[task](https://api.example.com/api/tasks/1)")
+    assert verdicts[0].verdict == DEAD
+    assert "not a page" in verdicts[0].reason
+    assert "api.example.com" not in out
+    assert "task (link removed: that address is not a web page)" in out
+
+
+def test_http_probe_reports_the_content_type_of_a_gated_answer_from_a_real_server():
+    """No stub: a stdlib server on loopback answers 401 as JSON and 403 as an HTML page."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from quest_ai_runner.core.link_guard import http_probe
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            if self.path.startswith("/api"):
+                body, ctype, code = b'{"detail":"Not authenticated"}', "application/json", 401
+            else:
+                body, ctype, code = b"<html>Sign in</html>", "text/html; charset=utf-8", 403
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        do_HEAD = do_GET
+
+        def log_message(self, *a):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        guard = LinkGuard(LinkPolicy(passes=1, timeout=3.0))
+        assert guard.check_external(base + "/api/tasks/1")[0] == DEAD
+        assert guard.check_external(base + "/signin")[0] == OK
+    finally:
+        server.shutdown()
+
+
+# --- provenance: the AI must have SEEN the link, not invented it ------------------------------------
+
+PROV = LinkPolicy(
+    routes=("/quest/[questId]", "/profile/ai-tasks"),
+    origins=("app.example.org",),
+    passes=1,
+    require_provenance=True,
+)
+REACHABLE = {
+    "https://seen.example.com/page": (200, "HEAD"),
+    "https://invented.example.com/page": (200, "HEAD"),
+}
+
+
+def test_a_reachable_link_the_turn_never_saw_is_stripped():
+    fetch = fetcher_for(REACHABLE)
+    guard = LinkGuard(PROV, fetcher=fetch)
+    out, verdicts = guard.sanitize(
+        "See [it](https://invented.example.com/page).", evidence="the user asked about tasks")
+    assert verdicts[0].verdict == UNKNOWN
+    assert "invented.example.com" not in out
+    assert "it (link removed: I did not find this address in anything I read)" in out
+    assert fetch.calls == []   # never fetched: unseen is decided before the network
+
+
+def test_a_link_that_appeared_in_the_turns_material_passes():
+    guard = LinkGuard(PROV, fetcher=fetcher_for(REACHABLE))
+    evidence = evidence_text("user: look at", {"web": [{"url": "https://seen.example.com/page"}]})
+    out, verdicts = guard.sanitize("See [it](https://seen.example.com/page).", evidence=evidence)
+    assert verdicts[0].verdict == OK
+    assert "https://seen.example.com/page" in out
+
+
+def test_provenance_ignores_case_scheme_www_fragment_and_trailing_slash():
+    guard = LinkGuard(PROV, fetcher=fetcher_for({"https://seen.example.com/page": (200, "HEAD")}))
+    out, _ = guard.sanitize("[a](https://seen.example.com/page#top)",
+                            evidence="Source: HTTP://WWW.Seen.Example.com/Page/")
+    assert "https://seen.example.com/page#top" in out
+
+
+def test_a_seen_host_does_not_vouch_for_an_invented_path_on_it():
+    guard = LinkGuard(PROV, fetcher=fetcher_for({"https://seen.example.com/page/deeper": (200, "HEAD")}))
+    out, _ = guard.sanitize("[a](https://seen.example.com/page/deeper)",
+                            evidence="https://seen.example.com/page")
+    assert "seen.example.com" not in out
+
+
+def test_in_app_routes_are_exempt_from_provenance():
+    guard = LinkGuard(PROV, fetcher=fetcher_for({}))
+    out, verdicts = guard.sanitize(
+        "[quest](/quest/abc123) and [tasks](https://app.example.org/profile/ai-tasks?taskId=1)",
+        evidence="")
+    assert [v.verdict for v in verdicts] == [OK, OK]
+    assert "/quest/abc123" in out and "app.example.org/profile/ai-tasks" in out
+
+
+def test_without_evidence_or_with_the_flag_off_nothing_is_gated():
+    # evidence=None: the caller has no material to offer (a deep worker's output), so exempt.
+    guard = LinkGuard(PROV, fetcher=fetcher_for(REACHABLE))
+    out, _ = guard.sanitize("[a](https://invented.example.com/page)")
+    assert "https://invented.example.com/page" in out
+    # Flag off (the library default): evidence is ignored.
+    off = LinkGuard(LinkPolicy(passes=1), fetcher=fetcher_for(REACHABLE))
+    out, _ = off.sanitize("[a](https://invented.example.com/page)", evidence="nothing")
+    assert "https://invented.example.com/page" in out
+    assert LinkPolicy().require_provenance is False
+    assert LinkPolicy.from_dict({"require_provenance": True}).require_provenance is True
+
+
+def test_a_seen_but_unreachable_link_is_still_stripped():
+    guard = LinkGuard(PROV, fetcher=fetcher_for({"https://seen.example.com/page": (404, "HTTP 404")}))
+    out, verdicts = guard.sanitize("[a](https://seen.example.com/page)",
+                                   evidence="https://seen.example.com/page")
+    assert verdicts[0].verdict == DEAD
+
+
+def test_the_orchestrator_hands_the_turns_own_material_to_the_guard():
+    """End to end: a link from the user's message and one from a gathered read pass; an invented
+    one is stripped. The evidence comes from the run, not from a global."""
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+
+    from .conftest import StubProvider, StubRetrieval
+
+    reply = ("From you: [one](https://seen.example.com/page). Invented: "
+             "[two](https://invented.example.com/page). Mine: [q](/quest/abc).")
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "chit-chat"}],
+                            answer_text=reply)
+    cfg = OrchestratorConfig()
+    cfg.overseer = False
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
+                        registry=ModelRegistry(provider), config=cfg)
+    orch.link_guard_built = True
+    orch.link_guard_instance = LinkGuard(PROV, fetcher=fetcher_for(REACHABLE))
+
+    res = orch.run("please summarize https://seen.example.com/page for me")
+
+    assert "https://seen.example.com/page" in res.text
+    assert "invented.example.com" not in res.text
+    assert "/quest/abc" in res.text
+
+
+def test_a_policy_object_on_the_config_builds_the_guard_without_a_file():
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+
+    from .conftest import StubProvider, StubRetrieval
+
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "x"}], answer_text="hi")
+    cfg = OrchestratorConfig()
+    cfg.link_policy = PROV
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
+                        registry=ModelRegistry(provider), config=cfg)
+    guard = orch.resolve_link_guard()
+    assert guard is not None and guard.policy is PROV

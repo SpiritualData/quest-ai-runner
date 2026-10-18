@@ -29,7 +29,7 @@ from .auxiliary_prompts import (
     VERIFY_RUN_OBSERVATIONS_NOTE,
     VERIFY_WEB_EVIDENCE_NOTE,
 )
-from .link_guard import LinkGuard, build_link_guard
+from .link_guard import LinkGuard, build_link_guard, evidence_text
 from .adapters import (
     STEP_JUDGE,
     STEP_SUMMARIZE,
@@ -336,11 +336,26 @@ class JudgesMixin:
             try:
                 self.link_guard_instance = build_link_guard(
                     self.cfg.link_policy_file or core_settings().link_policy_file,
-                    enabled=self.cfg.link_guard)
+                    enabled=self.cfg.link_guard,
+                    policy=getattr(self.cfg, "link_policy", None))
             except Exception as e:  # noqa: BLE001 -- a bad policy must not break every turn
                 log.warning("Link guard could not be built: %s: %s", type(e).__name__, e)
                 self.link_guard_instance = None
         return self.link_guard_instance
+
+    def link_evidence_for(self, rs: Any, res: Any) -> str:
+        """Everything this turn actually had, as one text, for the link guard's provenance rule.
+
+        The user's message and the conversation, the context the planner and answerer were shown
+        (cards, recalled turns, consumer grounding such as quest data), every observation gathered
+        (reads, greps, web searches, fetched pages), attachments, and any deep output that fed the
+        reply. Read from the run-local namespace, never from a global.
+        """
+        return evidence_text(
+            getattr(rs, "user_message", ""), getattr(rs, "transcript", ""),
+            getattr(rs, "context_view", ""), getattr(rs, "gathered", None),
+            getattr(rs, "attachments", None),
+            [getattr(d, "output", "") for d in (getattr(res, "deep_results", None) or [])])
 
     def write_answer_explanation(self, trace: TurnTrace) -> Optional[Dict[str, Any]]:
         """Write the user-facing "how I got this" payload for a turn that already answered.

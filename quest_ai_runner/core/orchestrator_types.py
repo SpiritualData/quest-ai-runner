@@ -443,6 +443,10 @@ class OrchestratorConfig:
     # paths have nothing to be checked against, so they come back unverified and are stripped.
     # Env: QAR_LINK_POLICY_FILE.
     link_policy_file: str = ""
+    # The same thing built in code: a ``core.link_guard.LinkPolicy``. Wins over ``link_policy_file``
+    # when both are set, so a consumer that derives its routes and origins at runtime does not have
+    # to write a temporary file.
+    link_policy: Optional[Any] = None
 
 
 @dataclass
