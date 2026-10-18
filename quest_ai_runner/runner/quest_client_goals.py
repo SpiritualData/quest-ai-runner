@@ -146,6 +146,24 @@ class GoalsMixin:
             log.warning("update_goal failed for %s: %s", goal_id, e)
             return {}
 
+    def assign_goal(self, goal_id: str, assigned_to_user_id: Optional[str], *,
+                    reason: Optional[str] = None, next_step: Optional[str] = None) -> Dict[str, Any]:
+        """PUT /api/planning/goals/{goal_id}/assign: hand a goal to a quest member (``None`` clears
+        it back to shared).
+
+        The backend authorizes it exactly as it does for the app (anyone who can edit the quest),
+        requires the assignee to be a member of it, notifies the assignee, writes a hand-over
+        update on the goal from ``reason`` and ``next_step`` (the new owner's AI reads it as the
+        goal's latest update), and moves the goal's not-yet-started AI tasks into the new owner's
+        lane. RAISES on refusal: a hand-over that did not happen must never read as done.
+        """
+        body: Dict[str, Any] = {"assigned_to_user_id": assigned_to_user_id}
+        if reason:
+            body["reason"] = reason
+        if next_step:
+            body["next_step"] = next_step
+        return self._request("PUT", f"/api/planning/goals/{goal_id}/assign", body=body) or {}
+
     def set_goal_completed(self, goal_id: str, *, completed: bool = True) -> Dict[str, Any]:
         """POST /api/planning/goals/{goal_id}/complete — tick or untick one goal.
 
@@ -159,6 +177,10 @@ class GoalsMixin:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("set_goal_completed failed for %s: %s", goal_id, e)
             return {}
+
+    def complete_goal(self, goal_id: str, *, completed: bool = True) -> Dict[str, Any]:
+        """Tick or untick a goal: the name the registry's ``complete_goal`` operation wraps."""
+        return self.set_goal_completed(goal_id, completed=completed)
 
     # --- goal creation (a REAL typed Goal, distinct from create_task's AI work item) ----------
 

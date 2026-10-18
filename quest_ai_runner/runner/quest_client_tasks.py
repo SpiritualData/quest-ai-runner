@@ -559,7 +559,9 @@ class TasksMixin:
                     parent_task_id: Optional[str] = None,
                     card_ids: Optional[List[str]] = None,
                     model: Optional[str] = None,
-                    deep_run_model: Optional[str] = None) -> Dict[str, Any]:
+                    deep_run_model: Optional[str] = None,
+                    related_goal_id: Optional[str] = None,
+                    new_goal: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """POST a new queued AI task to /api/assistant-tasks.
 
         ``team_id`` routes the task to a specific team's runner (defaults to the client's
@@ -631,6 +633,15 @@ class TasksMixin:
         is a live member of it: a non-member is a 403, no team at all is a 400. Omit it to keep the
         default executor.
 
+        ``related_goal_id`` names the ONE goal inside the quest (``goal_id``) that this task serves,
+        so the work shows against that goal. A task created with ``parent_task_id`` and no goal of
+        its own inherits its parent's quest and goal on the server. ``new_goal`` is the other way to
+        say what the task serves: the goal is created with the task (a dict with ``title`` and
+        optionally ``assigned_to_user_id``, ``deadline`` as YYYY-MM-DD, ``outcome_id``,
+        ``parent_goal_id`` (default: the goal the parent task served), ``description``,
+        ``criteria``) and the task is linked to it. Send one of the two, not both. The response
+        carries ``spawned_goal`` when a goal was created or reused.
+
         Returns the created task dict (includes its ``id``).
 
         Raises ``QuestApiError`` / ``QuestNotConfigured`` on failure instead of swallowing it:
@@ -675,6 +686,10 @@ class TasksMixin:
             body["model"] = model
         if deep_run_model is not None:
             body["deep_run_model"] = deep_run_model
+        if related_goal_id is not None:
+            body["related_goal_id"] = related_goal_id
+        if new_goal:
+            body["new_goal"] = dict(new_goal)
         return self._request("POST", "/api/assistant-tasks", body=body) or {}
 
     def update_task(self, task_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:

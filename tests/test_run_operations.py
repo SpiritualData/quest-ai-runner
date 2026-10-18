@@ -12,6 +12,7 @@ from .test_tools import make_orch
 from quest_ai_runner.core.tools import ToolContext, ToolRegistry, build_tool_registry
 from quest_ai_runner.core import tools_quest_ops as ops
 from quest_ai_runner.runner.executor_support import AUTOPILOT_WORK_KIND
+from quest_ai_runner.core.tools_quest_work import AUTOPILOT_WORK_PINS
 from quest_ai_runner.runner.run_operations import pinned_operations
 
 @pytest.fixture(autouse=True)
@@ -238,7 +239,7 @@ def deep_brief_for(task, tools):
 
 def test_an_autopilot_batch_is_given_the_asks_and_progress_how_to_without_any_prompt_text():
     brief = deep_brief_for(AUTOPILOT_BATCH, build_tool_registry(CREDS))
-    for name in ops.AUTOPILOT_PINS:
+    for name in ops.AUTOPILOT_PINS + AUTOPILOT_WORK_PINS:
         assert f"- {name} (standard" in brief, name
     assert "-m quest_ai_runner.tools call" in brief and "--kw" in brief
     assert "- create_goal (" not in brief                    # needs a request; not pinned
@@ -260,7 +261,7 @@ def test_a_run_that_names_an_ask_in_its_words_finds_the_operation_through_releva
 
 
 def test_only_autopilot_composed_tasks_are_pinned():
-    assert pinned_operations(AUTOPILOT_BATCH) == ops.AUTOPILOT_PINS
+    assert pinned_operations(AUTOPILOT_BATCH) == ops.AUTOPILOT_PINS + AUTOPILOT_WORK_PINS
     assert pinned_operations(PLAIN_TASK) == ()
     # a person pasting a prior brief into chat is not an autopilot batch (task_kind decides)
     assert pinned_operations({"text": "\n".join(["QAR:CONTEXT"] * 3)}) == ()
