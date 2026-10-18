@@ -62,7 +62,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 log = logging.getLogger(__name__)
 
@@ -123,6 +123,16 @@ class LinkPolicy:
     # a leading ``www.``, fragments and trailing slashes). Off by default: a library consumer that
     # cannot supply the turn's material would otherwise strip every external link.
     require_provenance: bool = False
+    # Optional consumer hook that judges the PARAMETERS of an in-app route that already matched the
+    # table: ``(route_pattern, params) -> verdict``. ``route_pattern`` is the matched pattern as
+    # written in ``routes`` ("/quest/[questId]/chat"); ``params`` maps each bracket name to the
+    # concrete path segment ({"questId": "..."}). A route table only proves a SCREEN exists, not
+    # that the id in the link names something the reader can open; this is where a consumer says so.
+    # Return ``None``, ``True`` or ``"ok"`` to accept; ``False`` or ``"dead"`` to reject with a
+    # default reason; ``"unknown"`` when it could not decide; or a ``(verdict, reason)`` pair to
+    # supply the reason. An exception counts as ``unknown``. It runs on a worker thread and must be
+    # quick. Code-only: it cannot come from a JSON policy file.
+    route_validator: Optional[Callable[[str, Dict[str, str]], Any]] = None
 
     @staticmethod
     def from_dict(data: Dict[str, Any], *, base_dir: Optional[Path] = None) -> "LinkPolicy":
@@ -256,6 +266,26 @@ def route_to_regex(pattern: str) -> re.Pattern:
     return re.compile(rf"^/{body}/?$" if body else r"^/$")
 
 
+def route_to_matcher(pattern: str) -> Tuple[re.Pattern, Tuple[str, ...]]:
+    """Like ``route_to_regex`` but every ``[param]`` and ``[...rest]`` is a capture group, and the
+    bracket names come back in order, so a matched path can be turned into ``{name: value}``."""
+    parts: List[str] = []
+    names: List[str] = []
+    for seg in pattern.strip("/").split("/"):
+        if not seg:
+            continue
+        if seg.startswith("[...") and seg.endswith("]"):
+            parts.append(r"(.+)")
+            names.append(seg[4:-1])
+        elif seg.startswith("[") and seg.endswith("]"):
+            parts.append(r"([^/]+)")
+            names.append(seg[1:-1])
+        else:
+            parts.append(re.escape(seg))
+    body = "/".join(parts)
+    return re.compile(rf"^/{body}/?$" if body else r"^/$"), tuple(names)
+
+
 
 # ---------------------------------------------------------------------------------------------
 # Provenance: was this address in material the turn actually had?
@@ -264,13 +294,44 @@ def route_to_regex(pattern: str) -> re.Pattern:
 EVIDENCE_URL_RE = re.compile(r"(?:https?://|www\.)[^\s<>()\[\]\"'`]+", re.IGNORECASE)
 
 
+GOOGLE_DOC_HOSTS = ("docs.google.com", "drive.google.com", "sheets.google.com", "slides.google.com")
+GOOGLE_DOC_ID_RES = (
+    re.compile(r"/d/([\w-]{10,})"),                 # /document/d/<ID>/edit, /file/d/<ID>/view, /d/<ID>
+    re.compile(r"/folders/([\w-]{10,})"),           # drive folders
+    re.compile(r"[?&]id=([\w-]{10,})"),             # drive.google.com/open?id=<ID>
+)
+
+
+def google_document_key(url_no_scheme: str) -> Optional[str]:
+    """For a Google Docs, Sheets, Slides, Forms or Drive address, a key made of the DOCUMENT ID, so
+    ``/d/<ID>/edit``, ``/d/<ID>``, ``/d/<ID>/view?usp=sharing`` and ``/open?id=<ID>`` all match each
+    other. None for any other address."""
+    host = url_no_scheme.split("/", 1)[0].split("?", 1)[0]
+    if host not in GOOGLE_DOC_HOSTS:
+        return None
+    rest = url_no_scheme[len(host):]
+    for rx in GOOGLE_DOC_ID_RES:
+        m = rx.search(rest)
+        if m:
+            return "google-document:" + m.group(1)
+    return None
+
+
 def normalize_url_for_match(url: str) -> str:
-    """The comparison key for provenance: case, scheme, ``www.``, fragment and trailing slash fold."""
-    t = (url or "").strip().strip("<>").lower()
-    t = re.sub(r"^https?://", "", t)
-    t = re.sub(r"^www\.", "", t)
+    """The comparison key for provenance: case, scheme, ``www.``, fragment and trailing slash fold.
+
+    A Google document (Docs, Sheets, Slides, Forms, Drive) is keyed by its document id alone, since
+    the same document is written ``/edit``, ``/view``, ``/preview`` or bare depending on who shared it.
+    The id is case sensitive, so it is taken from the original text, not the lowered copy."""
+    raw = (url or "").strip().strip("<>")
+    t = re.sub(r"^https?://", "", raw, flags=re.IGNORECASE)
+    t = re.sub(r"^www\.", "", t, flags=re.IGNORECASE)
     t = t.split("#", 1)[0]
-    return t.rstrip("/")
+    head = t.split("/", 1)[0].lower()
+    doc = google_document_key(head + t[len(head):])
+    if doc:
+        return doc
+    return t.lower().rstrip("/")
 
 
 def evidence_text(*sources: Any) -> str:
@@ -325,6 +386,7 @@ class LinkGuard:
         self.policy = policy or LinkPolicy()
         self.fetch = fetcher or http_probe
         self.routes = [route_to_regex(r) for r in self.policy.routes]
+        self.route_table = [(r, *route_to_matcher(r)) for r in self.policy.routes]
         self.rewrites = [(re.compile(m), r) for m, r in self.policy.rewrites]
         # url -> (verdict, reason, checked_at). Shared across turns for a long-lived process.
         self.cache: Dict[str, Tuple[str, str, float]] = {}
@@ -412,9 +474,25 @@ class LinkGuard:
         if not self.routes:
             return LinkVerdict(original, UNKNOWN, "no route table configured", replaced)
         bare = path.split("#", 1)[0].split("?", 1)[0] or "/"
-        for rx in self.routes:
-            if rx.match(bare):
+        for pattern, rx, names in self.route_table:
+            m = rx.match(bare)
+            if not m:
+                continue
+            validator = self.policy.route_validator
+            if validator is None or not names:
                 return LinkVerdict(original, OK, "matches an app route", replaced)
+            params = {n: unquote(v) for n, v in zip(names, m.groups())}
+            try:
+                answer = validator(pattern, params)
+            except Exception as e:  # noqa: BLE001 -- a failing hook must not break the reply
+                log.warning("link guard: route_validator failed for %s: %s: %s",
+                            pattern, type(e).__name__, e)
+                return LinkVerdict(original, UNKNOWN, "could not check this page", replaced)
+            verdict, reason = interpret_route_verdict(answer)
+            if verdict == OK:
+                return LinkVerdict(original, OK, reason or "matches an app route", replaced)
+            return LinkVerdict(original, verdict, reason, replaced,
+                               note=f"(link removed: {reason})")
         return LinkVerdict(original, DEAD, "no such screen in this app", replaced)
 
     def check_external(self, url: str) -> Tuple[str, str]:
@@ -588,6 +666,23 @@ class LinkGuard:
             return m.group(0)
 
         return SCAN_RE.sub(replace, text), changed
+
+
+def interpret_route_verdict(answer: Any) -> Tuple[str, str]:
+    """Turn a ``route_validator`` answer into ``(verdict, reason)``."""
+    if isinstance(answer, tuple) and len(answer) == 2:
+        verdict, reason = str(answer[0] or "").lower(), str(answer[1] or "")
+    elif answer is None or answer is True:
+        return OK, ""
+    elif answer is False:
+        verdict, reason = DEAD, ""
+    else:
+        verdict, reason = str(answer).lower(), ""
+    if verdict not in (OK, DEAD, UNKNOWN):
+        verdict = UNKNOWN
+    if verdict != OK and not reason:
+        reason = "not a page you can open" if verdict == DEAD else "could not check this page"
+    return verdict, reason
 
 
 def looks_like_url(s: str) -> bool:

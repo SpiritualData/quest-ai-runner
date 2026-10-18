@@ -600,3 +600,134 @@ def test_a_policy_object_on_the_config_builds_the_guard_without_a_file():
                         registry=ModelRegistry(provider), config=cfg)
     guard = orch.resolve_link_guard()
     assert guard is not None and guard.policy is PROV
+
+
+# --- provenance for deep runs: model output is never evidence ----------------------------------
+
+def deep_turn(runner, message="show me my docs"):
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+
+    from .test_deep_run_status_honesty import deep_plan
+    from .test_per_goal_context_iteration import ScriptedProvider
+    from .conftest import StubRetrieval
+
+    provider = ScriptedProvider(plans=[deep_plan()], verdicts=[{"met": True}])
+    cfg = OrchestratorConfig(deep_model_ladder=["haiku", "sonnet", "opus"])
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
+                        registry=ModelRegistry(provider), deep_runner=runner, config=cfg)
+    orch.link_guard_built = True
+    orch.link_guard_instance = LinkGuard(
+        LinkPolicy(passes=1, require_provenance=True),
+        fetcher=fetcher_for({"https://seen.example.com/a": (200, "HEAD"),
+                             "https://invented.example.com/b": (200, "HEAD")}))
+    return orch.run(message)
+
+
+def test_an_in_process_runners_invented_link_is_stripped_and_cannot_vouch_for_itself():
+    from quest_ai_runner.core.adapters import DeepResult
+
+    from .test_deep_run_status_honesty import ScriptedRunner
+
+    out = ("Docs: [seen](https://seen.example.com/a) and [made up](https://invented.example.com/b)")
+    runner = ScriptedRunner([DeepResult(met=True, output=out,
+                                        read_evidence="row: https://seen.example.com/a")],
+                            uses_model=False)
+    res = deep_turn(runner)
+    text = res.deep_results[0].output
+    assert res.deep_results[0].model_written is True
+    assert "https://seen.example.com/a" in text      # what the runner itself read survives
+    assert "invented.example.com" not in text        # its own words never vouch for a link
+
+
+def test_a_real_claude_code_workers_output_keeps_its_exemption():
+    from quest_ai_runner.core.adapters import DeepResult
+
+    from .test_deep_run_status_honesty import ScriptedRunner
+
+    runner = ScriptedRunner([DeepResult(met=True, output="[b](https://invented.example.com/b)")])
+    res = deep_turn(runner)
+    assert res.deep_results[0].model_written is False
+    assert "https://invented.example.com/b" in res.deep_results[0].output
+
+
+def test_link_evidence_excludes_model_written_deep_output_but_keeps_what_it_read():
+    from types import SimpleNamespace
+
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator_judges import JudgesMixin
+
+    res = SimpleNamespace(deep_results=[
+        DeepResult(met=True, output="https://model.example.com/x", model_written=True,
+                   read_evidence="https://read.example.com/y"),
+        DeepResult(met=True, output="https://worker.example.com/z"),
+    ])
+    rs = SimpleNamespace(user_message="u", transcript="", context_view="", gathered=None,
+                         attachments=None, rep_preamble="persona https://persona.example.com/p",
+                         context_meta={"link_evidence": ["https://extra.example.com/e"]})
+    text = JudgesMixin.link_evidence_for(SimpleNamespace(), rs, res)
+    assert "model.example.com" not in text
+    for kept in ("read.example.com", "worker.example.com", "persona.example.com", "extra.example.com"):
+        assert kept in text
+
+
+# --- google documents match by document id ------------------------------------------------------
+
+@pytest.mark.parametrize("seen,written", [
+    ("https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUv/edit?usp=sharing",
+     "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUv"),
+    ("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUv/edit#gid=0",
+     "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUv/view"),
+    ("https://docs.google.com/presentation/d/1AbCdEfGhIjKlMnOpQrStUv/edit",
+     "https://docs.google.com/presentation/d/1AbCdEfGhIjKlMnOpQrStUv/"),
+    ("https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUv/view",
+     "https://drive.google.com/open?id=1AbCdEfGhIjKlMnOpQrStUv"),
+])
+def test_a_google_document_matches_by_id_whatever_the_suffix(seen, written):
+    guard = LinkGuard(PROV, fetcher=fetcher_for({written: (200, "HEAD")}))
+    out, verdicts = guard.sanitize(f"[doc]({written})", evidence=seen)
+    assert verdicts[0].verdict == OK and written in out
+
+
+def test_a_different_google_document_id_is_not_vouched_for():
+    written = "https://docs.google.com/document/d/ZZZZZZZZZZZZZZZZZZZZZZ/edit"
+    guard = LinkGuard(PROV, fetcher=fetcher_for({written: (200, "HEAD")}))
+    out, _ = guard.sanitize(f"[doc]({written})",
+                            evidence="https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUv/edit")
+    assert "ZZZZ" not in out
+
+
+# --- route parameter validation hook ------------------------------------------------------------
+
+def policy_with(validator):
+    return LinkPolicy(routes=("/quest/[questId]", "/quest/[questId]/chat", "/profile/ai-tasks"),
+                      origins=("app.example.org",), passes=1, route_validator=validator)
+
+
+def test_route_validator_receives_pattern_and_params_and_can_reject():
+    seen = []
+
+    def validator(pattern, params):
+        seen.append((pattern, dict(params)))
+        return None if params["questId"] == "mine" else ("dead", "not a page you can open")
+
+    guard = LinkGuard(policy_with(validator), fetcher=fetcher_for({}))
+    out, verdicts = guard.sanitize(
+        "[a](/quest/mine) [b](https://app.example.org/quest/theirs/chat) [t](/profile/ai-tasks)")
+    assert {v.url: v.verdict for v in verdicts} == {
+        "/quest/mine": OK, "https://app.example.org/quest/theirs/chat": DEAD,
+        "/profile/ai-tasks": OK}
+    assert "/quest/mine" in out and "theirs" not in out
+    assert "not a page you can open" in out
+    assert ("/quest/[questId]", {"questId": "mine"}) in seen
+    assert ("/quest/[questId]/chat", {"questId": "theirs"}) in seen
+    assert all(p != "/profile/ai-tasks" for p, _ in seen)   # no params, nothing to validate
+
+
+def test_route_validator_failure_is_unknown_and_unmatched_routes_never_reach_it():
+    def boom(pattern, params):
+        raise RuntimeError("db down")
+
+    guard = LinkGuard(policy_with(boom), fetcher=fetcher_for({}))
+    _, verdicts = guard.sanitize("[a](/quest/x) [b](/nope/x)")
+    assert {v.url: v.verdict for v in verdicts} == {"/quest/x": UNKNOWN, "/nope/x": DEAD}

@@ -147,7 +147,14 @@ class RunLoopMixin:
                             res.link_checks.extend(v.to_dict() for v in _lv)
                         for _d in res.deep_results:
                             if getattr(_d, "output", None):
-                                _d.output, _lv = guard.sanitize(_d.output)
+                                # A real Claude Code worker's output is exempt (what it read is
+                                # invisible to the brain). An in-process runner's output is model
+                                # writing: judged against the turn's evidence plus what that runner
+                                # itself read.
+                                _d_evidence = None
+                                if getattr(_d, "model_written", False) and guard.policy.require_provenance:
+                                    _d_evidence = self.link_evidence_for(rs, res)
+                                _d.output, _lv = guard.sanitize(_d.output, evidence=_d_evidence)
                                 res.link_checks.extend(v.to_dict() for v in _lv)
                         _stripped = [v for v in res.link_checks if v.get("verdict") != "ok"]
                         if _stripped:

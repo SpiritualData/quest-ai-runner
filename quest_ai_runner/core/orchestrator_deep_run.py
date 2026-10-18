@@ -637,6 +637,10 @@ class DeepRunMixin:
                               resume_session_id=resume_session, max_turns=attempt_turns)
                 if model_applies:
                     res.model = res.model or run_model
+                # A runner that does not run the deep-model ladder answers in-process with a model of
+                # its own, so its words are model-written (the link guard's provenance rule needs to
+                # know; a real Claude Code worker's output keeps its exemption).
+                res.model_written = not model_applies
                 if emit is not None and res.model and not res.launch_failed:
                     # WHICH model this attempt ran on: the tier it was asked for and the full id the
                     # CLI resolved it to, as structured data the task feed can show per attempt.

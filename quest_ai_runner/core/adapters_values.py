@@ -212,6 +212,16 @@ class DeepResult:
     # model on it (a stronger model was never the problem). Structural, set by the runner from the
     # process outcome and its reported usage, never inferred from the wording of the output.
     launch_failed: bool = False
+    # The words in ``output`` were WRITTEN BY A MODEL answering in-process (a runner that declares
+    # ``uses_deep_model = False``), not produced by a Claude Code worker that went and read things.
+    # Set by the orchestrator from the runner it dispatched to, never by a runner. The link guard's
+    # provenance rule reads it: such output is never evidence, and its links are judged like the
+    # reply's own.
+    model_written: bool = False
+    # What a model-written run itself READ to produce ``output``, as plain text: the results of the
+    # queries it executed, not anything it wrote. The only part of such a run that may vouch for an
+    # address. A runner that cannot carry it leaves it empty.
+    read_evidence: str = ""
     # The model this run actually executed with, when known. Set by the goal loop from the ladder
     # rung it dispatched to (``core/orchestrator.py``'s ``run_one``), not by the runner itself, so
     # every runner gets this for free; a runner that resolves its own model (or a future rung that

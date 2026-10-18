@@ -43,12 +43,20 @@ Reachable is not real: a model can invent an address that happens to resolve. Se
 `ok` only if it is both reachable AND present in material this turn actually had: the user's
 messages and the conversation, the context shown to the planner and answerer (cards, recalled turns,
 the consumer's grounding such as quest data), every gathered observation (reads, greps, web searches,
-`web_page` fetches), attachments, and deep output that fed the reply. Comparison ignores case, scheme,
-a leading `www.`, fragments and trailing slashes, and a query string must match. A host that was seen
+`web_page` fetches), attachments, and the persona preamble. Comparison ignores case, scheme,
+a leading `www.`, fragments and trailing slashes, and a query string must match. A Google Docs,
+Sheets, Slides, Forms or Drive address is compared by its document id, so `/d/<ID>/edit`, `/d/<ID>`,
+`/view` and `open?id=<ID>` all match each other. A host that was seen
 does not vouch for an invented path on it. An unseen link is never fetched; it is stripped with
 "I did not find this address in anything I read". In-app links (route table), `mailto:`, `tel:` and
-declared schemes are exempt. A deep worker's own output is exempt too, since what that worker read is
-not visible to the brain (reachability and the route table still apply). The orchestrator builds the
+declared schemes are exempt. **Model output is never evidence.** A real Claude Code deep worker's
+output is exempt from the rule, since what that worker read is not visible to the brain
+(reachability and the route table still apply), and it counts as evidence. A runner that answers
+in-process (`uses_deep_model = False`) is model-written: `DeepResult.model_written` is set by the
+orchestrator, its output is judged against the turn's evidence plus `DeepResult.read_evidence` (what
+that runner itself read, such as the results of the queries it executed), and its output never
+vouches for anything. A consumer can add material the turn had that the run does not hold (the
+whole user history past a transcript cap, pending proposals) as `context_meta["link_evidence"]`. The orchestrator builds the
 evidence from the run itself (`link_evidence_for`) and passes it to `sanitize(text, evidence=...)`.
 A consumer that builds its policy in code sets `OrchestratorConfig.link_policy` (a `LinkPolicy`),
 which wins over `link_policy_file`.
@@ -56,6 +64,14 @@ which wins over `link_policy_file`.
 **Unverified is treated like dead on purpose.** A link nobody can stand behind is not worth sending,
 and a short honest note beats a dead tap. The author's own label survives as plain text, so the
 sentence still reads; only the address is gone.
+
+## Checking the ids in an in-app link
+
+A route table proves a screen exists, not that `/quest/<id>` names something the reader can open. Set
+`LinkPolicy.route_validator` (code only) to a callable `(route_pattern, params) -> verdict`, called
+for a matched route that has bracket parameters, with the pattern as written in `routes` and the
+concrete values (`{"questId": "..."}`). Return `None`/`True`/`"ok"` to keep the link, `False`/`"dead"`
+or `("dead", "reason")` to strip it, `"unknown"` when undecided. A raising validator is `unknown`.
 
 ## Multiple passes, which is the part that matters
 

@@ -350,14 +350,28 @@ class JudgesMixin:
 
         The user's message and the conversation, the context the planner and answerer were shown
         (cards, recalled turns, consumer grounding such as quest data), every observation gathered
-        (reads, greps, web searches, fetched pages), attachments, and any deep output that fed the
-        reply. Read from the run-local namespace, never from a global.
+        (reads, greps, web searches, fetched pages) and attachments. Read from the run-local
+        namespace, never from a global.
+
+        MODEL OUTPUT IS NEVER EVIDENCE: a deep run's output counts only when a real Claude Code
+        worker wrote it (it went and read things); the output of an in-process runner is model
+        writing and is left out, because an invented link would then vouch for itself. What such a
+        runner itself READ (``DeepResult.read_evidence``, its executed query results) does count.
+        The persona preamble is the consumer's own text and counts. A consumer adds material the
+        turn had that is in none of those (the whole user history past a transcript cap, pending
+        proposals, file sources) as ``context_meta["link_evidence"]`` (a string or list of strings).
         """
+        deep_text: List[str] = []
+        for d in (getattr(res, "deep_results", None) or []):
+            if getattr(d, "model_written", False):
+                deep_text.append(getattr(d, "read_evidence", "") or "")
+            else:
+                deep_text.append(getattr(d, "output", "") or "")
         return evidence_text(
             getattr(rs, "user_message", ""), getattr(rs, "transcript", ""),
             getattr(rs, "context_view", ""), getattr(rs, "gathered", None),
-            getattr(rs, "attachments", None),
-            [getattr(d, "output", "") for d in (getattr(res, "deep_results", None) or [])])
+            getattr(rs, "attachments", None), deep_text, getattr(rs, "rep_preamble", ""),
+            (getattr(rs, "context_meta", None) or {}).get("link_evidence"))
 
     def write_answer_explanation(self, trace: TurnTrace) -> Optional[Dict[str, Any]]:
         """Write the user-facing "how I got this" payload for a turn that already answered.
