@@ -355,7 +355,8 @@ class DecisionsSource(_BaseSource):
     judged.
     """
     name = "decisions"
-    describes = "asks sent to people on this quest, still open or answered since the last look"
+    describes = ("asks sent to people on this quest: still open, answered since the last look, or "
+                 "answered and waiting for the AI to act")
     judge_relevance = False
     tracks_asks = False
 
@@ -377,8 +378,15 @@ class DecisionsSource(_BaseSource):
         out: List[ContextUpdate] = []
         for row in opens[:MAX_OPEN_PER_SOURCE]:
             out.append(self._open_update(row, where))
+        # Answered with "don't act yet" and not acted on since: owed action however old, so offered
+        # on every look (first look included) until Quest marks it acted.
+        waiting = [r for r in settled if _awaits_ai_action(r)][:MAX_AWAITING_ACTION]
+        for row in waiting:
+            out.append(self._awaiting_action_update(row, where))
         if not request.first_look:
             for row in settled:
+                if _awaits_ai_action(row):
+                    continue                   # offered above, as owed action
                 when = _as_utc(row.get("resolved_at"))
                 if when and request.since and when <= request.since:
                     continue                   # resolved before the last look: already seen
@@ -409,6 +417,36 @@ class DecisionsSource(_BaseSource):
         )
 
     @staticmethod
+    def _awaiting_action_update(row: Dict[str, Any], where: str) -> ContextUpdate:
+        summary = _clip(row.get("summary") or "a decision", 200)
+        resolution = str(row.get("resolution") or "").strip() or "answered"
+        response = str(row.get("response_text") or "").strip()
+        answerer = str(row.get("resolved_by_name") or row.get("assignee_name") or "").strip() \
+            or "The person"
+        if _has_parked_action(row):
+            respond = ("they approved a prepared action, which Quest runs itself when the queue is "
+                       "run; do not perform it yourself, plan around it")
+        else:
+            respond = ("act on this answer in this run, together with any other answers waiting "
+                       "on this quest; do not ask it again")
+        return ContextUpdate(
+            source="decisions",
+            kind="answered ask, not yet acted on",
+            item_id=str(row.get("decision_id") or ""),
+            title=(f'{answerer} answered "{_clip(summary, 100)}" with {resolution} and asked the '
+                   "AI to hold off until they had answered the rest; it is waiting for you to act"),
+            body=response or resolution,
+            verbatim=bool(response),
+            excerpt=response,
+            author=str(row.get("resolved_by_name") or "").strip(),
+            occurred_at=_as_utc(row.get("resolved_at")),
+            location=where,
+            needs_response=not _has_parked_action(row),
+            how_to_respond=respond,
+            raw=dict(row),
+        )
+
+    @staticmethod
     def _resolved_update(row: Dict[str, Any], where: str, when: Optional[datetime]) -> ContextUpdate:
         asker = str(row.get("requester_name") or "").strip() or "Someone"
         summary = _clip(row.get("summary") or "a decision", 200)
@@ -432,6 +470,24 @@ class DecisionsSource(_BaseSource):
             needs_response=False,
             raw=dict(row),
         )
+
+
+# Answered asks still waiting on the AI, offered per look. Generous on purpose: the point of
+# deferring is answering a batch (ten asks on one quest) and having them read together.
+MAX_AWAITING_ACTION = 25
+
+
+def _awaits_ai_action(row: Dict[str, Any]) -> bool:
+    """Resolved by a person who chose "don't have my AI act on it yet", and not acted on since.
+    Quest sets ``ai_action_status`` to "pending" for these and flips it once a run acts."""
+    return str(row.get("ai_action_status") or "").strip().lower() == "pending" \
+        and str(row.get("status") or "").strip().lower() != "open"
+
+
+def _has_parked_action(row: Dict[str, Any]) -> bool:
+    """An approved ask carrying a prepared action Quest itself runs (an email, a field edit), not
+    yet run; Quest stamps ``ai_action_parked`` on the row. A run must not redo it by hand."""
+    return bool(row.get("ai_action_parked")) and not row.get("executed")
 
 
 def _decisions_explanation(total: int, offered: int) -> str:

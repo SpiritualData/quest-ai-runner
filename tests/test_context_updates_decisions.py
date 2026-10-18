@@ -191,3 +191,41 @@ def test_decisions_reach_every_quest_without_being_asked_for():
 
     assert [u.item_id for u in _rows(bundle)] == ["d1"]
     assert client.calls == ["q1"]
+
+
+def test_an_answer_waiting_for_the_ai_is_offered_on_every_look_as_owed_action():
+    """Answered with "Have my AI act on it now" unticked: Quest marks it pending until a run acts.
+    It is owed action however old, so neither the watermark nor a first look hides it."""
+    row = _decision(status="resolved", resolution="decline", response_text="Use the smaller venue.",
+                    resolved_by_name="Sam", resolved_at=_iso(days_ago=3), ai_action_status="pending")
+    marks = Watermarks(None)
+    marks.set("q1", "decisions", NOW - timedelta(hours=1))
+
+    for engine in (_engine(DecisionsClient([row]), watermarks=marks),
+                   _engine(DecisionsClient([row]))):
+        rows = _rows(engine.collect({"quest_id": "q1"}, card_id="q1"))
+        assert [u.item_id for u in rows] == ["d1"]
+        assert rows[0].kind == "answered ask, not yet acted on"
+        assert rows[0].needs_response is True
+        assert rows[0].body == "Use the smaller venue."
+        assert "act on this answer" in rows[0].how_to_respond
+
+
+def test_an_approved_prepared_action_waiting_is_shown_but_not_to_be_done_by_hand():
+    row = _decision(status="resolved", resolution="approve", resolved_at=_iso(days_ago=1),
+                    ai_action_status="pending", ai_action_parked=True)
+
+    rows = _rows(_engine(DecisionsClient([row])).collect({"quest_id": "q1"}, card_id="q1"))
+
+    assert rows[0].needs_response is False
+    assert "do not perform it yourself" in rows[0].how_to_respond
+
+
+def test_an_answer_the_ai_already_acted_on_is_ordinary_history():
+    row = _decision(status="resolved", resolution="decline", resolved_at=_iso(days_ago=1),
+                    ai_action_status="acted")
+    marks = Watermarks(None)
+    marks.set("q1", "decisions", NOW - timedelta(hours=1))
+
+    assert _rows(_engine(DecisionsClient([row]), watermarks=marks).collect(
+        {"quest_id": "q1"}, card_id="q1")) == []
