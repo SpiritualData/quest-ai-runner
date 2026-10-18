@@ -220,6 +220,31 @@ class ContextEntriesMixin:
             log.warning("get_insights_collection failed: %s", e)
             return {}
 
+    def list_quest_insights(self, quest_id: str, limit: int = 10,
+                            include_acted: bool = False) -> Dict[str, Any]:
+        """GET /api/data/insights/by-quest -- the latest insights ASSIGNED to one quest.
+
+        An insight carries the quest ids it was assigned to when it was captured, so this is the
+        only insights read context assembly makes: the quest in front of the run, never the
+        person's whole backlog. Returns ``{"collection_id", "has_quests_field", "items": [...]}``,
+        newest first, already filtered to that quest and (unless ``include_acted``) to unacted
+        ones. Items are entry dicts shaped like ``list_collection_entries`` items (camelCase or
+        snake_case). An older backend without the route answers 404 and a person whose collection
+        has no quests field gets an empty list; both read as "no insights". Returns {} on any
+        error, including a blank ``quest_id``.
+        """
+        if not str(quest_id or "").strip():
+            return {}
+        try:
+            self._require()
+            resp = self._request("GET", "/api/data/insights/by-quest",
+                                 params={"quest_id": quest_id, "limit": int(limit),
+                                         "include_acted": "true" if include_acted else "false"}) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_quest_insights failed for quest %s: %s", quest_id, e)
+            return {}
+
     def add_context_pref(self, user_id: str, pref: str, *,
                          team_id: Optional[str] = None, source: str = "auto") -> bool:
         """POST /api/teams/{team_id}/members/{user_id}/context-prefs -- teach a rep where it works.

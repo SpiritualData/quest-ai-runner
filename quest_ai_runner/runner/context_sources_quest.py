@@ -708,59 +708,56 @@ class ReflectionsSource(_BaseSource):
 
 
 class InsightsSource(_BaseSource):
-    """The person's unacted captures (``runner.insights``), ONE UPDATE PER CAPTURE.
+    """The insights assigned to THIS quest (``runner.insights``), ONE UPDATE PER CAPTURE.
 
-    One row each, and that is the whole design: the relevance judge decides on each capture on its
-    own, the receipt answers for each capture in the person's own words, and a card that names
-    ``categories`` gets the captures the person tagged that way flagged as waiting on an answer
-    ("is this one yours?"). Delivered as one block, none of that is possible: a judge shown the
-    block as a single item either drops every capture for this card or passes every one through,
-    and a receipt line for "the captures" tells nobody whether THEIR capture reached the run.
+    Quest-scoped: the source asks the backend for the latest unacted insights assigned to the
+    card's quest (a card of kind ``quest``, or any card whose row names a ``quest_id``) and reads
+    nothing else. A card with no quest gets no insights. Insights are assigned to a quest when they
+    are captured, so every row is relevant to the card and none is put to the relevance judge or
+    held back as unsure.
 
-    The rows render through the composer's ``insights`` slot inside the same framing the block has
-    always carried (``runner.insights.block_header`` / ``BLOCK_FOOTER``), so a brief reads as it did.
-
-    Category matching is case-insensitive and substring-based on the PERSON's own tags. That is a
-    string rule, and it is allowed because it reads their words against their words: the card's
-    spec was written to match the tags they type. Nothing matches model output, and a tag never
-    gates delivery.
+    One row each: the receipt answers for each capture in the person's own words. The rows render
+    through the composer's ``insights`` slot inside the framing the block carries
+    (``runner.insights.block_header`` / ``BLOCK_FOOTER``). The person's category tags are shown
+    beside each row as their own words and never decide anything.
     """
     name = "insights"
-    describes = "captures the person made and has not acted on (optionally by category)"
-    # The one source that reaches every card with material about all the others. Reflections are
-    # exempt on purpose: there is exactly one, it is the person's steer for the day rather than an
-    # item to action, and asking a model whether someone's own reflection is "relevant" to their
-    # own work is a judgment with no upside.
-    judge_relevance = True
+    describes = "the insights assigned to this quest that the person has not acted on"
+    judge_relevance = False
 
     slot = "insights"
 
+    @staticmethod
+    def _quest_id(request: CollectRequest) -> str:
+        if (request.card_kind or "") == "quest" and request.card_id:
+            return str(request.card_id)
+        card = request.card or {}
+        return str(card.get("quest_id") or card.get("questId") or "")
+
     def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
-        from .insights import collect_unacted_insights
-        wanted = [str(c).strip().lower()
-                  for c in (request.opt("categories") or []) if str(c).strip()]
-        # User-scoped, so read once per engine and narrowed per card in memory -- the same
-        # arrangement ``AutopilotPass`` had, kept because a pass over five quests should not make
-        # five identical round trips.
-        ctx = request.cache.get("insights")
+        from .insights import BLOCK_FOOTER, block_header, collect_quest_insights
+        quest_id = self._quest_id(request)
+        if not quest_id:
+            return []
+        # Cached per quest within one engine window: the cache is shared across cards, so a bare
+        # "insights" key would hand one quest's captures to the next card.
+        key = f"insights:{quest_id}:{request.since.isoformat() if request.since else ''}"
+        ctx = request.cache.get(key)
         if ctx is None:
-            ctx = collect_unacted_insights(request.client, now=request.now)
-            request.cache["insights"] = ctx
-        narrowed = ctx.narrow_to(request.since) if hasattr(ctx, "narrow_to") else ctx
-        rows = list(getattr(narrowed, "insights", None) or [])
+            ctx = collect_quest_insights(request.client, quest_id, since=request.since,
+                                         now=request.now)
+            request.cache[key] = ctx
+        rows = list(getattr(ctx, "insights", None) or [])
         if not rows:
             return []
-        from .insights import BLOCK_FOOTER, block_header
-        frame = (block_header(getattr(narrowed, "since", None),
-                              getattr(narrowed, "window_days", 14)), BLOCK_FOOTER)
+        frame = (block_header(getattr(ctx, "since", None),
+                              getattr(ctx, "window_days", 14)), BLOCK_FOOTER)
         out: List[ContextUpdate] = []
         for row in rows:
             text = str(getattr(row, "text", "") or "").strip()
             if not text:
                 continue
             cats = [str(c) for c in (getattr(row, "categories", None) or [])]
-            low = [c.lower() for c in cats]
-            tagged_for_this = bool(wanted) and any(w in c or c in w for w in wanted for c in low)
             when = _as_utc(getattr(row, "created_at", None))
             date = when.strftime("%Y-%m-%d") if when else "an unrecorded date"
             tags = f" tagged {', '.join(cats)}" if cats else " (untagged)"
@@ -768,10 +765,7 @@ class InsightsSource(_BaseSource):
                 source=self.name,
                 kind="capture",
                 item_id=str(getattr(row, "entry_id", "") or ""),
-                title=(f"They tagged this {', '.join(cats)} and have not acted on it"
-                       if tagged_for_this else "They captured this and have not acted on it"),
-                # The row as the block always rendered it (date, tags, their words), so the slot
-                # reads exactly as before with a ref in front of each row.
+                title="They captured this for this quest and have not acted on it",
                 body=f"[{date}]{tags}\n      {text}",
                 verbatim=True,  # their capture, as they wrote it
                 excerpt=text,
@@ -779,12 +773,10 @@ class InsightsSource(_BaseSource):
                 location="Quest insights",
                 slot=self.slot,
                 slot_frame=frame,
-                how_to_respond=("act on it and say so, or say why it does not apply here"
-                                if tagged_for_this else
-                                "act on it and say so in your result, or pass over it"),
-                needs_response=tagged_for_this,
+                how_to_respond="act on it and say so in your result, or say why it cannot be acted on yet",
+                needs_response=True,
                 summary=f"Unacted insight from {date}{tags}: {_clip(text, 220)}",
-                raw={"categories": cats, "promoted_by": wanted if tagged_for_this else []},
+                raw={"categories": cats},
             ))
         return out
 

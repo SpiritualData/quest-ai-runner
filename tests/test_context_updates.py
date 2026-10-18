@@ -411,21 +411,23 @@ def test_a_default_consumer_gets_an_engine_whose_stamps_persist_beside_its_state
     assert (tmp_path / "qar_state_context_watermarks.json").exists()
 
 
-# --- promotion, not filtering (the rule that keeps a tag from gating delivery) -----------------
+# --- insights are scoped to the card's quest ----------------------------------------------------
 
 class InsightsClient(BareClient):
-    """The two reads ``runner.insights`` makes, and nothing else."""
+    """Only the by-quest read ``runner.insights`` makes. ``items_by_quest`` maps quest id -> items."""
 
-    def __init__(self, entries):
-        self.entries = list(entries)
-        self.entry_calls = 0
+    def __init__(self, items_by_quest):
+        self.items_by_quest = dict(items_by_quest)
+        self.calls = []
 
-    def get_insights_collection(self):
-        return {"id": "coll_1"}
+    @property
+    def entry_calls(self):
+        return len(self.calls)
 
-    def list_collection_entries(self, collection_id, *, page=0, limit=50):
-        self.entry_calls += 1
-        return {"items": self.entries if page == 0 else [], "pagination": {"has_next": False}}
+    def list_quest_insights(self, quest_id, limit=10, include_acted=False):
+        self.calls.append(quest_id)
+        return {"collection_id": "coll_1", "has_quests_field": True,
+                "items": list(self.items_by_quest.get(quest_id, []))}
 
 
 def _capture(entry_id, text, categories):
@@ -433,52 +435,85 @@ def _capture(entry_id, text, categories):
             "fieldValues": {"insight": text, "acted_on": False, "categories": categories}}
 
 
-def test_every_capture_is_its_own_row_and_a_tag_only_flags_it():
-    """One row per capture, so the judge decides on each and the receipt answers for each.
-    A category the card names flags the captures tagged that way; it never gates the others."""
-    client = InsightsClient([
+def test_every_capture_is_its_own_row_and_every_row_is_relevant_to_the_quest():
+    """One row per capture so the receipt answers for each. They were assigned to this quest, so
+    every row needs a response whatever its tags say."""
+    client = InsightsClient({"q1": [
         _capture("e1", "The method chapter has to come first", ["PhD"]),
         _capture("e2", "Batch the errands into one trip", ["home"]),
-    ])
-    bundle = _engine(client).collect(
-        {"context_sources": [{"source": "insights", "categories": ["phd"]}]}, card_id="q1")
+    ]})
+    bundle = _engine(client).collect({"context_sources": ["insights"]}, card_id="q1")
 
     rows = {u.item_id: u for u in bundle.updates}
-    assert set(rows) == {"e1", "e2"}                       # the untagged one is delivered too
-    assert rows["e1"].needs_response is True and "tagged this PhD" in rows["e1"].title
-    assert rows["e2"].needs_response is False
+    assert set(rows) == {"e1", "e2"}
+    assert all(u.needs_response for u in rows.values())
+    assert rows["e1"].title == rows["e2"].title            # tags promote nothing
     assert all(u.slot == "insights" and u.ref for u in bundle.updates)
-    # The slot reads as the block always did: the framing, then one ref-tagged row per capture.
     from quest_ai_runner.runner.insights import BLOCK_FOOTER
     slot = bundle.slot_text("insights")
     assert slot.startswith("Insights the person captured on Quest")
     assert slot.rstrip().endswith(BLOCK_FOOTER)
     assert f"[{rows['e1'].ref}] [2026-09-09] tagged PhD" in slot
     assert "(+1 more)" in bundle.slot_summary("insights")
-    # And the receipt lists each capture in the person's own words.
     receipt = render_receipt(bundle.manifest(), {rows["e1"].ref: "folded into the plan"})
     assert '"The method chapter has to come first" · needs an answer -> folded into the plan' in receipt
-    assert '"Batch the errands into one trip" -> no note from the run' in receipt
+    assert '"Batch the errands into one trip" · needs an answer -> no note from the run' in receipt
 
 
-def test_the_judge_sees_each_capture_on_its_own_and_only_the_kept_ones_reach_the_slot():
-    """A judge shown the captures as ONE block could only drop them all or pass them all."""
-    client = InsightsClient([
-        _capture("e1", "idea for the construct weighting", ["PhD"]),
-        _capture("e2", "collaboration tracking at Cornerstone", ["work"]),
-    ])
-    seen = {}
+def test_insights_are_never_put_to_the_relevance_judge():
+    """They were assigned to the quest at capture, so there is nothing for a judge to decide."""
+    client = InsightsClient({"q1": [_capture("e1", "idea for the construct weighting", ["PhD"])]})
+    seen = {"called": False}
 
     def judge(work, ctx, ups):
-        seen["items"] = [u.item_id for u in ups]
-        return {"e1"}
+        seen["called"] = True
+        return set()
 
     bundle = _engine(client, relevance_judge=judge).collect(
         {"context_sources": ["insights"]}, card_id="q1")
-    assert seen["items"] == ["e1", "e2"]
+    assert seen["called"] is False
     assert [u.item_id for u in bundle.updates] == ["e1"]
-    assert "Cornerstone" not in bundle.slot_text("insights")
-    assert "insights (1, 1 not about this work)" in bundle.checked_line()
+
+
+def test_two_quests_through_one_engine_never_share_insights():
+    client = InsightsClient({"q1": [_capture("a", "for one", [])],
+                             "q2": [_capture("b", "for two", [])]})
+    engine = _engine(client)
+    one = engine.collect({"context_sources": ["insights"]}, card_id="q1")
+    two = engine.collect({"context_sources": ["insights"]}, card_id="q2")
+    assert [u.item_id for u in one.updates] == ["a"]
+    assert [u.item_id for u in two.updates] == ["b"]
+    assert sorted(client.calls) == ["q1", "q2"]
+
+
+def test_a_card_with_no_quest_gets_no_insights_and_makes_no_read():
+    client = InsightsClient({"q1": [_capture("a", "for one", [])]})
+    bundle = _engine(client).collect({"context_sources": ["insights"]}, card_id="",
+                                     card_kind="goal")
+    assert not [u for u in bundle.updates if u.source == "insights"]
+    assert client.calls == []
+
+
+def test_a_non_quest_card_naming_its_quest_reads_that_quests_insights():
+    client = InsightsClient({"q9": [_capture("a", "for nine", [])]})
+    bundle = _engine(client).collect({"context_sources": ["insights"], "quest_id": "q9"},
+                                     card_id="g1", card_kind="goal")
+    assert [u.item_id for u in bundle.updates] == ["a"]
+
+
+def test_the_cache_expires_so_an_afternoon_task_sees_the_mornings_captures():
+    """The poller keeps ONE engine for its whole life; without an expiry the first read stands."""
+    from quest_ai_runner.runner.context_updates import CACHE_TTL_SECONDS
+
+    client = InsightsClient({"q1": [_capture("e1", "One thought", ["PhD"])]})
+    clock = {"now": NOW}
+    engine = UpdateEngine(client, always=(), now_fn=lambda: clock["now"])
+    engine.collect({"context_sources": ["insights"]}, card_id="q1")
+    engine.collect({"context_sources": ["insights"]}, card_id="q1")
+    assert client.entry_calls == 1                          # one window, one read
+    clock["now"] = NOW + timedelta(seconds=CACHE_TTL_SECONDS + 1)
+    engine.collect({"context_sources": ["insights"]}, card_id="q1")
+    assert client.entry_calls == 2                          # later, read again
 
 
 def test_the_judge_is_given_the_whole_description_of_the_work():
@@ -498,35 +533,11 @@ def test_the_judge_is_given_the_whole_description_of_the_work():
     from quest_ai_runner.runner.context_updates import _describe_work
     work = _describe_work({"outcome": "I've completed my dissertation", "description": description},
                           "Dissertation")
-    keep = judge(work, "", [ContextUpdate(source="insights", item_id="e1", body="x")])
+    keep = judge(work, "", [ContextUpdate(source="notes", item_id="e1", body="x")])
     assert keep == {"e1"}
     assert "Outcome: I've completed my dissertation" in prompts[0]
     assert "THE TAIL OF THE DESCRIPTION"[:20] in prompts[0] or "Description:" in prompts[0]
     assert len(work) > 400 and work[:400] in prompts[0]
-
-
-def test_the_user_scoped_cache_expires_so_an_afternoon_task_sees_the_mornings_captures():
-    """The poller keeps ONE engine for its whole life. Without an expiry the first pass's read of
-    the captures stood for every later pass and task until the next restart."""
-    from quest_ai_runner.runner.context_updates import CACHE_TTL_SECONDS
-
-    client = InsightsClient([_capture("e1", "One thought", ["PhD"])])
-    clock = {"now": NOW}
-    engine = UpdateEngine(client, always=(), now_fn=lambda: clock["now"])
-    engine.collect({"context_sources": ["insights"]}, card_id="q1")
-    engine.collect({"context_sources": ["insights"]}, card_id="q2")
-    assert client.entry_calls == 1                          # one pass, one read
-    clock["now"] = NOW + timedelta(seconds=CACHE_TTL_SECONDS + 1)
-    engine.collect({"context_sources": ["insights"]}, card_id="q1")
-    assert client.entry_calls == 2                          # later, read again
-
-
-def test_a_user_scoped_channel_is_read_once_per_engine_not_once_per_card():
-    client = InsightsClient([_capture("e1", "One thought", ["PhD"])])
-    engine = _engine(client)
-    for quest_id in ("q1", "q2", "q3"):
-        engine.collect({"context_sources": ["insights"]}, card_id=quest_id)
-    assert client.entry_calls == 1
 
 
 class _OwnerComments:

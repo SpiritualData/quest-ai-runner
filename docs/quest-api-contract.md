@@ -360,6 +360,12 @@ GET   /api/data/collections/{collection_id}/entries?page=0&limit=50    (list_col
                                      "acted_on": false, "action_taken": "" } } ],
        "pagination": { "total": N, "page": 0, "has_next": false, ... } }
 
+GET   /api/data/insights/by-quest?quest_id=Q&limit=10&include_acted=false   (list_quest_insights)
+  -> { "collection_id": "...", "has_quests_field": true,
+       "items": [ same entry shape as above, newest first, only insights assigned to Q, unacted ] }
+     (a collection with no quests field answers items [] and has_quests_field false;
+      an older backend without the route answers 404, which the client reports as {})
+
 PATCH /api/data/insights/mark-acted-on           (mark_insight_acted_on)
   body { "entry_id": "...", "collection_id": "...", "action_taken_description": "..." }
 ```
@@ -370,45 +376,41 @@ checkbox, and an `action_taken` description. It is the only place in Quest holdi
 person recorded that has **not** yet become a goal or a task, which is exactly why a background
 pass that never reads it composes its brief as if the capture never happened.
 
-Three facts about the wire shape, each one a place an assumed contract would fail quietly:
-
-- The entries route is **generic and unfiltered**. There is no server-side date filter and no
-  field filter, so "recent" and "not yet acted on" are both the caller's to apply client-side:
-  the same client-side selection quest-backend does for itself in `_get_recent_unacted_insights`.
-- Items come back **newest first** (`created_at` descending), which is what lets paging stop at the
-  first entry past the cutoff instead of walking a person's whole history.
-- The envelope is **camelCase** (`fieldValues`, `createdAt`) while the keys *inside* `fieldValues`
-  are the collection's own field ids (`insight`, `categories`, `acted_on`, `action_taken`). An
-  in-process caller sees snake_case instead, so `runner/insights.py` reads both.
+Insights carry the quest ids they were assigned to (`fieldValues.quests`, set at capture).
+Context assembly reads **only** the quest in front of it, through `by-quest`; it never reviews the
+person's whole backlog, so unrelated insights are not pulled in and a capture is not re-clarified
+on every request or pass. A request or task with no quest gets no insights. Wire facts that still
+matter: items come back **newest first**, the envelope is **camelCase** (`fieldValues`,
+`createdAt`) while the keys inside are the collection's field ids (`insight`, `categories`,
+`acted_on`, `quests`), and an in-process caller sees snake_case, so `runner/insights.py` reads both.
 
 `runner/insights.py` composes them into one `InsightsContext`:
 
 ```python
-from quest_ai_runner.runner.insights import collect_unacted_insights
+from quest_ai_runner.runner.insights import collect_quest_insights
 
-ctx = collect_unacted_insights(client, since=last_pass_at)   # or no `since`, for the window
+ctx = collect_quest_insights(client, quest_id, since=last_pass_at)   # or no `since`, for the window
 ctx.as_text()                 # a dated, tagged block for a prompt
 ctx.one_line()                # one condensed line, for an artifact that holds a single note
-ctx.narrow_to(cutoff)         # the same fetch, re-cut to a different "since"
 ```
 
-It skips anything ticked `acted_on`, bounds the result by the later of `since` and
-`now - days_cap` (default 14 days), caps the list, and clips each entry. Every read is best-effort:
-a client without these methods, a 404, or a transport failure all degrade to an empty context.
+It re-applies the `acted_on` check and the cutoff (the later of `since` and `now - days_cap`,
+default 14 days) defensively, keeps newest first, caps the list and clips each entry. Every read is
+best-effort: a client without the method, a 404, or a transport failure all degrade to an empty
+context.
 
 **The category tags are context for the reader, never a filter in this code.** Nothing compares a
 tag to a quest name, a goal title, or any other string. Each insight is rendered with its tags as
 the person typed them and the block ends by saying plainly that the tags are their labels for their
-own thinking rather than a routing rule, so the model composing the run decides what applies, the
-same judgment it already makes about goals and reflections. A hardcoded tag match is a fixed string
+own thinking rather than a routing rule. Relevance is decided once, when the insight is assigned
+to a quest. A hardcoded tag match is a fixed string
 rule that silently drops every wording it did not anticipate ("dissertation" vs. "thesis" vs. no
 tag at all), which is what hard rule #3 in `CLAUDE.md` forbids.
 
-**Autopilot** (`runner/autopilot.py`) reads them once per pass (user-scoped, like reflections) over
-the widest window it could need, then narrows that one result per quest against that quest's own
-`autopilot.last_pass_at`, the same stamp the cadence gate reads, so "what has the person captured
-since I last ran" needs no separate freshness tracker that could drift out of step with it. A quest
-with no `last_pass_at` sees the whole window, because on a first pass everything recent is new.
+**Autopilot** (`runner/autopilot.py`) reads each quest's own insights (cache keyed by quest id, so
+two quests in one pass never share a set), bounded by that quest's `autopilot.last_pass_at`, the
+same stamp the cadence gate reads. A quest with no `last_pass_at` sees the whole window, because on
+a first pass everything recent is new.
 `next_steps_from_pass` puts one condensed line in the artifact's `note` slot; an insight is never
 promoted to a *step*, since the person captured it rather than committing to it.
 

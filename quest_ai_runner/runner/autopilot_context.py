@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import timezone
 
 from .reflections import DEFAULT_PERIODS, ReflectionContext, collect_reflections
-from .insights import InsightsContext, collect_unacted_insights
+from .insights import InsightsContext, collect_quest_insights
 from .quest_folder_sync import publish_next_steps, read_next_steps
 from .autopilot_personas import PERSONA_HELD, persona_entries_on_duty, resolve_task_persona
 from .autopilot_defaults import (
@@ -141,29 +141,33 @@ class PassContextMixin:
                          ", ".join(cached.checked_periods) or "no period")
         return cached
 
-    def _insights(self, autopilot_cfg: Dict[str, Any]) -> InsightsContext:
-        """The person's unacted captures since THIS quest's last pass.
+    def _insights(self, autopilot_cfg: Dict[str, Any], quest_id: str = "") -> InsightsContext:
+        """The latest unacted insights ASSIGNED to this quest since its last pass.
 
-        Read once per pass (insights are user-scoped, so re-reading them per quest would be the
-        same entries at N times the cost), then narrowed per quest against the ``last_pass_at``
-        this pass is about to overwrite. That field already exists for exactly this question -- it
-        is the pass's own record of when it last looked at this quest -- so "what has the person
-        captured since I last ran" needs no separate freshness tracker, and cannot drift out of
-        step with the cadence gate that reads the same stamp.
+        Quest-scoped by construction: the read asks the backend for this quest's insights only
+        (``collect_quest_insights``), so a capture assigned to another quest, or to none, never
+        reaches this quest's brief. The per-pass cache is keyed by quest id, so two quests in one
+        pass each get their own set and never share one. A quest with no id gets no insights.
 
-        A quest that has never had a pass (no ``last_pass_at``, or an unparsable one) sees the
-        whole default window rather than nothing: on a first run, everything recent IS new.
+        ``since`` is the ``last_pass_at`` this pass is about to overwrite, the pass's own record of
+        when it last looked at this quest. A quest that has never had a pass (no ``last_pass_at``,
+        or an unparsable one) sees the whole default window rather than nothing.
 
-        Best-effort by construction (``collect_unacted_insights`` never raises and returns an empty
-        context for a client with no insights methods), so a backend or client without these
-        endpoints composes exactly the batch text it composed before.
+        Best-effort by construction (``collect_quest_insights`` never raises), so a backend or
+        client without the route composes exactly the batch text it composed before.
         """
-        if self._insights_cache is None:
-            self._insights_cache = collect_unacted_insights(self._client, now=self._now())
-            found = len(self._insights_cache.insights)
-            log.info("autopilot: read %d unacted insight(s) from the last %d days",
-                     found, self._insights_cache.window_days)
-        return self._insights_cache.narrow_to(_parse_dt(autopilot_cfg.get("last_pass_at")))
+        qid = str(quest_id or "").strip()
+        if not qid:
+            return InsightsContext()
+        since = _parse_dt(autopilot_cfg.get("last_pass_at"))
+        key = (qid, since)
+        cached = self._insights_cache.get(key)
+        if cached is None:
+            cached = collect_quest_insights(self._client, qid, since=since, now=self._now())
+            self._insights_cache[key] = cached
+            log.info("autopilot: read %d unacted insight(s) assigned to quest %s",
+                     len(cached.insights), qid)
+        return cached
 
     def _adopts_recurring(self, autopilot_cfg: Dict[str, Any]) -> bool:
         """Whether to adopt this quest's recurring tasks: the QUEST's own setting when it states

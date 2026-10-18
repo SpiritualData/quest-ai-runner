@@ -56,7 +56,7 @@ class RetrievalAdapter(Protocol):
 
     def list_operations(self) -> Observation:
         """DISCOVERY (cheap): the operations the consumer makes callable — both reads
-        (e.g. "get latest insights") and mutations — one short line each (name + effect).
+        (e.g. "get a quest's latest notes") and mutations — one short line each (name + effect).
         The brain calls this before authoring a change, so it acts via a real operation
         instead of free-associating a shape. Never raises."""
 

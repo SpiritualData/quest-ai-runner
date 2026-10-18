@@ -50,7 +50,7 @@ any particular quest:
     "mode": "act",
     "context_sources": [
       "quest_notes",
-      {"source": "insights", "categories": ["PhD"]},
+      "insights",
       {"source": "drive_comments", "folder_id": "1kEc..."},
       {"source": "drive_changes", "folder_id": "1kEc..."},
       {"source": "inbound_mail", "mailbox": "support@example.org"},
@@ -144,13 +144,13 @@ of the bundle is delivered. A source signals this by raising `SourceGap`: the en
 message as written, logs it at info rather than as a failure, and does not advance the watermark,
 because nothing was read. A failed read (a 403, a timeout) is reported the same way, with its cause.
 
-**Every capture is its own row, and a tag never gates delivery.** The captures arrive one update
-each, each with its own ref, so the relevance judge decides on each one and the receipt answers
-for each one in the person's own words. `{"source": "insights", "categories": ["PhD"]}` FLAGS the
-captures the person tagged that way as waiting on an answer ("is this one yours?"); the others are
-delivered all the same. A fixed string rule that gated delivery would silently lose every capture
-whose wording it did not anticipate, which is what hard rule #3 in `CLAUDE.md` forbids. The only
-thing that sets a capture aside is the judge (below), and any failure of the judge keeps everything.
+**Every capture is its own row, scoped to the card's quest.** The `insights` source asks the
+backend for the latest unacted insights assigned to the card's quest (`list_quest_insights`) and
+reads nothing else; a card with no quest gets none. The captures arrive one update each, with its
+own ref, and the receipt answers for each one in the person's own words. They are assigned to the
+quest when captured, so every row counts as relevant: the source is not put to the relevance judge,
+and the old `categories` option no longer does anything (a tag never gated delivery, and now does
+not flag one either).
 
 ## The receipt
 

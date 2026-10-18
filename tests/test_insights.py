@@ -1,18 +1,17 @@
 """Insights — the person's own captures, read from Quest and surfaced with their own tags.
 
-Two layers, both offline (no network, no key): the three ``QuestClient`` methods against a stubbed
-``_request``, and ``collect_unacted_insights`` against a fake client. The selection this proves is
-entirely CLIENT-side, because the entries endpoint has no server-side filter for either half of it
-(``acted_on`` or a date), and because the composed block deliberately does no matching at all
-between an insight's category tags and any quest — the tags are shown to the reader and the reader
-judges, which is the whole point of the design.
+Two layers, both offline (no network, no key): the ``QuestClient`` methods against a stubbed
+``_request``, and ``collect_quest_insights`` against a fake client. Context assembly reads ONE
+quest's insights through the by-quest route and never the person's whole backlog; the composed
+block does no matching between an insight's category tags and any quest.
 """
 from datetime import datetime, timedelta, timezone
 
 from quest_ai_runner.runner.insights import (
     DEFAULT_WINDOW_DAYS,
     InsightsContext,
-    collect_unacted_insights,
+    block_header,
+    collect_quest_insights,
 )
 from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
 
@@ -92,11 +91,37 @@ def test_mark_insight_acted_on_reports_failure_rather_than_swallowing_it():
     assert calls2 == []
 
 
+def test_list_quest_insights_sends_the_documented_query():
+    client, calls = client_capturing_calls({
+        "/api/data/insights/by-quest": {"collection_id": "c1", "has_quests_field": True,
+                                         "items": []},
+    })
+    payload = client.list_quest_insights("q1", limit=7)
+    assert calls[0]["method"] == "GET"
+    assert calls[0]["params"] == {"quest_id": "q1", "limit": 7, "include_acted": "false"}
+    assert payload["has_quests_field"] is True
+    client.list_quest_insights("q1", include_acted=True)
+    assert calls[1]["params"]["include_acted"] == "true"
+
+
+def test_list_quest_insights_degrades_to_empty_on_an_older_backend_404():
+    client, _ = client_capturing_calls({
+        "/api/data/insights/by-quest": QuestApiError("not found", status=404),
+    })
+    assert client.list_quest_insights("q1") == {}
+
+
+def test_list_quest_insights_with_no_quest_makes_no_request():
+    client, calls = client_capturing_calls({})
+    assert client.list_quest_insights("") == {}
+    assert calls == []
+
+
 # --- the composer -------------------------------------------------------------------------------
 
 def _entry(entry_id, text, *, categories=None, acted_on=False, created_at=None, camel=True):
-    """One entry AS THE ENTRIES ENDPOINT RETURNS IT: camelCase envelope, field ids inside."""
-    values = {"insight": text, "acted_on": acted_on}
+    """One entry AS THE ENDPOINT RETURNS IT: camelCase envelope, field ids inside."""
+    values = {"insight": text, "acted_on": acted_on, "quests": ["q1"]}
     if categories is not None:
         values["categories"] = categories
     created = created_at if created_at is not None else NOW
@@ -107,251 +132,134 @@ def _entry(entry_id, text, *, categories=None, acted_on=False, created_at=None, 
     return {"id": entry_id, "field_values": values, "created_at": created}
 
 
-class FakeInsightsClient:
-    """A client exposing only the two read methods ``collect_unacted_insights`` needs."""
+class FakeQuestInsightsClient:
+    """Exposes ONLY the by-quest read. Any other call is an AttributeError, so a test fails if
+    collection reviews the person's whole backlog."""
 
-    def __init__(self, pages=None, collection=None, fail_entries=False):
-        self.pages = list(pages or [])        # a list of {items, pagination} payloads, by page
-        self.collection = collection if collection is not None else {"id": "coll_1"}
-        self.fail_entries = fail_entries
-        self.entry_calls = []
-        self.collection_calls = 0
+    def __init__(self, items=None, payload=None, fail=False):
+        self.items = list(items or [])
+        self.payload = payload
+        self.fail = fail
+        self.calls = []
 
-    def get_insights_collection(self):
-        self.collection_calls += 1
-        return dict(self.collection)
-
-    def list_collection_entries(self, collection_id, *, page=0, limit=50):
-        self.entry_calls.append((collection_id, page, limit))
-        if self.fail_entries:
-            raise RuntimeError("entries endpoint down")
-        return self.pages[page] if page < len(self.pages) else {"items": []}
+    def list_quest_insights(self, quest_id, limit=10, include_acted=False):
+        self.calls.append((quest_id, limit, include_acted))
+        if self.fail:
+            raise RuntimeError("down")
+        if self.payload is not None:
+            return self.payload
+        return {"collection_id": "coll_1", "has_quests_field": True, "items": self.items}
 
 
-def _page(entries, *, has_next=False):
-    return {"items": list(entries), "pagination": {"has_next": has_next}}
-
-
-def test_acted_on_insights_are_filtered_out():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("e1", "Mornings are the only time the writing happens"),
-        _entry("e2", "Already handled this one", acted_on=True),
-    ])])
-    ctx = collect_unacted_insights(client, now=NOW)
-    assert [i.entry_id for i in ctx.insights] == ["e1"]
-    assert ctx.collection_id == "coll_1"
-
-
-def test_the_acted_on_checkbox_is_read_through_its_string_forms():
-    """A JSON round-trip can leave "true"/"false" behind; a stray "false" must not read as ticked."""
-    client = FakeInsightsClient(pages=[_page([
-        _entry("e1", "Still open", acted_on="false"),
-        _entry("e2", "Closed", acted_on="true"),
-    ])])
-    assert [i.entry_id for i in collect_unacted_insights(client, now=NOW).insights] == ["e1"]
-
-
-def test_the_since_cutoff_drops_anything_captured_before_it():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("new", "Captured this morning", created_at=NOW - timedelta(hours=2)),
-        _entry("old", "Captured last week", created_at=NOW - timedelta(days=6)),
-    ])])
-    ctx = collect_unacted_insights(client, since=NOW - timedelta(days=1), now=NOW)
-    assert [i.entry_id for i in ctx.insights] == ["new"]
-
-
-def test_both_timestamp_shapes_are_understood():
-    """The HTTP response carries an ISO string; an in-process caller can hand back a datetime."""
-    client = FakeInsightsClient(pages=[_page([
-        _entry("iso", "From the wire", created_at="2026-08-12T07:00:00Z"),
-        _entry("dt", "From storage", created_at=NOW - timedelta(hours=3), camel=False),
-        _entry("stale-iso", "Older, on the wire", created_at="2026-08-01T07:00:00Z"),
-    ])])
-    ctx = collect_unacted_insights(client, since=NOW - timedelta(days=1), now=NOW)
-    assert [i.entry_id for i in ctx.insights] == ["iso", "dt"]
-
-
-def test_an_offset_timestamp_is_converted_rather_than_stamped():
-    """Stamping UTC onto an aware value (as a naive ``replace`` would) moves the capture by hours,
-    which is enough to push a late-evening insight across a cutoff."""
-    client = FakeInsightsClient(pages=[_page([
-        _entry("late", "Written last night", created_at="2026-08-11T23:30:00-07:00"),
-    ])])
-    # 2026-08-11T23:30-07:00 IS 2026-08-12T06:30Z, which is after a midnight-UTC cutoff.
-    ctx = collect_unacted_insights(client, since=datetime(2026, 8, 12, tzinfo=timezone.utc), now=NOW)
-    assert [i.entry_id for i in ctx.insights] == ["late"]
-
-
-def test_an_unreadable_timestamp_keeps_the_insight():
-    """Matching quest-backend: a capture with a malformed date is still something the person wrote."""
-    client = FakeInsightsClient(pages=[_page([_entry("e1", "No date on this", created_at="???")])])
-    ctx = collect_unacted_insights(client, since=NOW - timedelta(days=1), now=NOW)
+def test_only_the_quest_route_is_called_with_the_quest_id():
+    client = FakeQuestInsightsClient([_entry("e1", "one")])
+    ctx = collect_quest_insights(client, "q1", now=NOW)
+    assert client.calls == [("q1", 8, False)]
+    assert ctx.quest_id == "q1" and ctx.collection_id == "coll_1"
     assert [i.entry_id for i in ctx.insights] == ["e1"]
 
 
-def test_the_default_window_bounds_a_missing_cutoff():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("recent", "This week", created_at=NOW - timedelta(days=2)),
-        _entry("ancient", "Three months ago", created_at=NOW - timedelta(days=90)),
-    ])])
-    ctx = collect_unacted_insights(client, now=NOW)
-    assert [i.entry_id for i in ctx.insights] == ["recent"]
-    assert ctx.window_days == DEFAULT_WINDOW_DAYS
+def test_a_request_with_no_quest_gets_nothing_and_reads_nothing():
+    client = FakeQuestInsightsClient([_entry("e1", "one")])
+    for blank in ("", None, "  "):
+        assert not collect_quest_insights(client, blank, now=NOW).has_any()
+    assert client.calls == []
 
 
-def test_a_very_old_since_is_still_bounded_by_the_window():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("ancient", "A year ago", created_at=NOW - timedelta(days=365)),
-    ])])
-    ctx = collect_unacted_insights(client, since=NOW - timedelta(days=400), days_cap=14, now=NOW)
-    assert ctx.insights == []
+def test_an_older_backend_404_degrades_to_empty():
+    assert not collect_quest_insights(FakeQuestInsightsClient(payload={}), "q1", now=NOW).has_any()
 
 
-def test_the_list_is_capped_and_paging_stops():
-    entries = [_entry(f"e{n}", f"Insight {n}", created_at=NOW - timedelta(minutes=n))
-               for n in range(20)]
-    client = FakeInsightsClient(pages=[_page(entries, has_next=True), _page(entries)])
-    ctx = collect_unacted_insights(client, max_insights=5, now=NOW)
-    assert len(ctx.insights) == 5
-    # Enough in hand from page 0: no second page is fetched despite has_next.
-    assert client.entry_calls == [("coll_1", 0, 50)]
+def test_a_collection_without_a_quests_field_is_empty():
+    client = FakeQuestInsightsClient(payload={"collection_id": "c", "has_quests_field": False,
+                                              "items": []})
+    assert not collect_quest_insights(client, "q1", now=NOW).has_any()
 
 
-def test_paging_stops_once_a_page_reaches_past_the_cutoff():
-    """Entries come back newest-first, so the first one past the cutoff ends the walk."""
-    client = FakeInsightsClient(pages=[
-        _page([_entry("new", "Fresh", created_at=NOW - timedelta(hours=1)),
-               _entry("old", "Stale", created_at=NOW - timedelta(days=30))], has_next=True),
-        _page([_entry("older", "Staler", created_at=NOW - timedelta(days=40))]),
-    ])
-    ctx = collect_unacted_insights(client, now=NOW)
-    assert [i.entry_id for i in ctx.insights] == ["new"]
-    assert client.entry_calls == [("coll_1", 0, 50)]
-
-
-def test_paging_continues_while_the_server_says_there_is_more():
-    fresh = [_entry(f"p0_{n}", f"Page zero {n}", created_at=NOW - timedelta(minutes=n))
-             for n in range(3)]
-    more = [_entry(f"p1_{n}", f"Page one {n}", created_at=NOW - timedelta(minutes=10 + n))
-            for n in range(2)]
-    client = FakeInsightsClient(pages=[_page(fresh, has_next=True), _page(more, has_next=False)])
-    ctx = collect_unacted_insights(client, max_insights=8, now=NOW)
-    assert len(ctx.insights) == 5
-    assert client.entry_calls == [("coll_1", 0, 50), ("coll_1", 1, 50)]
-
-
-def test_a_client_without_the_insight_methods_yields_an_empty_context():
+def test_a_client_without_the_method_or_that_raises_yields_empty():
     class Bare:
         pass
+    assert not collect_quest_insights(Bare(), "q1", now=NOW).has_any()
+    assert not collect_quest_insights(FakeQuestInsightsClient(fail=True), "q1", now=NOW).has_any()
 
-    ctx = collect_unacted_insights(Bare(), now=NOW)
-    assert not ctx.has_any() and ctx.as_text() == "" and ctx.collection_id == ""
+
+def test_acted_on_entries_are_skipped_defensively():
+    client = FakeQuestInsightsClient([_entry("a", "done", acted_on=True),
+                                      _entry("b", "open"),
+                                      _entry("c", "stringy", acted_on="false")])
+    assert [i.entry_id for i in collect_quest_insights(client, "q1", now=NOW).insights] == ["b", "c"]
 
 
-def test_a_missing_collection_yields_an_empty_context():
-    client = FakeInsightsClient(collection={})
-    ctx = collect_unacted_insights(client, now=NOW)
+def test_window_cap_and_since_cutoffs():
+    old = NOW - timedelta(days=40)
+    recent = NOW - timedelta(days=3)
+    client = FakeQuestInsightsClient([_entry("r", "recent", created_at=recent),
+                                      _entry("o", "old", created_at=old)])
+    ctx = collect_quest_insights(client, "q1", now=NOW)
+    assert [i.entry_id for i in ctx.insights] == ["r"]
+    assert ctx.window_days == DEFAULT_WINDOW_DAYS and ctx.since is None
+    ctx = collect_quest_insights(client, "q1", since=NOW - timedelta(days=1), now=NOW)
+    assert not ctx.has_any() and ctx.since == NOW - timedelta(days=1)
+    # A very old `since` is bounded by the window, never the whole history.
+    ctx = collect_quest_insights(client, "q1", since=NOW - timedelta(days=400), now=NOW)
+    assert [i.entry_id for i in ctx.insights] == ["r"]
+    ctx = collect_quest_insights(client, "q1", days_cap=1, now=NOW)
     assert not ctx.has_any()
-    assert client.entry_calls == []
 
 
-def test_a_blown_up_entries_read_yields_an_empty_context():
-    client = FakeInsightsClient(pages=[_page([_entry("e1", "Never seen")])], fail_entries=True)
-    ctx = collect_unacted_insights(client, now=NOW)
-    assert not ctx.has_any()
+def test_newest_first_bounded_and_both_casings_read():
+    items = [_entry("a", "older", created_at=NOW - timedelta(days=2), camel=False),
+             _entry("b", "newest", created_at=NOW - timedelta(hours=1)),
+             _entry("c", "middle", created_at=NOW - timedelta(days=1))]
+    ctx = collect_quest_insights(FakeQuestInsightsClient(items), "q1", now=NOW, max_insights=2)
+    assert [i.entry_id for i in ctx.insights] == ["b", "c"]
 
 
-def test_a_blown_up_collection_read_yields_an_empty_context():
-    class Exploding(FakeInsightsClient):
-        def get_insights_collection(self):
-            raise RuntimeError("Quest insights endpoint down")
-
-    assert not collect_unacted_insights(Exploding(), now=NOW).has_any()
+def test_an_unreadable_timestamp_is_kept_and_empty_text_dropped():
+    items = [_entry("a", "no date", created_at="not-a-date"), _entry("b", "   ")]
+    ctx = collect_quest_insights(FakeQuestInsightsClient(items), "q1", now=NOW)
+    assert [i.entry_id for i in ctx.insights] == ["a"]
 
 
-# --- what the block actually says -----------------------------------------------------------
-
-def test_as_text_shows_each_insight_with_the_persons_own_tags():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("e1", "Mornings are the only time the writing happens",
-               categories=["dissertation", "energy"], created_at=NOW - timedelta(hours=2)),
-        _entry("e2", "Stop scheduling calls before noon", categories=[],
-               created_at=NOW - timedelta(days=1)),
-    ])])
-    text = collect_unacted_insights(client, now=NOW).as_text()
-    assert "Mornings are the only time the writing happens" in text
-    assert "tagged dissertation, energy" in text
-    assert "(untagged)" in text          # an untagged capture is still shown, not dropped
-    assert "[2026-08-12]" in text and "[2026-08-11]" in text
+def test_tags_are_shown_verbatim_text_is_clipped_and_no_em_dash_in_the_frame():
+    long = "x" * 900
+    items = [_entry("a", long, categories="health, career")]
+    ctx = collect_quest_insights(FakeQuestInsightsClient(items), "q1", now=NOW)
+    assert ctx.insights[0].categories == ["health", "career"]
+    assert ctx.insights[0].text.endswith("[...truncated]")
+    text = ctx.as_text()
+    assert "assigned to THIS quest" in text and "tagged health, career" in text
+    assert "\u2014" not in text and "\u2014" not in block_header(None)
+    assert "(+" not in ctx.one_line()
 
 
-def test_as_text_hands_the_relevance_judgment_to_the_reader():
-    """The tags are context for the model, never a filter in this code: nothing here compares a
-    category against a quest or goal name, and the block says so explicitly."""
-    client = FakeInsightsClient(pages=[_page([
-        _entry("e1", "Batch the errands", categories=["home"]),
-    ])])
-    text = collect_unacted_insights(client, now=NOW).as_text()
-    assert "Judge for yourself which of them (if any) bear on the goals above" in text
-    assert "can still matter here" in text
+def test_empty_context_renders_nothing():
+    ctx = InsightsContext()
+    assert ctx.as_text() == "" and ctx.one_line() == ""
 
 
-def test_an_empty_context_says_nothing_at_all():
-    assert InsightsContext().as_text() == "" and InsightsContext().one_line() == ""
+def test_collect_unacted_insights_no_longer_exists():
+    """The review-all path is gone on purpose; context assembly must not be able to call it."""
+    import quest_ai_runner.runner.insights as mod
+    assert not hasattr(mod, "collect_unacted_insights")
 
 
-def test_a_comma_separated_tags_string_is_accepted():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("e1", "Voice-captured", categories="health, career"),
-    ])])
-    assert collect_unacted_insights(client, now=NOW).insights[0].categories == ["health", "career"]
+# --- the executor's context view -----------------------------------------------------------
+
+def test_executor_reads_the_tasks_quest_insights_only():
+    from quest_ai_runner.runner.executor import TaskExecutor
+    client = FakeQuestInsightsClient([_entry("e1", "assigned to this quest", created_at=NOW)])
+    ex = TaskExecutor(client, None)
+    text = ex._fetch_quest_captures("q1")
+    assert client.calls == [("q1", 8, False)]      # only the quest route; no all-entries listing
+    assert isinstance(text, str)
 
 
-def test_a_long_insight_is_clipped_with_a_visible_marker():
-    client = FakeInsightsClient(pages=[_page([_entry("e1", "x" * 900)])])
-    text = collect_unacted_insights(client, now=NOW).insights[0].text
-    assert text.endswith("[...truncated]") and len(text) < 500
-
-
-def test_one_line_condenses_the_newest_capture():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("e1", "Mornings are the only time the writing happens",
-               categories=["dissertation"], created_at=NOW - timedelta(hours=1)),
-        _entry("e2", "Second one", created_at=NOW - timedelta(hours=5)),
-    ])])
-    line = collect_unacted_insights(client, now=NOW).one_line()
-    assert line.startswith("Unacted insight from 2026-08-12 [dissertation]:")
-    assert line.endswith("(+1 more)")
-
-
-# --- narrowing one fetch to many per-quest cutoffs --------------------------------------------
-
-def test_narrow_to_filters_an_already_collected_context():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("new", "This morning", created_at=NOW - timedelta(hours=2)),
-        _entry("old", "Four days ago", created_at=NOW - timedelta(days=4)),
-    ])])
-    ctx = collect_unacted_insights(client, now=NOW)
-    assert len(ctx.insights) == 2
-    narrowed = ctx.narrow_to(NOW - timedelta(days=1))
-    assert [i.entry_id for i in narrowed.insights] == ["new"]
-    assert "since 2026-08-11" in narrowed.as_text()
-    # The original is untouched, so one fetch can serve many different cutoffs.
-    assert len(ctx.insights) == 2
-
-
-def test_narrow_to_none_keeps_everything():
-    client = FakeInsightsClient(pages=[_page([_entry("e1", "Anything")])])
-    ctx = collect_unacted_insights(client, now=NOW)
-    assert ctx.narrow_to(None) is ctx
-
-
-def test_narrow_to_a_cutoff_older_than_the_window_does_not_overstate_the_reach():
-    client = FakeInsightsClient(pages=[_page([
-        _entry("e1", "Two days ago", created_at=NOW - timedelta(days=2)),
-    ])])
-    ctx = collect_unacted_insights(client, days_cap=14, now=NOW)
-    narrowed = ctx.narrow_to(NOW - timedelta(days=400))
-    assert len(narrowed.insights) == 1
-    # It is labeled with the window it actually had, not the year-old cutoff it was asked for.
-    assert "since 2026-07-29" in narrowed.as_text()
+def test_executor_with_no_quest_gets_no_insights_and_reads_nothing():
+    from quest_ai_runner.runner.executor import TaskExecutor
+    client = FakeQuestInsightsClient([_entry("e1", "x")])
+    ex = TaskExecutor(client, None)
+    assert ex._fetch_quest_captures(None) == ""
+    assert ex._fetch_quest_captures("") == ""
+    assert client.calls == []
+    assert not hasattr(ex, "_fetch_person_captures")

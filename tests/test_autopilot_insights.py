@@ -1,20 +1,14 @@
-"""Autopilot sees what the person has CAPTURED since its last pass, and still works when it cannot.
+"""Autopilot sees the insights ASSIGNED TO EACH QUEST since its last pass, and still works without.
 
-The ask that produced this: "make sure that autopilot runs are aware of relevant insights since the
-last time it ran, leveraging category field". Before it, ``grep -rn insight quest_ai_runner/``
-found nothing — Quest had been storing every quick capture, with the person's own category tags,
-in a collection no pass ever read.
+Insights carry the quest ids they were assigned to at capture. A pass reads each quest's own insights
+through the by-quest route and never reviews the person's whole backlog, so a capture assigned to
+one quest never reaches another quest's brief.
 
-Two things this file pins down beyond "the text shows up":
-
-  * The cutoff is the quest's OWN ``autopilot.last_pass_at``, the same stamp the cadence gate reads,
-    so "since the last time it ran" needs no second freshness tracker to fall out of step with.
-  * NOTHING matches a category tag against a quest. The tags are rendered next to each insight and
-    the reader decides — a fixed tag-to-quest rule would silently drop every wording it did not
-    anticipate, which is what hard rule #3 forbids.
+  * The cutoff is the quest's OWN ``autopilot.last_pass_at``, the same stamp the cadence gate reads.
+  * NOTHING matches a category tag against a quest; tags are rendered beside each insight.
 
 Driven against a fake client, offline. The last test is the compatibility one: a client with no
-insights methods at all must compose exactly the batch it composed before.
+insights method at all must compose exactly the batch it composed before.
 """
 from datetime import datetime, timezone
 
@@ -41,28 +35,26 @@ def _entry(entry_id, text, *, categories=None, acted_on=False, created_at="2026-
 
 
 class CapturingClient(FakeAutopilotClient):
-    """The autopilot fake plus the two insight reads, counting how often they are called."""
+    """The autopilot fake plus the by-quest read. ``entries`` maps quest id -> its insights, or is a
+    list used for every quest. It has NO all-entries listing, so a pass that tried to review the
+    person's whole backlog would raise."""
 
-    def __init__(self, *args, entries=None, collection=None, **kwargs):
+    def __init__(self, *args, entries=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.entries = list(entries or [])
-        self.collection = collection if collection is not None else {"id": "coll_1"}
-        self.entry_calls = []
+        self.entries = entries if entries is not None else []
+        self.insight_calls = []
 
-    def get_insights_collection(self):
-        return dict(self.collection)
-
-    def list_collection_entries(self, collection_id, *, page=0, limit=50):
-        self.entry_calls.append((collection_id, page))
-        items = self.entries if page == 0 else []
-        return {"items": items, "pagination": {"has_next": False}}
+    def list_quest_insights(self, quest_id, limit=10, include_acted=False):
+        self.insight_calls.append(quest_id)
+        items = self.entries.get(quest_id, []) if isinstance(self.entries, dict) else self.entries
+        return {"collection_id": "coll_1", "has_quests_field": True, "items": list(items)}
 
 
 # --- the composed text ---------------------------------------------------------------------
 
 def test_compose_batch_text_carries_the_insight_block_with_its_tags():
-    block = ("Insights the person captured on Quest since 2026-07-11 and has not yet marked acted "
-             "on, in their own words, with the category tags they chose:\n"
+    block = ("Insights the person captured on Quest since 2026-07-11, assigned to THIS quest, not yet "
+             "marked acted on, in their own words, with the category tags they chose:\n"
              "  - [2026-07-12] tagged dissertation\n      Mornings are the only writing time")
     text = compose_batch_text("ship the thing", insights=block)
     assert "Mornings are the only writing time" in text
@@ -102,14 +94,13 @@ def test_a_pass_folds_unacted_insights_into_the_batch_it_creates():
     assert result.created_task_ids
     text = client.created_tasks[0]["text"]
     assert "Mornings are the only time the writing happens" in text
-    # The person's own tags ride along, and the relevance call is handed to the reader.
+    # The person's own tags ride along; no relevance guess is asked of the reader.
     assert "tagged dissertation, energy" in text
-    assert "Judge for yourself which of them (if any) bear on the goals above" in text
+    assert "assigned to this quest when the person captured them" in text
 
 
-def test_an_insight_tagged_for_something_else_is_still_shown_not_filtered_out():
-    """No tag-to-quest matching anywhere in this code: an insight tagged "home" reaches a quest
-    about shipping software, and the model composing the run decides whether it bears on it."""
+def test_an_insight_with_an_unrelated_tag_is_shown_when_the_server_assigned_it_here():
+    """No tag-to-quest matching anywhere in this code: assignment decides, not the tag."""
     client = CapturingClient(
         quests=[_quest("q1", outcome="ship the backend rewrite")],
         goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", "Cut the release")]))},
@@ -157,23 +148,24 @@ def test_an_acted_on_insight_never_reaches_the_batch():
     assert "Already turned into a goal" not in text
 
 
-def test_insights_are_read_once_per_pass_and_narrowed_per_quest():
-    """They are USER-scoped, so one read serves the pass; but "since the last time it ran" is a
-    PER-QUEST question, so the cutoff is applied to that one result in memory."""
+def test_each_quest_reads_its_own_insights_and_the_sets_are_never_mixed():
+    """Two quests in one pass: each is asked for ITS insights once, and each brief carries only its own."""
     goals = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
     client = CapturingClient(
         quests=[_quest("q1", cadence="daily", last_pass_at="2026-07-11T09:00:00Z"),
                 _quest("q2", cadence="daily", last_pass_at="2026-07-01T09:00:00Z")],
         goals_by_quest={"q1": goals, "q2": goals},
-        entries=[_entry("new", "Captured this morning", created_at="2026-07-12T08:00:00Z"),
-                 _entry("mid", "Captured a week ago", created_at="2026-07-05T08:00:00Z")],
+        entries={"q1": [_entry("a", "Only for quest one", created_at="2026-07-12T08:00:00Z"),
+                        _entry("a_old", "Quest one stale", created_at="2026-07-05T08:00:00Z")],
+                 "q2": [_entry("b", "Only for quest two", created_at="2026-07-05T08:00:00Z")]},
     )
     result = _pass_with(client).run({"text": "autopilot pass"})
     assert len(result.created_task_ids) == 2
-    assert client.entry_calls == [("coll_1", 0)]        # ONE read for the whole pass
+    assert sorted(client.insight_calls) == ["q1", "q2"]
     q1_text, q2_text = client.created_tasks[0]["text"], client.created_tasks[1]["text"]
-    assert "Captured this morning" in q1_text and "Captured a week ago" not in q1_text
-    assert "Captured this morning" in q2_text and "Captured a week ago" in q2_text
+    assert "Only for quest one" in q1_text and "Only for quest two" not in q1_text
+    assert "Quest one stale" not in q1_text            # before q1's last pass
+    assert "Only for quest two" in q2_text and "Only for quest one" not in q2_text
 
 
 def test_a_pass_with_no_insights_on_record_still_creates_its_batch():
@@ -191,8 +183,8 @@ def test_a_pass_with_no_insights_on_record_still_creates_its_batch():
 
 def test_an_insights_read_that_blows_up_never_fails_the_pass():
     class BrokenInsightsClient(CapturingClient):
-        def list_collection_entries(self, collection_id, *, page=0, limit=50):
-            raise RuntimeError("Quest entries endpoint down")
+        def list_quest_insights(self, quest_id, limit=10, include_acted=False):
+            raise RuntimeError("Quest insights endpoint down")
 
     client = BrokenInsightsClient(
         quests=[_quest("q1")],
@@ -202,7 +194,7 @@ def test_an_insights_read_that_blows_up_never_fails_the_pass():
     assert result.created_task_ids and not result.errors
 
 
-def test_a_client_without_the_insight_methods_behaves_exactly_as_before():
+def test_a_client_without_the_insight_method_behaves_exactly_as_before():
     client = FakeAutopilotClient(
         quests=[_quest("q1")],
         goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", "Draft ch. 2")]))},

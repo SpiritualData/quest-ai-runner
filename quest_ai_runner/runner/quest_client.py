@@ -51,8 +51,11 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                GET   /api/data/collections                    (list_collections)
                GET   /api/data/collections/{id}/entries        (list_collection_entries)
                PATCH /api/data/insights/mark-acted-on          (mark_insight_acted_on)
-               The entries route has NO server-side date or field filter; ``runner.insights``
-               applies the "recent and not yet acted on" selection client-side.
+               GET   /api/data/insights/by-quest              (list_quest_insights; the latest
+               insights ASSIGNED to one quest, newest first, unacted by default. An older backend
+               without the route answers 404, which reads as no insights.)
+               The generic entries route has NO server-side date or field filter, and context
+               assembly no longer walks it: ``runner.insights`` reads one quest's insights only.
 
 ``QuestDecisionSink`` wraps a QuestClient as a core ``EscalationSink`` so the brain can raise a
 confirm/decision and get back a ``decision_id`` to report on the task.

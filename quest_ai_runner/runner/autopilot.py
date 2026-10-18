@@ -44,9 +44,10 @@ normal deep-run path). Each pass:
      suggestion ends up in the person's list every morning). The batch text carries the person's
      OWN latest reflection
      (``runner.reflections``: the daily plan's review of yesterday, plus the newest submitted
-     period review) and the insights they have CAPTURED but not yet acted on since this quest's
+     period review) and the insights assigned to THIS quest that they have not yet acted on since its
      last pass (``runner.insights``, with the person's own category tags shown beside each one).
-     Both are read once per pass, since both are user-scoped rather than per quest. Everything
+     The reflection is read once per pass (user-scoped); the insights are read per quest, from the
+     quest's own route, and never shared between quests. Everything
      else in that text is derived from rows the system recorded; those two are the parts the
      person wrote, so they are what break ties about what actually matters today.
   7. Updates the quest's ``autopilot.last_pass_at`` (and ``miss_streak`` when nothing was
@@ -238,7 +239,9 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # could need, and each quest narrows that one result to its own ``last_pass_at`` in memory.
         # ``None`` means "not read yet" (an empty context is a legitimate result and must not be
         # mistaken for a cache miss).
-        self._insights_cache: Optional[InsightsContext] = None
+        # Keyed by (quest id, since): insights are assigned to a quest, so one quest's set is never
+        # served to another.
+        self._insights_cache: Dict[Tuple[str, Optional[datetime]], InsightsContext] = {}
         # The id of the pass task currently being run, set in ``run`` and stamped onto everything
         # this pass creates (see _create_autopilot_task). None until a pass starts.
         self._pass_task_id: Optional[str] = None
@@ -450,7 +453,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             # pass), and what they captured since this quest's own last pass.
             reflections = self._reflections(scope_label)
             reflection_text = reflections.as_text() or None
-            insights = self._insights(autopilot_cfg)
+            insights = self._insights(autopilot_cfg, quest_id)
             insights_text = insights.as_text() or None
             reflection_note, insights_note = reflections.one_line(), insights.one_line()
 

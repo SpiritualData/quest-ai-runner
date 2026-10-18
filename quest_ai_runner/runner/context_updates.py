@@ -21,18 +21,15 @@ building a task's context view, an attended session -- asks the same engine the 
 a source added once is seen by all of them.
 
 CUSTOM PER CARD, AS DATA. What a card watches is a list of specs the card itself carries:
-``{"source": "insights", "categories": ["PhD"]}``, ``{"source": "drive_comments",
-"folder_id": "1kEc..."}``, ``{"source": "quest_notes"}``. An assistant can write a spec (it is
+``{"source": "quest_notes"}``, ``{"source": "drive_comments",
+"folder_id": "1kEc..."}``. An assistant can write a spec (it is
 JSON, and the vocabulary is discoverable via ``UpdateEngine.describe_sources()``); nothing in this
 module hardcodes that any particular card watches any particular thing, and an unknown source name
 degrades to a reported gap rather than an exception.
 
-A TAG NEVER GATES DELIVERY. ``runner.insights`` refuses to match tags against quest names for a
-good reason (hard rule #3): a fixed string rule silently loses every capture whose wording it did
-not anticipate. So a ``categories`` spec here does not filter the captures. Every capture is its
-own update with its own ref; a tag match only FLAGS one as waiting on an answer. The only thing
-that sets a capture aside is the relevance judge, which is a model reading the card's subject
-matter, and any failure of the judge keeps everything.
+INSIGHTS ARE QUEST-SCOPED. ``runner.insights`` reads only the insights assigned to the card's
+quest (they are assigned when captured) and never reviews the person's whole backlog; a card with
+no quest gets none. A tag is the person's own label and never gates delivery (hard rule #3).
 
 THE RECEIPT. Surfacing context is only half the loop: a person who leaves a comment or captures an
 insight has no way to know whether the run that followed actually used it, and "I read your note"
@@ -131,7 +128,7 @@ def default_spec_resolver(card: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     Looks in the card's own fields and inside its ``autopilot`` settings block (where per-quest
     configuration already lives in this library). Accepts a bare source name as shorthand:
-    ``["quest_notes", {"source": "insights", "categories": ["PhD"]}]``.
+    ``["quest_notes", {"source": "drive_comments", "folder_id": "..."}]``.
     """
     found: List[Any] = []
     for holder in (card or {}, (card or {}).get("autopilot") or {}):
@@ -282,8 +279,7 @@ class UpdateEngine:
     def specs_for(self, card: Dict[str, Any]) -> List[Dict[str, Any]]:
         """This card's source specs: the always-on ones, then whatever the card declares.
 
-        A card declaring a source that is also always-on wins, so ``{"source": "insights",
-        "categories": [...]}`` refines the default rather than running twice.
+        A card declaring a source that is also always-on wins, so ``{"source": "insights"}`` refines the default rather than running twice.
         """
         declared = self._spec_resolver(card) or []
         named = {str(s.get("source")) for s in declared}

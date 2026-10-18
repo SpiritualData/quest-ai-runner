@@ -160,7 +160,7 @@ class ContextViewMixin:
                 # passes already read these; an ordinary scheduled run did not, so the same
                 # capture steered a pass and was invisible to the daily task working the very
                 # quest it was about.
-                insights_text = self._fetch_person_captures()
+                insights_text = self._fetch_quest_captures(quest_id)
                 if insights_text:
                     parts.append(insights_text)
 
@@ -308,10 +308,16 @@ class ContextViewMixin:
             self._context_bundle = None
             return ""
 
-    def _fetch_person_captures(self) -> str:
-        """The person's recent unacted captures, rendered, or "" when there are none."""
+    def _fetch_quest_captures(self, quest_id: Optional[str]) -> str:
+        """The latest unacted insights assigned to THIS quest, rendered, or "" when there are none.
+
+        Quest-scoped: a task with no quest id gets nothing, and the person's insights assigned to
+        other quests are never read.
+        """
+        if not quest_id:
+            return ""
         try:
-            from .insights import collect_unacted_insights
-            return collect_unacted_insights(self._client).as_text()
+            from .insights import collect_quest_insights
+            return collect_quest_insights(self._client, quest_id).as_text()
         except Exception:  # noqa: BLE001
             return ""  # never let a context extra break a run

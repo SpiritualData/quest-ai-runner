@@ -1,32 +1,33 @@
-"""The person's own captured insights, collected into one readable, tagged block.
+"""The insights assigned to ONE quest, collected into a readable block.
 
 Quest gives every person an "Insights" collection: a quick-capture space for the idea or
 realization that arrives away from any goal ("the mornings are the only time the writing happens",
 "stop scheduling calls before noon"). Each capture carries the text itself, the free-text
-**category tags** the person chose for it, and an ``acted_on`` checkbox they tick once something
-came of it.
+**category tags** the person chose for it, an ``acted_on`` checkbox they tick once something came
+of it, and, since quest-backend assigns them at capture time, the **quest ids** it belongs to
+(``field_values["quests"]``).
 
-That is the one channel in Quest where a person records something they have NOT yet turned into a
-goal or a task. Everything a background pass otherwise reads is a row the system already recorded,
-so an insight captured on Tuesday could sit untouched while every pass since composed its brief as
-if it had never been written.
+That assignment is what context assembly reads. A run asks for the latest insights of the quest in
+front of it (``QuestClient.list_quest_insights``, one route, filtered server-side to that quest and
+to unacted) and nothing else. There is deliberately NO function here that reviews all of a
+person's unacted insights: pulling in captures that were assigned elsewhere put unrelated material
+in front of every run and re-clarified the same insights on every request and pass. A request with
+no quest gets no insights.
 
 **The tags are context for the reader, never a filter for this code.** Nothing here matches a
-category against a quest name, a goal title, or any other string. The tags are rendered next to
-each insight exactly as the person typed them, and the model composing the run decides which (if
-any) bear on the quest in front of it, the same way it judges the relevance of goals and
-reflections. A hardcoded match would silently drop every insight whose tag the code did not
-anticipate ("dissertation" vs. "thesis" vs. no tag at all), which is the failure mode this
-repository's hard rule #3 exists to prevent.
+category against a quest name, a goal title, or any other string; relevance was decided when the
+insight was assigned. The tags are rendered next to each insight exactly as the person typed them
+(hard rule #3 in this repository's CLAUDE.md: never keyword-match model or user text to decide
+anything).
 
 Like ``runner.reflections``, every function here is best-effort and never raises: a client without
-these methods, a 404, an empty collection, or a transport failure all degrade to an EMPTY context.
-A person who has captured nothing is the normal case, not an error.
+the method, an older backend (404), an empty list, or a transport failure all degrade to an EMPTY
+context. A quest with no assigned insights is the normal case, not an error.
 """
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -50,10 +51,8 @@ DEFAULT_WINDOW_DAYS = 14
 # out of the model's attention.
 MAX_INSIGHTS = 8
 
-# Per-insight character cap, and the page size / page count used to walk the entries endpoint.
+# Per-insight character cap.
 MAX_INSIGHT_CHARS = 400
-ENTRY_PAGE_LIMIT = 50
-MAX_PAGES = 3
 
 
 def _clip(text: Any, limit: int = MAX_INSIGHT_CHARS) -> str:
@@ -162,24 +161,22 @@ class Insight:
 # The framing around a rendered capture list. Shared with ``runner.context_updates`` so captures
 # delivered per row through the engine's slot read exactly as the block always has.
 BLOCK_FOOTER = (
-    "Those are the person's own captures, not work items filed against this quest, and the "
-    "tags are how they label their own thinking rather than a routing rule. Judge for "
-    "yourself which of them (if any) bear on the goals above: one tagged for something else "
-    "can still matter here, and one whose tag looks like a match can be irrelevant. Where "
-    "an insight does apply, act on it and say so in your result. Pass over the rest without "
-    "comment.")
+    "These were assigned to this quest when the person captured them, so none needs a relevance "
+    "guess. The tags are how they label their own thinking, not a routing rule. Where an "
+    "insight applies to the work in front of you, act on it and say so in your result. If "
+    "one cannot be acted on yet, say why in a sentence.")
 
 
 def block_header(since: Optional[datetime], window_days: int = DEFAULT_WINDOW_DAYS) -> str:
     when = (f"since {since.strftime('%Y-%m-%d')}" if since
             else f"in the last {window_days} days")
-    return (f"Insights the person captured on Quest {when} and has not yet marked acted on, "
-            f"in their own words, with the category tags they chose:")
+    return (f"Insights the person captured on Quest {when}, assigned to THIS quest, not yet "
+            f"marked acted on, in their own words, with the category tags they chose:")
 
 
 @dataclass
 class InsightsContext:
-    """The person's recent unacted insights, ready to render into a prompt.
+    """One quest's recent unacted insights, ready to render into a prompt.
 
     ``collection_id`` is carried so a caller that DOES act on one can close the loop through
     ``QuestClient.mark_insight_acted_on`` without a second lookup.
@@ -191,42 +188,19 @@ class InsightsContext:
     # they are different pieces of information.
     since: Optional[datetime] = None
     window_days: int = DEFAULT_WINDOW_DAYS
-    # The oldest instant this context could ever contain (``now - window_days`` at collect time).
-    # A narrowing cutoff older than this is clamped to it, so the rendered label never claims a
-    # reach the fetch did not have.
+    # The oldest instant this context could contain (``now - window_days`` at collect time).
     window_start: Optional[datetime] = None
+    # The quest these insights were assigned to.
+    quest_id: str = ""
 
     def has_any(self) -> bool:
         return bool(self.insights)
 
-    def narrow_to(self, cutoff: Optional[datetime]) -> "InsightsContext":
-        """A copy holding only insights captured after ``cutoff``.
-
-        This is what makes one fetch serve a whole pass. Insights are USER-scoped, so they are read
-        once; but "since the last time it ran" is a PER-QUEST question (each quest carries its own
-        ``last_pass_at``), so the narrowing happens here, in memory, instead of costing another
-        round trip per quest. ``None`` means no narrowing: a quest that has never had a pass should
-        see the whole window rather than nothing.
-        """
-        if cutoff is None:
-            return self
-        at = cutoff.astimezone(timezone.utc)
-        if self.window_start is not None and at < self.window_start:
-            # The fetch never reached that far back, so narrowing to it changes nothing and
-            # labelling it that way would overstate what is in the list.
-            at = self.window_start
-            kept = list(self.insights)
-        else:
-            kept = [i for i in self.insights if i.created_at is None or i.created_at > at]
-        return replace(self, insights=kept, since=at)
-
     def as_text(self) -> str:
         """The block a batch prompt can carry, or "" when there is nothing to say.
 
-        The closing instruction is the load-bearing part. It states plainly that the tags are the
-        person's labels for their own thinking rather than a routing rule, and hands the relevance
-        judgment to the reader — because the alternative (this code deciding which tags "belong" to
-        which quest) is a fixed string match that silently drops everything it did not anticipate.
+        The closing instruction is the load-bearing part: these were assigned to this quest at
+        capture, so the reader acts on them rather than guessing whether they belong.
         """
         if not self.has_any():
             return ""
@@ -248,107 +222,71 @@ class InsightsContext:
         return f"Unacted insight from {newest.date_label}{tags}: {text}{more}"
 
 
-def _collection_id(client: Any) -> str:
-    getter = getattr(client, "get_insights_collection", None)
-    if not callable(getter):
-        return ""
-    try:
-        payload = getter() or {}
-    except Exception:  # noqa: BLE001 -- insights are context, never worth failing a caller over
-        log.info("insights: could not read the Insights collection", exc_info=True)
-        return ""
-    if not isinstance(payload, dict):
-        return ""
-    return str(payload.get("id") or payload.get("_id") or "")
+def collect_quest_insights(client: Any, quest_id: str, *,
+                           since: Optional[datetime] = None,
+                           days_cap: int = DEFAULT_WINDOW_DAYS,
+                           max_insights: int = MAX_INSIGHTS,
+                           now: Optional[datetime] = None) -> InsightsContext:
+    """Read the latest unacted insights assigned to ``quest_id`` into one ``InsightsContext``.
 
+    ``client`` is a ``QuestClient`` (or anything exposing ``list_quest_insights``). A blank
+    ``quest_id``, a client without the method, an older backend (the route answers 404, which the
+    client reports as ``{}``) or a transport failure yields an EMPTY context, never an exception.
+    Only the quest route is called: the person's other insights are never read.
 
-def _entry_page(client: Any, collection_id: str, page: int, limit: int) -> Dict[str, Any]:
-    getter = getattr(client, "list_collection_entries", None)
-    if not callable(getter):
-        return {}
-    try:
-        payload = getter(collection_id, page=page, limit=limit) or {}
-    except Exception:  # noqa: BLE001
-        log.info("insights: entry page %s read failed for collection %s", page, collection_id,
-                 exc_info=True)
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def collect_unacted_insights(client: Any, *,
-                             since: Optional[datetime] = None,
-                             days_cap: int = DEFAULT_WINDOW_DAYS,
-                             max_insights: int = MAX_INSIGHTS,
-                             page_limit: int = ENTRY_PAGE_LIMIT,
-                             max_pages: int = MAX_PAGES,
-                             now: Optional[datetime] = None) -> InsightsContext:
-    """Read the person's recent, still-unacted insights into one ``InsightsContext``.
-
-    ``client`` is a ``QuestClient`` (or anything exposing ``get_insights_collection`` and
-    ``list_collection_entries``). A client without those methods yields an empty context rather
-    than an AttributeError, so an older or partial client stays usable.
-
-    The entries endpoint has NO server-side filter for either condition, so both are applied here,
-    mirroring quest-backend's own ``_get_recent_unacted_insights``: skip anything whose ``acted_on``
-    checkbox is ticked, and anything captured before the cutoff. The cutoff is the LATER of ``since``
-    and ``now - days_cap`` — a caller passing a very old "last time I ran" still gets a bounded,
-    recent list rather than the whole history.
-
-    Entries come back newest-first, so paging stops as soon as a page reaches past the cutoff (and,
-    regardless, at ``max_pages`` or once ``max_insights`` are in hand). An entry with an unreadable
-    timestamp is KEPT rather than dropped, matching the backend: a capture with a malformed date is
-    still something the person wrote.
+    The server already filters to the quest and to unacted, newest first. Both the window and the
+    acted check are applied again here, defensively: skip anything whose ``acted_on`` checkbox is
+    ticked, and anything captured at or before the cutoff, the LATER of ``since`` and
+    ``now - days_cap``. An entry with an unreadable timestamp is KEPT: a capture with a malformed
+    date is still something the person wrote. Output is newest first and bounded by
+    ``max_insights``.
     """
     at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     window_start = at - timedelta(days=max(0, days_cap))
     cutoff = window_start
     if since is not None:
-        since_utc = since.astimezone(timezone.utc)
-        cutoff = max(window_start, since_utc)
-
+        cutoff = max(window_start, since.astimezone(timezone.utc))
+    qid = str(quest_id or "").strip()
     ctx = InsightsContext(since=cutoff if since is not None else None,
-                          window_days=max(0, days_cap),
-                          window_start=window_start)
-    collection_id = _collection_id(client)
-    if not collection_id:
+                          window_days=max(0, days_cap), window_start=window_start,
+                          quest_id=qid)
+    getter = getattr(client, "list_quest_insights", None)
+    if not qid or not callable(getter):
         return ctx
-    ctx.collection_id = collection_id
+    limit = max(1, max_insights)
+    try:
+        payload = getter(qid, limit=limit, include_acted=False) or {}
+    except Exception:  # noqa: BLE001 -- insights are context, never worth failing a caller over
+        log.info("insights: could not read the insights of quest %s", qid, exc_info=True)
+        return ctx
+    if not isinstance(payload, dict):
+        return ctx
+    ctx.collection_id = str(payload.get("collection_id") or payload.get("collectionId") or "")
+    items = payload.get("items") or []
+    if not isinstance(items, list):
+        return ctx
 
-    collected: List[Insight] = []
-    for page in range(max(1, max_pages)):
-        payload = _entry_page(client, collection_id, page, page_limit)
-        items = payload.get("items") or payload.get("entries") or []
-        if not isinstance(items, list) or not items:
-            break
-        reached_past_cutoff = False
-        for entry in items:
-            if not isinstance(entry, dict):
-                continue
-            values = _field_values(entry)
-            if _acted_on(values.get(INSIGHT_ACTED_ON_FIELD_ID)):
-                continue
-            created = _parse_created(_created_raw(entry))
-            if created is not None and created <= cutoff:
-                # Newest-first ordering means everything after this is older too.
-                reached_past_cutoff = True
-                continue
-            text = _clip(values.get(INSIGHT_FIELD_ID))
-            if not text:
-                continue
-            collected.append(Insight(
-                entry_id=str(entry.get("id") or entry.get("_id") or ""),
-                text=text,
-                categories=_categories(values.get(INSIGHT_CATEGORIES_FIELD_ID)),
-                created_at=created,
-            ))
-            if len(collected) >= max(1, max_insights):
-                break
-        if len(collected) >= max(1, max_insights) or reached_past_cutoff:
-            break
-        pagination = payload.get("pagination") or {}
-        has_next = pagination.get("has_next", pagination.get("hasNext"))
-        if has_next is False:
-            break
-
-    ctx.insights = collected
+    rows: List[Insight] = []
+    for entry in items:
+        if not isinstance(entry, dict):
+            continue
+        values = _field_values(entry)
+        if _acted_on(values.get(INSIGHT_ACTED_ON_FIELD_ID)):
+            continue
+        created = _parse_created(_created_raw(entry))
+        if created is not None and created <= cutoff:
+            continue
+        text = _clip(values.get(INSIGHT_FIELD_ID))
+        if not text:
+            continue
+        rows.append(Insight(
+            entry_id=str(entry.get("id") or entry.get("_id") or ""),
+            text=text,
+            categories=_categories(values.get(INSIGHT_CATEGORIES_FIELD_ID)),
+            created_at=created,
+        ))
+    # Newest first regardless of the order the server used; an undated row sorts last.
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    rows.sort(key=lambda i: i.created_at or floor, reverse=True)
+    ctx.insights = rows[:limit]
     return ctx
