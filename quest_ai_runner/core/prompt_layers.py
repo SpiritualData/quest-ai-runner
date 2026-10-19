@@ -64,7 +64,7 @@ def language_instruction(language: Optional[str] = None) -> str:
     - ``None`` or anything else (the default, since quest-ai-runner has no per-user preference
       lookup of its own) pins the reply to English unless the user explicitly asks for another
       language. Mirroring the message language let foreign-language context pull replies out of
-      English (reported by Zee, 2026-10-15), so English is the default.
+      English (reported by a team member, 2026-10-15), so English is the default.
     """
     name = LANGUAGE_NAMES.get((language or "").strip().lower())
     if name:
