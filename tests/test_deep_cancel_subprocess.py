@@ -16,6 +16,7 @@ import os
 import stat
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -23,7 +24,7 @@ from typing import List, Optional
 import pytest
 
 from quest_ai_runner.core import goal_runner_contract
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters import DeepResult, EVENT_EXEC, ProgressEvent
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.goal_runner_contract import kill_process_group
 from quest_ai_runner.core.model_registry import ModelRegistry
@@ -249,3 +250,55 @@ def test_a_runner_without_the_parameter_is_called_exactly_as_before():
     build(runner).run("build X", cancel_check=lambda: False)
 
     assert runner.calls >= 1
+
+
+# --- terminal Esc: run_stream cancels the run instead of abandoning it ----------------------------
+
+class BlockingRunner:
+    """Streams one event, then works until its cancel signal fires (a stand-in for a long
+    ``claude -p``). ``stopped_at`` records when it noticed, ``events_after`` anything it did after."""
+
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.noticed = threading.Event()
+        self.finished = threading.Event()
+
+    def run_goal(self, *, goal: str, brief: str, model: Optional[str] = None,
+                 max_turns: Optional[int] = None, emit=None, cancel_check=None) -> DeepResult:
+        if emit is not None:
+            emit(ProgressEvent(type=EVENT_EXEC, text="working", data={"run_id": "r1"}))
+        self.started.set()
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            if cancel_check is not None and cancel_check():
+                self.noticed.set()
+                break
+            time.sleep(0.02)
+        self.finished.set()
+        return DeepResult(met=False, output="", cancelled=self.noticed.is_set(),
+                          session_id="sess-1")
+
+
+def test_closing_run_stream_stops_the_run_and_waits_for_it():
+    """Esc in the terminal breaks out of the stream. That must cancel the worker and not return
+    until it has stopped, so queued messages cannot start a second turn beside a live one."""
+    runner = BlockingRunner()
+    stream = build(runner).run_stream("build X")
+    for item in stream:
+        if runner.started.is_set():
+            break
+    stream.close()
+
+    assert runner.noticed.is_set(), "the worker must be told to stop"
+    assert runner.finished.is_set(), "close() must wait until the worker has stopped"
+
+
+def test_run_stream_forwards_a_cancel_check_to_the_run():
+    runner = BlockingRunner()
+    flag = threading.Event()
+    threading.Timer(0.3, flag.set).start()
+
+    items = list(build(runner).run_stream("build X", cancel_check=flag.is_set))
+
+    assert runner.noticed.is_set()
+    assert items[-1].kind == "cancelled"

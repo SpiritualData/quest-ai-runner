@@ -222,8 +222,16 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                    conv_id: Optional[str] = None,
                    conv_scope: Optional[Dict[str, Any]] = None,
                    now: Optional[str] = None,
-                   context_meta: Optional[Dict[str, Any]] = None):
+                   context_meta: Optional[Dict[str, Any]] = None,
+                   cancel_check: Optional[Callable[[], bool]] = None,
+                   stop_join_seconds: float = 60.0):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
+
+        ``cancel_check`` is forwarded to ``run`` (cooperative cancel, which also stops a running
+        deep worker process). Closing the generator early (``break`` then ``close()``, or letting
+        it be garbage collected) also cancels the run and WAITS up to ``stop_join_seconds`` for the
+        worker thread to exit, so a consumer that abandons the stream never has a run still working
+        behind its back when it starts the next turn.
 
         Yields each ``ProgressEvent`` (as emitted, post-sink-policy for the given mode) and,
         as the FINAL item, the terminal ``OrchestratorResult``. Implemented by feeding a
@@ -251,6 +259,12 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
         sink = StreamSink(lambda ev: q.put(("event", ev)))
 
         result_box: Dict[str, Any] = {}
+        abandoned = _threading.Event()
+
+        def _cancelled() -> bool:
+            if abandoned.is_set():
+                return True
+            return bool(cancel_check()) if cancel_check is not None else False
 
         def _worker():
             try:
@@ -258,7 +272,8 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                                quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint,
                                attachments=attachments, rep_preamble=rep_preamble,
                                pending_inputs=pending_inputs, conv_id=conv_id,
-                               conv_scope=conv_scope, now=now, context_meta=context_meta)
+                               conv_scope=conv_scope, now=now, context_meta=context_meta,
+                               cancel_check=_cancelled)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e
@@ -267,12 +282,23 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
 
         t = _threading.Thread(target=_worker, daemon=True)
         t.start()
-        while True:
-            kind, payload = q.get()
-            if kind == "event":
-                yield payload
-            else:
-                break
+        try:
+            while True:
+                kind, payload = q.get()
+                if kind == "event":
+                    yield payload
+                else:
+                    break
+        finally:
+            if t.is_alive():
+                # The consumer stopped early. Cancel the run and wait for the thread, so the
+                # worker (and any Claude Code process under it) is stopped before the caller
+                # moves on.
+                abandoned.set()
+                t.join(timeout=stop_join_seconds)
+                if t.is_alive():
+                    log.warning("run_stream: the run did not stop within %ss of being abandoned",
+                                stop_join_seconds)
         t.join()
         if "error" in result_box:
             raise result_box["error"]

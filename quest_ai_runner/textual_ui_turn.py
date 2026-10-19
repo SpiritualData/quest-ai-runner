@@ -109,7 +109,7 @@ class TurnMixin:
                 how = "Selected" if s.turn_quest is s.pinned_quest else "Matched"
                 self.call_from_thread(self._console.dim,
                                       f"  {how} {describe_match(s.turn_quest)}")
-            for item in s._orch.run_stream(
+            stream = s._orch.run_stream(
                 user_text,
                 transcript=s._last_transcript(),
                 quest_id=s.bound_quest_id(),
@@ -118,13 +118,23 @@ class TurnMixin:
                 pending_inputs=_pending,
                 conv_id=s._conv_id,
                 context_meta=grounding_meta,
-            ):
-                if self._cancel.is_set():
-                    break
-                if isinstance(item, OrchestratorResult):
-                    final = item
-                else:
-                    self.call_from_thread(self._handle_event, item)
+                cancel_check=self._cancel.is_set,
+            )
+            try:
+                for item in stream:
+                    if self._cancel.is_set():
+                        break
+                    if isinstance(item, OrchestratorResult):
+                        final = item
+                    else:
+                        self.call_from_thread(self._handle_event, item)
+            finally:
+                # Esc: closing the stream cancels the run (a deep worker process is interrupted)
+                # and waits for it to stop, so the leftover-message turn that _finish_turn may
+                # start can never run beside the one that was cancelled.
+                close = getattr(stream, "close", None)
+                if callable(close):
+                    close()
         except Exception as e:  # noqa: BLE001
             error = e
 
