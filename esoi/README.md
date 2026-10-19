@@ -310,6 +310,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `iterate-by-spec:slice-only` | Slice of the specification before the task | quest_ai_runner/core/goal_runner_contract.py |  |
 | `iterate-by-spec:slice-and-writeback` | Slice before and write-back after | quest_ai_runner/core/goal_runner_contract.py |  |
 | `run-deep-work:stream_json` | Persistent stream-json runner | quest_ai_runner/core/goal_runner_stream.py |  |
+| `core-ml-tasks:message-route-family` | Classify through the message router alternatives | evaluation/components/classification/impls |  |
+| `core-ml-tasks:registry-conditioned-routing` | Route with the registry of examples, by model tier |  |  |
 
 ## Metrics
 
