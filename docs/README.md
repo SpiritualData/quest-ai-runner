@@ -69,7 +69,7 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 
 ## Explanation / reference
 
-- **[Structure registry](structure/README.md)**: the checked inventory of every component
+- **[Structure registry](../esoi/README.md)**: the checked inventory of every component
   (`components.csv`), every swappable solution with its metric (`solutions.csv`), the waivers, and
   `esoi check` that keeps them true.
 - **[Architecture Standards](ARCHITECTURE_STANDARDS.md)**: the brain / runner / adapters split, why
