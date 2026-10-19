@@ -4,7 +4,8 @@ A mixin of ``TaskExecutor`` (see ``executor.py``): methods only, state lives on 
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from ..core.orchestrator import OrchestratorResult, _strip_future_context
 from ..core.adapters import ProgressEvent
@@ -48,13 +49,16 @@ class ReportingMixin:
         itself. A caller with no such task to check defaults to False, the safe choice: the receipt
         then falls back to this executor's own context bundle, when one is wired, rather than
         risking a false receipt from text that merely quotes a prior brief."""
+        # When the run's work ended and reporting began: a leftover message sent before this moment
+        # arrived WHILE the run was working, one sent after it arrived after the run finished.
+        report_began = datetime.now(timezone.utc)
         outcome = self._report(task_id, result, conv_id, request_text=request_text,
                                rep_preamble=rep_preamble, card_id=card_id,
                                autopilot_composed=autopilot_composed)
         # Only after the terminal report: a steer that landed after the run's last drain point
         # has to be claimed now, or it sits on a finished task forever. See the helper.
         if outcome.status != "cancelled":
-            self._start_run_for_leftover_messages(task_id)
+            self._start_run_for_leftover_messages(task_id, run_ended_at=report_began)
         return outcome
 
     def _report_progress(self, task_id: str, kind: str, *, text: Optional[str] = None,
@@ -538,7 +542,31 @@ class ReportingMixin:
         if event.text:
             self._report_progress(task_id, "exec", text=event.text)
 
-    def _start_run_for_leftover_messages(self, task_id: str) -> None:
+    @staticmethod
+    def _leftover_arrival(claimed: List[Dict[str, Any]],
+                          run_ended_at: Optional[datetime]) -> str:
+        """When the leftover messages arrived relative to the run: ``"during"``, ``"after"`` or
+        ``"unknown"``.
+
+        Decided from each message's own ``at`` timestamp against the moment the run's work ended,
+        never guessed. ``"during"`` only when every message was sent before the run ended,
+        ``"after"`` only when every one was sent after, and ``"unknown"`` for a mix or when a time
+        is missing or unreadable, so the copy never claims more than is known."""
+        if run_ended_at is None:
+            return "unknown"
+        verdicts = set()
+        for message in claimed:
+            try:
+                sent = datetime.fromisoformat(str(message.get("at") or "").replace("Z", "+00:00"))
+                if sent.tzinfo is None:
+                    sent = sent.replace(tzinfo=timezone.utc)
+            except ValueError:
+                return "unknown"
+            verdicts.add("during" if sent < run_ended_at else "after")
+        return verdicts.pop() if len(verdicts) == 1 else "unknown"
+
+    def _start_run_for_leftover_messages(self, task_id: str,
+                                         run_ended_at: Optional[datetime] = None) -> None:
         """Turn steering messages the run never folded in into a new run on the same task.
 
         A person can send a message while the task is in_progress. The run only claims messages at
@@ -553,9 +581,23 @@ class ReportingMixin:
         person is told on the task's feed, since the claim already marked the message delivered.
         Best-effort like the other reads: never raises, and nothing happens when nothing is pending.
         """
-        leftover = self._message_texts(self._claim_task_messages(task_id))
+        claimed = self._claim_task_messages(task_id)
+        leftover = self._message_texts(claimed)
         if not leftover:
             return
+        # What the feed says about WHEN the message arrived must be true, so it is worked out from
+        # the message times and not assumed: a steer sent while the run was working could not be
+        # folded in (the worker was mid-step), and that is not "after the run finished".
+        arrival = self._leftover_arrival(claimed, run_ended_at)
+        many = len(leftover) > 1
+        if arrival == "during":
+            when = ("were sent while the run was still working" if many
+                    else "was sent while the run was still working")
+        elif arrival == "after":
+            when = "arrived after the run finished"
+        else:
+            when = ("were not picked up by the run" if many else "was not picked up by the run")
+        subject = f"Your {len(leftover)} messages" if many else "Your message"
         text = "\n\n".join(leftover)
         open_run = getattr(self._client, "open_run_on_task", None)
         try:
@@ -567,12 +609,10 @@ class ReportingMixin:
                         len(leftover), task_id, e)
             self._report_progress(
                 task_id, "error",
-                text=("Your message arrived after the run finished, and it could not start a new "
-                      "run. Send it again to try once more."))
+                text=(f"{subject} {when}, and {'they' if many else 'it'} could not start a new "
+                      "run. Send again to try once more."))
             return
         self._report_progress(
             task_id, "status",
-            text=("Your message arrived after the run finished, so it started a new run."
-                  if len(leftover) == 1 else
-                  f"Your {len(leftover)} messages arrived after the run finished, so they "
-                  "started a new run."))
+            text=f"{subject} {when}, so {'they' if many else 'it'} started a new run.")
+        self._mark_messages_seen(task_id, claimed, "new_run")

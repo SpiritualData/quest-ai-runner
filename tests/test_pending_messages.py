@@ -44,10 +44,11 @@ class MessageClaimingClient(MockQuestClient):
         self._queued: Dict[str, List[Dict[str, Any]]] = {}
         self.claim_calls: List[str] = []
 
-    def queue_message(self, task_id: str, text: str, *, message_id: str = "amsg_test") -> None:
+    def queue_message(self, task_id: str, text: str, *, message_id: str = "amsg_test",
+                      at: str = "2026-07-24T00:00:00Z") -> None:
         self._queued.setdefault(task_id, []).append({
             "message_id": message_id, "text": text, "author_user_id": "u1",
-            "at": "2026-07-24T00:00:00Z", "delivered_at": None,
+            "at": at, "delivered_at": None,
         })
 
     def claim_task_messages(self, task_id: str) -> List[Dict[str, Any]]:
@@ -311,3 +312,53 @@ def test_nothing_is_reported_seen_when_nothing_was_claimed():
         "s3", interval=0.0)
     assert poll() == []
     assert client.seen_calls == []
+
+
+# --- (e) the feed only says "after the run finished" when that is true -----------------------------
+
+class TimedLateClient(LateMessageClient):
+    """A late message whose own ``at`` timestamp the test chooses."""
+
+    def __init__(self, at: str):
+        super().__init__("one more thing")
+        self.sent_at = at
+
+    def report_done(self, task_id, result, *args, **kwargs):
+        MessageClaimingClient.report_done(self, task_id, result)
+        self.queue_message(task_id, self.late_text, message_id="amsg_late", at=self.sent_at)
+
+    def report_done_with_data(self, task_id, result, result_data=None):
+        out = MessageClaimingClient.report_done_with_data(self, task_id, result, result_data)
+        self.queue_message(task_id, self.late_text, message_id="amsg_late", at=self.sent_at)
+        return out
+
+
+def _leftover_status(at: str) -> str:
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = TimedLateClient(at)
+    TaskExecutor(client, _brain(provider)).execute({"id": "when1", "text": "do it"})
+    texts = [t for (_tid, k, t, _o) in client.progress if k == "status" and "new run" in (t or "")]
+    assert len(texts) == 1
+    return texts[0]
+
+
+def test_a_message_sent_during_the_run_is_not_said_to_have_arrived_after_it_finished():
+    said = _leftover_status("2020-01-01T00:00:00+00:00")
+
+    assert "after the run finished" not in said
+    assert "while the run was still working" in said
+    assert "started a new run" in said
+
+
+def test_a_message_sent_after_the_run_finished_says_so():
+    said = _leftover_status("2999-01-01T00:00:00+00:00")
+
+    assert "arrived after the run finished" in said
+
+
+def test_a_message_with_no_readable_time_claims_neither():
+    said = _leftover_status("not a time")
+
+    assert "after the run finished" not in said
+    assert "while the run was still working" not in said
+    assert "started a new run" in said
