@@ -17,6 +17,5 @@ S20,behave-by-esoi,"Live arm calls a model; stale because the recorded cases wer
 S20,judge-esoi-behavior,"Live arm calls a model; stale because code changed by the esoi migration (no behaviour change intended). Re-run by staged decision under esoi/metric-run-policy.md once the maintainer decides the development budget"
 S20,route-a-message:pre_route_then_planner,"Rival arm calls a model; stale since the esoi migration. Re-run with the selected arm by staged decision once the maintainer decides the development budget"
 S20,operate-a-quest:qar_orchestrator,"Rival arm calls a model; stale since the esoi migration. Re-run with the selected arm by staged decision once the maintainer decides the development budget"
-S20,replay-known-operations:planner_only_offline,"Rival arm calls a model; stale since the esoi migration. Re-run with the selected arm by staged decision once the maintainer decides the development budget"
 S20,behave-by-esoi:plain,"Rival arm calls a model; stale since the esoi migration. Re-run with the selected arm by staged decision once the maintainer decides the development budget"
 S20,behave-by-esoi:insitu_plain,"Rival arm calls a model; stale since the esoi migration. Re-run with the selected arm by staged decision once the maintainer decides the development budget"
