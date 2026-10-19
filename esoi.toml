@@ -13,9 +13,6 @@ plugins = ["scripts/esoi_rules.py"]
 # measured code for staleness: the package and the evaluation drivers, not their prose
 code_paths = ["quest_ai_runner", "evaluation/components", ":(exclude,glob)**/*.md"]
 
-# the overall network (qar_solution.md is its readable version), and the one column QAR keeps on its tracker
-# tabs after the key column: the grouping of detailed solutions into the ten areas of qar_solution.md
-overall = "docs/structure/overall"
 
 [tracker_extra]
 solutions = ["area"]

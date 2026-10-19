@@ -1,6 +1,6 @@
 # The ESOI network of QAR's structure
 
-Draft for Joshua's review, 2026-10-17. This is the intent of the structure itself: the evolvable
+Draft for Joshua's review, 2026-10-17. This elaborates the solution `evolve-by-metric` inside QAR's top intent, the structure itself: the evolvable
 structure that every QAR solution is recorded, measured and selected through ("The structure itself is
 an implementation of a solution which defines the purpose of the structure", `SKILL.md`). Every field
 is a field of the intent template in the evolvable-structure skill's `SKILL.md`; nothing here adds

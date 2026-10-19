@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Structure records use esoi's intent layout (esoi 3d3cb75).** `docs/structure/` now holds the top intent (`intent.csv`: why quest-ai-runner exists) beside the five record files; the two-level `overall/` folder is merged in and removed. The evolvable structure QAR applies is the solution `evolve-by-metric`, whose implementation uses esoi's solutions. `tests/test_overall_network.py` became `tests/test_top_intent_network.py`.
 - **Insights are read per quest, never all at once.** Context assembly, the autopilot pass and the executor ask `GET /api/data/insights/by-quest` (`QuestClient.list_quest_insights`, `runner.insights.collect_quest_insights`) for the latest unacted insights assigned to the quest in front of them. The review-all path (`collect_unacted_insights`) is removed, a request or task with no quest gets no insights, and the autopilot cache is keyed by quest. Insight rows no longer depend on category-tag promotion; the `categories` option of the `insights` source is ignored. An older backend without the route reads as no insights.
 
 ### Added

@@ -56,7 +56,7 @@ Say QAR must `summarize-a-thread`, and two ways exist: a rule-based cut and a mo
 ## Adopting it in another repo
 
 Install the `esoi` package and follow its guide, `docs/guides/apply-with-tools.md` in the evolvable-structure repository:
-write `esoi.toml`, then `components.csv` first (every file in one component), then the overall network and the intent
+write `esoi.toml`, then `components.csv` first (every file in one component), then `intent.csv` (the project's own why) and the intent
 records with a gap noted where no metric exists yet, and turn the gaps into components one at a time. Keep the rules that
 fit (`esoi rules` lists them; S1, S10 and S19 are the core) and record any exception in `waivers.csv`, which only shrinks.
 QAR's own `esoi.toml`, `scripts/esoi_rules.py` and `evaluation/components/common.py` are a worked example of the

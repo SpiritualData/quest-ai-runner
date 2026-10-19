@@ -2,8 +2,8 @@
 
 It depends on QAR's naming convention (``QAR_*``) and its generated configuration page, and sits beside
 ``env_vars.py`` (the scanner QAR keeps) in ``scripts/``. It is named in ``esoi.toml`` as a plugin; ``esoi rules``
-lists it with esoi's own rules. The overall network is native esoi (``docs/structure/overall/``), so no rule of
-QAR's is needed for it.
+lists it with esoi's own rules. The top intent and its records are native esoi (``docs/structure/``), so no rule of
+QAR's is needed for them.
 """
 import functools
 from pathlib import Path

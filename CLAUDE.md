@@ -58,8 +58,8 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 
 The repo's structure is data, not folklore, and the checking, running and measuring of it is Joshua's `esoi` package
 (a dev dependency pinned in `pyproject.toml`; `esoi rules` lists its rules, so they are not restated here). `docs/structure/`
-holds `components.csv` (placement only), the five intent record files, `overall/` (the overall network; `qar_solution.md` is
-its readable version), `waivers.csv` and `metric-run-policy.md`; `esoi.toml` configures esoi for this repo and
+holds `components.csv` (placement only), `intent.csv` (the top intent: why this project exists, in its own words) beside the five intent record files
+(`qar_solution.md` is the readable version of its problems, ideals and top solution), `waivers.csv` and `metric-run-policy.md`; `esoi.toml` configures esoi for this repo and
 `scripts/esoi_rules.py` adds QAR's one rule (S15, environment variables are documented). To add a solution, read
 `docs/structure/STANDARD.md`. Nothing lives outside a solution: a component that serves none (S19), or a solution with no
 current recorded run (S20), fails the check, and the code is removed rather than waived.

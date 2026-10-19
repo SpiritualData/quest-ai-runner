@@ -1,15 +1,15 @@
-# QAR as a solution: the overall ESOI network
+# QAR's top intent: why quest-ai-runner exists
 
-Draft for Joshua's review, 2026-10-17. This is the intent of quest-ai-runner as a whole: why it
+Draft for Joshua's review, 2026-10-17 (restated for the intent layout 2026-10-18). This is the top intent of quest-ai-runner (`intent.csv`), the intent as a whole: why it
 exists, what it should become, what it is defined to do, the alternatives to it, and how to tell
 whether it succeeds. Everything practical in the repository (each solution in `solutions.csv`, each
 module) implements a part of this. The general method and utilities for applying evolvable structure
 come from the separate evolvable-structure library; this document is QAR's own application of it.
 
 Every field is a field of the intent template in the evolvable-structure skill's `SKILL.md`.
-Metric has only a name until the template defines its other fields. The detailed problems and ideals
-in `problems.csv` and `ideals.csv` are aspects of the ones here; each detailed record names the
-overall one it serves in the table at the end.
+Metric has only a name until the template defines its other fields. The other problems and ideals
+in `problems.csv` and `ideals.csv` are aspects of the ones here; each names the one it elaborates
+(`parent_problem_ids`, `parent_ideal_ids`) in the table at the end.
 
 ## Problems
 
@@ -126,7 +126,7 @@ solution of its own unless its "best" differs from its parts.
 7. **Run on schedule:** run-queued-tasks, gate-an-autopilot-pass, configure-a-lane.
 8. **Spend proportionately:** call-a-model, choose-a-model-tier, track-usage-and-cost.
 9. **Be adoptable and safe in the open:** expose-the-public-api, explain-qar, operate-from-a-terminal, keep-secrets-out, verify-offline.
-10. **Evolve by metric:** check-the-structure, select-an-implementation, measure-implementations. These apply the evolvable-structure library to QAR; the general machinery moves there, and QAR keeps its records and configuration.
+10. **Evolve by metric:** evolve-by-metric (the evolvable structure QAR applies, a solution inside this intent whose implementation uses the `@esoi/...` solutions), select-an-implementation. The general machinery lives in the evolvable-structure library; QAR keeps its records and configuration.
 
 ## Implementations
 
@@ -190,9 +190,9 @@ solution of its own unless its "best" differs from its parts.
 - **Solution:** QS1 (measured through the structure check and the leaderboard)
 - **Ideals:** QI5, QI6
 
-## How the detailed records serve this
+## How the other records serve this
 
-| Overall | Detailed problems (problems.csv) |
+| Problem here | Detailed problems (problems.csv) |
 |---|---|
 | QP1 | prob-queued-task-falls-through, prob-autopilot-works-when-unwanted, prob-deep-work-wanders, prob-claimed-done-not-done |
 | QP2 | prob-reply-misses-the-account, prob-follow-up-loses-thread, prob-context-drifts-from-its-source, prob-relevant-card-not-found, prob-prompt-overflow-and-duplication, prob-corrections-repeat, prob-private-data-crosses-scope, prob-web-answers-unsafe-or-costly |
