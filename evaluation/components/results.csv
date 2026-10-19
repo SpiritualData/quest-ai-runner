@@ -482,3 +482,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-18,explain_qar,shipped_docs,413,413,413/413,0/0,0,0,0,0.0,0.3,5f1b014,08e1e503,none,,
 2026-10-18,persist_predictions,file_store,12,12,9/9,3/3,0,0,0,0.0,0.0,5f1b014,04f6935e,none,,
 2026-10-18,gate_an_autopilot_pass,live_pass,33,33,27/27,6/6,0,0,0,0.0,0.0,5f1b014,db27a1a5,none,,
+2026-10-18,recipe_fast_path,recipe_replay_offline,30,30,30/30,0/0,47,0,0,,0.1,09089e0,c6c91720,unknown,,
