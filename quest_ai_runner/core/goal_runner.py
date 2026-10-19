@@ -46,6 +46,8 @@ from .adapters import DeepResult, DeepRunner, EVENT_EXEC, ProgressEvent
 
 from .goal_runner_contract import (  # noqa: F401
     BALANCED_CLI_MODEL,
+    CANCEL_POLL_SECONDS,
+    DEFAULT_CANCEL_GRACE_SECONDS,
     DEEP_REVIEW_CALL_TIMEOUT_SECONDS,
     DEEP_REVIEW_PROMPT,
     DEFAULT_DEEP_MAX_TURNS,
@@ -75,6 +77,8 @@ from .goal_runner_contract import (  # noqa: F401
     envelope_reports_no_work,
     extract_escalation_id,
     kill_process_group,
+    signal_process_group,
+    stop_process_group,
     parse_deep_review,
     resolve_deep_review_interval_seconds,
     resolve_deep_timeout_seconds,
@@ -218,13 +222,21 @@ class SubprocessGoalRunner(DeepRunner):
                  run_id: Optional[str] = None,
                  working_dir: Optional[str] = None,
                  resume_session_id: Optional[str] = None,
-                 requester_user_id: Optional[str] = None) -> DeepResult:
-        """Run the goal, then stamp the result with the model id Claude Code resolved it to."""
+                 requester_user_id: Optional[str] = None,
+                 cancel_check: Optional[Callable[[], bool]] = None) -> DeepResult:
+        """Run the goal, then stamp the result with the model id Claude Code resolved it to.
+
+        ``cancel_check`` (optional) is polled every ``CANCEL_POLL_SECONDS`` while the worker runs;
+        when it reports True the worker is stopped promptly (interrupt, then terminate after the
+        configured grace period, then kill) and the result comes back ``cancelled`` with the
+        session id, instead of the worker carrying on until it exits or the liveness review
+        notices."""
         try:
             res = self.run_goal_once(goal=goal, brief=brief, model=model, max_turns=max_turns,
                                      emit=emit, context_preamble=context_preamble, run_id=run_id,
                                      working_dir=working_dir, resume_session_id=resume_session_id,
-                                     requester_user_id=requester_user_id)
+                                     requester_user_id=requester_user_id,
+                                     cancel_check=cancel_check)
         except Exception as e:  # noqa: BLE001 — the DeepRunner port never raises (adapters_deep.py)
             _log.error("deep worker failed unexpectedly: %s: %s", type(e).__name__, e, exc_info=True)
             return DeepResult(met=False, error=f"The deep worker failed unexpectedly: {type(e).__name__}: {e}")
@@ -241,7 +253,8 @@ class SubprocessGoalRunner(DeepRunner):
                       working_dir: Optional[str] = None,
                       resume_session_id: Optional[str] = None,
                       prompt_budget_tokens: Optional[int] = None,
-                      requester_user_id: Optional[str] = None) -> DeepResult:
+                      requester_user_id: Optional[str] = None,
+                      cancel_check: Optional[Callable[[], bool]] = None) -> DeepResult:
         # ``prompt_budget_tokens`` overrides the configured prompt budget for this call only; it is
         # how a launch refused with "Prompt is too long" retries with a tighter fit (see below).
         # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
@@ -417,11 +430,21 @@ class SubprocessGoalRunner(DeepRunner):
         proc_start = time.time()
         stop_reason: Optional[str] = None
         stop_limit = None
+        stopped_how: Optional[str] = None   # set when a cancel request stopped the worker
         pending_input: Optional[bytes] = prompt.encode("utf-8")
+        # With a cancel signal the wait is cut into short slices so a Stop is noticed within
+        # ``CANCEL_POLL_SECONDS``; the liveness review then runs on its own clock inside them.
+        # Without one the slices are the review interval, exactly as before.
+        poll_s = CANCEL_POLL_SECONDS if cancel_check is not None else None
+        next_review = (proc_start + review_interval) if review_interval is not None else None
         try:
             while True:
                 now = time.time()
                 slice_s = review_interval
+                if poll_s is not None and next_review is not None:
+                    slice_s = min(poll_s, max(0.0, next_review - now))
+                elif poll_s is not None:
+                    slice_s = poll_s
                 if effective_timeout is not None:
                     left = max(0.0, effective_timeout - (now - proc_start))
                     slice_s = left if slice_s is None else min(slice_s, left)
@@ -430,6 +453,15 @@ class SubprocessGoalRunner(DeepRunner):
                     break
                 except subprocess.TimeoutExpired:
                     pending_input = None  # the prompt is only ever sent on the first call
+                    if cancel_check is not None:
+                        try:
+                            cancel_now = bool(cancel_check())
+                        except Exception:  # noqa: BLE001 -- a broken check must never end a run
+                            cancel_now = False
+                        if cancel_now:
+                            raw, err, stopped_how = stop_process_group(
+                                proc, self.cfg.cancel_grace_seconds)
+                            break
                     elapsed = time.time() - proc_start
                     if effective_timeout is not None and elapsed >= effective_timeout:
                         stop_reason = (
@@ -438,6 +470,10 @@ class SubprocessGoalRunner(DeepRunner):
                         break
                     if review_interval is None:
                         continue
+                    if poll_s is not None:
+                        if time.time() < next_review:
+                            continue
+                        next_review = time.time() + review_interval
                     stop_now, reason, stop_limit = self._review_liveness(
                         effective_working_dir, session_id, elapsed, emit, run_id)
                     if stop_now:
@@ -456,6 +492,18 @@ class SubprocessGoalRunner(DeepRunner):
             if monitor_thread:
                 monitor_thread.join(timeout=2)
 
+        if stopped_how is not None:
+            # STOPPED ON REQUEST. The worker process group was interrupted (and terminated or killed
+            # when it ignored that); whatever it had printed is kept, and the session id lets a
+            # later reply resume the work already done. Not a failure and never verified.
+            partial_raw = raw.decode("utf-8", errors="replace") if raw else ""
+            partial, stop_tokens, stop_cost = _parse_worker_output(partial_raw)[:3]
+            _log.info("deep run %s stopped on request (%s)", session_id, stopped_how)
+            return DeepResult(
+                met=False, output=partial, tokens=stop_tokens, cost_usd=stop_cost,
+                session_id=session_id, cancelled=True,
+                error="The run was stopped on request. Changes it had already finished are kept; "
+                      "a step it was in the middle of may not have completed.")
         if stop_reason is not None:
             if stop_limit is not None:
                 stop_limit = usage_limit.record(stop_limit)
@@ -496,7 +544,8 @@ class SubprocessGoalRunner(DeepRunner):
                     data={"run_id": run_id, "phase": "resume_unavailable"}))
             return self.run_goal(goal=goal, brief=brief, model=model, max_turns=max_turns,
                                  emit=emit, context_preamble=context_preamble, run_id=run_id,
-                                 working_dir=working_dir, resume_session_id=None)
+                                 working_dir=working_dir, resume_session_id=None,
+                                 cancel_check=cancel_check)
 
         # THE SUBSCRIPTION USAGE LIMIT is a wait, not a failure. Claude Code refuses with exit 1 and
         # a synthetic result ("You've hit your weekly limit · resets 1pm (America/Los_Angeles)");
@@ -568,7 +617,8 @@ class SubprocessGoalRunner(DeepRunner):
                         goal=goal, brief=brief, model=model, max_turns=max_turns, emit=emit,
                         context_preamble=context_preamble, run_id=run_id,
                         working_dir=working_dir, resume_session_id=None,
-                        prompt_budget_tokens=budget, requester_user_id=requester_user_id)
+                        prompt_budget_tokens=budget, requester_user_id=requester_user_id,
+                        cancel_check=cancel_check)
                 tighter = budget // 2
                 if tighter >= prompt_budget.MIN_DEEP_PROMPT_TOKEN_BUDGET:
                     _log.info("prompt too long at a %d-token budget (~%d tokens sent); retrying "
@@ -577,7 +627,8 @@ class SubprocessGoalRunner(DeepRunner):
                         goal=goal, brief=brief, model=model, max_turns=max_turns, emit=emit,
                         context_preamble=context_preamble, run_id=run_id,
                         working_dir=working_dir, resume_session_id=None,
-                        prompt_budget_tokens=tighter, requester_user_id=requester_user_id)
+                        prompt_budget_tokens=tighter, requester_user_id=requester_user_id,
+                        cancel_check=cancel_check)
                 return DeepResult(
                     met=False, output="", session_id=session_id, launch_failed=True,
                     error=(f"The deep worker could not start: the model refused the prompt as too "

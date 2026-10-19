@@ -131,6 +131,24 @@ def _run_goal_accepts_resume_session_id(deep_runner: Any) -> bool:
     return False
 
 
+def run_goal_accepts_cancel_check(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``cancel_check`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_emit``. When accepted, the run's cancel signal is
+    handed to the worker so a cancel STOPS the running process (interrupt, then terminate after a
+    grace period) instead of being read only between attempts. A runner without the kwarg keeps
+    today's behaviour: the cancel takes effect when its current attempt returns.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "cancel_check" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 def run_goal_accepts_is_subgoal(deep_runner: Any) -> bool:
     """Whether a DeepRunner's ``run_goal`` accepts an ``is_subgoal`` keyword (or **kwargs).
 

@@ -41,6 +41,7 @@ from .orchestrator_capabilities import (
     _run_goal_accepts_resume_session_id,
     _run_goal_accepts_run_id,
     _run_goal_accepts_working_dir,
+    run_goal_accepts_cancel_check,
     run_goal_accepts_gathered_observations,
     run_goal_accepts_is_subgoal,
     run_goal_accepts_requester_user_id,
@@ -102,7 +103,19 @@ class DeepRunMixin:
         # bail out before spawning any subtask work at all when the caller already reports the run
         # was cancelled. ``goals`` mirrors the "no deep-runner configured" early return above so a
         # caller inspecting a cancelled result still sees which goal(s) were requested.
-        if cancel_check is not None and cancel_check():
+        #
+        # The caller's check is wrapped so a worker that reports ``DeepResult.cancelled`` (it was
+        # stopped on request, mid-process) counts as cancelled at once for every check below. The
+        # caller's own check is throttled, so it may still read False for a while after the stop.
+        user_cancel_check = cancel_check
+        stopped_on_request = threading.Event()
+
+        def cancel_check() -> bool:  # noqa: F811 -- deliberately wraps the caller's parameter
+            if stopped_on_request.is_set():
+                return True
+            return bool(user_cancel_check()) if user_cancel_check is not None else False
+
+        if cancel_check():
             _cancelled_goals = [
                 (st.get("goal") or "").strip() or user_message
                 for st in (plan.deep_subtasks or [{"goal": plan.goal}])
@@ -388,7 +401,7 @@ class DeepRunMixin:
                 if runner is None:
                     return {"emit": False, "run_id": False, "preamble": False, "gathered": False,
                             "working_dir": False, "resume": False, "is_subgoal": False,
-                            "requester": False}
+                            "requester": False, "cancel": False}
                 cached = runner_caps.get(id(runner))
                 if cached is None:
                     cached = {
@@ -400,6 +413,7 @@ class DeepRunMixin:
                         "resume": _run_goal_accepts_resume_session_id(runner),
                         "is_subgoal": run_goal_accepts_is_subgoal(runner),
                         "requester": run_goal_accepts_requester_user_id(runner),
+                        "cancel": run_goal_accepts_cancel_check(runner),
                     }
                     runner_caps[id(runner)] = cached
                 return cached
@@ -502,6 +516,11 @@ class DeepRunMixin:
                     # (``QAR_REQUESTER_USER_ID``, see ``core/requester.py``).
                     if caps["requester"] and requester_user_id:
                         kwargs["requester_user_id"] = requester_user_id
+                    # THE CANCEL SIGNAL, so a cancel stops the running worker process itself (an
+                    # interrupt, then a terminate after a grace period) instead of being read only
+                    # once the attempt has finished. Only for a runner that accepts it.
+                    if caps["cancel"] and cancel_check is not None:
+                        kwargs["cancel_check"] = cancel_check
                     # The runner LADDER was resolved once per task, above (not re-resolved per
                     # retry — the classifier's inputs don't change across retries of the same
                     # task); which rung of it runs THIS attempt is decided by the loop below and
@@ -510,7 +529,13 @@ class DeepRunMixin:
                     # FUTURE-CONTEXT bullets are moved out of ``output`` into ``future_context``, so
                     # the payload handed to the goal verifier, the emit paths, and the consumer can
                     # never carry the section, and the card updater has exactly one place to read.
-                    return _normalize_future_context(active_runner.run_goal(**kwargs))
+                    done = active_runner.run_goal(**kwargs)
+                    if getattr(done, "cancelled", False):
+                        # The worker was stopped on request. Remember it here, because the caller's
+                        # own cancel_check is throttled and may not read True yet: the loop below
+                        # must stop at once (no verifier call, no retry), never run on a stale False.
+                        stopped_on_request.set()
+                    return _normalize_future_context(done)
                 except Exception as e:  # noqa: BLE001
                     log.error(f"Deep runner failed: {type(e).__name__}: {e}", exc_info=True)
                     return DeepResult(met=False, error=type(e).__name__)

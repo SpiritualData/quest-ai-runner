@@ -204,6 +204,16 @@ class DeepResult:
     # rung is a Claude model, so another rung would be refused too) and the task executor requeues
     # the task instead of reporting it. ``session_id`` still names the session to continue.
     usage_limited: bool = False
+    # The run was STOPPED ON REQUEST (the caller's ``cancel_check`` reported a cancel while the
+    # worker was running). The worker process was interrupted and, if it ignored that, terminated;
+    # ``session_id`` still names the session so a later reply can resume the work already done.
+    # Structural, set by the runner from its own stop, never inferred from any text. The goal loop
+    # stops on it at once: no verifier call, no retry.
+    cancelled: bool = False
+    # The run was PAUSED on request (the caller's control channel asked for a pause). The process
+    # was interrupted and released; ``session_id`` is what a resume continues. Not a failure and
+    # not a cancel: the work belongs back on the thread until a person resumes it.
+    paused: bool = False
     # The worker NEVER STARTED the goal: the binary is missing or not executable, or the CLI refused
     # before its first model turn (an unrecognized model id, bad credentials, a rejected flag), so
     # it consumed nothing and did nothing. Its ``output`` (if any) is the CLI's own error text, not

@@ -7,6 +7,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import os
 import re
 import signal
 from typing import Any, Callable, List, Optional, Tuple
@@ -140,6 +141,61 @@ def kill_process_group(proc: "subprocess.Popen") -> None:
         proc.kill()
     except Exception:  # noqa: BLE001 — best-effort cleanup, never raise from a timeout handler
         pass
+
+
+# How often (seconds) a running worker is checked for a cancel request. Short, because a person who
+# pressed Stop is waiting on it; the check itself is a cheap call the caller already throttles.
+CANCEL_POLL_SECONDS = 1.0
+
+# How long a worker is given to exit on its own after an interrupt before it is terminated, and
+# after a terminate before it is killed. Claude Code flushes its session on an interrupt, so the
+# grace is what keeps the work done so far resumable.
+DEFAULT_CANCEL_GRACE_SECONDS = 5.0
+
+
+def signal_process_group(proc: "subprocess.Popen", sig: int) -> bool:
+    """Send ``sig`` to the worker's whole process group; True when it was delivered.
+
+    Same reach as ``kill_process_group`` (the worker is its own group leader), but with a chosen
+    signal, so a stop can ask politely (SIGINT, then SIGTERM) before the SIGKILL.
+    """
+    try:
+        os.killpg(os.getpgid(proc.pid), sig)
+        return True
+    except (ProcessLookupError, PermissionError, OSError, AttributeError):
+        pass
+    try:
+        proc.send_signal(sig)
+        return True
+    except Exception:  # noqa: BLE001 -- already exited, or no such process
+        return False
+
+
+def stop_process_group(proc: "subprocess.Popen", grace_seconds: float = DEFAULT_CANCEL_GRACE_SECONDS
+                       ) -> Tuple[Optional[bytes], Optional[bytes], str]:
+    """Stop a running worker promptly: interrupt, then terminate, then kill.
+
+    SIGINT first (what Esc is to Claude Code: it stops the current step and exits having saved its
+    session), SIGTERM after ``grace_seconds`` if it is still alive, SIGKILL after another
+    ``grace_seconds``. Returns ``(stdout, stderr, how)`` with whatever the worker had buffered and
+    ``how`` one of ``"interrupted"``, ``"terminated"`` or ``"killed"``. Never raises.
+    """
+    import subprocess as _subprocess
+    for sig, how in ((signal.SIGINT, "interrupted"), (signal.SIGTERM, "terminated")):
+        signal_process_group(proc, sig)
+        try:
+            out, err = proc.communicate(timeout=grace_seconds)
+            return out, err, how
+        except _subprocess.TimeoutExpired:
+            continue
+        except Exception:  # noqa: BLE001 -- a broken pipe means it is gone
+            return None, None, how
+    kill_process_group(proc)
+    try:
+        out, err = proc.communicate(timeout=5)
+    except Exception:  # noqa: BLE001 -- best-effort drain after a kill
+        out, err = None, None
+    return out, err, "killed"
 
 
 def _is_claude_model(model: str) -> bool:
@@ -545,6 +601,9 @@ class SubprocessConfig:
     # QAR_DEEP_PROMPT_TOKEN_BUDGET, else the library default; any value is capped at what the
     # run's model window can hold beside the worker's own system prompt and working room.
     prompt_token_budget: Optional[int] = None
+    # Seconds a worker is given to exit after an interrupt (and again after a terminate) when a run
+    # is stopped on request, before it is killed. See ``stop_process_group``.
+    cancel_grace_seconds: float = DEFAULT_CANCEL_GRACE_SECONDS
 
     def web_enabled(self) -> bool:
         """Whether the spawned worker can BROWSE the live web (WebSearch/WebFetch reachable).
