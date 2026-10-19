@@ -47,8 +47,9 @@ dependencies = [
     "python-docx>=1.1",
     "openpyxl>=3.1",
     # Declares each swappable implementation beside its code (`@implementation`) and selects one at run time
-    # (core/resolve.py). Core, since the adapters import it; no dependencies of its own.
-    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@ee2c591a413e2b1167ecd9b71fdaa1f49eed2057#subdirectory=implementations/python",
+    # (core/resolve.py). Core, since the adapters import it; no dependencies of its own. Tracks esoi main like the
+    # backend and conceptai do: two different direct-URL commits of one package cannot be installed together.
+    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@main#subdirectory=implementations/python",
 ]
 
 [project.optional-dependencies]
