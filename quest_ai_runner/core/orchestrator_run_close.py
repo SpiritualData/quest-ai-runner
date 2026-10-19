@@ -8,6 +8,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
+from .auxiliary_prompts import SUPPORT_REWRITE_STEER
 from .adapters import EVENT_INTENT, EVENT_MILESTONE, Mode, PlanDecision, ProgressEvent
 from .orchestrator_constants import log, result_landed_work
 from .orchestrator_decide_tool import (
@@ -355,7 +356,8 @@ class RunCloseMixin:
                         transcript=transcript,
                         exec_record=exec_record if self.cfg.verify_claims else None,
                         context_layer=answer_context_layer,
-                        gathered=gathered)
+                        gathered=gathered,
+                        check_support=bool(self.cfg.verify_claims and self.cfg.verify_support))
                     if verdict is not None:
                         rs._last_verdict = verdict
                     if verdict is not None and verdict.get("met"):
@@ -502,6 +504,21 @@ class RunCloseMixin:
                             self._kickoff_card_update(_esc_res, _esc_plan, rs.user_message, _ctx_meta,
                                                       emit, gathered=gathered)
                             return finish(_esc_res)
+                    # SUPPORT: the reply states facts or advice as certain that nothing this turn
+                    # backs. Rewrite it ONCE (state the basis, hedge, say there is no evidence, or
+                    # drop the claim). The flag is spent after one rewrite: a second verdict that
+                    # still flags it ends the loop with the reply as written rather than looping.
+                    if verdict.get("claims_unsupported"):
+                        if getattr(rs, "support_rewritten", False):
+                            break
+                        rs.support_rewritten = True
+                        if emit is not None:
+                            emit.status("Adding the basis for the claims in the reply…")
+                        rs.text = self.keep_landed_work_reported(rs, _gen_answer(
+                            SUPPORT_REWRITE_STEER.format(
+                                reason=verdict.get("reason") or "see the claims above", text=rs.text)))
+                        _attempt += 1
+                        continue
                     # Goal not met: surface the current answer as a milestone so the user sees
                     # progress while we continue iterating toward the goal.
                     if emit is not None and rs.text:
@@ -532,6 +549,7 @@ class RunCloseMixin:
                 and not rs.deferred_unconfirmed
                 and not rs._claim_corrected and not rs.brainstorm_active
                 and rs._last_verdict is not None and not rs._last_verdict.get("met")
+                and not rs._last_verdict.get("claims_unsupported")
                 and not _ctx_meta.get("deep_attempted")
                 and self._has_deep_execution_capability()
                 and (exec_record is None or not exec_record.any_mutation_attempted)):

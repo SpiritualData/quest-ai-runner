@@ -323,6 +323,9 @@ VERIFY_WEB_EVIDENCE_MAX_CHARS = 8000
 # correct detail from later in the page unsupported. Sized for one full part (~12000 tokens) plus
 # a few other reads; search-only turns keep the smaller cap above.
 VERIFY_WEB_PAGE_EVIDENCE_MAX_CHARS = 64000
+# Cap on what the support check shows of this turn's non-web reads (files, records, query results).
+# Bounded so a read-heavy turn cannot grow the verifier's uncached tail without limit.
+VERIFY_READ_EVIDENCE_MAX_CHARS = 3000
 
 
 # ---------------------------------------------------------------------------

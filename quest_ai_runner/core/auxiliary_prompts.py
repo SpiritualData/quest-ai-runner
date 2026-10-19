@@ -44,6 +44,10 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
             "claims_unexecuted": {"type": "boolean",
                                   "description": "True if the output claims a completed change the "
                                                  "execution record does not back."},
+            "claims_unsupported": {"type": "boolean",
+                                   "description": "True if the output states a factual claim or advice as "
+                                                  "certain that nothing shown supports and no named source "
+                                                  "backs, per the SUPPORT FOR CLAIMS rule."},
         },
         "required": ["met"],
     },
@@ -365,6 +369,32 @@ completion claims.
 {record}
 
 """
+
+# Appended after VERIFY_CLAIMS_RULES on the same answer turns (an execution record is supplied and
+# ``verify_support`` is on). It rides the SAME verdict call, so it adds a few prompt tokens and no
+# call. A failure triggers one bounded rewrite of the reply (see ``_run_verify_answer``).
+VERIFY_SUPPORT_RULES = """\
+SUPPORT FOR CLAIMS: also check the output's factual claims and advice. A claim is supported when it
+follows from the context shown, what was read this turn, the execution record, the user's own words,
+or a source the output itself names. If the output states a specific fact, figure, date, or a
+recommendation about how the world works (health, habits, learning, business, science) as certain,
+and nothing shown supports it, no named source backs it, and it is not marked as general knowledge
+or as uncertain, set claims_unsupported=true and met=false, and name the claim in reason. Never flag
+opinions, questions, options offered for the user to weigh, confirmations of recorded actions, or
+statements framed as uncertain. When unsure, do not flag.
+
+"""
+
+# The rewrite instruction for a reply the verifier flagged claims_unsupported. One pass only.
+SUPPORT_REWRITE_STEER = (
+    "Your previous answer states claims that nothing from this turn supports: {reason}\n"
+    "Rewrite it once. For each such claim do one of these: state its basis in a few words (the "
+    "person's own data, something read this turn, a named source, or research findings), mark it as "
+    "general knowledge and say how sure you are, say plainly that you have no evidence for it, or "
+    "remove it. Never invent a source. Keep everything that is supported, keep the reply as short as "
+    "before, and add no new claims. Do not use em dashes.\n\n"
+    "--- YOUR PREVIOUS ANSWER ---\n{text}"
+)
 
 # The exact delimiter line the deep worker must emit before its future-context bullets, and the
 # prefix the parser slices on. Kept as one constant so the brief instruction and the parser agree.
@@ -740,6 +770,16 @@ Scope:
   generic label ("the doc", "that project").
 - Keep what is finished apart from what remains. Say pending work as specific future steps, not as
   running commentary on how it is going.
+
+Evidence:
+- Give the basis of each fact or piece of advice in a few plain words: the person's own data, what
+  you read this turn, a named source, or research findings. Never invent a source, and never list
+  retrieval hits to do it. Show your confidence when you are not certain, and say plainly when you
+  have no evidence instead of sounding sure.
+- Advice about how the world works (health, habits, learning, business) needs research or a named
+  source behind it, so check it with the research or web tools you have when you are not already
+  sure of it.
+- A plain confirmation of an action you took needs no citation.
 
 Style:
 """ + READER_FIRST_STANDARD + """

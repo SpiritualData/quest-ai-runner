@@ -190,6 +190,11 @@ class OrchestratorConfig:
     # default. ``max_remediations`` caps the execute-for-real re-runs (only when no action ran).
     verify_claims: bool = True
     max_remediations: int = 1
+    # SUPPORT CHECK, folded into the SAME verdict as ``verify_claims`` (no extra call): the verdict
+    # also flags factual claims or advice the reply states as certain that nothing this turn
+    # supports (``claims_unsupported``). A flagged reply is rewritten ONCE to state its basis,
+    # hedge, or drop the claim. Only consulted when ``verify_claims`` is on.
+    verify_support: bool = True
     # LAST-RESORT DEEP RUN: when the turn's goal verdict is definitively NOT met and no deep run
     # was attempted this turn, run ONE deep pass before handing the user a non-answer (for example
     # "I don't have material on that, which file should I look in?"). Only applies when a deep

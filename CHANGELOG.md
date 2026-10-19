@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **The answer check also judges support for claims (`verify_support`, on by default).** The existing goal verdict on an answer turn (the same call that checks completed-change claims, no extra call) now also flags `claims_unsupported`: facts or advice stated as certain that nothing this turn supports (the context, what was read, the execution record, the user's words, or a named source). It is shown a bounded view of what the turn read (non-web, `VERIFY_READ_EVIDENCE_MAX_CHARS`). A flagged reply is rewritten once to state its basis, hedge, say there is no evidence, or drop the claim; the rewrite never starts a deep run. `REPLY_VOICE_SYSTEM` gains a short Evidence rule asking each fact or piece of advice to carry its basis and confidence.
 - **`QuestClient.list_team_chat`** reads `GET /api/teams/{team_id}/chat` (the team chat's recent messages, oldest first, read-only), so a consumer no longer needs a raw request to review a team's chat.
 
 ### Changed
