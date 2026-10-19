@@ -22,8 +22,10 @@ from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
 from quest_ai_runner.core.reflections import DEFAULT_PERIODS, collect_reflections
+from esoi import implementation
 
 
+@implementation("gather-evidence", "quest")
 class QuestRetrievalAdapter(RetrievalAdapter):
     """Query the Quest API for goal, task, and cross-environment context.
 

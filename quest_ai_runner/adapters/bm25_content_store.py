@@ -50,6 +50,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from esoi import implementation
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 
@@ -148,6 +149,7 @@ def _best_snippet(content: str, query_tokens: Set[str], n_lines: int = _SNIPPET_
 # BM25ContentStore
 # ---------------------------------------------------------------------------
 
+@implementation("select-context", "bm25")
 class BM25ContentStore(ContextAssemblerBase):
     """ContextAssembler using BM25 over the ACTUAL CONTENT of files in ``root``.
 

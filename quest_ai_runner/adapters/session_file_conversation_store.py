@@ -44,6 +44,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from quest_ai_runner.core.adapters import ConversationContext, ConversationStore
 
+from esoi import implementation
 from .conversation_format import (
     conversation_digest,
     conversation_messages,
@@ -79,6 +80,7 @@ _RECENCY_FLOOR_CONVS = 2
 _CONV_CACHE_SIZE = 16
 
 
+@implementation("remember-conversations", "session_file")
 class SessionFileConversationStore(ConversationStore):
     """ConversationStore over local Claude session files. Never raises from its public methods."""
 

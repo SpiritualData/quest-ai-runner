@@ -15,10 +15,12 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import ModelProviderBase
 from .retry_utils import parse_json_with_retry, retry_transient
 
 
+@implementation("call-a-model", "openai")
 class OpenAIProvider(ModelProviderBase):
     # Subclass hooks for OpenAI-compatible vendors (see DeepSeekProvider).
     key_env_name = "OPENAI_API_KEY"

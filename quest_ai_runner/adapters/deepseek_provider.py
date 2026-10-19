@@ -14,11 +14,13 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from .openai_provider import OpenAIProvider
 
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 
 
+@implementation("call-a-model", "deepseek")
 class DeepSeekProvider(OpenAIProvider):
     key_env_name = "DEEPSEEK_API_KEY"
     model_id_marker = "deepseek"

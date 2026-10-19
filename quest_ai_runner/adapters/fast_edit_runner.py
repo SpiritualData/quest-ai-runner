@@ -57,6 +57,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from esoi import implementation
 from ..core.adapters import (
     EVENT_EXEC,
     FUTURE_CONTEXT_VIA_FIELD,
@@ -205,6 +206,7 @@ class FastEditConfig:
     max_retries: int = 1
 
 
+@implementation("run-deep-work", "fast_edit")
 class FastEditRunner(DeepRunnerBase):
     """One-call file editing behind the ``DeepRunner`` interface.
 

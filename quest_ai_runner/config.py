@@ -297,7 +297,7 @@ class RunnerConfig:
     # LLM review) when model_provider is set. Leave None for keyword-only (zero-dependency).
     vector_store: Any = None
     # WHICH IMPLEMENTATION fills a swappable slot, as data: ``{solution_id: implementation name}``
-    # (ids from esoi/solutions.csv, names from core/selection_table.py), e.g.
+    # (ids from esoi/solutions.csv, names from the @implementation declarations), e.g.
     # ``{"run-deep-work": "acp", "index-by-meaning": "qdrant"}``. A slot not named here takes the table
     # default. Read by ``core.resolve.resolve`` at the selection sites; settable from a config file's
     # ``[selections]`` table, so switching an implementation is a config change, not code.
@@ -826,7 +826,7 @@ def build_orchestrator(
         tools=resolve_tool_registry(cfg),
         web=cfg.web_research,
         recipes=cfg.recipe_store or build_recipe_store_from_env(os.environ),
-        # Which first look fronts the planner: the selection table's operate-a-quest entry (or
+        # Which first look fronts the planner: the selected operate-a-quest implementation (or
         # ``cfg.selections["operate-a-quest"]``); "orchestrator" turns the pre-route off.
         pre_router_cls=resolve("operate-a-quest", overrides=cfg.selections),
         edited_files_card_updater=update_cards_from_deep_edits,

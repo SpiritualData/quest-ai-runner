@@ -142,74 +142,71 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `operate-a-quest:orchestrator_pre_route` | Brain with a settling pre-route | evaluation/components/quest_ops/impls/orchestrator_pre_route.py |  |
 | `operate-a-quest:direct_tool_call` | Direct tool-call ablation | evaluation/components/quest_ops/impls/direct_tool_call.py |  |
 | `operate-a-quest:pre_route` | Pre-route stage | quest_ai_runner/core/pre_route.py |  |
-| `gather-evidence:files_adapter` | Local file tree reader | quest_ai_runner/adapters/files_adapter.py |  |
-| `gather-evidence:cached_db_adapter` | Cached live-database reader | quest_ai_runner/adapters/cached_db_adapter.py |  |
-| `gather-evidence:composite_retrieval_adapter` | Parallel multi-source composite | quest_ai_runner/adapters/composite_retrieval_adapter.py |  |
-| `gather-evidence:mcp_retrieval_adapter` | MCP server reader | quest_ai_runner/adapters/mcp_retrieval_adapter.py |  |
+| `gather-evidence:files` | Local file tree reader | quest_ai_runner/adapters/files_adapter.py |  |
+| `gather-evidence:cached_db` | Cached live-database reader | quest_ai_runner/adapters/cached_db_adapter.py |  |
+| `gather-evidence:composite` | Parallel multi-source composite | quest_ai_runner/adapters/composite_retrieval_adapter.py |  |
+| `gather-evidence:mcp` | MCP server reader | quest_ai_runner/adapters/mcp_retrieval_adapter.py |  |
 | `gather-evidence:remote_files_adapter` | Remote file server reader | quest_ai_runner/adapters/remote_files_adapter.py |  |
-| `gather-evidence:notion_adapter` | Notion database reader | quest_ai_runner/adapters/notion_adapter.py |  |
-| `gather-evidence:google_drive_adapter` | Drive document reader | quest_ai_runner/adapters/google_drive_adapter.py |  |
-| `gather-evidence:google_chat_adapter` | Chat conversation reader | quest_ai_runner/adapters/google_chat_adapter.py |  |
-| `gather-evidence:quest_retrieval_adapter` | Quest API context reader | quest_ai_runner/adapters/quest_retrieval_adapter.py |  |
+| `gather-evidence:notion` | Notion database reader | quest_ai_runner/adapters/notion_adapter.py |  |
+| `gather-evidence:google_drive` | Drive document reader | quest_ai_runner/adapters/google_drive_adapter.py |  |
+| `gather-evidence:google_chat` | Chat conversation reader | quest_ai_runner/adapters/google_chat_adapter.py |  |
+| `gather-evidence:quest` | Quest API context reader | quest_ai_runner/adapters/quest_retrieval_adapter.py |  |
 | `search-the-web:web_research` | Snippet-first research with page extraction | quest_ai_runner/adapters/web_research.py |  |
-| `search-the-web:web_search_adapter` | Single-vendor retrieval-style search | quest_ai_runner/adapters/web_search_adapter.py |  |
-| `search-the-web:provider_web_search_adapter` | Model-native search | quest_ai_runner/adapters/provider_web_search_adapter.py |  |
-| `search-the-web:web_search_backends` | Pluggable search backends with fallback | quest_ai_runner/adapters/web_search_backends.py |  |
-| `call-a-model:anthropic_provider` | Anthropic SDK provider | quest_ai_runner/adapters/anthropic_provider.py |  |
-| `call-a-model:gemini_provider` | Gemini provider | quest_ai_runner/adapters/gemini_provider.py |  |
-| `call-a-model:openai_provider` | OpenAI provider | quest_ai_runner/adapters/openai_provider.py |  |
-| `call-a-model:deepseek_provider` | DeepSeek provider | quest_ai_runner/adapters/deepseek_provider.py |  |
-| `call-a-model:claude_cli_provider` | Keyless command-line provider | quest_ai_runner/adapters/claude_cli_provider.py |  |
+| `search-the-web:web_search` | Single-vendor retrieval-style search | quest_ai_runner/adapters/web_search_adapter.py |  |
+| `search-the-web:provider_web_search` | Model-native search | quest_ai_runner/adapters/provider_web_search_adapter.py |  |
+| `search-the-web:serper` | Pluggable search backends with fallback | quest_ai_runner/adapters/web_search_backends.py |  |
+| `call-a-model:anthropic` | Anthropic SDK provider | quest_ai_runner/adapters/anthropic_provider.py |  |
+| `call-a-model:gemini` | Gemini provider | quest_ai_runner/adapters/gemini_provider.py |  |
+| `call-a-model:openai` | OpenAI provider | quest_ai_runner/adapters/openai_provider.py |  |
+| `call-a-model:deepseek` | DeepSeek provider | quest_ai_runner/adapters/deepseek_provider.py |  |
+| `call-a-model:claude_cli` | Keyless command-line provider | quest_ai_runner/adapters/claude_cli_provider.py |  |
 | `call-a-model:multi_provider` | Prefix-routing multi-provider | quest_ai_runner/adapters/multi_provider.py |  |
 | `call-a-model:single_provider` | Single flat provider floor | evaluation/components/model_providers/impls/single_provider.py |  |
-| `run-deep-work:goal_runner` | Subprocess goal runner | quest_ai_runner/core/goal_runner.py |  |
-| `run-deep-work:acp_deep_runner` | Agent-protocol deep runner | quest_ai_runner/adapters/acp_deep_runner.py |  |
-| `run-deep-work:fast_edit_runner` | One-call fast file editor | quest_ai_runner/adapters/fast_edit_runner.py |  |
-| `run-deep-work:mcp_write_runner` | One-call MCP operation runner | quest_ai_runner/adapters/mcp_write_runner.py |  |
+| `run-deep-work:subprocess` | Subprocess goal runner | quest_ai_runner/core/goal_runner.py |  |
+| `run-deep-work:acp` | Agent-protocol deep runner | quest_ai_runner/adapters/acp_deep_runner.py |  |
+| `run-deep-work:fast_edit` | One-call fast file editor | quest_ai_runner/adapters/fast_edit_runner.py |  |
+| `run-deep-work:mcp_write` | One-call MCP operation runner | quest_ai_runner/adapters/mcp_write_runner.py |  |
 | `run-deep-work:subprocess_runner` | Subprocess runner scenarios | evaluation/components/deep_runner/impls/subprocess_runner.py |  |
 | `run-deep-work:acp_runner` | Agent-protocol runner scenarios | evaluation/components/deep_runner/impls/acp_runner.py |  |
 | `run-deep-work:goal_contract` | Goal contract rules check | evaluation/components/deep_run/impls/goal_contract.py |  |
 | `detect-a-stalled-run:goal_runner` | Production liveness review in the goal runner | quest_ai_runner/core/goal_runner.py |  |
 | `detect-a-stalled-run:live_reviewer` | Live model reviewer arm | evaluation/components/deep_review/impls/live_reviewer.py |  |
 | `detect-a-stalled-run:rule_floor` | Keyword and threshold rule floor | evaluation/components/deep_review/impls/rule_floor.py |  |
-| `write-files:files_writer` | Contained backed-up writer | quest_ai_runner/adapters/files_writer.py |  |
+| `write-files:files` | Contained backed-up writer | quest_ai_runner/adapters/files_writer.py |  |
 | `write-files:bounded_writer` | Scratch-tree boundary check | evaluation/components/write_files/impls/bounded_writer.py |  |
-| `write-through-mcp:mcp_write_adapter` | MCP operation writer | quest_ai_runner/adapters/mcp_write_adapter.py |  |
+| `write-through-mcp:mcp` | MCP operation writer | quest_ai_runner/adapters/mcp_write_adapter.py |  |
 | `write-through-mcp:allowlist_writer` | Fake-client allowlist check | evaluation/components/write_through_mcp/impls/allowlist_writer.py |  |
-| `escalate-to-a-human:quest_client` | Decision-request sink | quest_ai_runner/runner/quest_client.py |  |
+| `escalate-to-a-human:quest_decision` | Decision-request sink | quest_ai_runner/runner/quest_client.py |  |
 | `escalate-to-a-human:quest_decision_sink` | Fake-backend delivery check | evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py |  |
-| `show-progress:adapters` | Stream, milestone and fan-out sinks | quest_ai_runner/core/adapters.py |  |
+| `show-progress:stream` | Stream, milestone and fan-out sinks | quest_ai_runner/core/adapters_sinks.py |  |
 | `show-progress:progress_sinks` | Sink policy cases | evaluation/components/show_progress/impls/progress_sinks.py |  |
-| `remember-conversations:session_file_conversation_store` | Local session-file conversation store | quest_ai_runner/adapters/session_file_conversation_store.py |  |
+| `remember-conversations:session_file` | Local session-file conversation store | quest_ai_runner/adapters/session_file_conversation_store.py |  |
 | `select-context:idf_docstrings` | Field-weighted keyword arm | evaluation/components/context_selection/impls/idf_docstrings.py |  |
 | `select-context:idf_paths_only` | Docstring ablation of the keyword arm | evaluation/components/context_selection/impls/idf_paths_only.py |  |
 | `select-context:blind_grep` | Blind text-search floor | evaluation/components/context_selection/impls/blind_grep.py |  |
 | `select-context:vector_bge_small` | Plain cosine semantic baseline | evaluation/components/context_selection/impls/vector_bge_small.py |  |
 | `select-context:hybrid_union` | Keyword plus vector fusion (measured live class) | evaluation/components/context_selection/impls/hybrid_union.py |  |
-| `select-context:file_context_store` | Card-file keyword store | quest_ai_runner/adapters/file_context_store.py |  |
-| `select-context:vector_context_assembler` | Semantic card retrieval | quest_ai_runner/adapters/vector_context_assembler.py |  |
-| `select-context:hybrid_context_assembler` | Parallel keyword and vector fusion | quest_ai_runner/adapters/hybrid_context_assembler.py |  |
-| `select-context:bm25_content_store` | Exact-content BM25 arm | quest_ai_runner/adapters/bm25_content_store.py |  |
-| `select-context:rep_context_assembler` | Per-agent preference wrapper | quest_ai_runner/adapters/rep_context_assembler.py |  |
-| `select-context:composite_assembler` | Ordered assembler composition | quest_ai_runner/core/composite_assembler.py |  |
+| `select-context:file` | Card-file keyword store | quest_ai_runner/adapters/file_context_store.py |  |
+| `select-context:vector` | Semantic card retrieval | quest_ai_runner/adapters/vector_context_assembler.py |  |
+| `select-context:hybrid` | Parallel keyword and vector fusion | quest_ai_runner/adapters/hybrid_context_assembler.py |  |
+| `select-context:bm25` | Exact-content BM25 arm | quest_ai_runner/adapters/bm25_content_store.py |  |
+| `select-context:rep` | Per-agent preference wrapper | quest_ai_runner/adapters/rep_context_assembler.py |  |
+| `select-context:composite` | Ordered assembler composition | quest_ai_runner/core/composite_assembler.py |  |
 | `select-context:seeded_keyword_store` | Seeded keyword card-quality arm | evaluation/components/card_quality/impls/seeded_keyword_store.py |  |
 | `select-context:seeded_keyword_open` | Open-gate ablation of the card-quality arm | evaluation/components/card_quality/impls/seeded_keyword_open.py |  |
 | `select-context:live_updater_hybrid` | Live learner plus hybrid store arm | evaluation/components/card_quality/impls/live_updater_hybrid.py |  |
 | `select-context:idf_hint` | Offline warm-hint builder | evaluation/components/claude_code_ab/impls/idf_hint.py |  |
 | `select-context:cold_claude` | Agent without hint | evaluation/components/claude_code_ab/impls/cold_claude.py |  |
 | `select-context:warm_claude` | Agent with hint | evaluation/components/claude_code_ab/impls/warm_claude.py |  |
-| `persist-cards:card_repository` | Atomic JSON file repository | quest_ai_runner/adapters/card_repository.py |  |
-| `persist-cards:qdrant_card_repository` | Vector database repository | quest_ai_runner/adapters/qdrant_card_repository.py |  |
-| `persist-cards:quest_api_card_repository` | Hosted card API repository | quest_ai_runner/adapters/quest_api_card_repository.py |  |
-| `persist-cards:filesystem` | Filesystem conformance arm | evaluation/components/persist_cards/impls/filesystem.py |  |
-| `persist-cards:qdrant` | Embedded vector conformance arm | evaluation/components/persist_cards/impls/qdrant.py |  |
-| `persist-cards:quest_api` | Hosted API conformance arm | evaluation/components/persist_cards/impls/quest_api.py |  |
-| `index-by-meaning:qdrant_vector_store` | Qdrant-backed vector store | quest_ai_runner/adapters/qdrant_vector_store.py |  |
-| `guide-by-feedback:guidance_provider` | Universal guidance provider | quest_ai_runner/core/guidance_provider.py |  |
+| `persist-cards:filesystem` | Atomic JSON file repository | quest_ai_runner/adapters/card_repository.py |  |
+| `persist-cards:qdrant` | Vector database repository | quest_ai_runner/adapters/qdrant_card_repository.py |  |
+| `persist-cards:quest_api` | Hosted card API repository | quest_ai_runner/adapters/quest_api_card_repository.py |  |
+| `index-by-meaning:qdrant` | Qdrant-backed vector store | quest_ai_runner/adapters/qdrant_vector_store.py |  |
+| `guide-by-feedback:universal` | Universal guidance provider | quest_ai_runner/core/guidance_provider.py |  |
 | `guide-by-feedback:ledger_guidance` | Live ledger and provider arm | evaluation/components/feedback_loop/impls/ledger_guidance.py |  |
 | `guide-by-feedback:no_memory` | No-feedback floor | evaluation/components/feedback_loop/impls/no_memory.py |  |
 | `guide-by-feedback:dump_all` | Show-everything baseline | evaluation/components/feedback_loop/impls/dump_all.py |  |
-| `talk-over-a-channel:openclaw_channel` | MCP gateway bridge transport | quest_ai_runner/adapters/openclaw_channel.py |  |
+| `talk-over-a-channel:openclaw` | MCP gateway bridge transport | quest_ai_runner/adapters/openclaw_channel.py |  |
 | `talk-over-a-channel:openclaw_bridge` | Fake-gateway conformance arm | evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py |  |
 | `replay-known-operations:recipe_replay` | Live recipe replay arm | evaluation/components/recipe_fast_path/impls/recipe_replay.py |  |
 | `replay-known-operations:planner_only` | Live planner-only baseline | evaluation/components/recipe_fast_path/impls/planner_only.py |  |
@@ -223,19 +220,18 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `assemble-a-prompt:live` | Live assembly-point driver | evaluation/components/prompt_size/impls/live.py |  |
 | `judge-a-decision:qar_judges` | Production judges under a scripted provider | evaluation/components/judges/impls/qar_judges.py |  |
 | `guard-a-reply:qar_guards` | Production guard engines under test | evaluation/components/reply_guards/impls/qar_guards.py |  |
-| `feed-context-sources:context_sources_base` | Source interface with shared channel flags | quest_ai_runner/runner/context_sources_base.py |  |
+| `feed-context-sources:base` | Source interface with shared channel flags | quest_ai_runner/runner/context_sources_base.py |  |
 | `feed-context-sources:update_engine` | Live engine over fake quest channels | evaluation/components/feed_context_sources/impls/update_engine.py |  |
-| `store-feedback:feedback_ledger` | File-backed feedback ledger | quest_ai_runner/runner/feedback_ledger.py |  |
+| `store-feedback:ledger` | File-backed feedback ledger | quest_ai_runner/runner/feedback_ledger.py |  |
 | `store-feedback:ledger_guidance` | Ledger plus guidance bridge, end to end | evaluation/components/feedback_loop/impls/ledger_guidance.py |  |
 | `store-feedback:no_memory` | No-memory floor | evaluation/components/feedback_loop/impls/no_memory.py |  |
 | `store-feedback:dump_all` | Remember-everything baseline | evaluation/components/feedback_loop/impls/dump_all.py |  |
-| `recall-recent-context:recent_context` | Lexical-gated scoped file store | quest_ai_runner/core/recent_context.py |  |
-| `receive-input-mid-run:inbox` | In-memory thread-safe inbox | quest_ai_runner/core/inbox.py |  |
-| `receive-input-mid-run:in_memory` | Orchestrator-driven in-memory arm | evaluation/components/receive_input_mid_run/impls/in_memory.py |  |
-| `resolve-references:reference_resolver` | Registry of built-in and host resolvers | quest_ai_runner/adapters/reference_resolver.py |  |
+| `recall-recent-context:file` | Lexical-gated scoped file store | quest_ai_runner/core/recent_context.py |  |
+| `receive-input-mid-run:in_memory` | In-memory thread-safe inbox | quest_ai_runner/core/inbox.py |  |
+| `resolve-references:note` | Registry of built-in and host resolvers | quest_ai_runner/adapters/reference_resolver.py |  |
 | `resolve-references:card_resolvers` | Production registry under scripted host resolvers | evaluation/components/resolve_references/impls/card_resolvers.py |  |
-| `cache-cards:quest_api_card_repository` | Card repository with a cache seam | quest_ai_runner/adapters/quest_api_card_repository.py |  |
-| `cache-cards:card_cache_file` | Durable file cache | quest_ai_runner/adapters/card_cache_file.py |  |
+| `cache-cards:null` | Card repository with a cache seam and a null cache | quest_ai_runner/adapters/quest_api_card_repository.py |  |
+| `cache-cards:file` | Durable file cache | quest_ai_runner/adapters/card_cache_file.py |  |
 | `cache-cards:null_cache` | No-op cache (shipped default of the seam) | evaluation/components/cache_cards/impls/null_cache.py |  |
 | `cache-cards:memory_cache` | In-process memory cache | evaluation/components/cache_cards/impls/memory_cache.py |  |
 | `cache-cards:file_cache` | Durable file cache under outage scenarios | evaluation/components/cache_cards/impls/file_cache.py |  |
@@ -284,15 +280,21 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `verify-offline:collect_by_file` |  | evaluation/components/verify_offline/impls/collect_by_file.py |  |
 | `keep-secrets-out:live_scanner` | Planted-secret evaluation arm | evaluation/components/keep_secrets_out/impls/live_scanner.py |  |
 | `select-an-implementation:resolve` |  | quest_ai_runner/core/resolve.py |  |
-| `select-an-implementation:selection_table` |  | quest_ai_runner/core/selection_table.py |  |
 | `select-an-implementation:live_resolver` |  | evaluation/components/select_an_implementation/impls/live_resolver.py |  |
 | `explain-qar:README.md` | Documentation index | docs/README.md |  |
 | `explain-qar:shipped_docs` | Shipped-documents evaluation arm | evaluation/components/explain_qar/impls/shipped_docs.py |  |
-| `persist-predictions:anticipation_store` | Atomic file prediction store | quest_ai_runner/core/anticipation_store.py |  |
+| `persist-predictions:file` | Atomic file prediction store | quest_ai_runner/core/anticipation_store.py |  |
 | `persist-predictions:memory_store` | In-memory reference store | evaluation/components/persist_predictions/impls/memory_store.py |  |
 | `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | quest_ai_runner/runner/autopilot_gates.py |  |
 | `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py |  |
-| `evolve-by-metric:structure-library` | Apply the evolvable-structure library |  |  |
+| `evolve-by-metric:structure-library` | Apply the evolvable-structure library | and a runtime one because implementations are declared with its decorators; a rule or format change in the library needs a migration here; offline arms only unless a paid arm is run by decision. |  |
+| `operate-a-quest:orchestrator` | Planner alone | quest_ai_runner/core/pre_route.py |  |
+| `search-the-web:brave` | Brave search backend | quest_ai_runner/adapters/web_search_backends.py |  |
+| `search-the-web:gemini` | Gemini grounded search backend | quest_ai_runner/adapters/web_search_backends.py |  |
+| `search-the-web:provider` | Provider-native search backend | quest_ai_runner/adapters/web_search_backends.py |  |
+| `search-the-web:searxng` | SearXNG search backend | quest_ai_runner/adapters/web_search_backends.py |  |
+| `search-the-web:tavily` | Tavily search backend | quest_ai_runner/adapters/web_search_backends.py |  |
+| `show-progress:milestone` | Milestone sink | quest_ai_runner/core/adapters_sinks.py |  |
 
 ## Metrics
 

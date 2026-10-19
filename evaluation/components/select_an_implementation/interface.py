@@ -2,8 +2,8 @@
 
     select(kind: str, args: dict) -> dict
 
-Which implementation serves a solution is data (the selection table), not an ``if`` at a call site. The caller
-names it, a config file overrides it, or the table default applies; a typo fails loudly with the choices; and
+Which implementation serves a solution is data (declared beside its code and listed in the records), not an ``if``
+at a call site. The caller names it, a config file overrides it, or the records' default applies; a typo fails loudly with the choices; and
 a config override switches the LIVE implementation without editing code. All of it is deterministic, so this
 component runs offline, with no model.
 
@@ -13,7 +13,7 @@ Kinds and the dict a solution returns:
   by_default    args {solution}                       -> {"cls": ..., "default": name, "error": ...}
   typo          args {solution, name}                 -> {"error": exception name | None, "lists_choices": bool}
   integrity     args {}                               -> {"unresolvable": [ids], "bad_defaults": [ids], "solutions": n}
-                every table entry imports to a class, and every default is one of its implementations
+                every declared implementation imports to a class, and every default is one of them
   live_switch   args {site, ...}                      -> {"cls": class name | None}
                 the real wiring at a call site, switched only by data: site "model_provider" (args backend),
                 "deep_runner" (args selections), "search_backend" (args backend)

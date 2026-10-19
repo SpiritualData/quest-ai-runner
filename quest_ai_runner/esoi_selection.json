@@ -2,19 +2,19 @@
  "cache-cards": {
   "default": "file",
   "modules": {
-   "card_cache_file": "quest_ai_runner.adapters.card_cache_file",
-   "quest_api_card_repository": "quest_ai_runner.adapters.quest_api_card_repository"
+   "file": "quest_ai_runner.adapters.card_cache_file",
+   "null": "quest_ai_runner.adapters.quest_api_card_repository"
   }
  },
  "call-a-model": {
   "default": "multi_provider",
   "modules": {
-   "anthropic_provider": "quest_ai_runner.adapters.anthropic_provider",
-   "claude_cli_provider": "quest_ai_runner.adapters.claude_cli_provider",
-   "deepseek_provider": "quest_ai_runner.adapters.deepseek_provider",
-   "gemini_provider": "quest_ai_runner.adapters.gemini_provider",
+   "anthropic": "quest_ai_runner.adapters.anthropic_provider",
+   "claude_cli": "quest_ai_runner.adapters.claude_cli_provider",
+   "deepseek": "quest_ai_runner.adapters.deepseek_provider",
+   "gemini": "quest_ai_runner.adapters.gemini_provider",
    "multi_provider": "quest_ai_runner.adapters.multi_provider",
-   "openai_provider": "quest_ai_runner.adapters.openai_provider"
+   "openai": "quest_ai_runner.adapters.openai_provider"
   }
  },
  "choose-a-model-tier": {
@@ -46,7 +46,7 @@
  "escalate-to-a-human": {
   "default": "quest_decision",
   "modules": {
-   "quest_client": "quest_ai_runner.runner.quest_client"
+   "quest_decision": "quest_ai_runner.runner.quest_client"
   }
  },
  "expose-the-public-api": {
@@ -60,7 +60,7 @@
  "feed-context-sources": {
   "default": "base",
   "modules": {
-   "context_sources_base": "quest_ai_runner.runner.context_sources_base"
+   "base": "quest_ai_runner.runner.context_sources_base"
   }
  },
  "gate-an-autopilot-pass": {
@@ -72,27 +72,27 @@
  "gather-evidence": {
   "default": "composite",
   "modules": {
-   "cached_db_adapter": "quest_ai_runner.adapters.cached_db_adapter",
-   "composite_retrieval_adapter": "quest_ai_runner.adapters.composite_retrieval_adapter",
-   "files_adapter": "quest_ai_runner.adapters.files_adapter",
-   "google_chat_adapter": "quest_ai_runner.adapters.google_chat_adapter",
-   "google_drive_adapter": "quest_ai_runner.adapters.google_drive_adapter",
-   "mcp_retrieval_adapter": "quest_ai_runner.adapters.mcp_retrieval_adapter",
-   "notion_adapter": "quest_ai_runner.adapters.notion_adapter",
-   "quest_retrieval_adapter": "quest_ai_runner.adapters.quest_retrieval_adapter",
+   "cached_db": "quest_ai_runner.adapters.cached_db_adapter",
+   "composite": "quest_ai_runner.adapters.composite_retrieval_adapter",
+   "files": "quest_ai_runner.adapters.files_adapter",
+   "google_chat": "quest_ai_runner.adapters.google_chat_adapter",
+   "google_drive": "quest_ai_runner.adapters.google_drive_adapter",
+   "mcp": "quest_ai_runner.adapters.mcp_retrieval_adapter",
+   "notion": "quest_ai_runner.adapters.notion_adapter",
+   "quest": "quest_ai_runner.adapters.quest_retrieval_adapter",
    "remote_files_adapter": "quest_ai_runner.adapters.remote_files_adapter"
   }
  },
  "guide-by-feedback": {
   "default": "universal",
   "modules": {
-   "guidance_provider": "quest_ai_runner.core.guidance_provider"
+   "universal": "quest_ai_runner.core.guidance_provider"
   }
  },
  "index-by-meaning": {
   "default": "qdrant",
   "modules": {
-   "qdrant_vector_store": "quest_ai_runner.adapters.qdrant_vector_store"
+   "qdrant": "quest_ai_runner.adapters.qdrant_vector_store"
   }
  },
  "learn-by-example": {
@@ -105,6 +105,7 @@
  "operate-a-quest": {
   "default": "pre_route",
   "modules": {
+   "orchestrator": "quest_ai_runner.core.pre_route",
    "pre_route": "quest_ai_runner.core.pre_route"
   }
  },
@@ -121,48 +122,48 @@
  "persist-cards": {
   "default": "quest_api",
   "modules": {
-   "card_repository": "quest_ai_runner.adapters.card_repository",
-   "qdrant_card_repository": "quest_ai_runner.adapters.qdrant_card_repository",
-   "quest_api_card_repository": "quest_ai_runner.adapters.quest_api_card_repository"
+   "filesystem": "quest_ai_runner.adapters.card_repository",
+   "qdrant": "quest_ai_runner.adapters.qdrant_card_repository",
+   "quest_api": "quest_ai_runner.adapters.quest_api_card_repository"
   }
  },
  "persist-predictions": {
   "default": "file",
   "modules": {
-   "anticipation_store": "quest_ai_runner.core.anticipation_store"
+   "file": "quest_ai_runner.core.anticipation_store"
   }
  },
  "recall-recent-context": {
   "default": "file",
   "modules": {
-   "recent_context": "quest_ai_runner.core.recent_context"
+   "file": "quest_ai_runner.core.recent_context"
   }
  },
  "receive-input-mid-run": {
   "default": "in_memory",
   "modules": {
-   "inbox": "quest_ai_runner.core.inbox"
+   "in_memory": "quest_ai_runner.core.inbox"
   }
  },
  "remember-conversations": {
   "default": "session_file",
   "modules": {
-   "session_file_conversation_store": "quest_ai_runner.adapters.session_file_conversation_store"
+   "session_file": "quest_ai_runner.adapters.session_file_conversation_store"
   }
  },
  "resolve-references": {
   "default": "note",
   "modules": {
-   "reference_resolver": "quest_ai_runner.adapters.reference_resolver"
+   "note": "quest_ai_runner.adapters.reference_resolver"
   }
  },
  "run-deep-work": {
   "default": "subprocess",
   "modules": {
-   "acp_deep_runner": "quest_ai_runner.adapters.acp_deep_runner",
-   "fast_edit_runner": "quest_ai_runner.adapters.fast_edit_runner",
-   "goal_runner": "quest_ai_runner.core.goal_runner",
-   "mcp_write_runner": "quest_ai_runner.adapters.mcp_write_runner"
+   "acp": "quest_ai_runner.adapters.acp_deep_runner",
+   "fast_edit": "quest_ai_runner.adapters.fast_edit_runner",
+   "mcp_write": "quest_ai_runner.adapters.mcp_write_runner",
+   "subprocess": "quest_ai_runner.core.goal_runner"
   }
  },
  "run-queued-tasks": {
@@ -178,46 +179,51 @@
  "search-the-web": {
   "default": "web_research",
   "modules": {
-   "provider_web_search_adapter": "quest_ai_runner.adapters.provider_web_search_adapter",
+   "brave": "quest_ai_runner.adapters.web_search_backends",
+   "gemini": "quest_ai_runner.adapters.web_search_backends",
+   "provider": "quest_ai_runner.adapters.web_search_backends",
+   "provider_web_search": "quest_ai_runner.adapters.provider_web_search_adapter",
+   "searxng": "quest_ai_runner.adapters.web_search_backends",
+   "serper": "quest_ai_runner.adapters.web_search_backends",
+   "tavily": "quest_ai_runner.adapters.web_search_backends",
    "web_research": "quest_ai_runner.adapters.web_research",
-   "web_search_adapter": "quest_ai_runner.adapters.web_search_adapter",
-   "web_search_backends": "quest_ai_runner.adapters.web_search_backends"
+   "web_search": "quest_ai_runner.adapters.web_search_adapter"
   }
  },
  "select-an-implementation": {
   "default": "live_resolver",
   "modules": {
-   "resolve": "quest_ai_runner.core.resolve",
-   "selection_table": "quest_ai_runner.core.selection_table"
+   "resolve": "quest_ai_runner.core.resolve"
   }
  },
  "select-context": {
   "default": "hybrid",
   "modules": {
-   "bm25_content_store": "quest_ai_runner.adapters.bm25_content_store",
-   "composite_assembler": "quest_ai_runner.core.composite_assembler",
-   "file_context_store": "quest_ai_runner.adapters.file_context_store",
-   "hybrid_context_assembler": "quest_ai_runner.adapters.hybrid_context_assembler",
-   "rep_context_assembler": "quest_ai_runner.adapters.rep_context_assembler",
-   "vector_context_assembler": "quest_ai_runner.adapters.vector_context_assembler"
+   "bm25": "quest_ai_runner.adapters.bm25_content_store",
+   "composite": "quest_ai_runner.core.composite_assembler",
+   "file": "quest_ai_runner.adapters.file_context_store",
+   "hybrid": "quest_ai_runner.adapters.hybrid_context_assembler",
+   "rep": "quest_ai_runner.adapters.rep_context_assembler",
+   "vector": "quest_ai_runner.adapters.vector_context_assembler"
   }
  },
  "show-progress": {
   "default": "stream",
   "modules": {
-   "adapters": "quest_ai_runner.core.adapters"
+   "milestone": "quest_ai_runner.core.adapters_sinks",
+   "stream": "quest_ai_runner.core.adapters_sinks"
   }
  },
  "store-feedback": {
   "default": "ledger",
   "modules": {
-   "feedback_ledger": "quest_ai_runner.runner.feedback_ledger"
+   "ledger": "quest_ai_runner.runner.feedback_ledger"
   }
  },
  "talk-over-a-channel": {
   "default": "openclaw",
   "modules": {
-   "openclaw_channel": "quest_ai_runner.adapters.openclaw_channel"
+   "openclaw": "quest_ai_runner.adapters.openclaw_channel"
   }
  },
  "track-usage-and-cost": {
@@ -243,13 +249,13 @@
  "write-files": {
   "default": "files",
   "modules": {
-   "files_writer": "quest_ai_runner.adapters.files_writer"
+   "files": "quest_ai_runner.adapters.files_writer"
   }
  },
  "write-through-mcp": {
   "default": "mcp",
   "modules": {
-   "mcp_write_adapter": "quest_ai_runner.adapters.mcp_write_adapter"
+   "mcp": "quest_ai_runner.adapters.mcp_write_adapter"
   }
  }
 }

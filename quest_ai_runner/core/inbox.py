@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import threading
 from typing import Dict, List, Protocol, runtime_checkable
+from esoi import implementation
 
 
 @runtime_checkable
@@ -37,6 +38,7 @@ class InputInbox(Protocol):
         """
 
 
+@implementation("receive-input-mid-run", "in_memory")
 class InMemoryInbox:
     """Thread-safe, in-process ``InputInbox``. The default wired by ``build_orchestrator``.
 

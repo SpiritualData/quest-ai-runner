@@ -103,6 +103,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from esoi import implementation
 from ..core.adapters import VectorHit, VectorStoreBase
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from .qdrant_embedders import embed_batch_size, embed_max_chars, FASTEMBED_EMBEDDER_ID
@@ -160,6 +161,7 @@ def _point_id(item_id: Any, scope_digest: Optional[str]) -> int:
     return int(hashlib.sha256(ns.encode()).hexdigest()[:15], 16)
 
 
+@implementation("index-by-meaning", "qdrant")
 class QdrantVectorStore(VectorStoreBase):
     """VectorStore backed by a local-filesystem or remote Qdrant instance.
 

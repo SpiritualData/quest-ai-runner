@@ -1,6 +1,7 @@
 """Composite ContextAssembler -- stdlib only."""
 import inspect
 from typing import Any, Dict, List, Optional
+from esoi import implementation
 
 
 def _accepts_meta(assembler: Any) -> bool:
@@ -46,6 +47,7 @@ def find_assembler(assembler: Any, predicate: Any) -> Optional[Any]:
     return None
 
 
+@implementation("select-context", "composite")
 class CompositeContextAssembler:
     """Wraps multiple ContextAssembler instances into one.
 

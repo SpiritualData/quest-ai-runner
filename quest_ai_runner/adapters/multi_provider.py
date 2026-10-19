@@ -17,6 +17,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import (
     ModelProvider,
     ThreadLocalCounter,
@@ -27,6 +28,7 @@ from ..core.adapters import (
 _log = logging.getLogger("quest-ai-runner.multi-provider")
 
 
+@implementation("call-a-model", "multi_provider")
 class MultiProvider(ModelProvider):
     """Routes model calls to the correct provider based on model name prefix."""
 

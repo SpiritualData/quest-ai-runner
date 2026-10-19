@@ -812,54 +812,12 @@
   }
  },
  {
-  "id": "DOC-059",
-  "area": "links",
-  "kind": "links",
-  "description": "esoi/STANDARD.md: every relative link resolves",
-  "args": {
-   "file": "esoi/STANDARD.md"
-  },
-  "expect": {
-   "eq": {
-    "broken": []
-   }
-  }
- },
- {
   "id": "DOC-060",
   "area": "links",
   "kind": "links",
   "description": "esoi/metric-run-policy.md: every relative link resolves",
   "args": {
    "file": "esoi/metric-run-policy.md"
-  },
-  "expect": {
-   "eq": {
-    "broken": []
-   }
-  }
- },
- {
-  "id": "DOC-061",
-  "area": "links",
-  "kind": "links",
-  "description": "esoi/qar_solution.md: every relative link resolves",
-  "args": {
-   "file": "esoi/qar_solution.md"
-  },
-  "expect": {
-   "eq": {
-    "broken": []
-   }
-  }
- },
- {
-  "id": "DOC-062",
-  "area": "links",
-  "kind": "links",
-  "description": "esoi/structure_network.md: every relative link resolves",
-  "args": {
-   "file": "esoi/structure_network.md"
   },
   "expect": {
    "eq": {
@@ -1778,54 +1736,12 @@
   }
  },
  {
-  "id": "DOC-128",
-  "area": "em_dash",
-  "kind": "em_dash",
-  "description": "esoi/STANDARD.md: no em dash",
-  "args": {
-   "file": "esoi/STANDARD.md"
-  },
-  "expect": {
-   "eq": {
-    "count": 0
-   }
-  }
- },
- {
   "id": "DOC-129",
   "area": "em_dash",
   "kind": "em_dash",
   "description": "esoi/metric-run-policy.md: no em dash",
   "args": {
    "file": "esoi/metric-run-policy.md"
-  },
-  "expect": {
-   "eq": {
-    "count": 0
-   }
-  }
- },
- {
-  "id": "DOC-130",
-  "area": "em_dash",
-  "kind": "em_dash",
-  "description": "esoi/qar_solution.md: no em dash",
-  "args": {
-   "file": "esoi/qar_solution.md"
-  },
-  "expect": {
-   "eq": {
-    "count": 0
-   }
-  }
- },
- {
-  "id": "DOC-131",
-  "area": "em_dash",
-  "kind": "em_dash",
-  "description": "esoi/structure_network.md: no em dash",
-  "args": {
-   "file": "esoi/structure_network.md"
   },
   "expect": {
    "eq": {

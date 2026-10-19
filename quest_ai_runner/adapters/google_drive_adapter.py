@@ -59,6 +59,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import Observation, RetrievalAdapterBase
 
 _log = logging.getLogger("quest-ai-runner.google-drive")
@@ -146,6 +147,7 @@ def _extract_pdf_text(data: bytes) -> str:
 # The adapter
 # ---------------------------------------------------------------------------
 
+@implementation("gather-evidence", "google_drive")
 class GoogleDriveAdapter(RetrievalAdapterBase):
     """RetrievalAdapter over Google Drive files and folders.
 

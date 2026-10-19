@@ -49,6 +49,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.requester import apply_requester_env
 from ..core.adapters import DeepResult, DeepRunnerBase, ProgressEvent
 from ..core.goal_runner import (
@@ -80,6 +81,7 @@ from .acp_deep_runner_session import AcpRun, AcpSessionClient, open_agent_connec
 # The DeepRunner
 # ---------------------------------------------------------------------------------------------
 
+@implementation("run-deep-work", "acp")
 class AcpDeepRunner(DeepRunnerBase):
     """A ``DeepRunner`` that runs each goal as one ACP session against the Claude ACP agent.
 
@@ -95,6 +97,8 @@ class AcpDeepRunner(DeepRunnerBase):
     can also call ``steer()`` directly. Both routes go through ``_session/steering``; a message that
     arrives after the turn settled is handed back to the queue rather than dropped.
     """
+
+    config_class = AcpConfig   # the dataclass this runner is built from (core.resolve.resolve_config)
 
     def __init__(self, config: AcpConfig):
         self.cfg = config

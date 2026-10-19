@@ -37,6 +37,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import Observation, RetrievalAdapterBase
 from .mcp_client import MCPClient, MCPServerSpec
 
@@ -46,6 +47,7 @@ _log = logging.getLogger("quest-ai-runner.mcp_retrieval_adapter")
 DEFAULT_MAX_BYTES = 20_000
 
 
+@implementation("gather-evidence", "mcp")
 class MCPRetrievalAdapter(RetrievalAdapterBase):
     """RetrievalAdapter over one MCP server, namespaced by ``alias``.
 

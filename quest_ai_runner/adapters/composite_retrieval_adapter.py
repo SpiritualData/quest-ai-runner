@@ -12,8 +12,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
+from esoi import implementation
 
 
+@implementation("gather-evidence", "composite")
 class CompositeRetrievalAdapter:
     """Parallel multi-source retrieval.
 

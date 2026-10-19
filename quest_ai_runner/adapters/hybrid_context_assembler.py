@@ -48,6 +48,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import AssembledContext, ContextAssemblerBase, ContextAssembler
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ def fused_card_order(kw_result: AssembledContext, vec_result: AssembledContext,
     return sorted(fused, key=lambda c: (c not in pinned, -fused[c], first_seen[c]))
 
 
+@implementation("select-context", "hybrid")
 class HybridContextAssembler(ContextAssemblerBase):
     """Fuses a keyword/IDF assembler and a vector assembler in parallel.
 

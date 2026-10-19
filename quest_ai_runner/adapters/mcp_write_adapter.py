@@ -38,12 +38,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import OperationWriterBase, WriteResult
 from .mcp_client import MCPClient, MCPServerSpec
 
 _log = logging.getLogger("quest-ai-runner.mcp_write_adapter")
 
 
+@implementation("write-through-mcp", "mcp")
 class MCPWriteAdapter(OperationWriterBase):
     """OperationWriter over one MCP server's mutating tools, namespaced by ``alias``.
 

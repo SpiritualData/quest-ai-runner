@@ -17,6 +17,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import ModelProviderBase
 from ..core.prompt_layers import blocks_to_prompt, cache_control_indices
 from .retry_utils import retry_transient
@@ -71,6 +72,7 @@ def _thinking_kwargs(create) -> Dict[str, Any]:
     return {"thinking": {"type": "disabled"}} if "thinking" in params else {}
 
 
+@implementation("call-a-model", "anthropic")
 class AnthropicProvider(ModelProviderBase):
     def __init__(self, *, api_key: Optional[str] = None, cache_seconds: float = 3600.0,
                  max_answer_tokens: int = 2048, max_plan_tokens: int = 800):

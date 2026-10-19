@@ -57,12 +57,23 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 ## Evolvable structure (ESOI): the registry and the check
 
 The repo's structure is data, not folklore, and the checking, running and measuring of it is Joshua's `esoi` package
-(a dev dependency pinned in `pyproject.toml`; `esoi rules` lists its rules, so they are not restated here). `esoi/`
-holds `components.csv` (placement only), `intent.csv` (the top intent: why this project exists, in its own words) beside the five intent record files
-(`qar_solution.md` is the readable version of its problems, ideals and top solution), `waivers.csv` and `metric-run-policy.md`; `esoi.toml` configures esoi for this repo and
-`scripts/esoi_rules.py` adds QAR's one rule (S15, environment variables are documented). To add a solution, read
-`esoi/STANDARD.md`. Nothing lives outside a solution: a component that serves none (S19), or a solution with no
-current recorded run (S20), fails the check, and the code is removed rather than waived.
+(a dependency pinned in `pyproject.toml`, a runtime one because implementations are declared with its decorators; `esoi rules`
+lists its rules, so they are not restated here, and the steps and the philosophy are the library's docs and the
+evolvable-structure skill, not copied here). `esoi/`
+holds `components.csv` (placement only), `intent.csv` (the top intent: why this project exists, in its own words) beside the five intent record files,
+`waivers.csv` and `metric-run-policy.md`; `esoi.toml` configures esoi for this repo and
+`scripts/esoi_rules.py` adds QAR's one rule (S15, environment variables are documented). Nothing lives outside a solution:
+a component that serves none (S19), or a solution with no current recorded run (S20), fails the check, and the code is
+removed rather than waived.
+**Swappable parts are declared once, beside their code.** An implementation of a port is a class with
+`@implementation("<solution id>", "<name>")` (from `esoi`), and `esoi/implementations.csv` lists the same implementation
+with the file it lives in (`esoi records sync` writes a missing row; `esoi check` rule S30 fails a declaration with no
+record). There is no table to keep in step: `core/resolve.py` is a thin entry point over `esoi.runtime` under the scope
+`quest_ai_runner`, imports each implementation lazily from the file its record names, and takes the default from the
+solution's `selected` (change it with `esoi select --promote`, then `esoi select --snapshot
+quest_ai_runner/esoi_selection.json`, because an installed copy ships without the records; `tests/test_resolve.py` pins the
+snapshot). A runner that is built from a config dataclass names it with a `config_class` attribute. To add an implementation:
+write the class, add the decorator, run `esoi records sync`, fill the text, add its file to the solution's `implementations`.
 `evaluation/components/esoi_behavior/` scores whether an AI's replies follow ESOI (`cases.csv` is reviewed as a sheet).
 
 - **Before you commit:** `.venv/bin/esoi check` (it also runs as `tests/test_structure_registry.py`; `esoi check --write-docs`

@@ -37,6 +37,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Set, Tuple
 
+from esoi import implementation
+
 from . import usage_limit
 from .requester import apply_requester_env
 from .runtime_settings import process_environment
@@ -102,6 +104,7 @@ from .goal_runner_session import (  # noqa: F401
 )
 
 
+@implementation("run-deep-work", "subprocess")
 class SubprocessGoalRunner(DeepRunner):
     """Reference DeepRunner: spawn Claude Code headless with ``/goal`` + ``--max-turns``.
 
@@ -112,6 +115,8 @@ class SubprocessGoalRunner(DeepRunner):
     When an emit callback is provided, streams live Claude Code session updates to the
     caller so they see what Claude is doing in real-time.
     """
+
+    config_class = SubprocessConfig   # the dataclass this runner is built from (core.resolve.resolve_config)
 
     def __init__(self, config: SubprocessConfig, *,
                  model_translator: Optional[Callable[[Optional[str]], Optional[str]]] = None):

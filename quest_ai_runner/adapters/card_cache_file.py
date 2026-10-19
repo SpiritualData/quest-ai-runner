@@ -16,6 +16,7 @@ import tempfile
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from esoi import implementation
 
 _log = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ LISTING_FILE = "listing.json"
 OUTBOX_FILE = "outbox.json"
 
 
+@implementation("cache-cards", "file")
 class FileCardCache:
     """A ``CardCache`` persisted under ``directory`` (created on first write)."""
 

@@ -7,10 +7,12 @@ from __future__ import annotations
 from typing import Any, Dict, List, Protocol, Sequence
 from datetime import datetime
 
+from esoi import implementation
 from .context_update_types import ContextUpdate, _as_utc, log
 from .context_update_state import CollectRequest
 
 
+@implementation("feed-context-sources", "base")
 class ContextSource(Protocol):
     """One channel this engine can check. Implementations must never raise; the engine catches
     anyway, but a source that reports its own empty result can say WHY."""

@@ -47,7 +47,7 @@ def load_cases(component):
 def build_offline_orchestrator(meter, registry=None, planner_tier="haiku", recipe_store=None, selections=None):
     """Real Orchestrator, deep runner disabled, no Quest server. Refuses to return if a deep runner is wired.
     ``recipe_store`` wires a RecipeStore; None leaves recipes off (QAR_RECIPES is scrubbed).
-    ``selections`` overrides the selection table for this orchestrator (``RunnerConfig.selections``); every
+    ``selections`` overrides the project default for this orchestrator (``RunnerConfig.selections``); every
     component measures the planner alone (``operate-a-quest`` = ``orchestrator``) unless it asks otherwise."""
     scratch = tempfile.mkdtemp(prefix="qar_comp_")
     os.environ.update(QUEST_BASE_URL=OFFLINE_QUEST_URL, QUEST_API_KEY="offline-eval",

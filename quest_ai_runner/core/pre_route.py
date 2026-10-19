@@ -22,6 +22,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Protocol
+from esoi import implementation
 
 ROUTES = ("answer", "tool", "deep", "confirm", "clarify")
 
@@ -76,6 +77,7 @@ class MessageRouter(Protocol):
     def settles(self, pre: Optional[PreRoute]) -> bool: ...
 
 
+@implementation("operate-a-quest", "orchestrator")
 class NoPreRoute:
     """The planner alone: never looks, never settles. Costs no call."""
 
@@ -90,6 +92,7 @@ class NoPreRoute:
         return False
 
 
+@implementation("operate-a-quest", "pre_route")
 class PreRouter:
     """``route(message, catalog)`` asks the model once. ``catalog`` is the rendered listing of the
     tools relevant to the message (``ToolRegistry.render_catalog``); ``direct_tools`` are the tools a

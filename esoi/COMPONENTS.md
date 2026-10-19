@@ -43,5 +43,5 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `tests` | tests | Offline test suite and shared fakes | verify-offline |
 | `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | verify-offline, keep-secrets-out |
 | `docs-and-meta` | docs | Documentation and repo-level project files | explain-qar |
-| `core-selection` | core | Selection as data: resolve(solution_id, name) turns a name into the implementation from the selection table, so switching an implementation is a data or config change | select-an-implementation |
+| `core-selection` | core | Selection by name: resolve(solution_id, name) turns a name into the implementation declared beside its code, with the records as the only list and the snapshot for an installed copy, so switching an implementation is a data or config change | select-an-implementation |
 | `core-consumer-helpers` | core | Plumbing every consumer needs and must not copy: one persistent background loop for sync adapters calling async I/O, and signature probes that drop keywords an older installed library lacks | expose-the-public-api |

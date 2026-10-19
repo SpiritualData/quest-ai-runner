@@ -48,6 +48,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from esoi import implementation
 from ..core.adapters import ContextAssemblerBase
 from ._walk import effective_skip_dirs
 from .card_content_render import (
@@ -135,6 +136,7 @@ from .context_store_bootstrap_walk import BootstrapWalkMixin
 
 
 
+@implementation("select-context", "file")
 class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, BootstrapWalkMixin, ContextAssemblerBase):
     """Stdlib-only ContextAssembler backed by per-card JSON files.
 

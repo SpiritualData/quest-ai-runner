@@ -17,6 +17,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
+from esoi import implementation
 from .anticipation_learner import (
     CONF_FLOOR,
     Pattern,
@@ -105,6 +106,7 @@ class PredictionStore(Protocol):
     def append_log(self, record: Dict[str, Any]) -> None: ...
 
 
+@implementation("persist-predictions", "file")
 class FilePredictionStore:
     """The runner lane's persistence for the anticipation engine: one JSON file per SCOPE KEY
     under ``<root_dir>/predictions/<sha1(key)[:16]>.json`` (the same layout convention as

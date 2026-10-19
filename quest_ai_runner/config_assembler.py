@@ -217,7 +217,7 @@ def _resolve_context_assembler_base(
             vector_store = _cards_vector_store
         if vector_store is None and vector_backend not in ("none", "off"):
             try:
-                # Which store class: the selection table (core/selection_table.py), by cfg.selections.
+                # Which store class: the declared implementations (core/resolve.py), by cfg.selections.
                 _QdrantVS = resolve("index-by-meaning", overrides=cfg.selections)
                 if _QdrantVS is not None:
                     if notify:

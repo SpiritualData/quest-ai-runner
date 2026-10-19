@@ -49,7 +49,7 @@ def _model_provider_from_env() -> ModelProvider:
         raise ValueError("QAR_MODEL_BACKEND names the primary vendor; multi_provider is the router build_orchestrator "
                          "wraps around it, so choose anthropic, claude_cli, gemini, openai or deepseek.")
     try:
-        provider_cls = resolve("call-a-model", backend)   # the selection table, core/selection_table.py
+        provider_cls = resolve("call-a-model", backend)   # the declared implementations, core/resolve.py
     except ValueError as e:
         raise ValueError(f"Unknown QAR_MODEL_BACKEND: {backend}. {e}") from e
     kwargs = {}

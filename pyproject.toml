@@ -46,6 +46,9 @@ dependencies = [
     # image installs only this list.
     "python-docx>=1.1",
     "openpyxl>=3.1",
+    # Declares each swappable implementation beside its code (`@implementation`) and selects one at run time
+    # (core/resolve.py). Core, since the adapters import it; no dependencies of its own.
+    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@ee2c591a413e2b1167ecd9b71fdaa1f49eed2057#subdirectory=implementations/python",
 ]
 
 [project.optional-dependencies]
@@ -84,12 +87,11 @@ all = [
     "bm25s>=0.2",
     "mcp==2.0.0",
 ]
-# esoi checks esoi/ and runs and records the evaluation components (`esoi check`, `esoi run`, `esoi hygiene`).
-# Dev and test only: nothing under quest_ai_runner/ imports it.
+# esoi (a core dependency, pinned above) also checks esoi/ and runs and records the evaluation components
+# (`esoi check`, `esoi run`, `esoi hygiene`), so dev and test need nothing more of it.
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
-    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@9c2b901#subdirectory=implementations/python",
 ]
 
 [project.urls]

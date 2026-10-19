@@ -54,6 +54,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import AssembledContext, Observation, RetrievalAdapterBase
 from .card_scoped_learning import (
     active_card_terms,
@@ -216,6 +217,7 @@ class ChatMessages:
 # The adapter
 # ---------------------------------------------------------------------------
 
+@implementation("gather-evidence", "google_chat")
 class GoogleChatAdapter(RetrievalAdapterBase):
     """RetrievalAdapter over Google Chat conversations.
 

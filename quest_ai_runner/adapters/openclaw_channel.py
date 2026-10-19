@@ -60,6 +60,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import (
     ChannelTransportBase,
     InboundBatch,
@@ -134,6 +135,7 @@ class OpenClawChannelConfig:
     channel: str = "openclaw"
 
 
+@implementation("talk-over-a-channel", "openclaw")
 class OpenClawChannel(ChannelTransportBase):
     """``ChannelTransport`` over OpenClaw's MCP server. Wraps ``MCPClient`` -- never reimplements
     subprocess/stdio handling.

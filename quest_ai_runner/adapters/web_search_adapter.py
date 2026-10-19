@@ -24,6 +24,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import Observation, RetrievalAdapterBase
 from .web_query_spec import coerce_web_query
 
@@ -33,6 +34,7 @@ _TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 _TAVILY_EXTRACT_URL = "https://api.tavily.com/extract"
 
 
+@implementation("search-the-web", "web_search")
 class WebSearchAdapter(RetrievalAdapterBase):
     """RetrievalAdapter that searches the live web via the Tavily API.
 

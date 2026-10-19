@@ -41,6 +41,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core import usage_limit
 from ..core.adapters import ModelProviderBase, ThreadLocalCounter
 from .retry_utils import retry_transient
@@ -355,6 +356,7 @@ def _flatten_messages(messages: List[Dict[str, Any]]) -> str:
     return "\n\n".join(parts)
 
 
+@implementation("call-a-model", "claude_cli")
 class ClaudeCliProvider(ModelProviderBase):
     """Keyless ModelProvider backed by the ``claude`` CLI (subscription login).
 

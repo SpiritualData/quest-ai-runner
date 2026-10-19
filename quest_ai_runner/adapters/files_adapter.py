@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import Observation, RetrievalAdapterBase
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 
@@ -108,6 +109,7 @@ def resolve_in_tree(root: Path, rel_or_abs: str) -> Optional[Path]:
     return resolved
 
 
+@implementation("gather-evidence", "files")
 class FilesAdapter(RetrievalAdapterBase):
     def __init__(self, root: str, *, default_read_max_bytes: int = 20000,
                  default_grep_max_hits: int = 40, grep_max_file_bytes: int = 256 * 1024):

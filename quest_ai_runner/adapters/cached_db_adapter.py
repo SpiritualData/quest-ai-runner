@@ -24,6 +24,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import Observation, RetrievalAdapterBase
 
 FetchFn = Callable[[str, Dict[str, Any]], List[Dict[str, Any]]]
@@ -36,6 +37,7 @@ def _canonical(filter_: Dict[str, Any]) -> str:
         return repr(filter_)
 
 
+@implementation("gather-evidence", "cached_db")
 class CachedDbAdapter(RetrievalAdapterBase):
     def __init__(self, fetch: FetchFn, *, ttl_seconds: float = 30.0, default_limit: int = 20,
                  max_render_bytes: int = 6000,

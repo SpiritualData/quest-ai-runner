@@ -243,21 +243,28 @@ Leave `guidance_provider` unset for exactly today's behavior (no guidance). `Orc
 
 Which class fills a swappable slot (a model provider, a search backend, the vector store, the deep runner,
 and every other port in `esoi/solutions.csv`) is data, not an `if`/`elif` at the call site.
-`quest_ai_runner/core/selection_table.py` lists each slot's implementations and default;
+each implementation is declared beside its code with `@implementation("<solution id>", "<name>")` (from `esoi`), and
+`esoi/implementations.csv` lists the same implementations with their file, so that CSV is the only list; the slot's default
+is the solution's `selected` in `esoi/solutions.csv`;
 `quest_ai_runner.core.resolve.resolve(solution_id, name=None, overrides=None)` returns the class:
 
 ```python
 from quest_ai_runner.core.resolve import resolve, register
 
 resolve("call-a-model", "gemini")                      # an explicit name
-resolve("run-deep-work", overrides=cfg.selections)     # RunnerConfig.selections, else the table default
+resolve("run-deep-work", overrides=cfg.selections)     # RunnerConfig.selections, else the project default
 register("search-the-web", "mine", "my_pkg.search:MyBackend")   # your own implementation, no core edit
 ```
 
 In a lane's config file: `[selections]` then `"run-deep-work" = "acp"`. An unknown name raises with the list of
-choices. A new built-in implementation is one line in the table plus its file in the solution's
-`implementations` column; `esoi check` (S14) keeps the two in step. The name is chosen by the
-config layer (environment variables such as `QAR_MODEL_BACKEND` are read there), never inside `core`.
+choices. A new built-in implementation is a class with the decorator, a row in `esoi/implementations.csv`
+(`esoi records sync` writes it) and its file in the solution's `implementations` column; `esoi check` (S30) fails a
+declaration with no record. The name is chosen by the config layer (environment variables such as `QAR_MODEL_BACKEND` are
+read there), never inside `core`. Below those, `esoi` adds three layers a deployment can use without code: an
+`esoi.override(...)` block, `ESOI_SELECT_QUEST_AI_RUNNER_<SOLUTION_ID>` (or the plain `ESOI_SELECT_<SOLUTION_ID>`), and
+`[selection]` in `esoi.toml`. `register` replaces the library's implementation of the same name, if any. After
+`esoi select --promote` changes a default, run `esoi select --snapshot quest_ai_runner/esoi_selection.json`: an installed
+copy ships without the records and reads that file.
 
 ## Wiring them up
 

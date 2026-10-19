@@ -56,6 +56,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import VectorHit, VectorStoreBase
 from .card_repository import card_embed_text
 
@@ -137,6 +138,7 @@ def _connect(
     return QdrantClient(path=path or ".quest-context/cards-qdrant")
 
 
+@implementation("persist-cards", "qdrant")
 class QdrantCardRepository:
     """A generic ``CardRepository`` over a Qdrant collection, optionally scoped to a tenant.
 

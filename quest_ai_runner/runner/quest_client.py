@@ -70,6 +70,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Sequence
 
+from esoi import implementation
 from ..core.adapters import Escalation, EscalationSinkBase
 
 from .quest_client_support import (
@@ -214,6 +215,7 @@ class QuestClient(TasksMixin, DecisionsMixin, GoalsMixin, QuestsMixin, ContextEn
         return json.dumps(detail) if detail is not None else body
 
 
+@implementation("escalate-to-a-human", "quest_decision")
 class QuestDecisionSink(EscalationSinkBase):
     """Adapt a QuestClient into a core EscalationSink.
 

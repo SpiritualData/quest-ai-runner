@@ -29,6 +29,7 @@ import os
 
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
+from esoi import implementation
 from ..core.adapters import Observation
 from .web_cache import normalize_query, WebCache
 from .web_link_access import (
@@ -104,6 +105,7 @@ _DAILY_LIMIT_FALLBACK_MESSAGE = (
 # ---------------------------------------------------------------------------
 
 
+@implementation("search-the-web", "web_research")
 class WebResearchAdapter:
     """Snippet-first web search + focus-scored page fetch, for the orchestrator's planner.
 

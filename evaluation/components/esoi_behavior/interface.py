@@ -8,7 +8,7 @@ the reply against the case's ``must_have`` regexes (all must match) and ``must_n
 match), both case-insensitive.
 
 What this measures: whether an AI follows the evolvable-structure (ESOI) principles in its own work, one
-principle per case (P1..P13, see esoi/principles.csv), including cases where adding structure
+principle per case (P1..P13, the numbered principles of the evolvable-structure skill's SKILL.md), including cases where adding structure
 is the wrong answer (P1, P12). The dataset is ``cases.csv`` (one row per scenario, built to be reviewed as a
 Google Sheet; the ``reviewer_*`` columns are the human's).
 

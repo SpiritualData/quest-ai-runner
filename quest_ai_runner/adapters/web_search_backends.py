@@ -33,6 +33,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol
 
 import httpx
 
+from esoi import implementation
 from ..core.resolve import resolve
 
 logger = logging.getLogger("quest-ai-runner.web-search-backends")
@@ -117,6 +118,7 @@ def _strip_tags(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+@implementation("search-the-web", "serper")
 class SerperBackend:
     name = "serper"
 
@@ -167,6 +169,7 @@ class SerperBackend:
 # ---------------------------------------------------------------------------
 
 
+@implementation("search-the-web", "brave")
 class BraveBackend:
     name = "brave"
 
@@ -209,6 +212,7 @@ class BraveBackend:
 # ---------------------------------------------------------------------------
 
 
+@implementation("search-the-web", "tavily")
 class TavilyBackend:
     name = "tavily"
 
@@ -259,6 +263,7 @@ class TavilyBackend:
 # ---------------------------------------------------------------------------
 
 
+@implementation("search-the-web", "searxng")
 class SearxngBackend:
     name = "searxng"
 
@@ -316,6 +321,7 @@ def _location_header(resp: Any) -> str:
         return ""
 
 
+@implementation("search-the-web", "gemini")
 class GeminiGroundingBackend:
     """Searches via Gemini's native Google Search grounding tool (``google.genai``).
 
@@ -506,6 +512,7 @@ class GeminiGroundingBackend:
 # ---------------------------------------------------------------------------
 
 
+@implementation("search-the-web", "provider")
 class ProviderNativeBackend:
     """Wraps any ``ModelProvider`` exposing ``web_search(query, model=, max_results=)``."""
 
@@ -626,7 +633,7 @@ def select_search_backend(
     def constructor_args(name: str) -> Optional[Dict[str, Any]]:
         """The keyword arguments a backend is built with from this environment, or None when its
         key/config is missing (then the backend is unavailable). Which class a name means is the
-        selection table's (``core/selection_table.py``), not decided here."""
+        selection's (``core/resolve.py``), not decided here."""
         if name == "serper":
             key = env.get("SERPER_API_KEY", "")
             return {"api_key": key} if key else None

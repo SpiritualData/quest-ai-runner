@@ -17,12 +17,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import Observation, RetrievalAdapterBase
 from .web_query_spec import coerce_web_query
 
 _log = logging.getLogger("quest-ai-runner.provider-web-search")
 
 
+@implementation("search-the-web", "provider_web_search")
 class ProviderWebSearchAdapter(RetrievalAdapterBase):
     """RetrievalAdapter backed by a ModelProvider's native web-search capability.
 

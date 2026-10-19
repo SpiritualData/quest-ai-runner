@@ -61,6 +61,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import (Any, Callable, Dict, Iterable, Iterator, List, Optional, Protocol, Sequence,
                     Tuple, runtime_checkable)
+from esoi import implementation
 
 try:                                  # POSIX: the cross-process lock under a shared ledger file
     import fcntl
@@ -353,6 +354,7 @@ class FeedbackStore(Protocol):
 MAX_REMEMBERED_OFFERS = 300
 
 
+@implementation("store-feedback", "ledger")
 class FeedbackLedger:
     """Every tracked item for this lane.
 

@@ -28,6 +28,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from esoi import implementation
 from ..core.adapters import FileWriterBase, WriteResult
 from .files_adapter import _BINARY_EXTS, resolve_in_tree
 
@@ -52,6 +53,7 @@ def default_backup_dir() -> Path:
     return Path.home() / ".quest-ai-runner" / "file-backups"
 
 
+@implementation("write-files", "files")
 class FilesWriter(FileWriterBase):
     """Write text files inside ``root``, keeping a backup of what was replaced.
 

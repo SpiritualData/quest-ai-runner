@@ -36,6 +36,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ..core.current_rep import current_rep
 
@@ -144,6 +145,7 @@ def pref_is_duplicate(pref: str, existing: Any) -> bool:
     return False
 
 
+@implementation("select-context", "rep")
 class RepContextAssembler(ContextAssemblerBase):
     """Wraps a ContextAssembler with the current rep's learned context preferences."""
 

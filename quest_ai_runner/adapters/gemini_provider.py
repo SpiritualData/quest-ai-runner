@@ -16,6 +16,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import ModelProviderBase
 from ..core.prompt_layers import join_layers
 from .retry_utils import parse_json_with_retry, retry_transient
@@ -61,6 +62,7 @@ def _gemini_image_part(block: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return {"inline_data": {"mime_type": media_type, "data": data}}
 
 
+@implementation("call-a-model", "gemini")
 class GeminiProvider(ModelProviderBase):
     def __init__(self, *, api_key: Optional[str] = None, cache_seconds: float = 3600.0):
         super().__init__()

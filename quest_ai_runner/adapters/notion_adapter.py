@@ -58,6 +58,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from esoi import implementation
 from ..core.adapters import Observation, RetrievalAdapterBase
 from .tfdfidf_sampling import keywords_from_text
 
@@ -391,6 +392,7 @@ def build_notion_filter(schema: Dict[str, Dict[str, Any]], simple: Dict[str, Any
 # The adapter
 # ---------------------------------------------------------------------------
 
+@implementation("gather-evidence", "notion")
 class NotionAdapter(RetrievalAdapterBase):
     """RetrievalAdapter over a configured set of Notion databases. Read-only; never raises."""
 

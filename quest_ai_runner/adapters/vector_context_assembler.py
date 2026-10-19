@@ -71,6 +71,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import (
     AssembledContext,
     ContextAssemblerBase,
@@ -197,6 +198,7 @@ def _task_slug(task_text: str) -> str:
     return slug or "task"
 
 
+@implementation("select-context", "vector")
 class VectorContextAssembler(ContextAssemblerBase):
     """ContextAssembler that retrieves context via vector (semantic) search.
 

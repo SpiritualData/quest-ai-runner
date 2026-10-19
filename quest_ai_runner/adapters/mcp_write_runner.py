@@ -53,6 +53,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
+from esoi import implementation
 from ..core.adapters import (
     EVENT_EXEC,
     FUTURE_CONTEXT_VIA_FIELD,
@@ -114,6 +115,7 @@ class MCPOperationConfig:
     tier: str = "balanced"
 
 
+@implementation("run-deep-work", "mcp_write")
 class MCPOperationRunner(DeepRunnerBase):
     """One-call MCP write execution behind the ``DeepRunner`` interface.
 

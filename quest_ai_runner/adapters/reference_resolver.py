@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Callable, Dict, Optional, Protocol, runtime_checkable
+from esoi import implementation
 
 # Item ``type`` values understood by the card content model. ``note`` and ``file`` have built-in
 # resolvers; the data-backed types are consumer-injected (and degrade to an unresolved-pointer line
@@ -92,6 +93,7 @@ def _render_unresolved(item_type: str, locator: Dict[str, Any]) -> str:
         return f"[{item_type} ref (unresolved)]"
 
 
+@implementation("resolve-references", "note")
 class NoteResolver:
     """Built-in resolver for ``note`` items: returns the locator's ``text`` verbatim (capped).
 

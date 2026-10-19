@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional
 
+from esoi import implementation
 from .adapters_values import ProgressEvent
 from .adapters_events import (
     EVENT_CONTEXT,
@@ -27,6 +28,7 @@ from .adapters_bases import ProgressSinkBase
 # consumer inherits identical messaging policy regardless of how they wire things.
 # ---------------------------------------------------------------------------
 
+@implementation("show-progress", "stream")
 class StreamSink(ProgressSinkBase):
     """LIVE sink — forward EVERYTHING to the consumer's stream in real time.
 
@@ -45,6 +47,7 @@ class StreamSink(ProgressSinkBase):
             pass
 
 
+@implementation("show-progress", "milestone")
 class MilestoneSink(ProgressSinkBase):
     """BACKGROUND sink — surface ONLY result / decision / milestone / context / done.
 

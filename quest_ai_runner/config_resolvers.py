@@ -55,7 +55,7 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
         from .adapters.claude_cli_provider import cli_model
         from .core.resolve import chosen_name, resolve, resolve_config
 
-        # Which runner and its config class come from the selection table (core/selection_table.py),
+        # Which runner and its config class come from the declared implementations (core/resolve.py),
         # by ``cfg.selections["run-deep-work"]``; the default is the SubprocessGoalRunner.
         sel = getattr(cfg, "selections", None)
         name = chosen_name("run-deep-work", overrides=sel)

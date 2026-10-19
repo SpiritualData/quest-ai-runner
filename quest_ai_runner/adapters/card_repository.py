@@ -28,6 +28,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
+from esoi import implementation
 from ..core.file_modes import match_umask
 
 # Name of the bootstrap meta sidecar written next to cards on the filesystem. The filesystem repo
@@ -157,6 +158,7 @@ class CardRepository(Protocol):
     #       """
 
 
+@implementation("persist-cards", "filesystem")
 class FilesystemCardRepository:
     """Default ``CardRepository``: one ``<cards_dir>/<id>.json`` file per card.
 
