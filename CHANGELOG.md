@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`QuestClient.list_team_chat`** reads `GET /api/teams/{team_id}/chat` (the team chat's recent messages, oldest first, read-only), so a consumer no longer needs a raw request to review a team's chat.
+
 ### Changed
 - **An autopilot pass no longer keeps specifications.** The default quest instructions lose the spec-keeping paragraph and `SPEC_KEEPING_PINS` is removed, so the five intents tools (`list_intents`, `get_spec`, `refresh_spec`, `edit_spec_record`, `place_quest`) are still available to the planner but no longer pinned to every pass; `place_quest` is only for when the person asks. Nothing that did work read the spec a pass kept.
 - **The autopilot brief carries the intent frame.** `QuestClient.get_intent_frame` reads `GET /api/intents/frame` once per quest (the server builds it from stored ids with no model call) and `compose_batch_text(intent_frame=...)` places it before the goal ladder, with its use stated once. It adds nothing for an unsorted quest or a person with no intents. The solutions `ground-in-intent` and `iterate-by-spec` are recorded in `esoi/` with `selected` unchanged until their metrics are run by decision.

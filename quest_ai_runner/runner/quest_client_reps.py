@@ -33,6 +33,23 @@ class RepsMixin:
             log.warning("list_team_reps failed: %s", e)
             return []
 
+    def list_team_chat(self, *, team_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """GET /api/teams/{team_id}/chat — the team chat's recent messages, oldest first.
+
+        Read-only. ``limit`` caps how many of the latest messages come back. Returns [] on any error.
+        """
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to read the team chat")
+            resp = self._request("GET", f"/api/teams/{tid}/chat", params={"limit": limit}) or {}
+            msgs = resp.get("messages") if isinstance(resp, dict) else None
+            return msgs if isinstance(msgs, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_team_chat failed: %s", e)
+            return []
+
     def create_rep(self, display_name: str, *, team_id: Optional[str] = None,
                    persona: Optional[str] = None, area: Optional[str] = None,
                    owner_user_id: Optional[str] = None) -> Dict[str, Any]:
