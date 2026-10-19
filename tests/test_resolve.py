@@ -131,3 +131,45 @@ def test_vector_store_class_is_resolved_through_the_table(monkeypatch):
     sentinel = type("Sentinel", (), {})
     monkeypatch.setattr(mod, "QdrantVectorStore", sentinel)
     assert resolve("index-by-meaning") is sentinel
+
+
+# --- the project default is written once, in the records ------------------------------------------------
+
+def test_the_table_holds_no_default_of_its_own():
+    assert [sid for sid, entry in SELECTION.items() if "default" in entry] == []
+
+
+def test_the_shipped_snapshot_matches_the_records():
+    esoi_select = pytest.importorskip("esoi.runtime")
+    import esoi.config
+    snapshot = esoi_select.snapshot(esoi.config.load(ROOT))
+    shipped = resolve_mod.json.loads(resolve_mod.SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    assert shipped == snapshot, "run: esoi select --snapshot quest_ai_runner/esoi_selection.json"
+    for sid in SELECTION:
+        assert default_name(sid) == snapshot[sid]["default"]
+
+
+def test_an_installed_copy_without_the_records_or_esoi_still_has_its_defaults(tmp_path):
+    """A package installed elsewhere (quest-backend installs QAR) has neither esoi/ nor the esoi package."""
+    import shutil
+    import subprocess
+    import sys
+    site = tmp_path / "site-packages"
+    shutil.copytree(ROOT / "quest_ai_runner", site / "quest_ai_runner",
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    code = (
+        "import sys; sys.modules['esoi'] = None\n"
+        "import quest_ai_runner.core.resolve as r\n"
+        f"assert r.__file__.startswith({str(site)!r}), r.__file__\n"
+        "from quest_ai_runner.core.selection_table import SELECTION\n"
+        "bad = [s for s in SELECTION if not r.default_name(s)]\n"
+        "assert not bad, bad\n"
+        "assert r.default_name('call-a-model') == 'multi_provider'\n"
+        "assert r.resolve('search-the-web').__name__ == 'WebResearchAdapter'\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], cwd=elsewhere, capture_output=True, text=True,
+                          env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(site), "HOME": str(tmp_path)})
+    assert done.returncode == 0, done.stderr
+    assert not (site / "esoi").exists() and not (tmp_path / "esoi").exists()

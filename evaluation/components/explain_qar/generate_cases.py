@@ -17,7 +17,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 def documents():
     listed = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.md"], cwd=REPO,
                             capture_output=True, text=True).stdout.split()
-    return sorted(f for f in set(listed) if not f.startswith("docs/structure/tracker/") and (REPO / f).is_file())
+    return sorted(f for f in set(listed) if not f.startswith("esoi/tracker/") and (REPO / f).is_file())
 
 
 def main():

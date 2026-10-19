@@ -242,7 +242,7 @@ Leave `guidance_provider` unset for exactly today's behavior (no guidance). `Orc
 ## Choosing which implementation fills a slot
 
 Which class fills a swappable slot (a model provider, a search backend, the vector store, the deep runner,
-and every other port in `docs/structure/solutions.csv`) is data, not an `if`/`elif` at the call site.
+and every other port in `esoi/solutions.csv`) is data, not an `if`/`elif` at the call site.
 `quest_ai_runner/core/selection_table.py` lists each slot's implementations and default;
 `quest_ai_runner.core.resolve.resolve(solution_id, name=None, overrides=None)` returns the class:
 

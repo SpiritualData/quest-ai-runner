@@ -11,7 +11,7 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
 
 - `core/`: the brain, a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
   nothing about Quest, any database, any org, or any user. Depends only on the adapter
-  *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; `docs/structure/solutions.csv` lists them all.
+  *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; `esoi/solutions.csv` lists them all.
   Prompt text is split out by definition: the planner prompt (rubric, full/compact variants, mode
   notes, profile table) is `core/planner_prompt.py`; `orchestrator.py` holds the loop and re-exports
   those names. A new prompt variant is an entry in `PLANNER_PROFILES`; add prompt text there, not to
@@ -44,7 +44,7 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
 - `adapters/`: reference *implementations* of the interfaces: retrieval (`FilesAdapter`,
   `CachedDbAdapter`, `CompositeRetrievalAdapter`, MCP, Notion, Google), model providers (Anthropic,
   Gemini, OpenAI, DeepSeek, Claude CLI, behind `MultiProvider`), card stores, vector and hybrid context
-  assemblers, web research, deep runners and conversation stores. `docs/structure/COMPONENTS.md` is the
+  assemblers, web research, deep runners and conversation stores. `esoi/COMPONENTS.md` is the
   current list.
 - `config.py`: `RunnerConfig`, the single place a consumer supplies everything specific.
 - `examples/`: runnable reference consumers (env-driven, no real data).
@@ -57,11 +57,11 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 ## Evolvable structure (ESOI): the registry and the check
 
 The repo's structure is data, not folklore, and the checking, running and measuring of it is Joshua's `esoi` package
-(a dev dependency pinned in `pyproject.toml`; `esoi rules` lists its rules, so they are not restated here). `docs/structure/`
+(a dev dependency pinned in `pyproject.toml`; `esoi rules` lists its rules, so they are not restated here). `esoi/`
 holds `components.csv` (placement only), `intent.csv` (the top intent: why this project exists, in its own words) beside the five intent record files
 (`qar_solution.md` is the readable version of its problems, ideals and top solution), `waivers.csv` and `metric-run-policy.md`; `esoi.toml` configures esoi for this repo and
 `scripts/esoi_rules.py` adds QAR's one rule (S15, environment variables are documented). To add a solution, read
-`docs/structure/STANDARD.md`. Nothing lives outside a solution: a component that serves none (S19), or a solution with no
+`esoi/STANDARD.md`. Nothing lives outside a solution: a component that serves none (S19), or a solution with no
 current recorded run (S20), fails the check, and the code is removed rather than waived.
 `evaluation/components/esoi_behavior/` scores whether an AI's replies follow ESOI (`cases.csv` is reviewed as a sheet).
 
@@ -69,7 +69,7 @@ current recorded run (S20), fails the check, and the code is removed rather than
   regenerates `COMPONENTS.md`, `docs/configuration.md` and `tracker/*.csv`) and `.venv/bin/esoi hygiene`. Each problem line
   starts with the id of the rule it breaks. After committing measured code or cases (`quest_ai_runner/`,
   `evaluation/components/`), run `esoi run --stale` and commit `evaluation/components/results.csv`, then `esoi check --strict`.
-  Offline arms only: a live arm (model calls) is run only by decision, per `docs/structure/metric-run-policy.md`.
+  Offline arms only: a live arm (model calls) is run only by decision, per `esoi/metric-run-policy.md`.
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
   when its metric wins on the same cases.

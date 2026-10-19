@@ -4,7 +4,7 @@ The filled-in metric run policy for this repository, from esoi's template (`docs
 esoi repository). Lines that start "Pending Joshua's decision" are proposals that nobody has approved yet; the proposed default
 is what is followed until he decides. The policy is prose here: esoi does not require it as records (`governs_metric_ids` on a
 solution and `run_policy_ids` on a metric are optional columns that `esoi check` verifies once they exist). To make it records,
-add the policy solution with its problem, ideal, alternatives and metric under `docs/structure/`, list the governed metrics in
+add the policy solution with its problem, ideal, alternatives and metric under `esoi/`, list the governed metrics in
 `governs_metric_ids` and name the policy in each metric's `run_policy_ids`.
 
 ## Problem (`prob-metrics-run-at-the-wrong-time`)

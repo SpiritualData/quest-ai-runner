@@ -30,13 +30,13 @@ no matter who uses it.
 the brain seems to need something concrete, add a new *interface* in `core/adapters*.py`, put the fill-in
 under `adapters/`, and wire it via `RunnerConfig`; if it needs a helper that lives outward, move the helper
 inward and let the outer module re-export it. `esoi check` enforces this (rule S6); the
-justified exceptions are in `docs/structure/waivers.csv`.
+justified exceptions are in `esoi/waivers.csv`.
 
 ## Module map
 
-The authoritative, checked inventory is `docs/structure/components.csv` (rendered in
-`docs/structure/COMPONENTS.md`), and the swappable solutions with their metrics are in
-`docs/structure/solutions.csv`. The table below is the short orientation.
+The authoritative, checked inventory is `esoi/components.csv` (rendered in
+`esoi/COMPONENTS.md`), and the swappable solutions with their metrics are in
+`esoi/solutions.csv`. The table below is the short orientation.
 
 | Module | Role |
 |---|---|

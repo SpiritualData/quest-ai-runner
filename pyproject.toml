@@ -84,12 +84,12 @@ all = [
     "bm25s>=0.2",
     "mcp==2.0.0",
 ]
-# esoi checks docs/structure/ and runs and records the evaluation components (`esoi check`, `esoi run`, `esoi hygiene`).
+# esoi checks esoi/ and runs and records the evaluation components (`esoi check`, `esoi run`, `esoi hygiene`).
 # Dev and test only: nothing under quest_ai_runner/ imports it.
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
-    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@3d3cb75#subdirectory=implementations/python",
+    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@9c2b901#subdirectory=implementations/python",
 ]
 
 [project.urls]
@@ -106,7 +106,7 @@ where = ["."]
 include = ["quest_ai_runner*"]
 
 [tool.setuptools.package-data]
-quest_ai_runner = ["prompts/*.md"]
+quest_ai_runner = ["prompts/*.md", "esoi_selection.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evaluation/components"]

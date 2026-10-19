@@ -2,7 +2,7 @@
 
 It depends on QAR's naming convention (``QAR_*``) and its generated configuration page, and sits beside
 ``env_vars.py`` (the scanner QAR keeps) in ``scripts/``. It is named in ``esoi.toml`` as a plugin; ``esoi rules``
-lists it with esoi's own rules. The top intent and its records are native esoi (``docs/structure/``), so no rule of
+lists it with esoi's own rules. The top intent and its records are native esoi (``esoi/``), so no rule of
 QAR's is needed for them.
 """
 import functools
@@ -47,7 +47,7 @@ def env_docs(ctx: Context) -> list:
             bad.append(f"S15 {var}: read in {where} but missing from docs/configuration.md (run `esoi check --write-docs`)")
     for var, where in result["unexplained"]:
         if var not in waived:
-            bad.append(f"S15 {var}: read in {where} but explained nowhere; add a line to docs/structure/env_descriptions.csv")
+            bad.append(f"S15 {var}: read in {where} but explained nowhere; add a line to esoi/env_descriptions.csv")
     if result["stale"]:
         bad.append("S15 docs/configuration.md: out of date (run `esoi check --write-docs`)")
     return bad

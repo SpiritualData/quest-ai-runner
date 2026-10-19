@@ -297,7 +297,7 @@ class RunnerConfig:
     # LLM review) when model_provider is set. Leave None for keyword-only (zero-dependency).
     vector_store: Any = None
     # WHICH IMPLEMENTATION fills a swappable slot, as data: ``{solution_id: implementation name}``
-    # (ids from docs/structure/solutions.csv, names from core/selection_table.py), e.g.
+    # (ids from esoi/solutions.csv, names from core/selection_table.py), e.g.
     # ``{"run-deep-work": "acp", "index-by-meaning": "qdrant"}``. A slot not named here takes the table
     # default. Read by ``core.resolve.resolve`` at the selection sites; settable from a config file's
     # ``[selections]`` table, so switching an implementation is a config change, not code.

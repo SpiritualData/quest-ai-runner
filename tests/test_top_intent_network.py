@@ -1,9 +1,9 @@
-"""qar_solution.md (the readable top intent) says what the top intent's records in docs/structure/*.csv (the ones esoi checks) say."""
+"""qar_solution.md (the readable top intent) says what the top intent's records in esoi/*.csv (the ones esoi checks) say."""
 import csv
 import re
 from pathlib import Path
 
-STRUCTURE = Path(__file__).resolve().parent.parent / "docs" / "structure"
+STRUCTURE = Path(__file__).resolve().parent.parent / "esoi"
 TEXT = (STRUCTURE / "qar_solution.md").read_text()
 
 

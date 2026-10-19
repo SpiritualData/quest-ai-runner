@@ -5,7 +5,7 @@ other_layers = ["prompts", "docs", "evaluation", "examples", "scripts", "tests",
 max_lines = 1500
 selection = "quest_ai_runner/core/selection_table.py:SELECTION"
 # Where the maintainers keep the skill that defines the intent template; absent elsewhere, then S27 is skipped
-# and the committed docs/structure/esoi_template.csv is what records are checked against.
+# and the committed esoi/esoi_template.csv is what records are checked against.
 template_source = "../../.claude/skills/evolvable-structure/SKILL.md"
 # live_calls: evaluation implementations that drive the real orchestrator through the shared offline builder
 live_calls = ["common.build_offline_orchestrator", "hygiene.scan_text"]

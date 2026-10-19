@@ -4,7 +4,7 @@
     cls = resolve("run-deep-work", overrides=cfg.selections)   # a per-solution override dict, else the default
     cls = resolve("search-the-web")                            # the table default
 
-Precedence: explicit ``name``, then ``overrides[solution_id]``, then the table's ``default``. An unknown
+Precedence: explicit ``name``, then ``overrides[solution_id]``, then the project default. An unknown
 solution or name raises ``ValueError`` listing the choices, so a typo in config fails loudly instead of
 falling through an ``else``. Targets are imported lazily, so ``core`` never imports an adapter at import
 time and an optional dependency is only needed when its implementation is chosen.
@@ -16,12 +16,29 @@ implementation is a data change, not an edit to a call site.
 from __future__ import annotations
 
 import importlib
+import json
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
 from .selection_table import SELECTION
 
 _EXTRA: Dict[str, Dict[str, Any]] = {}   # run-time additions: {solution_id: {name: entry}}
 _EXTRA_DEFAULT: Dict[str, str] = {}
+
+# The project default is the solution's ``selected`` in esoi/solutions.csv, written once. QAR is installed without
+# its records (quest-backend installs it), and esoi is a dev dependency, so the defaults ship as the snapshot
+# ``esoi select --snapshot quest_ai_runner/esoi_selection.json`` writes: esoi's own format, read here with the
+# standard library. tests/test_resolve.py fails when the snapshot differs from the records.
+SNAPSHOT_PATH = Path(__file__).resolve().parent.parent / "esoi_selection.json"
+_DEFAULTS: Dict[str, str] = {}
+
+
+def project_defaults() -> Dict[str, str]:
+    """{solution_id: implementation name} from the shipped snapshot (read once)."""
+    if not _DEFAULTS:
+        found = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+        _DEFAULTS.update({sid: entry["default"] for sid, entry in found.items() if entry.get("default")})
+    return _DEFAULTS
 
 
 def _implementations(solution_id: str) -> Dict[str, Any]:
@@ -33,7 +50,11 @@ def _implementations(solution_id: str) -> Dict[str, Any]:
 def default_name(solution_id: str) -> str:
     """The implementation used when nothing asks for another."""
     _implementations(solution_id)
-    return _EXTRA_DEFAULT.get(solution_id) or SELECTION[solution_id]["default"]
+    found = _EXTRA_DEFAULT.get(solution_id) or project_defaults().get(solution_id)
+    if not found:
+        raise ValueError(f"solution {solution_id!r} has no default: the snapshot {SNAPSHOT_PATH.name} names none "
+                         "(run `esoi select --snapshot quest_ai_runner/esoi_selection.json`)")
+    return found
 
 
 def names(solution_id: str) -> List[str]:

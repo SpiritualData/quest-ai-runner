@@ -1,7 +1,7 @@
 """CURRENT: the live suite, collected for real. Every ``tests/`` file matching a shard is collected with
 ``pytest --collect-only``, one call per shard: test modules import, parametrisation resolves and no test body runs.
 Seeded broken synthetic files prove the collector sees an import error, a syntax error, a bad parametrisation and
-a module that raises on import. The size ceiling is read from ``docs/structure/waivers.csv`` (the S4 waivers).
+a module that raises on import. The size ceiling is read from ``esoi/waivers.csv`` (the S4 waivers).
 Zero model calls."""
 import csv
 import tempfile
@@ -37,7 +37,7 @@ def coverage(args):
 
 
 def size(args):  # noqa: ARG001
-    with (REPO / "docs/structure/waivers.csv").open(newline="") as fh:
+    with (REPO / "esoi/waivers.csv").open(newline="") as fh:
         waived = {r["path"] for r in csv.DictReader(fh) if r["rule"] == "S4"}
     over = [str(p.relative_to(REPO)) for p in sorted((REPO / "tests").rglob("*.py"))
             if sum(1 for _ in p.open()) > MAX_LINES]

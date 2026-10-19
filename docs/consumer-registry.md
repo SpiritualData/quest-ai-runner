@@ -14,7 +14,7 @@ One row per integration point. Columns (extra columns such as `tracking_status`,
 | `integration_id` | unique id |
 | `solution_id` | the consumer's own solution this point belongs to (needed with `--solutions`/`--results`) |
 | `module`, `symbol` | the consumer's dotted module and its class or function |
-| `qar_solution_id` | a `solution_id` from QAR's `docs/structure/solutions.csv`, or empty |
+| `qar_solution_id` | a `solution_id` from QAR's `esoi/solutions.csv`, or empty |
 | `qar_port` | for an implementation: the Protocol class it claims (`RetrievalAdapter`, `EscalationSink`, ...) |
 | `qar_symbol` | for a call or config row: the `quest_ai_runner.module:Name` the consumer uses |
 | `kind` | `implementation` (a consumer class for a QAR port), `config` (config passed to a QAR object), `call` (the consumer calls a QAR symbol), `duplicate` (library plumbing copied or patched in the consumer: must name the action that removes it) |
@@ -25,7 +25,7 @@ One row per integration point. Columns (extra columns such as `tracking_status`,
 
 ## 2. Run the check
 
-    esoi consumer check --registry docs/structure/qar_integration.csv \
+    esoi consumer check --registry esoi/qar_integration.csv \
         --root . --requirements requirements.txt [--fail-on-lag]
 
 It verifies that every implementation imports and has every public method of the port it claims
@@ -40,7 +40,7 @@ Every integration point must sit in a solution with a current result. Give the c
 `metric_files` (the case files); `results.csv` has `solution_id`, `cases`, `passed`, `git_sha`,
 `cases_sha` (use `esoi.consumer.cases_hash(files, root)`). A point in no solution, a solution with no
 selected implementation, a missing, failing or stale result (the case files changed since the run)
-fails. The solution/problem/ideal/metric shape is QAR's own `docs/structure/` standard.
+fails. The solution/problem/ideal/metric shape is QAR's own `esoi/` standard.
 
 Two more optional solution columns say what kind of metric a solution has, as QAR's own standard does:
 `metric_kind` is `eval` (a scored component where the best implementation can vary; name its `component` and

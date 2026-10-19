@@ -33,7 +33,7 @@ $PY -m pytest evaluation/components/test_components.py                  # offlin
 ```
 Flags: `--only ID,ID`, `--max-calls N` (aborts when model calls exceed N), `--out path`.
 `QAR_EVAL_MODEL` (default `haiku`) sets the model for every implementation, so they compare like for like.
-Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the model-call count. `--record` also appends a row to the committed `results.csv` (with `git_sha`, `cases_sha` and `model`); `leaderboard.py` ranks only rows with the same `cases_sha`. A row may carry a `details` path to a committed per-case reasons file. A comparison where a model was called is a TIE inside a 10 point pass-rate margin and 15% spend (override per component in `noise.json`). Which implementation is "selected" is whatever `docs/structure/solutions.csv` says, not a label in this file.
+Each run writes `/tmp/qar_components/<component>_<impl>.json` and prints the model-call count. `--record` also appends a row to the committed `results.csv` (with `git_sha`, `cases_sha` and `model`); `leaderboard.py` ranks only rows with the same `cases_sha`. A row may carry a `details` path to a committed per-case reasons file. A comparison where a model was called is a TIE inside a 10 point pass-rate margin and 15% spend (override per component in `noise.json`). Which implementation is "selected" is whatever `esoi/solutions.csv` says, not a label in this file.
 
 ## Components and their functions
 
@@ -191,7 +191,7 @@ written seeing 1-22 only), so a baseline gap between the two groups shows over-f
 `chat_quality/runner.py` (see its README). The offline arm `impls/reference_replies.py` is recorded over every case in the datasets: it shows the metric is sound.
 The graded arm is drawn with `--sample N` and counts its spend when run in process (see `chat_quality/README.md`).
 
-Every implementation measures live code or says it does not (check S12 in `docs/structure/README.md`): it
+Every implementation measures live code or says it does not (check S12 in `esoi/README.md`): it
 imports or drives `quest_ai_runner`, or declares `ALTERNATIVE = True` (or a docstring opening `ALTERNATIVE`,
 `BASELINE`, `ABLATION`, `FLOOR`, `VALIDITY`). The leaderboard tags these arms and never offers an `ABLATION` or a `VALIDITY` arm as the thing to adopt. A row recorded without `cases_sha` shows as `unverified` in `leaderboard.py`
 and is never compared against a verified one (check S16).
@@ -278,7 +278,7 @@ parametrises and that no test vanished; whether a test passes is shown by runnin
 
 ## Invariant solutions and `broken/`
 
-A solution whose `metric_kind` in `docs/structure/solutions.csv` is `invariant` is a rule that holds or does not (a write stays
+A solution whose `metric_kind` in `esoi/solutions.csv` is `invariant` is a rule that holds or does not (a write stays
 inside its root, a message is delivered once, a name resolves to one class). Its case suite and recorded run stay, because
 they pin the behaviour, but "best" cannot vary, so `leaderboard.py` lists it apart under "Invariant solutions" and never
 ranks it, and the tracker labels it `invariant`, not `decided-by-metric`. The floor a first draft would write (naive open

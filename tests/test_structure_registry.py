@@ -1,4 +1,4 @@
-"""The evolvable-structure registry stays true: see docs/structure/README.md.
+"""The evolvable-structure registry stays true: see esoi/README.md.
 
 The checks are the ``esoi`` package's (``esoi rules`` lists them) plus QAR's own plugin, scripts/esoi_rules.py,
 both configured by esoi.toml. They run in-process here (no network, no model). A new module that no component

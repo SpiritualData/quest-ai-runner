@@ -1,6 +1,8 @@
 """BASELINE, offline arm: the same live Orchestrator, fake tool world and rule model with no recipe store, so
 every ask takes the normal plan, tool and answer path. Parity with ``recipe_replay_offline`` on correctness
 and a higher model-call count is the claim being checked."""
+
+SIMULATED = True   # meters a deterministic rule model: recorded as model 'simulated' at cost 0.0, compared on calls
 import scripted_brain
 from recipe_fast_path.rule_model import RuleModel
 

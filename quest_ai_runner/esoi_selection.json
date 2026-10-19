@@ -1,0 +1,255 @@
+{
+ "cache-cards": {
+  "default": "file",
+  "modules": {
+   "card_cache_file": "quest_ai_runner.adapters.card_cache_file",
+   "quest_api_card_repository": "quest_ai_runner.adapters.quest_api_card_repository"
+  }
+ },
+ "call-a-model": {
+  "default": "multi_provider",
+  "modules": {
+   "anthropic_provider": "quest_ai_runner.adapters.anthropic_provider",
+   "claude_cli_provider": "quest_ai_runner.adapters.claude_cli_provider",
+   "deepseek_provider": "quest_ai_runner.adapters.deepseek_provider",
+   "gemini_provider": "quest_ai_runner.adapters.gemini_provider",
+   "multi_provider": "quest_ai_runner.adapters.multi_provider",
+   "openai_provider": "quest_ai_runner.adapters.openai_provider"
+  }
+ },
+ "choose-a-model-tier": {
+  "default": "qar_selection",
+  "modules": {
+   "deep_model_selection": "quest_ai_runner.core.deep_model_selection",
+   "model_family": "quest_ai_runner.core.model_family",
+   "model_registry": "quest_ai_runner.core.model_registry",
+   "provider_outage": "quest_ai_runner.core.provider_outage",
+   "usage_limit": "quest_ai_runner.core.usage_limit"
+  }
+ },
+ "configure-a-lane": {
+  "default": "qar_config",
+  "modules": {
+   "config": "quest_ai_runner.config",
+   "config_core_settings": "quest_ai_runner.config_core_settings",
+   "config_environment": "quest_ai_runner.config_environment",
+   "config_file": "quest_ai_runner.config_file",
+   "runtime_settings": "quest_ai_runner.core.runtime_settings"
+  }
+ },
+ "detect-a-stalled-run": {
+  "default": "live_reviewer",
+  "modules": {
+   "goal_runner": "quest_ai_runner.core.goal_runner"
+  }
+ },
+ "escalate-to-a-human": {
+  "default": "quest_decision",
+  "modules": {
+   "quest_client": "quest_ai_runner.runner.quest_client"
+  }
+ },
+ "expose-the-public-api": {
+  "default": "live_surface",
+  "modules": {
+   "__init__": "quest_ai_runner",
+   "aider_editblock": "quest_ai_runner.vendor.aider_editblock",
+   "async_bridge": "quest_ai_runner.core.async_bridge"
+  }
+ },
+ "feed-context-sources": {
+  "default": "base",
+  "modules": {
+   "context_sources_base": "quest_ai_runner.runner.context_sources_base"
+  }
+ },
+ "gate-an-autopilot-pass": {
+  "default": "live_pass",
+  "modules": {
+   "autopilot_gates": "quest_ai_runner.runner.autopilot_gates"
+  }
+ },
+ "gather-evidence": {
+  "default": "composite",
+  "modules": {
+   "cached_db_adapter": "quest_ai_runner.adapters.cached_db_adapter",
+   "composite_retrieval_adapter": "quest_ai_runner.adapters.composite_retrieval_adapter",
+   "files_adapter": "quest_ai_runner.adapters.files_adapter",
+   "google_chat_adapter": "quest_ai_runner.adapters.google_chat_adapter",
+   "google_drive_adapter": "quest_ai_runner.adapters.google_drive_adapter",
+   "mcp_retrieval_adapter": "quest_ai_runner.adapters.mcp_retrieval_adapter",
+   "notion_adapter": "quest_ai_runner.adapters.notion_adapter",
+   "quest_retrieval_adapter": "quest_ai_runner.adapters.quest_retrieval_adapter",
+   "remote_files_adapter": "quest_ai_runner.adapters.remote_files_adapter"
+  }
+ },
+ "guide-by-feedback": {
+  "default": "universal",
+  "modules": {
+   "guidance_provider": "quest_ai_runner.core.guidance_provider"
+  }
+ },
+ "index-by-meaning": {
+  "default": "qdrant",
+  "modules": {
+   "qdrant_vector_store": "quest_ai_runner.adapters.qdrant_vector_store"
+  }
+ },
+ "learn-by-example": {
+  "default": "live_examples",
+  "modules": {
+   "custom_consumer": "examples.custom_consumer",
+   "minimal_lane": "examples.minimal_lane"
+  }
+ },
+ "operate-a-quest": {
+  "default": "pre_route",
+  "modules": {
+   "pre_route": "quest_ai_runner.core.pre_route"
+  }
+ },
+ "operate-from-a-terminal": {
+  "default": "qar_main",
+  "modules": {
+   "__main__": "quest_ai_runner.tools.__main__",
+   "cli": "quest_ai_runner.cli",
+   "cli_parser": "quest_ai_runner.cli_parser",
+   "cli_quest": "quest_ai_runner.cli_quest",
+   "store_cli": "quest_ai_runner.store_cli"
+  }
+ },
+ "persist-cards": {
+  "default": "quest_api",
+  "modules": {
+   "card_repository": "quest_ai_runner.adapters.card_repository",
+   "qdrant_card_repository": "quest_ai_runner.adapters.qdrant_card_repository",
+   "quest_api_card_repository": "quest_ai_runner.adapters.quest_api_card_repository"
+  }
+ },
+ "persist-predictions": {
+  "default": "file",
+  "modules": {
+   "anticipation_store": "quest_ai_runner.core.anticipation_store"
+  }
+ },
+ "recall-recent-context": {
+  "default": "file",
+  "modules": {
+   "recent_context": "quest_ai_runner.core.recent_context"
+  }
+ },
+ "receive-input-mid-run": {
+  "default": "in_memory",
+  "modules": {
+   "inbox": "quest_ai_runner.core.inbox"
+  }
+ },
+ "remember-conversations": {
+  "default": "session_file",
+  "modules": {
+   "session_file_conversation_store": "quest_ai_runner.adapters.session_file_conversation_store"
+  }
+ },
+ "resolve-references": {
+  "default": "note",
+  "modules": {
+   "reference_resolver": "quest_ai_runner.adapters.reference_resolver"
+  }
+ },
+ "run-deep-work": {
+  "default": "subprocess",
+  "modules": {
+   "acp_deep_runner": "quest_ai_runner.adapters.acp_deep_runner",
+   "fast_edit_runner": "quest_ai_runner.adapters.fast_edit_runner",
+   "goal_runner": "quest_ai_runner.core.goal_runner",
+   "mcp_write_runner": "quest_ai_runner.adapters.mcp_write_runner"
+  }
+ },
+ "run-queued-tasks": {
+  "default": "qar_runner",
+  "modules": {
+   "executor": "quest_ai_runner.runner.executor",
+   "lane": "quest_ai_runner.runner.lane",
+   "personas": "quest_ai_runner.runner.personas",
+   "poller": "quest_ai_runner.runner.poller",
+   "quest_folder_sync": "quest_ai_runner.runner.quest_folder_sync"
+  }
+ },
+ "search-the-web": {
+  "default": "web_research",
+  "modules": {
+   "provider_web_search_adapter": "quest_ai_runner.adapters.provider_web_search_adapter",
+   "web_research": "quest_ai_runner.adapters.web_research",
+   "web_search_adapter": "quest_ai_runner.adapters.web_search_adapter",
+   "web_search_backends": "quest_ai_runner.adapters.web_search_backends"
+  }
+ },
+ "select-an-implementation": {
+  "default": "live_resolver",
+  "modules": {
+   "resolve": "quest_ai_runner.core.resolve",
+   "selection_table": "quest_ai_runner.core.selection_table"
+  }
+ },
+ "select-context": {
+  "default": "hybrid",
+  "modules": {
+   "bm25_content_store": "quest_ai_runner.adapters.bm25_content_store",
+   "composite_assembler": "quest_ai_runner.core.composite_assembler",
+   "file_context_store": "quest_ai_runner.adapters.file_context_store",
+   "hybrid_context_assembler": "quest_ai_runner.adapters.hybrid_context_assembler",
+   "rep_context_assembler": "quest_ai_runner.adapters.rep_context_assembler",
+   "vector_context_assembler": "quest_ai_runner.adapters.vector_context_assembler"
+  }
+ },
+ "show-progress": {
+  "default": "stream",
+  "modules": {
+   "adapters": "quest_ai_runner.core.adapters"
+  }
+ },
+ "store-feedback": {
+  "default": "ledger",
+  "modules": {
+   "feedback_ledger": "quest_ai_runner.runner.feedback_ledger"
+  }
+ },
+ "talk-over-a-channel": {
+  "default": "openclaw",
+  "modules": {
+   "openclaw_channel": "quest_ai_runner.adapters.openclaw_channel"
+  }
+ },
+ "track-usage-and-cost": {
+  "default": "qar_usage",
+  "modules": {
+   "pricing": "quest_ai_runner.pricing",
+   "resources": "quest_ai_runner.resources",
+   "usage": "quest_ai_runner.usage"
+  }
+ },
+ "verify-offline": {
+  "default": "collect_by_file",
+  "modules": {
+   "conftest": "tests.conftest"
+  }
+ },
+ "watch-a-run": {
+  "default": "overseer",
+  "modules": {
+   "overseer": "quest_ai_runner.core.overseer"
+  }
+ },
+ "write-files": {
+  "default": "files",
+  "modules": {
+   "files_writer": "quest_ai_runner.adapters.files_writer"
+  }
+ },
+ "write-through-mcp": {
+  "default": "mcp",
+  "modules": {
+   "mcp_write_adapter": "quest_ai_runner.adapters.mcp_write_adapter"
+  }
+ }
+}

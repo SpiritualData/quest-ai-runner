@@ -61,16 +61,16 @@ def _doc_texts(root: Path) -> dict[str, str]:
         files = [p] if p.is_file() else sorted(p.rglob("*.md")) if p.is_dir() else []
         for f in files:
             rel = str(f.relative_to(root))
-            if rel in ("docs/configuration.md",) or rel.startswith("docs/structure/"):
+            if rel in ("docs/configuration.md",) or rel.startswith("esoi/"):
                 continue
             texts[rel] = f.read_text(errors="ignore")
     return texts
 
 
 def descriptions(root: Path = ROOT) -> dict[str, str]:
-    """{variable: one-line description} from docs/structure/env_descriptions.csv."""
+    """{variable: one-line description} from esoi/env_descriptions.csv."""
     import csv
-    path = root / "docs" / "structure" / "env_descriptions.csv"
+    path = root / "esoi" / "env_descriptions.csv"
     if not path.exists():
         return {}
     with path.open(newline="") as fh:
