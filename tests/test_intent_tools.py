@@ -237,7 +237,7 @@ def test_writes_are_on_request_only_and_reads_are_not():
     specs = {n: b(CREDS) for n, b in intents.QUEST_INTENT_BUILDERS.items()}
     assert {n for n, s in specs.items() if s.on_request_only} == {"refresh_spec", "edit_spec_record", "place_quest"}
     assert not specs["list_intents"].mutates and not specs["get_spec"].mutates
-    assert set(intents.SPEC_KEEPING_PINS) == set(specs)
+    assert not hasattr(intents, "SPEC_KEEPING_PINS")   # no intents tool is pinned to an autopilot pass
 
 
 def test_no_credentials_means_no_intent_tools():

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple
 
-from ..core.tools_quest_intents import SPEC_KEEPING_PINS
 from ..core.tools_quest_ops import AUTOPILOT_PINS
 from ..core.tools_quest_work import AUTOPILOT_WORK_PINS
 from .executor_support import _autopilot_composed_text
@@ -24,5 +23,5 @@ from .executor_support import _autopilot_composed_text
 def pinned_operations(task: Dict[str, Any]) -> Tuple[str, ...]:
     """The operation names this task's run is pinned to (empty for most runs)."""
     if _autopilot_composed_text(task):
-        return AUTOPILOT_PINS + AUTOPILOT_WORK_PINS + SPEC_KEEPING_PINS
+        return AUTOPILOT_PINS + AUTOPILOT_WORK_PINS
     return ()

@@ -13,7 +13,6 @@ from quest_ai_runner.core.tools import ToolContext, ToolRegistry, build_tool_reg
 from quest_ai_runner.core import tools_quest_ops as ops
 from quest_ai_runner.runner.executor_support import AUTOPILOT_WORK_KIND
 from quest_ai_runner.core.tools_quest_work import AUTOPILOT_WORK_PINS
-from quest_ai_runner.core.tools_quest_intents import SPEC_KEEPING_PINS
 from quest_ai_runner.runner.run_operations import pinned_operations
 
 @pytest.fixture(autouse=True)
@@ -262,7 +261,9 @@ def test_a_run_that_names_an_ask_in_its_words_finds_the_operation_through_releva
 
 
 def test_only_autopilot_composed_tasks_are_pinned():
-    assert pinned_operations(AUTOPILOT_BATCH) == ops.AUTOPILOT_PINS + AUTOPILOT_WORK_PINS + SPEC_KEEPING_PINS
+    assert pinned_operations(AUTOPILOT_BATCH) == ops.AUTOPILOT_PINS + AUTOPILOT_WORK_PINS
+    pinned = set(pinned_operations(AUTOPILOT_BATCH))
+    assert not pinned & {"list_intents", "get_spec", "refresh_spec", "edit_spec_record", "place_quest"}
     assert pinned_operations(PLAIN_TASK) == ()
     # a person pasting a prior brief into chat is not an autopilot batch (task_kind decides)
     assert pinned_operations({"text": "\n".join(["QAR:CONTEXT"] * 3)}) == ()

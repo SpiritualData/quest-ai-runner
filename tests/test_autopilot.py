@@ -703,6 +703,13 @@ def test_default_quest_instructions_tell_a_run_to_iterate_rather_than_fragment()
     assert "—" not in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS  # no em dashes, matches the file's own rule
 
 
+def test_default_quest_instructions_no_longer_carry_spec_keeping():
+    """Nothing read the spec an autopilot pass kept; the backend refreshes an intent on events instead."""
+    for tool in ("refresh_spec", "place_quest", "list_intents"):
+        assert tool not in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    assert "specification of the quest" not in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+
+
 # --- the two default briefs, each defaulting on its own -------------------------------------------
 # The quest-wide slot (how to work here and how to deliver) and the persona slot (what this
 # character works on) fall back INDEPENDENTLY: whatever the person wrote fills its own slot, the

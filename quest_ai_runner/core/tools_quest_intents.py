@@ -183,9 +183,8 @@ def refresh_spec_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                      "holds now. One call, hash-gated: if nothing changed since the last refresh it "
                      "writes nothing. It never touches a field the person edited and raises an ask "
                      "before a rename, a vision change or moving a quest the person placed."),
-        when_to_use=("Spec-keeping work: an autopilot pass whose standing instructions say to keep the "
-                     "specification current, or the person asks you to write or refresh one. Pass "
-                     "reason=autopilot in a pass."),
+        when_to_use=("The person asks you to write or refresh a specification. The backend also refreshes "
+                     "a top intent by itself when a quest is placed, moved, completed or archived."),
         when_not_to_use=("Every turn, or right after creating a quest. Calling it again after it "
                          "answered nothing changed."),
         parameters={"type": "object", "properties": {
@@ -277,10 +276,10 @@ def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         description=("Put a quest under one of the person's top intents (or back to unsorted by leaving "
                      "intent_id empty). Moving a quest the person placed themselves is held as an ask "
                      "for them."),
-        when_to_use=("Spec-keeping work where an unsorted quest clearly belongs under one existing "
-                     "intent, or the person asks you to sort a quest."),
-        when_not_to_use=("When no intent clearly fits (leave it unsorted). Never create an intent to fit "
-                         "a quest. Never re-sort quests the person has already placed."),
+        when_to_use="Only when the person asks you to sort or move a quest.",
+        when_not_to_use=("On your own initiative: moving a quest is the person's call, and the app does it "
+                         "without an AI. When no intent clearly fits, leave it unsorted. Never create an "
+                         "intent to fit a quest. Never re-sort quests the person has already placed."),
         parameters={"type": "object", "properties": {
             "quest_id": {"type": "string", "description": "The quest (defaults to this run's quest)."},
             "intent_id": {"type": "string", "description": "A top intent id from list_intents; empty = unsorted."},
@@ -305,8 +304,3 @@ QUEST_INTENT_BUILDERS = {
 }
 STANDARD_TOOL_BUILDERS.update(QUEST_INTENT_BUILDERS)
 QUEST_OPERATION_BUILDERS.update(QUEST_INTENT_BUILDERS)
-
-#: Operations an autopilot pass is pinned to in addition to the asks and work pins: the default brief
-#: carries the spec-keeping paragraph, so these never wait on a lexical match. With no intents the first
-#: call (``list_intents``) says so and the pass moves on.
-SPEC_KEEPING_PINS = ("list_intents", "get_spec", "refresh_spec", "edit_spec_record", "place_quest")
