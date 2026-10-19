@@ -344,7 +344,13 @@ class JudgesMixin:
                                         else "more_work"),
                             "question": str(raw.get("question") or "").strip(),
                             "claims_unexecuted": bool(raw.get("claims_unexecuted")),
-                            "claims_unsupported": bool(check_support and raw.get("claims_unsupported"))}, None
+                            "claims_unsupported": bool(
+                                check_support and raw.get("claims_unsupported")
+                                # Only when it is the ONLY failure: a real gap (more context
+                                # needed, or work claimed but not done) is fixed by the goal
+                                # loop, and a support rewrite must not spend its retry.
+                                and not raw.get("need_more_context")
+                                and not raw.get("claims_unexecuted"))}, None
                 last_error = f"verifier response missing 'met' (model={model})"
             except Exception as e:  # noqa: BLE001 — verification must never break the run
                 last_error = f"{type(e).__name__}: {e}"

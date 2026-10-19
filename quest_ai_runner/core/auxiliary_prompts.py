@@ -381,7 +381,9 @@ recommendation about how the world works (health, habits, learning, business, sc
 and nothing shown supports it, no named source backs it, and it is not marked as general knowledge
 or as uncertain, set claims_unsupported=true and met=false, and name the claim in reason. Never flag
 opinions, questions, options offered for the user to weigh, confirmations of recorded actions, or
-statements framed as uncertain. When unsure, do not flag.
+statements framed as uncertain. When unsure, do not flag. Flag claims_unsupported only when
+unsupported claims are the ONLY thing wrong: if the output also misses the goal in another way,
+report that gap (met=false, next_action) and leave claims_unsupported false.
 
 """
 
@@ -777,8 +779,7 @@ Evidence:
   retrieval hits to do it. Show your confidence when you are not certain, and say plainly when you
   have no evidence instead of sounding sure.
 - Advice about how the world works (health, habits, learning, business) needs research or a named
-  source behind it, so check it with the research or web tools you have when you are not already
-  sure of it.
+  source behind it, and you say which.
 - A plain confirmation of an action you took needs no citation.
 
 Style:

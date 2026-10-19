@@ -112,3 +112,14 @@ def test_deep_goal_verification_prompt_is_unchanged():
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider))
     orch._verify_goal("goal", "brief", "worker output", check_support=True)
     assert "SUPPORT FOR CLAIMS" not in seen[0]      # no execution record, so no claims rules at all
+
+
+def test_unsupported_flag_alongside_a_real_gap_does_not_trigger_the_support_rewrite():
+    """A real gap (more context needed) is the goal loop's job; the rewrite is for support only."""
+    both = {"met": False, "claims_unsupported": True, "need_more_context": True,
+            "context_query": "sleep and anxiety", "reason": "also missing the person's own data"}
+    provider = SupportProvider(
+        plan_decisions=[{"action": "answer", "rationale": "advice"}],
+        goal_verdicts=[both, {"met": True}], answer_text=ADVICE)
+    run(provider)
+    assert provider.support_rewrites == 0
