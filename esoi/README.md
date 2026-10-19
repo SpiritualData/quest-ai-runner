@@ -38,6 +38,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-channel-messages-misdelivered`: A live two-way chat over an external channel can drop, duplicate or reorder messages, or break when a payload arrives in an unexpected shape.
 - `prob-private-data-crosses-scope`: Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI.
 - `prob-narrow-verdicts-unreliable`: A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes the turn.
+- `prob-work-misses-its-why`: Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed.
 
 ## Ideals
 
@@ -71,6 +72,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-honest-grading`, Honest Grading: A grade means the reply did what the principle asks, whatever words it used.
 - `ideal-contained-scope`, Contained Scope: Data stays inside the user, team and quest it belongs to, on every read and write path.
 - `ideal-reliable-verdict`, Reliable Verdict: A narrow judgment changes a turn only when it is usable.
+- `ideal-purposeful-work`, Purposeful Work: Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
 
 ## Solutions
 
@@ -123,6 +125,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `persist-predictions` | Scoped prediction store | file | Prediction store contract pass rate |
 | `gate-an-autopilot-pass` | Autopilot run-or-skip gate | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py | Autopilot gate decision correctness |
 | `evolve-by-metric` | Evolve by metric | structure-library | Parts selected by measurement |
+| `ground-in-intent` | Intent frame for quest-scoped prompts | none | Intent-grounded pass rate |
+| `iterate-by-spec` | Specification slice before a task and write-back after | generic-doctrine | First-pass acceptance and exploration before the first edit |
 
 ## Implementations
 
@@ -295,6 +299,13 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `search-the-web:searxng` | SearXNG search backend | quest_ai_runner/adapters/web_search_backends.py |  |
 | `search-the-web:tavily` | Tavily search backend | quest_ai_runner/adapters/web_search_backends.py |  |
 | `show-progress:milestone` | Milestone sink | quest_ai_runner/core/adapters_sinks.py |  |
+| `ground-in-intent:none` | Prompts without the intent frame | quest_ai_runner/runner/autopilot_briefs.py |  |
+| `ground-in-intent:frame-line` | Computed frame in the prompt | quest_ai_runner/runner/autopilot_briefs.py |  |
+| `ground-in-intent:frame-card-drilldown` | Frame plus intent card and record drill-down | quest_ai_runner/runner/quest_client_intents.py |  |
+| `ground-in-intent:frame-lazy-spec` | Frame plus a lazily generated quest specification | quest_ai_runner/core/tools_quest_intents.py |  |
+| `iterate-by-spec:generic-doctrine` | Generic method in the standing instructions | quest_ai_runner/prompts/evolvable_structure.md |  |
+| `iterate-by-spec:slice-only` | Slice of the specification before the task | quest_ai_runner/core/goal_runner_contract.py |  |
+| `iterate-by-spec:slice-and-writeback` | Slice before and write-back after | quest_ai_runner/core/goal_runner_contract.py |  |
 
 ## Metrics
 
@@ -350,3 +361,5 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-persist-predictions`, Prediction store contract pass rate: `esoi run persist_predictions --impl file_store`
 - `metric-gate-an-autopilot-pass`, Autopilot gate decision correctness: `esoi run gate_an_autopilot_pass --impl live_pass`
 - `QME7`, Parts selected by measurement: `none`
+- `metric-ground-in-intent`, Intent-grounded pass rate: `esoi run intent_grounding`
+- `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`

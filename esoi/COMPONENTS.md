@@ -17,7 +17,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `runner-quest-client` | runner | The Quest HTTP client in API-area mixins plus decision sink | escalate-to-a-human |
 | `runner-poller` | runner | Event-driven, signature-deduped poll loop with bounded concurrency | run-queued-tasks |
 | `runner-executor` | runner | Run one claimed task through the brain and report | run-queued-tasks |
-| `runner-autopilot` | runner | The recurring autopilot pass: defaults, periods, personas, briefs, gates | gate-an-autopilot-pass, assemble-a-prompt |
+| `runner-autopilot` | runner | The recurring autopilot pass: defaults, periods, personas, briefs, gates | gate-an-autopilot-pass, assemble-a-prompt, ground-in-intent |
 | `runner-context-updates` | runner | Keeping a quest context up to date: bundle, receipts, state, judges, sources | assemble-a-prompt, feed-context-sources |
 | `runner-personas` | runner | Which persona runs a task (data, not code), rep skill sync, workflow actions | run-queued-tasks |
 | `runner-quest-folder` | runner | A quest as a working folder: index, two-way sync, zones, goals, experiments | run-queued-tasks |
@@ -35,7 +35,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | track-usage-and-cost |
 | `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | expose-the-public-api |
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |
-| `prompts` | prompts | Standing deep-run instructions shipped as data (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior |
+| `prompts` | prompts | Standing deep-run instructions shipped as data (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
 | `vendor` | vendor | Vendored third-party code, unmodified | expose-the-public-api |
 | `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset | verify-offline |
 | `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (persist-cards), restart-if-idle (run-queued-tasks) | search-the-web, persist-cards, run-queued-tasks |
