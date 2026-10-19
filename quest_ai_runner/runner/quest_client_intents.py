@@ -56,6 +56,16 @@ class IntentsMixin:
             self.last_error = str(e)
             return None
 
+    def get_intent_frame(self, quest_id: str) -> Optional[Dict[str, Any]]:
+        """GET /api/intents/frame: why a quest exists. ``{"text", "anchor", "below"}``; ``text`` is empty for an
+        unsorted quest or a person with no intents. Computed by the server from stored ids, no model call."""
+        try:
+            return self._request("GET", "/api/intents/frame", params={"questId": quest_id}) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_intent_frame failed for %s: %s", quest_id, e)
+            self.last_error = str(e)
+            return None
+
     def get_spec(self, subject_type: str, subject_id: str) -> Optional[Dict[str, Any]]:
         """GET /api/intents/specs/{subjectType}/{subjectId}: the records of an intent's or a quest's specification."""
         try:

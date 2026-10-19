@@ -421,6 +421,10 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         experiment_proposal_open = (
             quest_experiments is not None and not has_experiment(quest_experiments)
             and planning == "plan_and_work" and proposal_is_open(self._client, quest_id))
+        # Why the quest exists, read ONCE per quest from the server (no model call there; empty for an
+        # unsorted quest or a person with no intents, so those cost nothing). A client that cannot ask
+        # or a failed read gives no section, never a guess.
+        intent_frame_text = self.read_intent_frame(quest_id)
         # One batch per pass may be the one that proposes; a second character's batch is told a
         # proposal is already being handled instead of raising a duplicate.
         experiment_proposal_offered = False
@@ -544,7 +548,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                       default_persona_instructions),
                                                   goal_ladder=goal_ladder,
                                                   experiments=experiments_text,
-                                                  asked=asked_text)
+                                                  asked=asked_text,
+                                                  intent_frame=intent_frame_text)
                 if task_id:
                     experiment_proposal_offered = True
                     result.created.append({

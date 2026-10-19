@@ -118,6 +118,20 @@ class WorkMixin:
             return None
         return str(task_id)
 
+    def read_intent_frame(self, quest_id: str) -> Optional[str]:
+        """The quest's intent frame text, or None (no intents, unsorted, a client that cannot ask, a failed
+        read). The server builds it from stored ids with no model call."""
+        getter = getattr(self._client, "get_intent_frame", None)
+        if not callable(getter):
+            return None
+        try:
+            frame = getter(quest_id)
+        except Exception as e:  # noqa: BLE001 -- an extra for the brief, never a reason to lose the pass
+            log.warning("autopilot: intent frame unavailable for quest %s: %s", quest_id, e)
+            return None
+        text = str((frame or {}).get("text") or "").strip() if isinstance(frame, dict) else ""
+        return text or None
+
     def _create_batch_task(self, quest: Dict[str, Any], quest_id: str, persona: Optional[str],
                            mode: str, *,
                            title: Optional[str] = None,
@@ -135,7 +149,8 @@ class WorkMixin:
                            default_persona_instructions: Optional[str] = None,
                            goal_ladder: Optional[List[Dict[str, Any]]] = None,
                            experiments: Optional[str] = None,
-                           asked: Optional[str] = None) -> Optional[str]:
+                           asked: Optional[str] = None,
+                           intent_frame: Optional[str] = None) -> Optional[str]:
         text = compose_batch_text(str(quest.get("outcome") or ""),
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
@@ -148,7 +163,7 @@ class WorkMixin:
                                   default_quest_instructions=default_quest_instructions,
                                   default_persona_instructions=default_persona_instructions,
                                   goal_ladder=goal_ladder, experiments=experiments,
-                                  asked=asked)
+                                  asked=asked, intent_frame=intent_frame)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,

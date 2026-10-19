@@ -247,6 +247,14 @@ _CONFIRMATION_RULE = (
 )
 
 
+INTENT_FRAME_PREAMBLE = (
+    "Why this quest exists (the top intent it serves, worked out from the person's own structure). When the "
+    "standing instructions leave the choice open, prefer work that closes a listed gap or moves a listed "
+    "metric, and say which. Judge plans by whether they plausibly move the ideals. Name a conflict with an "
+    "ideal in one clause. Say nothing about this block when it is not relevant."
+)
+
+
 _INSTRUCTIONS_PREAMBLE = (
     "Standing instructions for this quest, written by the person who owns it. They are the "
     "specification for this run: they say what to produce and how. Everything below is the "
@@ -353,7 +361,8 @@ def compose_batch_text(quest_outcome: str,
                        default_persona_instructions: Optional[str] = None,
                        goal_ladder: Optional[List[Dict[str, Any]]] = None,
                        experiments: Optional[str] = None,
-                       asked: Optional[str] = None) -> str:
+                       asked: Optional[str] = None,
+                       intent_frame: Optional[str] = None) -> str:
     """The batch task's text: what this run is asked to produce, the period and goals it serves,
     what the person themselves last said about the work, and what the previous period produced.
 
@@ -511,6 +520,11 @@ def compose_batch_text(quest_outcome: str,
         template = (_PERSONA_INSTRUCTIONS_PREAMBLE if persona_instructions
                     else _DEFAULT_PERSONA_INSTRUCTIONS_PREAMBLE)
         require(template.format(who=who) + "\n\n" + persona_brief)
+    if intent_frame:
+        # Why this quest exists, computed by the server (no model call): the top intent it serves, what it
+        # builds, the ideals and metrics, and the gaps. It adds the "why"; the outcome and the goals are
+        # carried by the parts around it, so it repeats neither. Stated once here, not in every prompt.
+        add("intent", INTENT_FRAME_PREAMBLE + "\n" + intent_frame.strip(), prompt_budget.PRIORITY_GOALS)
     if goal_ladder:
         # After the brief, deliberately: the run reads what it is asked to produce, then the goals
         # that output has to add up to. The reverse order reads as "here is a list of work, and
