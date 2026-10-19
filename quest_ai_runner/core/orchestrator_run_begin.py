@@ -348,11 +348,27 @@ class RunBeginMixin:
         # folding work for ANY interface that pushes to the inbox (chat, Quest frontend, ...) with no
         # per-interface wiring beyond the push. The conversation key is resolved generically.
         if rs.pending_inputs is None and self.input_inbox is not None:
-            _conv_key = (quest_id or _ctx_meta.get("conversation_id")
-                         or _ctx_meta.get("session_id") or _ctx_meta.get("user_id"))
-            if _conv_key:
+            # The conversation id the caller ran this turn for (``conv_id``) is read FIRST: an
+            # interface pushes a mid-run message under the id of the conversation the person is in,
+            # while ``quest_id`` names the quest that conversation is bound to. Reading only the
+            # quest id left a quest chat's voice message in memory, never drained (2026-10-19).
+            # The older key chain stays, so an interface that pushes by quest or session id works.
+            _legacy_key = (quest_id or _ctx_meta.get("conversation_id")
+                           or _ctx_meta.get("session_id") or _ctx_meta.get("user_id"))
+            _conv_keys = [k for k in dict.fromkeys(
+                [str(conv_id) if conv_id else None,
+                 str(_ctx_meta.get("conversation_id")) if _ctx_meta.get("conversation_id") else None,
+                 str(_legacy_key) if _legacy_key else None]) if k]
+            if _conv_keys:
                 _inbox = self.input_inbox
-                rs.pending_inputs = lambda: _inbox.drain(_conv_key)  # noqa: E731
+
+                def _drain_conversation() -> List[str]:
+                    drained: List[str] = []
+                    for key in _conv_keys:
+                        drained.extend(_inbox.drain(key))
+                    return drained
+
+                rs.pending_inputs = _drain_conversation
 
     def _run_gather_context(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
         """Understand the request and gather the turn's context: conversation slice, recent cards, anticipation, assembled context and guidance."""
