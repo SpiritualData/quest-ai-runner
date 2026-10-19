@@ -294,3 +294,16 @@ def test_the_runner_is_declared_and_not_selected():
     assert "stream_json" in resolve.names("run-deep-work")
     assert resolve.resolve("run-deep-work", "stream_json") is StreamJsonGoalRunner
     assert resolve.default_name("run-deep-work") != "stream_json"   # an alternative until Phase 4 measures it
+
+
+def test_the_wall_clock_cap_kills_the_session(tmp_path):
+    claude = make_claude(tmp_path, {"steps": [{"name": "slow", "seconds": 30}]})
+    cfg = SubprocessConfig(working_dir=str(tmp_path), claude_path=claude, review_interval_seconds=0,
+                           timeout_seconds=0.6, cancel_grace_seconds=0.5)
+    res = StreamJsonGoalRunner(cfg).run_goal(goal="do the steps", brief="steps",
+                                             control=ScriptedControl().control)
+    assert res.met is False and res.cancelled is False
+    assert "wall-clock timeout" in (res.error or "")
+    pid = [e for e in read_log(tmp_path) if e["event"] == "argv"][0]["pid"]
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)

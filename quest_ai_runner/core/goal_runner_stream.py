@@ -340,12 +340,14 @@ class StreamRun:
                 self.steer()
             elapsed = now - started
             if self.timeout is not None and elapsed >= self.timeout:
+                kill_process_group(self.proc)   # a capped run is not asked politely
                 return "timeout", f"Deep run exceeded its configured wall-clock timeout: ran for " \
                                   f"{elapsed:.0f}s against a {self.timeout:.0f}s limit."
             if next_review is not None and now >= next_review and self.review is not None:
                 next_review = now + (self.review_interval or 0)
                 stop_now, reason = self.review(elapsed)
                 if stop_now:
+                    kill_process_group(self.proc)
                     return "review", reason
 
     def stop_wanted(self) -> str:
