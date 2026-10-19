@@ -316,3 +316,12 @@ What is still open, in rough order of how likely it is to matter:
 3. Extend `PIVOTS` and the world together (add the fact to the seeded data AND to `PIVOTS`), then
    `reset`; never hand-edit dev data.
 4. File QAR/quest-backend defects as findings with the case id, and re-run only those ids.
+
+## Target (Joshua, 2026-10-19)
+
+The cheapest tier (haiku) passes 10 of 10 dev cases at a few cents per passing turn. The recorded 1 of 10 at about $1.44 per
+passing turn is a structure problem, not a budget problem: if haiku misses a case, fix the prompts, tools, routing or
+context the chat is given and re-run haiku. Do not set a dollar ceiling per passing turn, do not choose a stronger tier to
+buy the pass, and do not ask whether a grounded, safe reply with one unnecessary question should fail: the rubric stands as
+written (an unnecessary question about data the account already holds is a miss). Runs follow the metric run policy
+(`esoi/metric-run-policy.md`): 3-case and 10-case dev runs on the cheapest tier inside the $5 per rolling 24 hours cap.

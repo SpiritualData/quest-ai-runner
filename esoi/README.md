@@ -39,6 +39,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-private-data-crosses-scope`: Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI.
 - `prob-narrow-verdicts-unreliable`: A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes the turn.
 - `prob-work-misses-its-why`: Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed.
+- `prob-core-ml-tasks-unspecified`: Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). Each has had alternative implementations, but QAR's records do not name them as one solution, so no alternative is compared on a metric.
 
 ## Ideals
 
@@ -73,6 +74,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-contained-scope`, Contained Scope: Data stays inside the user, team and quest it belongs to, on every read and write path.
 - `ideal-reliable-verdict`, Reliable Verdict: A narrow judgment changes a turn only when it is usable.
 - `ideal-purposeful-work`, Purposeful Work: Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
+- `ideal-measured-core-ml`, Measured Core ML: Every classification and recommendation Quest depends on has a defined input and output, a held-out labelled case set, and a recorded comparison of its alternatives.
 
 ## Solutions
 
@@ -127,6 +129,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `evolve-by-metric` | Evolve by metric | structure-library | Parts selected by measurement |
 | `ground-in-intent` | Intent frame for quest-scoped prompts | none | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | generic-doctrine | First-pass acceptance and exploration before the first edit |
+| `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
 
 ## Implementations
 
@@ -364,3 +367,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `QME7`, Parts selected by measurement: `none`
 - `metric-ground-in-intent`, Intent-grounded pass rate: `esoi run intent_grounding`
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
+- `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`

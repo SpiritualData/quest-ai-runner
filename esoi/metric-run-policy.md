@@ -40,11 +40,14 @@ approved.
   the dev arm (never real user data).
 - **Outputs:** a row in `results.csv` with `git_sha`, `cases_sha`, `model`, calls, tokens and cost.
 - **Effects:** model spend on live arms; the dev arm drives a development server only.
-- **Who approves spend:** a staged run on the cheapest tier against development, up to the 30-case stage, an AI may approve for
-  itself.
-  - Pending Joshua's decision: whether an AI may approve its own development test asks up to the 30-case stage. Proposed
-    default: yes, on the cheapest tier against development, as now practised. A full run, a run on a stronger tier, or anything against production or
-  user data goes to Joshua through the approval-gate as a decision-request.
+- **Who approves spend:** approved by Joshua on 2026-10-19. A staged run on the cheapest tier against development, at the
+  3-case or 10-case stage, an AI may approve for itself, inside a call budget written in the task before the run. The cap is
+  **$5 across all of Spiritual Data in any rolling 24 hours** (his words: "budget is $5 across all of Spiritual Data in a given
+  24 hours"); the AI sums the estimated cost of the runs it approves and stops before the total passes $5. Anything larger
+  (the 30-case stage and up), a stronger tier, or anything against production or user data goes to Joshua through the
+  approval-gate as a decision-request. A full run of an evaluation set always does (his 2026-10-06 rule, which stands). Mirror:
+  quest-backend's `esoi/metric-run-policy.md`; commit a293903a (checks on the esoi library) and the October follow-up that
+  moved the policy into `esoi/`.
 - **Stale when:** the row has no `git_sha` or `cases_sha`; the case files changed (hash differs); it was recorded on uncommitted code
   (`-dirty`); the measured code or the arm's files changed since its commit (`esoi check --strict`); or the model, its price or
   the provider's behavior changed. The first four are checked by the tool; the last needs the scheduled re-measurement below.
@@ -72,5 +75,5 @@ spend of the runs behind each. Counted from `git log` of `solutions.csv` and `re
 | metric_id | arm | trigger | stages | call_budget | cost_estimate | approver | stale_when |
 |---|---|---|---|---|---|---|---|
 | each offline component's metric | offline | every change to the component or its cases | whole set | none | none | none | cases changed, code changed since commit, dirty |
-| classification, quest_ops, recipe_fast_path, esoi_behavior (chat arm), esoi_judge, chat_quality | live | a decision | 3, 10, 30 | set per run in the task (Pending Joshua's decision: the default budget; proposed default: a budget written in the task before the first stage) | calls x price, written first | AI for dev stages, Joshua beyond | as above, and a model or price change |
+| classification, quest_ops, recipe_fast_path, esoi_behavior (chat arm), esoi_judge, chat_quality | live | a decision | 3, 10, 30 | set per run in the task before the first stage, inside the $5 per rolling 24 hours cap across Spiritual Data | calls x price, written first | AI for dev 3 and 10-case stages within the cap, Joshua beyond | as above, and a model or price change |
 | answer-a-turn (dev arm) | live | a decision | 3, 10 | set per run | calls x price | AI for dev, Joshua beyond | as above, and any change to the dev world |
