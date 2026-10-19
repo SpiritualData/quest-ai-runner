@@ -36,6 +36,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   the Agent Client Protocol instead of a one-shot `claude -p`, so a message queued mid-run reaches
   the turn already in progress. How to wire it, the Node >= 22 requirement, and why the default
   path is unchanged.
+- **[The stream-json deep runner](stream-json-runner.md)**: the alternative `run-deep-work`
+  implementation that keeps one live Claude Code session per run, so a person can steer, stop or
+  pause while it works. The control channel, the exactly-once rules, the Claude Code version it
+  needs, and why the one-shot runner is still the default.
 - **[The fast edit runner](fast-edit-runner.md)**: the opt-in `DeepRunner` that lands a bounded
   file edit in one model call instead of spawning a full agent, and with it quest-ai-runner's
   first write capability: how the opt-in works, what the write boundary guarantees (containment,

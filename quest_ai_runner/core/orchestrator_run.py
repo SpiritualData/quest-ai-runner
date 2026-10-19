@@ -45,7 +45,8 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
             anticipated_id: Optional[str] = None,
             message_is_user_turn: bool = True,
             resume_session_id: Optional[str] = None,
-            now: Optional[str] = None) -> OrchestratorResult:
+            now: Optional[str] = None,
+            run_control: Optional[Any] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -151,6 +152,11 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                             Best effort by contract: a runner that cannot resume ignores it, and a
                             session the worker no longer holds degrades to a cold start rather than
                             failing the run. Absent/None means exactly today's behavior.
+        * ``run_control``  -- optional ``core.run_control.RunControl`` for THIS run: the channel a
+                            deep worker uses to take steering messages, and to be stopped or
+                            paused, while it works. Handed only to a worker that declares a
+                            ``control`` keyword and only on a single-goal run. Absent/None means
+                            exactly today's behavior.
         * ``now``          -- optional ISO date/datetime string, the CALLER's notion of "now". Fed
                             into goal-condition/constraint derivation (see ``_derive_goal_condition``)
                             so a relative date in the message ("Wednesday", "last week") resolves
@@ -186,6 +192,7 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
             message_is_user_turn=message_is_user_turn,
             resume_session_id=resume_session_id,
             now=now,
+            run_control=run_control,
         )
         res = self._run_begin(rs)
         if res is not None:

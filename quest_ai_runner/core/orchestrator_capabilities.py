@@ -149,6 +149,21 @@ def run_goal_accepts_cancel_check(deep_runner: Any) -> bool:
     return False
 
 
+def run_goal_accepts_control(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` NAMES a ``control`` keyword (a ``RunControl``).
+
+    Stricter than the other opt-ins: ``**kwargs`` alone does not count, because ``control`` carries
+    live callables that claim messages. A runner that merely tolerates unknown keywords would drop
+    them, and a claim nobody reads must never happen. Only a runner that declares ``control``
+    gets one, so a message is claimed only by a runner that will write it.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return "control" in sig.parameters
+
+
 def run_goal_accepts_is_subgoal(deep_runner: Any) -> bool:
     """Whether a DeepRunner's ``run_goal`` accepts an ``is_subgoal`` keyword (or **kwargs).
 

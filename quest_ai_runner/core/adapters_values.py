@@ -214,6 +214,11 @@ class DeepResult:
     # was interrupted and released; ``session_id`` is what a resume continues. Not a failure and
     # not a cancel: the work belongs back on the thread until a person resumes it.
     paused: bool = False
+    # Messages the run CLAIMED from its control channel and wrote to the worker, but whose arrival
+    # at the model was never confirmed before the run ended (a stop, a pause or a crash). They are
+    # returned here, as text, so nothing a person sent is silently lost: the caller shows them or
+    # sends them with the resume. Empty for a run that saw everything it was given.
+    unseen_inputs: List[str] = field(default_factory=list)
     # The worker NEVER STARTED the goal: the binary is missing or not executable, or the CLI refused
     # before its first model turn (an unrecognized model id, bad credentials, a rejected flag), so
     # it consumed nothing and did nothing. Its ``output`` (if any) is the CLI's own error text, not

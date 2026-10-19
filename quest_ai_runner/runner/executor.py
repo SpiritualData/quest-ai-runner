@@ -22,6 +22,7 @@ it can be unit-tested against a mock Quest client + stub brain with no network.
 """
 from __future__ import annotations
 
+import inspect
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -29,6 +30,7 @@ from ..core import provider_outage, usage_limit
 from ..core.adapters import Mode
 from ..core.orchestrator import Orchestrator, OrchestratorResult
 from ..core.requester import requester_from_task
+from ..core.run_control import ControlMessage, RunControl
 from ..core.work_model import WorkModelUnavailable, apply_work_model, default_effective, is_tier_word
 
 from .executor_contracts import (
@@ -49,6 +51,7 @@ from .executor_support import (
     CONV_CONTEXT_MAX_BYTES,
     ExecutionOutcome,
     MESSAGE_CLAIM_INTERVAL_SECONDS,
+    RUN_CONTROL_POLL_SECONDS,
     _TaskProgressSink,
     _autopilot_composed_text,
     _is_autopilot_pass,
@@ -225,6 +228,48 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
             return texts
 
         return _poll
+
+    def _build_run_control(self, task_id: str) -> RunControl:
+        """The ``RunControl`` of THIS task's run, for a deep worker that holds a live session.
+
+        Bound to one task id, so a message claimed through it belongs to this task and no other.
+        ``claim_inputs`` claims straight from the task (atomic on the backend: each message is
+        handed over once); the worker calls it only when it is about to write the result to its
+        model. ``cancel_requested`` and ``pause_requested`` are read at the control poll cadence.
+        Every callable is best-effort and never raises.
+        """
+        def claim_inputs() -> List[ControlMessage]:
+            out: List[ControlMessage] = []
+            for m in self._claim_task_messages(task_id):
+                text = str(m.get("text") or "").strip()
+                if text:
+                    out.append(ControlMessage(id=str(m.get("message_id") or ""), text=text))
+            return out
+
+        def mark_seen(ids: List[str], where: str) -> None:
+            mark = getattr(self._client, "mark_task_messages_seen", None)
+            ids = [i for i in ids if i]
+            if not callable(mark) or not ids:
+                return
+            try:
+                mark(task_id, ids, where)
+            except Exception:  # noqa: BLE001 -- a status stamp must never affect the run
+                pass
+
+        def pause_requested() -> bool:
+            asked = getattr(self._client, "is_task_pause_requested", None)
+            if not callable(asked):
+                return False
+            try:
+                return bool(asked(task_id))
+            except Exception:  # noqa: BLE001
+                return False
+
+        return RunControl(
+            claim_inputs=claim_inputs, mark_seen=mark_seen,
+            cancel_requested=self._build_cancel_check(task_id, RUN_CONTROL_POLL_SECONDS),
+            pause_requested=pause_requested, poll_seconds=RUN_CONTROL_POLL_SECONDS,
+            label=task_id)
 
     def _is_task_cancelled(self, task_id: str) -> bool:
         """Best-effort, UNTHROTTLED cancellation check for the final reporting path.
@@ -459,6 +504,15 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
         # When this run began, so a usage limit recorded DURING it can be told apart from one some
         # other concurrent run hit (see ``_usage_limit_behind``).
         run_started = time.time()
+        # THE RUN'S CONTROL CHANNEL, bound to this task: a deep worker with a live session takes
+        # steering messages and stop/pause requests through it. Only passed to a brain whose
+        # ``run`` accepts it (an older brain, or a test double, is called exactly as before).
+        control_kwargs: Dict[str, Any] = {}
+        try:
+            if "run_control" in inspect.signature(self._orch.run).parameters:
+                control_kwargs["run_control"] = self._build_run_control(task_id)
+        except (TypeError, ValueError):
+            pass
         try:
             result: OrchestratorResult = self._orch.run(
                 text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
@@ -476,7 +530,7 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
                 # Orchestrator.run: a work brief full of legitimate instructions ("stop asking",
                 # "do not silently drop them") otherwise degrades the run to an answer with no
                 # tools, and it reports as though it had looked.
-                message_is_user_turn=False)
+                message_is_user_turn=False, **control_kwargs)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             # A run that raises BECAUSE it was interrupted must not be reported as failed: check
             # (unthrottled, this is the terminal path) whether the task was cancelled meanwhile.

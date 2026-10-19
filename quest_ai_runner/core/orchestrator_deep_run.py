@@ -42,6 +42,7 @@ from .orchestrator_capabilities import (
     _run_goal_accepts_run_id,
     _run_goal_accepts_working_dir,
     run_goal_accepts_cancel_check,
+    run_goal_accepts_control,
     run_goal_accepts_gathered_observations,
     run_goal_accepts_is_subgoal,
     run_goal_accepts_requester_user_id,
@@ -76,7 +77,13 @@ class DeepRunMixin:
                   working_dir_override: Optional[str] = None,
                   resume_session_id: Optional[str] = None,
                   self_initiated: bool = False,
-                  user_ordered: bool = False) -> OrchestratorResult:
+                  user_ordered: bool = False,
+                  run_control: Optional[Any] = None) -> OrchestratorResult:
+        # ``run_control``: the ``RunControl`` of THIS run (steer, stop, pause; see
+        # ``core/run_control.py``). It is handed to a worker that declares a ``control`` keyword, and
+        # only on a single-goal run: the subgoals of a fan-out run concurrently, and one control
+        # handed to several workers could deliver one message to the wrong one. None = today's
+        # behaviour, byte-for-byte.
         # ``self_initiated``: this deep run is the orchestrator's OWN escalation (the answer
         # verifier asked for more context, or the last-resort run before giving up), not work the
         # user or the planner asked for. A goal that resolves to a runner whose work outlives the
@@ -401,7 +408,7 @@ class DeepRunMixin:
                 if runner is None:
                     return {"emit": False, "run_id": False, "preamble": False, "gathered": False,
                             "working_dir": False, "resume": False, "is_subgoal": False,
-                            "requester": False, "cancel": False}
+                            "requester": False, "cancel": False, "control": False}
                 cached = runner_caps.get(id(runner))
                 if cached is None:
                     cached = {
@@ -414,6 +421,7 @@ class DeepRunMixin:
                         "is_subgoal": run_goal_accepts_is_subgoal(runner),
                         "requester": run_goal_accepts_requester_user_id(runner),
                         "cancel": run_goal_accepts_cancel_check(runner),
+                        "control": run_goal_accepts_control(runner),
                     }
                     runner_caps[id(runner)] = cached
                 return cached
@@ -521,6 +529,10 @@ class DeepRunMixin:
                     # once the attempt has finished. Only for a runner that accepts it.
                     if caps["cancel"] and cancel_check is not None:
                         kwargs["cancel_check"] = cancel_check
+                    # THE CONTROL CHANNEL (steer, stop, pause), for a worker that declares it and a
+                    # single-goal run only (see ``run_control`` above).
+                    if caps["control"] and run_control is not None and not multi:
+                        kwargs["control"] = run_control
                     # The runner LADDER was resolved once per task, above (not re-resolved per
                     # retry — the classifier's inputs don't change across retries of the same
                     # task); which rung of it runs THIS attempt is decided by the loop below and

@@ -83,6 +83,15 @@
    "remote_files_adapter": "quest_ai_runner.adapters.remote_files_adapter"
   }
  },
+ "ground-in-intent": {
+  "default": "none",
+  "modules": {
+   "frame-card-drilldown": "quest_ai_runner.runner.quest_client_intents",
+   "frame-lazy-spec": "quest_ai_runner.core.tools_quest_intents",
+   "frame-line": "quest_ai_runner.runner.autopilot_briefs",
+   "none": "quest_ai_runner.runner.autopilot_briefs"
+  }
+ },
  "guide-by-feedback": {
   "default": "universal",
   "modules": {
@@ -93,6 +102,13 @@
   "default": "qdrant",
   "modules": {
    "qdrant": "quest_ai_runner.adapters.qdrant_vector_store"
+  }
+ },
+ "iterate-by-spec": {
+  "default": "generic-doctrine",
+  "modules": {
+   "slice-and-writeback": "quest_ai_runner.core.goal_runner_contract",
+   "slice-only": "quest_ai_runner.core.goal_runner_contract"
   }
  },
  "learn-by-example": {
@@ -163,6 +179,7 @@
    "acp": "quest_ai_runner.adapters.acp_deep_runner",
    "fast_edit": "quest_ai_runner.adapters.fast_edit_runner",
    "mcp_write": "quest_ai_runner.adapters.mcp_write_runner",
+   "stream_json": "quest_ai_runner.core.goal_runner_stream",
    "subprocess": "quest_ai_runner.core.goal_runner"
   }
  },

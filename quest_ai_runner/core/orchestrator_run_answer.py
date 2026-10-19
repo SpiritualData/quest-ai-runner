@@ -254,7 +254,8 @@ class RunAnswerMixin:
                                  pending_inputs=rs.pending_inputs, model_hint=rs.model_hint,
                                  ctx_meta=_ctx_meta, cancel_check=cancel_check,
                                  working_dir_override=working_dir_override,
-                                 resume_session_id=take_resume_session())
+                                 resume_session_id=take_resume_session(),
+                                 run_control=rs.run_control)
             if rs.res.kind == "cancelled":
                 return finish(rs.res)
             rs.res.exit_reason = "deep_met" if (rs.res.deep_results and all(d.met for d in rs.res.deep_results)) else "deep_not_met"
@@ -409,7 +410,8 @@ class RunAnswerMixin:
                         ctx_meta=_ctx_meta, cancel_check=cancel_check,
                         working_dir_override=working_dir_override,
                         resume_session_id=take_resume_session(), self_initiated=True,
-                        user_ordered=user_ordered_work(rs.turn_user_intent))
+                        user_ordered=user_ordered_work(rs.turn_user_intent),
+                        run_control=rs.run_control)
                     if _ov_res.kind == "cancelled":
                         return finish(_ov_res)
                     if not own_escalation_adds_nothing(_ov_res, exec_record, ov_facts_before):

@@ -106,7 +106,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `feed-context-sources` | Incremental context-update feed | base | Update-offering correctness over synthetic quest channels |
 | `store-feedback` | Verbatim feedback ledger | ledger | Correction carry-through over the feedback-loop cases |
 | `recall-recent-context` | Scoped recent-context warm start | file | Warm-start accuracy with no cross-work-item leakage |
-| `receive-input-mid-run` | Conversation-keyed mid-run input inbox | in_memory | Exactly-once mid-run delivery per conversation |
+| `receive-input-mid-run` | Conversation-keyed mid-run input inbox | in_memory | Exactly-once mid-run delivery per run, and how fast it is seen |
 | `resolve-references` | Fail-safe card reference resolver | note | Pointer-resolution safety over offline cases |
 | `cache-cards` | Offline card cache and write outbox | file | Outage resilience of the card repository |
 | `behave-by-esoi` | Standing-instruction behaviour layer | evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py | Principle-following pass rate under standing instructions |
@@ -306,6 +306,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `iterate-by-spec:generic-doctrine` | Generic method in the standing instructions | quest_ai_runner/prompts/evolvable_structure.md |  |
 | `iterate-by-spec:slice-only` | Slice of the specification before the task | quest_ai_runner/core/goal_runner_contract.py |  |
 | `iterate-by-spec:slice-and-writeback` | Slice before and write-back after | quest_ai_runner/core/goal_runner_contract.py |  |
+| `run-deep-work:stream_json` | Persistent stream-json runner | quest_ai_runner/core/goal_runner_stream.py |  |
 
 ## Metrics
 
@@ -342,7 +343,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-feed-context-sources`, Update-offering correctness over synthetic quest channels: `esoi run feed_context_sources --impl update_engine`
 - `metric-store-feedback`, Correction carry-through over the feedback-loop cases: `esoi run feedback_loop --impl ledger_guidance`
 - `metric-recall-recent-context`, Warm-start accuracy with no cross-work-item leakage: `esoi run recent_context --impl file_store_filter`
-- `metric-receive-input-mid-run`, Exactly-once mid-run delivery per conversation: `esoi run receive_input_mid_run --impl in_memory`
+- `metric-receive-input-mid-run`, Exactly-once mid-run delivery per run, and how fast it is seen: `esoi run receive_input_mid_run --impl in_memory`
 - `metric-resolve-references`, Pointer-resolution safety over offline cases: `esoi run resolve_references --impl card_resolvers`
 - `metric-cache-cards`, Outage resilience of the card repository: `esoi run cache_cards --impl file_cache`
 - `metric-behave-by-esoi`, Principle-following pass rate under standing instructions: `esoi run esoi_behavior --impl insitu_standing_instructions`

@@ -163,6 +163,18 @@ class TasksMixin:
             log.warning("is_task_cancelled check failed for %s", task_id, exc_info=True)
             return False
 
+    def is_task_pause_requested(self, task_id: str) -> bool:
+        """True when a person asked for this task's run to PAUSE (its ``pause_requested`` field).
+
+        The pause control is read the way a cancel is: by re-fetching the task. Fail-open for the
+        same reason as ``is_task_cancelled``: a failed read must never pause a healthy run. A task
+        whose backend has no such field simply reads False."""
+        try:
+            return bool((self.get_task(task_id) or {}).get("pause_requested"))
+        except Exception:  # noqa: BLE001 -- fail-open
+            log.warning("is_task_pause_requested check failed for %s", task_id, exc_info=True)
+            return False
+
     # --- claim / report ------------------------------------------------------
 
     def claim(self, task_id: str, handler: Optional[str] = None) -> Optional[Dict[str, Any]]:

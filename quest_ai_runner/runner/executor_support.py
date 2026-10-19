@@ -21,6 +21,12 @@ from .executor_contracts import log
 MESSAGE_CLAIM_INTERVAL_SECONDS = 15.0
 
 
+# While a deep worker holds a live two-way session, a steering message is only useful if it is
+# quick: the worker looks for new messages, and for a stop or pause request, this often. The cost
+# is one cheap call per active run per interval. Used by the ``RunControl`` the executor builds.
+RUN_CONTROL_POLL_SECONDS = 2.0
+
+
 # Hard cap on the FALLBACK prior-conversation read in ``_build_context_view`` (the path taken only
 # when no ConversationStore is wired). Without a cap, a long-running conversation would dump its
 # entire transcript into every linked task's prompt, growing without bound as the conversation

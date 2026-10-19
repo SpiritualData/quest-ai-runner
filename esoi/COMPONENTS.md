@@ -10,7 +10,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message |
 | `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | watch-a-run, judge-a-decision |
 | `core-model-selection` | core | Tier to live model id, family resolution, deep-run starting model, outage and usage-limit memory | choose-a-model-tier |
-| `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-turn execution record | run-deep-work, receive-input-mid-run, detect-a-stalled-run |
+| `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-run control channel (steer, stop, pause), per-turn execution record | run-deep-work, receive-input-mid-run, detect-a-stalled-run |
 | `core-context-selection` | core | Choosing and learning which context cards enter a prompt | select-context, guide-by-feedback, recall-recent-context |
 | `core-tools` | core | The one catalog of operations an AI run can perform (tools, asks, progress, goals, notes, experiments), their relevance selection and per-run pins, plus operator-registered custom tools | operate-a-quest |
 | `core-reply-guards` | core | Link honesty, replayable recipes and the anticipation learner | replay-known-operations, guard-a-reply, persist-predictions |
