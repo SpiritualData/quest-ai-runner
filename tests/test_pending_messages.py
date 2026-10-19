@@ -150,15 +150,16 @@ def test_build_pending_inputs_rechecks_after_interval_elapses():
     assert client.claim_calls.count("t7") == 2
 
 
-def test_build_pending_inputs_posts_status_tick_when_handing_messages_over():
+def test_build_pending_inputs_does_not_repeat_the_backends_pickup_line():
+    """The backend's claim already writes "Picked up your message." (a ``message_ack`` tick) to
+    the task feed. The runner posting it again as a status tick showed it twice."""
     client = MessageClaimingClient()
     client.queue_message("t8", "steer this")
     ex = TaskExecutor(client, _brain(StubProvider(decisions=[])))
     poll = ex._build_pending_inputs("t8", interval=0.0)
-    poll()
+    assert poll() == ["steer this"]
 
-    status_texts = [t for (_tid, k, t, _o) in client.progress if k == "status"]
-    assert status_texts == ["Picked up your message."]
+    assert not any("Picked up" in (t or "") for (_tid, _k, t, _o) in client.progress)
 
 
 def test_build_pending_inputs_no_status_tick_when_nothing_claimed():

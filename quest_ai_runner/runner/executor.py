@@ -202,12 +202,8 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
                 texts = self._message_texts(claimed)
             except Exception:  # noqa: BLE001 -- polling must never break the run
                 return []
-            if texts:
-                n = len(texts)
-                self._report_progress(
-                    task_id, "status",
-                    text=("Picked up your message." if n == 1
-                          else f"Picked up your {n} messages."))
+            # No "Picked up your message." tick here: the backend's claim already writes that line
+            # to the task feed (the ``message_ack`` tick), and posting it again showed it twice.
             return texts
 
         return _poll
