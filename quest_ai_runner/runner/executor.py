@@ -159,6 +159,21 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
         except Exception:  # noqa: BLE001
             return []
 
+    def _mark_messages_seen(self, task_id: str, claimed: List[Dict[str, Any]], where: str) -> None:
+        """Tell the backend these claimed messages have now reached a model turn.
+
+        Claiming only means the runner holds a message; ``seen`` is what the person is shown, so it
+        is reported at the point the text is handed on to the model (``where`` names which). No-ops
+        for a client without ``mark_task_messages_seen`` and never raises."""
+        ids = [str(m.get("message_id")) for m in (claimed or []) if m.get("message_id")]
+        mark = getattr(self._client, "mark_task_messages_seen", None)
+        if not task_id or not ids or not callable(mark):
+            return
+        try:
+            mark(task_id, ids, where)
+        except Exception:  # noqa: BLE001 -- a status stamp must never affect the run
+            pass
+
     @staticmethod
     def _message_texts(claimed: List[Dict[str, Any]]) -> List[str]:
         """Extract non-empty ``text`` fields from a list of claimed message dicts, in order."""
@@ -204,6 +219,9 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
                 return []
             # No "Picked up your message." tick here: the backend's claim already writes that line
             # to the task feed (the ``message_ack`` tick), and posting it again showed it twice.
+            # What this side adds is the SEEN stamp: the texts go to the model's next step now.
+            if texts:
+                self._mark_messages_seen(task_id, claimed, "next_step")
             return texts
 
         return _poll
@@ -333,8 +351,10 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
         # instead of waiting for a later drain point. The backend's claim endpoint already posts
         # its own ``message_ack`` progress tick when it hands these over; this status tick is
         # separate -- it names that the FOLD happened, for the live feed.
-        _initial_texts = self._message_texts(self._claim_task_messages(task_id))
+        _initial_claimed = self._claim_task_messages(task_id)
+        _initial_texts = self._message_texts(_initial_claimed)
         if _initial_texts:
+            self._mark_messages_seen(task_id, _initial_claimed, "planner")
             # Reuse the orchestrator's own rendering (a one-shot callable over the already-claimed
             # texts) so this fold-in reads IDENTICAL to one folded in mid-run by the orchestrator's
             # ``_drain_pending`` (deep retry loop, answer-improve loop, planner loop) -- one voice

@@ -70,3 +70,30 @@ def test_claim_task_messages_never_raises_when_not_configured():
 
     client._request = unconfigured  # type: ignore[assignment]
     assert client.claim_task_messages("task_1") == []
+
+
+# --- mark_task_messages_seen: claimed is not seen -------------------------------------------------
+
+def test_mark_task_messages_seen_posts_ids_and_where():
+    client, captured = client_capturing_request({"messages": [{"message_id": "amsg_1"}]})
+    out = client.mark_task_messages_seen("task_1", ["amsg_1"], "deep_worker")
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/api/assistant-tasks/task_1/messages/seen"
+    assert captured["body"] == {"message_ids": ["amsg_1"], "where": "deep_worker"}
+    assert out == [{"message_id": "amsg_1"}]
+
+
+def test_mark_task_messages_seen_sends_nothing_without_ids():
+    client, captured = client_capturing_request({"messages": []})
+    assert client.mark_task_messages_seen("task_1", []) == []
+    assert captured == {}
+
+
+def test_mark_task_messages_seen_never_raises_on_api_error():
+    client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
+
+    def failing_request(*a, **k):
+        raise QuestApiError("Quest API POST /api/assistant-tasks/task_1/messages/seen -> 500: boom")
+
+    client._request = failing_request  # type: ignore[assignment]
+    assert client.mark_task_messages_seen("task_1", ["amsg_1"]) == []

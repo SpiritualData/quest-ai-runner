@@ -272,3 +272,42 @@ def test_failed_open_is_reported_on_the_task_and_the_outcome_still_stands():
     assert out.status == "done"
     error_texts = [t for (_tid, k, t, _o) in client.progress if k == "error"]
     assert any("could not start a new run" in (t or "") for t in error_texts)
+
+
+# --- (d) "seen" is reported when the text reaches a model turn, not when it is claimed -------------
+
+class SeenRecordingClient(MessageClaimingClient):
+    def __init__(self):
+        super().__init__([])
+        self.seen_calls: List[tuple] = []
+
+    def mark_task_messages_seen(self, task_id, message_ids, where="planner"):
+        self.seen_calls.append((task_id, list(message_ids), where))
+        return []
+
+
+def test_a_message_folded_into_the_first_prompt_is_reported_seen_by_the_planner():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = SeenRecordingClient()
+    client.queue_message("s1", "look at staging", message_id="amsg_a")
+    TaskExecutor(client, _brain(provider)).execute({"id": "s1", "text": "run the checks"})
+
+    assert ("s1", ["amsg_a"], "planner") in client.seen_calls
+
+
+def test_a_message_handed_over_mid_run_is_reported_seen_for_the_next_step():
+    client = SeenRecordingClient()
+    client.queue_message("s2", "steer", message_id="amsg_b")
+    poll = TaskExecutor(client, _brain(StubProvider(decisions=[])))._build_pending_inputs(
+        "s2", interval=0.0)
+    assert poll() == ["steer"]
+
+    assert client.seen_calls == [("s2", ["amsg_b"], "next_step")]
+
+
+def test_nothing_is_reported_seen_when_nothing_was_claimed():
+    client = SeenRecordingClient()
+    poll = TaskExecutor(client, _brain(StubProvider(decisions=[])))._build_pending_inputs(
+        "s3", interval=0.0)
+    assert poll() == []
+    assert client.seen_calls == []

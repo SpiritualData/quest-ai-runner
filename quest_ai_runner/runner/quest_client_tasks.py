@@ -400,6 +400,28 @@ class TasksMixin:
             log.warning("claim_task_messages failed for task %s: %s", task_id, e)
             return []
 
+    def mark_task_messages_seen(self, task_id: str, message_ids: List[str],
+                                where: str = "planner") -> List[Dict[str, Any]]:
+        """POST /api/assistant-tasks/{task_id}/messages/seen: report claimed messages as SEEN.
+
+        A claim only means the runner holds a message. This is called when its text reaches a
+        model turn (``where``: ``planner``, ``next_step``, ``deep_worker`` or ``new_run``), and the
+        backend stamps ``seen_at`` once per message. Returns the messages newly stamped.
+
+        BEST-EFFORT BY CONTRACT, like ``claim_task_messages``: never raises, a transport or API
+        error is logged and an empty list returned, so a status stamp can never affect a run.
+        """
+        if not message_ids:
+            return []
+        try:
+            resp = self._request(
+                "POST", f"/api/assistant-tasks/{task_id}/messages/seen",
+                body={"message_ids": list(message_ids), "where": where}) or {}
+            return resp.get("messages") or []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("mark_task_messages_seen failed for task %s: %s", task_id, e)
+            return []
+
     def open_run_on_task(self, task_id: str, text: str) -> Dict[str, Any]:
         """POST /api/assistant-tasks/{task_id}/iterate: open a NEW run on this task's thread.
 
