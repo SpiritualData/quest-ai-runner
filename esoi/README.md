@@ -312,6 +312,12 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `run-deep-work:stream_json` | Persistent stream-json runner | quest_ai_runner/core/goal_runner_stream.py |  |
 | `core-ml-tasks:message-route-family` | Classify through the message router alternatives | evaluation/components/classification/impls |  |
 | `core-ml-tasks:registry-conditioned-routing` | Route with the registry of examples, by model tier |  |  |
+| `core-ml-tasks:shared-quest-ranker` | Pick the quest with the shared ranker (embeddings lead, the model picks by number) |  |  |
+| `core-ml-tasks:hybrid-candidate-ranker` | Rank quests by words and meaning, with evidence |  |  |
+| `core-ml-tasks:category-vector-match` | Match a goal to an area of life by vector similarity |  |  |
+| `core-ml-tasks:intent-placement-llm` | Place quests under top intents with the model |  |  |
+| `core-ml-tasks:intent-suggestion-llm` | Recommend top intents with the model |  |  |
+| `core-ml-tasks:period-placement-llm` | Recommend where backlog goals go in the next period |  |  |
 
 ## Metrics
 
