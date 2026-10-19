@@ -1504,6 +1504,23 @@ def test_compose_batch_text_confirmation_rule_survives_a_previous_period_block()
     assert "never means swapping an untouched item" in text
 
 
+def test_compose_batch_text_improves_one_solution_even_under_a_written_brief():
+    """Joshua, 2026-10-19: every autopilot run improves at least one solution. The rule first lived
+    in the built-in quest brief, which a quest's own brief replaces outright, so any quest whose
+    owner had written one never saw it. It belongs to the brief's always-required part instead,
+    with or without a written brief, and once, not again inside the default brief."""
+    from quest_ai_runner.runner.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    written = compose_batch_text("Ship it", instructions="Work only on the eval tracker.",
+                                 default_quest_instructions=BUNDLED_DEFAULT_QUEST_INSTRUCTIONS)
+    assert "Work only on the eval tracker." in written
+    assert "IMPROVE ONE SOLUTION" in written
+    assert "improve at least one solution" not in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    defaulted = compose_batch_text("Ship it",
+                                   default_quest_instructions=BUNDLED_DEFAULT_QUEST_INSTRUCTIONS)
+    assert defaulted.count("improve at least one solution") == 1
+    assert "IMPROVE ONE SOLUTION" in compose_batch_text("Ship it")
+
+
 # --- REAL-CONTRACT fidelity: the shapes verified against quest-backend's july branch -------------
 
 def test_autopilot_mode_is_read_from_the_quest_state_not_the_team_listing():

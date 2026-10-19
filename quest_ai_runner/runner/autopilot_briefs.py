@@ -247,6 +247,23 @@ _CONFIRMATION_RULE = (
 )
 
 
+# Always told to a batch run, like the rule above, and never part of a standing brief. It used to
+# sit in the built-in quest-wide brief, which a quest replaces the moment its owner writes one, so
+# every quest with its own brief silently lost it. Joshua, 2026-10-19: "make it so every autopilot
+# run iterates to improve at least 1 solution (via implementations) according to the ESOI
+# structure ... And gaps in specification are filled by AI as needed to fulfill this requirement."
+_SOLUTION_IMPROVEMENT_RULE = (
+    "IMPROVE ONE SOLUTION. Unless this run's input was only a question, improve at least one "
+    "solution in this run. Find the solution your work serves in the quest's or the top intent's "
+    "specification (get_spec), pick one of its implementations or add an alternative, measure it "
+    "with the solution's metric, and keep whichever measures best. If the specification has a gap "
+    "that stops you (no solution, ideal, metric or implementation), fill it yourself with a "
+    "proposal, never over a field the person edited. Name the solution, what you changed and the "
+    "measured result in your result. Run to the metric run policy: paid runs stay inside the "
+    "approved budget."
+)
+
+
 INTENT_FRAME_PREAMBLE = (
     "Why this quest exists (the top intent it serves, worked out from the person's own structure). When the "
     "standing instructions leave the choice open, prefer work that closes a listed gap or moves a listed "
@@ -579,6 +596,7 @@ def compose_batch_text(quest_outcome: str,
         add("last run", last_run, prompt_budget.PRIORITY_HISTORY)
     if previous:
         add("previous period", _summarize_previous(previous), prompt_budget.PRIORITY_HISTORY)
+    require(_SOLUTION_IMPROVEMENT_RULE)
     require(_CONFIRMATION_RULE)
     fit = prompt_budget.fit_sections(sections, AUTOPILOT_BRIEF_TOKEN_BUDGET)
     if fit.cuts:
