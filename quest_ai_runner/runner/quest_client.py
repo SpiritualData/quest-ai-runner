@@ -87,11 +87,12 @@ from .quest_client_goals import GoalsMixin
 from .quest_client_quests import QuestsMixin
 from .quest_client_context import ContextEntriesMixin
 from .quest_client_reps import RepsMixin
+from .quest_client_intents import IntentsMixin
 
 
 
 
-class QuestClient(TasksMixin, DecisionsMixin, GoalsMixin, QuestsMixin, ContextEntriesMixin, RepsMixin):
+class QuestClient(TasksMixin, DecisionsMixin, GoalsMixin, QuestsMixin, ContextEntriesMixin, RepsMixin, IntentsMixin):
     """Thin urllib client for the Quest task + decision API. No third-party deps."""
 
     def __init__(self, base_url: str, api_key: str, *, team_id: Optional[str] = None,
