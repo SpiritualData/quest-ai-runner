@@ -704,3 +704,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-19,track_usage_and_cost,qar_usage,39,39,39/39,0/0,0,0,0,0.0,0.0,4ab6504,b9493d62,none,,
 2026-10-20,spec_selection,lexical_vector_llm,15,15,15/15,0/0,30,0,0,0.0,0.0,b79a811,d8564d0a,simulated,,
 2026-10-20,spec_selection,lexical_only,15,12,12/15,0/0,0,0,0,0.0,0.0,b79a811,d8564d0a,none,,
+2026-10-20,spec_selection,lexical_only,32,21,21/32,0/0,0,0,0,0.0,0.0,7b633f9,3561e6b9,none,,
+2026-10-20,spec_selection,lexical_vector_llm,32,26,26/32,0/0,92,128916,32024,0.0173,141.3,7b633f9,3561e6b9,unknown,,
