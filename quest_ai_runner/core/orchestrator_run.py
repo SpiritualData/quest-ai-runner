@@ -46,7 +46,8 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
             message_is_user_turn: bool = True,
             resume_session_id: Optional[str] = None,
             now: Optional[str] = None,
-            run_control: Optional[Any] = None) -> OrchestratorResult:
+            run_control: Optional[Any] = None,
+            deep_goal: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -157,6 +158,15 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                             paused, while it works. Handed only to a worker that declares a
                             ``control`` keyword and only on a single-goal run. Absent/None means
                             exactly today's behavior.
+        * ``deep_goal``    -- optional goal of a deep run the CALLER has already decided on (for
+                            example a terminal ``/resume`` of a paused worker). The turn goes straight
+                            to a deep run of this goal: no understanding step, no goal-condition
+                            call, no turn-start context search and no planner call, so the routing
+                            can never turn it into a plain answer, a clarifying question or a hold.
+                            ``user_message`` is the brief handed to the worker, and pairs with
+                            ``resume_session_id`` to continue a worker's session. A decision made by
+                            the caller's code, never read from anyone's words. Absent/None means
+                            exactly today's behavior.
         * ``now``          -- optional ISO date/datetime string, the CALLER's notion of "now". Fed
                             into goal-condition/constraint derivation (see ``_derive_goal_condition``)
                             so a relative date in the message ("Wednesday", "last week") resolves
@@ -193,6 +203,7 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
             resume_session_id=resume_session_id,
             now=now,
             run_control=run_control,
+            deep_goal=deep_goal,
         )
         res = self._run_begin(rs)
         if res is not None:
@@ -233,7 +244,8 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                    cancel_check: Optional[Callable[[], bool]] = None,
                    stop_join_seconds: float = 60.0,
                    resume_session_id: Optional[str] = None,
-                   run_control: Optional[Any] = None):
+                   run_control: Optional[Any] = None,
+                   deep_goal: Optional[str] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         ``cancel_check`` is forwarded to ``run`` (cooperative cancel, which also stops a running
@@ -250,7 +262,8 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
         ``model_hint`` and ``context_meta`` are forwarded to ``run`` unchanged — see ``run`` for
         semantics. So are ``resume_session_id`` and ``run_control`` (the control channel of this
         run, see ``core/run_control.py``): a live consumer such as the terminal steers, stops
-        and pauses a running deep worker through them. Both default to None, which is today's
+        and pauses a running deep worker through them. So is ``deep_goal``, which sends the turn
+        straight to a deep run (the terminal's ``/resume``). All default to None, which is today's
         behaviour.
 
         Example::
@@ -286,7 +299,7 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                                pending_inputs=pending_inputs, conv_id=conv_id,
                                conv_scope=conv_scope, now=now, context_meta=context_meta,
                                cancel_check=_cancelled, resume_session_id=resume_session_id,
-                               run_control=run_control)
+                               run_control=run_control, deep_goal=deep_goal)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e

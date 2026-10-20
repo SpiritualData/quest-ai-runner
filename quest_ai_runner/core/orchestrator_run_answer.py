@@ -263,7 +263,8 @@ class RunAnswerMixin:
                 rs.res.exit_reason = "overseer_escalated_deep"
             if not attachments:
                 self._recipe_learn_deep(rs.user_message, rs.plan, rs.res, _ctx_meta.get("scope_tags"),
-                                        learnable=message_is_user_turn and mode is Mode.LIVE)
+                                        learnable=(message_is_user_turn and mode is Mode.LIVE
+                                                    and rs.caller_deep_plan is None))
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if rs.res.deep_results and any(dr.met for dr in rs.res.deep_results):
                 self._update_context_cards_after_deep(rs.res, context_meta)

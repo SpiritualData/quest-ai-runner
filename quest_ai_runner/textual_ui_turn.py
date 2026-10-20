@@ -42,7 +42,8 @@ class TurnMixin:
 
     def _begin_turn(self, user_text: str, *, echo: bool, auto: bool = False,
                     resume_session_id: Optional[str] = None,
-                    request: Optional[str] = None) -> None:
+                    request: Optional[str] = None,
+                    deep_goal: Optional[str] = None) -> None:
         if self._turn_active:
             return
         self._turn_active = True
@@ -52,6 +53,8 @@ class TurnMixin:
         self._run_control = self._new_terminal_control()
         self._turn_request = request if request is not None else user_text
         self._resume_session_id = resume_session_id
+        # A turn that goes straight to a deep run of this goal, with no planner routing (/resume).
+        self._deep_goal = deep_goal
         self._partial_started = False
         self._ai_label_shown = False
         self._cur_deep_run = None
@@ -159,12 +162,18 @@ class TurnMixin:
                               self._cancel.is_set(), error)
 
     def _control_stream_kwargs(self) -> dict:
-        """The extra ``run_stream`` arguments for steer, stop, pause and resume, only when set."""
+        """The extra ``run_stream`` arguments for steer, stop, pause and resume, only when set.
+
+        ``deep_goal`` is what makes ``/resume`` deterministic: the turn goes straight to a deep run
+        of the paused goal in the paused session, whatever the planner would have chosen.
+        """
         extra: dict = {}
         if self._run_control is not None:
             extra["run_control"] = self._run_control.run_control()
         if getattr(self, "_resume_session_id", None):
             extra["resume_session_id"] = self._resume_session_id
+        if getattr(self, "_deep_goal", None):
+            extra["deep_goal"] = self._deep_goal
         return extra
 
     def _handle_event(self, event) -> None:

@@ -29,7 +29,7 @@ from .orchestrator_capabilities import (
     record_context_assembly_timeout,
 )
 from .orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
-from .orchestrator_decisions import message_forbids_new_task, restates_meaningfully
+from .orchestrator_decisions import _truncate_goal, message_forbids_new_task, restates_meaningfully
 from .orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from .orchestrator_turn import Narrator, TurnCardCache, _Emitter
 from .orchestrator_types import OrchestratorResult
@@ -164,7 +164,10 @@ class RunBeginMixin:
         # visible symptom was a report claiming it had looked at files and found nothing, when it
         # never had a filesystem at all -- a silent false-completion, which is the exact failure
         # this file is otherwise full of guards against.
-        hold_off_active = message_is_user_turn and message_forbids_new_task(rs.user_message)
+        # A deep run the caller already decided on (``deep_goal``) is not a message to be read for a
+        # veto either: the caller's code chose to run it.
+        hold_off_active = (message_is_user_turn and not (rs.deep_goal or "").strip()
+                           and message_forbids_new_task(rs.user_message))
         rs.hold_off_active = hold_off_active
         # The same reasoning covers the ESCALATION NETS' own hold-off check (the "is this a request
         # for a change?" fallbacks below): on a queued task's brief it would read quoted output of
@@ -238,7 +241,8 @@ class RunBeginMixin:
         # arguments?). A hit returns the tool's receipt now; a miss, a failure, or a near-miss
         # falls through to the unchanged run below.
         if (self.recipes is not None and self.tools is not None and cfg.recipe_fast_path
-                and mode is Mode.LIVE and message_is_user_turn and not attachments):
+                and mode is Mode.LIVE and message_is_user_turn and not attachments
+                and not (rs.deep_goal or "").strip()):
             _fast = self._recipe_fast_path(rs.user_message, quest_id=quest_id,
                                            context_meta=context_meta, emit=emit)
             if _fast is not None:
@@ -246,9 +250,17 @@ class RunBeginMixin:
         # DEEP RECIPE: a request that repeats a saved quest-data operation gets a ready plan, so the
         # planner call and the turn-start context search below never run for it.
         rs._forced_plan: Optional[PlanDecision] = None
+        # A deep run the CALLER decided on (``Orchestrator.run(deep_goal=...)``): the plan is built
+        # here from the caller's goal, so no planner call or routing can change what the turn does.
+        rs.caller_deep_plan: Optional[PlanDecision] = None
+        if (rs.deep_goal or "").strip():
+            rs.caller_deep_plan = PlanDecision(
+                action="deep", goal=_truncate_goal(rs.deep_goal.strip()),
+                deep_brief=rs.user_message, rationale="the caller started this deep run directly")
+            rs._forced_plan = rs.caller_deep_plan
         if (self.recipes is not None and cfg.recipe_fast_path and cfg.recipe_deep
                 and mode is Mode.LIVE and message_is_user_turn and not attachments
-                and self._has_deep_execution_capability()):
+                and rs.caller_deep_plan is None and self._has_deep_execution_capability()):
             rs._forced_plan = self._recipe_deep_plan(rs.user_message, quest_id=quest_id,
                                                   context_meta=context_meta, emit=emit)
 
@@ -436,7 +448,11 @@ class RunBeginMixin:
         # alongside the goal condition below (else-branch only -- see ``_derive_goal_condition``).
         # None whenever nothing in the message calls for filtering (today's behavior).
         rs.retrieval_constraints: Optional[Dict[str, Any]] = None
-        if (self.conversation_store is not None and conv_id
+        if rs.caller_deep_plan is not None:
+            # The caller chose this deep run, so there is no request to resolve, no clarifying
+            # question to ask and no done-standard to derive: the worker's session holds the context.
+            pass
+        elif (self.conversation_store is not None and conv_id
                 and self._needs_context_to_understand(rs.user_message)):
             try:
                 rs.goal_condition, conv_ctx_text, clarify_q = self._understand_input(

@@ -166,7 +166,8 @@ credentials are set.
 
 With the `stream_json` deep runner selected (`ESOI_SELECT_QUEST_AI_RUNNER_RUN_DEEP_WORK=stream_json`,
 see [stream-json-runner.md](stream-json-runner.md)), a message typed while the worker runs reaches it
-within a second, `/pause` pauses it and `/resume` continues the same session. With the default
+within a second, `/pause` pauses it and `/resume` continues the same session (straight to a deep
+run of the paused goal, never through the planner). With the default
 one-shot runner a message typed mid-run is queued and acted on when the turn ends.
 
 ## Keys

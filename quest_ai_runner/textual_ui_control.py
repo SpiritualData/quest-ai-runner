@@ -233,7 +233,10 @@ class ControlMixin:
                 f"  ↑ Sending {len(held)} held message{'s' if len(held) != 1 else ''} with it",
                 style="bold yellow"))
         self._tlog.write(Text(""))
-        self._begin_turn("\n\n".join(parts), echo=False, resume_session_id=paused["session_id"])
+        # Straight to a deep run of the paused goal in the paused session: the planner is not asked,
+        # so nothing it could choose (an answer, a question) can leave the work unresumed.
+        self._begin_turn("\n\n".join(parts), echo=False, resume_session_id=paused["session_id"],
+                         deep_goal=paused.get("goal") or request)
 
     # -- the end of a turn (UI thread) ----------------------------------------------------
 
@@ -280,6 +283,7 @@ class ControlMixin:
             how = "paused" if paused else "stopped"
             goals = getattr(final, "goals", None) or []
             self._resumable = {"session_id": session_id, "how": how,
-                               "request": self._turn_request or "; ".join(goals)}
+                               "request": self._turn_request or "; ".join(goals),
+                               "goal": "; ".join(g for g in goals if g)}
             return how
         return ""

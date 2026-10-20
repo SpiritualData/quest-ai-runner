@@ -1,19 +1,102 @@
-"""Pausing a task behind a usage limit or a provider outage.
+"""Pausing a task: on a person's request, behind a usage limit or behind a provider outage.
 
 A mixin of ``TaskExecutor`` (see ``executor.py``): methods only, state lives on the instance.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ..core.orchestrator import OrchestratorResult
 from ..core import provider_outage, usage_limit
-from .executor_support import ExecutionOutcome, utc_stamp
+from .executor_support import ExecutionOutcome, terminal_session_id, utc_stamp
 from .executor_contracts import log
 
 
 class PausesMixin:
-    """Pausing a task behind a usage limit or a provider outage."""
+    """Pausing a task: on a person's request, behind a usage limit or behind a provider outage."""
+
+    @staticmethod
+    def paused_deep_results(result: OrchestratorResult) -> List[Any]:
+        """The deep results the worker reported as PAUSED on request (``DeepResult.paused``).
+
+        Structural: the stream runner sets the flag from its own interrupt, so nothing here reads
+        any text. Empty for every run that was not paused, which is how the executor tells a pause
+        from a cancel (both end the orchestrator's result as ``cancelled``).
+        """
+        return [d for d in (getattr(result, "deep_results", None) or [])
+                if getattr(d, "paused", False)]
+
+    def hand_back_paused_task(self, task: Dict[str, Any], task_id: str, result: OrchestratorResult, *,
+                              session_id: Optional[str]) -> ExecutionOutcome:
+        """Hand a task whose run a person paused back to the queue, holding its Claude session.
+
+        The same put-back as ``_pause_for_usage_limit`` (status queued plus ``resume_session_id``)
+        with none of its timing: no ``start_at``, because a person's pause is lifted by a person.
+        The backend keeps ``pause_requested`` on the task, so no lane can claim it until
+        ``POST /api/assistant-tasks/{id}/resume`` clears the flag and a lane resumes this same
+        session. A pause is not a result: no verifier call, no done, failed or needs_you report, and
+        nothing posted into the chat (the person asked for it and the backend tells them).
+
+        Messages are never lost. This method claims none (a message steered in after the pause
+        stays unclaimed and the resumed run's opening drain delivers it). One the run had claimed
+        but never confirmed reaching the model (``DeepResult.unseen_inputs``) goes back onto the
+        task as a new message, and is named on the task's feed if even that write fails.
+
+        If the hand-back write is refused the task would sit in_progress forever, so it is reported
+        failed, saying why. A task cancelled while the run was stopping stays cancelled.
+        """
+        if self._is_task_cancelled(task_id):
+            return self._quiet_cancelled(task_id, result)
+        sid = (session_id or "").strip() or None
+        requeue = getattr(self._client, "requeue_paused_task", None)
+        requeued = None
+        if callable(requeue):
+            try:
+                requeued = requeue(task_id, resume_session_id=sid)
+            except Exception:  # noqa: BLE001 -- handled below exactly like a refused write
+                log.error("pause hand-back failed for task %s", task_id, exc_info=True)
+        if not requeued:
+            msg = ("Paused, but the task could not be put back in the queue, so it is marked failed. "
+                   "Run it again to continue.")
+            self._safe_report_failed(task_id, msg)
+            return ExecutionOutcome(task_id, "failed", msg)
+        note = ("Paused. The run stopped at a safe point and kept the work it had done. Resume it "
+                "to continue in the same session.")
+        self._report_progress(task_id, "status", text=note,
+                              data={"phase": "run_paused", "resume_session_id": sid})
+        log.info("task %s paused on request; session %s is kept for the resume", task_id, sid)
+        self.return_unseen_messages(task_id, self.paused_unseen_inputs(result))
+        return ExecutionOutcome(task_id, "paused", note)
+
+    @staticmethod
+    def paused_unseen_inputs(result: OrchestratorResult) -> List[str]:
+        """Messages a paused run claimed but never confirmed reaching its model, in order, once each."""
+        seen: List[str] = []
+        for deep in PausesMixin.paused_deep_results(result):
+            for text in (getattr(deep, "unseen_inputs", None) or []):
+                text = str(text or "").strip()
+                if text and text not in seen:
+                    seen.append(text)
+        return seen
+
+    def return_unseen_messages(self, task_id: str, texts: List[str]) -> None:
+        """Put messages the run could not deliver back on the task, unclaimed, for the resume.
+
+        Never raises. A message that cannot be written back is quoted on the task's feed instead,
+        so it stays readable by the person who sent it.
+        """
+        post = getattr(self._client, "post_task_message", None)
+        for text in texts:
+            try:
+                if not callable(post):
+                    raise RuntimeError("this client cannot post a message to a task")
+                post(task_id, text)
+            except Exception as e:  # noqa: BLE001 -- the pause already went through
+                log.warning("could not return an unconfirmed message to task %s: %s", task_id, e)
+                self._report_progress(
+                    task_id, "error",
+                    text=("A message sent just before the pause was not delivered and could not be "
+                          f"kept for the resume. Send it again: {text}"))
 
     @staticmethod
     def _usage_limit_behind(result: OrchestratorResult,

@@ -346,6 +346,42 @@ class TasksMixin:
             log.warning("requeue (%s) failed for task %s: %s", hold_reason, task_id, e)
             return None
 
+    def requeue_paused_task(self, task_id: str, *,
+                            resume_session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Hand a task whose run a person PAUSED back to the queue, holding its session.
+
+        PATCHes ``status=queued`` plus ``resume_session_id`` (the Claude Code session the stopped
+        run held) and nothing else: no ``start_at`` and no hold reason, because a person's pause is
+        lifted by a person. The task keeps its ``pause_requested`` flag, which is what keeps every
+        lane off it (the claim PATCH answers 409 and discovery skips it) until
+        ``POST /api/assistant-tasks/{id}/resume`` clears it; that resume is the requeue, and the
+        next claim continues this same session. Returns the task, or None when the write failed
+        (the caller must then say so, since the task is still marked in_progress and nothing else
+        will pick it up).
+        """
+        body: Dict[str, Any] = {"status": "queued"}
+        sid = (resume_session_id or "").strip()
+        if sid:
+            body["resume_session_id"] = sid
+        try:
+            # An accepted write with an empty body is still a success; only a raised error is not.
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
+                                 body=body) or {"task_id": task_id, "status": "queued"}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("pause hand-back failed for task %s: %s", task_id, e)
+            return None
+
+    def post_task_message(self, task_id: str, text: str) -> Dict[str, Any]:
+        """POST /api/assistant-tasks/{task_id}/messages: add a steering message to a task.
+
+        Used to give back a message the run had claimed but never confirmed reaching the model
+        (a paused run's ``unseen_inputs``): on a queued task it lands unclaimed, so the resumed run
+        delivers it. Unlike the best-effort reads above this RAISES on failure, because a
+        swallowed refusal would lose the person's message without a trace.
+        """
+        return self._request("POST", f"/api/assistant-tasks/{task_id}/messages",
+                             body={"text": text}) or {}
+
     def hold_for_usage_limit(self, task_id: str, *, start_at: datetime,
                              detail: str) -> Optional[Dict[str, Any]]:
         """Hold a still-QUEUED task until the lane's usage-limit pause ends, without claiming it.

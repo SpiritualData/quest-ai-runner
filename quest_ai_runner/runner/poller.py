@@ -662,8 +662,9 @@ class Poller(PassesMixin, SyncMixin):
         # Opt-in push-back: post any locally-queued notes on the quest folder up to Quest.
         self._push_quest_folder_for(task)
         # Opt-in: record this task's outcome into the rep's turn store so future runs can recall it.
-        # A task paused on the Claude usage limit has no outcome yet; its resumed run records one.
-        if getattr(outcome, "status", None) != "waiting":
+        # A task paused (on the Claude usage limit, or by a person) has no outcome yet; its resumed
+        # run records one.
+        if getattr(outcome, "status", None) not in ("waiting", "paused"):
             self._record_rep_turn(task, target, outcome)
         return task_id
 

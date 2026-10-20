@@ -50,6 +50,33 @@ builds a control bound to its own task id (`TaskExecutor._build_run_control`): c
 way a cancel is, and a pause from `QuestClient.is_task_pause_requested` (the task's
 `pause_requested` field, which a backend that has no such field reads as false).
 
+## A paused task: the hand-off to the queue
+
+A run paused through the control ends as `DeepResult(paused=True, cancelled=True)` carrying its
+session id, and the orchestrator returns `kind="cancelled"` with those `deep_results`. The task
+executor tells a pause from a cancel by `DeepResult.paused` (structural, never by text) and hands the
+task back the way `requeue_for_usage_limit` puts one back, without its timing:
+
+1. It does not call the verifier, report done, failed, needs_you or incomplete, post into the chat,
+   or claim any message.
+2. `QuestClient.requeue_paused_task` PATCHes `{"status": "queued", "resume_session_id": <session>}`.
+   The backend keeps `pause_requested` on the task, so a claim PATCH answers 409 and discovery skips
+   it until `POST /api/assistant-tasks/{id}/resume` clears the flag. A refused write returns `None`;
+   the executor then reports the task failed and says why, because it would otherwise stay
+   in_progress with nothing to pick it up. A task cancelled while it was stopping stays cancelled.
+3. The task feed gets one status line starting `Paused.`, and the executor returns outcome status
+   `paused` (the poller records no rep turn for it, as for a usage-limit wait).
+4. A lane that claims the resumed task reads `resume_session_id` and the deep runner resumes that
+   same Claude Code session with `--resume`, on the same thread.
+
+Messages are not lost. A message steered in after the pause stays unclaimed (the pause path claims
+nothing) and the resumed run's opening drain delivers it. One the run had claimed but never
+confirmed reaching the model (`DeepResult.unseen_inputs`) is posted back onto the task with
+`QuestClient.post_task_message` (which raises when refused), and is quoted on the feed if even that
+write fails. Before this hand-off existed a paused result was read as a cancel: the feed said "Stopped:
+this task was cancelled.", nothing was PATCHed, the session id was dropped and the task stayed
+in_progress.
+
 ## Guarantees and how they hold
 
 * **Exactly once, only to its own run.** The control belongs to one call, so a run can only claim
@@ -102,7 +129,7 @@ retry loop or the end-of-turn flush picks it up.
 | Type a message while a live worker runs | It is queued as usual (`up queued (N)`), then the worker takes it within a second (`TerminalRunControl`, `textual_ui_control.py`), writes it into the session and the transcript says `sent to the running worker`, then `The worker received 1 message` once the model replays it. |
 | Esc | Stops the running step and keeps the session. Finished work stays. `/resume` continues the same session. |
 | `/pause` | The same interrupt, ending the run `paused`. Messages typed since are held and go with `/resume`. `/pause` says so when no live worker exists (planning, or the one-shot runner). |
-| `/resume` | Starts a turn for the paused or stopped request with `--resume <session>`, plus any held messages. The AI plans that turn, so a request that routes to deep work resumes the session; one that routes to a plain answer does not. |
+| `/resume` | Starts a deep run of the paused or stopped goal straight away, with `--resume <session>`, plus any held messages. The planner is not asked (`Orchestrator.run_stream(deep_goal=..., resume_session_id=...)`), so nothing it could have chosen, such as a plain answer or a question, can leave the session unresumed. |
 
 A message is delivered exactly once. The live worker, the orchestrator's own drains and the
 end-of-turn flush all draw from the same inbox, and a draw is atomic. A message the worker took but
@@ -118,6 +145,8 @@ stop keeping the session, pause then resume, an interrupt that is ignored (termi
 message landing as the run finishes, a message after the run ended, two concurrent runs with no
 cross delivery, a message never replayed (returned as unseen), and an old CLI falling back to the
 one-shot runner. `tests/test_run_control_plumbing.py` pins how the control reaches (and does not
-reach) a worker and how the executor binds it to its task. `tests/test_terminal_run_control.py` drives
+reach) a worker and how the executor binds it to its task. `tests/test_executor_pause.py` pins the
+pause hand-off above (including a full pause then resume against the scripted worker).
+`tests/test_terminal_run_control.py` drives
 the terminal's control against the real runner (steer, stop, pause then `--resume`, an unconfirmed
 message put back first) and pins `/pause`, `/resume` and the end of a turn.

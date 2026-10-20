@@ -181,7 +181,7 @@ def client_accepts_session_id(fn: Any) -> bool:
 @dataclass
 class ExecutionOutcome:
     task_id: str
-    status: str                       # "done" | "needs_you" | "incomplete" | "failed" | "cancelled" | "waiting"
+    status: str                       # "done" | "needs_you" | "incomplete" | "failed" | "cancelled" | "waiting" | "paused"
     result: str = ""
     decision_id: Optional[str] = None
 

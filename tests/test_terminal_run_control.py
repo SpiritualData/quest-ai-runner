@@ -230,6 +230,42 @@ def test_a_stopped_worker_result_carries_its_session_to_the_caller():
         ("sess-9", True, ["lost?"])]
 
 
+def answer_orchestrator(runner):
+    """A planner that would ANSWER plainly: what a routed /resume turn could have turned into."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "just chat"}])
+    cfg = OrchestratorConfig(deep_goal_max_iterations=1)
+    cfg.overseer = False
+    brain = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+                         deep_runner=runner, config=cfg)
+    brain.stub_provider = provider
+    return brain
+
+
+def test_a_planner_that_would_answer_still_resumes_the_session_when_the_goal_is_given():
+    runner = ControlAwareRunner()
+    brain = answer_orchestrator(runner)
+    control = RunControl(label="t")
+    items = list(brain.run_stream(
+        "build it\n\nThis work was paused and is being resumed. Do not create a task for it.",
+        run_control=control, resume_session_id="sess-7", deep_goal="build it"))
+    final = items[-1]
+    assert final.kind == "deep"
+    assert runner.resumed == ["sess-7"] and runner.controls == [control]
+    asked = [t.get("name") for t in brain.stub_provider.plan_tool_schemas]
+    assert "goal_verdict" in asked and len(asked) == 1       # the verifier only: no planner call
+
+
+def test_without_the_goal_the_same_turn_is_left_to_the_planner():
+    """The failure this fixes: routing decided, the worker never resumed."""
+    runner = ControlAwareRunner()
+    brain = answer_orchestrator(runner)
+    items = list(brain.run_stream("build it\n\nThis work was paused and is being resumed.",
+                                  run_control=RunControl(label="t"), resume_session_id="sess-7"))
+    assert items[-1].kind == "answer"
+    assert runner.resumed == []
+    assert any(t.get("name") != "goal_verdict" for t in brain.stub_provider.plan_tool_schemas)
+
+
 # --- the terminal: /pause, /resume, wrap-up ---------------------------------------------------------
 
 def stub_session(inbox: InMemoryInbox) -> SimpleNamespace:
@@ -303,8 +339,41 @@ def test_a_paused_turn_is_resumable_and_keeps_queued_messages_for_the_resume():
     assert len(started) == 1
     text, kw = started[0]
     assert kw["resume_session_id"] == "sess-7" and kw["echo"] is False
+    assert kw["deep_goal"] == "build it"                         # straight to deep, no planner
     assert text.startswith("build it") and "never confirmed" in text and "typed while paused" in text
     assert resumable is None                                     # consumed once
+
+
+def test_resume_reaches_the_stream_as_a_direct_deep_run_of_the_paused_goal():
+    """The terminal side of the deterministic resume: the stream is started with the paused session
+    AND the paused goal as ``deep_goal``, so the planner is never asked what to do with the turn."""
+    async def build(app, pilot):
+        inbox = InMemoryInbox()
+        app.sess = stub_session(inbox)
+        app._run_control = app._new_terminal_control()
+        app._turn_request = "build it"
+        app._begin_turn = lambda text, **kw: None
+        app._finish_turn("build it", paused_result(), 1.0, False, None)
+        del app._begin_turn                                  # the real one, with the stream stubbed
+        app._run_stream = lambda text: None
+        app._cmd_resume()
+        return app._control_stream_kwargs()
+
+    kwargs = run_app(build)
+    assert kwargs["resume_session_id"] == "sess-7"
+    assert kwargs["deep_goal"] == "build it"
+    assert kwargs["run_control"] is not None
+
+
+def test_an_ordinary_turn_carries_no_deep_goal():
+    async def build(app, pilot):
+        app.sess = stub_session(InMemoryInbox())
+        app._run_stream = lambda text: None
+        app._begin_turn("hello", echo=False)
+        return app._control_stream_kwargs()
+
+    kwargs = run_app(build)
+    assert "deep_goal" not in kwargs and "resume_session_id" not in kwargs
 
 
 def test_resume_with_nothing_paused_says_so():

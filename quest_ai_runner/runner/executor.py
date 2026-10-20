@@ -554,6 +554,15 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
                             task_id=task_id, card_id=card_id)
             return ExecutionOutcome(task_id, "failed", msg)
 
+        # A person PAUSED the run (the worker reports ``paused`` with its session): the task goes
+        # back to the queue holding that session, to be resumed by a person. Checked before the
+        # usage-limit and outage reads, which treat a stopped run as theirs, and before ``report``,
+        # which would read the stopped run as a cancel and leave the task in_progress.
+        paused_results = self.paused_deep_results(result)
+        if paused_results:
+            paused_session = ((paused_results[-1].session_id or "").strip()
+                              or terminal_session_id(result) or resume_session_id)
+            return self.hand_back_paused_task(task, task_id, result, session_id=paused_session)
         # The run had the person's material in front of it, so the next look starts after it.
         # After the run and not before: an orchestrator that raised before doing anything has not
         # delivered it (see ``ContextUpdates.mark_seen``).
