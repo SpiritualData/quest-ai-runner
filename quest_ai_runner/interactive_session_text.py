@@ -17,7 +17,7 @@ _SLASH_COMMANDS = [
     "/whoami", "/status", "/tasks",
     "/quit", "/q",
     "/models", "/model", "/model ", "/depth", "/depth ",
-    "/system", "/replan",
+    "/system", "/replan", "/pause", "/resume",
     "/save ", "/save", "/load ", "/sessions",
     "/quest", "/quest ",
 ]
@@ -52,6 +52,8 @@ Commands:
     /depth [level]       Alias for /model: light=haiku, standard=sonnet, deep=opus
     /system [text]       Show or set a custom system prompt prepended to persona
     /replan              Prime next turn for a fresh re-planning pass (uses opus)
+    /pause               Pause the live deep worker, keeping its work (stream_json runner)
+    /resume              Continue a paused or stopped deep run in the same session
 
   ● Quest
     /quest               Select a quest for this conversation
@@ -75,6 +77,7 @@ Keys:
 
   /              Open the command menu (arrows move, Tab completes, Enter runs, Esc closes)
   Esc            Cancel the current turn, or close an open menu
+  (typing)       While a live deep worker runs, a message you send reaches it within seconds
   Ctrl+C         Copy the selected text; with nothing selected, exit
   Ctrl+Y         Copy the last AI reply
   Ctrl+L         Clear the screen

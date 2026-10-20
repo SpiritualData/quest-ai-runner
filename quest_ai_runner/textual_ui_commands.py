@@ -119,6 +119,10 @@ class CommandsMixin:
             s._cmd_depth(line[6:].strip()); return
         if line.startswith("/system"):
             s._cmd_system(line[7:].strip()); return
+        if line == "/pause":
+            self._cmd_pause(); return
+        if line == "/resume":
+            self._cmd_resume(); return
         if line == "/replan":
             s._replan_next = True
             c.dim("  Next turn will use opus for a fresh re-planning pass."); return

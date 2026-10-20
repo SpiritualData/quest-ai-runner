@@ -88,6 +88,12 @@ Env it reads:
                                                    (defaults haiku / sonnet / sonnet); the run
                                                    still escalates up QAR_DEEP_MODELS (or
                                                    haiku,sonnet,opus when unset) on a not-met goal
+  ESOI_SELECT_QUEST_AI_RUNNER_RUN_DEEP_WORK (optional)
+                                                 — the deep worker implementation: "subprocess"
+                                                   (default, one-shot) or "stream_json" (a live
+                                                   session; in `chat` it lets a typed message steer
+                                                   the running worker and /pause and /resume work;
+                                                   see docs/stream-json-runner.md)
   QAR_REP_SYNC_DIRECTION (optional)              — "pull" (default) | "push" | "both"; sets
                                                    RunnerConfig.rep_sync_direction. Only takes
                                                    effect once a rep_sync_resolver or a personas

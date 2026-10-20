@@ -40,11 +40,18 @@ class TurnMixin:
             )
         return self._ev
 
-    def _begin_turn(self, user_text: str, *, echo: bool, auto: bool = False) -> None:
+    def _begin_turn(self, user_text: str, *, echo: bool, auto: bool = False,
+                    resume_session_id: Optional[str] = None,
+                    request: Optional[str] = None) -> None:
         if self._turn_active:
             return
         self._turn_active = True
         self._cancel.clear()
+        # This turn's control channel (steer, stop, pause; textual_ui_control.py). It only does
+        # anything for a deep worker that holds a live session; every other worker never sees it.
+        self._run_control = self._new_terminal_control()
+        self._turn_request = request if request is not None else user_text
+        self._resume_session_id = resume_session_id
         self._partial_started = False
         self._ai_label_shown = False
         self._cur_deep_run = None
@@ -119,11 +126,20 @@ class TurnMixin:
                 conv_id=s._conv_id,
                 context_meta=grounding_meta,
                 cancel_check=self._cancel.is_set,
+                **self._control_stream_kwargs(),
             )
             try:
                 for item in stream:
                     if self._cancel.is_set():
-                        break
+                        control = self._run_control
+                        if control is None or not control.in_use:
+                            break
+                        # A live worker is being stopped: let it finish stopping so its result
+                        # (the session a /resume continues, any message it never confirmed)
+                        # reaches _finish_turn. Nothing more is rendered meanwhile.
+                        if isinstance(item, OrchestratorResult):
+                            final = item
+                        continue
                     if isinstance(item, OrchestratorResult):
                         final = item
                     else:
@@ -141,6 +157,15 @@ class TurnMixin:
         elapsed = time.monotonic() - self._t0
         self.call_from_thread(self._finish_turn, user_text, final, elapsed,
                               self._cancel.is_set(), error)
+
+    def _control_stream_kwargs(self) -> dict:
+        """The extra ``run_stream`` arguments for steer, stop, pause and resume, only when set."""
+        extra: dict = {}
+        if self._run_control is not None:
+            extra["run_control"] = self._run_control.run_control()
+        if getattr(self, "_resume_session_id", None):
+            extra["resume_session_id"] = self._resume_session_id
+        return extra
 
     def _handle_event(self, event) -> None:
         """Render one ProgressEvent (runs on the UI thread)."""
@@ -394,21 +419,29 @@ class TurnMixin:
         self._flush_pending_deep_runs()
         self._deep_view.hide()
         self._deep_detail.hide()
+        # Steer, stop, pause: put back what a live worker never confirmed, hold what a paused run
+        # keeps for /resume, remember the session a /resume continues.
+        ended = self._settle_run_control(final, cancelled, error)
 
         if error is not None:
             friendly = format_provider_error(error)
             log.write(f"  [red]Error:[/red] {friendly}")
-        elif cancelled:
-            self._console.dim("  Cancelled.")
+        elif cancelled or ended == "paused":
+            paused = ended == "paused"
+            self._console.dim("  Paused." if paused else "  Cancelled.")
+            if ended:
+                self._console.dim("  Finished work is kept. /resume continues the same session.")
+            marker = "[paused by user]" if paused else "[cancelled by user]"
             s._last_user = user_text
-            s._last_assistant = "[cancelled by user]"
-            s._session_history.append((user_text, "[cancelled by user]"))
+            s._last_assistant = marker
+            s._session_history.append((user_text, marker))
             s._write_session_file()
             ctx = getattr(s._orch, "context_assembler", None)
             if ctx is not None:
                 try:
                     ctx.record(user_text, {"kind": "cancelled",
-                                           "response": "[turn was cancelled by user]"})
+                                           "response": "[turn was paused by user]" if paused
+                                           else "[turn was cancelled by user]"})
                 except Exception:  # noqa: BLE001
                     pass
         elif final is not None:
@@ -553,7 +586,7 @@ class TurnMixin:
                 log.write(Text(""))
                 self._begin_turn(
                     "Execute it. No more planning, just code it and apply changes now.",
-                    echo=False, auto=True,
+                    echo=False, auto=True, request=self._turn_request,
                 )
 
     def _maybe_handle_deep_plan(self, final, run: bool = False) -> bool:

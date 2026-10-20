@@ -162,12 +162,19 @@ Where quests come from:
 If the list is empty, the chooser says why: where it looked for quest folders, and whether Quest
 credentials are set.
 
+## Steering a running deep worker
+
+With the `stream_json` deep runner selected (`ESOI_SELECT_QUEST_AI_RUNNER_RUN_DEEP_WORK=stream_json`,
+see [stream-json-runner.md](stream-json-runner.md)), a message typed while the worker runs reaches it
+within a second, `/pause` pauses it and `/resume` continues the same session. With the default
+one-shot runner a message typed mid-run is queued and acted on when the turn ends.
+
 ## Keys
 
 | Key | What it does |
 |---|---|
 | `/` | Open the command menu. |
-| Esc | Cancel the current turn, or close an open menu or chooser. |
+| Esc | Cancel the current turn, or close an open menu or chooser. With the `stream_json` deep runner, a stop that keeps the session: `/resume` continues it. |
 | Ctrl+C | Copy the selected text; with nothing selected, exit. |
 | Ctrl+Y | Copy the last AI reply. |
 | Ctrl+L | Clear the screen. |

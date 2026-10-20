@@ -82,6 +82,34 @@ way a cancel is, and a pause from `QuestClient.is_task_pause_requested` (the tas
   read as cumulative. The live ladder should confirm that too.
 * **One long-lived process per active run** on a shared host. A paused run holds no process.
 
+## In the interactive terminal
+
+The Textual terminal (`quest-ai-runner chat`) steers, stops and pauses a running deep worker the way
+typing into interactive Claude Code does. Turn it on for a session with the one variable that
+selects the runner, set before starting the chat:
+
+```bash
+ESOI_SELECT_QUEST_AI_RUNNER_RUN_DEEP_WORK=stream_json quest-ai-runner chat
+```
+
+(The same selection as `[selection]` in `esoi.toml`; the default stays `subprocess`. `core.resolve.chosen_name("run-deep-work")`
+prints which one a process would use.) With the one-shot runner nothing below applies and the
+terminal behaves as before: a message typed while a deep run works is queued, the orchestrator's own
+retry loop or the end-of-turn flush picks it up.
+
+| You do | What happens |
+|---|---|
+| Type a message while a live worker runs | It is queued as usual (`up queued (N)`), then the worker takes it within a second (`TerminalRunControl`, `textual_ui_control.py`), writes it into the session and the transcript says `sent to the running worker`, then `The worker received 1 message` once the model replays it. |
+| Esc | Stops the running step and keeps the session. Finished work stays. `/resume` continues the same session. |
+| `/pause` | The same interrupt, ending the run `paused`. Messages typed since are held and go with `/resume`. `/pause` says so when no live worker exists (planning, or the one-shot runner). |
+| `/resume` | Starts a turn for the paused or stopped request with `--resume <session>`, plus any held messages. The AI plans that turn, so a request that routes to deep work resumes the session; one that routes to a plain answer does not. |
+
+A message is delivered exactly once. The live worker, the orchestrator's own drains and the
+end-of-turn flush all draw from the same inbox, and a draw is atomic. A message the worker took but
+never confirmed (`DeepResult.unseen_inputs`, or a claim with no `mark_seen`) goes back to the front
+of the inbox when the turn ends, so the end-of-turn flush sends it again, and a transcript line says
+so. After a pause it is held for `/resume` instead.
+
 ## Tests
 
 `tests/test_goal_runner_stream.py` drives the real runner against `tests/fakes/fake_claude_stream.py`,
@@ -90,4 +118,6 @@ stop keeping the session, pause then resume, an interrupt that is ignored (termi
 message landing as the run finishes, a message after the run ended, two concurrent runs with no
 cross delivery, a message never replayed (returned as unseen), and an old CLI falling back to the
 one-shot runner. `tests/test_run_control_plumbing.py` pins how the control reaches (and does not
-reach) a worker and how the executor binds it to its task.
+reach) a worker and how the executor binds it to its task. `tests/test_terminal_run_control.py` drives
+the terminal's control against the real runner (steer, stop, pause then `--resume`, an unconfirmed
+message put back first) and pins `/pause`, `/resume` and the end of a turn.

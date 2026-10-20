@@ -1073,7 +1073,11 @@ class DeepRunMixin:
         # normal "deep" result. This is the point that decides whether the CALLER (Orchestrator.run)
         # sees this as a genuine (possibly partial) deep outcome or a cancelled one.
         if cancel_check is not None and cancel_check():
+            # The workers' results ride along (a stopped or paused worker names the session a
+            # later resume continues, and may hand back messages it never confirmed); a caller
+            # that only checks ``kind`` is unaffected.
             return OrchestratorResult(kind="cancelled", goals=all_goals, rationale=plan.rationale,
+                                      deep_results=[r for r in all_results if r is not None],
                                       exit_reason="cancelled")
 
         deep_results = [r for r in all_results if r is not None]

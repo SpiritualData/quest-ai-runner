@@ -99,6 +99,7 @@ from .textual_ui_commands import CommandsMixin
 from .textual_ui_turn import TurnMixin
 from .textual_ui_deep import DeepMixin
 from .textual_ui_actions import ActionsMixin
+from .textual_ui_control import ControlMixin
 
 
 if TYPE_CHECKING:
@@ -110,7 +111,7 @@ if TYPE_CHECKING:
 
 # ── Main app ──────────────────────────────────────────────────────────────────
 
-class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, ActionsMixin, App):
+class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, ActionsMixin, ControlMixin, App):
     """Textual REPL over an `InteractiveSession`'s orchestrator brain."""
 
     CSS = """
@@ -283,6 +284,14 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
 
         # When set, the next submitted line is a menu selection, not a turn.
         self._pending_select: Optional[Callable[[str], None]] = None
+
+        # Steer, stop, pause (textual_ui_control.py): this turn's control channel, the request of
+        # this turn, the paused or stopped run ``/resume`` continues (session id, how it ended,
+        # the request), and the messages held for that resume.
+        self._run_control = None
+        self._turn_request: str = ""
+        self._resumable: Optional[dict] = None
+        self._held_for_resume: List[str] = []
 
         # Stable session key for the input inbox so mid-turn messages can be queued.
         self._session_id = str(id(self))

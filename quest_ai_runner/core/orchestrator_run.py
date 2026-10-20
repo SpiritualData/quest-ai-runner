@@ -231,7 +231,9 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                    now: Optional[str] = None,
                    context_meta: Optional[Dict[str, Any]] = None,
                    cancel_check: Optional[Callable[[], bool]] = None,
-                   stop_join_seconds: float = 60.0):
+                   stop_join_seconds: float = 60.0,
+                   resume_session_id: Optional[str] = None,
+                   run_control: Optional[Any] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         ``cancel_check`` is forwarded to ``run`` (cooperative cancel, which also stops a running
@@ -246,7 +248,10 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
         worker thread, so the caller streams in real time and still gets the structured result.
 
         ``model_hint`` and ``context_meta`` are forwarded to ``run`` unchanged — see ``run`` for
-        semantics.
+        semantics. So are ``resume_session_id`` and ``run_control`` (the control channel of this
+        run, see ``core/run_control.py``): a live consumer such as the terminal steers, stops
+        and pauses a running deep worker through them. Both default to None, which is today's
+        behaviour.
 
         Example::
 
@@ -280,7 +285,8 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                                attachments=attachments, rep_preamble=rep_preamble,
                                pending_inputs=pending_inputs, conv_id=conv_id,
                                conv_scope=conv_scope, now=now, context_meta=context_meta,
-                               cancel_check=_cancelled)
+                               cancel_check=_cancelled, resume_session_id=resume_session_id,
+                               run_control=run_control)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e
