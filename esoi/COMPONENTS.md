@@ -37,7 +37,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |
 | `prompts` | prompts | Standing deep-run instructions shipped as data (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
 | `vendor` | vendor | Vendored third-party code, unmodified | expose-the-public-api |
-| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset | verify-offline |
+| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset | verify-offline, spec-selection |
 | `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (persist-cards), restart-if-idle (run-queued-tasks) | search-the-web, persist-cards, run-queued-tasks |
 | `examples` | examples | Runnable reference consumers (env-driven, no real data) | learn-by-example |
 | `tests` | tests | Offline test suite and shared fakes | verify-offline |
@@ -45,3 +45,4 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `docs-and-meta` | docs | Documentation and repo-level project files | explain-qar |
 | `core-selection` | core | Selection by name: resolve(solution_id, name) turns a name into the implementation declared beside its code, with the records as the only list and the snapshot for an installed copy, so switching an implementation is a data or config change | select-an-implementation |
 | `core-consumer-helpers` | core | Plumbing every consumer needs and must not copy: one persistent background loop for sync adapters calling async I/O, and signature probes that drop keywords an older installed library lacks | expose-the-public-api |
+| `core-spec-selection` | core | Finding the intent specifications a new input concerns: lexical narrowing over an ESOI specification index, an optional vector search, and parallel batched model selection. | spec-selection |

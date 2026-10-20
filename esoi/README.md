@@ -40,6 +40,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-narrow-verdicts-unreliable`: A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes the turn.
 - `prob-work-misses-its-why`: Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed.
 - `prob-core-ml-tasks-unspecified`: Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). Each has had alternative implementations, but QAR's records do not name them as one solution, so no alternative is compared on a metric.
+- `prob-intent-specs-not-found-for-input`: A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads all, or relies on whichever the person remembers to mention.
 
 ## Ideals
 
@@ -75,6 +76,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-reliable-verdict`, Reliable Verdict: A narrow judgment changes a turn only when it is usable.
 - `ideal-purposeful-work`, Purposeful Work: Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
 - `ideal-measured-core-ml`, Measured Core ML: Every classification and recommendation Quest depends on has a defined input and output, a held-out labelled case set, and a recorded comparison of its alternatives.
+- `ideal-specs-that-apply-are-in-view`, Specifications that apply are in view: Every run sees the intent specifications that concern its input, and only those, at the cheapest tier that lets it decide.
 
 ## Solutions
 
@@ -130,6 +132,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `ground-in-intent` | Intent frame for quest-scoped prompts | none | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | generic-doctrine | First-pass acceptance and exploration before the first edit |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
+| `spec-selection` | Select the intent specifications an input concerns | lexical-vector-llm | Specification selection pass rate |
 
 ## Implementations
 
@@ -318,6 +321,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `core-ml-tasks:intent-placement-llm` | Place quests under top intents with the model |  |  |
 | `core-ml-tasks:intent-suggestion-llm` | Recommend top intents with the model |  |  |
 | `core-ml-tasks:period-placement-llm` | Recommend where backlog goals go in the next period |  |  |
+| `spec-selection:lexical-vector-llm` | Lexical TF-IDF, optional vector search, parallel batched model judging | quest_ai_runner/core/spec_selection.py |  |
+| `spec-selection:lexical-only` | Lexical top few only | quest_ai_runner/core/spec_selection.py |  |
 
 ## Metrics
 
@@ -376,3 +381,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-ground-in-intent`, Intent-grounded pass rate: `esoi run intent_grounding`
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
+- `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_only`

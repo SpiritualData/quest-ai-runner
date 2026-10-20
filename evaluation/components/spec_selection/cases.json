@@ -1,0 +1,292 @@
+[
+ {
+  "id": "SPS-001",
+  "kind": "lexical",
+  "area": "prob-winner-not-adopted is found by the request's own words",
+  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
+  "args": {
+   "task": "a rival implementation beats the selected one and nobody switches the default",
+   "relevant": [
+    "prob-winner-not-adopted"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-winner-not-adopted"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-002",
+  "kind": "lexical",
+  "area": "prob-selection-default-kept-twice is found by the request's own words",
+  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
+  "args": {
+   "task": "we keep the same default in the selection table and in the records",
+   "relevant": [
+    "prob-selection-default-kept-twice"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-selection-default-kept-twice"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-003",
+  "kind": "lexical",
+  "area": "prob-measurements-untrusted is found by the request's own words",
+  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
+  "args": {
+   "task": "a number was recorded on uncommitted code and compared with another run",
+   "relevant": [
+    "prob-measurements-untrusted"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-measurements-untrusted"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-004",
+  "kind": "lexical",
+  "area": "prob-switching-means-editing-code is found by the request's own words",
+  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
+  "args": {
+   "task": "switching the model provider means editing call sites with an if chain",
+   "relevant": [
+    "prob-switching-means-editing-code"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-switching-means-editing-code"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-005",
+  "kind": "lexical",
+  "area": "prob-skill-cannot-be-reached-safely is found by the request's own words",
+  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
+  "args": {
+   "task": "a leaked secret in a public skill copy before we publish",
+   "relevant": [
+    "prob-skill-cannot-be-reached-safely"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-skill-cannot-be-reached-safely"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-006",
+  "kind": "lexical",
+  "area": "prob-rules-unjustified is found by the request's own words",
+  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
+  "args": {
+   "task": "a rule has no record of the mistake that justified it",
+   "relevant": [
+    "prob-rules-unjustified"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-rules-unjustified"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-007",
+  "kind": "lexical",
+  "area": "prob-metrics-run-at-the-wrong-time is found by the request's own words",
+  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
+  "args": {
+   "task": "how often to run paid metrics and who approves the cost",
+   "relevant": [
+    "prob-metrics-run-at-the-wrong-time"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-metrics-run-at-the-wrong-time"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-008",
+  "kind": "lexical",
+  "area": "prob-intent-specs-not-found-for-new-input is found by the request's own words",
+  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
+  "args": {
+   "task": "a new input arrives and we cannot tell which specifications apply",
+   "relevant": [
+    "prob-intent-specs-not-found-for-new-input"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-intent-specs-not-found-for-new-input"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-009",
+  "kind": "vocabulary_gap",
+  "area": "the vector search recovers a record that shares no word with the request",
+  "description": "the request's words do not reach the record; the injected vector search proposes it and the model keeps it",
+  "args": {
+   "task": "our dashboards went green yet customers still see errors",
+   "relevant": [
+    "prob-evaluation-detached-from-shipped-code"
+   ],
+   "vector": [
+    "prob-evaluation-detached-from-shipped-code"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-evaluation-detached-from-shipped-code"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-010",
+  "kind": "vocabulary_gap",
+  "area": "a vector search that fails leaves the lexical answer intact",
+  "description": "the vector search raises; lexical candidates still answer",
+  "args": {
+   "task": "a rival implementation beats the selected one and nobody switches the default",
+   "relevant": [
+    "prob-winner-not-adopted"
+   ],
+   "vector": "raise"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-winner-not-adopted"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-011",
+  "kind": "batches",
+  "area": "candidates are judged in parallel batches, one call per batch",
+  "description": "a broad request with a small batch size makes one call per batch and unions the verdicts",
+  "args": {
+   "task": "records implementation solution metric intent specification problem ideal",
+   "relevant": [],
+   "batch_size": 6,
+   "k_lexical": 24
+  },
+  "expect": {
+   "eq": {
+    "calls_match_batches": true
+   }
+  }
+ },
+ {
+  "id": "SPS-012",
+  "kind": "invented",
+  "area": "an id the model was not offered is dropped",
+  "description": "the model names an id that is not a candidate; it never reaches the result",
+  "args": {
+   "task": "a rival implementation beats the selected one and nobody switches the default",
+   "relevant": [
+    "prob-winner-not-adopted",
+    "ghost-record"
+   ]
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-winner-not-adopted"
+    ]
+   },
+   "eq": {
+    "has_ghost": false
+   }
+  }
+ },
+ {
+  "id": "SPS-013",
+  "kind": "model_failure",
+  "area": "a failed model call keeps the batch's candidates",
+  "description": "every call raises; the candidates survive in fused order and the failure is counted",
+  "args": {
+   "task": "a rival implementation beats the selected one and nobody switches the default"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-winner-not-adopted"
+    ]
+   },
+   "eq": {
+    "all_batches_failed": true
+   }
+  }
+ },
+ {
+  "id": "SPS-014",
+  "kind": "links",
+  "area": "a selected record brings its linked records, marked",
+  "description": "expand adds the solution a selected problem links to",
+  "args": {
+   "task": "a rival implementation beats the selected one and nobody switches the default",
+   "relevant": [
+    "prob-winner-not-adopted"
+   ],
+   "expand": 2
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-winner-not-adopted",
+     "promote-the-winner"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SPS-015",
+  "kind": "lexical",
+  "area": "nothing matches, nothing is returned",
+  "description": "a request sharing no word with any record returns no candidates and spends no call",
+  "args": {
+   "task": "zebra quokka marmalade",
+   "relevant": []
+  },
+  "expect": {
+   "eq": {
+    "ids": [],
+    "calls": 0
+   }
+  }
+ }
+]

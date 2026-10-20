@@ -231,6 +231,13 @@
    "stream": "quest_ai_runner.core.adapters_sinks"
   }
  },
+ "spec-selection": {
+  "default": "lexical-vector-llm",
+  "modules": {
+   "lexical-only": "quest_ai_runner.core.spec_selection",
+   "lexical-vector-llm": "quest_ai_runner.core.spec_selection"
+  }
+ },
  "store-feedback": {
   "default": "ledger",
   "modules": {

@@ -31,7 +31,7 @@ package-root,config,quest_ai_runner/bootstrap_email.py;quest_ai_runner/__init__.
 tools-cli,tools,quest_ai_runner/tools/*.py,"python -m quest_ai_runner.tools: list and call standard tools, send email",operate-from-a-terminal
 prompts,prompts,quest_ai_runner/prompts/*;scripts/sync_standing_instructions.py,Standing deep-run instructions shipped as data (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill),assemble-a-prompt;behave-by-esoi;judge-esoi-behavior;iterate-by-spec
 vendor,vendor,quest_ai_runner/vendor/*.py,"Vendored third-party code, unmodified",expose-the-public-api
-eval-components,evaluation,evaluation/components/**;evaluation/*.md,"Per-component evaluation harness: one function per component, impls swappable, same dataset",verify-offline
+eval-components,evaluation,evaluation/components/**;evaluation/*.md,"Per-component evaluation harness: one function per component, impls swappable, same dataset",verify-offline;spec-selection
 scripts,scripts,scripts/quarantine_cards.py;scripts/restart_if_idle.sh;scripts/web_search_bench.py,"Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (persist-cards), restart-if-idle (run-queued-tasks)",search-the-web;persist-cards;run-queued-tasks
 examples,examples,examples/*,"Runnable reference consumers (env-driven, no real data)",learn-by-example
 tests,tests,tests/**,Offline test suite and shared fakes,verify-offline
@@ -39,3 +39,4 @@ structure-registry,docs,esoi/*;esoi.toml;scripts/esoi_rules.py;scripts/env_vars.
 docs-and-meta,docs,docs/*.md;.github/**;.env.example;.gitignore;README.md;CHANGELOG.md;CLAUDE.md;CONTRIBUTING.md;SECURITY.md;CODE_OF_CONDUCT.md;LICENSE;NOTICE;pyproject.toml,Documentation and repo-level project files,explain-qar
 core-selection,core,quest_ai_runner/core/resolve.py;quest_ai_runner/esoi_selection.json,"Selection by name: resolve(solution_id, name) turns a name into the implementation declared beside its code, with the records as the only list and the snapshot for an installed copy, so switching an implementation is a data or config change",select-an-implementation
 core-consumer-helpers,core,quest_ai_runner/core/async_bridge.py;quest_ai_runner/core/signature_probe.py;quest_ai_runner/core/scaffolding.py,"Plumbing every consumer needs and must not copy: one persistent background loop for sync adapters calling async I/O, and signature probes that drop keywords an older installed library lacks",expose-the-public-api
+core-spec-selection,core,quest_ai_runner/core/spec_selection.py,"Finding the intent specifications a new input concerns: lexical narrowing over an ESOI specification index, an optional vector search, and parallel batched model selection.",spec-selection
