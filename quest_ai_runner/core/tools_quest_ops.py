@@ -112,6 +112,16 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
         if args.get("review_url"):
             kwargs["review_url"] = str(args["review_url"])
         row = client.create_decision(summary, **kwargs)
+        if (row or {}).get("duplicate") == "answered":
+            # The person already passed on, or declined, this same question. Quest's message says
+            # what they decided and what to do instead; repeating it in new words is the loop.
+            return ToolResult(ok=True, data=row, text=str(row.get("message") or (
+                "Not asked: the person already passed on or declined this question. Do not ask it "
+                "again in other words; use your own judgment or report what you could not do.")))
+        if (row or {}).get("duplicate") is True:
+            return ToolResult(ok=True, data=row, text=str(row.get("message") or (
+                f"Already open as ask {row.get('decision_id')}: not raised again. Point to it in "
+                f"your result instead of a second ask.")))
         ident = (row or {}).get("decision_id") or (row or {}).get("id")
         if not ident:
             return ToolResult(ok=False, text=(

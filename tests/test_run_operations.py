@@ -94,6 +94,27 @@ def test_create_decision_does_not_raise_what_is_already_open():
     assert client.calls == []
 
 
+def test_create_decision_tells_the_ai_when_quest_says_it_is_already_open():
+    class Open(FakeClient):
+        def create_decision(self, summary, **kw):
+            return {"decision_id": "dec_4", "duplicate": True,
+                    "message": "Not raised again: the same question is already open as ask dec_4."}
+
+    result = run(ops.create_decision_spec, Open(), {"summary": "Approve the outline note?"})
+    assert result.ok and "dec_4" in result.text and "Not raised again" in result.text
+
+
+def test_create_decision_tells_the_ai_when_the_person_already_passed_on_it():
+    class Answered(FakeClient):
+        def create_decision(self, summary, **kw):
+            return {"duplicate": "answered",
+                    "message": "Not asked: the person already passed on this same question."}
+
+    result = run(ops.create_decision_spec, Answered(), {"summary": "Approve the outline note?"})
+    assert result.ok and "already passed on" in result.text
+    assert "NOT been asked" not in result.text
+
+
 def test_create_decision_refused_by_quest_says_the_person_was_not_asked():
     client = FakeClient()
     client.accept = False

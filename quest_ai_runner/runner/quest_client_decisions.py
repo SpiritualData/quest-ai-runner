@@ -143,6 +143,12 @@ class DecisionsMixin:
                 body["executable"] = dict(executable)
             return self._request("POST", f"/api/teams/{tid}/decisions", body=body)
         except (QuestApiError, QuestNotConfigured) as e:
+            if isinstance(e, QuestApiError) and e.status == 409:
+                # Quest refused because the person already passed on, or declined, this same
+                # question recently. Hand its explanation to the caller instead of an empty dict,
+                # which would read as "Quest did not accept the ask" and invite another try.
+                log.info("create_decision not raised: %s", e)
+                return {"duplicate": "answered", "message": self.error_detail(e)}
             log.warning("create_decision failed: %s", e)
             return {}
 
