@@ -34,10 +34,16 @@ answer. A request that shares no word with any record and has no vector search s
 
 `spec-selection` (records in `esoi/`): `lexical-vector-llm` is selected, `lexical-only` is the baseline. The metric
 `metric-spec-selection` runs `evaluation/components/spec_selection/` over `fixture_index.json`, the real output of
-`esoi spec index` for the esoi repository's own records, so a change to the index format fails there. Its judge is scripted
-and declared simulated: it measures the pipeline (narrowing, fusion, batching, dropping invented ids, surviving failures), not
-a model's taste. Refresh the fixture with `esoi spec index --out evaluation/components/spec_selection/fixture_index.json` (the
-cases name real record ids, so check them after).
+`esoi spec index` for the esoi repository's own records, against labelled requests: the records each concerns, a ceiling on
+how many ids may come back, and requests that concern nothing. The metric is real. The judge is the runner's own model client
+making real cheap-model calls (`ClaudeCliProvider` on the logged-in `claude`, model `haiku` unless `QAR_EVAL_MODEL` says
+otherwise) and the vector search is real local bge-small embeddings; nothing is scripted, a missing `claude` or embedder fails
+loudly instead of scoring a stand-in, and the arm is `PAID`, so `esoi run --stale` asks before running it. The request kinds
+are `direct` (the record's own words), `paraphrase` and `solution` (other words, so lexical alone misses), and `none`
+(a model that returns everything, or the baseline that always returns something, fails). Scripted-judge checks of the
+plumbing (batching, invented ids, a failed call, links) are unit tests in `tests/test_spec_selection.py` and are not the
+metric. Refresh the fixture with `esoi spec index --out evaluation/components/spec_selection/fixture_index.json` (the cases
+name real record ids, so check them after).
 
 It is the slice source that `iterate-by-spec` and `ground-in-intent` were waiting for; neither calls it yet. Wiring it into a
 run's context is a decision for those solutions' own metrics, not assumed here.

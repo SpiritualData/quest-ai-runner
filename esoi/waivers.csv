@@ -22,3 +22,7 @@ S20,behave-by-esoi:insitu_plain,"Rival arm calls a model; stale since the esoi m
 
 S20,ground-in-intent,"Live arms call a model and have not been run: the paid ladder waits for the maintainer's decision under esoi/metric-run-policy.md. The no-frame arm stays selected until then"
 S20,iterate-by-spec,"The slice arms are not built and the live arm calls a model: the replay waits for the maintainer's decision under esoi/metric-run-policy.md"
+S31,metric-receive-input-mid-run,"What is judged is the inbox and delivery logic (exactly once, never crossed between runs), which runs for real through a real Orchestrator; only Claude Code's live session is faked at the boundary because delivery is deterministic and a model adds nothing to it. Pending: a live-session variant."
+S31,metric-run-queued-tasks,"What is judged is the poll, claim, run and report lifecycle, which runs for real; the model and the Quest server are faked at the boundary because the lifecycle is deterministic. Pending: a live-model lane run."
+S31,replay-known-operations:planner_only_offline,"Pending decision: the hit-rate and parity comparison meters a stand-in for the planner, so it does not yet show that replay matches a real planner. A real-planner variant of this arm is the fix."
+S31,replay-known-operations:recipe_replay_offline,"Pending decision: same as planner_only_offline; the replayed operations are real but the planner they are compared with is a stand-in. A real-planner variant is the fix."

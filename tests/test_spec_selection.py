@@ -67,3 +67,17 @@ def test_without_a_provider_the_fused_candidates_answer_and_links_are_marked():
     got = ss.select_specs(RIVAL, INDEX, expand=1)
     assert got.calls == 0 and WANT in got.ids
     assert all(src in got.ids for src in got.linked.values())
+
+
+def test_the_metric_cases_name_records_that_exist_and_can_discriminate():
+    """The real accuracy metric (evaluation/components/spec_selection) is only as good as its labels: every expected id is in the
+    fixture index, the kinds include requests with other words and requests that concern nothing, and no arm is simulated."""
+    base = Path(__file__).resolve().parent.parent / "evaluation" / "components" / "spec_selection"
+    known = {e["id"] for e in json.loads((base / "fixture_index.json").read_text())["entries"]}
+    cases = json.loads((base / "cases.json").read_text())
+    for case in cases:
+        assert set(case["expect"].get("has", {}).get("ids", [])) <= known, case["id"]
+    assert {"direct", "paraphrase", "solution", "none"} <= {c["kind"] for c in cases}
+    assert len(cases) >= 30
+    for impl in (base / "impls").glob("*.py"):
+        assert "SIMULATED = True" not in impl.read_text(), impl.name

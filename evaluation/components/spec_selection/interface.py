@@ -3,10 +3,12 @@
     select(task: str, index: dict, *, provider, model, vector_search, ...) -> SpecSelection
 
 The index is ``fixture_index.json``: the real output of ``esoi spec index`` over the evolvable-structure repository's own
-records (168 entries), so a changed index format fails here. The model is a SCRIPTED stand-in that answers with the case's
-``relevant`` ids among those it was offered (a perfect judge), because the arm measures the PIPELINE (narrowing, fusion,
-batching, parallelism, dropping invented ids, surviving a failed call), not a model's taste; it spends nothing and says so
-(``meter`` counts the calls a real model would receive). A vector search is likewise a dict the case supplies.
-Kinds: lexical, vocabulary_gap, batches, invented, model_failure, links. Each returns
-``{"ids", "calls", ...}`` for ``esoi.expect``. Deterministic and offline.
+records, so a changed index format fails here. The cases are labelled requests: the records each request concerns, a ceiling
+on how many ids may come back, and requests that concern nothing. Kinds: direct (the record's own words), paraphrase (other
+words, so lexical alone struggles), solution (asks for what a solution does), none (nothing may be returned).
+
+The metric is REAL: the judge is the runner's own model client making real cheap-model calls and the vector search is a real
+local embedding search. A case passes when every expected id is in the answer and no more than the ceiling comes back (a model
+that returns everything fails). Scripted-judge plumbing tests (batching, invented ids, failed calls) live in
+``tests/test_spec_selection.py``, not here. Each returns ``{"ids", "n_ids", "calls", ...}`` for ``esoi.expect``.
 """

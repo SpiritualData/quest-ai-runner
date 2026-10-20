@@ -1,243 +1,9 @@
 [
  {
   "id": "SPS-001",
-  "kind": "lexical",
-  "area": "prob-winner-not-adopted is found by the request's own words",
-  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
-  "args": {
-   "task": "a rival implementation beats the selected one and nobody switches the default",
-   "relevant": [
-    "prob-winner-not-adopted"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-winner-not-adopted"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-002",
-  "kind": "lexical",
-  "area": "prob-selection-default-kept-twice is found by the request's own words",
-  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
-  "args": {
-   "task": "we keep the same default in the selection table and in the records",
-   "relevant": [
-    "prob-selection-default-kept-twice"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-selection-default-kept-twice"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-003",
-  "kind": "lexical",
-  "area": "prob-measurements-untrusted is found by the request's own words",
-  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
-  "args": {
-   "task": "a number was recorded on uncommitted code and compared with another run",
-   "relevant": [
-    "prob-measurements-untrusted"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-measurements-untrusted"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-004",
-  "kind": "lexical",
-  "area": "prob-switching-means-editing-code is found by the request's own words",
-  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
-  "args": {
-   "task": "switching the model provider means editing call sites with an if chain",
-   "relevant": [
-    "prob-switching-means-editing-code"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-switching-means-editing-code"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-005",
-  "kind": "lexical",
-  "area": "prob-skill-cannot-be-reached-safely is found by the request's own words",
-  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
-  "args": {
-   "task": "a leaked secret in a public skill copy before we publish",
-   "relevant": [
-    "prob-skill-cannot-be-reached-safely"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-skill-cannot-be-reached-safely"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-006",
-  "kind": "lexical",
-  "area": "prob-rules-unjustified is found by the request's own words",
-  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
-  "args": {
-   "task": "a rule has no record of the mistake that justified it",
-   "relevant": [
-    "prob-rules-unjustified"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-rules-unjustified"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-007",
-  "kind": "lexical",
-  "area": "prob-metrics-run-at-the-wrong-time is found by the request's own words",
-  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
-  "args": {
-   "task": "how often to run paid metrics and who approves the cost",
-   "relevant": [
-    "prob-metrics-run-at-the-wrong-time"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-metrics-run-at-the-wrong-time"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-008",
-  "kind": "lexical",
-  "area": "prob-intent-specs-not-found-for-new-input is found by the request's own words",
-  "description": "a plain-words request reaches the record through lexical narrowing and the model's agreement",
-  "args": {
-   "task": "a new input arrives and we cannot tell which specifications apply",
-   "relevant": [
-    "prob-intent-specs-not-found-for-new-input"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-intent-specs-not-found-for-new-input"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-009",
-  "kind": "vocabulary_gap",
-  "area": "the vector search recovers a record that shares no word with the request",
-  "description": "the request's words do not reach the record; the injected vector search proposes it and the model keeps it",
-  "args": {
-   "task": "our dashboards went green yet customers still see errors",
-   "relevant": [
-    "prob-evaluation-detached-from-shipped-code"
-   ],
-   "vector": [
-    "prob-evaluation-detached-from-shipped-code"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-evaluation-detached-from-shipped-code"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-010",
-  "kind": "vocabulary_gap",
-  "area": "a vector search that fails leaves the lexical answer intact",
-  "description": "the vector search raises; lexical candidates still answer",
-  "args": {
-   "task": "a rival implementation beats the selected one and nobody switches the default",
-   "relevant": [
-    "prob-winner-not-adopted"
-   ],
-   "vector": "raise"
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-winner-not-adopted"
-    ]
-   }
-  }
- },
- {
-  "id": "SPS-011",
-  "kind": "batches",
-  "area": "candidates are judged in parallel batches, one call per batch",
-  "description": "a broad request with a small batch size makes one call per batch and unions the verdicts",
-  "args": {
-   "task": "records implementation solution metric intent specification problem ideal",
-   "relevant": [],
-   "batch_size": 6,
-   "k_lexical": 24
-  },
-  "expect": {
-   "eq": {
-    "calls_match_batches": true
-   }
-  }
- },
- {
-  "id": "SPS-012",
-  "kind": "invented",
-  "area": "an id the model was not offered is dropped",
-  "description": "the model names an id that is not a candidate; it never reaches the result",
-  "args": {
-   "task": "a rival implementation beats the selected one and nobody switches the default",
-   "relevant": [
-    "prob-winner-not-adopted",
-    "ghost-record"
-   ]
-  },
-  "expect": {
-   "has": {
-    "ids": [
-     "prob-winner-not-adopted"
-    ]
-   },
-   "eq": {
-    "has_ghost": false
-   }
-  }
- },
- {
-  "id": "SPS-013",
-  "kind": "model_failure",
-  "area": "a failed model call keeps the batch's candidates",
-  "description": "every call raises; the candidates survive in fused order and the failure is counted",
+  "kind": "direct",
+  "area": "prob-winner-not-adopted is selected for a request",
+  "description": "the request uses the record's own words",
   "args": {
    "task": "a rival implementation beats the selected one and nobody switches the default"
   },
@@ -247,45 +13,572 @@
      "prob-winner-not-adopted"
     ]
    },
-   "eq": {
-    "all_batches_failed": true
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-002",
+  "kind": "direct",
+  "area": "prob-selection-default-kept-twice is selected for a request",
+  "description": "the request uses the record's own words",
+  "args": {
+   "task": "we keep the same default in the selection table and in the records"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-selection-default-kept-twice"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-003",
+  "kind": "direct",
+  "area": "prob-measurements-untrusted is selected for a request",
+  "description": "the request uses the record's own words",
+  "args": {
+   "task": "a number was recorded on uncommitted code and compared with another run"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-measurements-untrusted"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-004",
+  "kind": "direct",
+  "area": "prob-template-copies-drift is selected for a request",
+  "description": "the request uses the record's own words",
+  "args": {
+   "task": "the intent template is being refined and every checker keeps its own copy"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-template-copies-drift"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-005",
+  "kind": "direct",
+  "area": "prob-structure-rules-decay is selected for a request",
+  "description": "the request uses the record's own words",
+  "args": {
+   "task": "rules about where files go are written in prose and nobody follows them"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-structure-rules-decay"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-006",
+  "kind": "direct",
+  "area": "prob-evaluation-detached-from-shipped-code is selected for a request",
+  "description": "the request uses the record's own words",
+  "args": {
+   "task": "our evaluation tests a stub rather than the code that ships"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-evaluation-detached-from-shipped-code"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-007",
+  "kind": "direct",
+  "area": "prob-skill-cannot-be-reached-safely is selected for a request",
+  "description": "the request uses the record's own words",
+  "args": {
+   "task": "I want to publish the skill without leaking private files"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-skill-cannot-be-reached-safely"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-008",
+  "kind": "paraphrase",
+  "area": "prob-review-needs-implementations is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "management wants proof that quality is going up but I would have to go through every module myself"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-review-needs-implementations"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-009",
+  "kind": "paraphrase",
+  "area": "prob-no-order-to-follow is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "new hires ask where to begin and every person gives a different answer"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-no-order-to-follow"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-010",
+  "kind": "paraphrase",
+  "area": "prob-behaviour-verdicts-uncalibrated is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "the automated grader of our assistant's tone does not match what the human reviewers feel"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-behaviour-verdicts-uncalibrated"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-011",
+  "kind": "paraphrase",
+  "area": "prob-switching-means-editing-code is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "changing LLM vendor meant touching forty files"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-switching-means-editing-code"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-012",
+  "kind": "paraphrase",
+  "area": "prob-rules-unjustified is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "nobody remembers the incident behind this lint so people want to drop it"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-rules-unjustified"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-013",
+  "kind": "paraphrase",
+  "area": "prob-structure-costs-more-than-it-returns is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "the bureaucracy of our process slows down every pull request"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-structure-costs-more-than-it-returns"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
    }
   }
  },
  {
   "id": "SPS-014",
-  "kind": "links",
-  "area": "a selected record brings its linked records, marked",
-  "description": "expand adds the solution a selected problem links to",
+  "kind": "paraphrase",
+  "area": "prob-simulated-arm-false-loss is selected for a request",
+  "description": "the request describes the problem in other words",
   "args": {
-   "task": "a rival implementation beats the selected one and nobody switches the default",
-   "relevant": [
-    "prob-winner-not-adopted"
-   ],
-   "expand": 2
+   "task": "our offline mock of the model made the better approach appear to lose"
   },
   "expect": {
    "has": {
     "ids": [
-     "prob-winner-not-adopted",
-     "promote-the-winner"
+     "prob-simulated-arm-false-loss"
     ]
+   },
+   "at_most": {
+    "n_ids": 10
    }
   }
  },
  {
   "id": "SPS-015",
-  "kind": "lexical",
-  "area": "nothing matches, nothing is returned",
-  "description": "a request sharing no word with any record returns no candidates and spends no call",
+  "kind": "paraphrase",
+  "area": "prob-intent-specs-not-found-for-new-input is selected for a request",
+  "description": "the request describes the problem in other words",
   "args": {
-   "task": "zebra quokka marmalade",
-   "relevant": []
+   "task": "a new ticket just came in; which of our existing goals and yardsticks should guide the work"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-intent-specs-not-found-for-new-input"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-016",
+  "kind": "paraphrase",
+  "area": "prob-metrics-run-at-the-wrong-time is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "we pay for benchmark runs no one acts on, and stale figures drive today's choices"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-metrics-run-at-the-wrong-time"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-017",
+  "kind": "paraphrase",
+  "area": "prob-purposeless-oversized-code is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "half the repo is orphaned code nobody can justify"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-purposeless-oversized-code"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-018",
+  "kind": "paraphrase",
+  "area": "prob-template-copies-drift is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "people paste the framework's schema into their tooling and it goes out of date"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-template-copies-drift"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-019",
+  "kind": "paraphrase",
+  "area": "prob-ai-behaviour-drifts-from-principles is selected for a request",
+  "description": "the request describes the problem in other words",
+  "args": {
+   "task": "our assistant is inconsistent about applying our design philosophy"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "prob-ai-behaviour-drifts-from-principles"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-020",
+  "kind": "solution",
+  "area": "leaderboard is selected for a request",
+  "description": "the request asks for what a solution does, in other words",
+  "args": {
+   "task": "how do I compare two ways of doing something and see which one ranks higher"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "leaderboard"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-021",
+  "kind": "solution",
+  "area": "discriminating-cases is selected for a request",
+  "description": "the request asks for what a solution does, in other words",
+  "args": {
+   "task": "hard test inputs that a lazy first attempt would fail"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "discriminating-cases"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-022",
+  "kind": "solution",
+  "area": "consumer-check is selected for a request",
+  "description": "the request asks for what a solution does, in other words",
+  "args": {
+   "task": "make sure a downstream adopter did not misuse the library"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "consumer-check"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-023",
+  "kind": "solution",
+  "area": "readable-records is selected for a request",
+  "description": "the request asks for what a solution does, in other words",
+  "args": {
+   "task": "a summary page for each intent folder, generated from its files"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "readable-records"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-024",
+  "kind": "solution",
+  "area": "specify-from-code is selected for a request",
+  "description": "the request asks for what a solution does, in other words",
+  "args": {
+   "task": "read the list of alternatives from the decorators so the records do not repeat them"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "specify-from-code"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-025",
+  "kind": "solution",
+  "area": "local-application-index is selected for a request",
+  "description": "the request asks for what a solution does, in other words",
+  "args": {
+   "task": "how do I find which of my projects already apply this approach"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "local-application-index"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-026",
+  "kind": "solution",
+  "area": "promote-the-winner is selected for a request",
+  "description": "the request asks for what a solution does, in other words",
+  "args": {
+   "task": "automatically make the best scoring alternative the default"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "promote-the-winner"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-027",
+  "kind": "solution",
+  "area": "ownership-map is selected for a request",
+  "description": "the request asks for what a solution does, in other words",
+  "args": {
+   "task": "map every source file to the reason it exists"
+  },
+  "expect": {
+   "has": {
+    "ids": [
+     "ownership-map"
+    ]
+   },
+   "at_most": {
+    "n_ids": 10
+   }
+  }
+ },
+ {
+  "id": "SPS-028",
+  "kind": "none",
+  "area": "nothing concerned is selected for a request",
+  "description": "no record concerns the request: nothing may be returned",
+  "args": {
+   "task": "please schedule a haircut for Thursday afternoon"
   },
   "expect": {
    "eq": {
-    "ids": [],
-    "calls": 0
+    "ids": []
+   }
+  }
+ },
+ {
+  "id": "SPS-029",
+  "kind": "none",
+  "area": "nothing concerned is selected for a request",
+  "description": "no record concerns the request: nothing may be returned",
+  "args": {
+   "task": "zebra quokka marmalade"
+  },
+  "expect": {
+   "eq": {
+    "ids": []
+   }
+  }
+ },
+ {
+  "id": "SPS-030",
+  "kind": "none",
+  "area": "nothing concerned is selected for a request",
+  "description": "no record concerns the request: nothing may be returned",
+  "args": {
+   "task": "change the login page button colours to match the new brand"
+  },
+  "expect": {
+   "eq": {
+    "ids": []
+   }
+  }
+ },
+ {
+  "id": "SPS-031",
+  "kind": "none",
+  "area": "nothing concerned is selected for a request",
+  "description": "no record concerns the request: nothing may be returned",
+  "args": {
+   "task": "write a birthday message for my daughter's friend"
+  },
+  "expect": {
+   "eq": {
+    "ids": []
+   }
+  }
+ },
+ {
+  "id": "SPS-032",
+  "kind": "none",
+  "area": "nothing concerned is selected for a request",
+  "description": "no record concerns the request: nothing may be returned",
+  "args": {
+   "task": "fix the timezone bug in the calendar export"
+  },
+  "expect": {
+   "eq": {
+    "ids": []
    }
   }
  }
