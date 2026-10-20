@@ -128,7 +128,8 @@ class QuestsMixin:
                     timeline_days: Optional[int] = None,
                     start_date: Optional[str] = None,
                     category_ids: Optional[List[str]] = None,
-                    creation_mode: str = "quick") -> Dict[str, Any]:
+                    creation_mode: str = "quick",
+                    human_statement: Optional[str] = None) -> Dict[str, Any]:
         """POST /api/quests/start — create a brand-new top-level Quest under the caller's account.
 
         ``category_id`` is required (a string like "cat_career"; no server-side enum enforced at
@@ -147,9 +148,16 @@ class QuestsMixin:
         on failure rather than swallowing it: a caller that reports "quest created" must know it
         was. When Quest holds the creation for a person's approval (an AI account's request),
         ``QuestPendingApproval`` is raised with the ask's ``decision_id``: the quest does not exist yet.
+
+        ``human_statement`` is the person's VERBATIM approving words (for example "yes create a UX
+        quest in Application Engineering"). When it is non-blank the quest is created now, once, and
+        the words are stored as audit. Pass only what the person actually said, never invented or
+        paraphrased words. Omit it to have the request held for their approval.
         """
         self._require()
         body: Dict[str, Any] = {"category_id": category_id, "creation_mode": creation_mode}
+        if human_statement is not None:
+            body["human_statement"] = human_statement
         if outcome is not None:
             body["outcome"] = outcome
         if acceptance_criteria is not None:

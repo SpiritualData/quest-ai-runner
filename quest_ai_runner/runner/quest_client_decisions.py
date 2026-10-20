@@ -160,10 +160,15 @@ class DecisionsMixin:
             log.warning("list_open_decisions_for_user failed for user %s: %s", user_id, e)
             return []
 
-    def resolve_decision(self, decision_id: str, resolution: str) -> Dict[str, Any]:
+    def resolve_decision(self, decision_id: str, resolution: str,
+                         human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """``human_statement``: the person's verbatim approving words, required to approve an AI
+        account's quest-creation ask through a key (never invent them)."""
+        body: Dict[str, Any] = {"resolution": resolution}
+        if human_statement is not None:
+            body["human_statement"] = human_statement
         try:
-            return self._request("POST", f"/api/teams/decisions/{decision_id}/resolve",
-                                 body={"resolution": resolution})
+            return self._request("POST", f"/api/teams/decisions/{decision_id}/resolve", body=body)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("resolve_decision failed for decision %s: %s", decision_id, e)
             return {}
