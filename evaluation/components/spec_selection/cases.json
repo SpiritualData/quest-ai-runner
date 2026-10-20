@@ -2,583 +2,1691 @@
  {
   "id": "SPS-001",
   "kind": "direct",
-  "area": "prob-winner-not-adopted is selected for a request",
-  "description": "the request uses the record's own words",
+  "area": "prob-misrouted-message is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "a rival implementation beats the selected one and nobody switches the default"
+   "task": "a short chat message was handled the wrong way, a plain question started an expensive deep run"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-winner-not-adopted"
+     [
+      "prob-misrouted-message",
+      "ideal-proportionate-routing"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-002",
   "kind": "direct",
-  "area": "prob-selection-default-kept-twice is selected for a request",
-  "description": "the request uses the record's own words",
+  "area": "prob-corrections-repeat is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "we keep the same default in the selection table and in the records"
+   "task": "people give the same correction again and again because the AI does not keep what they said"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-selection-default-kept-twice"
+     [
+      "prob-corrections-repeat",
+      "ideal-lasting-correction"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-003",
   "kind": "direct",
-  "area": "prob-measurements-untrusted is selected for a request",
-  "description": "the request uses the record's own words",
+  "area": "prob-context-drifts-from-its-source is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "a number was recorded on uncommitted code and compared with another run"
+   "task": "a context card still describes a file that changed or disappeared"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-measurements-untrusted"
+     [
+      "prob-context-drifts-from-its-source",
+      "ideal-current-knowledge"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-004",
   "kind": "direct",
-  "area": "prob-template-copies-drift is selected for a request",
-  "description": "the request uses the record's own words",
+  "area": "prob-public-repo-leaks is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "the intent template is being refined and every checker keeps its own copy"
+   "task": "the public repository could leak keys, real machine paths or real ids"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-template-copies-drift"
+     [
+      "prob-public-repo-leaks",
+      "ideal-clean-publication"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-005",
   "kind": "direct",
-  "area": "prob-structure-rules-decay is selected for a request",
-  "description": "the request uses the record's own words",
+  "area": "prob-vendor-outage-halts-work is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "rules about where files go are written in prose and nobody follows them"
+   "task": "one model vendor has an outage and all AI work stops"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-structure-rules-decay"
+     [
+      "prob-vendor-outage-halts-work",
+      "ideal-right-sized-model"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-006",
   "kind": "direct",
-  "area": "prob-evaluation-detached-from-shipped-code is selected for a request",
-  "description": "the request uses the record's own words",
+  "area": "prob-queued-task-falls-through is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "our evaluation tests a stub rather than the code that ships"
+   "task": "a queued task was lost, run twice or run before its time"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-evaluation-detached-from-shipped-code"
+     [
+      "prob-queued-task-falls-through",
+      "ideal-dependable-delivery"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-007",
   "kind": "direct",
-  "area": "prob-skill-cannot-be-reached-safely is selected for a request",
-  "description": "the request uses the record's own words",
+  "area": "prob-channel-messages-misdelivered is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "I want to publish the skill without leaking private files"
+   "task": "messages on the live chat channel are dropped, duplicated or reordered"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-skill-cannot-be-reached-safely"
+     [
+      "prob-channel-messages-misdelivered",
+      "ideal-dependable-delivery"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-008",
-  "kind": "paraphrase",
-  "area": "prob-review-needs-implementations is selected for a request",
-  "description": "the request describes the problem in other words",
+  "kind": "direct",
+  "area": "prob-progress-unreadable is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "management wants proof that quality is going up but I would have to go through every module myself"
+   "task": "a person waiting on background work cannot tell what is happening"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-review-needs-implementations"
+     [
+      "prob-progress-unreadable",
+      "ideal-legible-progress"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-009",
-  "kind": "paraphrase",
-  "area": "prob-no-order-to-follow is selected for a request",
-  "description": "the request describes the problem in other words",
+  "kind": "direct",
+  "area": "prob-private-data-crosses-scope is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "new hires ask where to begin and every person gives a different answer"
+   "task": "data from one team reaches another team's prompt through a cache"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-no-order-to-follow"
+     [
+      "prob-private-data-crosses-scope",
+      "ideal-contained-scope"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-010",
-  "kind": "paraphrase",
-  "area": "prob-behaviour-verdicts-uncalibrated is selected for a request",
-  "description": "the request describes the problem in other words",
+  "kind": "direct",
+  "area": "prob-web-answers-unsafe-or-costly is selected for a request",
+  "description": "direct request, over QAR's own records",
   "args": {
-   "task": "the automated grader of our assistant's tone does not match what the human reviewers feel"
+   "task": "web research fetches addresses that should never be fetched and pays again for pages already read"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-behaviour-verdicts-uncalibrated"
+     [
+      "prob-web-answers-unsafe-or-costly",
+      "ideal-safe-search"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-011",
   "kind": "paraphrase",
-  "area": "prob-switching-means-editing-code is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-spend-surprises is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "changing LLM vendor meant touching forty files"
+   "task": "last night's loop quietly burned through the whole month's budget and nobody noticed until the invoice"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-switching-means-editing-code"
+     [
+      "prob-spend-surprises",
+      "ideal-predictable-spend"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-012",
   "kind": "paraphrase",
-  "area": "prob-rules-unjustified is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-claimed-done-not-done is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "nobody remembers the incident behind this lint so people want to drop it"
+   "task": "the agent said the job was finished but when I opened the result half of it was missing"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-rules-unjustified"
+     [
+      "prob-claimed-done-not-done",
+      "ideal-verified-completion"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-013",
   "kind": "paraphrase",
-  "area": "prob-structure-costs-more-than-it-returns is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-follow-up-loses-thread is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "the bureaucracy of our process slows down every pull request"
+   "task": "I wrote 'and the other one?' and the assistant had no idea what I was talking about"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-structure-costs-more-than-it-returns"
+     [
+      "prob-follow-up-loses-thread",
+      "ideal-unbroken-thread"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-014",
   "kind": "paraphrase",
-  "area": "prob-simulated-arm-false-loss is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-big-model-for-easy-work is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "our offline mock of the model made the better approach appear to lose"
+   "task": "we pay for the flagship model to answer 'what time is it' type questions"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-simulated-arm-false-loss"
+     [
+      "prob-big-model-for-easy-work",
+      "ideal-proportionate-routing",
+      "ideal-right-sized-model"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-015",
   "kind": "paraphrase",
-  "area": "prob-intent-specs-not-found-for-new-input is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-autopilot-works-when-unwanted is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "a new ticket just came in; which of our existing goals and yardsticks should guide the work"
+   "task": "the background assistant kept working on a weekend after the person turned notifications off for the day"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-intent-specs-not-found-for-new-input"
+     [
+      "prob-autopilot-works-when-unwanted",
+      "ideal-permitted-timing"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-016",
   "kind": "paraphrase",
-  "area": "prob-metrics-run-at-the-wrong-time is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-human-only-steps-slip is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "we pay for benchmark runs no one acts on, and stale figures drive today's choices"
+   "task": "the AI paid an invoice without anyone approving the spend"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-metrics-run-at-the-wrong-time"
+     [
+      "prob-human-only-steps-slip",
+      "ideal-exact-change",
+      "ideal-informed-consent"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-017",
   "kind": "paraphrase",
-  "area": "prob-purposeless-oversized-code is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-same-ask-repeats-cost is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "half the repo is orphaned code nobody can justify"
+   "task": "every Monday the same weekly summary request is planned from zero again and costs the same each time"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-purposeless-oversized-code"
+     [
+      "prob-same-ask-repeats-cost",
+      "ideal-remembered-work"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-018",
   "kind": "paraphrase",
-  "area": "prob-template-copies-drift is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-relevant-card-not-found is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "people paste the framework's schema into their tooling and it goes out of date"
+   "task": "the handbook has the answer but the question uses different wording so nothing is found"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-template-copies-drift"
+     [
+      "prob-relevant-card-not-found",
+      "ideal-findable-knowledge"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-019",
   "kind": "paraphrase",
-  "area": "prob-ai-behaviour-drifts-from-principles is selected for a request",
-  "description": "the request describes the problem in other words",
+  "area": "prob-deep-work-wanders is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "our assistant is inconsistent about applying our design philosophy"
+   "task": "an autonomous run looped on the same action for hours with nobody stopping it"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "prob-ai-behaviour-drifts-from-principles"
+     [
+      "prob-deep-work-wanders",
+      "ideal-accountable-autonomy"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-020",
-  "kind": "solution",
-  "area": "leaderboard is selected for a request",
-  "description": "the request asks for what a solution does, in other words",
+  "kind": "paraphrase",
+  "area": "prob-prompt-overflow-and-duplication is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "how do I compare two ways of doing something and see which one ranks higher"
+   "task": "the model call failed because the prompt was too long and the same block appeared twice"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "leaderboard"
+     [
+      "prob-prompt-overflow-and-duplication",
+      "ideal-bounded-prompt"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-021",
-  "kind": "solution",
-  "area": "discriminating-cases is selected for a request",
-  "description": "the request asks for what a solution does, in other words",
+  "kind": "paraphrase",
+  "area": "prob-unrequested-or-partial-changes is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "hard test inputs that a lazy first attempt would fail"
+   "task": "I asked it to rename one goal and it also edited three others and skipped the deadline I mentioned"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "discriminating-cases"
+     [
+      "prob-unrequested-or-partial-changes",
+      "ideal-exact-change"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-022",
-  "kind": "solution",
-  "area": "consumer-check is selected for a request",
-  "description": "the request asks for what a solution does, in other words",
+  "kind": "paraphrase",
+  "area": "prob-reply-misses-the-account is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
   "args": {
-   "task": "make sure a downstream adopter did not misuse the library"
+   "task": "the answer states a deadline that is nowhere in my account and ignores the one that is"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "consumer-check"
+     [
+      "prob-reply-misses-the-account",
+      "ideal-grounded-reply",
+      "ideal-reliable-verdict"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-023",
-  "kind": "solution",
-  "area": "readable-records is selected for a request",
-  "description": "the request asks for what a solution does, in other words",
+  "kind": "daily",
+  "area": "run-queued-tasks is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "a summary page for each intent folder, generated from its files"
+   "task": "Zee's scheduled task for 9am never ran and the queue shows it as picked up twice"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "readable-records"
+     [
+      "run-queued-tasks",
+      "prob-queued-task-falls-through",
+      "prob-human-only-steps-slip",
+      "ideal-dependable-delivery",
+      "metric-run-queued-tasks"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-024",
-  "kind": "solution",
-  "area": "specify-from-code is selected for a request",
-  "description": "the request asks for what a solution does, in other words",
+  "kind": "daily",
+  "area": "escalate-to-a-human is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "read the list of alternatives from the decorators so the records do not repeat them"
+   "task": "the agent needs Joshua to decide whether to send the donor email; make sure he gets the ask with the draft attached"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "specify-from-code"
+     [
+      "escalate-to-a-human",
+      "prob-human-only-steps-slip",
+      "prob-deep-work-wanders",
+      "ideal-informed-consent",
+      "metric-escalate-to-a-human"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-025",
-  "kind": "solution",
-  "area": "local-application-index is selected for a request",
-  "description": "the request asks for what a solution does, in other words",
+  "kind": "daily",
+  "area": "choose-a-model-tier is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "how do I find which of my projects already apply this approach"
+   "task": "haiku quota is exhausted for today, fall back to the next tier without failing the turn"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "local-application-index"
+     [
+      "choose-a-model-tier",
+      "prob-big-model-for-easy-work",
+      "prob-vendor-outage-halts-work",
+      "prob-spend-surprises",
+      "ideal-right-sized-model",
+      "metric-choose-a-model-tier"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-026",
-  "kind": "solution",
-  "area": "promote-the-winner is selected for a request",
-  "description": "the request asks for what a solution does, in other words",
+  "kind": "daily",
+  "area": "gate-an-autopilot-pass is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "automatically make the best scoring alternative the default"
+   "task": "skip the autopilot pass when the daily budget is already spent or the person set quiet hours"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "promote-the-winner"
+     [
+      "gate-an-autopilot-pass",
+      "prob-autopilot-works-when-unwanted",
+      "prob-spend-surprises",
+      "ideal-permitted-timing",
+      "metric-gate-an-autopilot-pass"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-027",
-  "kind": "solution",
-  "area": "ownership-map is selected for a request",
-  "description": "the request asks for what a solution does, in other words",
+  "kind": "daily",
+  "area": "keep-secrets-out is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "map every source file to the reason it exists"
+   "task": "before pushing, scan the diff for api keys and home directory paths"
   },
   "expect": {
-   "has": {
+   "any_of": {
     "ids": [
-     "ownership-map"
+     [
+      "keep-secrets-out",
+      "prob-public-repo-leaks",
+      "ideal-clean-publication",
+      "metric-keep-secrets-out"
+     ]
     ]
    },
    "at_most": {
-    "n_ids": 10
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-028",
-  "kind": "none",
-  "area": "nothing concerned is selected for a request",
-  "description": "no record concerns the request: nothing may be returned",
+  "kind": "daily",
+  "area": "configure-a-lane is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "please schedule a haircut for Thursday afternoon"
+   "task": "add a second lane config that overrides the model tier and the poll interval for one team"
   },
   "expect": {
-   "eq": {
-    "ids": []
+   "any_of": {
+    "ids": [
+     [
+      "configure-a-lane",
+      "prob-integration-is-trial-and-error",
+      "ideal-trustworthy-interface",
+      "metric-configure-a-lane"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
    }
-  }
+  },
+  "heldout": "yes"
  },
  {
   "id": "SPS-029",
-  "kind": "none",
-  "area": "nothing concerned is selected for a request",
-  "description": "no record concerns the request: nothing may be returned",
+  "kind": "daily",
+  "area": "assemble-a-prompt is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "zebra quokka marmalade"
+   "task": "trim the system prompt so the context block is not repeated and stays under the token ceiling"
   },
   "expect": {
-   "eq": {
-    "ids": []
+   "any_of": {
+    "ids": [
+     [
+      "assemble-a-prompt",
+      "prob-prompt-overflow-and-duplication",
+      "prob-spend-surprises",
+      "ideal-bounded-prompt",
+      "ideal-predictable-spend",
+      "metric-assemble-a-prompt"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-030",
-  "kind": "none",
-  "area": "nothing concerned is selected for a request",
-  "description": "no record concerns the request: nothing may be returned",
+  "kind": "daily",
+  "area": "detect-stale-cards is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "change the login page button colours to match the new brand"
+   "task": "re-read the card when the source file's hash no longer matches"
   },
   "expect": {
-   "eq": {
-    "ids": []
+   "any_of": {
+    "ids": [
+     [
+      "detect-stale-cards",
+      "prob-context-drifts-from-its-source",
+      "ideal-current-knowledge",
+      "metric-detect-stale-cards"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
    }
   }
  },
  {
   "id": "SPS-031",
-  "kind": "none",
-  "area": "nothing concerned is selected for a request",
-  "description": "no record concerns the request: nothing may be returned",
+  "kind": "daily",
+  "area": "track-usage-and-cost is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "write a birthday message for my daughter's friend"
+   "task": "report what each task cost today and stop new work once the daily dollar limit is hit"
   },
   "expect": {
-   "eq": {
-    "ids": []
+   "any_of": {
+    "ids": [
+     [
+      "track-usage-and-cost",
+      "prob-spend-surprises",
+      "prob-queued-task-falls-through",
+      "ideal-predictable-spend",
+      "metric-track-usage-and-cost"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-032",
+  "kind": "daily",
+  "area": "store-feedback is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "keep Joshua's verbatim correction about email tone in the ledger so the next draft applies it"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "store-feedback",
+      "prob-corrections-repeat",
+      "prob-private-data-crosses-scope",
+      "ideal-lasting-correction",
+      "ideal-contained-scope",
+      "metric-store-feedback"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
    }
   }
  },
  {
-  "id": "SPS-032",
-  "kind": "none",
-  "area": "nothing concerned is selected for a request",
-  "description": "no record concerns the request: nothing may be returned",
+  "id": "SPS-033",
+  "kind": "daily",
+  "area": "watch-a-run is selected for a request",
+  "description": "daily request, over QAR's own records",
   "args": {
-   "task": "fix the timezone bug in the calendar export"
+   "task": "an overseer should look at a long deep run and only interrupt when it is truly stuck"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "watch-a-run",
+      "prob-deep-work-wanders",
+      "prob-progress-unreadable",
+      "ideal-accountable-autonomy",
+      "metric-watch-a-run"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-034",
+  "kind": "daily",
+  "area": "ground-in-intent is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "put a short slice of the intent this quest serves, with its ideals and metrics, at the top of the autopilot brief"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "ground-in-intent",
+      "prob-work-misses-its-why",
+      "ideal-purposeful-work",
+      "metric-ground-in-intent"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-035",
+  "kind": "daily",
+  "area": "write-files is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "let the agent write notes into the goal folder but never outside it and keep a way to undo"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "write-files",
+      "prob-unrequested-or-partial-changes",
+      "prob-human-only-steps-slip",
+      "ideal-exact-change",
+      "metric-write-files"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-036",
+  "kind": "daily",
+  "area": "search-the-web is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "research three competitors on the public web without hitting private network addresses"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "search-the-web",
+      "prob-web-answers-unsafe-or-costly",
+      "prob-vendor-outage-halts-work",
+      "ideal-safe-search",
+      "metric-search-the-web"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-037",
+  "kind": "multi",
+  "area": "prob-misrouted-message, prob-spend-surprises is selected for a request",
+  "description": "multi request, over QAR's own records",
+  "args": {
+   "task": "simple questions go to the expensive path and the monthly bill keeps surprising us"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-misrouted-message",
+      "ideal-proportionate-routing"
+     ],
+     [
+      "prob-spend-surprises",
+      "ideal-predictable-spend"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 6
+   }
+  }
+ },
+ {
+  "id": "SPS-038",
+  "kind": "multi",
+  "area": "prob-corrections-repeat, prob-follow-up-loses-thread is selected for a request",
+  "description": "multi request, over QAR's own records",
+  "args": {
+   "task": "the assistant forgets my correction and also loses what we just said two messages ago"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-corrections-repeat",
+      "ideal-lasting-correction"
+     ],
+     [
+      "prob-follow-up-loses-thread",
+      "ideal-unbroken-thread"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 6
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-039",
+  "kind": "multi",
+  "area": "prob-public-repo-leaks, prob-integration-is-trial-and-error is selected for a request",
+  "description": "multi request, over QAR's own records",
+  "args": {
+   "task": "before open-sourcing the library nobody knows which names are stable, and we worry about leaking private paths"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-public-repo-leaks",
+      "ideal-clean-publication"
+     ],
+     [
+      "prob-integration-is-trial-and-error",
+      "ideal-trustworthy-interface"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 6
+   }
+  }
+ },
+ {
+  "id": "SPS-040",
+  "kind": "multi",
+  "area": "prob-claimed-done-not-done, prob-deep-work-wanders is selected for a request",
+  "description": "multi request, over QAR's own records",
+  "args": {
+   "task": "the deep runner wanders for hours and then claims success without meeting the goal"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-claimed-done-not-done",
+      "ideal-verified-completion"
+     ],
+     [
+      "prob-deep-work-wanders",
+      "ideal-accountable-autonomy"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 6
+   }
+  }
+ },
+ {
+  "id": "SPS-041",
+  "kind": "multi",
+  "area": "route-a-message, choose-a-model-tier is selected for a request",
+  "description": "multi request, over QAR's own records",
+  "args": {
+   "task": "pick the cheapest tier that can handle this message and route plain questions away from deep work"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "route-a-message",
+      "prob-misrouted-message",
+      "prob-big-model-for-easy-work",
+      "ideal-proportionate-routing",
+      "metric-route-a-message"
+     ],
+     [
+      "choose-a-model-tier",
+      "prob-big-model-for-easy-work",
+      "prob-vendor-outage-halts-work",
+      "prob-spend-surprises",
+      "ideal-right-sized-model",
+      "metric-choose-a-model-tier"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 6
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-042",
+  "kind": "multi",
+  "area": "persist-cards, cache-cards is selected for a request",
+  "description": "multi request, over QAR's own records",
+  "args": {
+   "task": "cards must survive a storage outage and the writes made while it was down must be replayed"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "persist-cards",
+      "prob-context-drifts-from-its-source",
+      "prob-private-data-crosses-scope",
+      "ideal-current-knowledge",
+      "ideal-contained-scope",
+      "metric-persist-cards"
+     ],
+     [
+      "cache-cards",
+      "prob-context-drifts-from-its-source",
+      "prob-vendor-outage-halts-work",
+      "ideal-current-knowledge",
+      "metric-cache-cards"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 6
+   }
+  }
+ },
+ {
+  "id": "SPS-043",
+  "kind": "measure",
+  "area": "metric-route-a-message is selected for a request",
+  "description": "measure request, over QAR's own records",
+  "args": {
+   "task": "how do we measure whether the router sends each message the right way"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "metric-route-a-message"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-044",
+  "kind": "measure",
+  "area": "metric-keep-secrets-out is selected for a request",
+  "description": "measure request, over QAR's own records",
+  "args": {
+   "task": "which metric shows the hygiene scanner finds real secrets without flagging placeholders"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "metric-keep-secrets-out"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-045",
+  "kind": "measure",
+  "area": "ideal-predictable-spend is selected for a request",
+  "description": "measure request, over QAR's own records",
+  "args": {
+   "task": "what does it look like when the cost of AI work is known before it is spent"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "ideal-predictable-spend",
+      "prob-spend-surprises"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-046",
+  "kind": "measure",
+  "area": "ideal-honest-grading is selected for a request",
+  "description": "measure request, over QAR's own records",
+  "args": {
+   "task": "what should a grader of AI replies reward besides the right vocabulary"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "ideal-honest-grading",
+      "prob-grader-fooled-by-vocabulary"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-047",
+  "kind": "measure",
+  "area": "metric-detect-stale-cards is selected for a request",
+  "description": "measure request, over QAR's own records",
+  "args": {
+   "task": "how precise is detection of stale cards over mutation cases"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "metric-detect-stale-cards"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-048",
+  "kind": "measure",
+  "area": "ideal-contained-scope is selected for a request",
+  "description": "measure request, over QAR's own records",
+  "args": {
+   "task": "ideal: one person's data never shows up in another person's answer"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "ideal-contained-scope",
+      "prob-private-data-crosses-scope"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-049",
+  "kind": "solution",
+  "area": "spec-selection is selected for a request",
+  "description": "solution request, over QAR's own records",
+  "args": {
+   "task": "given a new request, pick which problems, ideals and metrics of the project it concerns"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "spec-selection",
+      "prob-intent-specs-not-found-for-input",
+      "ideal-specs-that-apply-are-in-view",
+      "metric-spec-selection"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-050",
+  "kind": "solution",
+  "area": "iterate-by-spec is selected for a request",
+  "description": "solution request, over QAR's own records",
+  "args": {
+   "task": "start the task from the slice of the specification it serves and write what it learned back into the records"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "iterate-by-spec",
+      "prob-work-misses-its-why",
+      "ideal-purposeful-work",
+      "metric-iterate-by-spec"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-051",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "change the colour of the submit button on the pricing page"
   },
   "expect": {
    "eq": {
-    "ids": []
+    "n_selected": 0
+   }
+  }
+ },
+ {
+  "id": "SPS-052",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "what is the weather in Lisbon this weekend"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-053",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "route the HTTP traffic of the marketing site through the new load balancer"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  }
+ },
+ {
+  "id": "SPS-054",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "write a haiku about autumn"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  }
+ },
+ {
+  "id": "SPS-055",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "book a table for four at a quiet restaurant on Friday"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-056",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "translate the onboarding email into Portuguese"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  }
+ },
+ {
+  "id": "SPS-057",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "reset the password for the shared photo archive"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  }
+ },
+ {
+  "id": "SPS-058",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "congratulate Rosa on her piano recital"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-059",
+  "kind": "paraphrase",
+  "area": "prob-queued-task-falls-through is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
+  "args": {
+   "task": "the reminder went out twice because the retry fired after the first attempt had already succeeded"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-queued-task-falls-through",
+      "ideal-dependable-delivery"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-060",
+  "kind": "paraphrase",
+  "area": "prob-human-only-steps-slip is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
+  "args": {
+   "task": "she asked the assistant to email the board and it just sent it without showing her the draft"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-human-only-steps-slip",
+      "ideal-exact-change",
+      "ideal-informed-consent"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-061",
+  "kind": "paraphrase",
+  "area": "remember-conversations is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
+  "args": {
+   "task": "my notes from last Tuesday's chat vanished, the assistant acts like we never spoke"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "remember-conversations",
+      "prob-follow-up-loses-thread",
+      "prob-private-data-crosses-scope",
+      "ideal-unbroken-thread",
+      "ideal-contained-scope",
+      "metric-remember-conversations"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-062",
+  "kind": "paraphrase",
+  "area": "prob-private-data-crosses-scope is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
+  "args": {
+   "task": "an answer quoted a figure that belongs to another family's account"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-private-data-crosses-scope",
+      "ideal-contained-scope"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-063",
+  "kind": "paraphrase",
+  "area": "prob-grader-fooled-by-vocabulary is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
+  "args": {
+   "task": "the grader gave full marks to a reply that sounded right but did the wrong thing"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-grader-fooled-by-vocabulary",
+      "ideal-honest-grading"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-064",
+  "kind": "paraphrase",
+  "area": "prob-vendor-outage-halts-work is selected for a request",
+  "description": "paraphrase request, over QAR's own records",
+  "args": {
+   "task": "the provider started rate-limiting us and every queued job just sat there"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "prob-vendor-outage-halts-work",
+      "ideal-right-sized-model"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-065",
+  "kind": "daily",
+  "area": "track-usage-and-cost is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "put the cost per task into the daily usage report and warn the operator at eighty percent of the dollar limit"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "track-usage-and-cost",
+      "prob-spend-surprises",
+      "prob-queued-task-falls-through",
+      "ideal-predictable-spend",
+      "metric-track-usage-and-cost"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-066",
+  "kind": "daily",
+  "area": "replay-known-operations is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "look up whether a similar request was answered before and reuse that plan instead of planning again"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "replay-known-operations",
+      "prob-same-ask-repeats-cost",
+      "prob-spend-surprises",
+      "ideal-remembered-work",
+      "ideal-predictable-spend",
+      "metric-replay-known-operations"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-067",
+  "kind": "daily",
+  "area": "receive-input-mid-run is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "when the person types while the agent is mid-run, hand the message over without losing it or delivering it twice"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "receive-input-mid-run",
+      "prob-follow-up-loses-thread",
+      "prob-deep-work-wanders",
+      "ideal-unbroken-thread",
+      "metric-receive-input-mid-run"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-068",
+  "kind": "daily",
+  "area": "learn-by-example is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "add a runnable example that shows how to start a lane in ten lines"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "learn-by-example",
+      "prob-integration-is-trial-and-error",
+      "ideal-trustworthy-interface",
+      "metric-learn-by-example"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-069",
+  "kind": "daily",
+  "area": "explain-qar is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "check that the docs mention every public command and keep to the plain voice"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "explain-qar",
+      "prob-integration-is-trial-and-error",
+      "ideal-trustworthy-interface",
+      "metric-explain-qar"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-070",
+  "kind": "daily",
+  "area": "operate-from-a-terminal is selected for a request",
+  "description": "daily request, over QAR's own records",
+  "args": {
+   "task": "make the terminal command refuse a bad flag with a clear message and exit non-zero"
+  },
+  "expect": {
+   "any_of": {
+    "ids": [
+     [
+      "operate-from-a-terminal",
+      "prob-integration-is-trial-and-error",
+      "prob-deep-work-wanders",
+      "ideal-trustworthy-interface",
+      "metric-operate-from-a-terminal"
+     ]
+    ]
+   },
+   "at_most": {
+    "n_selected": 4
+   }
+  }
+ },
+ {
+  "id": "SPS-071",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "fix the calendar widget that is misaligned on the Quest mobile app"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  }
+ },
+ {
+  "id": "SPS-072",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "draft release notes for the Quest backend's new billing page"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-073",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "why is the Postgres connection pool exhausted on the production database"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  }
+ },
+ {
+  "id": "SPS-074",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "summarise last quarter's grant applications for the board"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  }
+ },
+ {
+  "id": "SPS-075",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "rename the staging cluster and rotate its TLS certificate"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
+   }
+  },
+  "heldout": "yes"
+ },
+ {
+  "id": "SPS-076",
+  "kind": "none",
+  "area": "a request that concerns no record returns nothing",
+  "description": "none request, over QAR's own records",
+  "args": {
+   "task": "teach Rosa fractions with a pizza analogy"
+  },
+  "expect": {
+   "eq": {
+    "n_selected": 0
    }
   }
  }

@@ -27,9 +27,9 @@ def real_provider(meter):
 
 
 def real_vector_search():
-    """``vector_search(text, k) -> ids`` by cosine similarity of local bge-small embeddings of each entry's card line.
+    """``vector_search(text, k) -> [(id, cosine)]`` by cosine similarity of local bge-small embeddings of each entry's card line.
     The model is the one the context-selection evaluation uses (read offline from the fastembed cache); it raises when the model
-    is not cached, never degrades to no vector search. No on-disk vector cache: 168 short lines embed in seconds."""
+    is not cached, never degrades to no vector search. No on-disk vector cache: a few hundred short lines embed in seconds."""
     import numpy as np
     from context_selection.embedder import MODEL
     from fastembed import TextEmbedding
@@ -46,7 +46,7 @@ def real_vector_search():
     def search(text, k):
         q = embed([text])[0]
         scores = matrix @ (q / np.linalg.norm(q))
-        return [ids[i] for i in np.argsort(-scores)[:k]]
+        return [(ids[i], float(scores[i])) for i in np.argsort(-scores)[:k]]
     return search
 
 
@@ -56,5 +56,6 @@ def runner(select, meter, *, judge=False, vector=False):
 
     def run(kind, args):
         got = select(args["task"], INDEX, provider=provider, model=JUDGE_MODEL if judge else None, vector_search=vector_search)
-        return {"ids": got.ids, "n_ids": len(got.ids), "calls": got.calls, "failed_batches": got.failed_batches}
+        selected = [i for i in got.ids if i not in got.linked]
+        return {"ids": selected, "linked": [i for i in got.ids if i in got.linked], "n_ids": len(got.ids), "n_selected": len(selected), "route": got.route, "calls": got.calls, "failed_batches": got.failed_batches}
     return run

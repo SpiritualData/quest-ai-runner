@@ -7,7 +7,7 @@ import pytest
 
 from quest_ai_runner.core import spec_selection as ss
 
-INDEX = ss.load_spec_index(Path(__file__).resolve().parents[1] / "evaluation" / "components" / "spec_selection" / "fixture_index.json")
+INDEX = ss.load_spec_index(Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "esoi_repo_spec_index.json")
 RIVAL = "a rival implementation beats the selected one and nobody switches the default"
 WANT = "prob-winner-not-adopted"
 
@@ -81,3 +81,57 @@ def test_the_metric_cases_name_records_that_exist_and_can_discriminate():
     assert len(cases) >= 30
     for impl in (base / "impls").glob("*.py"):
         assert "SIMULATED = True" not in impl.read_text(), impl.name
+
+
+def lines(*pairs):
+    return list(pairs)
+
+
+def test_the_gate_answers_clear_and_empty_requests_without_a_model():
+    sure = ss.gate_decision(lines(("a", 90.0), ("b", 10.0)), lines(("a", 0.85), ("c", 0.5)))
+    assert sure == "sure"
+    assert ss.gate_decision(lines(("a", 90.0)), lines(("b", 0.85))) == "ask"          # the two searches disagree
+    assert ss.gate_decision(lines(("a", 20.0)), lines(("a", 0.6))) == "ask"           # agree but weak evidence
+    assert ss.gate_decision(lines(("a", 5.0)), lines(("a", 0.4))) == "nothing"
+    assert ss.gate_decision(lines(("a", 90.0)), lines(("a", 0.0))) == "sure"          # strong lexical evidence, agreement, unscored vectors
+    assert ss.gate_decision([], []) == "nothing"
+
+
+def test_the_gated_selection_spends_one_call_on_an_ambiguous_request_and_none_otherwise():
+    weak = lambda text, k: [(WANT, 0.60), ("prob-selection-default-kept-twice", 0.58)]   # noqa: E731
+    judge = Judge([WANT])
+    got = ss.lexical_vector_gated(RIVAL, INDEX, provider=judge, model="fast", vector_search=weak)
+    assert got.route == "judged" and got.calls == judge.calls == 1 and WANT in got.ids
+    strong = lambda text, k: [(WANT, 0.9)]   # noqa: E731
+    judge = Judge([])
+    got = ss.lexical_vector_gated(RIVAL, INDEX, provider=judge, model="fast", vector_search=strong)
+    assert got.route == "sure" and judge.calls == 0 and got.ids[0] == WANT
+    nothing = ss.lexical_vector_gated("zebra quokka marmalade", INDEX, provider=judge, model="fast", vector_search=lambda t, k: [("x", 0.1)])
+    assert nothing.route == "nothing" and nothing.ids == [] and judge.calls == 0
+
+
+def test_a_failed_judging_call_keeps_the_best_few_candidates():
+    weak = lambda text, k: [(WANT, 0.60)]   # noqa: E731
+    got = ss.lexical_vector_gated(RIVAL, INDEX, provider=Judge([], fail=True), model="fast", vector_search=weak, expand=0)
+    assert got.failed_batches == 1 and 0 < len(got.ids) <= ss.UNJUDGED_TOP
+
+
+def test_related_specs_walks_links_nearest_first_and_intent_specs_lists_a_whole_intent():
+    near = ss.related_specs(INDEX, WANT, depth=1)
+    assert near and all(h["depth"] == 1 and h["via"] == WANT for h in near)
+    far = ss.related_specs(INDEX, WANT, depth=2, limit=500)
+    assert {h["id"] for h in near} < {h["id"] for h in far} and WANT not in {h["id"] for h in far}
+    assert [h["depth"] for h in far] == sorted(h["depth"] for h in far)
+    with pytest.raises(KeyError):
+        ss.related_specs(INDEX, "no-such-record")
+    everything = ss.intent_specs(INDEX)
+    assert len(everything) == INDEX["n"] and everything[0]["kind"] == "intent" or everything[0]["kind"] == "problem"
+    assert {h["id"] for h in ss.intent_specs(INDEX, INDEX["entries"][0]["intent"])} <= {e["id"] for e in INDEX["entries"]}
+
+
+def test_implementations_are_reached_through_links_not_proposed_as_candidates():
+    got = ss.select_specs("selected implementation default table", INDEX)
+    assert all(INDEX_BY_ID[i]["kind"] != "implementation" for i in got.candidates)
+
+
+INDEX_BY_ID = {e["id"]: e for e in INDEX["entries"]}

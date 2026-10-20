@@ -27,3 +27,10 @@ names = ["QAR_WEB_SEARCH_BACKEND", "SERPER_API_KEY", "BRAVE_SEARCH_API_KEY", "BR
          "QUEST_BASE_URL", "QUEST_API_URL", "QUEST_API_KEY", "QUEST_TEAM_ID", "QUEST_TEAM_IDS", "QUEST_ORG_ID",
          "CLAUDE_CONFIG_DIR"]
 set = { QAR_STANDARD_TOOLS = "0", QAR_CLAUDE_PATH = "qar-eval-no-such-claude", QAR_CLAUDE_LIVE_MODELS = "0" }
+
+# The balanced score of the spec-selection metric (esoi/balance.py): accuracy 70%, cost 15%, time 15%. A request is worth
+# at most half a cent and ten seconds; an arm that spends the whole of either gets zero for it.
+[balance.spec_selection]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.005
+seconds_per_case = 10

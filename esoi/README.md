@@ -323,6 +323,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `core-ml-tasks:period-placement-llm` | Recommend where backlog goals go in the next period |  |  |
 | `spec-selection:lexical-vector-llm` | Lexical TF-IDF, optional vector search, parallel batched model judging | quest_ai_runner/core/spec_selection.py |  |
 | `spec-selection:lexical-only` | Lexical top few only | quest_ai_runner/core/spec_selection.py |  |
+| `spec-selection:lexical-vector-gated` | Lexical vector gated | quest_ai_runner/core/spec_selection.py |  |
 
 ## Metrics
 
@@ -381,4 +382,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-ground-in-intent`, Intent-grounded pass rate: `esoi run intent_grounding`
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
-- `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_only`
+- `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`

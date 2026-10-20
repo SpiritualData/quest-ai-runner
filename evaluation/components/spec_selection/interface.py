@@ -10,5 +10,5 @@ words, so lexical alone struggles), solution (asks for what a solution does), no
 The metric is REAL: the judge is the runner's own model client making real cheap-model calls and the vector search is a real
 local embedding search. A case passes when every expected id is in the answer and no more than the ceiling comes back (a model
 that returns everything fails). Scripted-judge plumbing tests (batching, invented ids, failed calls) live in
-``tests/test_spec_selection.py``, not here. Each returns ``{"ids", "n_ids", "calls", ...}`` for ``esoi.expect``.
+``tests/test_spec_selection.py``, not here. Each returns ``{"ids" (the selected records), "linked" (those brought in by a link, not checked), "n_selected", "route", "calls", ...}`` for ``esoi.expect``.
 """
