@@ -44,14 +44,14 @@ def test_fusion_prefers_what_two_lists_agree_on():
 
 def test_the_model_chooses_in_parallel_batches_and_invented_ids_are_dropped():
     judge = Judge([WANT])
-    got = ss.select_specs(RIVAL, INDEX, provider=judge, model="fast", batch_size=4, k_lexical=12, expand=0)
+    got = ss.lexical_vector_llm(RIVAL, INDEX, provider=judge, model="fast", batch_size=4, k_lexical=12, expand=0)
     assert got.ids == [WANT] and got.calls == judge.calls == 3 and "not-offered" not in got.ids
 
 
 def test_a_failed_model_call_keeps_the_candidates_and_a_failed_vector_search_changes_nothing():
     def broken(text, k):
         raise RuntimeError("store down")
-    got = ss.select_specs(RIVAL, INDEX, provider=Judge([], fail=True), model="fast", vector_search=broken, batch_size=50)
+    got = ss.lexical_vector_llm(RIVAL, INDEX, provider=Judge([], fail=True), model="fast", vector_search=broken, batch_size=50)
     assert WANT in got.ids and got.failed_batches == got.calls == 1
 
 

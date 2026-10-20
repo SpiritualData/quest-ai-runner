@@ -32,7 +32,7 @@ answer. A request that shares no word with any record and has no vector search s
 
 ## It is a solution with alternatives
 
-`spec-selection` (records in `esoi/`): `lexical-vector-llm` is selected, `lexical-only` is the baseline. The metric
+`spec-selection` (records in `esoi/`): `lexical-vector-gated` is selected (chosen by the metric's balanced score), `lexical-vector-llm` (batched judging), `lexical-vector` (no model) and `lexical-only` are the alternatives and baselines. The metric
 `metric-spec-selection` runs `evaluation/components/spec_selection/` over `fixture_index.json`, the real output of
 `esoi spec index` for the esoi repository's own records, against labelled requests: the records each concerns, a ceiling on
 how many ids may come back, and requests that concern nothing. The metric is real. The judge is the runner's own model client
@@ -44,6 +44,12 @@ are `direct` (the record's own words), `paraphrase` and `solution` (other words,
 plumbing (batching, invented ids, a failed call, links) are unit tests in `tests/test_spec_selection.py` and are not the
 metric. Refresh the fixture with `esoi spec index --out evaluation/components/spec_selection/fixture_index.json` (the cases
 name real record ids, so check them after).
+
+The metric ranks by a balanced score of accuracy (70%), cost (15%) and time (15%) with the budgets in `esoi.toml` `[balance.spec_selection]`. On 76 labelled requests (2026-10-20) the gated arm scored 0.885 (67/76, about $0.0001 and 2 s a request), batched judging 0.418 (21/76: on the larger index it returned crowds), lexical plus vector 0.816 and lexical only 0.788.
+
+## Day-to-day use (`core/repo_specs.py`)
+
+A run working in a repository with an `esoi.toml` (or `QAR_SPEC_ROOT`) gets four read-only tools, `find_specs`, `related_specs`, `intent_specs` and `show_spec` (`core/tools_repo_specs.py`). The index is cached and rebuilt only when a record file changes, a local vector search is added when `fastembed` is installed, and the run walks links on demand instead of reading every record. The same functions run free from a shell: `python -m quest_ai_runner.core.repo_specs find|related|intent|show`.
 
 It is the slice source that `iterate-by-spec` and `ground-in-intent` were waiting for; neither calls it yet. Wiring it into a
 run's context is a decision for those solutions' own metrics, not assumed here.

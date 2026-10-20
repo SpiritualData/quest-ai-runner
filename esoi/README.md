@@ -132,7 +132,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `ground-in-intent` | Intent frame for quest-scoped prompts | none | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | generic-doctrine | First-pass acceptance and exploration before the first edit |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
-| `spec-selection` | Select the intent specifications an input concerns | lexical-vector-llm | Specification selection pass rate |
+| `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 
 ## Implementations
 
@@ -382,4 +382,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-ground-in-intent`, Intent-grounded pass rate: `esoi run intent_grounding`
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
-- `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
+- `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
