@@ -140,8 +140,8 @@ def file_email_draft_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
 # exist, never how to write each one, and AI-written vision statements, current states and
 # measurable outcomes read as generic. Each tool below writes exactly one field (or adds one goal,
 # strategy or habit) and its description carries that field's own writing standard from
-# ``core.quest_field_instructions``, so the model reads the standard at the moment it chooses the
-# write. They remain the ONLY way an AI changes quest data: never generated code, a file edit or a
+# ``core.quest_field_instructions`` (built from the vendored backend YAML), so the model reads the
+# standard at the moment it chooses the write. They remain the ONLY way an AI changes quest data: never generated code, a file edit or a
 # coding agent (Joshua, 2026-10-01: "AI generated code should never be used for quest field
 # updates, qar has a specific tool for that").
 #
@@ -185,10 +185,11 @@ _QUEST_ID_PARAM = {"type": "string", "description": "Quest to change (defaults t
 
 def _with_standard(description: str, key: str, period: Optional[str] = None) -> str:
     from .quest_field_instructions import (UNIVERSAL_RULES, field_instructions_text,
-                                           goal_instructions_text)
+                                           goal_instructions_text, what_a_quest_is)
     standard = goal_instructions_text(period) if key == "goal" else field_instructions_text(key)
     always = "\n".join(f"- {r}" for r in UNIVERSAL_RULES)
-    return f"{description}\n\nHOW TO WRITE IT:\n{standard}\nAlways:\n{always}"
+    return (f"{description}\n\nWHAT A QUEST IS: {what_a_quest_is('short')}\n\n"
+            f"HOW TO WRITE IT:\n{standard}\nAlways:\n{always}")
 
 
 def _not_applied_text(what: str, quest_id: str, result: Mapping[str, Any]) -> str:
@@ -433,7 +434,7 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
         name="add_quest_strategy",
         direct=True,
         handler=handler,
-        description=_with_standard("Add one strategy (an approach) to a quest.", "strategy"),
+        description=_with_standard("Add one strategy (a candidate solution) to a quest.", "strategy"),
         when_to_use="The user asked to add a strategy or approach to their quest. " + _NEVER_CODE,
         when_not_to_use=("A single goal or task (use create_quest_goal). A strategy the user did "
                          "not ask for: suggest it instead."),

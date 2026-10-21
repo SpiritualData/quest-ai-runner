@@ -12,12 +12,12 @@ There are two kinds, and the model sees both side by side:
   `send_quest_email`, and `file_email_draft`, which files one email draft into the key owner's
   Approval Queue in the Quest app (`POST /api/email-drafts`); nothing is sent until a person
   approves it there. And the **quest-data tools**, the ONLY way an AI changes a quest's own data,
-  one tool per thing it writes: `update_quest_outcome` (the vision statement),
+  one tool per thing it writes: `update_quest_outcome` (the intent's end state), `update_quest_name`,
   `update_quest_purpose`, `update_quest_current_state`, `update_quest_preferences`,
   `update_quest_acceptance_criteria`, `update_quest_scope`, `update_quest_goal_statement`,
   `update_quest_completion_criteria`, `add_quest_measurable_outcome`, `create_quest_goal`,
   `add_quest_strategy`, `create_quest_habit`, and for the Experiments section `create_quest_experiment`, `update_quest_experiment` and `delete_quest_experiment` (a two-step delete: preview, then `confirm_delete`; never the default question) (read or search them first with the read-only `find_quest_experiments`, which matches words across question, context, expectations (hypotheses), purpose, sub-questions, assumptions and conclusion; experiments are not quest fields, so they use the section's own routes and are created or changed only when the user asked). Each tool's description carries the writing
-  standard for that one field or item, from `core/quest_field_instructions.py` (goals carry a
+  standard for that one field or item, plus the short overview of what a quest is (an instance of ESOI for one intent, never a to-do list). The field standards are built from `core/quest_field_guidance.yaml`, a byte-identical copy of the backend's `app/prompts/quest_field_guidance.yaml` (the one source of truth; refresh it with `scripts/sync_quest_field_guidance.py`, which `--check` verifies); only goals and habits, which are Implementations in motion rather than fields, are written in `core/quest_field_instructions.py` (goals carry a
   nuance per period: day, week, month, quarter, year), so the model reads how to write a good
   value at the moment it chooses the write. Field writes declare `actor="ai"` plus the structured
   `user_asked_for_this_field` verdict, and Quest's AI field-write gate decides whether they apply

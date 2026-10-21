@@ -170,9 +170,10 @@ def _count_line(n: int, one: str, many: str) -> str:
 def _quest_label(quest: Dict[str, Any], quest_id: str) -> str:
     """A quest said the way its owner would say it: its outcome, or the id if it has none.
 
-    The outcome IS the quest's name in the product (a quest is stated as the outcome it is for), so
-    this is the phrase the person recognizes. Truncated, because an outcome can be a paragraph and
-    this goes in a one-line report.
+    The outcome is the intent's end state, the sentence the person sees most often on the quest,
+    so this is a phrase they recognize (the short ``name`` field is a separate label this report
+    does not read). Truncated, because an outcome can be a paragraph and this goes in a one-line
+    report.
     """
     label = str(quest.get("outcome") or "").strip().splitlines()[0] if quest.get("outcome") else ""
     if not label:

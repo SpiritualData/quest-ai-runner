@@ -68,7 +68,8 @@ class QuestsMixin:
             return []
 
     def edit_quest_field(self, quest_id: str, fields: Dict[str, Any], *,
-                         actor: str = "ai", user_requested: bool = False) -> Dict[str, Any]:
+                         actor: str = "ai", user_requested: bool = False,
+                         human_statement: Optional[str] = None) -> Dict[str, Any]:
         """PATCH /api/quests/{quest_id}/field — owner-scoped edit of AI-determined quest fields.
 
         The OTHER write path, and the one to reach for when a field the team route refuses needs
@@ -98,14 +99,33 @@ class QuestsMixin:
         hold; never derive it by reading words out of model output. Pass ``actor="human"`` only
         when a person literally supplied this value. A backend that does not know the field
         ignores it and behaves exactly as before.
+
+        A quest's autopilot setting never decides whether a ``user_requested=True`` edit applies:
+        the person asked, so it applies directly. An edit the person did NOT ask for (the default,
+        ``user_requested=False``) is a proposal on every quest. ``human_statement`` is the
+        person's VERBATIM words asking for the edit (never invent them): a non-blank statement
+        counts as that request on its own and is recorded with the key id in the quest's
+        change history.
+
+        HOW EACH FIELD IS WRITTEN: read ``field_guidance()`` (or the ``field_guidance`` key this
+        method returns for the last field written, and that a refused write returns beside its
+        ``decision_id``) BEFORE you produce a value for ``outcome``, ``acceptance_criteria``,
+        ``current_state``, ``preferences``, ``purpose``, ``strategies``, ``measurable_outcomes`` and
+        the other AI-determined fields. In short: ``outcome`` is an end state that gets reached at
+        some point and then holds, not a permanent quality and not a task; ``acceptance_criteria``
+        are high level indicators that the end state is reached (a number, threshold or named
+        measurement), never tasks or a restatement of the latest request; ``current_state`` is the problems and the solutions
+        already tried, not a task log.
         """
         result: Dict[str, Any] = {}
         for field_name, value in fields.items():
+            body: Dict[str, Any] = {"field_name": field_name, "value": value,
+                                    "actor": actor, "userRequested": bool(user_requested)}
+            if (human_statement or "").strip():
+                body["humanStatement"] = human_statement
             try:
                 result = self._request(
-                    "PATCH", f"/api/quests/{quest_id}/field",
-                    body={"field_name": field_name, "value": value,
-                          "actor": actor, "userRequested": bool(user_requested)}) or {}
+                    "PATCH", f"/api/quests/{quest_id}/field", body=body) or {}
             except (QuestApiError, QuestNotConfigured) as e:
                 log.warning("edit_quest_field failed for quest %s field %s: %s",
                            quest_id, field_name, e)
@@ -116,6 +136,21 @@ class QuestsMixin:
                          field_name, quest_id, result.get("reason"), result.get("decision_id"))
                 return result
         return result
+
+    def field_guidance(self) -> Dict[str, Any]:
+        """GET /api/quests/field-guidance: how every AI-determined quest field must be written.
+
+        Returns ``{"version", "universal_rules": [...], "fields": {field: {label, esoi, summary,
+        rules, good, bad, does_not_belong}}, "aliases"}``. It is the same text the backend shows its
+        own AI whenever it creates or changes one of these fields, kept in one YAML file in the
+        backend. Read it before writing a field through ``edit_quest_field`` or ``start_quest``.
+        Returns {} when the backend predates the endpoint.
+        """
+        try:
+            return self._request("GET", "/api/quests/field-guidance") or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("field_guidance failed: %s", e)
+            return {}
 
     def start_quest(self, *, category_id: str,
                     outcome: Optional[str] = None,
@@ -153,6 +188,12 @@ class QuestsMixin:
         quest in Application Engineering"). When it is non-blank the quest is created now, once, and
         the words are stored as audit. Pass only what the person actually said, never invented or
         paraphrased words. Omit it to have the request held for their approval.
+
+        HOW EACH FIELD IS WRITTEN: call ``field_guidance()`` first and write ``outcome``,
+        ``acceptance_criteria``, ``current_state`` and ``preferences`` to it. The response (and a held
+        request's body) echoes ``field_guidance`` for the fields you sent. The outcome is an end
+        state that gets reached, not a permanent quality; the acceptance criteria are high level
+        indicators of that end state with a number or named measurement, never tasks.
         """
         self._require()
         body: Dict[str, Any] = {"category_id": category_id, "creation_mode": creation_mode}

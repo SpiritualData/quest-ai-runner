@@ -172,3 +172,20 @@ def test_edit_quest_field_stops_and_returns_empty_on_first_failure():
     assert result == {}
     # Never silently reports the earlier successful write as the whole call's result.
     assert len(seen) == 2
+
+
+# --- human_statement and field guidance ------------------------------------------------------
+
+def test_edit_quest_field_sends_the_persons_words_only_when_given():
+    client, calls = client_capturing_calls()
+    client.edit_quest_field("quest_1", {"outcome": "New"}, user_requested=True)
+    assert "humanStatement" not in calls[0]["body"]
+    client.edit_quest_field("quest_1", {"outcome": "New"}, human_statement="yes, change it")
+    assert calls[1]["body"]["humanStatement"] == "yes, change it"
+    assert calls[1]["body"]["userRequested"] is False
+
+
+def test_field_guidance_reads_the_backend_endpoint():
+    client, calls = client_capturing_calls()
+    client.field_guidance()
+    assert calls[0]["method"] == "GET" and calls[0]["path"] == "/api/quests/field-guidance"

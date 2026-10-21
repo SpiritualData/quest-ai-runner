@@ -109,7 +109,7 @@ where = ["."]
 include = ["quest_ai_runner*"]
 
 [tool.setuptools.package-data]
-quest_ai_runner = ["prompts/*.md", "esoi_selection.json"]
+quest_ai_runner = ["prompts/*.md", "esoi_selection.json", "core/quest_field_guidance.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evaluation/components"]

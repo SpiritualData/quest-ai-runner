@@ -1,0 +1,320 @@
+# How an AI writes each quest field: the ONE source of truth.
+#
+# Loaded by app/business/quests/field_guidance.py (field_guidance, guidance_text). Every path that
+# creates or changes one of the fields in ai_field_writes.AI_DETERMINED_FIELDS delivers the entry
+# for that field before the value is produced, echoes it in the API response, and shows it on the
+# approval card. A structural test (tests/test_quest_field_guidance_registry.py) fails when a field
+# here is missing or a registered writer path stops delivering it. Edit the text HERE only.
+#
+# GROUNDING. The vocabulary is ESOI (Evolvable Structure that Optimizes Intent; see the
+# evolvable-structure skill). ESOI specifies an INTENT as Problems, Solutions, Implementations,
+# Ideals and Metrics:
+#   Problem         what motivated the intent: a challenge, or how an ideal is not yet reached.
+#   Solution        how one or more problems can be addressed to fulfill the intent.
+#   Implementation  the built approach, design or tool that carries out a solution (an alternative).
+#   Ideal           the future state the intent implies, in one dimension, with hints of measurement.
+#   Metric          a practical way to measure the distance between an implementation and an ideal.
+# A quest is one instance of ESOI for one intent (see what_a_quest_is below; the Quest app itself is a
+# Solution inside an intent about quests). Its fields map onto that specification:
+#   outcome              -> the intent's end state (its vision)
+#   acceptance_criteria  -> the intent's Metrics (high level indicators that the end state is reached)
+#   current_state        -> the intent's Problems, plus the Solutions already tried and how they went
+#   preferences          -> the Implementations the person prefers, plus inspiration for Metrics
+#   purpose              -> the Ideal the intent serves (why it matters)
+#   strategies           -> candidate Solutions toward the intent
+# The rest (name, measurable_outcomes, quest_goal, quest_completion_criteria) are DRAFTS in the same
+# style, pending the owner's review.
+#
+# Style: no em dashes anywhere in this file. Each entry has:
+#   label, esoi (the definition in ESOI terms), summary (one line, shown on approval cards),
+#   rules, good, bad, does_not_belong.
+
+version: 1
+
+# What a quest is, in ESOI terms. `full` is served by GET /api/quests/field-guidance and shown on the
+# approval card; `short` (2 to 3 sentences) opens every LLM prompt that carries field guidance.
+# Every other place that explains what a quest is renders one of these two, it never restates them.
+what_a_quest_is:
+  short: >-
+    The Quest app is a Solution inside an intent about quests: a structure that helps a person
+    specify and fulfill an intent. A single quest is one instance of ESOI (Evolvable Structure that
+    Optimizes Intent) for ONE intent of the person, so its fields are the intent's specification
+    (end state, Ideal, Problems and Solutions tried, candidate Solutions, preferred Implementations,
+    Metrics), not a to-do list. Plans, goals and habits are Implementations in motion, and notes
+    and progress are the feedback loop in which the intent and the structure evolve together.
+  full: >-
+    The Quest app is a Solution inside an intent about quests. It is the structure that helps a person
+    specify and fulfill an intent. A single quest is one INSTANCE of ESOI (Evolvable Structure that
+    Optimizes Intent) for one intent of the person, and ESOI specifies an intent as Problems,
+    Solutions, Implementations, Ideals and Metrics. The quest's fields are that specification:
+    the outcome is the intent's end state (reached at some point, not forever); the purpose is the
+    Ideal it serves; the current state holds the Problems and the Solutions already tried; the
+    strategies are candidate Solutions; the preferences are the preferred Implementations plus
+    inspiration for Metrics; the acceptance criteria are the Metrics that show the end state is
+    reached. The plan, goals and habits are Implementations in motion: the work that carries a
+    chosen Solution out. Notes and progress are the feedback loop in which the intent and the
+    structure evolve together: evidence from the work updates the Problems, Solutions and Metrics,
+    and the intent itself can change. A quest is therefore never a to-do list or a task container;
+    tasks, requests and progress belong to goals, habits and notes.
+
+universal_rules:
+  - "Write in the person's own words. Keep their specific nouns, names, numbers and dates."
+  - "Specific beats inspiring. No filler, no exclamation marks, no emoji, no em dashes."
+  - "Never invent a fact, number, date or constraint the person did not give and the record does not show."
+  - "Keep what is already in the field and still true. A new fact is added to the field, it does not replace it."
+  - "Only change a field the person asked to change. Anything else you notice is a suggestion, not an edit."
+  - "A single message the person just sent is evidence about the quest, not the quest. Never turn the latest request into a field value because it is the latest thing said."
+
+fields:
+  outcome:
+    label: Outcome (the quest's intent)
+    esoi: >-
+      The intent's end state: a condition that is reached at some point in the future and is not
+      forever. For a life-design intent the end state is near the end of life; otherwise it is
+      bounded in time. It is the vision the whole quest serves, so it names the thing and the result.
+    summary: "One sentence naming an end state that gets reached, not a permanent quality, not a task."
+    rules:
+      - "One sentence, short, in the present tense, written as the reached end state."
+      - "Name the specific thing and the result. Hint at how anyone would know it is real, without literal metrics (those are acceptance criteria)."
+      - "Describe a condition that is achieved in the future and then holds. Do not describe a permanent quality ('has an excellent X', 'is always Y')."
+      - "Short and specific to this one intention: ideally under 20 words, one sentence, naming its niche. Drop the methods and means (structure, coaching, protocols) and keep the result."
+      - "One intention per sentence. Treat 'and' as a red flag unless it only clarifies the scope of one thing."
+      - "Write the reached state as already true, with no gerund or in-progress wording (no building, creating, developing, working toward, 'I am becoming')."
+      - "Keep the person's own wording when it already meets all of this, and change nothing."
+      - "Never rewrite it because of small work inside the quest: a task, a progress note, one new goal, the latest request."
+    good:
+      - "Quest's user experience retains thousands of engaged users."
+      - "I have demonstrated the full range of my psychic ability potential in this life."
+      - "The systems I initiated have brought expanded worldviews across most of the world's population."
+    bad:
+      - "Quest has an excellent user experience."
+      - "Quest has an excellent user experience: bugs found in daily use are logged here as tasks and fixed promptly."
+      - "I am working toward building better systems."
+      - "I am creating systems where truth claims and theories are ranked by the data and diverse perspectives, so people think for themselves and parapsychology is accepted broadly across all countries."
+    does_not_belong:
+      - "Tasks, to-dos, or how to get there."
+      - "How Quest or any of its features is used."
+      - "Literal metrics or thresholds (acceptance criteria hold those)."
+      - "Permanent qualities that never get reached."
+
+  name:
+    label: Name (short quest label)
+    esoi: >-
+      A short phrase that distinguishes the topic of this intent from the person's other intents.
+      It labels the intent; it does not state the end state.
+    summary: "Two to five words, a noun phrase from the person's own niche."
+    rules:
+      - "Two to five words, at most about 40 characters, a noun phrase in the person's own words."
+      - "Draw it from the niche in the outcome ('Barefoot running'), not from a category word ('Health')."
+      - "A label, not a sentence: no verb phrase, no 'I', no trailing period."
+      - "If the person typed a name, never change it."
+    good:
+      - "Barefoot running"
+      - "Psychic ability demonstration"
+    bad:
+      - "Improving my overall health and wellbeing journey"
+      - "Health"
+    does_not_belong:
+      - "A full sentence or the vision statement."
+      - "Dates, numbers or status."
+
+  acceptance_criteria:
+    label: Acceptance criteria (the intent's metrics)
+    esoi: >-
+      The intent's Metrics: measurable indicators that the end state is reached. Each one is
+      verifiable by anyone, with a number, a threshold or a named measurement. They are HIGH LEVEL:
+      they clarify the intent itself by saying how anyone would know the outcome is true.
+    summary: "Three to six high level pass or fail indicators of the end state, each with a number, threshold or named measurement. Never tasks."
+    rules:
+      - "Three to six lines. Each line is one pass or fail indicator of the END STATE that a stranger could verify without asking anyone."
+      - "Each line carries a number, threshold, date or named measurement or artifact."
+      - "Describe the world when the quest is done, never activities, tasks or process ('is logged', 'will review')."
+      - "Keep them high level. They clarify the intent itself, so they stay true however the work is done."
+      - "Never write a criterion from the latest thing the person asked for. A single request, a to-do or a task is not an indicator of the end state, however recent. This is the most common mistake."
+      - "No vague words (improves, better, promptly, shrinks, robust) unless a measure is given."
+      - "Each line stands alone and does not restate the outcome."
+      - "Keep the person's existing criteria unless they asked to change them. Add or revise only what they asked about."
+    good:
+      - "Zero open bugs marked high priority older than 14 days."
+      - "At least 2,000 users are active in a given week for 12 consecutive weeks."
+      - "Median time from sign up to first completed goal is under 10 minutes."
+    bad:
+      - "Every bug is logged here."
+      - "The open bug list shrinks."
+      - "Sort the quest list by priority by default."
+      - "Reply to the investor email by Friday."
+    does_not_belong:
+      - "A single request the person just made, a task or a to-do (the narrow task-like criterion written from whatever they just asked is the typical failure)."
+      - "Activities, process, or who does what."
+      - "Restatements of the outcome."
+
+  current_state:
+    label: Current state (problems and solutions tried)
+    esoi: >-
+      The intent's Problems (what motivated it, what stands between here and the end state, who has
+      the problem, why it is hard) plus the Solutions or attempts already tried and how they went.
+      High level: where the intent stands, not what happened this week.
+    summary: "The problems, and the solutions already tried with how they went. High level, not a task log."
+    rules:
+      - "State the problems plainly: what is in the way, who it affects, why it is hard to resolve."
+      - "List attempts already made and how each went, including what did not work."
+      - "Facts, not feelings or advice. No plan or recommendations."
+      - "Lead with numbers the person gave, dated when they may go stale ('as of 3 Oct 2026')."
+      - "When updating, keep earlier facts that are still true and mark superseded ones with the new value and date."
+      - "High level. Never turn the latest request or a recent to-do into a line here."
+    good:
+      - "Churn is high in the first week: 41 percent of new users never complete a goal (as of 3 Oct 2026). Onboarding emails were tried in September and raised week-one return from 22 to 27 percent. A shorter signup was tried and made no difference."
+    bad:
+      - "Need to fix the sort order of the quest list."
+      - "Today I asked the AI to log a bug about the calendar."
+      - "The user is motivated but faces some challenges."
+    does_not_belong:
+      - "Tasks, requests, or the status of individual to-dos."
+      - "Recommendations or the plan (strategies hold candidate solutions)."
+      - "Feelings or generic motivation."
+
+  preferences:
+    label: Preferences (preferred implementations and metric inspiration)
+    esoi: >-
+      Which Implementations (approaches, designs, tools, ways of working) the person prefers or
+      refuses, plus inspiration for Metrics: what they would like measured and benchmarks they
+      admire. Principles that should shape any implementation, such as design principles, go here.
+    summary: "Preferred and refused approaches, tools and design principles, plus what they would like measured."
+    rules:
+      - "Write each preference as a checkable statement a plan could visibly respect or violate ('no paid coaching', 'weekly checklist format')."
+      - "Include principles the person holds for how the thing should be built or done."
+      - "Include what they would like measured and benchmarks they admire, as inspiration for metrics."
+      - "Record only what the person said or chose. Do not infer personality traits."
+    good:
+      - "Prefers a small team and open source tools. Design principle: every screen must work with one hand on a phone. Admires Linear's weekly cycle time as a measure."
+    bad:
+      - "Prefers a balanced approach that fits their lifestyle."
+      - "Wants the AI to add a dark mode to the settings page."
+    does_not_belong:
+      - "Tasks or requests."
+      - "Facts about the current situation (current state holds those)."
+
+  preferences_text:
+    alias_of: preferences
+
+  purpose:
+    label: Purpose (the ideal it serves)
+    esoi: >-
+      The Ideal this intent serves: why it matters, in the person's own reasons, and what it would
+      be like when the ideal is reached.
+    summary: "One or two sentences on why it matters, in the person's own reasons."
+    rules:
+      - "One or two sentences."
+      - "Use only reasons the person stated or clearly implied. Never supply a generic motive."
+      - "Name who benefits when it is not only the person."
+    good:
+      - "My father had a heart attack at 55. I want to show myself I can build the endurance he never had and keep up with my kids."
+    bad:
+      - "To become the best version of myself."
+    does_not_belong:
+      - "Goals, tasks or metrics."
+      - "A restatement of the outcome."
+
+  strategies:
+    label: Strategies (candidate solutions)
+    esoi: >-
+      Candidate Solutions toward the intent: distinct ways one or more of its problems could be
+      addressed. Each says what it is for and how it would help; it does not specify the built
+      implementation.
+    summary: "Distinct candidate approaches, each tied to a problem it addresses."
+    rules:
+      - "Each strategy is a different way to address a stated problem, with a short title and a description of why it would work."
+      - "Ground each in the current state and preferences. Respect the person's constraints."
+      - "Offer genuinely different alternatives, not one idea reworded."
+      - "Do not mark a strategy accepted for the person."
+    good:
+      - "Weekly cohort onboarding call: addresses week-one churn by giving new users a human first step. Hypothesis: a live walkthrough raises goal completion in week one."
+    bad:
+      - "Work hard and stay consistent."
+      - "Fix the sort order bug."
+    does_not_belong:
+      - "Tasks or to-dos (goals and tasks carry the doing)."
+      - "The outcome or the metrics restated."
+
+  measurable_outcomes:
+    label: Measurable outcomes (trackable metrics) [DRAFT, pending owner review]
+    esoi: >-
+      The Metrics that can be tracked numerically as a checklist, each derived from an acceptance
+      criterion or a named measurement: one metric, a target and a unit.
+    summary: "Each item is one countable metric with a target and a unit."
+    rules:
+      - "Each item names one metric, a target value and a unit, and a baseline and date when known."
+      - "Prefer result metrics over effort metrics, with at most one effort metric."
+      - "Add an item only when the person asked, or the quest is being specified for the first time. Never reword, merge or delete existing items."
+      - "A new goal gets its own criteria instead of a new quest-level item."
+    good:
+      - "Reach 2,000 weekly active users (baseline 640 on 3 Oct 2026)."
+    bad:
+      - "Be more consistent with posting."
+      - "Reply to the investor email."
+    does_not_belong:
+      - "Tasks or one-off requests."
+      - "Vague aspirations without a number."
+
+  quest_goal:
+    label: Quest goal [DRAFT, pending owner review]
+    esoi: >-
+      The end state made operational: the outcome with its horizon and the main Solution being
+      pursued. It never introduces a different goal than the outcome.
+    summary: "The outcome with a horizon and the main approach, in one or two sentences."
+    rules:
+      - "One or two sentences: what will be reached, by when, and by what main approach."
+      - "Derive it from the outcome, current state and strategies. Do not introduce a different goal."
+      - "Include the horizon when known."
+    good:
+      - "Quest's user experience retains thousands of engaged users by the end of 2027, through a redesigned first week and weekly cohort onboarding."
+    bad:
+      - "Achieve success."
+      - "Fix the open bugs this week."
+    does_not_belong:
+      - "Tasks or this week's to-dos."
+      - "A goal that differs from the outcome."
+
+  quest_completion_criteria:
+    label: Quest completion criteria [DRAFT, pending owner review]
+    esoi: >-
+      The Metric thresholds whose satisfaction marks the quest itself complete, drawn from the
+      acceptance criteria, plus any closing step.
+    summary: "One to three checkable conditions that mark the whole quest done."
+    rules:
+      - "One to three conditions, each checkable on a single day with a yes or no."
+      - "Consistent with the acceptance criteria and never looser than them."
+      - "A closing step (a review written, a handover done) is allowed when it is checkable."
+    good:
+      - "All acceptance criteria met for 12 consecutive weeks, and a one-page retrospective written in the quest notes."
+    bad:
+      - "When I feel done."
+      - "When the current to-do list is empty."
+    does_not_belong:
+      - "Tasks or progress notes."
+      - "Anything not checkable with a yes or no."
+
+# Fields an AI writes that the AI field-write gate does not cover (ai_field_writes.AI_DETERMINED_FIELDS),
+# so the writing tool itself holds the line. Same entry shape; served as `other_fields`.
+other_fields:
+  scope:
+    label: Scope (routing)
+    esoi: >-
+      The boundary of this intent for routing work: which kinds of work, names, topics and keywords
+      belong to this quest and which belong to a neighbouring intent. It is not a restatement of the
+      end state.
+    summary: "A short routing description: what is in scope by name, and the nearest topic that is out."
+    rules:
+      - "Use the exact names that will appear in requests (product names, people, folders), since routing matches on them."
+      - "Name what is in scope. When a nearby topic belongs to a different quest, add one out-of-scope line for it so similar quests are not confused."
+      - "A single sentence or a phrase list of about 25 terms at most. Do not describe the app or explain reasoning."
+      - "Name a person only when that person has a large, specific role in this quest's work. Never list team members, owners or everyone with access."
+      - "Use only the information provided. Do not restate the outcome: scope is about routing work, not the goal."
+    good:
+      - "In scope: the bakery's online orders, the web store, supplier emails and invoices, the weekly price list. Out of scope: the catering side business (its own quest), personal finances."
+    bad:
+      - "Anything related to this project."
+      - "General tasks related to the business."
+    does_not_belong:
+      - "The outcome or vision statement restated."
+      - "A description defined only by what it excludes."
