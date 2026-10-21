@@ -155,6 +155,21 @@ DEFAULT_DEEP_MAX_TURNS = 30
 DEEP_CONTINUATION_TURN_MULTIPLIER_CAP = 4
 
 
+# AUTOMATIC FOLLOW-UP RUNS (see ``runner/auto_followup.py``). When a task's deep run ends with the
+# original ask clearly unfinished (the verifier or the worker named what remains) and nothing is
+# waiting on a person, the task executor starts another deep run for the remaining items instead of
+# ending the task with "what is left" text. Bounded two ways: this many follow-up runs per task
+# execution (0 turns the behaviour off), and a token budget over the whole chain. The budget is the
+# per-run goal-loop budget (``OrchestratorConfig.deep_goal_token_budget``, 300k by default) for the
+# first run plus one more for each follow-up, so the chain can never cost more than its cap allows.
+AUTO_FOLLOWUP_MAX_RUNS = 3
+AUTO_FOLLOWUP_TOKEN_BUDGET = 300_000 * (1 + AUTO_FOLLOWUP_MAX_RUNS)
+# How much of the original ask and of the previous run's report a follow-up brief carries.
+AUTO_FOLLOWUP_ASK_MAX_CHARS = 3000
+AUTO_FOLLOWUP_DONE_MAX_CHARS = 3000
+AUTO_FOLLOWUP_REMAINING_MAX_CHARS = 1500
+
+
 DEFAULT_MAX_GATHER_CHARS = 6000
 
 

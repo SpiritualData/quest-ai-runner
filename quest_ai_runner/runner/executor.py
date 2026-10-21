@@ -56,11 +56,13 @@ from .executor_support import (
     _autopilot_composed_text,
     _is_autopilot_pass,
     _model_used_note,
+    _run_accepts,
     across_pass_resume,
     task_scope_tags,
     terminal_session_id,
 )
 from .executor_context import ContextViewMixin
+from .executor_followup import FollowUpMixin
 from .executor_pauses import PausesMixin
 from .executor_reporting import ReportingMixin
 from .run_operations import pinned_operations
@@ -68,7 +70,7 @@ from .run_operations import pinned_operations
 
 
 
-class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
+class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin):
     def __init__(self, client, orchestrator: Orchestrator, *,
                 quest_folder_map: Optional[Dict[str, str]] = None,
                 autopilot_pass: Optional[Any] = None,
@@ -513,9 +515,10 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
                 control_kwargs["run_control"] = self._build_run_control(task_id)
         except (TypeError, ValueError):
             pass
-        try:
-            result: OrchestratorResult = self._orch.run(
-                text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
+        def run_once(brief: str, resume: Optional[str],
+                     extra: Optional[Dict[str, Any]] = None) -> OrchestratorResult:
+            return self._orch.run(
+                brief, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
                 sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
                 context_meta=context_meta, working_dir_override=working_dir_override,
                 conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check,
@@ -524,13 +527,24 @@ class TaskExecutor(ContextViewMixin, PausesMixin, ReportingMixin):
                 # It rides the SAME plumbing as the within-run turn-budget continuation (the deep
                 # loop's ``resume_session``, forwarded to a runner that accepts it), so there is one
                 # resume path, not two. None = today's cold start, byte-for-byte.
-                resume_session_id=resume_session_id,
+                resume_session_id=resume,
                 # This text is a QUEUED TASK's brief, not something the human typed at us this
                 # turn, so the user-veto gate must not read it. See the no-action gate in
                 # Orchestrator.run: a work brief full of legitimate instructions ("stop asking",
                 # "do not silently drop them") otherwise degrades the run to an answer with no
                 # tools, and it reports as though it had looked.
-                message_is_user_turn=False, **control_kwargs)
+                message_is_user_turn=False, **control_kwargs, **(extra or {}))
+
+        decisions_before = self._open_decision_ids(quest_id)
+        try:
+            result: OrchestratorResult = run_once(text, resume_session_id)
+            # AUTOMATIC FOLLOW-UP RUNS: while the ask is clearly unfinished and nothing waits on a
+            # person, run again for the remaining items (see ``runner/auto_followup.py``).
+            result = self._follow_up_while_incomplete(
+                result, task, task_id, run_once, ask=self._task_text(task) or text,
+                quest_id=quest_id, run_started=run_started, resume_session_id=resume_session_id,
+                supports_deep_goal=_run_accepts(self._orch.run, "deep_goal"),
+                decisions_before=decisions_before)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             # A run that raises BECAUSE it was interrupted must not be reported as failed: check
             # (unthrottled, this is the terminal path) whether the task was cancelled meanwhile.

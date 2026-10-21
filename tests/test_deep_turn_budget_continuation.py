@@ -285,8 +285,10 @@ def test_a_run_that_falls_short_still_reports_what_it_did():
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
         {"met": False, "reason": "the tests were never written"},
-        {"met": False, "reason": "the tests were never written"},
-        {"met": False, "reason": "the tests were never written"},
+        # Distinct gaps: two verdicts that repeat one reason are a STALL (the loop stops and says so,
+        # covered in the stall tests); this test is about a run that keeps falling short in new ways.
+        {"met": False, "reason": "the poller still has no retry handling for the queue"},
+        {"met": False, "reason": "the documentation page was not updated at all"},
     ])
     runner = ResumableRunner([
         DeepResult(met=False, output="Wrote engine.py and wired the poller.",
@@ -299,7 +301,8 @@ def test_a_run_that_falls_short_still_reports_what_it_did():
     client = MockQuestClient([])
     brain = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
                          registry=ModelRegistry(provider), deep_runner=runner,
-                         config=OrchestratorConfig(deep_goal_max_iterations=2))
+                         config=OrchestratorConfig(deep_goal_max_iterations=2,
+                                                   auto_followup_max_runs=0))  # one run's report
     out = TaskExecutor(client, brain).execute({"id": "t9", "text": "build X"})
 
     # The run worked but fell short: "incomplete" (a technical error would be "failed").
@@ -307,7 +310,8 @@ def test_a_run_that_falls_short_still_reports_what_it_did():
     reported = client.reports[0][2]
     assert "Wrote engine.py and wired the poller." in reported
     assert "unfinished" in reported            # never presented as done work
-    assert "the tests were never written" in reported or "turn budget" in reported
+    # the report names the LATEST open gap the verifier gave, not the first
+    assert "the poller still has no retry handling" in reported or "turn budget" in reported
 
 
 def test_the_grown_budget_is_capped():
@@ -316,7 +320,11 @@ def test_the_grown_budget_is_capped():
     from quest_ai_runner.core.orchestrator import DEEP_CONTINUATION_TURN_MULTIPLIER_CAP as CAP
 
     provider = ScriptedProvider(plans=[PLAN],
-                                verdicts=[{"met": False, "reason": "still not done"}] * 8)
+                                verdicts=[{"met": False, "reason": reason} for reason in (
+                                    "the engine module is missing", "the poller has no retry handling",
+                                    "the config schema was never added", "no tests exist for the queue",
+                                    "the docs page was not written", "the migration is absent",
+                                    "the cli entry point is not wired", "the release notes are empty")])
     runner = ResumableRunner([
         DeepResult(met=False, output=f"pass {i}", limit_hit=True, session_id="sess-1")
         for i in range(8)

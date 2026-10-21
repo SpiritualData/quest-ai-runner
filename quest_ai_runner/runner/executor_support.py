@@ -144,6 +144,14 @@ def terminal_session_id(result: OrchestratorResult) -> Optional[str]:
     return None
 
 
+def _run_accepts(fn: Any, name: str) -> bool:
+    """Whether the callable ``fn`` takes a parameter called ``name`` (False when it cannot be told)."""
+    try:
+        return name in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+
+
 def utc_stamp(moment) -> str:
     """An aware datetime as "YYYY-MM-DDTHH:MM:SSZ" (the backend's start_at form)."""
     from datetime import timezone as _tz

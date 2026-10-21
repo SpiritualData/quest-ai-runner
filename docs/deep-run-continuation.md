@@ -101,6 +101,40 @@ results' `error` strings and drop their `output`, which is how a task with two f
 reached its owner as one line of error text. The work now travels with the failure under a heading
 that says plainly it is unfinished and unverified, so it can be found and picked up.
 
+## Automatic follow-up runs for an unfinished task
+
+Everything above happens inside one `Orchestrator.run`. When that run still ends with the original
+ask clearly unfinished, the task executor (`TaskExecutor.execute`) now starts another deep run for
+the remaining items, instead of ending the task with "what is left" text for a person to reply to.
+It sits in the executor, so it applies to every task origin (chat, the task modal, an autopilot pass,
+an API call): they all arrive as the same queued task.
+
+A follow-up starts only when all of these hold (`runner/auto_followup.py`, decided from structured
+fields of the result, never from the wording of anything the model wrote):
+
+1. The result is a deep run with an unmet goal, or an answer turn whose goal verdict is not met.
+2. It names what remains: the verifier's reason or next action (`verdict_reason`,
+   `verdict_next_action`), or the worker stopped on its turn limit (`limit_hit`).
+3. Nothing waits on a person: no open decision, no question only a person can answer
+   (`needs_person`), no failing tool, no stalled loop, no runner out of moves, no usage limit, no
+   launch failure, no handed-off work, no unverified result, and no new decision appeared on the
+   quest while it ran.
+4. The task was not cancelled or paused.
+5. The chain is under its cap, `OrchestratorConfig.auto_followup_max_runs` (default
+   `AUTO_FOLLOWUP_MAX_RUNS` = 3, 0 turns it off), and its token budget,
+   `auto_followup_token_budget` (default `AUTO_FOLLOWUP_TOKEN_BUDGET`, the per-run goal budget for
+   the first run plus one per follow-up; None disables the guard).
+
+The follow-up is another `Orchestrator.run` with `deep_goal` (straight to a deep run) and
+`resume_session_id` set to the previous run's session. Its brief carries the original ask, the
+previous run's own report and the explicit remaining items. A follow-up that fails keeps the earlier
+result and reports it; a usage limit or provider outage is handed back to the queue as usual.
+
+Every decision, to continue or not and why, is logged (`task <id> auto follow-up (n of N used): ...`)
+and written to the task's progress feed with the remaining items in `data.auto_followup`.
+
+Tests: `tests/test_auto_followup.py`.
+
 ## Why the tests did not catch it
 
 Every test built its turn-exhausted `DeepResult` with a non-empty `output=`, and the runner-level

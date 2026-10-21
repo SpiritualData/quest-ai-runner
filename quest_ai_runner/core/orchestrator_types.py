@@ -12,6 +12,8 @@ from .planner_prompt import DEFAULT_PLANNER_PROMPT_PROFILE
 from .adapters import DeepResult
 from .guard import ExecutionRecord
 from .orchestrator_constants import (
+    AUTO_FOLLOWUP_MAX_RUNS,
+    AUTO_FOLLOWUP_TOKEN_BUDGET,
     DEFAULT_CARD_MERGE_SIMILARITY,
     DEFAULT_DEEP_MAX_TURNS,
     DEFAULT_MAX_CONSECUTIVE_READS,
@@ -60,6 +62,13 @@ class OrchestratorConfig:
     # (then only the attempt cap applies). The consumer sets this from an env var so it is operator-
     # tunable. Default allows a few full deep attempts.
     deep_goal_token_budget: Optional[int] = 300_000
+    # AUTOMATIC FOLLOW-UP RUNS for a queued task (``runner/auto_followup.py``): when a task's deep
+    # run ends with the original ask clearly unfinished and nothing is waiting on a person, the task
+    # executor starts up to this many further deep runs for the remaining items. 0 turns it off.
+    auto_followup_max_runs: int = AUTO_FOLLOWUP_MAX_RUNS
+    # Token budget over the whole chain of runs (the first run plus its follow-ups); None disables
+    # the guard (then only the run cap applies).
+    auto_followup_token_budget: Optional[int] = AUTO_FOLLOWUP_TOKEN_BUDGET
     # The deep-worker MODEL LADDER: models tried in order, escalating to a STRONGER one when a goal
     # is not met (the failure may be a model-capability gap). The deep worker is Claude Code, so
     # these are Claude models/aliases (fast -> strong, e.g. ["haiku","sonnet","opus"]). None = use the
