@@ -263,3 +263,15 @@ def test_executor_with_no_quest_gets_no_insights_and_reads_nothing():
     assert ex._fetch_quest_captures("") == ""
     assert client.calls == []
     assert not hasattr(ex, "_fetch_person_captures")
+
+
+def test_withheld_count_from_a_shared_quest_is_told_to_the_run_not_hidden():
+    payload = {"collection_id": "coll_1", "has_quests_field": True, "withheld": 2,
+               "items": [_entry("a", "ship the report")]}
+    ctx = collect_quest_insights(FakeQuestInsightsClient(payload=payload), "q1", now=NOW)
+    text = ctx.as_text()
+    assert ctx.withheld == 2 and "2 more assigned to this quest were held back" in text
+    assert "—" not in text
+    # An older backend sends no count, and a malformed one reads as none.
+    for body in ({"items": [_entry("a", "x")]}, {"withheld": "lots", "items": [_entry("a", "x")]}):
+        assert collect_quest_insights(FakeQuestInsightsClient(payload=body), "q1", now=NOW).withheld == 0

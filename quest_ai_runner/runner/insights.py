@@ -167,6 +167,10 @@ BLOCK_FOOTER = (
     "one cannot be acted on yet, say why in a sentence.")
 
 
+WITHHELD_LINE = ("({count} more assigned to this quest were held back because the quest is shared and "
+                 "they look personal. Do not ask for them or guess at them.)")
+
+
 def block_header(since: Optional[datetime], window_days: int = DEFAULT_WINDOW_DAYS) -> str:
     when = (f"since {since.strftime('%Y-%m-%d')}" if since
             else f"in the last {window_days} days")
@@ -192,6 +196,10 @@ class InsightsContext:
     window_start: Optional[datetime] = None
     # The quest these insights were assigned to.
     quest_id: str = ""
+    # How many assigned insights the server held back because this quest is shared and they read as
+    # personal or sensitive (the ``withheld`` count of the by-quest route). The run is told, so it
+    # neither guesses at them nor reports "no insights".
+    withheld: int = 0
 
     def has_any(self) -> bool:
         return bool(self.insights)
@@ -206,6 +214,8 @@ class InsightsContext:
             return ""
         lines = [block_header(self.since, self.window_days)]
         lines += [i.as_line() for i in self.insights]
+        if self.withheld:
+            lines.append(WITHHELD_LINE.format(count=self.withheld))
         lines.append(BLOCK_FOOTER)
         return "\n".join(lines)
 
@@ -262,6 +272,10 @@ def collect_quest_insights(client: Any, quest_id: str, *,
     if not isinstance(payload, dict):
         return ctx
     ctx.collection_id = str(payload.get("collection_id") or payload.get("collectionId") or "")
+    try:
+        ctx.withheld = max(0, int(payload.get("withheld") or 0))
+    except (TypeError, ValueError):
+        ctx.withheld = 0
     items = payload.get("items") or []
     if not isinstance(items, list):
         return ctx
