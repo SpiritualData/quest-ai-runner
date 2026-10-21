@@ -1,4 +1,4 @@
-"""Life-intent tools: the five operations, the client calls under them, and the no-churn rules.
+"""Life-intent tools: the six operations, the client calls under them, and the no-churn rules.
 
 The stub backend models what the real one does (the user-edit lock, the ask for a user-placed move,
 the digest gate, revisions), not just its reply shape, so a tool that printed a refusal as success
@@ -62,6 +62,13 @@ class StubIntentsBackend:
         row["revision"] += 1
         self.writes += 1
         return dict(row)
+
+    def create_sub_intent(self, record_id, name, opportunity, **kw):
+        self.sub_calls = getattr(self, "sub_calls", []) + [(record_id, name, opportunity, kw)]
+        if getattr(self, "direct", False):
+            return {"intent": {"intentId": "int_sub", "name": name}, "wroteChildSide": True,
+                    "wroteParentSide": True, "status": "active"}
+        return {"pending": True, "decisionId": "dec_sub"}
 
     def place_quest(self, quest_id, intent_id, **kw):
         if quest_id in self.placed_by_user:
@@ -179,6 +186,57 @@ def test_a_202_ask_from_the_server_is_surfaced():
     assert result.ok and "NOT done" in result.text and "dec_3" in result.text
 
 
+# --- sub-intents ---------------------------------------------------------------------------------
+
+def test_list_intents_names_the_parent_of_a_sub_intent():
+    backend = StubIntentsBackend()
+    backend.intents.append({"intentId": "int_s", "name": "Running", "visionStatement": "I run.", "questCount": 0,
+                            "arisesFrom": {"intentId": "int_a", "recordId": "esr_9", "reveal": "private"}})
+    result = invoke(intents.list_intents_spec, backend, {})
+    assert "1 top intents and 1 sub-intents" in result.text
+    assert "int_s Running [sub-intent of Health, record esr_9]" in result.text
+
+
+def test_a_quest_can_be_placed_under_a_sub_intent():
+    backend = StubIntentsBackend()
+    result = invoke(intents.place_quest_spec, backend, {"intent_id": "int_s"})
+    assert result.ok and "placed under intent int_s" in result.text
+    assert "sub-intent" in intents.place_quest_spec(CREDS).description
+
+
+def test_create_sub_intent_is_held_as_an_ask_not_done():
+    backend = StubIntentsBackend()
+    result = invoke(intents.create_sub_intent_spec, backend,
+                    {"record_id": "esr_9", "name": "Running", "opportunity": "Its own races and community."})
+    assert result.ok and "NOT done" in result.text and "dec_sub" in result.text
+    assert backend.sub_calls[0][:3] == ("esr_9", "Running", "Its own races and community.")
+
+
+def test_create_sub_intent_reports_a_direct_creation():
+    backend = StubIntentsBackend()
+    backend.direct = True
+    result = invoke(intents.create_sub_intent_spec, backend,
+                    {"record_id": "esr_9", "name": "Running", "opportunity": "x"})
+    assert result.ok and "int_sub" in result.text
+
+
+def test_create_sub_intent_needs_the_opportunity_and_a_short_one():
+    backend = StubIntentsBackend()
+    assert not invoke(intents.create_sub_intent_spec, backend, {"record_id": "esr_9", "name": "Running"}).ok
+    long = invoke(intents.create_sub_intent_spec, backend,
+                  {"record_id": "esr_9", "name": "Running", "opportunity": "x" * 401})
+    assert not long.ok and not hasattr(backend, "sub_calls")
+
+
+def test_create_sub_intent_refusal_is_not_success():
+    class Refusing(StubIntentsBackend):
+        def create_sub_intent(self, *a, **kw):
+            return {"refused": True, "status": 400, "code": "INVALID", "message": "name taken", "lockedFields": []}
+
+    result = invoke(intents.create_sub_intent_spec, Refusing(), {"record_id": "r", "name": "n", "opportunity": "o"})
+    assert not result.ok and "name taken" in result.text
+
+
 # --- the client: paths, wire shape and refusals --------------------------------------------------
 
 class Recorder(QuestClient):
@@ -226,6 +284,14 @@ def test_a_failed_write_is_never_an_empty_dict_and_a_failed_read_is_none():
     assert refusal_of(QuestApiError("plain", status=500))["message"] == "plain"
 
 
+def test_client_posts_a_sub_intent_in_camel_case_and_returns_the_202_unchanged():
+    client = Recorder(reply={"pending": True, "decisionId": "dec_1"})
+    out = client.create_sub_intent("esr_9", "Running", "Own races", vision_statement="I run.")
+    assert out == {"pending": True, "decisionId": "dec_1"}
+    assert client.sent[0][:2] == ("POST", "/api/intents/records/esr_9/sub-intents")
+    assert client.sent[0][3] == {"name": "Running", "visionStatement": "I run.", "opportunity": "Own races"}
+
+
 def test_the_client_returns_a_202_body_unchanged():
     client = Recorder(reply={"pending": True, "decisionId": "dec_1"})
     assert client.place_quest("q1", "int_a") == {"pending": True, "decisionId": "dec_1"}
@@ -235,7 +301,7 @@ def test_the_client_returns_a_202_body_unchanged():
 
 def test_writes_are_on_request_only_and_reads_are_not():
     specs = {n: b(CREDS) for n, b in intents.QUEST_INTENT_BUILDERS.items()}
-    assert {n for n, s in specs.items() if s.on_request_only} == {"refresh_spec", "edit_spec_record", "place_quest"}
+    assert {n for n, s in specs.items() if s.on_request_only} == {"refresh_spec", "edit_spec_record", "place_quest", "create_sub_intent"}
     assert not specs["list_intents"].mutates and not specs["get_spec"].mutates
     assert not hasattr(intents, "SPEC_KEEPING_PINS")   # no intents tool is pinned to an autopilot pass
 

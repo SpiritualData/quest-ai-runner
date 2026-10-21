@@ -1,9 +1,10 @@
 """Quest operations for top intents and their hidden ESOI specification.
 
-Role: five registry tools (see ``tools_quest_ops`` for how the registry shows an operation to a run).
+Role: six registry tools (see ``tools_quest_ops`` for how the registry shows an operation to a run).
 ``list_intents`` and ``get_spec`` read; ``refresh_spec`` asks the server to write or update a
 specification (one hash-gated call, so a run whose inputs did not change writes nothing);
-``edit_spec_record`` changes one record the AI wrote; ``place_quest`` puts a quest under a top intent.
+``edit_spec_record`` changes one record the AI wrote; ``place_quest`` puts a quest under an intent (a top intent or a sub-intent);
+``create_sub_intent`` asks for a new sub-intent under an implementation record of an intent.
 
 The server owns every rule: it refuses a field the person edited (FIELD_LOCKED) and holds a rename,
 a vision change or a move of a quest the person placed as an ask for them (HTTP 202). The tools only
@@ -21,6 +22,7 @@ from .tools_quest_ops import QUEST_OPERATION_BUILDERS, read_failure_reason, trim
 SUBJECT_TYPES = ("intent", "quest")
 REFRESH_REASONS = ("first_open", "autopilot", "onboarding", "chat", "task", "manual")
 OWNER_TYPES = ("user", "team", "org")
+OPPORTUNITY_MAX = 400
 
 OWNER_PARAMS = {
     "owner_type": {"type": "string", "enum": list(OWNER_TYPES),
@@ -75,6 +77,21 @@ def spec_line(record: Mapping[str, Any]) -> str:
             f"{derived}: {trim(label, 100)}{lock}")
 
 
+def parent_names(intents: Any) -> Dict[str, str]:
+    return {str(i.get("intentId")): str(i.get("name") or "") for i in intents}
+
+
+def intent_line(i: Mapping[str, Any], parents: Mapping[str, str]) -> str:
+    """One intent for the model; a sub-intent names its parent and the implementation it arises from."""
+    arises = i.get("arisesFrom") or {}
+    sub = ""
+    if arises:
+        parent = parents.get(str(arises.get("intentId")), "") or str(arises.get("intentId"))
+        sub = f" [sub-intent of {trim(parent, 60)}, record {arises.get('recordId')}]"
+    return (f"- {i.get('intentId')} {trim(i.get('name'), 80)}{sub}: {trim(i.get('visionStatement'), 120)} "
+            f"({i.get('questCount', len(i.get('quests') or []))} quests)")
+
+
 def list_intents_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -92,16 +109,19 @@ def list_intents_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
             return ToolResult(ok=True, data=overview, text=(
                 f"No top intents yet; {len(unsorted)} quests are unsorted. Never create a top intent "
                 f"yourself: they belong to the person."))
-        lines = [f"- {i.get('intentId')} {trim(i.get('name'), 80)}: {trim(i.get('visionStatement'), 120)} "
-                 f"({i.get('questCount', len(i.get('quests') or []))} quests)" for i in intents]
+        parents = parent_names(intents)
+        subs = sum(1 for i in intents if i.get("arisesFrom"))
+        lines = [intent_line(i, parents) for i in intents]
+        kinds = f"{len(intents) - subs} top intents" + (f" and {subs} sub-intents" if subs else "")
         return ToolResult(ok=True, data=overview, text=(
-            f"{len(intents)} top intents, {len(unsorted)} unsorted quests.\n" + "\n".join(lines)))
+            f"{kinds}, {len(unsorted)} unsorted quests.\n" + "\n".join(lines)))
 
     return ToolSpec(
         name="list_intents",
         handler=handler,
-        description=("List the person's (or a team's or organization's) top intents: id, name, vision "
-                     "statement and how many quests sit under each, plus how many quests are unsorted."),
+        description=("List the person's (or a team's or organization's) intents: id, name, vision "
+                     "statement and how many quests sit under each, plus how many quests are unsorted. "
+                     "A sub-intent shows its parent's name and the implementation record it arises from."),
         when_to_use=("You need the real top intents before placing a quest or refreshing a "
                      "specification, or the person asks what their intents are."),
         when_not_to_use="Creating or renaming an intent (the person does that). Never list from memory.",
@@ -273,8 +293,9 @@ def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     return ToolSpec(
         name="place_quest",
         handler=handler,
-        description=("Put a quest under one of the person's top intents (or back to unsorted by leaving "
-                     "intent_id empty). Moving a quest the person placed themselves is held as an ask "
+        description=("Put a quest under one of the person's intents, a top intent or a sub-intent (or back "
+                     "to unsorted by leaving intent_id empty). Pick the most specific intent the quest "
+                     "serves: a sub-intent when it fits, else its parent. Moving a quest the person placed themselves is held as an ask "
                      "for them."),
         when_to_use="Only when the person asks you to sort or move a quest.",
         when_not_to_use=("On your own initiative: moving a quest is the person's call, and the app does it "
@@ -282,13 +303,62 @@ def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                          "intent to fit a quest. Never re-sort quests the person has already placed."),
         parameters={"type": "object", "properties": {
             "quest_id": {"type": "string", "description": "The quest (defaults to this run's quest)."},
-            "intent_id": {"type": "string", "description": "A top intent id from list_intents; empty = unsorted."},
+            "intent_id": {"type": "string", "description": "Any intent id from list_intents, sub-intents included; empty = unsorted."},
             "implementation_id": {"type": "string",
                                   "description": "The implementation record this quest carries out, if known."},
             **OWNER_PARAMS}},
         mutates=True, workflow_step=False, origin="standard", on_request_only=True,
         keywords=("place", "move", "sort", "intent", "quest", "group", "unsorted"),
         context_args={"quest_id": "quest_id"}, timeout_seconds=45.0)
+
+
+def create_sub_intent_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        record_id = str(args.get("record_id") or "").strip()
+        name = str(args.get("name") or "").strip()
+        opportunity = str(args.get("opportunity") or "").strip()
+        if not record_id or not name or not opportunity:
+            return ToolResult(ok=False, text=(
+                "Needs record_id (an implementation record of the parent intent, from get_spec), name and "
+                "opportunity (why it earns its own intent)."))
+        if len(opportunity) > OPPORTUNITY_MAX:
+            return ToolResult(ok=False, text=f"opportunity is {len(opportunity)} characters; keep it under {OPPORTUNITY_MAX}.")
+        client = factory()
+        result = client.create_sub_intent(record_id, name, opportunity,
+                                          vision_statement=str(args.get("vision_statement") or "").strip())
+        if result.get("refused"):
+            return ToolResult(ok=False, text=refusal_text(result, record_id))
+        if result.get("pending") is True:
+            return ToolResult(ok=True, data=result, text=pending_text(result, f"the sub-intent '{trim(name, 60)}'"))
+        child = result.get("intent") or {}
+        return ToolResult(ok=True, data=result, text=(
+            f"Sub-intent {child.get('intentId')} '{trim(child.get('name') or name, 80)}' created "
+            f"(link {result.get('status')})."))
+
+    return ToolSpec(
+        name="create_sub_intent",
+        handler=handler,
+        description=("Ask for an implementation record of an intent to become its own sub-intent, with a "
+                     "name, a vision statement and the opportunity line saying why it earns its own "
+                     "intent. The server holds it as an ask for the person, so it is never created until "
+                     "they say yes."),
+        when_to_use=("The person asks you to split something out, or an implementation of an intent has "
+                     "opportunities of its own that the parent does not serve (ESOI: When to split into "
+                     "sub-intents)."),
+        when_not_to_use=("An implementation that only carries out the parent, with no opportunity of its "
+                         "own. A top intent (never create those). Repeating it while an ask is waiting."),
+        parameters={"type": "object", "required": ["record_id", "name", "opportunity"], "properties": {
+            "record_id": {"type": "string",
+                          "description": "The parent's implementation record (esr_...) from get_spec."},
+            "name": {"type": "string", "description": "The sub-intent's name."},
+            "vision_statement": {"type": "string", "description": "Its vision statement, in the person's voice."},
+            "opportunity": {"type": "string",
+                            "description": f"Why it earns its own intent, one or two sentences (max {OPPORTUNITY_MAX} characters)."}}},
+        mutates=True, workflow_step=False, origin="standard", on_request_only=True,
+        keywords=("sub", "intent", "split", "implementation", "opportunity", "nested", "child"),
+        timeout_seconds=45.0)
 
 
 def with_credentials(build):
@@ -301,6 +371,7 @@ QUEST_INTENT_BUILDERS = {
     "refresh_spec": with_credentials(refresh_spec_spec),
     "edit_spec_record": with_credentials(edit_spec_record_spec),
     "place_quest": with_credentials(place_quest_spec),
+    "create_sub_intent": with_credentials(create_sub_intent_spec),
 }
 STANDARD_TOOL_BUILDERS.update(QUEST_INTENT_BUILDERS)
 QUEST_OPERATION_BUILDERS.update(QUEST_INTENT_BUILDERS)

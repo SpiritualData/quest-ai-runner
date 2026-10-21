@@ -102,6 +102,16 @@ class IntentsMixin:
             body["ownerId"] = owner_id
         return self.intent_write("PUT", "/api/intents/placements", body)
 
+    def create_sub_intent(self, record_id: str, name: str, opportunity: str, *, vision_statement: str = "",
+                          reveal: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/intents/records/{recordId}/sub-intents: make an implementation record of an intent its
+        own intent. From an AI caller the server never creates it: it answers 202 ``{"pending": True,
+        "decisionId": ...}`` (an ask the person approves in "Asks for you"), which is returned unchanged."""
+        body: Dict[str, Any] = {"name": name, "visionStatement": vision_statement, "opportunity": opportunity}
+        if reveal:
+            body["reveal"] = reveal
+        return self.intent_write("POST", f"/api/intents/records/{record_id}/sub-intents", body)
+
     def intent_write(self, method: str, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         try:
             return self._request(method, path, body=body) or {}
