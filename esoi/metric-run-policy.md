@@ -32,7 +32,7 @@ approved.
   - Live arms (model calls: `classification`, `quest_ops`, `recipe_fast_path` real-model arms, `esoi_behavior` chat arm with the
     model judge, `esoi_judge`, `answer-a-turn` dev arm, `chat_quality`): run only when a decision depends on them: a new
     alternative, a selection change, or a suspected regression. Staged: 3 cases, then 10, then 30, by `--sample N` (a stratified
-    sample, the same cases each time) with `--max-calls`. A full run only if a decision still depends on it after the 30.
+    sample, the same cases each time) with `--max-calls`. A full run only if a decision still depends on it after the 30 (size is a cost choice, not an approval gate).
     - Pending Joshua's decision: whether this 3, 10, 30 ladder matches his "3/10/30 to 100%" staging. Proposed default: the
       ladder as written.
   - Cost first: estimate calls and price before the first stage and write it in the task.
@@ -40,15 +40,17 @@ approved.
   the dev arm (never real user data).
 - **Outputs:** a row in `results.csv` with `git_sha`, `cases_sha`, `model`, calls, tokens and cost.
 - **Effects:** model spend on live arms; the dev arm drives a development server only.
-- **Who approves spend:** approved by Joshua on 2026-10-19. A staged run on the cheapest tier against development, at the
-  3-case or 10-case stage, an AI may approve for itself, inside a call budget written in the task before the run. The cap is
+- **Who approves spend:** approved by Joshua on 2026-10-19 and widened on 2026-10-21 ("You don't need to ask me for every eval
+  run, only if total across Spiritual Data for the day would be over $5"). A run on the cheapest tier against development, of any
+  size including a full set, an AI may approve for itself, inside a call budget written in the task before the run, whenever the
+  day's total including the run stays within the cap. The cap is
   **$5 across all of Spiritual Data in any rolling 24 hours** (his words: "budget is $5 across all of Spiritual Data in a given
   24 hours"). The cap is counted in one ledger shared by every repository and every AI run, which Spiritual Data keeps
   outside this public repository: before the run the AI reserves its estimate there, and a reservation that would take
   the last 24 hours past $5 is refused, so that run goes to Joshua instead; after the run it records the actual cost from
-  the results row. Anything larger
-  (the 30-case stage and up), a stronger tier, or anything against production or user data goes to Joshua through the
-  approval-gate as a decision-request. A full run of an evaluation set always does (his 2026-10-06 rule, which stands). Mirror:
+  the results row. A run that
+  would take the day past $5, a stronger tier, or anything against production or user data goes to Joshua through the
+  approval-gate as a decision-request. Run size alone no longer does (this replaces his 2026-10-06 rule on full runs). Mirror:
   quest-backend's `esoi/metric-run-policy.md`; commit a293903a (checks on the esoi library) and the October follow-up that
   moved the policy into `esoi/`.
 - **Stale when:** the row has no `git_sha` or `cases_sha`; the case files changed (hash differs); it was recorded on uncommitted code

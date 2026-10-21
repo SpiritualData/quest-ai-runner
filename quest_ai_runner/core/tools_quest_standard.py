@@ -155,6 +155,7 @@ def file_email_draft_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
 #: Field name on the quest -> the tool that writes it. Tool names say the field in plain words.
 QUEST_FIELD_TOOLS: Dict[str, str] = {
     "outcome": "update_quest_outcome",
+    "name": "update_quest_name",
     "purpose": "update_quest_purpose",
     "current_state": "update_quest_current_state",
     "preferences": "update_quest_preferences",
