@@ -1,2 +1,2 @@
-intent_id,name,vision_statement,implements,opportunity
-quest-ai-runner,Grounded AI that advances people's goals,"Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote, and every answer and action rests on the person's own goals, material and preferences, and never on another person's.",,
+intent_id,name,vision_statement,implements,opportunities
+quest-ai-runner,Grounded AI that advances people's goals,"Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote, and every answer and action rests on the person's own goals, material and preferences, and never on another person's.",,"unconfirmed: for Joshua to confirm. Other products that need an AI which works from a person's own goals and material could reuse this engine, so the grounding, the standard for delegated work and the scope fences are built once and shared."
