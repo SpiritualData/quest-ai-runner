@@ -149,7 +149,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit;Runs that leave a durable, attributed record of what they changed |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
-| `bound-card-growth` | Card store growth control | quarantine_tool | Cards per source-file group and duplicate share after repeated nested bootstrap |
+| `bound-card-growth` | Card store growth control | bootstrap_guards | Cards per source-file group and duplicate share after repeated nested bootstrap |
 | `search-cards-and-specs` | Unified card and specification search | two_pipelines | Mixed card and specification selection, with both existing selection metrics held |
 | `tag-solutions` | Problem-linked tags that identify solutions |  | Right solution missed without the tag |
 | `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
