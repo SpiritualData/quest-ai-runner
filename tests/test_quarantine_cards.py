@@ -109,9 +109,61 @@ def test_a_compounded_copy_is_moved_even_when_used(store: Path):
     # The one override: a compounded card is a COPY, so whatever it carries also exists on the
     # card it was copied from. Nothing is lost by moving it.
     write_card(store, "a-aaaa--root-bbbb--root-cccc--topic", files=["docs/a.md"], usage_count=9)
+    write_card(store, "hq-dfbfcd--topic", files=["docs/a.md"])
     entries, _ = tool.plan(tool.load_cards(store), reasons={"compounded"},
                            excluded=[], threshold=0.8)
     assert [e["reason"] for e in entries] == ["compounded"]
+
+
+def test_a_compounded_card_with_a_surviving_equivalent_is_moved(store: Path):
+    write_card(store, "a-aaaa--root-bbbb--root-cccc--topic", files=["docs/a.md", "docs/b.md"])
+    write_card(store, "hq-dfbfcd--topic", files=["docs/a.md", "docs/b.md", "docs/c.md"])
+    entries, skipped = tool.plan(tool.load_cards(store), reasons={"compounded"},
+                                 excluded=[], threshold=0.8)
+    assert [(e["card_id"], e["reason"]) for e in entries] == [
+        ("a-aaaa--root-bbbb--root-cccc--topic", "compounded")]
+    assert "equivalent kept: hq-dfbfcd--topic" in entries[0]["detail"]
+    assert skipped == {}
+
+
+def test_a_compounded_only_copy_is_kept_and_listed_in_skipped(store: Path):
+    write_card(store, "a-aaaa--root-bbbb--root-cccc--goals", files=["thesis/GOALS.md"])
+    write_card(store, "unrelated", files=["docs/a.md", "docs/b.md"])
+    entries, skipped = tool.plan(tool.load_cards(store), reasons={"compounded"},
+                                 excluded=[], threshold=0.8)
+    assert entries == []
+    assert skipped == {"compounded card kept: its only copy in this store": 1}
+
+
+def test_a_compounded_card_whose_only_equivalent_is_moved_in_the_same_run_is_kept(store: Path):
+    # The equivalent is mostly inside an excluded folder, so it is moved in this run; the
+    # compounded card is not excluded itself, so moving it too would drop the file's coverage.
+    write_card(store, "a-aaaa--root-bbbb--root-cccc--topic", files=["app/c.py"])
+    write_card(store, "mostly-vendored", files=["vendor/a.py", "vendor/b.py", "app/c.py"])
+    entries, skipped = tool.plan(tool.load_cards(store), reasons={"compounded", "excluded"},
+                                 excluded=["vendor"], threshold=0.8)
+    assert [(e["card_id"], e["reason"]) for e in entries] == [("mostly-vendored", "excluded")]
+    assert skipped == {"compounded card kept: its only copy in this store": 1}
+
+
+def test_a_compounded_data_file_card_is_still_moved_as_thin_with_a_thin_equivalent(store: Path):
+    # A card that is itself thin goes under that reason as before; its equivalent, also thin,
+    # goes too, so neither is counted as a surviving copy.
+    write_card(store, "a-aaaa--root-bbbb--root-cccc--state", files=["app/run_state.json"])
+    write_card(store, "state-card", files=["app/run_state.json"])
+    entries, skipped = tool.plan(tool.load_cards(store), reasons={"compounded", "thin"},
+                                 excluded=[], threshold=0.8)
+    assert sorted((e["card_id"], e["reason"]) for e in entries) == [
+        ("a-aaaa--root-bbbb--root-cccc--state", "thin"), ("state-card", "thin")]
+    assert skipped == {}
+
+
+def test_a_compounded_card_inside_an_excluded_folder_is_still_moved(store: Path):
+    write_card(store, "a-aaaa--root-bbbb--root-cccc--vendored", files=["vendor/a.py", "vendor/b.py"])
+    entries, skipped = tool.plan(tool.load_cards(store), reasons={"compounded", "excluded"},
+                                 excluded=["vendor"], threshold=0.8)
+    assert [e["reason"] for e in entries] == ["excluded"]
+    assert skipped == {}
 
 
 # --- the three remaining reasons ------------------------------------------------------------

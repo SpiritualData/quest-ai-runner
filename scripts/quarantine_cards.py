@@ -12,6 +12,14 @@ what already happened, for the ways it happened:
                   stores sitting inside one another re-imported each other's imports. An id with
                   two or more import-namespace prefixes (``<words>-<6 hex>`` segments before the
                   topic) is compounded; one such prefix is a normal single-hop import.
+                  A lane in copy mode reads only its own store, so a compounded card is moved
+                  only when a SURVIVING equivalent stays in the same store: another card, not
+                  itself moved in this run and not a compounded candidate, whose file set equals
+                  or contains this one's. The survivors are judged after every other reason is
+                  planned, so a card whose equivalent is itself being moved (excluded, surplus,
+                  thin) is kept too. With no survivor the compounded card is the only copy and
+                  stays ("compounded card kept: its only copy in this store"). A candidate that
+                  the excluded or thin rule moves anyway is still moved under that rule.
   excluded        a card with MORE THAN HALF of its files in folders the folder review now
                   excludes for good (a nested dependency repository, a duplicate tree, a
                   generated-data subtree). The cards are summaries of content that is not this
@@ -37,7 +45,8 @@ Cards it refuses to touch, because they are not inflation:
   * a card carrying ``managed_by`` (written and owned by another system, e.g. quest folder sync),
   * a card with ``usage_count`` above zero, or provenance other than the bootstrap,
     i.e. a hand-learned card. Those are only ever moved under the ``compounded`` reason, which is
-    provable from the id alone: a compounded card is a COPY, so the original stays.
+    provable from the id alone: a compounded card is a COPY, so the original stays,
+    provided a surviving equivalent exists in the same store.
 
 Examples (paths are arguments; this script hardcodes none):
 
@@ -287,8 +296,11 @@ def plan(
     def note_skip(why: str) -> None:
         skipped[why] = skipped.get(why, 0) + 1
 
-    # 1. Compounded copies. Decided first and overriding protection: a compounded card is a COPY,
-    #    so whatever it carries also exists on the card it was copied from.
+    # 1. Compounded candidates. Provable from the id alone and overriding protection, but only
+    #    MOVED in step 6, once the other reasons are planned and the survivors are known. Until
+    #    then a candidate stays out of surplus and covered, and may still be taken by excluded
+    #    or thin (without the protection check, as compounded always overrode it).
+    pending: Dict[Path, str] = {}
     if "compounded" in reasons:
         for path, card in cards:
             evidence = compounding_evidence(str(card.get("id") or path.stem))
@@ -297,7 +309,7 @@ def plan(
             if card.get("managed_by"):
                 note_skip("compounded but managed by another system")
                 continue
-            record(path, card, "compounded", evidence)
+            pending[path] = evidence
 
     # 2. Cards mostly inside a folder the review excludes for good.
     if "excluded" in reasons and excluded:
@@ -311,7 +323,7 @@ def plan(
             inside = [h for h in hits if h]
             if len(inside) * 2 <= len(paths):
                 continue
-            protection = is_protected(card)
+            protection = "" if path in pending else is_protected(card)
             if protection:
                 note_skip(f"excluded-folder card kept: {protection}")
                 continue
@@ -323,7 +335,7 @@ def plan(
         groups: List[Dict[str, Any]] = []
         candidates = [(i, path, card, set(card_paths(card)))
                       for i, (path, card) in enumerate(cards)
-                      if path not in decided and card_paths(card)]
+                      if path not in decided and path not in pending and card_paths(card)]
         # Inverted path -> group index: an overlap at or above any positive threshold needs at
         # least one shared file, so comparing only the groups that share a path is exact, and it
         # keeps a 32,000-card store from becoming a quadratic scan.
@@ -364,7 +376,7 @@ def plan(
     if "thin" in reasons:
         covered_by_kept: Set[str] = set()
         for path, card in cards:
-            if path in decided:
+            if path in decided or path in pending:
                 continue
             paths = card_paths(card)
             if len(paths) >= 2:
@@ -375,7 +387,7 @@ def plan(
             paths = card_paths(card)
             if len(paths) != 1 or not path_is_data_file(paths[0]):
                 continue
-            protection = is_protected(card)
+            protection = "" if path in pending else is_protected(card)
             if protection:
                 note_skip(f"single data-file card kept: {protection}")
                 continue
@@ -400,7 +412,7 @@ def plan(
                 for rel in files:
                     holders.setdefault(rel, set()).add(len(other_sets) - 1)
             for path, card in cards:
-                if path in decided:
+                if path in decided or path in pending:
                     continue
                 files = normalized(card)
                 if not files:
@@ -421,6 +433,36 @@ def plan(
                 kind = "same files as" if other_sets[index] == files else "files inside those of"
                 record(path, card, "covered",
                        f"{kind} {other_ids[index]} in covered-by store {number}")
+
+    # 6. Compounded candidates not taken above: moved only when a surviving equivalent exists,
+    #    i.e. another card neither moved in this run nor a candidate, with the same or more files.
+    if pending:
+        holders_by_path: Dict[str, Set[int]] = {}
+        survivors: List[Tuple[str, Set[str]]] = []
+        for path, card in cards:
+            files = set(card_paths(card))
+            if path in decided or path in pending or not files:
+                continue
+            survivors.append((str(card.get("id") or path.stem), files))
+            for rel in files:
+                holders_by_path.setdefault(rel, set()).add(len(survivors) - 1)
+        for path, card in cards:
+            if path in decided or path not in pending:
+                continue
+            files = set(card_paths(card))
+            matches: Optional[Set[int]] = None
+            for rel in files:
+                matches = set(holders_by_path.get(rel, set())) if matches is None \
+                    else matches & holders_by_path.get(rel, set())
+                if not matches:
+                    break
+            if files and not matches:
+                note_skip("compounded card kept: its only copy in this store")
+                continue
+            detail = pending[path]
+            if matches:
+                detail += f"; equivalent kept: {survivors[min(matches)][0]}"
+            record(path, card, "compounded", detail)
 
     # A surplus keeper can itself be moved by a later reason: say so on the surplus entries.
     for entry_path, keeper_path in keeper_of.items():
