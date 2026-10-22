@@ -654,7 +654,7 @@ wait rather than a silent one:
 - `Orchestrator.bounded_goal_assembly` runs the assembler read under the same wall-clock budget as
   the turn-start assembly (`QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`), with the same soft
   `meta["assembly_deadline"]` so a deadline-aware assembler returns a partial result. On a timeout
-  it logs a WARNING, counts it, says "Continuing without that context, the search took too long."
+  it logs a WARNING, counts it, says "Going on without that context. The search ran long."
   and the run goes on without that context. It never raises.
 - A deep run with exactly ONE goal serves the request the turn-start assembly already served, so
   it reuses that result (finished: handed over; still running: waited for only what is left of
@@ -670,7 +670,7 @@ wait rather than a silent one:
   and 8.1 s without, against 35 ms with the pause.)
 - The wait is announced first: "Gathering what I need to start." (the same for every runner: it names no
   model), only when a wait really happens (nothing is announced when the budget is already spent: the
-  line "Continuing without that context" comes at once), followed by "Starting the work on <model>." for a pinned model
+  line "Going on without that context" comes at once), followed by "Starting the work on <model>." for a pinned model
   or the existing "Starting on <model>" line for an automatic choice. A declined self-initiated escalation pays for no assembly.
 
 Disable the whole feature with `QAR_RECENT_CONTEXT=0` (env, read in `cli.py`), or by passing

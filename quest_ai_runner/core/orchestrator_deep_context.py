@@ -27,7 +27,7 @@ from .scope_tags import as_tag_list
 
 # Said when a deep run's own context could not be had in time, so the person is not left thinking
 # the worker was given it. The log WARNING carries the detail.
-CONTEXT_DROPPED_STATUS = "Continuing without that context, the search took too long."
+CONTEXT_DROPPED_STATUS = "Going on without that context. The search ran long."
 
 
 class DeepContextMixin:
