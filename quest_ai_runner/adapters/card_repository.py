@@ -237,6 +237,19 @@ class FilesystemCardRepository:
         self._parsed = parsed
         return cards
 
+    def count(self) -> int:
+        """How many card files there are: a listing of names, nothing parsed. 0 on any error."""
+        total = 0
+        try:
+            with os.scandir(self._cards_dir) as it:
+                for entry in it:
+                    name = entry.name
+                    if name.endswith(".json") and not name.startswith(".") and name not in _SIDECAR_FILES:
+                        total += 1
+        except OSError:
+            return 0
+        return total
+
     def read(self, card_id: str) -> Optional[Dict[str, Any]]:
         """Return the card dict stored under ``card_id``, or ``None`` if absent/corrupt/unreadable."""
         try:

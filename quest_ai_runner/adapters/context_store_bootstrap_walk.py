@@ -280,7 +280,10 @@ class BootstrapWalkMixin:
                 replacement = _first_substantive_line(summary) or (card.get("name") or "").strip()
                 if not replacement or replacement == summary.strip():
                     continue
+                unedited = card_origin.matches_index_hash(card)
                 card["summary"] = replacement[:200]
+                if unedited:
+                    card_origin.stamp_index_hash(card)      # the index's own repair is not an edit by hand
                 cid = card.get("id")
                 if cid and not self._dry_run:
                     try:
@@ -439,7 +442,7 @@ class BootstrapWalkMixin:
                 _log.info("context index: room for %d more card(s); analysing the %d file(s) of the most "
                           "recently changed folders, %d file(s) wait for room", room, len(analysed), len(waiting_files))
         if uncovered and provider is not None and uncovered_discoverable:
-            _log.info("context index: stage 2 — analyzing %d new files for topics", len(analysed))
+            _log.info("context index: stage 2: analyzing %d new files for topics", len(analysed))
             topic_cards = _llm_topic_cards(
                 analysed, provider, model=model, existing_cards=own_cards, walk_root=walk_root
             )
@@ -711,6 +714,7 @@ class BootstrapWalkMixin:
             }
 
             card_origin.stamp_created_at(card, loaded_existing)
+            card_origin.stamp_index_hash(card)      # what the pass wrote, so a later edit by hand shows
 
             # Persist via the repository (skip if dry-run mode).
             if not self._dry_run:

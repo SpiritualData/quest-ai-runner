@@ -9,6 +9,8 @@ from typing import Any, ContextManager, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
 from .card_store_lock import StoreLock
+
+NOT_PREPARED = object()      # ``_store_write`` was not told which cold cards may move out: it looks
 from .card_store_mounts import MODE_MOUNT, Mount
 from .card_store_identity import ORIGIN_FIELD, read_meta as read_store_meta, writer_origins
 from .context_bootstrap_support import _card_file_paths, _log
@@ -181,20 +183,28 @@ class OriginsMixin:
             _log.info("context index: stamped this store's writer origin on %d legacy card(s)", stamped)
         return stamped
 
-    def _store_write(self, card_id: str, card: Dict[str, Any]) -> bool:
+    def _store_write(self, card_id: str, card: Dict[str, Any], victims: Any = NOT_PREPARED) -> bool:
         """The ONE place this store persists a card: stamp the writer origin, ask the card limit, write.
 
         The limit's answer is final for a new derived card; a card already stored, and every learned
         or quest card, is let through (see ``card_limit``). The repository refuses an id that may
         never be stored (``card_origin.card_id_problem``) on its own.
+
+        ``victims`` are the cold cards that may move out to make room, chosen by the caller BEFORE it took the
+        folder's lock (``CardLimit.prepare``); a caller that holds no lock yet leaves it to this method.
         """
         self._stamp_origin(card_id, card)
-        with self.folder_lock():
-            if not self.limit_guard.admit(card_id, card):
-                return False
-            ok = self._repo.write(card_id, card)
-            self.limit_guard.wrote(ok)
-            return ok
+        if victims is NOT_PREPARED:
+            victims = self.limit_guard.prepare(card_id, card)      # off the lock: which cold cards could make room
+        try:
+            with self.folder_lock():
+                if not self.limit_guard.admit(card_id, card, victims):
+                    return False
+                ok = self._repo.write(card_id, card)
+                self.limit_guard.wrote(ok)
+                return ok
+        finally:
+            self.limit_guard.speak()                            # the notice and the counters, holding no lock
 
     def _own_cards(self) -> Dict[str, Dict[str, Any]]:
         """The cards THIS store owns: ``_load_all()`` minus any mounted views and, with an injected

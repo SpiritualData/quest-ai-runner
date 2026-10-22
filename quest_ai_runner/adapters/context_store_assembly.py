@@ -857,14 +857,19 @@ class AssemblyMixin:
             if not used_item_ids and not used_paths:
                 continue
             try:
-                self._mark_sources_used_inner(card_id, used_item_ids, used_paths, now)
+                # wait=False: the stamp is bookkeeping, and a turn never waits for another process's hold on
+                # the card folder (a tidy, the card limit, a learned write); a stamp that finds it busy is skipped.
+                self._mark_sources_used_inner(card_id, used_item_ids, used_paths, now, wait=False)
             except Exception:  # noqa: BLE001 — one card's bookkeeping never blocks the rest
                 _log.debug("usage bump failed for card %s", card_id, exc_info=True)
 
     def _mark_sources_used_inner(
-        self, card_id: str, item_ids: Set[str], file_paths: Set[str], now: float
+        self, card_id: str, item_ids: Set[str], file_paths: Set[str], now: float, wait: bool = True
     ) -> bool:
         """Read-modify-write ONE card's per-source usage fields. Returns True when it wrote.
+
+        With ``wait`` off (the assembly path) it takes the card folder's lock only if that is free right now,
+        and does nothing when another process or thread holds it: a turn never blocks on a flock.
 
         Reads the card through the persistence boundary (so it never writes back a stale in-memory
         copy), stamps the used content items and file entries, and persists only when something
@@ -873,6 +878,25 @@ class AssemblyMixin:
         """
         if self.is_mounted_card(card_id):
             return False  # usage heat on a mounted card would be a write into the owner's store
+        lock = self.folder_lock()
+        take = getattr(lock, "acquire", None)
+        if not wait and take is not None:
+            if not take(blocking=False):
+                return False
+            try:
+                return self._mark_sources_used_locked(card_id, item_ids, file_paths, now)
+            finally:
+                lock.release()
+                self.limit_guard.speak()
+        with lock:
+            written = self._mark_sources_used_locked(card_id, item_ids, file_paths, now)
+        self.limit_guard.speak()
+        return written
+
+    def _mark_sources_used_locked(
+        self, card_id: str, item_ids: Set[str], file_paths: Set[str], now: float
+    ) -> bool:
+        """The read-modify-write of ``_mark_sources_used_inner``, run while the card folder's lock is held."""
         loaded = self._repo.read(card_id)
         if not isinstance(loaded, dict):
             return False

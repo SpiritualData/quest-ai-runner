@@ -5,10 +5,13 @@ A mixin of ``FileContextStore`` (see ``file_context_store.py``): methods only, s
 from __future__ import annotations
 
 import heapq
+import json
+import os
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
 from . import card_origin
+from . import card_limit as limit_mod
 from .card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
 from .card_content_render import (
     dedupe_content as _dedupe_content,
@@ -23,6 +26,10 @@ from ..core.vector_scopes import SeedItems
 from .context_card_extraction import _card_slug, _managed_names, _trim_content_by_recency
 from .context_card_dedup import _record_summary
 from .context_bootstrap_support import _log
+
+# How many cards an edit may be passed on through when the card it was meant for has been moved out and the card
+# that stood for it was moved too.
+MOVED_CARD_HOPS = 3
 
 # How many card keys are sorted together before the next slice starts. One sort of 140,000 keys is
 # about 80 ms in a single call, and the interpreter's lock is held for all of it.
@@ -114,8 +121,11 @@ class CardsMixin:
         so a run can accumulate notes / collection refs / conversation refs, not just files.
         """
         try:
+            card_id = self._record_card_id(task_text, outcome)
+            victims = self.limit_guard.prepare(card_id)         # off the lock: which cold cards could make room
             with self.folder_lock():
-                self._record_inner(task_text, outcome)
+                self._record_inner(task_text, outcome, victims)
+            self.limit_guard.speak()                            # the notice, now that no lock is held
         except Exception:  # noqa: BLE001
             pass
 
@@ -211,8 +221,10 @@ class CardsMixin:
             if self._cache is not None:
                 # The listing in hand says whether this id is new here; without one the date is not guessed.
                 card_origin.stamp_created_at(card, self._cache.get(card_id))
+            victims = self.limit_guard.prepare(card_id, card)    # off the lock: which cold cards could make room
             with self.folder_lock():
-                self._write_card_atomic(card_id, card)
+                self._write_card_atomic(card_id, card, victims)
+            self.limit_guard.speak()                             # the notice, now that no lock is held
             return True
         except Exception:  # noqa: BLE001
             _log.debug("write_card failed for %s", card_id, exc_info=True)
@@ -268,7 +280,7 @@ class CardsMixin:
         except Exception:  # noqa: BLE001 — semantic dedup is best-effort
             return None
 
-    def _write_card_atomic(self, card_id: str, card: Dict[str, Any]) -> None:
+    def _write_card_atomic(self, card_id: str, card: Dict[str, Any], victims: Optional[List[str]] = None) -> None:
         """Persist ``card`` under ``card_id`` via the repository and mark the cache dirty.
 
         Shared by record() and the card-update API. Respects ``dry_run`` (writes nothing). Raises
@@ -277,7 +289,7 @@ class CardsMixin:
         """
         if self._dry_run:
             return
-        if not self._store_write(card_id, card):
+        if not self._store_write(card_id, card, victims):
             raise OSError(f"card repository write failed for {card_id!r}")
         self._cache_dirty = True
 
@@ -331,9 +343,13 @@ class CardsMixin:
         if card_origin.is_store_qualified(card_id):
             _log.info("card update skipped: %s names a card of another store that is not mounted here", card_id)
             return False
-        with self.folder_lock():
-            return self._update_card_locked(card_id, add=add, replace=replace, remove=remove,
-                                            fields=fields, scope_tags=scope_tags)
+        victims = self.limit_guard.prepare(card_id)             # off the lock: which cold cards could make room
+        try:
+            with self.folder_lock():
+                return self._update_card_locked(card_id, add=add, replace=replace, remove=remove,
+                                                fields=fields, scope_tags=scope_tags, victims=victims)
+        finally:
+            self.limit_guard.speak()                            # the notice, now that no lock is held
 
     def _update_card_locked(
         self,
@@ -344,17 +360,21 @@ class CardsMixin:
         remove: Optional[List[str]] = None,
         fields: Optional[Dict[str, Any]] = None,
         scope_tags: Optional[List[str]] = None,
+        victims: Optional[List[str]] = None,
+        hops: int = 0,
     ) -> bool:
         """The read-modify-write of ``_update_card_inner``, run while the card folder's lock is held."""
         loaded = self._repo.read(card_id)
         if not isinstance(loaded, dict):
-            # A card that was moved out of the index (a tidy, the card limit) is not recreated as an
-            # empty stub carrying one note: that is how a stale writer used to push the store over its limit.
             finder = getattr(self._own_repo, "quarantined", None)
             where = finder(card_id) if callable(finder) else None
             if where is not None:
-                _log.info("card update skipped: %s was moved out of the index (it is in %s)", card_id, where.parent)
-                return False
+                # A card that was moved out of the index (a tidy, a retirement, the card limit) is not
+                # recreated as an empty stub carrying one note: that is how a stale writer used to push the
+                # store over its limit. The edit goes to the card that stands for it now, or the card comes
+                # back, or the loss is said out loud. It is never dropped quietly.
+                return self._edit_moved_card(card_id, where, hops, add=add, replace=replace, remove=remove,
+                                             fields=fields, scope_tags=scope_tags, victims=victims)
         card: Dict[str, Any] = loaded if isinstance(loaded, dict) else {}
         card.setdefault("id", card_id)
         if scope_tags:
@@ -423,18 +443,53 @@ class CardsMixin:
         # 4) recency trim + persist
         card["content"] = _trim_content_by_recency(content)
         card_origin.stamp_created_at(card, loaded if isinstance(loaded, dict) else None)
-        self._write_card_atomic(card_id, card)
+        self._write_card_atomic(card_id, card, victims)
         return not self._dry_run
 
-    def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:
+    def _edit_moved_card(self, card_id: str, where: Any, hops: int, *, add: Any, replace: Any, remove: Any,
+                         fields: Any, scope_tags: Any, victims: Any) -> bool:
+        """An edit meant for a card that now sits in ``_quarantine/``: send it to the card that stands for it
+        (recorded in the manifest of the move that took it out), bring back a card the card limit moved out
+        to make room, or, when neither is possible, log the edit in full at WARNING. Caller holds the lock."""
+        from . import card_store_hygiene as hygiene
+        keeper = hygiene.keeper_of_moved(self._cards_dir, card_id)
+        edit = dict(add=add, replace=replace, remove=remove, fields=fields, scope_tags=scope_tags)
+        if keeper and keeper != card_id and hops < MOVED_CARD_HOPS and not card_origin.is_store_qualified(keeper):
+            _log.info("card update for %s goes to %s, which stands for it now", card_id, keeper)
+            return self._update_card_locked(keeper, victims=victims, hops=hops + 1, **edit)
+        if where.parent.name == limit_mod.QUARANTINE_REASON and not self._dry_run:
+            back = self._cards_dir / f"{card_id}.json"
+            if not back.exists():
+                try:
+                    os.replace(str(where), str(back))
+                except OSError:
+                    back = None
+                if back is not None:
+                    self.folder_bump()
+                    self.limit_guard.note_restored()
+                    _log.info("card %s was moved out to make room and is back in the index: a run added to it",
+                              card_id)
+                    return self._update_card_locked(card_id, victims=victims, hops=hops + 1, **edit)
+        shown = json.dumps({k: v for k, v in edit.items() if v}, default=str, ensure_ascii=False)
+        _log.warning("card update NOT applied: %s was moved out of the index (it is in %s) and no card is recorded "
+                     "as standing for it. The edit was: %s", card_id, where.parent, shown[:2000],
+                     extra={"in_transcript": False})
+        return False
+
+    @staticmethod
+    def _record_card_id(task_text: str, outcome: Dict[str, Any]) -> str:
         # A run on a THREAD (a recurring or autopilot task) records onto one card per thread, not
         # one per pass: each pass's composed brief differs, so keying by its text minted a new card
         # every day, and that card, keyed on the whole brief's vocabulary, was then the top match
-        # for the next pass of the same thread (self-retrieval, 2026-10-06). Keywords come from the
-        # request's gist, never every word of a composed brief.
+        # for the next pass of the same thread (self-retrieval, 2026-10-06).
+        own_task = str(outcome.get("task_id") or "")
+        return _card_slug(f"thread record {own_task}") if own_task else _card_slug(task_text)
+
+    def _record_inner(self, task_text: str, outcome: Dict[str, Any], victims: Optional[List[str]] = None) -> None:
+        # Keywords come from the request's gist, never every word of a composed brief.
         from ..core.prompt_budget import decision_excerpt
         own_task = str(outcome.get("task_id") or "")
-        card_id = _card_slug(f"thread record {own_task}") if own_task else _card_slug(task_text)
+        card_id = self._record_card_id(task_text, outcome)
 
         # Load existing card or start fresh.
         loaded = self._repo.read(card_id)
@@ -521,7 +576,7 @@ class CardsMixin:
         # Persist via the repository (skip if dry-run mode). Re-raise on failure so the outer
         # try/except in record() catches it; the cache is invalidated so assemble() sees the card.
         if not self._dry_run:
-            if not self._store_write(card_id, card):
+            if not self._store_write(card_id, card, victims):
                 raise OSError(f"card repository write failed for {card_id!r}")
             self._cache_dirty = True
 

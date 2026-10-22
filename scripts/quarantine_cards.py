@@ -511,15 +511,18 @@ def move_entries(cards_dir: Path, entries: List[Dict[str, Any]], own_store_id: s
                 entry["error"] = "gone: already moved or removed by somebody else"
                 continue
             why = ""
+            joined: Dict[str, Any] = {}
+            keeper = ""
             if reason == "item-id":
-                destination, why = settle_move(
-                    cards_dir, Move(source, source.stem, reason, entry["detail"]), own_store_id)
+                settled = settle_move(cards_dir, Move(source, source.stem, reason, entry["detail"]), own_store_id)
+                destination, why, joined, keeper = settled.moved_to, settled.why, settled.joined, settled.keeper
             else:
                 protection = is_protected(card)
                 if protection and not (reason == "compounded" and entry.get("joins")):
                     why = f"left in place, it gained something since the plan: {protection}"
                 elif protection:
-                    why = join_onto(cards_dir, card, cards_dir / entry["joins"])
+                    why, joined = join_onto(cards_dir, card, cards_dir / entry["joins"])
+                    keeper = Path(entry["joins"]).stem
                 destination = None if why else move_to(cards_dir, source, reason)
                 if destination is None and not why:
                     why = "could not be moved"
@@ -529,6 +532,8 @@ def move_entries(cards_dir: Path, entries: List[Dict[str, Any]], own_store_id: s
                 continue
             lock.bump()
             entry["moved_to"] = str(destination.relative_to(cards_dir))
+            if keeper:
+                entry["keeper"], entry["joined"] = keeper, joined
             moved += 1
     return moved, failed
 

@@ -341,10 +341,10 @@ class TestTheLimitNeverMovesWhatSomebodyAdded:
 
 
 class TestAStaleWriterDoesNotUndoTheLimit:
-    """Review finding 6: an updater that was shown a card another process has since moved wrote an empty stub
-    under its id, and each stub evicted one more card."""
+    """Review findings 6 and (round 2) 5: an updater that was shown a card another process has since moved
+    wrote an empty stub under its id and each stub evicted one more card; refusing it instead dropped the note."""
 
-    def test_an_edit_to_a_card_that_was_moved_out_is_refused_and_creates_nothing(self, tmp_path, caplog):
+    def test_a_note_for_a_card_the_limit_moved_out_brings_the_card_back_with_the_note(self, tmp_path, caplog):
         seed(tmp_path / "cards", [card(f"{n}-topic", files=[f"{n}/a.md", f"{n}/b.md"]) for n in "abc"])
         stale = store_for(tmp_path, tmp_path, max_cards=3)
         stale._load_all()
@@ -352,11 +352,186 @@ class TestAStaleWriterDoesNotUndoTheLimit:
         assert busy.update_card("lesson-1", add=[{"id": "l1", "text": "lesson"}])
         moved = [p.stem for p in (tmp_path / "cards" / "_quarantine" / "limit").glob("*.json")]
         assert len(moved) == 1
-        before = card_ids(tmp_path / "cards")
         with caplog.at_level(logging.INFO, logger="quest-ai-runner.context"):
-            assert stale.update_card(moved[0], add=[{"id": "n1", "text": "late note"}]) is False
-        assert card_ids(tmp_path / "cards") == before, "no stub was created and nobody else was moved"
-        assert "was moved out of the index" in caplog.text
+            assert stale.update_card(moved[0], add=[{"id": "n1", "text": "late note"}]) is True
+        back = FilesystemCardRepository(str(tmp_path / "cards")).read(moved[0])
+        assert back["summary"] == f"about {moved[0]}", "the card as it was, not an empty stub"
+        assert [i["id"] for i in back["content"]] == ["n1"]
+        assert len(card_ids(tmp_path / "cards")) == 4, "kept over the limit, and nobody else was moved"
+        assert stale.limit_guard.state.admitted_over == 1
+        assert "is back in the index" in caplog.text
+
+    def test_a_note_for_a_copy_that_was_moved_out_lands_on_the_card_that_stands_for_it(self, tmp_path, caplog):
+        from quest_ai_runner.adapters import card_store_hygiene as hygiene
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        seed(cards, [card("topic", files=files, name="a topic"),
+                     card("sd-aaaaaa--product-bbbbbb--topic", files=files, name="a topic")])
+        stale = store_for(tmp_path, tmp_path, max_cards=0)
+        stale._load_all()
+        hygiene.apply_tidy(cards, hygiene.plan_tidy(hygiene.card_files_in(cards)))
+        assert card_ids(cards) == ["topic"]
+        with caplog.at_level(logging.INFO, logger="quest-ai-runner.context"):
+            assert stale.add_content("sd-aaaaaa--product-bbbbbb--topic", {"id": "n1", "type": "note",
+                                                                         "locator": {"text": "late note"}, "why": "w"})
+        assert card_ids(cards) == ["topic"], "no stub was created"
+        assert [i["id"] for i in FilesystemCardRepository(str(cards)).read("topic")["content"]] == ["n1"]
+        assert "stands for it now" in caplog.text
+
+    def test_a_note_that_can_land_nowhere_is_logged_in_full_never_dropped_quietly(self, tmp_path, caplog):
+        cards = tmp_path / "cards"
+        seed(cards, [card("topic", files=["a/one.md", "a/two.md"])])
+        (cards / "_quarantine" / "by-hand").mkdir(parents=True)
+        (cards / "topic.json").rename(cards / "_quarantine" / "by-hand" / "topic.json")
+        with caplog.at_level(logging.WARNING, logger="quest-ai-runner.context"):
+            assert store_for(tmp_path, tmp_path, max_cards=0).add_content(
+                "topic", {"id": "n1", "type": "note", "locator": {"text": "late note"}, "why": "w"}) is False
+        assert card_ids(cards) == []
+        assert "card update NOT applied" in caplog.text and "late note" in caplog.text
+
+
+@pytest.fixture
+def lock_log(monkeypatch):
+    """Every acquisition of a card folder's lock in this process: whether it waited, and what the folder's
+    repository was asked to do while it was held (``load_all`` parses every card, ``read`` one)."""
+    from quest_ai_runner.adapters.card_store_lock import StoreLock
+    log = {"acquired": [], "held": 0, "under_lock": []}
+    real_acquire, real_release = StoreLock.acquire, StoreLock.release
+
+    def acquire(self, blocking=True):
+        if log["held"] == 0:
+            log["acquired"].append(blocking)          # only a first taking can wait; taking it again never does
+        got = real_acquire(self, blocking)
+        if got:
+            log["held"] += 1
+        return got
+
+    def release(self):
+        log["held"] -= 1
+        return real_release(self)
+    monkeypatch.setattr(StoreLock, "acquire", acquire)
+    monkeypatch.setattr(StoreLock, "release", release)
+    for name in ("load_all", "read"):
+        real = getattr(FilesystemCardRepository, name)
+
+        def wrapped(self, *args, _real=real, _name=name, **kwargs):
+            if log["held"] > 0:
+                log["under_lock"].append(_name)
+            return _real(self, *args, **kwargs)
+        monkeypatch.setattr(FilesystemCardRepository, name, wrapped)
+    return log
+
+
+class TestNothingOnATurnWaitsForTheFolderLock:
+    """Round 2 finding 1: the usage stamp in assemble() took the cross-process lock by waiting, so a turn waited as
+    long as another process held it (5 s measured)."""
+
+    def assembling_store(self, tmp_path):
+        root = corpus(tmp_path / "corpus", ["alpha", "beta", "gamma"])
+        index(store_for(tmp_path, root, max_cards=0), root)
+        return store_for(tmp_path, root, max_cards=0, confidence_threshold=0.0), root
+
+    def test_assembly_stamps_usage_without_ever_waiting_for_the_lock(self, tmp_path, lock_log):
+        store, _ = self.assembling_store(tmp_path)
+        store._load_all()
+        lock_log["acquired"].clear()
+        assembled = store.assemble("tell me about alpha")
+        assert assembled.card_ids, "the turn used a card"
+        assert lock_log["acquired"] and True not in lock_log["acquired"], "every attempt was without waiting"
+        used = FilesystemCardRepository(str(tmp_path / "cards")).read(assembled.card_ids[0])
+        assert any(fe.get("use_count") for fe in used["files"]), "and the stamp was written when the lock was free"
+
+    def test_a_turn_while_another_thread_holds_the_lock_skips_the_stamp_and_goes_on(self, tmp_path):
+        import threading
+        store, _ = self.assembling_store(tmp_path)
+        store._load_all()
+        held, release = threading.Event(), threading.Event()
+
+        def hold():
+            with store.folder_lock():
+                held.set()
+                release.wait(30)
+        holder = threading.Thread(target=hold, daemon=True)
+        holder.start()
+        assert held.wait(10)
+        try:
+            assembled = store.assemble("tell me about alpha")      # would never return if it waited
+        finally:
+            release.set()
+            holder.join(10)
+        assert assembled.card_ids
+        used = FilesystemCardRepository(str(tmp_path / "cards")).read(assembled.card_ids[0])
+        assert not any(fe.get("use_count") for fe in used["files"]), "nothing was stamped: the lock was busy"
+
+
+class TestTheLimitDoesNoStoreSizedWorkUnderTheLock:
+    """Round 2 finding 2: the limit rebuilt a snapshot of every card and ranked them all while holding the
+    lock every other process needs, so one learned write cost 0.9 to 6.9 s at 140,000 cards."""
+
+    def test_a_learned_write_to_a_store_above_its_limit_parses_nothing_under_the_lock(self, tmp_path, lock_log):
+        seed(tmp_path / "cards", [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(60)])
+        store = store_for(tmp_path, tmp_path, max_cards=20)
+        store._load_all()
+        other = store_for(tmp_path, tmp_path, max_cards=20)
+        with other.limit_guard.folder:
+            other.limit_guard.folder.bump()                          # another process changed the folder
+        lock_log["under_lock"].clear()
+        assert store.update_card("lesson-1", add=[{"id": "l1", "type": "note", "locator": {"text": "x"}, "why": "w"}])
+        assert "load_all" not in lock_log["under_lock"]
+        assert lock_log["under_lock"].count("read") <= 2, "one read of the card being edited, no more"
+
+    def test_a_learned_write_at_the_limit_chooses_off_the_lock_and_reads_only_the_card_it_moves(self, tmp_path, lock_log):
+        seed(tmp_path / "cards", [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(20)])
+        store = store_for(tmp_path, tmp_path, max_cards=20)
+        store._load_all()
+        lock_log["under_lock"].clear()
+        assert store.update_card("lesson-1", add=[{"id": "l1", "type": "note", "locator": {"text": "x"}, "why": "w"}])
+        assert "load_all" not in lock_log["under_lock"]
+        assert lock_log["under_lock"].count("read") <= 3, "the card being edited and the one that moves"
+        assert len(list((tmp_path / "cards" / "_quarantine" / "limit").glob("*.json"))) == 1
+
+    def test_the_count_is_taken_from_names_and_remembered_until_the_folder_changes(self, tmp_path, monkeypatch):
+        seed(tmp_path / "cards", [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(30)])
+        counts = []
+        real = FilesystemCardRepository.count
+        monkeypatch.setattr(FilesystemCardRepository, "count", lambda self: counts.append(1) or real(self))
+        store = store_for(tmp_path, tmp_path, max_cards=10)
+        note = {"id": "l", "type": "note", "locator": {"text": "x"}, "why": "w"}
+        assert store.update_card("lesson-first", add=[note])         # the first write also makes the report and counters
+        counts.clear()
+        for i in range(5):
+            assert store.update_card(f"lesson-{i}", add=[note])
+        assert counts == [], "its own writes keep the count true: nothing is listed again"
+        other = store_for(tmp_path, tmp_path, max_cards=10)
+        with other.limit_guard.folder:
+            other.limit_guard.folder.bump()
+        store.update_card("lesson-9", add=[note])
+        assert len(counts) == 1, "another process changed the folder: listed once more"
+
+
+class TestAStoreAlreadyOverItsLimit:
+    """Round 2 finding 7: a store above its limit swapped regenerable cards for learned ones, one for one, for good."""
+
+    def test_learned_cards_are_admitted_without_moving_any_card_out(self, tmp_path):
+        seed(tmp_path / "cards", [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(40)])
+        store = store_for(tmp_path, tmp_path, max_cards=10)
+        for i in range(5):
+            assert store.update_card(f"lesson-{i}", add=[{"id": "l", "type": "note", "locator": {"text": "x"}, "why": "w"}])
+        assert len(card_ids(tmp_path / "cards")) == 45
+        assert not (tmp_path / "cards" / "_quarantine").exists(), "nothing was moved out"
+        assert store.limit_guard.state.admitted_over == 5 and store.limit_guard.state.evicted == 0
+
+    def test_the_report_says_so(self, tmp_path):
+        seed(tmp_path / "cards", [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(12)])
+        store = store_for(tmp_path, tmp_path, max_cards=10)
+        store.update_card("lesson-1", add=[{"id": "l", "type": "note", "locator": {"text": "x"}, "why": "w"}])
+        assert "kept above the limit (nothing derived could be moved): 1" in report_for(str(tmp_path / "cards"), 10)
+
+    def test_a_store_exactly_at_its_limit_still_makes_room(self, tmp_path):
+        seed(tmp_path / "cards", [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(10)])
+        store = store_for(tmp_path, tmp_path, max_cards=10)
+        assert store.update_card("lesson-1", add=[{"id": "l", "type": "note", "locator": {"text": "x"}, "why": "w"}])
+        assert len(card_ids(tmp_path / "cards")) == 10 and store.limit_guard.state.evicted == 1
 
 
 def writer_process(cards_dir: str, root: str, number: int, barrier, results) -> None:
@@ -422,7 +597,7 @@ class TestTheNotice:
         shown = [r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True)]
         assert shown == [
             "Context store full at 10: 4 topic, 2 imported, 3 learned, 1 quest",
-            "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it.",
+            "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it",
         ]
         assert all("—" not in line for line in shown)
 
@@ -437,8 +612,7 @@ class TestTheNotice:
         shown = [r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True)]
         limit = min(LOG_LINE_CHARS, width - 8)
         if width >= 80:
-            assert [short_log_text(line, limit) for line in shown] == [line.rstrip(".") for line in shown], (
-                "nothing was cut or ended early")
+            assert [short_log_text(line, limit) for line in shown] == shown, "nothing was cut or ended early"
         assert not any("card_limit_report" in line or "/" in line for line in shown), "the path is in the log only"
 
     def test_the_counts_fit_one_80_column_line_even_for_the_incident_sized_store(self):
@@ -461,8 +635,8 @@ class TestTheNotice:
         store = mixed_store(tmp_path)
         self.refuse_one(store)
         notes = card_limit.take_task_notes()
-        assert notes == ["Context store full at 10: 4 topic, 2 imported, 3 learned, 1 quest "
-                         "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it."]
+        assert notes == ["About the context store, not this task: Context store full at 10: 4 topic, 2 imported, "
+                         "3 learned, 1 quest. Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it."]
         assert card_limit.take_task_notes() == []
 
     def test_a_startup_callback_is_told_both_lines_when_the_store_is_opened_full(self, tmp_path):
@@ -470,7 +644,7 @@ class TestTheNotice:
         store = mixed_store(tmp_path)
         store.prewarm(notify=said.append)
         assert said == ["Context store full at 10: 4 topic, 2 imported, 3 learned, 1 quest",
-                        "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it."]
+                        "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it"]
 
     def test_the_log_carries_the_instructions_an_ai_needs_to_change_it(self, tmp_path, caplog):
         store = mixed_store(tmp_path)

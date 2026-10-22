@@ -193,19 +193,22 @@ def tidy_protected(args, scratch):  # noqa: ARG001
 
 
 def stale_writer(args, scratch):  # noqa: ARG001
-    """An updater shown a card another process has since moved out of a full store: it must not recreate it."""
+    """An updater shown a card another process has since moved out of a full store: its note is kept, on the card
+    as it was, and nobody else is moved for it."""
     root = notes(scratch / "corpus", ["a", "b", "c"])
     index(root, max_cards=3)
     stale = new_store(root, max_cards=3)
     stale._load_all()
     new_store(root, max_cards=3).update_card("lesson-1", add=[{"id": "l1", "type": "note", "text": "lesson"}])
     gone = [c["id"] for c in quarantined(root, "limit")]
-    before = card_ids(root)
     if gone:
         stale.update_card(gone[0], add=[{"id": "n1", "type": "note", "text": "late note"}])
-    return {"moved_by_the_first": len(gone), "stub_created": int(bool(gone) and gone[0] in card_ids(root)),
-            "cards_changed_by_the_stale_edit": int(card_ids(root) != before),
-            "total_at_limit": int(len(card_ids(root)) <= 3 + 1)}
+    live = world.cards_in(root / ".quest-context")
+    held = live.get(gone[0], {}) if gone else {}
+    return {"moved_by_the_first": len(gone),
+            "note_kept": int(any("n1" in {i.get("id") for i in c.get("content") or []} for c in live.values())),
+            "card_is_not_a_stub": int(bool(held.get("summary"))),
+            "nothing_else_moved": int(len(quarantined(root, "limit")) <= 1)}
 
 
 def mounted_edit(args, scratch):  # noqa: ARG001

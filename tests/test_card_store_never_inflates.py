@@ -40,6 +40,17 @@ from card_store_growth import world  # noqa: E402
 SEEDS = (0, 20, 32, 33, 36, 43, 47, 59, 61, 71)
 STEPS = 20
 
+# Seeds that fail I4 (the world is not a fixed point) since commit ac61f64, the folder risk gate, and pass at its parent
+# b223469. When the folder review cannot be answered (the fake model here; a model outage in production) the gate
+# blocks a folder that holds several card stores, the copies imported from it are retired and replaced by the
+# store's own cards, and the review is asked again on every pass: 4 model calls per pass for ever, 0 before it.
+# It is churn and repeated paid calls, not growth: eight more rounds leave the world at 37 cards. These are a KNOWN
+# failure of that commit, kept here as expected failures so it stays visible (they report XPASS when it is fixed),
+# not removed from the list and not made to pass.
+RISK_GATE_FIXED_POINT_FAILURES = (11, 12, 17, 25, 68, 76)
+KNOWN_FAILURE = ("known failure of commit ac61f64 (the folder risk gate): not a fixed point when the folder review "
+                 "cannot be answered; passes at its parent b223469; churn and repeated model calls, not growth")
+
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
@@ -49,7 +60,9 @@ def offline(monkeypatch):
         yield
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", [pytest.param(seed, marks=pytest.mark.xfail(reason=KNOWN_FAILURE, strict=False))
+                                  if seed in RISK_GATE_FIXED_POINT_FAILURES else seed
+                                  for seed in SEEDS + RISK_GATE_FIXED_POINT_FAILURES])
 def test_no_sequence_of_operations_inflates_a_store(seed):
     outcome = world.run(seed, STEPS)
     assert outcome["violations"] == [], (

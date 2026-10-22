@@ -19,11 +19,14 @@ AT THE LIMIT, one function (``CardLimit.admit``) is asked by every writer:
     move (``card_origin.protection`` is empty: no notes, quest tags, usage, hand-written provenance or
     owner), and it is read again from disk, under the folder's lock, just before it moves. When nothing
     can move, the card is admitted anyway and the notice says so;
-  * a store already ABOVE the limit when opened is never trimmed by the limit: only the checks for
-    provable duplicates (``card_store_hygiene``) remove anything from it.
+  * a store already ABOVE the limit moves nothing for a learned or quest card (swapping them one for one
+    would exchange the regenerable cards for learned ones for good): the card is admitted and counted as kept
+    over the limit. The limit never trims such a store: only the checks for provable duplicates
+    (``card_store_hygiene``) remove anything from it.
 """
 from __future__ import annotations
 
+import heapq
 import json
 import logging
 import os
@@ -52,6 +55,11 @@ KIND_IMPORTED = "imported"
 KIND_LEARNED = "learned"
 KIND_MANAGED = "managed"
 DERIVED_KINDS = frozenset({KIND_TOPIC, KIND_IMPORTED})
+
+# How many cold cards are chosen, before the lock is taken, as the ones that may move out for a learned card.
+# Each is read again under the lock, so a few are enough to find one that is still unchanged; this is how many
+# are tried, not how many may exist.
+VICTIM_CHOICES = 8
 
 announced_stores: Set[str] = set()
 announce_lock = threading.Lock()
@@ -134,10 +142,14 @@ def coldness(card_id: str, card: Dict[str, Any]):
 class CardLimit:
     """Admission control for the cards one store writes (see the module docstring).
 
-    ``cards`` returns the store's own cards ``{id: card}``; ``revision`` is the repository's cheap
-    change stamp, so the snapshot is rebuilt only when somebody else wrote. ``repo`` is the store's
-    own repository: a filesystem one can MOVE a card (``quarantine``), another one cannot, and then
-    nothing is ever evicted.
+    ``cards`` returns the store's own cards ``{id: card}`` (parsed; used for the notice and for choosing a card
+    to move out). ``repo`` is the store's own repository: a filesystem one can COUNT cards by name and MOVE a
+    card (``quarantine``), another one cannot, and then nothing is ever evicted.
+
+    Nothing here does work proportional to the size of the store while the folder's lock is held. The count is
+    taken from file names (never from parsing), is cached against the folder's change count, and the cold
+    cards to move out are chosen BEFORE the lock is taken; under the lock each is read again, checked again and
+    moved, one at a time. A store of 140,000 cards costs a learned write one listing of names, not a parse.
     """
 
     def __init__(self, cards_dir: str, limit: int, *, repo: Any, cards: Callable[[], Dict[str, Dict[str, Any]]],
@@ -146,13 +158,17 @@ class CardLimit:
         self.limit = max(0, int(limit or 0))
         self.repo = repo
         self.list_cards = cards
-        self.revision_of = revision
+        self.revision_of = revision                  # kept for callers; the limit keys on the folder, not on this
         self.lock = threading.RLock()
         self.folder = StoreLock.for_dir(str(cards_dir))      # shared with every process that changes the folder
-        self.generation_seen = -1                            # the folder's change count the snapshot is of
-        self.membership_changed = False                      # admit let a new card in (or moved one out)
+        self.counted: Optional[int] = None           # how many cards the folder held when last counted
+        self.counted_key: Any = None                 # (change count, folder mtime) that count is true for
+        self.pending_add = False                     # admit let a new card in; wrote() makes it a fact
+        self.folder_changed = False                  # a card was added or moved out by this process
         self.snapshot_cards: Optional[Dict[str, Dict[str, Any]]] = None
-        self.stamp: Any = None
+        self.snapshot_key: Any = None
+        self.announce_due = False
+        self.state_dirty = False
         self.state = self.load_state()
         self.refused_ids: Set[str] = set()      # every id refused by this process, for tests and callers
         self.pass_refused: Set[str] = set()
@@ -172,6 +188,7 @@ class CardLimit:
 
     def flush(self) -> None:
         """Write the counters beside the cards. Best effort; never raises."""
+        self.state_dirty = False
         try:
             target = self.state_path()
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -190,30 +207,33 @@ class CardLimit:
         except Exception:  # noqa: BLE001
             log.debug("could not write the card limit state", exc_info=True)
 
-    # -- the snapshot --------------------------------------------------------------------------
+    # -- counting ------------------------------------------------------------------------------
 
     @property
     def enabled(self) -> bool:
         return self.limit > 0
 
-    def snapshot(self) -> Dict[str, Dict[str, Any]]:
-        """The store's own cards, rebuilt when somebody else changed the repository.
+    def key(self) -> Any:
+        """What the folder looks like from outside: the change count every process raises under the lock, and
+        the folder's own modification time (which also moves when a person or an older version changed it)."""
+        try:
+            mtime = self.cards_dir.stat().st_mtime_ns
+        except OSError:
+            mtime = 0
+        return (self.folder.generation(), mtime)
 
-        "Somebody else" is known two ways: the repository's change stamp, and the folder lock's change
-        count, which every process raises when it adds or moves a card. The second is exact, so a
-        writer in another process can never leave this one counting a store that has since changed.
-        """
-        with self.lock:
-            stamp = self.revision_of()
-            generation = self.folder.generation()
-            if self.snapshot_cards is None or stamp != self.stamp or generation != self.generation_seen:
-                self.snapshot_cards = dict(self.list_cards())
-                self.stamp = stamp
-                self.generation_seen = generation
-            return self.snapshot_cards
+    def count_cards(self) -> int:
+        counter = getattr(self.repo, "count", None)
+        return int(counter()) if callable(counter) else len(self.list_cards())
 
     def count(self) -> int:
-        return len(self.snapshot())
+        """How many cards the store holds: a listing of names, cached until the folder changes."""
+        with self.lock:
+            key = self.key()
+            if self.counted is None or key != self.counted_key:
+                self.counted = self.count_cards()
+                self.counted_key = key
+            return self.counted
 
     def room(self) -> Optional[int]:
         """How many more derived cards fit, or None with no limit. Zero or less means full."""
@@ -221,56 +241,107 @@ class CardLimit:
             return None
         return self.limit - self.count()
 
+    def snapshot(self) -> Dict[str, Dict[str, Any]]:
+        """The store's own cards, parsed; rebuilt when the folder changed. For the notice and for choosing what moves."""
+        with self.lock:
+            key = self.key()
+            if self.snapshot_cards is None or key != self.snapshot_key:
+                self.snapshot_cards = dict(self.list_cards())
+                self.snapshot_key = key
+            return self.snapshot_cards
+
+    def exists(self, card_id: str) -> bool:
+        check = getattr(self.repo, "exists", None)
+        if callable(check):
+            return bool(check(card_id))
+        return card_id in self.snapshot()
+
     # -- admission -----------------------------------------------------------------------------
 
-    def admit(self, card_id: str, card: Dict[str, Any]) -> bool:
-        """Whether the store may write ``card`` under ``card_id`` now. Counts and announces refusals."""
+    def prepare(self, card_id: str, card: Optional[Dict[str, Any]] = None) -> Optional[List[str]]:
+        """BEFORE the folder's lock is taken: the coldest cards that could move out for this one.
+
+        Only a learned or quest card, new to a store that holds exactly its limit, can need room (a card not
+        yet built is taken to be a learned one). For everything else (a refresh of a card that exists, a
+        derived card, a store with room or already above the limit) this returns ``None`` at once without
+        reading a card. A list, possibly empty (every derived card holds something), means "looked, and
+        these are the choices".
+        """
+        if not self.enabled or (card is not None and card_kind(card) in DERIVED_KINDS) or self.exists(card_id):
+            return None
+        if self.count() != self.limit:
+            return None
+        return self.coldest(self.snapshot())
+
+    def coldest(self, held: Dict[str, Dict[str, Any]]) -> List[str]:
+        """Up to ``VICTIM_CHOICES`` derived cards nobody has touched, coldest first."""
+        ranked = heapq.nsmallest(VICTIM_CHOICES, (
+            (coldness(cid, c), cid) for cid, c in held.items()
+            if card_kind(c) in DERIVED_KINDS and not card_origin.protection(c)))
+        return [cid for _, cid in ranked]
+
+    def admit(self, card_id: str, card: Dict[str, Any], victims: Optional[List[str]] = None) -> bool:
+        """Whether the store may write ``card`` under ``card_id`` now. The caller holds the folder's lock.
+
+        A card that exists is refreshed. A new card is admitted while there is room; a new derived card is
+        refused beyond it. A new learned or quest card, with the store exactly AT its limit, moves one of
+        ``victims`` out to make room; with the store already ABOVE its limit it moves nothing (swapping cards
+        one for one would only exchange the regenerable ones for learned ones for good) and is counted as kept
+        over the limit, as it is when nothing can move. Counts, never parses: see the class.
+        """
         if not self.enabled:
             return True
-        with self.folder, self.lock:
-            held = self.snapshot()
-            if card_id in held:
+        if self.exists(card_id):
+            return True
+        with self.lock:
+            count = self.count()
+            if count < self.limit:
+                self.pending_add = True
                 return True
-            if len(held) < self.limit:
-                held[card_id] = card
-                self.membership_changed = True
-                return True
-            kind = card_kind(card)
-            if kind in DERIVED_KINDS:
+            if card_kind(card) in DERIVED_KINDS:
                 self.pass_refused.add(card_id)
                 self.refused_ids.add(card_id)
                 self.reached()
                 return False
-            if self.make_room(held, for_card=card_id):
+            if count == self.limit:
+                # ``victims`` is None when nobody looked because there was room a moment ago and another
+                # process has filled it since: look now (a store at exactly its limit, so this is small).
+                choices = victims if victims is not None else self.coldest(self.snapshot())
+            else:
+                choices = []                     # above the limit: nothing is exchanged for the new card
+            if choices and self.make_room(choices, for_card=card_id):
                 self.state.evicted += 1
             else:
                 self.state.admitted_over += 1
-            held[card_id] = card
-            self.membership_changed = True
-            # The move changed the folder; the snapshot in hand is right for it (it has the card that is
-            # about to be written), so it must not be rebuilt from disk by the notice below.
-            self.stamp = self.revision_of()
+            self.pending_add = True
+            self.state_dirty = True
             self.reached()
-            self.flush()
             return True
 
     def wrote(self, ok: bool) -> None:
-        """The store has written (or failed to write) what ``admit`` allowed: keep the snapshot true.
+        """The store has written (or failed to write) what ``admit`` allowed: keep the count true.
 
-        Called by the writer while it still holds the folder's lock. A card that joined the store (or
-        left it) raises the folder's change count here, once it is really on disk, so every other
-        process looks at the folder again before it counts it.
+        Called by the writer while it still holds the folder's lock. A card that joined the store (or left it)
+        raises the folder's change count here, once it is really on disk, so every other process counts again.
         """
         if not self.enabled:
             return
-        with self.folder, self.lock:
-            if ok:
-                self.stamp = self.revision_of()
-                if self.membership_changed:
-                    self.generation_seen = self.folder.bump() or self.generation_seen
-            else:
-                self.snapshot_cards = None
-            self.membership_changed = False
+        with self.lock:
+            added = ok and self.pending_add
+            if added and self.counted is not None:
+                self.counted += 1
+            if added or self.folder_changed:
+                self.folder.bump()
+            if self.counted is not None:
+                self.counted_key = self.key()
+            self.pending_add = False
+            self.folder_changed = False
+
+    def note_restored(self) -> None:
+        """A card the limit moved out came back because a run added to it: it is a kept-over-the-limit card now."""
+        with self.lock:
+            self.state.admitted_over += 1
+            self.reached()
 
     def begin_pass(self) -> None:
         """An indexing pass starts: what it refuses is counted afresh."""
@@ -294,49 +365,37 @@ class CardLimit:
             if refused or self.pass_unindexed or self.state.waiting or self.state.unindexed_files:
                 self.state.waiting = refused
                 self.state.unindexed_files = self.pass_unindexed
+                self.state_dirty = True
                 if refused or self.pass_unindexed:
                     self.reached()
-                self.flush()
-            return refused
+        self.speak()
+        return refused
 
     def refused_in_pass(self) -> int:
         return len(self.pass_refused)
 
-    def least_valuable_derived(self, held: Dict[str, Dict[str, Any]]) -> Optional[str]:
-        """The coldest derived card nobody has touched, or None when every derived card holds something."""
-        candidates = [(coldness(cid, c), cid) for cid, c in held.items()
-                      if card_kind(c) in DERIVED_KINDS and not card_origin.protection(c)]
-        return min(candidates)[1] if candidates else None
-
-    def make_room(self, held: Dict[str, Dict[str, Any]], *, for_card: str) -> bool:
-        """Move one cold derived card out. Each candidate is read again first: a card another process
-        already moved, or one that has since gained notes, usage or tags, is dropped from the choice and
-        the next coldest is tried. True when a card was moved (by THIS call)."""
-        tried: Set[str] = set()
-        while True:
-            candidates = {cid: c for cid, c in held.items() if cid not in tried}
-            victim = self.least_valuable_derived(candidates)
-            if victim is None:
-                return False
-            tried.add(victim)
-            if self.evict(victim, held, for_card=for_card):
+    def make_room(self, victims: List[str], *, for_card: str) -> bool:
+        """Move one of ``victims`` out, coldest first. Each is read again here, under the lock: one that
+        another process already moved, or that has since gained notes, usage or tags, is skipped for the next.
+        True when a card was moved (by THIS call)."""
+        for victim in victims:
+            if self.evict(victim, for_card=for_card):
                 return True
+        return False
 
-    def evict(self, victim: str, held: Dict[str, Dict[str, Any]], *, for_card: str) -> bool:
+    def evict(self, victim: str, *, for_card: str) -> bool:
         move = getattr(self.repo, "quarantine", None)
         read = getattr(self.repo, "read", None)
         if not callable(move) or not callable(read):
             return False
         card = read(victim)
-        if not isinstance(card, dict):
-            held.pop(victim, None)              # somebody else moved it already: not ours to count
-            return False
-        if card_origin.protection(card):
-            held[victim] = card                 # it has gained something since the snapshot: it stays
-            return False
+        if not isinstance(card, dict) or card_origin.protection(card):
+            return False                         # gone already, or it has gained something: it stays
         if not move(victim, QUARANTINE_REASON):
             return False
-        held.pop(victim, None)
+        self.folder_changed = True
+        if self.counted is not None:
+            self.counted -= 1                    # the card is out; the caller's own card goes in next
         self.append_manifest({"moved": victim, "kind": card_kind(card), "for": for_card,
                                "usage_count": card.get("usage_count", 0), "at": card_origin.now_iso(),
                                "why": "the store was at its card limit and a card learned from a run or "
@@ -355,9 +414,27 @@ class CardLimit:
     # -- saying so -------------------------------------------------------------------------------
 
     def reached(self) -> None:
+        """Note that the limit has acted; the notice itself is given by ``speak``, outside any lock."""
         if not self.state.reached_at:
             self.state.reached_at = card_origin.now_iso()
-        self.announce()
+        self.state_dirty = True
+        self.announce_due = True
+
+    def speak(self) -> None:
+        """Give the notice that is due and write the counters, once the caller holds no lock. Never raises.
+
+        Building the notice reads every card, so it is never done while this thread holds the folder's lock
+        (a caller that took the lock around its write calls ``speak`` again after it let go)."""
+        if self.folder.held_by_current_thread():
+            return
+        if self.announce_due:
+            self.announce_due = False
+            self.announce()
+        if self.state_dirty:
+            self.flush()
+        with self.lock:
+            if self.counted is not None:
+                self.counted_key = self.key()    # the notice and the counters are this process's own files
 
     def announce(self, *, at_open: bool = False, notify: Optional[Callable[[str], None]] = None) -> bool:
         """Say, once per process, that this store is full, with what fills it. True when it spoke."""

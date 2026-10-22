@@ -223,7 +223,10 @@ class BootstrapMixin:
                 # _merge_card_group). A card matching every query answers none of them.
                 kws = card.get("keywords") or []
                 if len(kws) > _MAX_MERGED_KEYWORDS:
+                    unedited = card_origin.matches_index_hash(card)
                     card["keywords"] = kws[:_MAX_MERGED_KEYWORDS]
+                    if unedited:
+                        card_origin.stamp_index_hash(card)      # the index's own repair is not an edit by hand
                     if not self._dry_run:
                         try:
                             self._store_write(cid, card)
@@ -234,7 +237,10 @@ class BootstrapMixin:
                 if summary and _is_prompt_echo(summary):
                     replacement = _first_substantive_line(summary) or (card.get("name") or "").strip()
                     if replacement and replacement != summary:
+                        unedited = card_origin.matches_index_hash(card)
                         card["summary"] = replacement[:200]
+                        if unedited:
+                            card_origin.stamp_index_hash(card)
                         if not self._dry_run:
                             try:
                                 self._store_write(cid, card)
@@ -516,16 +522,25 @@ class BootstrapMixin:
             if not isinstance(card, dict):
                 return False                        # somebody else moved it already
             why = card_origin.protection(card)
+            joined: Dict[str, Any] = {}
             if why:
                 survivor_path = self._cards_dir / f"{survivor_id}.json" if survivor_id else None
-                if survivor_path is None or not survivor_path.is_file() or not callable(quarantine) \
-                        or hygiene.join_onto(self._cards_dir, card, survivor_path):
-                    _log.info("context index: copy %s stays: %s, and no card it can join stands for it", card_id, why)
+                failed = ""
+                if survivor_path is None or not survivor_path.is_file() or not callable(quarantine):
+                    failed = "no card it can join stands for it"
+                else:
+                    failed, joined = hygiene.join_onto(self._cards_dir, card, survivor_path)
+                if failed:
+                    _log.info("context index: copy %s stays: %s, and %s", card_id, why, failed)
                     return False
             if callable(quarantine):
                 moved = bool(quarantine(card_id, "superseded-import"))
                 if moved:
                     self.folder_bump()
+                    find = getattr(repo, "quarantined", None)
+                    placed = find(card_id) if callable(find) else None
+                    if placed is not None:
+                        hygiene.record_retirement(self._cards_dir, placed, card_id, survivor_id, joined)
                 return moved
             return bool(self._repo.delete(card_id))
 
@@ -946,7 +961,7 @@ class BootstrapMixin:
         limit says so here, once (see ``card_limit``); nothing is removed to fit the limit.
         """
         try:
-            self.tidy(notify)       # first: so the index built below never holds a card on its way out
+            self.tidy(notify, quick=True)   # first: so the index built below never holds a card on its way out
             cards = self._load_all()
             self.limit_guard.check_at_open(notify)
             self.inflated()

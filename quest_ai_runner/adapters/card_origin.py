@@ -22,6 +22,7 @@ Pure functions, stdlib only. The store logic that applies them is in ``context_s
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import re
@@ -197,20 +198,69 @@ def is_copy(card: Dict[str, Any]) -> bool:
     return bool(prov.get("imported_from") or prov.get(ORIGIN_STORE))
 
 
-def protection(card: Dict[str, Any]) -> str:
+INDEX_HASH = "index_hash"            # provenance key: a hash of what the index pass wrote (see ``index_fingerprint``)
+# Fields of a card that change without anybody editing it: the index's own bookkeeping and the heat a retrieval leaves.
+VOLATILE_FILE_KEYS = frozenset({"sha256", "mtime", "git_sha", "tfdfidf_terms", "tfdfidf_v", "last_used_ts", "use_count"})
+VOLATILE_CARD_KEYS = frozenset({"id", "provenance", "origin", "usage_count", "last_outcome"})
+
+
+def index_fingerprint(card: Dict[str, Any]) -> str:
+    """A short hash of what an index pass wrote on this card: everything except the fields that change on their
+    own (the id, fingerprints of the files, retrieval heat, the usage count, the origin stamp, the provenance). A summary,
+    keywords, a link or any field added by hand is in it, so the hash no longer matches once somebody edits one.
+    Stored by the pass in ``provenance.index_hash``; a card without one is judged as before."""
+    body = {k: v for k, v in card.items() if k not in VOLATILE_CARD_KEYS}
+    body["files"] = [({k: v for k, v in fe.items() if k not in VOLATILE_FILE_KEYS} if isinstance(fe, dict) else fe)
+                     for fe in card.get("files") or []]
+    text = json.dumps(body, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha1(text.encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def stamp_index_hash(card: Dict[str, Any]) -> None:
+    """Record what the index pass wrote, so a later edit by hand shows. Call it on the finished card."""
+    prov = card.get("provenance")
+    if not isinstance(prov, dict):
+        prov = {}
+        card["provenance"] = prov
+    prov.pop(INDEX_HASH, None)
+    prov[INDEX_HASH] = index_fingerprint(card)
+
+
+def matches_index_hash(card: Dict[str, Any]) -> bool:
+    """Whether the pass recorded what it wrote on this card and the card still is exactly that."""
+    recorded = provenance_of(card).get(INDEX_HASH)
+    return bool(recorded) and recorded == index_fingerprint(card)
+
+
+def file_heat(card: Dict[str, Any]) -> int:
+    """How many times retrievals have rendered this card's files (``files[].use_count``, summed)."""
+    total = 0
+    for fe in card.get("files") or []:
+        if isinstance(fe, dict):
+            try:
+                total += max(0, int(fe.get("use_count") or 0))
+            except (TypeError, ValueError):
+                continue
+    return total
+
+
+def protection(card: Dict[str, Any], check_edits: bool = True) -> str:
     """Why this card may never be moved out of the index by a tidy, the card limit or a retirement, or "".
 
     A card is movable only while it is exactly what an index pass wrote and nothing else touched:
     written by the bootstrap (``created_by_task`` is ``bootstrap``; a card with no provenance was written
-    by a person), not used, not owned by another system, with no notes added by a run (a ``content`` key:
-    a pass never writes one, the card-update API always does), no quest tags and no conventions.
-    Anything else holds something that no file can regenerate. This is the one definition; the tidy,
-    the limit, the retirement of copies and ``scripts/quarantine_cards.py`` all ask it.
+    by a person), not used (the card's ``usage_count``, or retrievals that rendered its files), not owned by
+    another system, with no notes added by a run (a ``content`` key: a pass never writes one, the card-update
+    API always does), no quest tags and no conventions, and, when the pass recorded what it wrote
+    (``provenance.index_hash``), unchanged since: a summary, keywords, links or any field somebody edited by
+    hand no longer matches. ``check_edits=False`` skips that last comparison (it costs a hash of the card) for
+    a first, cheap look. Anything else holds something that no file can regenerate. This is the one
+    definition; the tidy, the limit, the retirement of copies and ``scripts/quarantine_cards.py`` all ask it.
     """
     if card.get("managed_by") or card.get("managed_fields") or card.get("managed_items"):
         return "managed by another system"
     try:
-        if int(card.get("usage_count") or 0) > 0:
+        if int(card.get("usage_count") or 0) > 0 or file_heat(card) > 0:
             return "has been used"
     except (TypeError, ValueError):
         pass
@@ -223,6 +273,10 @@ def protection(card: Dict[str, Any]) -> str:
         return "carries quest tags"
     if card.get("conventions"):
         return "carries conventions"
+    if check_edits:
+        recorded = provenance_of(card).get(INDEX_HASH)
+        if recorded and recorded != index_fingerprint(card):
+            return "edited by hand since the index wrote it"
     return ""
 
 

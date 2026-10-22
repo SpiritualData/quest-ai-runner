@@ -22,7 +22,8 @@ temporary folder, with a fake model that never leaves the process, and returns w
             Returns {moved_that_hold_something, notes_kept, learned_admitted}.
   tidy_protected  a tidy over cards pinning one topic's files, some written by hand, taught, or tagged for a quest.
             Returns {protected_moved, by_hand_kept, tagged_kept, taught_kept, copy_note_kept, plain_copy_moved}.
-  stale_writer    an updater shown a card another process has since moved out. Returns {stub_created, ...}.
+  stale_writer    an updater shown a card another process has since moved out of a full store. Its note is kept on the
+            card as it was. Returns {moved_by_the_first, note_kept, card_is_not_a_stub, nothing_else_moved}.
   mounted_edit    an edit meant for a card read in place from a neighbour. Returns {own_card_untouched, ...}.
   old_copy_with_notes  an older version's copy, taught something, that its replacement now stands for. Returns
             {retired, notes_joined, tags_joined, usage_joined}.

@@ -20,7 +20,7 @@ from .context_bootstrap_support import _log
 class HealMixin:
     """Tidy at open, and the consistency check that keeps an inflated store from being embedded."""
 
-    def tidy(self, notify: Optional[Callable[[str], None]] = None) -> int:
+    def tidy(self, notify: Optional[Callable[[str], None]] = None, quick: bool = False) -> int:
         """Move the cards that are provably copies of other cards out of the index. Never raises.
 
         Meant for a background thread: the scan and the moves are paced (``Pacer``), the cards being
@@ -28,6 +28,11 @@ class HealMixin:
         a card that is on its way out. Says what it did once: one WARNING (the terminal shows its first
         sentence as a calm line, the log holds the counts) and ``notify`` when given. Returns how many
         cards moved.
+
+        The plan is made from the cards the store has already parsed for its turns, so a large store is
+        not parsed twice. With ``quick`` (the startup tidy) nothing is planned unless a card file NAME shows
+        something to tidy (a vector point id, or an id that stacks import prefixes): a clean store of any size
+        pays one listing of names. A pass that has just written cards plans in full.
         """
         if not getattr(self, "heal_enabled", False) or self._dry_run:
             return 0
@@ -37,12 +42,15 @@ class HealMixin:
             return 0
         process_lock = StoreLock.for_dir(str(self._cards_dir), TIDY_LOCK_FILE)
         if not process_lock.acquire(blocking=False):
+            self.tidy_lock.release()
             return 0                      # another process is tidying this folder right now
         try:
+            if quick and not hygiene.names_show_something(self._cards_dir):
+                return 0
             pace = Pacer()
             own_store_id = self.own_store_id()
             plan = hygiene.plan_tidy(hygiene.card_files_in(self._cards_dir), pace, self._closed.is_set,
-                                     own_store_id)
+                                     own_store_id, cards=self._own_cards())
             if plan.kept:
                 _log.info("context index: tidy left %s", "; ".join(
                     f"{count:,} ({why})" for why, count in sorted(plan.kept.items())))
@@ -84,6 +92,9 @@ class HealMixin:
         does, something wrote cards the corpus did not call for, and the store is neither embedded nor
         synced until it is tidied (``export_for_embedding`` returns nothing). Nothing is removed for
         this reason. Only a store built with ``self_heal`` checks; others return False. Never raises.
+
+        The corpus's folder count is a walk of the whole corpus, so it is remembered against the store's last
+        completed pass (``hygiene.inflation_check``); a store that is not over it pays a count of its cards.
         """
         if not getattr(self, "heal_enabled", False) or self.inflation_verdict is not None:
             return bool(getattr(self, "inflation_verdict", False))
@@ -92,15 +103,15 @@ class HealMixin:
             root = self._effective_root()
             if not root or not Path(root).is_dir():
                 return False
-            health = hygiene.store_health(self._cards_dir, root=Path(root), cards=self._own_cards())
-            self.inflation_verdict = health.topic_over_folders
-            if self.inflation_verdict:
+            check = hygiene.inflation_check(self._cards_dir, Path(root), self._own_cards())
+            self.inflation_verdict = check.over
+            if check.over:
                 _log.error(
                     "This context store holds %d topic cards but its corpus has only %d folders "
                     "(%d allowed per folder), so something wrote cards the corpus did not call for. "
                     "It will not be embedded or synced this session. Nothing was removed: run "
                     "'quest-ai-runner cards tidy --cards-dir %s' to see what is provably redundant.",
-                    health.topic, health.folders or 0, health.per_folder, self._cards_dir)
+                    check.topic, check.folders or 0, check.per_folder, self._cards_dir)
         except Exception:  # noqa: BLE001
             _log.debug("context index: inflation check failed", exc_info=True)
         return bool(self.inflation_verdict)

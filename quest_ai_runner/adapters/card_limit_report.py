@@ -122,36 +122,51 @@ def thousands(n: int) -> str:
 
 
 def compact(n: int) -> str:
-    if n < 1000:
-        return str(n)
-    return f"{n / 1000:.1f}".rstrip("0").rstrip(".") + "k"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}".rstrip("0").rstrip(".") + "M"
+    if n >= 1000:
+        return f"{n / 1000:.1f}".rstrip("0").rstrip(".") + "k"
+    return str(n)
+
+
+FULL_HEADS = ("Context store full at {limit}", "Store full at {limit}", "Full at {limit}")
+OVER_HEADS = ("Context store over its limit of {limit} ({total})", "Store over limit {limit} ({total})",
+              "Over limit {limit} ({total})", "Over limit {limit}", "Over {limit} ({total})", "Over {limit}")
+WORD_SETS = (("topic", "imported", "learned", "quest"), ("topic", "imp", "learned", "quest"),
+             ("top", "imp", "lrn", "qst"))
 
 
 def count_line(b: Breakdown) -> str:
-    """The one line that says the store is full and what fills it, at most ``SCREEN_CHARS`` long when it can be.
+    """The one line that says the store is full and what fills it, at most ``SCREEN_CHARS`` long.
 
-    ``Context store full at 1,000: 812 topic, 150 imported, 30 learned, 8 quest``. The terminal shows the first
+    ``Store full at 1,000: 812 topic, 150 imported, 30 learned, 8 quest``. The terminal shows the first
     sentence of a warning cut to the width of the window (80 columns leave 72 characters), so this is one line
-    with no full stop inside it, and when the numbers are large it shortens its first words, drops the thousands
-    separators, then writes thousands as ``12k``, then every count as ``1.4k``. Nothing is ever left out of it: all four counts are
-    always there, and the longest form that fits is the one used.
+    with no full stop inside it. All four counts are always there, whatever the size of the store: the longest
+    form that fits is used, trying first the full words, then shortened first words (``Over limit ...``),
+    then no thousands separators, then ``12k`` and ``1.4M``, and only then shorter words.
     """
     over = b.total > b.limit
-    for fmt in (grouped, plain, thousands, compact):
-        for head in (("Context store over its limit of {limit} ({total})", "Store over limit {limit} ({total})",
-                      "Over limit {limit} ({total})") if over
-                     else ("Context store full at {limit}", "Store full at {limit}", "Full at {limit}")):
-            line = (head.format(limit=fmt(b.limit), total=fmt(b.total))
-                    + f": {fmt(b.topic)} topic, {fmt(b.imported)} imported, {fmt(b.learned)} learned, "
-                      f"{fmt(b.managed)} quest")
-            if len(line) <= SCREEN_CHARS:
-                return line
+    line = ""
+    for words in WORD_SETS:
+        for fmt in (grouped, plain, thousands, compact):
+            for head in (OVER_HEADS if over else FULL_HEADS):
+                line = (head.format(limit=fmt(b.limit), total=fmt(b.total))
+                        + f": {fmt(b.topic)} {words[0]}, {fmt(b.imported)} {words[1]}, "
+                          f"{fmt(b.learned)} {words[2]}, {fmt(b.managed)} {words[3]}")
+                if len(line) <= SCREEN_CHARS:
+                    return line
     return line
 
 
 def how_to_change_line() -> str:
     """The second line: how to allow more. Short enough for the same window, and no full stop inside it."""
-    return f"Set {limit_mod.ENV_MAX_CARDS} higher (0 = no limit), or ask the AI to raise it."
+    return f"Set {limit_mod.ENV_MAX_CARDS} higher (0 = no limit), or ask the AI to raise it"
+
+
+def lane_note(lines: List[str]) -> str:
+    """The two lines as one sentence pair for a lane's task feed, which has a task's text around it: it says
+    what it is about, so a reader does not take it for a report on their task."""
+    return f"About the context store, not this task: {lines[0]}. {lines[1]}."
 
 
 def notice_lines(b: Breakdown, *, admitted_over: int = 0) -> List[str]:
@@ -272,7 +287,7 @@ def announce_full(guard: Any, *, at_open: bool = False, notify: Optional[Callabl
                 log.debug("card limit notice callback failed", exc_info=True)
     # The whole text, for the log file and for an AI asked to change the limit; not repeated on screen.
     log.warning("%s", full_text(b, guard.state, guard.cards_dir), extra={"in_transcript": False})
-    limit_mod.hold_task_note(str(guard.cards_dir), " ".join(lines))
+    limit_mod.hold_task_note(str(guard.cards_dir), lane_note(lines))
 
 
 def report_for(cards_dir: str, limit: int) -> str:

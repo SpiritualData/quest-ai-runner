@@ -58,6 +58,7 @@ class StoreLock:
         self.path = os.path.join(directory, name)
         self.thread_lock = threading.RLock()
         self.depth = 0
+        self.owner: Optional[int] = None         # the thread that holds it, while it is held
         self.fd: Optional[int] = None
         self.warned = False
 
@@ -68,6 +69,10 @@ class StoreLock:
     def __exit__(self, *exc: object) -> None:
         self.release()
 
+    def held_by_current_thread(self) -> bool:
+        """Whether the calling thread holds this lock now (at any depth)."""
+        return self.depth > 0 and self.owner == threading.get_ident()
+
     def acquire(self, blocking: bool = True) -> bool:
         """Take the lock (again, if this thread holds it). False only when ``blocking`` is off and it is busy."""
         if not self.thread_lock.acquire(blocking):
@@ -76,11 +81,13 @@ class StoreLock:
             self.thread_lock.release()
             return False
         self.depth += 1
+        self.owner = threading.get_ident()
         return True
 
     def release(self) -> None:
         self.depth -= 1
         if self.depth == 0:
+            self.owner = None
             self.unlock_file()
         self.thread_lock.release()
 

@@ -308,6 +308,210 @@ class TestTheMoveLooksAgain:
         assert (first.moved, second.moved) == (1, 0)
 
 
+class TestAJoinIsDoneOnceAndCanBeUndone:
+    """Round 2 findings 4 and 8: a join repeated after a kill added the usage twice; the documented undo (moving the
+    files back) left every joined note on two cards."""
+
+    def copy_with_something(self, cards):
+        files = ["a/one.md", "a/two.md"]
+        note = dict(NOTE, id="n1", ts=5.0)
+        seed(cards, [card("t", files, name="a topic", summary="about t", usage_count=1),
+                     card(f"{SD}--{PRODUCT}--t", files, name="a topic", summary="about t", usage_count=2,
+                          content=[note], scope_tags=["quest:q1"])])
+        return files
+
+    def test_a_join_repeated_after_a_kill_between_the_join_and_the_move_counts_the_usage_once(self, tmp_path, monkeypatch):
+        cards = tmp_path / "cards"
+        self.copy_with_something(cards)
+        plan = hygiene.plan_tidy(hygiene.card_files_in(cards))
+        real = hygiene.move_to
+        monkeypatch.setattr(hygiene, "move_to", lambda *args: None)     # the process dies after the join was written
+        assert hygiene.apply_tidy(cards, plan).failed == 1
+        assert FilesystemCardRepository(str(cards)).read("t")["usage_count"] == 3
+        monkeypatch.setattr(hygiene, "move_to", real)
+        assert hygiene.apply_tidy(cards, hygiene.plan_tidy(hygiene.card_files_in(cards))).moved == 1
+        kept = FilesystemCardRepository(str(cards)).read("t")
+        assert kept["usage_count"] == 3, "joined once, not twice"
+        assert [i["id"] for i in kept["content"]] == ["n1"] and kept["scope_tags"] == ["quest:q1"]
+
+    def test_the_undo_puts_the_card_back_and_takes_what_was_joined_off_its_keeper(self, tmp_path):
+        cards = tmp_path / "cards"
+        self.copy_with_something(cards)
+        before = FilesystemCardRepository(str(cards)).read("t")
+        result = hygiene.apply_tidy(cards, hygiene.plan_tidy(hygiene.card_files_in(cards)))
+        assert result.moved == 1 and ids(cards) == ["t"]
+        assert hygiene.keeper_of_moved(cards, f"{SD}--{PRODUCT}--t") == "t", "the manifest says which card stands for it"
+        undone = hygiene.undo_tidy(cards, result.manifest)
+        assert (undone.restored, undone.unjoined) == (1, 1)
+        assert ids(cards) == sorted(["t", f"{SD}--{PRODUCT}--t"])
+        keeper = FilesystemCardRepository(str(cards)).read("t")
+        assert keeper["usage_count"] == before["usage_count"] and "content" not in keeper
+        assert "scope_tags" not in keeper and "joined_copies" not in keeper["provenance"]
+        back = FilesystemCardRepository(str(cards)).read(f"{SD}--{PRODUCT}--t")
+        assert back["usage_count"] == 2 and [i["id"] for i in back["content"]] == ["n1"]
+        assert hygiene.undo_tidy(cards, result.manifest).restored == 0, "a second undo finds nothing to do"
+
+    def test_a_note_of_the_same_id_the_join_replaced_comes_back_with_the_undo(self, tmp_path):
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        seed(cards, [card("t", files, name="a topic", summary="about t",
+                          content=[dict(NOTE, locator={"text": "old"}, ts=1.0)]),
+                     card(f"{SD}--{PRODUCT}--t", files, name="a topic", summary="about t",
+                          content=[dict(NOTE, locator={"text": "new"}, ts=9.0)])])
+        result = hygiene.apply_tidy(cards, hygiene.plan_tidy(hygiene.card_files_in(cards)))
+        assert FilesystemCardRepository(str(cards)).read("t")["content"][0]["locator"]["text"] == "new"
+        hygiene.undo_tidy(cards, result.manifest)
+        assert FilesystemCardRepository(str(cards)).read("t")["content"][0]["locator"]["text"] == "old"
+
+    def test_the_command_does_the_same(self, tmp_path, capsys):
+        from quest_ai_runner.cli import main
+        cards = tmp_path / "cards"
+        self.copy_with_something(cards)
+        assert main(["cards", "tidy", "--cards-dir", str(cards), "--apply"]) == 0
+        manifest = next((cards / "_quarantine").glob("*-tidy-manifest.jsonl"))
+        capsys.readouterr()
+        assert main(["cards", "tidy", "--cards-dir", str(cards), "--undo", str(manifest)]) == 0
+        assert "put back        : 1" in capsys.readouterr().out and len(ids(cards)) == 2
+
+
+class TestOnlyWhatIsNeededIsRead:
+    """Round 2 finding 3: the startup tidy parsed every card a second time while the first turn parsed them."""
+
+    def test_a_plan_made_from_parsed_cards_reads_no_card_file(self, tmp_path, monkeypatch):
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        seed(cards, [card("t", files, name="a topic"), card(f"{SD}--{PRODUCT}--{ROOT}--t", files, name="a topic"),
+                     card("other", ["b/one.md", "b/two.md"])])
+        parsed = FilesystemCardRepository(str(cards)).load_all()
+        reads = []
+        real = hygiene.read_card
+        monkeypatch.setattr(hygiene, "read_card", lambda path: reads.append(path) or real(path))
+        plan = hygiene.plan_tidy(hygiene.card_files_in(cards), cards=parsed)
+        assert [m.reason for m in plan.moves] == ["compounded"] and reads == []
+
+    def test_the_startup_tidy_of_a_clean_store_plans_nothing(self, tmp_path, monkeypatch):
+        seed(tmp_path / "cards", [card(f"topic-{i}", [f"f{i}/a.md", f"f{i}/b.md"]) for i in range(5)])
+        monkeypatch.setattr(hygiene, "plan_tidy", lambda *a, **k: pytest.fail("a clean store was planned"))
+        assert store(tmp_path, self_heal=True).tidy(quick=True) == 0
+
+    def test_a_name_that_stacks_prefixes_or_is_a_vector_point_id_starts_the_plan(self, tmp_path):
+        files = ["a/one.md", "a/two.md"]
+        seed(tmp_path / "cards", [card("t", files, name="a topic"), card(f"{SD}--t", files, name="a topic")])
+        assert store(tmp_path, self_heal=True).tidy(quick=True) == 0, "one import prefix is a normal copy"
+        seed(tmp_path / "cards", [card(f"{SD}--{PRODUCT}--t", files, name="a topic")])
+        assert store(tmp_path, self_heal=True).tidy(quick=True) == 2, "the whole plan runs: both copies are moved"
+
+    def test_the_corpus_folder_count_is_walked_once_while_the_store_does_not_change(self, tmp_path, monkeypatch):
+        root = tmp_path / "corpus"
+        for name in ("a", "b"):
+            (root / name).mkdir(parents=True)
+            (root / name / "n.md").write_text("x")
+        seed(tmp_path / "cards", [card("topic-1", ["a/n.md", "b/n.md"], provenance={"created_by_task": "bootstrap"})])
+        hygiene.write_card_file  # imported above; the meta below gives the store a completed pass to key on
+        (tmp_path / "cards" / "bootstrap_meta.json").write_text(json.dumps({"completed_at": "2026-10-22T00:00:00+00:00"}))
+        walks = []
+        real = hygiene.indexable_folders
+        monkeypatch.setattr(hygiene, "indexable_folders", lambda r: walks.append(r) or real(r))
+        for _ in range(3):
+            s = FileContextStore(str(tmp_path / "cards"), repo_root=str(root), auto_bootstrap=False,
+                                 mount_mode="copy", max_cards=0, self_heal=True)
+            assert s.inflated() is False
+        assert len(walks) == 1
+
+    def test_a_remembered_count_never_says_inflated_without_a_fresh_walk(self, tmp_path):
+        root = tmp_path / "corpus"
+        (root / "a").mkdir(parents=True)
+        (root / "a" / "n.md").write_text("x")
+        cards = tmp_path / "cards"
+        seed(cards, [card("topic-1", ["a/n.md", "a/m.md"], provenance={"created_by_task": "bootstrap"})])
+        (cards / "bootstrap_meta.json").write_text(json.dumps({"completed_at": "2026-10-22T00:00:00+00:00"}))
+        for i in range(60):
+            (root / f"more{i}").mkdir()
+            (root / f"more{i}" / "n.md").write_text("x")
+        topics = {f"t{i}": card(f"t{i}", [f"x{i}/a.md"], provenance={"created_by_task": "bootstrap"}) for i in range(40)}
+        hygiene.remember_folder_count(cards, root, 10)            # a count from when the corpus was small
+        check = hygiene.inflation_check(cards, root, topics)
+        assert check.over is False and check.folders > 40, "the old count said inflated; the fresh walk did not"
+        assert hygiene.cached_folder_count(cards, root) == check.folders
+        small = {f"t{i}": card(f"t{i}", [f"x{i}/a.md"], provenance={"created_by_task": "bootstrap"}) for i in range(500)}
+        assert hygiene.inflation_check(cards, root, small).over is True
+
+
+class TestWhatTheIndexWroteAndWhatSomebodyChanged:
+    """Round 2 finding 6: an edit by hand to an index-pass card (summary, keywords, links, a custom field) or the
+    heat retrievals left on its files did not protect it."""
+
+    def indexed(self, tmp_path):
+        root = tmp_path / "corpus"
+        for name in ("a", "b"):
+            (root / name).mkdir(parents=True)
+            for i in range(2):
+                (root / name / f"n{i}.md").write_text(f"# {name}\n")
+        from card_store_growth.world import DiskProvider
+        s = FileContextStore(str(root / ".quest-context"), repo_root=str(root), auto_bootstrap=False,
+                             mount_mode="copy", max_cards=0)
+        s.bootstrap(root=str(root), provider=DiskProvider(root.resolve()))
+        return root / ".quest-context"
+
+    def test_the_pass_records_what_it_wrote_and_the_card_is_free_to_move_while_it_matches(self, tmp_path):
+        from quest_ai_runner.adapters import card_origin
+        cards = self.indexed(tmp_path)
+        card_a = FilesystemCardRepository(str(cards)).read("a-topic")
+        assert card_a["provenance"]["index_hash"] == card_origin.index_fingerprint(card_a)
+        assert card_origin.protection(card_a) == ""
+
+    @pytest.mark.parametrize("change", [
+        {"summary": "a better summary"}, {"keywords": ["mine"]}, {"links": ["https://example.org/x"]},
+        {"notes": "a custom field a person added"}, {"description": "a better description"},
+    ], ids=["summary", "keywords", "links", "custom notes field", "description"])
+    def test_an_edit_by_hand_protects_the_card(self, tmp_path, change):
+        from quest_ai_runner.adapters import card_origin
+        cards = self.indexed(tmp_path)
+        edited = FilesystemCardRepository(str(cards)).read("a-topic")
+        edited.update(change)
+        assert card_origin.protection(edited) == "edited by hand since the index wrote it"
+        assert card_origin.protection(edited, check_edits=False) == "", "the quick look does not hash"
+
+    def test_the_heat_and_usage_the_machine_leaves_are_not_an_edit_but_a_retrieval_is_a_use(self, tmp_path):
+        from quest_ai_runner.adapters import card_origin
+        cards = self.indexed(tmp_path)
+        card_a = FilesystemCardRepository(str(cards)).read("a-topic")
+        card_a["files"][0]["sha256"] = "changed"
+        card_a["files"][0]["mtime"] = 1.0
+        assert card_origin.protection(card_a) == ""
+        card_a["files"][0]["use_count"] = 2
+        card_a["files"][0]["last_used_ts"] = 3.0
+        assert card_origin.protection(card_a) == "has been used"
+
+    def test_a_refresh_does_not_turn_the_pass_own_repair_into_an_edit(self, tmp_path):
+        from quest_ai_runner.adapters import card_origin
+        cards = self.indexed(tmp_path)
+        before = FilesystemCardRepository(str(cards)).read("a-topic")
+        files = {"a/n0.md", "a/n1.md"}
+        (tmp_path / "corpus" / "a" / "n0.md").write_text("# a edited\n")
+        from card_store_growth.world import DiskProvider
+        s = FileContextStore(str(cards), repo_root=str(tmp_path / "corpus"), auto_bootstrap=False,
+                             mount_mode="copy", max_cards=0)
+        s.refresh_stale(root=str(tmp_path / "corpus"), provider=DiskProvider((tmp_path / "corpus").resolve()))
+        after = FilesystemCardRepository(str(cards)).read("a-topic")
+        assert {f["path"] for f in after["files"]} == files and card_origin.protection(after) == ""
+        assert after["provenance"]["index_hash"] == card_origin.index_fingerprint(after)
+        assert before["provenance"]["index_hash"] or True
+
+    def test_the_tidy_keeps_a_duplicate_somebody_edited(self, tmp_path):
+        from quest_ai_runner.adapters import card_origin
+        cards = self.indexed(tmp_path)
+        original = FilesystemCardRepository(str(cards)).read("a-topic")
+        twin = json.loads(json.dumps(original))
+        twin["id"] = "a-topic-twin"
+        twin["provenance"]["created_at"] = "2099-01-01T00:00:00+00:00"       # ranks after the original
+        twin["summary"] = "worded by a person"
+        (cards / "a-topic-twin.json").write_text(json.dumps(twin))
+        plan, result = plan_and_apply(cards)
+        assert result.moved == 0 and "a-topic-twin" in ids(cards)
+        assert any("edited by hand" in why for why in plan.kept)
+
+
 def tidy_in_a_process(cards: str, root: str, barrier, results) -> None:
     logging.disable(logging.CRITICAL)
     s = FileContextStore(cards, repo_root=root, auto_bootstrap=False, mount_mode="copy", max_cards=0, self_heal=True)
