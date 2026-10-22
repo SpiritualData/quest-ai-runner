@@ -242,24 +242,36 @@ class TestTheVectorArmHandsTheCeilingToTheSource:
         assert not seed_source_takes_limit(object())
 
 
-class TestTheExportLetsTheTurnRun:
-    def test_the_export_yields_the_interpreter_every_few_cards(self, tmp_path, monkeypatch):
-        store = make_store(tmp_path, [make_card(f"c{i:02d}") for i in range(7)])
-        yields: List[float] = []
-        monkeypatch.setattr(store_cards, "EXPORT_YIELD_EVERY", 2)
-        monkeypatch.setattr(store_cards.time, "sleep", yields.append)
-        store.export_for_embedding()
-        assert yields == [0] * 4          # before cards 0, 2, 4 and 6
+class CountingPacer:
+    """Stands in for ``Pacer``: counts how often the loop under test offers to pause."""
 
-    def test_ranking_yields_between_slices_and_still_orders_exactly(self, monkeypatch):
+    made: List["CountingPacer"] = []
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.calls = 0
+        CountingPacer.made.append(self)
+
+    def __call__(self) -> None:
+        self.calls += 1
+
+
+class TestTheExportLetsTheTurnRun:
+    def test_the_export_offers_to_pause_once_per_card(self, tmp_path, monkeypatch):
+        store = make_store(tmp_path, [make_card(f"c{i:02d}") for i in range(7)])
+        CountingPacer.made = []
+        monkeypatch.setattr(store_cards, "Pacer", CountingPacer)
+        store.export_for_embedding()
+        assert [p.calls for p in CountingPacer.made] == [7]
+
+    def test_ranking_offers_to_pause_per_card_and_still_orders_exactly(self, monkeypatch):
         cards = {f"c{i:02d}": make_card(f"c{i:02d}", used=i % 3, touched=float((i * 7) % 11),
                                         managed=(i == 4))
                  for i in range(25)}
-        yields: List[float] = []
-        monkeypatch.setattr(store_cards, "EXPORT_YIELD_EVERY", 4)
-        monkeypatch.setattr(store_cards.time, "sleep", yields.append)
+        CountingPacer.made = []
+        monkeypatch.setattr(store_cards, "Pacer", CountingPacer)
+        monkeypatch.setattr(store_cards, "RANK_SLICE", 4)
         ordered = [card_id for card_id, _ in cards_in_seed_order(cards)]
-        assert len(yields) == 6                                  # one per full slice of four
+        assert [p.calls for p in CountingPacer.made] == [25]
         assert ordered == [key[3] for key in sorted(card_seed_key(i, c) for i, c in cards.items())]
         assert ordered[0] == "c04"                               # the managed card
 

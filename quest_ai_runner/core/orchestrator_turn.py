@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 
@@ -53,6 +54,7 @@ class TurnCardCache:
         self.executor: Optional[ThreadPoolExecutor] = None
         self.emit: Optional[Any] = None            # per-run event sink (set by run()); may stay None
         self.turn_start_query: Optional[str] = None   # the query the turn-start pre-fetch ran for
+        self.turn_start_began: Optional[float] = None   # time.monotonic() when that pre-fetch was registered
         self.turn_start_result: Any = None            # what the turn-start collect used (full or partial)
 
     def register_prefetch(self, query: str, future: Future) -> None:
@@ -63,6 +65,7 @@ class TurnCardCache:
             with self.lock:
                 self.futures[query] = future
                 self.turn_start_query = query
+                self.turn_start_began = time.monotonic()
         except Exception:  # noqa: BLE001
             pass
 
@@ -87,11 +90,15 @@ class TurnCardCache:
         * ``"reused"``: the turn-start collect already holds a result (full, or the partial it
           settled for); handed back at once.
         * ``"joined"``: the turn-start fetch timed out but is still running (or has since landed);
-          waited for up to ``timeout`` seconds and it finished in that time. ``on_wait`` is called
-          once, just before blocking on a fetch that is still running, so the caller can say so.
-        * ``"pending"``: that fetch is STILL running after ``timeout``; ``(None, "pending")``. The
-          caller goes on without it rather than start a second identical assembly that would only
-          compete with the first for the same store.
+          waited for what is left of ``timeout`` counted from when that fetch STARTED, and it
+          finished in that time. ``on_wait`` is called once, just before blocking on a fetch that
+          is still running, so the caller can say so.
+        * ``"pending"``: that fetch is STILL running when that time is up; ``(None, "pending")``.
+          The caller goes on without it rather than start a second identical assembly that would
+          only compete with the first for the same store. The person has already waited the whole
+          budget for the turn-start collect, so this does not wait a second budget on top of it:
+          a store too big to assemble in one budget used to cost two (64 s before the worker
+          started instead of 33 s) for a result that was dropped anyway.
         * ``""``: there is nothing to reuse (no assembler, no turn-start fetch this turn, or it
           failed); ``(None, "")``, and the caller assembles for itself."""
         try:
@@ -100,15 +107,17 @@ class TurnCardCache:
                     return self.turn_start_result, "reused"
                 query = self.turn_start_query
                 future = self.futures.get(query) if query else None
+                began = self.turn_start_began
             if future is None:
                 return None, ""
-            if not future.done() and on_wait is not None:
+            left = timeout if began is None else max(0.0, timeout - (time.monotonic() - began))
+            if not future.done() and left > 0 and on_wait is not None:
                 try:
                     on_wait()
                 except Exception:  # noqa: BLE001 -- a status callback must never break the wait
                     pass
             try:
-                assembled = future.result(timeout=timeout)
+                assembled = future.result(timeout=left)
             except FuturesTimeoutError:
                 return None, "pending"
             except Exception:  # noqa: BLE001 -- the fetch itself failed; the caller tries its own

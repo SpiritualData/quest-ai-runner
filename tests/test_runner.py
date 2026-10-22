@@ -1152,7 +1152,7 @@ def test_monitor_heartbeats_and_never_gives_up_early_while_waiting(monkeypatch):
     thread.join(timeout=2)
     assert not thread.is_alive()
 
-    beats = [e for e in events if e.type == gr.EVENT_EXEC and "elapsed" in (e.text or "")]
+    beats = [e for e in events if e.type == gr.EVENT_EXEC and (e.data or {}).get("phase") == "heartbeat"]
     assert beats, "a liveness heartbeat must fire while waiting for the session file"
     assert all("waiting for session output" in (e.text or "") for e in beats)
 

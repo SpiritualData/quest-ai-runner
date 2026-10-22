@@ -162,6 +162,26 @@ def test_pause_releases_the_process_and_resume_continues_the_same_session(tmp_pa
     assert "--resume" in argv and sid in argv
 
 
+def test_a_resumed_worker_is_watched_from_where_the_last_one_stopped(tmp_path, monkeypatch):
+    """A nudge or a retry resumes the session; its earlier output must not appear on screen a second time."""
+    started: List[Dict[str, Any]] = []
+
+    def watch(*args, **kwargs):
+        started.append(kwargs)
+
+    monkeypatch.setattr(goal_runner_stream, "_monitor_claude_session", watch)
+    monkeypatch.setattr(goal_runner_stream, "session_file_size", lambda working_dir, session_id: 321)
+    first = make_claude(tmp_path, {"steps": [{"name": "a", "seconds": 0.1}]}, "claude")
+    fresh = make_runner(first, tmp_path).run_goal(goal="g", brief="b", emit=lambda event: None,
+                                                  control=ScriptedControl().control)
+    second = make_claude(tmp_path, {"steps": [{"name": "c", "seconds": 0.1}]}, "claude2")
+    make_runner(second, tmp_path).run_goal(goal="g", brief="b", resume_session_id=fresh.session_id,
+                                           emit=lambda event: None, control=ScriptedControl().control)
+
+    assert [k["start_offset"] for k in started] == [0, 321]
+    assert started[1]["session_id"] == fresh.session_id
+
+
 def test_an_interrupt_the_worker_ignores_ends_in_terminate(tmp_path):
     claude = make_claude(tmp_path, {"steps": [{"name": "slow", "seconds": 30}], "ignore_interrupt": True})
     runner = make_runner(claude, tmp_path, grace=0.4)

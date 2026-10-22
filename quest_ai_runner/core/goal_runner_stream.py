@@ -69,6 +69,7 @@ from .goal_runner_session import (
     describe_session_activity,
     resolve_session_file,
     resolved_model_from_session,
+    session_file_size,
     worker_output_is_thin,
 )
 from .run_control import RunControl
@@ -525,10 +526,14 @@ class StreamJsonGoalRunner(SubprocessGoalRunner):
         stop_monitor = threading.Event()
         monitor_thread = None
         if emit is not None:
+            # Read before the worker starts: a resumed session already holds the output of its
+            # earlier spawn, and replaying it would show the person everything a second time.
+            already_reported = session_file_size(effective_dir, session_id) if resume_session_id else 0
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
                 args=(effective_dir, emit, stop_monitor, time.time()),
-                kwargs={"forced_run_id": run_id, "session_id": session_id}, daemon=True)
+                kwargs={"forced_run_id": run_id, "session_id": session_id,
+                        "start_offset": already_reported}, daemon=True)
             monitor_thread.start()
         try:
             proc = subprocess.Popen(

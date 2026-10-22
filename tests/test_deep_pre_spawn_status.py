@@ -10,7 +10,8 @@ was still running on the same store. Pinned here:
 * the per-goal assembly is bounded by the turn-start budget (a soft ``assembly_deadline`` in
   ``meta``, a WARNING on timeout) and the run proceeds without that context instead of hanging;
 * a single-goal run reuses the turn-start assembly (finished: handed over; still running: waited
-  for, never duplicated), a fan-out's subgoals still assemble for themselves;
+  for only what is left of the budget counted from when it started, never duplicated and never
+  given a second budget), a fan-out's subgoals still assemble for themselves;
 * the reuse never crosses scope tags, and a declined escalation never pays for an assembly;
 * a status never names a model for a runner that does not run the ladder's model.
 
@@ -327,18 +328,23 @@ def test_a_sequential_group_is_not_a_single_goal():
     assert all("TURN_START_VIEW" not in c["context_preamble"] for c in runner.calls)
 
 
-def test_a_turn_start_assembly_that_lands_late_is_joined_not_repeated(monkeypatch):
+def test_a_turn_start_assembly_that_lands_after_the_budget_is_not_waited_for_again(monkeypatch):
+    """The turn-start collect already waited the whole budget; the deep run does not wait a second one."""
     monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "0.3")
-    assembler = CountingAssembler(delay=0.5)
+    assembler = CountingAssembler(delay=1.5)
     timeline = Timeline()
     runner = OrderedRunner(timeline)
     orch = build(runner, assembler, plans=[deep_plan("Fix the parser bug")])
+    started = time.monotonic()
     result = orch.run("fix the parser", sink=timeline)
+    elapsed = time.monotonic() - started
 
     assert result.kind == "deep"
-    assert assembler.calls == [CONDITION], "joining the in-flight assembly, not starting a second"
-    assert f"CTX[{CONDITION}]" in runner.calls[0]["context_preamble"]
-    assert timeline.status_index(GATHERING) < timeline.worker_index("Fix the parser bug")
+    assert assembler.calls == [CONDITION], "no second assembly starts"
+    assert "CTX[" not in runner.calls[0]["context_preamble"]
+    assert GATHERING not in timeline.statuses(), "there is nothing left to wait for, so nothing to announce"
+    assert timeline.status_index(CONTEXT_DROPPED_STATUS) < timeline.worker_index("Fix the parser bug")
+    assert elapsed < 1.2, "the run did not sit on the assembly that was still going"
 
 
 def test_a_turn_start_assembly_that_never_lands_is_waited_on_once_then_dropped(monkeypatch, caplog):
@@ -362,8 +368,8 @@ def test_a_turn_start_assembly_that_never_lands_is_waited_on_once_then_dropped(m
     assert "CTX[" not in runner.calls[0]["context_preamble"]
     messages = [r.message.lower() for r in caplog.records]
     assert any("turn-start" in m and "proceeds without" in m for m in messages)
-    assert timeline.status_index(GATHERING) < timeline.status_index(CONTEXT_DROPPED_STATUS) \
-        < timeline.worker_index("Fix the parser bug")
+    assert GATHERING not in timeline.statuses()
+    assert timeline.status_index(CONTEXT_DROPPED_STATUS) < timeline.worker_index("Fix the parser bug")
 
 
 # --- the reuse never crosses a scope fence, and a declined run pays for nothing ------------------
@@ -443,6 +449,39 @@ def test_turn_start_context_reports_a_fetch_still_running_after_the_budget():
     cache = TurnCardCache(CountingAssembler(), {})
     cache.register_prefetch("q", Future())
     assert cache.turn_start_context(0.05) == (None, "pending")
+
+
+def test_turn_start_context_counts_the_budget_from_when_the_fetch_started():
+    cache = TurnCardCache(CountingAssembler(), {})
+    cache.register_prefetch("q", Future())
+    cache.turn_start_began = time.monotonic() - 40.0     # the person has already waited 40 s on it
+    waited: List[bool] = []
+    started = time.monotonic()
+
+    assert cache.turn_start_context(30.0, on_wait=lambda: waited.append(True)) == (None, "pending")
+    assert time.monotonic() - started < 0.5, "a second budget was spent on it"
+    assert waited == [], "nothing is being waited for, so nothing is announced"
+
+
+def test_turn_start_context_still_waits_for_what_is_left_of_the_budget():
+    cache = TurnCardCache(CountingAssembler(), {})
+    future: Future = Future()
+    cache.register_prefetch("q", future)
+    cache.turn_start_began = time.monotonic() - 0.2
+    threading.Timer(0.1, lambda: future.set_result(AssembledContext(context_view="LATE"))).start()
+
+    assembled, origin = cache.turn_start_context(2.0)
+    assert origin == "joined" and assembled.context_view == "LATE"
+
+
+def test_turn_start_context_hands_over_a_fetch_that_finished_after_the_budget_ran_out():
+    cache = TurnCardCache(CountingAssembler(), {})
+    future: Future = Future()
+    future.set_result(AssembledContext(context_view="DONE"))
+    cache.register_prefetch("q", future)
+    cache.turn_start_began = time.monotonic() - 99.0
+
+    assert cache.turn_start_context(30.0)[1] == "joined"
 
 
 def test_turn_start_context_leaves_a_failed_fetch_to_the_caller():

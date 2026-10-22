@@ -13,6 +13,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from ..core.adapters import AssembledContext
+from ..core.background_pacing import Pacer
 from .card_content_render import (
     content_item_text as _content_item_text,
     filter_content_by_time_range,
@@ -218,14 +219,19 @@ class AssemblyMixin:
 
         return weights
 
-    def _scoring_index(self, cards: Dict[str, Dict[str, Any]]
+    def _scoring_index(self, cards: Dict[str, Dict[str, Any]], pace: Optional[Pacer] = None
                        ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, int]]:
         """``(term-weight map per card, presence-based document frequency)`` for ``cards``.
 
         Cached across turns: a card's weights are reused while it is the same object (the card
         cache hands out new dicts whenever it reloads), and the DF table while the card set is
         unchanged and no card's weights were recomputed.
+
+        ``pace`` is called once per card weighed. The default does not pause: someone is waiting.
+        A build that nobody waits for any more (the turn gave up on it at its deadline, or this is
+        the prewarm) passes a ``Pacer`` so it stops starving the threads that are.
         """
+        pace = pace or Pacer.never()
         cache = self._term_weight_cache
         maps: Dict[str, Dict[str, float]] = {}
         recomputed = False
@@ -234,6 +240,7 @@ class AssemblyMixin:
             if hit is not None and hit[0] is card:
                 maps[cid] = hit[1]
             else:
+                pace()
                 weights = self._card_term_weights(card)
                 cache[cid] = (card, weights)
                 maps[cid] = weights
@@ -422,7 +429,11 @@ class AssemblyMixin:
         # symbols=1, dir components=0.5, extensions dropped). DF is computed
         # from presence (a term counts once per card regardless of weight) so
         # rare terms still get high IDF. Score = sum(field_weight * IDF).
-        card_weight_maps, df = self._scoring_index(cards)
+        # A turn that gave up on this search at its soft deadline is no longer waiting for the index:
+        # past that moment the build paces itself (see ``Pacer``). Until then it runs at full speed.
+        deadline = (meta or {}).get("assembly_deadline")
+        pace = Pacer(start_after=float(deadline)) if isinstance(deadline, (int, float)) else None
+        card_weight_maps, df = self._scoring_index(cards, pace)
         N = len(cards)
 
         # IDF(term) = log((N+1)/(df+1)) + 1  (smooth, always >= 1).

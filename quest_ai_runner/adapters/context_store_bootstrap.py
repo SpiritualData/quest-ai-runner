@@ -18,6 +18,7 @@ from .card_content_render import MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_C
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames, skip_subtrees
 from .card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
 from .bootstrap_reporter import mark_bootstrap_completed
+from ..core.background_pacing import Pacer
 from ..core.file_modes import match_umask
 from .context_bootstrap_support import (
     _BOOTSTRAP_MAX_BYTES,
@@ -765,7 +766,7 @@ class BootstrapMixin:
         try:
             cards = self._load_all()
             if cards:
-                self._scoring_index(cards)
+                self._scoring_index(cards, Pacer())
         except Exception:  # noqa: BLE001
             _log.debug("context index: prewarm failed", exc_info=True)
 

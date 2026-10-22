@@ -62,16 +62,39 @@ def _find_session_file(session_id: str, working_dir: Optional[str] = None) -> Op
     Resolving one base first and then looking inside it is wrong when two bases exist and the
     worker wrote to the other one: the monitor would wait on a file that never appears there and
     the live view would show only heartbeats.
+
+    Claude Code keeps a session at ``<base>/<project folder>/<session id>.jsonl``, so only each
+    project folder is looked in. A recursive search walks every session ever recorded (35,000
+    files on a busy machine), and the monitor asks every tenth of a second until the file
+    appears: while another thread kept the interpreter busy that walk took 12 to 17 seconds.
     """
     for base in _claude_project_bases(working_dir):
         try:
-            if base.exists():
-                match = next(base.rglob(f"{session_id}.jsonl"), None)
-                if match is not None:
-                    return match
+            if not base.exists():
+                continue
+            direct = base / f"{session_id}.jsonl"
+            if direct.is_file():
+                return direct
+            match = next(base.glob(f"*/{session_id}.jsonl"), None)
+            if match is not None:
+                return match
         except Exception as e:
             _log.debug("_find_session_file: error searching %s: %s", base, e)
     return None
+
+
+def session_file_size(working_dir: Optional[str], session_id: Optional[str]) -> int:
+    """Bytes already in the session's file, 0 when it has none yet. Never raises.
+
+    A resumed worker appends to the file its earlier spawn wrote; the monitor starts after those
+    bytes so a nudge or a retry does not replay everything the person has already seen."""
+    if not session_id:
+        return 0
+    try:
+        found = _find_session_file(session_id, working_dir)
+        return found.stat().st_size if found is not None else 0
+    except Exception:  # noqa: BLE001
+        return 0
 
 
 def _find_active_jsonl_file(project_dir: Path) -> Optional[Path]:
@@ -230,6 +253,7 @@ def _monitor_claude_session(
     forced_run_id: Optional[str] = None,
     session_id: Optional[str] = None,
     heartbeat_interval: float = DEFAULT_MONITOR_HEARTBEAT_SECONDS,
+    start_offset: int = 0,
 ) -> None:
     """Monitor a Claude Code session file and stream updates via callback.
 
@@ -253,6 +277,10 @@ def _monitor_claude_session(
     tagged with a different run_id (the new session file's own stem, when the "TASK N [xxxxxxxx]"
     marker isn't echoed back in the assistant's reply text), which a consumer's dashboard would
     then render as a separate, duplicate deep-run entry for what is really one ongoing subgoal.
+
+    ``start_offset`` is how many bytes of the session file were already there when the worker was
+    launched (``session_file_size``): a resumed session keeps its earlier output in the same file,
+    and only what the resumed worker adds is new.
     """
     _log.info("monitor thread started for working_dir: %s (session_id=%s)", working_dir, session_id)
     if cutoff_time is None:
@@ -318,7 +346,8 @@ def _monitor_claude_session(
         # parent session (or any other pre-existing session) for a new deep-runner subprocess
         # session. mtime alone is insufficient: the parent session's JSONL gets a new mtime
         # whenever Claude does anything in this conversation, which can push it past cutoff_time.
-        pre_existing_files: set = {str(f) for f in project_dir.rglob("*.jsonl")}
+        # Only that fallback needs the snapshot, and taking it walks every session file there is.
+        pre_existing_files: set = set() if session_id else {str(f) for f in project_dir.rglob("*.jsonl")}
         _log.debug("pre-existing session files excluded from monitoring: %d", len(pre_existing_files))
 
         while not stop_event.is_set():
@@ -344,7 +373,8 @@ def _monitor_claude_session(
                         # Track file position, not content hash (simpler, no duplicates)
                         if file_key not in watched_files:
                             _log.debug("detected session file: %s", jsonl_file.name)
-                            watched_files[file_key] = 0  # Start from beginning
+                            # From the beginning, except the part a resumed session already held.
+                            watched_files[file_key] = start_offset if session_id else 0
 
                         # Read new lines from this session file (only new ones we haven't seen)
                         current_size = jsonl_file.stat().st_size

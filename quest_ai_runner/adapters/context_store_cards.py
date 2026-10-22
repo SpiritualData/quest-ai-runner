@@ -5,7 +5,6 @@ A mixin of ``FileContextStore`` (see ``file_context_store.py``): methods only, s
 from __future__ import annotations
 
 import heapq
-import time
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
@@ -17,18 +16,16 @@ from .card_content_render import (
     tokenize as _tokenize,
 )
 from .card_repository import card_embed_text
+from ..core.background_pacing import Pacer
 from ..core.scope_tags import union_scope_tags
 from ..core.vector_scopes import SeedItems
 from .context_card_extraction import _card_slug, _managed_names, _trim_content_by_recency
 from .context_card_dedup import _record_summary
 from .context_bootstrap_support import _log
 
-# How many cards a pass over the whole store handles before it lets another thread run. The
-# embedding export runs on a background thread while the session's first turn assembles context on
-# another; a pure-Python loop over tens of thousands of cards otherwise keeps the GIL for whole
-# switch intervals, and every blocking call the turn makes (a stat, a read) waits one out. Yielding
-# is a courtesy to that thread, not a throttle: it costs the export nothing measurable.
-EXPORT_YIELD_EVERY = 200
+# How many card keys are sorted together before the next slice starts. One sort of 140,000 keys is
+# about 80 ms in a single call, and the interpreter's lock is held for all of it.
+RANK_SLICE = 200
 
 
 def card_last_touched(card: Dict[str, Any]) -> float:
@@ -86,16 +83,18 @@ def cards_in_seed_order(cards: Dict[str, Dict[str, Any]]) -> Iterator[Tuple[str,
     fraction of building items for it. The keys are sorted a slice at a time and merged lazily, so
     no single call holds the GIL for more than a slice (one sort of 140,000 keys is ~80 ms of
     stall for another thread) and a caller that stops after the best few never merges the rest.
+    The work is paced (``Pacer``): it runs on a background thread beside a turn that is waiting.
     """
+    pace = Pacer()
     slices: List[List[Tuple[int, float, int, str]]] = []
     current: List[Tuple[int, float, int, str]] = []
     for card_id, card in cards.items():
         current.append(card_seed_key(card_id, card))
-        if len(current) >= EXPORT_YIELD_EVERY:
+        pace()
+        if len(current) >= RANK_SLICE:
             current.sort()
             slices.append(current)
             current = []
-            time.sleep(0)
     if current:
         current.sort()
         slices.append(current)
@@ -582,11 +581,11 @@ class CardsMixin:
             result: List[Dict[str, Any]] = []
             capped = bool(limit) and limit > 0 and len(cards) > limit
             ordered = cards_in_seed_order(cards) if capped else cards.items()
-            for count, (card_id, card) in enumerate(ordered):
+            pace = Pacer()
+            for card_id, card in ordered:
                 if capped and len(result) >= limit:
                     break
-                if count % EXPORT_YIELD_EVERY == 0:
-                    time.sleep(0)
+                pace()
                 try:
                     # --- Text: the SHARED card embed-text helper (``card_embed_text``) — the topic
                     # NAME, the docstring-rich description (fall back to summary), the card's
