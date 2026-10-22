@@ -12,7 +12,7 @@ import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from textual.app import ComposeResult
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 from textual.widgets import RichLog, Static
 from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
@@ -21,7 +21,9 @@ from textual.containers import VerticalScroll
 from .chat_conversations import chat_log_path
 from .interactive_session import _Console
 from .interactive_session_tracker import format_elapsed
-from .textual_ui_helpers import _build_future_context_text, ellipsize, notice_line
+from .textual_ui_helpers import (
+    _build_future_context_text, ellipsize, metric_lines, notice_line, plural,
+)
 
 
 # Prompt placeholder shown while a turn is waiting on the user's reply to a decision question
@@ -29,15 +31,9 @@ from .textual_ui_helpers import _build_future_context_text, ellipsize, notice_li
 _AWAITING_DECISION_PLACEHOLDER = "Type your answer to the question above…"
 
 
-# Prompt placeholder shown while a turn is running — makes it explicit that typing now is safe
-# and queues, rather than looking like the input is simply dead until the AI finishes.
-_BUSY_PLACEHOLDER = "Type to queue a message for the next step…"
-
-
-def _busy_placeholder(queued: int) -> str:
-    if not queued:
-        return _BUSY_PLACEHOLDER
-    return f"{_BUSY_PLACEHOLDER} ({queued} queued)"
+# Prompt placeholder shown while a turn is running: typing now is safe (a note for the AI is read at the
+# next step), and the one key that stops the work is named, since the footer may be too narrow to show it.
+_BUSY_PLACEHOLDER = "Type to add a note for the AI. Esc stops the work."
 
 
 def newline_hint(environ=os.environ) -> str:
@@ -53,9 +49,9 @@ def newline_hint(environ=os.environ) -> str:
     return "Shift+Enter or Ctrl+J=newline"
 
 
-_READY_PLACEHOLDER = (
-    f"Ask anything…   Enter=send, {newline_hint()}   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
-)
+# Short enough to be drawn whole in the prompt of an 80 column terminal (the keys that matter while
+# working are in the key line under the prompt).
+_READY_PLACEHOLDER = f"Ask anything…  Enter=send, {newline_hint()}, /help"
 
 
 # ── RichLog-backed console adapter ─────────────────────────────────────────────
@@ -123,10 +119,12 @@ class _RichLogConsole(_Console):
 # under wrapped lines. The transcript now gets one short line per distinct problem; the full record
 # always goes to a log file.
 
-# The longest warning line the transcript shows, and how many distinct ones before the rest go to
-# the log file only (a handful is information, a dozen is noise).
+# The longest warning line the transcript shows, and how many distinct ones are shown before the rest
+# go to the log file only, counted in one closing line (a few are information, a dozen are noise).
 LOG_LINE_CHARS = 110
-LOG_LINES_SHOWN = 8
+LOG_LINES_SHOWN = 3
+# Seconds without a new warning after which the closing line is written (a burst is one group).
+LOG_SUMMARY_DELAY = 1.0
 LOG_FILE_BYTES = 1_000_000
 LOG_FILE_BACKUPS = 2
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -186,10 +184,12 @@ class _RichLogHandler(logging.Handler):
     """Routes Python logging for the chat: the full record to a file, a short line to the transcript.
 
     Every record reaching this handler is written in full to ``log_path`` (rotated, size capped).
-    The transcript gets at most one dim ``⚠`` line per distinct problem from this package's own
-    loggers: the first sentence, no time, level or logger name, with one hint to the file the first
-    time. A library's records (``huggingface_hub`` and the like) never appear there. With ``-v``
-    (``verbosity`` 1 or more) every record is written in full to the transcript, as before.
+    The transcript gets a dim ``⚠`` line for each of the first ``LOG_LINES_SHOWN`` distinct problems from
+    this package's own loggers: the first sentence, no time, level or logger name. Then, once the burst
+    is over (``write_summary``: a quiet second, or the person's next message), ONE closing line counts
+    the rest and says where the details are (``2 more notices. Details: <path>``), and the transcript
+    shows no further warnings. A library's records (``huggingface_hub`` and the like) never appear
+    there. With ``-v`` (``verbosity`` 1 or more) every record is written in full to the transcript.
     """
 
     def __init__(self, app: "QuestAITerminal", log: RichLog, verbosity: int = 0,
@@ -200,9 +200,10 @@ class _RichLogHandler(logging.Handler):
         self.verbosity = verbosity
         self.log_path = Path(log_path) if log_path is not None else chat_log_path()
         self.file_handler = open_log_file(self.log_path)
-        self.shown: Dict[str, int] = {}  # short line -> times seen, for the lines already shown
-        self.hinted = False
-        self.quieted = False
+        self.seen: Dict[str, int] = {}   # short line -> times seen, for every distinct problem
+        self.lines_shown = 0
+        self.summarized = False
+        self.timer = None
         self.setFormatter(logging.Formatter(LOG_FORMAT))
 
     def close(self) -> None:
@@ -217,6 +218,8 @@ class _RichLogHandler(logging.Handler):
             lines = self.transcript_lines(record)
             if lines:
                 self.show(lines)
+            if self.verbosity < 1 and self.seen and not self.summarized:
+                self.arm_summary()
         except Exception:  # noqa: BLE001
             # A logging problem must never reach the screen; the file already has the record.
             pass
@@ -232,20 +235,48 @@ class _RichLogHandler(logging.Handler):
         short = short_log_text(record.getMessage(), self.line_limit())
         if not short:
             return []
-        if short in self.shown:
-            self.shown[short] += 1
+        if short in self.seen:
+            self.seen[short] += 1
             return []
-        if self.quieted:
+        self.seen[short] = 1
+        if self.summarized or self.lines_shown >= LOG_LINES_SHOWN:
             return []
-        if len(self.shown) >= LOG_LINES_SHOWN:
-            self.quieted = True
-            return [notice_line("⚠ More warnings are in the log file only")]
-        self.shown[short] = 1
-        lines = [notice_line(f"⚠ {short}")]
-        if not self.hinted:
-            self.hinted = True
-            lines.append(notice_line(self.hint()))
-        return lines
+        self.lines_shown += 1
+        return [notice_line(f"⚠ {short}")]
+
+    def arm_summary(self) -> None:
+        """(Re)start the quiet second after which the closing line is written. Never raises."""
+        def arm() -> None:
+            try:
+                if self.timer is not None:
+                    self.timer.stop()
+                self.timer = self._app.set_timer(LOG_SUMMARY_DELAY, self.write_summary)
+            except Exception:  # noqa: BLE001  an app without timers (a stand-in) writes it on the next message
+                pass
+
+        thread_id = getattr(self._app, "_ui_thread_id", None)
+        if thread_id is not None and threading.get_ident() != thread_id:
+            try:
+                self._app.call_from_thread(arm)
+            except Exception:  # noqa: BLE001
+                pass
+        else:
+            arm()
+
+    def write_summary(self) -> None:
+        """Close the group of warnings with one line: how many more there were, and where the details are.
+
+        Once, and only if a warning was seen. Called when the burst is over, and before the person's next
+        message is echoed, so the line is the end of the group and never sits between two warnings."""
+        if self.summarized or not self.seen or self.verbosity >= 1:
+            return
+        self.summarized = True
+        if self.timer is not None:
+            self.timer.stop()
+            self.timer = None
+        more = max(len(self.seen) - self.lines_shown, 0)
+        head = f"{plural(more, 'more notice')}. " if more else ""
+        self.show([notice_line(head + self.hint())])
 
     def line_limit(self) -> int:
         """Longest warning text that still fits one line of this terminal (``LOG_LINE_CHARS`` at most)."""
@@ -257,14 +288,14 @@ class _RichLogHandler(logging.Handler):
         return min(LOG_LINE_CHARS, width - 8) if width >= 40 else LOG_LINE_CHARS
 
     def hint(self) -> str:
-        """Where the details are, once."""
+        """Where the details are."""
         if self.file_handler is None:
             return "Details: run with -v"
         home = str(Path.home())
         shown = str(self.log_path)
         if shown.startswith(home + os.sep):
             shown = "~" + shown[len(home):]
-        return f"Details: {shown}, or run with -v"
+        return f"Details: {shown}"
 
     def show(self, lines: List[Text]) -> None:
         """Write ``lines`` to the transcript on the UI thread (thread-safe)."""
@@ -281,12 +312,9 @@ class _RichLogHandler(logging.Handler):
 
 # ── Live widgets ────────────────────────────────────────────────────────────
 
-def with_elapsed(text: str, seconds: Optional[int]) -> str:
-    """A status line followed by how long the wait has lasted (unchanged when ``seconds`` is None)."""
-    if seconds is None:
-        return text
-    clock = format_elapsed(seconds)
-    return f"{text} {clock}" if text.endswith("…") else f"{text}  · {clock}"
+# Columns the status line assumes before the widget has a size, and the least it keeps of a status text.
+STATUS_WIDTH_FALLBACK = 76
+STATUS_MIN_CHARS = 12
 
 
 class ActivityBar(Static):
@@ -295,10 +323,12 @@ class ActivityBar(Static):
     Replaces the separate LoadingIndicator + StatusLine pair so we fully
     control dot count, inter-dot spacing, and the gap before the text.
 
-    A turn's clock (``start_clock`` / ``stop_clock``) adds the elapsed seconds to the line once a
-    wait passes ``SHOW_ELAPSED_AFTER``, so a long silent step (a deep run preparing) never looks
+    A turn's clock (``start_clock`` / ``stop_clock``) adds the elapsed time to the line once a
+    wait passes ``SHOW_ELAPSED_AFTER``, so a long silent step (preparing the work) never looks
     frozen. It runs from the start of the turn, not from the last status change, and the existing
-    interval timer repaints it, so it ticks once a second with no extra timer or flicker.
+    interval timer repaints it, so it ticks once a second with no extra timer or flicker. The clock
+    stands before the status text and the text is cut to the room left, so a long status can
+    never push the clock (or the count of messages waiting) off the end of a narrow terminal.
     """
 
     _INTERVAL = 0.45
@@ -360,28 +390,27 @@ class ActivityBar(Static):
             style = "cyan bold" if i == self._frame else "cyan dim"
             t.append("●", style=style)
         t.append("  ")
-        t.append(with_elapsed(self._text, self.elapsed_seconds()), style="dim")
-        if self._queued:
+        seconds = self.elapsed_seconds()
+        if seconds is not None:
+            t.append(format_elapsed(seconds))
             t.append("  ")
-            t.append(
-                f"· {self._queued} message{'s' if self._queued != 1 else ''} waiting",
-                style="bold yellow",
-            )
+        waiting = f"  · {plural(self._queued, 'message')} waiting" if self._queued else ""
+        room = (self.size.width or STATUS_WIDTH_FALLBACK) - len(t.plain) - len(waiting)
+        t.append(ellipsize(self._text, max(room, STATUS_MIN_CHARS)), style="dim")
+        if waiting:
+            t.append(waiting, style="bold yellow")
         return t
 
 
-class ContextPanel(Static):
-    """In-place, calm view of context cards + sources gathered this turn.
+class TurnContext:
+    """What one turn gathered: the context cards, the files read, how often the plan changed.
 
-    Updates the same widget rather than streaming lines into the transcript, so
-    the gather phase reads as one quietly-growing block (the display standard:
-    no flicker, no log spam).
-    """
+    State only, no widget: the context is told to the person in the transcript (the count line) and
+    behind Alt+C, and a panel that was never shown only held this state."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self) -> None:
         self.cards: List[dict] = []
-        self.sources: List[str] = []
+        self.sources: List[str] = []   # the files read so far (``EVENT_READ``)
         self.total_sources = 0
         self.replans = 0
 
@@ -390,66 +419,32 @@ class ContextPanel(Static):
         self.sources = []
         self.total_sources = 0
         self.replans = 0
-        self.refresh()
 
     def set_cards(self, cards: List[dict]) -> None:
         self.cards = cards or []
-        self.refresh()
 
     def add_sources(self, paths: List[str]) -> None:
         for p in paths:
             if p not in self.sources:
                 self.sources.append(p)
                 self.total_sources += 1
-        self.refresh()
 
     def inc_replans(self) -> None:
         self.replans += 1
         self.cards = []
         self.sources = []
-        self.refresh()
-
-    def render(self) -> str:
-        lines: List[str] = []
-        if self.cards:
-            lines.append("[bold cyan]\U0001F4C7 Context cards[/bold cyan]")
-            for card in self.cards:
-                cid = card.get("id", "?")
-                title = card.get("title") or "(no title)"
-                adapter = card.get("adapter", "")
-                score = card.get("relevance_score", 0)
-                fcount = card.get("file_count", len(card.get("files", [])))
-                alabel = f"\\[{adapter}] " if adapter else ""
-                sstr = f"score {score:.2f}" if score else "score ?"
-                lines.append(f"  [cyan]●[/cyan] {alabel}[dim]{cid}[/dim]: {title}")
-                lines.append(f"    [dim]{sstr} · {fcount} file{'s' if fcount != 1 else ''}[/dim]")
-                for f in (card.get("files") or [])[:3]:
-                    lines.append(f"      [dim]→ {f}[/dim]")
-                extra = len(card.get("files") or []) - 3
-                if extra > 0:
-                    lines.append(f"      [dim]… and {extra} more[/dim]")
-        if self.sources:
-            if self.cards:
-                lines.append("")
-            lines.append("[bold cyan]⌕ Sources[/bold cyan]")
-            for src in self.sources[-6:]:
-                prefix = "⌕" if src.startswith("(searched") else "↗"
-                label = src
-                lines.append(f"  {prefix} [dim]{label}[/dim]")
-            if len(self.sources) > 6:
-                lines.append(f"  [dim]… and {len(self.sources) - 6} more[/dim]")
-        self.display = bool(lines)
-        return "\n".join(lines)
 
 
 class DeepActivity(Static):
-    """In-place view of concurrent deep-run progress.
+    """In-place view of the work in progress.
 
-    Deep execution emits a steady stream of low-level ticks (tool calls, file
+    A running job emits a steady stream of low-level ticks (tool calls, file
     reads, agent steps). Appending each snapshot to the transcript buries the
     conversation under repeated "executing work…" lines. Instead we render the
-    whole live dashboard into this single widget and update it in place — one
+    whole live dashboard into this single widget and update it in place: one
     calm block that grows and shrinks, never a scrolling pile of snapshots.
+    Its text is the panel's own muted colour (never dimmed again, which fell below
+    the 4.5:1 contrast of readable text).
     """
 
     def __init__(self, *args, **kwargs):
@@ -464,21 +459,22 @@ class DeepActivity(Static):
         self._n_runs = n_runs
         self._line_map = line_map or {}
         self.display = bool(self._dashboard.strip())
-        self.refresh()
+        # The panel is as tall as its text (up to its maximum): a new height needs a new layout, not only a repaint.
+        self.refresh(layout=True)
 
     def hide(self) -> None:
         self._dashboard = ""
         self._n_runs = 0
         self._line_map = {}
         self.display = False
-        self.refresh()
+        self.refresh(layout=True)
 
     def render(self):
         if not self._dashboard.strip():
             return Text("")
-        hint = ("  [Alt+D/click] expand & scroll  [Tab] next agent" if self._n_runs > 1
-                else "  [Alt+D/click] expand & scroll full output")
-        t = Text.from_ansi(self._dashboard + f"\x1b[2m\n{hint}\x1b[0m")
+        hint = ("  Alt+D or click for details, Tab for the next job" if self._n_runs > 1
+                else "  Alt+D or click for details")
+        t = Text.from_ansi(self._dashboard + f"\n{hint}")
         t.no_wrap = False
         return t
 
@@ -505,13 +501,14 @@ class DeepActivity(Static):
 
 
 class DeepDetailPanel(VerticalScroll):
-    """Expanded, scrollable view of one deep run's full live exec output.
+    """Expanded, scrollable view of one job's full live output (Alt+D).
 
-    Hidden by default. Press ``d`` to toggle, ``Tab`` to cycle runs. Unlike the
-    calm inline dashboard (a few lines), this holds the run's ENTIRE output and
-    grows to fill the screen so there's room to actually read it. New lines
-    auto-follow the tail; page back through history with PgUp/PgDn (the body is a
-    real scroll region). Scrolling back to the bottom resumes following.
+    Hidden by default. Press Alt+D to toggle, ``Tab`` to cycle jobs. Unlike the
+    calm inline dashboard (a few lines), this holds the job's ENTIRE output and
+    grows to fill the screen so there's room to actually read it. After the
+    output come all of its metric results (the transcript shows the first few).
+    New lines auto-follow the tail; page back through history with PgUp/PgDn (the
+    body is a real scroll region). Scrolling back to the bottom resumes following.
     """
 
     def __init__(self, *args, **kwargs):
@@ -519,6 +516,7 @@ class DeepDetailPanel(VerticalScroll):
         self._run_id: Optional[str] = None
         self._goal: str = ""
         self._lines: List[str] = []
+        self._metrics: List[Mapping[str, Any]] = []
         self._pos: int = 1
         self._total: int = 1
         self._follow: bool = True
@@ -530,9 +528,10 @@ class DeepDetailPanel(VerticalScroll):
         yield self._body
 
     def open_for(self, run_id: str, goal: str, existing_lines: List[str],
-                 pos: int = 1, total: int = 1) -> None:
+                 pos: int = 1, total: int = 1, metrics: Sequence[Mapping[str, Any]] = ()) -> None:
         self._run_id = run_id
         self._goal = goal
+        self._metrics = [m for m in metrics if isinstance(m, Mapping)]
         self._lines = [ln.strip() for ln in existing_lines if ln and ln.strip()]
         self._pos = pos
         self._total = total
@@ -581,16 +580,22 @@ class DeepDetailPanel(VerticalScroll):
         if not self._run_id:
             self._body.update(Text(""))
             return
-        pos_str = f"agent {self._pos}/{self._total}  " if self._total > 1 else ""
+        pos_str = f"job {self._pos} of {self._total}: " if self._total > 1 else ""
         if self._total > 1:
-            nav_hint = "  scroll/PgUp/PgDn · [Tab] next · [Alt+D] close"
+            nav_hint = "  PgUp/PgDn to scroll, Tab for the next job, Alt+D to close"
         else:
-            nav_hint = "  scroll/PgUp/PgDn · [Alt+D] close"
-        header = f"⎅ {pos_str}{self._goal[:60]}"
-        body = "\n".join(f"  {ln}" for ln in self._lines)
-        footer = f"\x1b[2m{nav_hint}\x1b[0m"
-        t = Text.from_ansi(f"\x1b[1;36m{header}\x1b[0m\n{body}\n{footer}")
-        t.no_wrap = False
+            nav_hint = "  PgUp/PgDn to scroll, Alt+D to close"
+        t = Text(no_wrap=False)
+        t.append(f"{pos_str}{self._goal[:60]}\n", style="bold cyan")
+        t.append("\n".join(f"  {ln}" for ln in self._lines) + "\n")
+        if self._metrics:
+            # After the actions, where the panel's follow-the-tail view ends up, so opening it on a finished
+            # job shows the results first and PgUp goes back through the actions.
+            t.append("\n  Metric results\n", style="bold")
+            for line in metric_lines(self._metrics, limit=None):
+                t.append(line)
+                t.append("\n")
+        t.append(nav_hint)
         self._body.update(t)
         if self._follow:
             # Defer until after layout so virtual size reflects the new lines.
@@ -638,3 +643,36 @@ class FutureContextPanel(VerticalScroll):
     def _rerender(self) -> None:
         t = _build_future_context_text(self._bullets)
         self._body.update(t if t is not None else Text(""))
+
+
+class KeyHints(Static):
+    """The one line of keys that do something right now, under the prompt.
+
+    The app says which (``QuestAITerminal.key_hints``, most useful first: Esc while it works, then
+    Alt+D, Alt+C, Tab only when there is more than one job) and this draws as many whole hints as fit
+    the width, never a key cut in half. It replaces Textual's footer, which listed every binding in
+    its own order and showed only the first letters of the ones that did not fit at 80 columns."""
+
+    def on_mount(self) -> None:
+        # Cheap and rare enough to be the whole refresh logic: the keys follow the app's state.
+        self.set_interval(0.5, self.refresh)
+
+    def render(self):
+        variables = self.app.get_css_variables()
+        key_style = f"bold {variables.get('footer-key-foreground', '#FFA62B')}"
+        label_style = variables.get("footer-description-foreground", "#E0E0E0")
+        room = self.size.width or STATUS_WIDTH_FALLBACK
+        t = Text(no_wrap=True, overflow="crop")
+        try:
+            hints = self.app.key_hints()
+        except AttributeError:   # painted before the app finished mounting its panels
+            hints = []
+        for key, label in hints:
+            gap = 2 if t.plain else 0
+            if len(t.plain) + gap + len(key) + 1 + len(label) > room:
+                break
+            t.append(" " * gap)
+            t.append(key, style=key_style)
+            t.append(f" {label}", style=label_style)
+        return t
+

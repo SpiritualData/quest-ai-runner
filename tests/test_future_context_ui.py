@@ -78,9 +78,17 @@ def test_build_text_includes_header_and_bullets():
     )
     assert t is not None
     plain = t.plain
-    assert "Context it used" in plain
-    assert "col-123" in plain
+    assert plain.startswith("Sources used (2)\n"), "the heading counts the lines, in the transcript's own word"
+    assert "Pricing tiers (id: col-123)" in plain
     assert "metric units" in plain
+    assert "collection" not in plain, "the kind of store is internal and is not shown"
+    assert plain.rstrip().endswith("Alt+C to close")
+
+
+def test_the_panel_text_is_not_dimmed_twice():
+    """The panel's colour is already the muted one; a dim style on top fell to 3.7:1, under readable contrast."""
+    t = _build_future_context_text("- Pricing tiers")
+    assert all("dim" not in str(span.style) for span in t.spans)
 
 
 def test_build_text_empty_returns_none():
@@ -281,8 +289,7 @@ def test_build_shallow_context_bullets_from_cards():
         {"id": "card-2", "title": "Refund policy", "adapter": "vector"},
     ]
     bullets = _build_shallow_context_bullets(cards)
-    assert "keyword: Pricing tiers" in bullets
-    assert "vector: Refund policy" in bullets
+    assert bullets == "- Pricing tiers\n- Refund policy", "plain titles: no id, no kind of store"
 
 
 def test_build_shallow_context_bullets_empty_when_no_cards():
@@ -290,9 +297,9 @@ def test_build_shallow_context_bullets_empty_when_no_cards():
     assert _build_shallow_context_bullets(None) == ""
 
 
-def test_build_shallow_context_bullets_falls_back_to_id_when_no_title():
+def test_build_shallow_context_bullets_never_shows_the_id_when_there_is_no_title():
     bullets = _build_shallow_context_bullets([{"id": "card-1", "adapter": "keyword"}])
-    assert "card-1" in bullets
+    assert bullets == "- Untitled source" and "card-1" not in bullets
 
 
 def test_build_shallow_context_bullets_no_em_dash():
@@ -337,7 +344,7 @@ class _FakeSessionForFinishTurn:
 
 @pytest.mark.asyncio
 async def test_shallow_turn_with_context_cards_shows_alt_c_hint():
-    """A shallow (non-deep) turn that gathered context cards gets the same "Alt+C context used" hint,
+    """A shallow (non-deep) turn that gathered context sources gets the same "Alt+C sources used" hint,
     on the turn's one closing line, that deep turns get, and the cards survive into the
     FutureContextPanel instead of being discarded when the turn ends."""
     app = QuestAITerminal(_FakeSessionForFinishTurn())
@@ -354,11 +361,11 @@ async def test_shallow_turn_with_context_cards_shows_alt_c_hint():
         app._finish_turn("what are the pricing tiers?", _FakeFinalAnswer(), 1.2,
                          cancelled=False, error=None)
 
-        # The panel picked up bullets built from the ContextPanel's cards (not discarded).
+        # The panel picked up bullets built from the turn's cards (not discarded).
         assert "Pricing tiers" in app._future_ctx_panel._bullets
         # And the closing line says the keys are there: one line, no separate hint line.
         hinted = [ln for ln in log.lines if "Alt+C" in ln]
-        assert len(hinted) == 1 and hinted[0].strip().endswith("Alt+C context used")
+        assert len(hinted) == 1 and hinted[0].strip().endswith("Alt+C sources used")
 
 
 @pytest.mark.asyncio
@@ -429,9 +436,9 @@ async def test_explanation_summary_line_shows_trace_counts():
                          cancelled=False, error=None)
 
         body = "\n".join(log.lines)
-        assert "Explain how I got this:" in body
-        assert "2 sources" in body  # 1 card + 1 source
-        assert "1 read" in body
+        assert "How I got this:" in body
+        assert "How I got this: 1 source" in body, "the sources the context line counts: the cards"
+        assert "read" not in body, "files read are counted in the run's own summary, not a second time here"
         # The model-written prose never leaks into the terminal's one-line summary.
         assert "You asked about pricing" not in body
 
@@ -452,4 +459,4 @@ async def test_no_explanation_payload_no_summary_line():
         app._finish_turn("hi", _FakeFinalAnswer(), 0.2, cancelled=False, error=None)
 
         body = "\n".join(log.lines)
-        assert "Explain how I got this:" not in body
+        assert "How I got this:" not in body

@@ -25,7 +25,7 @@ from types import SimpleNamespace
 
 from quest_ai_runner.core.inbox import InMemoryInbox
 from quest_ai_runner.core.orchestrator import OrchestratorResult
-from quest_ai_runner.textual_ui import ActivityBar, PromptTextArea, QuestAITerminal, _busy_placeholder
+from quest_ai_runner.textual_ui import ActivityBar, PromptTextArea, QuestAITerminal, _BUSY_PLACEHOLDER
 
 
 def _stub_session(inbox: InMemoryInbox) -> SimpleNamespace:
@@ -63,10 +63,9 @@ def test_peek_does_not_clear_the_inbox():
     assert inbox.peek("conv1") == []
 
 
-def test_busy_placeholder_shows_the_count_only_when_nonzero():
-    assert "queued" not in _busy_placeholder(0)
-    assert "(1 queued)" in _busy_placeholder(1)
-    assert "(3 queued)" in _busy_placeholder(3)
+def test_the_busy_placeholder_says_what_typing_does_and_how_to_stop_and_carries_no_count():
+    assert _BUSY_PLACEHOLDER == "Type to add a note for the AI. Esc stops the work."
+    assert "queue" not in _BUSY_PLACEHOLDER and not any(ch.isdigit() for ch in _BUSY_PLACEHOLDER)
 
 
 def test_activity_bar_renders_queued_count_as_a_suffix():
@@ -115,6 +114,72 @@ def test_two_messages_typed_mid_turn_both_queue_and_count_increments():
     queued, shown_count = run_app(build)
     assert queued == ["first thought", "second thought"]
     assert shown_count == 2
+
+
+# --- a note typed while the AI works is the person's own line, tagged waiting ----------------------
+
+class RecordingLog:
+    def __init__(self):
+        self.lines = []
+        self.styles = []
+
+    def write(self, x):
+        self.lines.append(getattr(x, "plain", str(x)))
+        self.styles.append(getattr(x, "style", ""))
+
+
+def test_a_note_typed_mid_turn_is_the_persons_own_line_with_a_waiting_tag_and_no_count():
+    async def build(app, pilot):
+        app.sess = _stub_session(InMemoryInbox())
+        app._turn_active = True
+        log = RecordingLog()
+        app._tlog = log
+        prompt = app.query_one("#prompt")
+        for text in ("Also check the staging sheet.", "And the notes."):
+            prompt.post_message(PromptTextArea.Submitted(prompt, text))
+            await pilot.pause()
+        return log, app._activity.render().plain, prompt.placeholder
+
+    log, strip, placeholder = run_app(build)
+    assert log.lines == ["❯ Also check the staging sheet.  (waiting)", "❯ And the notes.  (waiting)"]
+    assert log.styles[0] == "bold cyan", "the style of the person's own message line"
+    assert strip.endswith("· 2 messages waiting"), "the count is in the status strip only"
+    assert not any("queued" in line or "sends next" in line for line in log.lines)
+
+
+def test_the_pickup_of_notes_is_one_plain_dim_line_without_a_stale_count():
+    async def build(app, pilot):
+        inbox = InMemoryInbox()
+        app.sess = _stub_session(inbox)
+        log = RecordingLog()
+        app._tlog = log
+        for text in ("a", "b"):
+            inbox.push(app._session_id, text)
+        pending = app._make_pending_drain(inbox, app._session_id)
+        await asyncio.to_thread(pending)
+        await pilot.pause()
+        inbox.push(app._session_id, "c")
+        await asyncio.to_thread(pending)
+        await pilot.pause()
+        return log
+
+    log = run_app(build)
+    assert log.lines == ["  Working your 2 notes in now.", "  Working your note in now."]
+    assert set(log.styles) == {"dim"}
+
+
+def test_the_end_of_turn_flush_sends_the_notes_without_a_sending_line_of_its_own():
+    async def build(app, pilot):
+        inbox = InMemoryInbox()
+        app.sess = _stub_session(inbox)
+        inbox.push(app._session_id, "m1")
+        log = RecordingLog()
+        app._tlog = log
+        app._begin_turn = lambda text, **kw: None
+        app._finish_turn("original request", None, 1.0, True, None)
+        return log.lines
+
+    assert not [line for line in run_app(build) if "Sending" in line or "queued" in line]
 
 
 # --- the core bug fix: a turn that ends must flush what's still queued, combined ---------------

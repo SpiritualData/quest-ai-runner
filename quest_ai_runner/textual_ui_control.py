@@ -23,8 +23,7 @@ from typing import Callable, Dict, Iterable, List, Optional
 from rich.text import Text
 
 from .core.run_control import ControlMessage, RunControl
-from .textual_ui_prompt import PromptTextArea
-from .textual_ui_widgets import _busy_placeholder
+from .textual_ui_helpers import plural, working_notes_in
 
 # How often a live worker looks for a typed message. Short, because a person is waiting at the
 # prompt for their words to reach the model.
@@ -173,21 +172,17 @@ class ControlMixin:
 
     def _note_worker_live(self) -> None:
         self._tlog.write(Text(
-            "  Live worker: type to steer it, /pause to pause it, Esc to stop it.",
+            "  You can steer the work as it goes: type a note, /pause to pause, Esc to stop.",
             style="dim"))
 
     def _note_sent_to_worker(self, texts: List[str], remaining: int) -> None:
-        n = len(texts)
-        self._tlog.write(Text(
-            f"  ↓ {n} queued message{'s' if n != 1 else ''} sent to the running worker",
-            style="dim yellow"))
+        self._tlog.write(Text(f"  {working_notes_in(len(texts))}", style="dim"))
         self._activity.set_queued(remaining)
-        self.query_one("#prompt", PromptTextArea).placeholder = _busy_placeholder(remaining)
 
     def _note_worker_received(self, texts: List[str]) -> None:
         n = len(texts)
         self._tlog.write(Text(
-            f"  ✓ The worker received {n} message{'s' if n != 1 else ''}", style="dim green"))
+            f"  The work has {'your note' if n == 1 else f'your {n} notes'}.", style="dim"))
 
     # -- /pause and /resume ---------------------------------------------------------------
 
@@ -198,8 +193,8 @@ class ControlMixin:
             return
         control = self._run_control
         if control is None or not control.in_use:
-            c.dim("  No live deep worker to pause right now. Pause needs the stream_json runner "
-                  "(see docs/stream-json-runner.md). Esc stops the turn.")
+            c.dim("  This work cannot be paused right now. Pause needs the stream_json runner "
+                  "(see docs/stream-json-runner.md). Esc stops it.")
             return
         if control.pause_event.is_set():
             c.dim("  Already pausing.")
@@ -216,7 +211,7 @@ class ControlMixin:
             return
         paused = self._resumable
         if paused is None:
-            c.dim("  Nothing to resume: no paused or stopped deep run in this session.")
+            c.dim("  Nothing to resume: no paused or stopped work in this session.")
             return
         self._resumable = None
         held = list(self._held_for_resume)
@@ -229,9 +224,7 @@ class ControlMixin:
         short = request if len(request) <= 80 else request[:79] + "…"
         self._tlog.write(Text(f"❯ /resume  ({short})", style="bold cyan"))
         if held:
-            self._tlog.write(Text(
-                f"  ↑ Sending {len(held)} held message{'s' if len(held) != 1 else ''} with it",
-                style="bold yellow"))
+            self._tlog.write(Text(f"  Sending {plural(len(held), 'held note')} with it.", style="dim"))
         self._tlog.write(Text(""))
         # Straight to a deep run of the paused goal in the paused session: the planner is not asked,
         # so nothing it could choose (an answer, a question) can leave the work unresumed.
@@ -269,14 +262,13 @@ class ControlMixin:
                 if self._held_for_resume:
                     n = len(self._held_for_resume)
                     self._tlog.write(Text(
-                        f"  {n} message{'s' if n != 1 else ''} held for /resume",
-                        style="dim yellow"))
+                        f"  {plural(n, 'note')} held for /resume", style="dim"))
             elif leftover:
                 control.put_back(leftover)
                 n = len(leftover)
                 self._tlog.write(Text(
-                    f"  ↻ {n} message{'s were' if n != 1 else ' was'} not confirmed by the "
-                    "worker, so will be sent again", style="dim yellow"))
+                    f"  {plural(n, 'note')} not confirmed, so {'it' if n == 1 else 'they'} will be sent again",
+                    style="dim"))
         except Exception:  # noqa: BLE001 -- bookkeeping must never break the turn's wrap-up
             pass
         if paused or (cancelled and control.in_use and session_id and error is None):

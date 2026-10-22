@@ -11,8 +11,7 @@ import re
 from datetime import datetime
 from typing import Any, List, Optional, Sequence, Tuple
 
-from .core import provider_outage, usage_limit
-from .core.adapters import LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED
+from .core import launch_failure, provider_outage, usage_limit
 
 # The most passes one request gets without the person asking again: their own, plus one automatic
 # second pass when a plan was written and nothing ran.
@@ -25,10 +24,6 @@ OUTCOME_NOT_STARTED = "not_started"    # the worker could not start; nothing ran
 OUTCOME_NOT_RUN = "not_run"            # a plan, but no worker was run at all
 OUTCOME_LIMIT = "limit"                # paused at the subscription's usage limit
 OUTCOME_WAITING = "waiting"            # waiting for the person's answer
-
-# The words every runner starts the error of a worker that never started with (``DeepResult.error``).
-# The cause shown to the person is the rest of that sentence; the whole text when it does not start so.
-LAUNCH_FAILED_PREFIX = "The deep worker could not start"
 
 
 def speaker_label(rep_name: str) -> str:
@@ -114,32 +109,13 @@ def limit_reset(final: Any, now: Optional[datetime] = None) -> str:
     return usage_limit.reset_clause(usage_limit.active_limit(now), now)
 
 
-# What the person reads for the two causes a runner reports as a structured ``launch_problem``.
-LAUNCH_PROBLEM_TEXT = {
-    LAUNCH_MISSING_PROGRAM: "the program that runs the work is not installed on this machine, or is not on its PATH.",
-    LAUNCH_PERMISSION_DENIED: "the program that runs the work could not be run, because permission was denied.",
-}
-
-
-def launch_failure_cause(error: Optional[str], problem: str = "") -> str:
-    """Why a worker could not start: plain words for a structured ``launch_problem``, else the
-    runner's own words minus its stock opening phrase."""
-    if problem in LAUNCH_PROBLEM_TEXT:
-        return LAUNCH_PROBLEM_TEXT[problem]
-    text = " ".join(str(error or "").split())
-    if text.startswith(LAUNCH_FAILED_PREFIX):
-        text = text[len(LAUNCH_FAILED_PREFIX):].lstrip(": ").strip()
-    text = text[:240].rstrip()
-    return text or "no reason was given"
-
-
 def launch_failure_lines(final: Any) -> List[str]:
     """What the person reads when the worker never started, or [] when it did (or it was not asked to)."""
     failed = [d for d in deep_results(final) if getattr(d, "launch_failed", False)]
     if not failed:
         return []
     return ["I couldn't start the work, so nothing was changed.",
-            f"The reason: {launch_failure_cause(getattr(failed[0], 'error', None), getattr(failed[0], 'launch_problem', ''))}",
+            f"The reason: {launch_failure.cause(getattr(failed[0], 'error', None), getattr(failed[0], 'launch_problem', ''))}",
             "Fix that, then send your request again."]
 
 

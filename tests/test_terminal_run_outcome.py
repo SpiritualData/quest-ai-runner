@@ -23,7 +23,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from quest_ai_runner.core import usage_limit
+from quest_ai_runner.core import launch_failure, usage_limit
 from quest_ai_runner.core.adapters import (
     DeepResult, EVENT_DECISION, EVENT_EXEC, EVENT_MILESTONE, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED,
 )
@@ -188,8 +188,8 @@ def closing_line(log: Log) -> str:
 def test_a_finished_goal_ends_with_one_quiet_line_and_no_other_done_marker():
     log, begun, _ = run_turn(deep_final(DeepResult(**MET)), elapsed=212.0, before=lambda app: (
         app._future_ctx_panel.load("- card: Pricing"), setattr(app, "_future_context", "- card: Pricing")))
-    assert closing_line(log) == "✓ Done in 3m32s · sonnet · Alt+C context used"
-    assert [ln for ln in log.stripped() if ln.startswith("✓")] == ["✓ Done in 3m32s · sonnet · Alt+C context used"]
+    assert closing_line(log) == "✓ Done in 3m32s · sonnet · Alt+C sources used"
+    assert [ln for ln in log.stripped() if ln.startswith("✓")] == ["✓ Done in 3m32s · sonnet · Alt+C sources used"]
     assert not begun
     body = "\n".join(log.lines)
     assert "complete" not in body.lower() and "Partial" not in body and "tokens" not in body
@@ -268,10 +268,10 @@ def test_the_launch_failure_wording_matches_what_the_runners_write(tmp_path):
     from quest_ai_runner.core.goal_runner import SubprocessGoalRunner, SubprocessConfig
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(tmp_path / "no-such-claude")))
     res = runner.run_goal(goal="g", brief="g")
-    assert res.launch_failed and res.error.startswith(outcome.LAUNCH_FAILED_PREFIX)
-    assert outcome.launch_failure_cause(res.error) == res.error[len(outcome.LAUNCH_FAILED_PREFIX):].lstrip(": ")
-    assert outcome.launch_failure_cause("") == "no reason was given"
-    assert outcome.launch_failure_cause("Something else broke.") == "Something else broke."
+    assert res.launch_failed and res.error.startswith(launch_failure.LAUNCH_FAILED_PREFIX)
+    assert launch_failure.cause(res.error) == res.error[len(launch_failure.LAUNCH_FAILED_PREFIX):].lstrip(": ")
+    assert launch_failure.cause("") == "no reason was given"
+    assert launch_failure.cause("Something else broke.") == "Something else broke."
 
 
 # --- the automatic second pass ------------------------------------------------------------------
@@ -512,7 +512,7 @@ def test_what_the_new_outcome_module_writes_has_no_long_dash_either(utc):
 
 
 def test_a_structured_launch_problem_is_worded_plainly_and_any_other_failure_keeps_the_runners_words():
-    assert outcome.launch_failure_cause("The deep worker could not start: permission denied (x).",
+    assert launch_failure.cause("The deep worker could not start: permission denied (x).",
                                         LAUNCH_PERMISSION_DENIED).endswith("because permission was denied.")
     other = DeepResult(met=False, launch_failed=True,
                        error="The deep worker could not start: There's an issue with the selected model (m).")

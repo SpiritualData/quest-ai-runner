@@ -5,11 +5,12 @@ Split out of ``textual_ui.py`` by definition; that module re-exports every name 
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from typing import Any, List, Mapping, Optional, Sequence
 from rich.text import Text
 
-from .core.metric_results import NOT_RECORDED_LINE, SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, format_value
+from .core.metric_results import NOT_RECORDED_LINE, SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED
 
 
 _CLIPBOARD_COMMANDS = (
@@ -50,24 +51,22 @@ def _copy_to_clipboard_tool(text: str, which=shutil.which, run=None) -> tuple:
 
 
 def _build_shallow_context_bullets(cards: List[dict]) -> str:
-    """Build "context it used" bullet lines from shallow-turn context cards.
+    """Build the bullet lines behind Alt+C from a short answer's context sources, one per source.
 
-    Mirrors the bullet format deep runs produce for the FutureContextPanel, so a shallow
-    turn's context cards can reuse the same Alt+C panel and footer hint instead of being
-    discarded once the turn ends. Returns an empty string when there is nothing to show.
+    Mirrors the bullet format a deep run produces for the FutureContextPanel, so both reuse the same
+    panel and key. A plain title, never the internal id or the kind of store it came from. Returns an
+    empty string when there is nothing to show.
     """
     lines: List[str] = []
     for card in cards or []:
-        title = card.get("title") or card.get("id") or "(no title)"
-        adapter = card.get("adapter") or ""
-        label = f"{adapter}: {title}" if adapter else title
-        lines.append(f"- {label}")
+        title = " ".join(str(card.get("title") or "").split()) or "Untitled source"
+        lines.append(f"- {title}")
     return "\n".join(lines)
 
 
-# The transcript's context block: a count line, this many cards, then "and K more".
-CONTEXT_CARDS_SHOWN = 3
-CONTEXT_TITLE_CHARS = 70
+# The transcript's context line names this many sources by title, then "and K more".
+CONTEXT_TITLES_SHOWN = 2
+CONTEXT_TITLE_CHARS = 50
 
 
 def ellipsize(text: str, limit: int) -> str:
@@ -88,8 +87,8 @@ def ellipsize(text: str, limit: int) -> str:
 def notice_line(text: str, width: Optional[int] = None, indent: str = "  ") -> Text:
     """One dim transcript line: ``indent`` then ``text``, ellipsized to fit ``width`` when given.
 
-    The one way the terminal writes a short quiet note (a warning, a hint, the context summary), so
-    each of them is a single line that never wraps.
+    The one way the terminal writes a short quiet note (a warning, a hint), so each of them is a
+    single line that never wraps.
     """
     body = ellipsize(text, max(width - len(indent), 1)) if width else text
     return Text(indent + body, style="dim")
@@ -99,6 +98,21 @@ def plural(n: int, noun: str) -> str:
     return f"{n} {noun}{'' if n == 1 else 's'}"
 
 
+def working_notes_in(n: int) -> str:
+    """The plain line for notes the person typed while the AI worked, once it has picked them up."""
+    return "Working your note in now." if n == 1 else f"Working your {n} notes in now."
+
+
+def waiting_note_line(text: str) -> Text:
+    """A note typed while the AI works, as the person's own line (like their messages) with a small tag.
+
+    The tag is the only thing that says it has not been read yet; the count of notes waiting is in the
+    status strip and nowhere else."""
+    line = Text(f"❯ {text}", style="bold cyan")
+    line.append("  (waiting)", style="dim")
+    return line
+
+
 def card_score(card: dict) -> float:
     try:
         return float(card.get("relevance_score") or 0)
@@ -106,55 +120,108 @@ def card_score(card: dict) -> float:
         return 0.0
 
 
-def context_block_lines(card_meta: List[dict], sources: List[dict], width: int = 80) -> List[Text]:
-    """The calm transcript block for the context gathered this turn, no line wider than ``width``.
+def source_count(card_meta: List[dict], sources: List[dict]) -> int:
+    """How many sources the context holds: the cards, else the items of the source groups.
 
-    A count line, the three best cards by title (never the internal card id, the score or file
-    paths; those are in the live context panel), "and K more", and one line of source labels with
-    their item counts. At most six lines, so a turn that gathered hundreds of items still reads as
-    one quiet block instead of a wall.
-    """
-    lines: List[Text] = [notice_line(
-        f"Context: {plural(len(card_meta), 'card')}, {plural(len(sources), 'source')}", width, indent="",
-    )]
+    "Sources" is the one word for the notes and files the AI looked at, in the context line, behind Alt+C
+    and in the explanation, so the counts agree wherever they appear."""
+    if card_meta:
+        return len(card_meta)
+    return sum(len(src.get("items") or []) for src in sources or [] if isinstance(src, dict))
+
+
+def context_block_lines(card_meta: List[dict], sources: List[dict]) -> List[Text]:
+    """The transcript's note on the context gathered this turn: one dim sentence, or none.
+
+    ``Found 6 sources: <title>, <title> and 4 more.`` The two best by retrieval score are named by title
+    (never the internal id, the score or a file path; Alt+C lists them all). Nothing in the data says which
+    of them the plan went on to use, so the order is the retrieval's own and no "most relevant to the
+    plan" ranking is claimed. A long title is cut to ``CONTEXT_TITLE_CHARS``; the sentence wraps."""
+    total = source_count(card_meta, sources)
+    if not total:
+        return []
     ranked = sorted(card_meta, key=card_score, reverse=True)
-    for card in ranked[:CONTEXT_CARDS_SHOWN]:
-        title = ellipsize(card.get("title") or "Untitled card", min(CONTEXT_TITLE_CHARS, max(width - 4, 10)))
-        line = Text("  ")
-        line.append("●", style="cyan")
-        line.append(f" {title}")
-        lines.append(line)
-    if len(ranked) > CONTEXT_CARDS_SHOWN:
-        lines.append(notice_line(f"… and {len(ranked) - CONTEXT_CARDS_SHOWN} more", width))
-    # A source with no file-level items (a recent or card match) has no count worth a label.
-    counted = [f"{src.get('label') or src.get('adapter') or '?'} ({len(src['items'])})"
-               for src in sources if src.get("items")]
-    if counted:
-        lines.append(notice_line("Sources: " + ", ".join(counted), width))
-    return lines
+    titles = [ellipsize(card.get("title") or "Untitled source", CONTEXT_TITLE_CHARS)
+              for card in ranked[:CONTEXT_TITLES_SHOWN]]
+    more = total - len(titles)
+    head = f"Found {plural(total, 'source')}"
+    if not titles:
+        return [Text(f"  {head}.", style="dim")]
+    if more > 0:
+        named = ", ".join(titles) + f" and {more} more"
+    else:
+        named = " and ".join(titles)
+    return [Text(f"  {head}: {named}.", style="dim")]
 
 
-# The transcript's metric block for one goal: this many lines, then "and K more".
+# The transcript's metric block for one goal: this many lines, then how many more there are.
 METRIC_LINES_SHOWN = 4
-# Who vouches for a metric entry, in plain words, and the short note when the two records disagree.
-METRIC_SOURCE_LABELS = {SOURCE_MEASURED: "measured by QAR", SOURCE_RECORDED: "recorded by the AI"}
-METRIC_DISAGREES_NOTES = {SOURCE_MEASURED: "disagrees with the AI", SOURCE_RECORDED: "disagrees with QAR"}
+# Who vouches for a metric entry, in plain words (never the internal name of the meter).
+METRIC_SOURCE_LABELS = {SOURCE_MEASURED: "measured automatically", SOURCE_RECORDED: "reported by the AI"}
+# The most decimals a metric value shows; the data carries no unit, so none is added.
+METRIC_DECIMALS = 3
 
 
-def metric_entry_text(entry: Mapping[str, Any], width: int = 80, indent: str = "  ") -> str:
-    """One metric entry as one line: ``<name>: <before> -> <after> (measured by QAR)``, never wider than ``width``.
+def metric_number(value: Any) -> str:
+    """A metric value the way a person reads it: at most ``METRIC_DECIMALS`` decimals, no trailing zeros.
 
-    The numbers and the source are the point of the line, so a long name is the part that gives way. A declared
-    not-applicable reads ``Metric not applicable: <reason>``."""
-    source = entry.get("source")
-    if source == SOURCE_NOT_APPLICABLE:
-        return f"Metric not applicable: {entry.get('reason') or 'no reason given'}"
-    how = METRIC_SOURCE_LABELS.get(source, str(source))
-    if entry.get("disagrees"):
-        how += f", {METRIC_DISAGREES_NOTES.get(source, 'the records differ')}"
-    tail = f": {format_value(entry.get('before'))} -> {format_value(entry.get('after'))} ({how})"
-    name = entry.get("name") or entry.get("metric_id") or "Metric"
-    return ellipsize(name, max(width - len(indent) - len(tail), 12)) + tail
+    ``0.380`` is ``0.38``, ``1.0`` is ``1``, ``0.0004`` keeps its first digits instead of becoming ``0``, and a
+    missing value is ``unknown``. The value's unit is not in the data, so none is shown or guessed."""
+    if value is None:
+        return "unknown"
+    number = float(value)
+    text = f"{number:.{METRIC_DECIMALS}f}".rstrip("0").rstrip(".")
+    if text in ("0", "-0") and number != 0:
+        text = f"{number:.2g}"
+    return text or "0"
+
+
+def metric_pair(entry: Mapping[str, Any]) -> str:
+    return f"{metric_number(entry.get('before'))} -> {metric_number(entry.get('after'))}"
+
+
+def metric_groups(entries: Sequence[Mapping[str, Any]]) -> List[tuple]:
+    """``(lead, other)`` per metric, in the order each first appears.
+
+    A measured entry and the AI's own record of the same metric are two entries in the payload; they read as one
+    line, led by the measured one, with the AI's numbers as ``other`` (None when there is no second entry).
+    Nothing is dropped: an entry that has no partner stands alone."""
+    groups: List[List[Any]] = []
+    open_group: dict = {}
+    for entry in entries:
+        key = (entry.get("solution_id"), entry.get("metric_id"))
+        source = entry.get("source")
+        slot = open_group.get(key) if source in METRIC_SOURCE_LABELS and any(key) else None
+        if slot is not None and slot[1] is None and (
+                (slot[0].get("source") == SOURCE_MEASURED) != (source == SOURCE_MEASURED)):
+            lead, other = (slot[0], entry) if slot[0].get("source") == SOURCE_MEASURED else (entry, slot[0])
+            slot[0], slot[1] = lead, other
+            continue
+        slot = [entry, None]
+        groups.append(slot)
+        if source in METRIC_SOURCE_LABELS and any(key):
+            open_group[key] = slot
+    return [tuple(g) for g in groups]
+
+
+def metric_entry_text(lead: Mapping[str, Any], other: Optional[Mapping[str, Any]] = None) -> str:
+    """One metric as one sentence, wrapped by the transcript and never cut.
+
+    ``<name>: 0.38 -> 0.91 (measured automatically)``. When the core flagged the two records as different
+    (``disagrees``, which this never decides), the AI's numbers follow, said neutrally:
+    ``... (measured automatically). The AI reported 0.4 -> 0.9.`` A declared not-applicable reads
+    ``Nothing to measure: <reason>``."""
+    if lead.get("source") == SOURCE_NOT_APPLICABLE:
+        return f"Nothing to measure: {lead.get('reason') or 'no reason given'}"
+    name = lead.get("name") or lead.get("metric_id") or "Metric"
+    how = METRIC_SOURCE_LABELS.get(lead.get("source"), str(lead.get("source")))
+    text = f"{name}: {metric_pair(lead)} ({how})"
+    if other is not None and lead.get("disagrees"):
+        text += f". The AI reported {metric_pair(other)}."
+    elif other is None and lead.get("disagrees"):
+        text = text[:-1] + (", and the AI reported different numbers)" if lead.get("source") == SOURCE_MEASURED
+                            else ", and the measured numbers differ)")
+    return text
 
 
 def metric_key(entry: Mapping[str, Any]) -> tuple:
@@ -162,17 +229,20 @@ def metric_key(entry: Mapping[str, Any]) -> tuple:
     return tuple(entry.get(key) for key in ("solution_id", "metric_id", "source", "reason", "before", "after"))
 
 
-def metric_lines(entries: Sequence[Mapping[str, Any]], missing: bool = False, width: int = 80) -> List[Text]:
-    """The calm transcript lines for a goal's metric results: dim, one per metric, none wider than ``width``.
+def metric_lines(entries: Sequence[Mapping[str, Any]], missing: bool = False,
+                 limit: Optional[int] = METRIC_LINES_SHOWN, more_hint: str = "") -> List[Text]:
+    """The transcript lines for a goal's metric results: one readable sentence per metric, in normal weight.
 
-    Written from the payload entries and never by a model. At most ``METRIC_LINES_SHOWN`` of them, then
-    "and K more". A change that ended with no metric result recorded gets the one line saying so. ``[]`` when
-    there is nothing to say."""
-    lines = [notice_line(metric_entry_text(entry, width), width) for entry in list(entries)[:METRIC_LINES_SHOWN]]
-    if len(entries) > METRIC_LINES_SHOWN:
-        lines.append(notice_line(f"… and {len(entries) - METRIC_LINES_SHOWN} more", width))
+    Written from the payload entries and never by a model. At most ``limit`` of them (all when None), then
+    a line counting the rest and ``more_hint`` (where to open them). A change that ended with no metric
+    result recorded gets the one dim line saying so. ``[]`` when there is nothing to say."""
+    groups = metric_groups(list(entries))
+    shown = groups if limit is None else groups[:limit]
+    lines = [Text("  " + metric_entry_text(lead, other)) for lead, other in shown]
+    if len(groups) > len(shown):
+        lines.append(notice_line(f"{plural(len(groups) - len(shown), 'more metric result')}. {more_hint}".strip()))
     if missing:
-        lines.append(notice_line(NOT_RECORDED_LINE, width))
+        lines.append(notice_line(NOT_RECORDED_LINE))
     return lines
 
 
@@ -203,20 +273,25 @@ def _missing_model_provider_message(env=None, which=shutil.which) -> Optional[st
     )
 
 
-def _build_future_context_text(bullets: str) -> Optional[Text]:
-    """Build the Rich Text to display in the "context it used" panel.
+# The kind of store a worker may name at the start of a bullet ("- collection: Pricing tiers"): internal, so not shown.
+STORE_KIND_PREFIX = re.compile(r"^(\s*(?:[-*\u2022]\s+)?)(?:collection|card|quest|note|file)\s*:\s+", re.IGNORECASE)
 
-    Returns ``None`` when ``bullets`` is empty so callers can gate visibility.
-    This is a pure function with no Textual dependencies — testable offline.
+
+def _build_future_context_text(bullets: str) -> Optional[Text]:
+    """Build the Rich Text to display in the "sources used" panel (Alt+C).
+
+    ``Sources used (N)`` then one line per source, N being the number of lines, the same word and the same
+    way of counting as the transcript's ``Found N sources``. Returns ``None`` when ``bullets`` is empty so
+    callers can gate visibility. Pure function with no Textual dependencies, testable offline.
     """
     cleaned = bullets.strip()
     if not cleaned:
         return None
-    lines = [ln for ln in cleaned.splitlines() if ln.strip()]
+    lines = [STORE_KIND_PREFIX.sub(r"\1", ln) for ln in cleaned.splitlines() if ln.strip()]
     if not lines:
         return None
-    body = "\n".join(f"  {ln}" for ln in lines)
-    hint = "\x1b[2m  [Alt+C] close\x1b[0m"
-    t = Text.from_ansi(f"\x1b[1;32mContext it used\x1b[0m\n{body}\n{hint}")
-    t.no_wrap = False
+    t = Text(no_wrap=False)
+    t.append(f"Sources used ({len(lines)})\n", style="bold green")
+    t.append("\n".join(f"  {ln}" for ln in lines) + "\n")
+    t.append("  Alt+C to close")
     return t

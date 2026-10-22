@@ -8,6 +8,7 @@ import os
 from typing import Optional
 
 from .interactive_session_render import _CYAN, _GOLD, _GREEN, _a
+from .interactive_session_tracker import format_elapsed
 
 
 class StatusMixin:
@@ -49,7 +50,7 @@ class StatusMixin:
             user_text = turn["user"]
             model = turn["model"] or "?"
             tokens = f"{turn['tokens_in']}↥ {turn['tokens_out']}↦"
-            elapsed = f"{turn['elapsed']:.1f}s"
+            elapsed = format_elapsed(turn['elapsed'])
 
             # Color the model tier
             model_colored = model
@@ -60,7 +61,7 @@ class StatusMixin:
             elif "opus" in model.lower():
                 model_colored = _a(_GOLD, model)
 
-            c.dim(f"  {i:2d}.  {user_text[:45]}...")
+            c.dim(f"  {i:2d}.  {user_text[:45]}…")
             c.dim(f"       {model_colored}  {tokens}  {elapsed}")
 
         c.line("")
@@ -109,7 +110,7 @@ class StatusMixin:
             c.dim(f"    {model:8s}  {count:2d} turn{'s' if count != 1 else ''}  ({pct:5.1f}%)")
 
         c.line("")
-        c.dim(f"  Speed:  fastest {fastest:.1f}s  ·  slowest {slowest:.1f}s  ·  avg {avg_time:.1f}s")
+        c.dim(f"  Speed:  fastest {format_elapsed(fastest)}  ·  slowest {format_elapsed(slowest)}  ·  avg {format_elapsed(avg_time)}")
         c.line("")
 
         usage_line = self._daily_usage_status()

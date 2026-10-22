@@ -279,9 +279,35 @@ def test_resumed_history_shows_before_session_is_ready(tmp_path):
 
     before, after = asyncio.run(run())
     assert "second question" in before and "Tester (AI):" in before
-    assert "Loading the rest of the session" in before
-    assert "Ready. Continue the conversation below." in after
+    assert "Picking up your last conversation (2 turns)." in before
+    assert "abc123" not in before, "the id is for -v"
+    for chatter in ("Loading the rest of the session", "End of resumed history", "Resumed conversation"):
+        assert chatter not in after
+    assert after.count("Ready.") == 1 and "Continue the conversation below" not in after
     assert after.count("second question") == 1  # not replayed a second time
+
+
+def test_resume_with_v_names_the_conversation_and_every_rep_label_follows_the_rule(tmp_path):
+    import asyncio
+    from quest_ai_runner.textual_ui import QuestAITerminal
+
+    path = write_conv(tmp_path, "abc123", [("hello", "hi there")])
+    conv = read_conversation(path)
+
+    async def run(rep_name, verbosity):
+        app = QuestAITerminal(None, _config=None, resume=conv, verbosity=verbosity)
+        app._build_session_worker = lambda: None
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            return "\n".join(str(line.text) for line in app._tlog.lines)
+
+    conv.meta["rep_name"] = "Quest AI"
+    quiet = asyncio.run(run("Quest AI", 0))
+    assert "\nQuest AI:\n" in quiet and "Quest AI (AI):" not in quiet, "a name that says AI needs no second one"
+    conv.meta["rep_name"] = "Zee"
+    assert "\nZee (AI):\n" in asyncio.run(run("Zee", 0))
+    verbose = asyncio.run(run("Zee", 1))
+    assert "Picking up your last conversation (1 turn, id " in verbose and "abc123" in verbose
 
 
 # -- exit hint: print how to resume, like Claude Code ---------------------------------------

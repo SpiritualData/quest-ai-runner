@@ -8,7 +8,7 @@ from typing import Any, List, Mapping, Optional, Sequence
 from collections import Counter, OrderedDict
 from rich.text import Text
 
-from .textual_ui_helpers import metric_key, metric_lines
+from .textual_ui_helpers import METRIC_LINES_SHOWN, metric_key, metric_lines
 
 # The key standing for the "no metric was recorded" line in ``metrics_shown``.
 METRIC_MISSING_KEY = ("no metric recorded",)
@@ -40,7 +40,9 @@ class DeepMixin:
         pos = run_ids.index(run_id) + 1 if run_id in run_ids else 1
         total = len(run_ids)
         existing = list(info.get("exec_lines", []))
-        self._deep_detail.open_for(run_id, info["goal"], existing, pos=pos, total=total)
+        # Every metric result of the job (the transcript shows the first few): its own, else the turn's.
+        metrics = info.get("metrics") or self.metrics_listing
+        self._deep_detail.open_for(run_id, info["goal"], existing, pos=pos, total=total, metrics=metrics)
         self._refresh_deep_dashboard()
 
     def _refresh_deep_dashboard(self) -> None:
@@ -51,7 +53,9 @@ class DeepMixin:
         next throttled exec-event redraw, so the arrow flips the instant the panel does instead of
         lagging behind (or during a quiet run, never catching up at all).
         """
-        if not self._deep._runs:
+        if not self._deep._runs or not self._turn_active:
+            # With the turn over the live panel is gone for good: opening a job's details (Alt+D) must not
+            # bring it back above them.
             return
         n = len(self._deep._runs)
         dashboard, line_map = self._deep.get_dashboard_with_map(active_run_id=self._deep_detail.active_run_id)
@@ -100,9 +104,10 @@ class DeepMixin:
         def _plural(n: int, one: str, many: str) -> str:
             return f"{n} {one if n == 1 else many}"
 
+        # "Files read", never "reads": "sources" is the word for what the AI looked at before it started.
         parts: List[str] = []
         if reads:
-            parts.append(_plural(reads, "read", "reads"))
+            parts.append(_plural(reads, "file read", "files read"))
         if writes:
             parts.append(_plural(writes, "edit", "edits"))
         if cmds:
@@ -157,10 +162,13 @@ class DeepMixin:
         # 1) The subgoal this task was assigned, but only when it tells runs apart: with one run
         # it is the person's own request again, already on screen above.
         if runs_this_turn > 1:
-            log.write(Text(f"⎅ {goal}" if goal else "⎅ Task", style="bold cyan"))
+            log.write(Text(goal or "Task", style="bold cyan"))
         # 2) A one-line roll-up of activity, instead of every read/write/command.
         if summary:
             log.write(Text(f"  {summary}", style="dim"))
+        # 3) What the metric was before and after, written from the run's own data (never by a model),
+        # ahead of the result so the numbers are not left below a long answer and its link.
+        self.write_metrics(snap.get("metrics"), snap.get("metric_missing"))
         if final_output:
             # The result is the AI's reply, so it is introduced by its speaker like any answer.
             self.write_speaker_label()
@@ -173,9 +181,6 @@ class DeepMixin:
                 log.write(Text(f"  … {len(narration) - len(tail)} earlier steps", style="dim"))
             for nl in tail:
                 log.write(Text(f"  {nl}"))
-        # What the metric was before and after, written from the run's own data (never by a model), as
-        # its closing detail, even when no explanation is on.
-        self.write_metrics(snap.get("metrics"), snap.get("metric_missing"))
         # No "complete" line here: a run's record does not know how the turn ended (met, stopped,
         # paused, waiting). The turn's one closing line says it, from the final result.
 
@@ -184,7 +189,11 @@ class DeepMixin:
 
         The same entry reaches the terminal more than once (a run's milestone, the turn's result, the
         explanation), and each is written once: an entry already written is skipped, however it arrived.
-        ``missing`` adds the one line saying a change ended with no metric result recorded."""
+        ``missing`` adds the one line saying a change ended with no metric result recorded.
+
+        The first ``METRIC_LINES_SHOWN`` metrics are written and the rest are counted, with where to open them:
+        Alt+D lists all of a job's metric results. Where there is no job to open (a runner that streamed nothing),
+        nothing is folded away, so no count is ever a dead end."""
         remaining = Counter(self.metrics_shown)
         fresh: List[Mapping[str, Any]] = []
         for entry in entries if isinstance(entries, (list, tuple)) else []:
@@ -199,7 +208,9 @@ class DeepMixin:
         absent = missing is True and remaining[METRIC_MISSING_KEY] == 0
         if absent:
             self.metrics_shown[METRIC_MISSING_KEY] += 1
-        for line in metric_lines(fresh, absent, self.transcript_width()):
+        self.metrics_listing.extend(fresh)
+        can_open = bool(self._available_deep_runs())
+        for line in metric_lines(fresh, absent, METRIC_LINES_SHOWN if can_open else None, "Alt+D shows them all."):
             self._tlog.write(line)
 
     def _flush_pending_deep_runs(self) -> None:

@@ -5,6 +5,7 @@ A mixin of ``QuestAITerminal`` (see ``textual_ui.py``): methods only, state live
 from __future__ import annotations
 
 import os
+from typing import List, Tuple
 from rich.text import Text
 
 from .textual_ui_prompt import PromptTextArea
@@ -54,8 +55,36 @@ class ActionsMixin:
             return True, "sent to terminal (if paste fails, install wl-clipboard/xclip)"
         return False, tool_msg.strip("()")
 
+    # -- the key line under the prompt ---------------------------------------------
+
+    def key_hints(self) -> List[Tuple[str, str]]:
+        """The keys worth showing right now, most useful first: only those that would do something.
+
+        Esc while the AI works (or a chooser is open); Alt+D once there is work to open; Alt+C once there
+        are sources to show; Tab only when there is more than one job to cycle through."""
+        hints: List[Tuple[str, str]] = []
+        if self._turn_active or self._pending_select is not None:
+            hints.append(("esc", "Cancel"))
+        runs = self._available_deep_runs()
+        if runs:
+            hints.append(("alt+d", "Details"))
+        if self._future_ctx_panel.has_bullets:
+            hints.append(("alt+c", "Sources"))
+        if len(runs) > 1:
+            hints.append(("tab", "Next job"))
+        hints.append(("pgup/pgdn", "Scroll"))
+        hints.append(("ctrl+c", "Copy / Quit"))
+        return hints
+
+    def refresh_key_hints(self) -> None:
+        """Redraw the key line now (it also redraws twice a second on its own)."""
+        try:
+            self.query_one("#keys").refresh()
+        except Exception:  # noqa: BLE001  not mounted yet
+            pass
+
     def action_copy_last(self) -> None:
-        """Copy the last AI response to the system clipboard (Ctrl+Y)."""
+        """Copy the last AI response to the system clipboard (Alt+Y)."""
         text = "\n".join(self._answer_parts).strip() if self._answer_parts else ""
         if not text and self.sess._last_assistant:
             text = self.sess._last_assistant

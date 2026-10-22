@@ -37,7 +37,7 @@ class QuestsMixin:
 
     def no_quests_reason(self) -> str:
         """Why the quest list is empty, in words a person can act on."""
-        where = self.quest_search_root or "the corpus root"
+        where = self.quest_search_root or "the folder the chat started in"
         parts = [f"No quests found. No folder under {where} has a QUEST_SYNC.md"]
         if self._quest_client() is None:
             parts.append("and this chat is not signed in to Quest (QUEST_BASE_URL and "

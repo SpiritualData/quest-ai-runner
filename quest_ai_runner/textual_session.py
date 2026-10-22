@@ -51,7 +51,7 @@ def start_textual_interactive(
         # the mouse, so the terminal's native plain-drag selection is suppressed, but
         # Textual reproduces it). Ctrl+C copies that selection via OSC-52 (works over
         # SSH/mobile too); see action_copy_or_quit in textual_ui.py. Shift+drag remains
-        # available as the terminal-native selection fallback, and Ctrl+Y copies the
+        # available as the terminal-native selection fallback, and Alt+Y copies the
         # last AI reply. So scroll + selection + copy all work at once.
         app = QuestAITerminal(
             None,

@@ -12,7 +12,7 @@ from rich.text import Text
 
 from .interactive_session import _HELP, _parse_skill_frontmatter
 from .textual_ui_prompt import PromptTextArea
-from .textual_ui_widgets import _busy_placeholder
+from .textual_ui_helpers import waiting_note_line
 
 
 class CommandsMixin:
@@ -34,12 +34,12 @@ class CommandsMixin:
         # Session still initializing — queue the message for replay once ready.
         if self.sess is None:
             if line.startswith("/"):
-                self._console.dim(f"  Still starting up; {line.split()[0]} opens in a moment.")
+                self._console.dim(f"  Still starting up. {line.split()[0]} will run as soon as I'm ready.")
             else:
-                # Echo it now (it is replayed without a second echo) so it does not seem lost.
-                self._tlog.write(Text(f"❯ {line}", style="bold cyan"))
+                # Echo it now as the person's own line, tagged waiting like any note typed while the AI
+                # works (it is replayed without a second echo), so it does not seem lost.
+                self._tlog.write(waiting_note_line(line))
                 self._tlog.write(Text(""))
-                self._console.dim("  Queued. Sends as soon as the session is ready.")
             self._pre_session_queue.append(line)
             return
 
@@ -63,16 +63,12 @@ class CommandsMixin:
             # never simply dropped once the AI stops, even outside a loop that drains it itself.
             inbox = getattr(self.sess._orch, "input_inbox", None)
             if inbox is None:
-                self._tlog.write(Text(
-                    f"  ↑ {line}  [not queued: no input inbox wired for this session]",
-                    style="dim red",
-                ))
+                self._tlog.write(Text(f"  Not kept: this session cannot take a note while it works. Send it again after: {line}",
+                                      style="yellow"))
                 return
             inbox.push(self._session_id, line)
-            count = len(inbox.peek(self._session_id))
-            self._tlog.write(Text(f"  ↑ queued ({count}): {line}", style="dim"))
-            self._activity.set_queued(count)
-            self.query_one("#prompt", PromptTextArea).placeholder = _busy_placeholder(count)
+            self._tlog.write(waiting_note_line(line))
+            self._activity.set_queued(len(inbox.peek(self._session_id)))
             return
 
         self._begin_turn(line, echo=True)

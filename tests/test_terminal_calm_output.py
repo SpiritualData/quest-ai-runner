@@ -6,9 +6,10 @@ Three things used to bury a conversation or leave it looking frozen:
    wrapped over several lines), a library's included. Now the full record goes to a log file and the
    transcript gets at most one short dim line per distinct problem from this package.
 2. The ``context`` event wrote a per-card dump (internal id, score, five file paths each). Now it is
-   the count line, three titles and "and K more"; the detail is in the live context panel.
-3. A deep run takes minutes to start and the status line said nothing. Now it says "Preparing the
-   deep run" and counts the seconds once a wait passes three.
+   one sentence, ``Found 6 sources: A, B and 4 more.``; the full list is behind Alt+C.
+3. A long job takes minutes to start and the status line said nothing. Now it says "Getting ready to
+   start the work" and counts the time once a wait passes three, ahead of the text so a narrow
+   terminal never cuts the clock.
 
 No terminal, no network: records are built by hand and fed to the handler, and the app is driven
 through Textual's headless ``run_test``.
@@ -32,13 +33,14 @@ from quest_ai_runner.textual_ui import ActivityBar, QuestAITerminal, _RichLogHan
 from quest_ai_runner import textual_ui_widgets
 from quest_ai_runner.core.adapters import EVENT_MILESTONE
 from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE
-from quest_ai_runner.textual_ui_helpers import METRIC_LINES_SHOWN, context_block_lines, ellipsize, metric_lines
+from quest_ai_runner.textual_ui_helpers import (
+    METRIC_LINES_SHOWN, context_block_lines, ellipsize, metric_lines, metric_number,
+)
 from quest_ai_runner.interactive_session_tracker import format_elapsed
 from quest_ai_runner.textual_ui_widgets import (
     LOG_LINE_CHARS,
     LOG_LINES_SHOWN,
     short_log_text,
-    with_elapsed,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -109,15 +111,35 @@ def test_the_transcript_gets_one_short_deduped_line_and_the_file_gets_every_full
     assert "A second, different problem. More." in text
 
 
-def test_the_details_hint_comes_once_with_the_log_path(tmp_path):
+def test_the_details_hint_is_the_last_line_of_the_group_never_between_two_warnings(tmp_path):
     handler, log, path = make_handler(tmp_path)
     handler.handle(make_record("quest_ai_runner.a", "First problem."))
     handler.handle(make_record("quest_ai_runner.b", "Second problem."))
     handler.handle(make_record("quest_ai_runner.c", "Third problem."))
-    hints = [ln for ln in log.lines if "Details:" in ln]
-    assert hints == [f"  Details: {path}, or run with -v"]
-    assert log.lines.index(hints[0]) == 1, "the hint follows the first warning"
+    assert log.lines == ["  ⚠ First problem", "  ⚠ Second problem", "  ⚠ Third problem"], "no hint yet"
+    handler.write_summary()
+    handler.write_summary()   # once
+    assert log.lines[-1] == f"  Details: {path}"
+    assert [ln for ln in log.lines if "Details:" in ln] == [log.lines[-1]]
     handler.close()
+
+
+def test_a_warning_after_the_closing_line_goes_to_the_file_only(tmp_path):
+    handler, log, path = make_handler(tmp_path)
+    handler.handle(make_record("quest_ai_runner.a", "First problem."))
+    handler.write_summary()
+    handler.handle(make_record("quest_ai_runner.b", "A later problem."))
+    handler.write_summary()
+    handler.close()
+    assert log.lines == ["  ⚠ First problem", f"  Details: {path}"]
+    assert "A later problem." in path.read_text(encoding="utf-8")
+
+
+def test_nothing_is_written_to_close_a_group_that_never_had_a_warning(tmp_path):
+    handler, log, _path = make_handler(tmp_path)
+    handler.write_summary()
+    handler.close()
+    assert log.lines == []
 
 
 def test_a_librarys_records_reach_the_file_but_never_the_transcript(tmp_path):
@@ -172,15 +194,19 @@ def test_a_long_first_sentence_is_ellipsized_and_a_multiline_message_uses_its_fi
     assert short_log_text("   ") == ""
 
 
-def test_after_a_handful_of_distinct_warnings_the_rest_go_to_the_file_only(tmp_path):
+def test_after_three_distinct_warnings_the_rest_are_counted_in_one_closing_line(tmp_path):
+    assert LOG_LINES_SHOWN == 3
     handler, log, path = make_handler(tmp_path)
     for n in range(LOG_LINES_SHOWN + 5):
         handler.handle(make_record("quest_ai_runner.noisy", f"Problem number {n} happened."))
+    handler.handle(make_record("quest_ai_runner.noisy", "Problem number 4 happened."))   # a repeat counts once
+    handler.write_summary()
     handler.close()
     problems = [ln for ln in log.lines if ln.startswith("  ⚠ Problem")]
     assert len(problems) == LOG_LINES_SHOWN
-    assert [ln for ln in log.lines if "More warnings" in ln] == ["  ⚠ More warnings are in the log file only"]
-    assert path.read_text(encoding="utf-8").count("happened.") == LOG_LINES_SHOWN + 5
+    assert log.lines[-1] == f"  5 more notices. Details: {path}"
+    assert len(log.lines) == LOG_LINES_SHOWN + 1
+    assert path.read_text(encoding="utf-8").count("happened.") == LOG_LINES_SHOWN + 6
 
 
 def test_an_unwritable_log_location_never_raises_and_the_hint_falls_back_to_verbose(tmp_path):
@@ -188,6 +214,7 @@ def test_an_unwritable_log_location_never_raises_and_the_hint_falls_back_to_verb
     blocker.write_text("not a folder")
     handler, log, _path = make_handler(tmp_path, log_path=blocker / "chat.log")
     handler.handle(make_record("quest_ai_runner.a", "Something degraded."))
+    handler.write_summary()
     handler.close()
     assert log.lines == ["  ⚠ Something degraded", "  Details: run with -v"]
 
@@ -277,29 +304,37 @@ SOURCES = [{"label": "Corpus files", "adapter": "files", "items": ["/srv/corpus/
            {"label": "Recent turns", "adapter": "recent", "items": []}]
 
 
-def test_the_context_block_is_the_count_three_titles_and_how_many_more():
-    lines = [ln.plain for ln in context_block_lines(many_cards(), SOURCES, width=80)]
-    assert lines[0] == "Context: 6 cards, 2 sources"
-    bullets = [ln for ln in lines if ln.startswith("  ●")]
-    assert len(bullets) == 3
-    assert bullets[0].startswith("  ● Topic 5 "), "the highest score comes first"
-    assert "  … and 3 more" in lines
-    assert lines[-1] == "  Sources: Corpus files (2)", "labels and counts only, no item lists"
-    assert len(lines) <= 6
+def test_the_context_block_is_one_sentence_two_titles_and_how_many_more():
+    lines = [ln.plain for ln in context_block_lines(many_cards(), SOURCES)]
+    assert len(lines) == 1
+    assert lines[0].startswith("  Found 6 sources: Topic 5 "), "the highest score comes first"
+    assert lines[0].count("Topic ") == 2 and lines[0].endswith(" and 4 more.")
     blob = "\n".join(lines)
-    for hidden in ("card:", "area-aaaaaa", "score", "/srv/", ".md", "files"):
-        assert hidden not in blob.replace("Corpus files", "")
+    for hidden in ("card", "area-aaaaaa", "score", "/srv/", ".md", "Corpus files", "Sources:"):
+        assert hidden not in blob
 
 
-@pytest.mark.parametrize("width", [20, 30, 60, 100])
-def test_no_context_line_is_wider_than_the_terminal(width):
-    for line in context_block_lines(many_cards(), SOURCES, width=width):
-        assert len(line.plain) <= max(width, 14), (width, line.plain)
+def test_the_context_line_names_every_source_when_there_are_two_or_fewer():
+    cards = [{"title": "Pricing tiers", "relevance_score": 0.9}, {"title": "Refund policy", "relevance_score": 0.5}]
+    assert [ln.plain for ln in context_block_lines(cards, [])] == ["  Found 2 sources: Pricing tiers and Refund policy."]
+    assert [ln.plain for ln in context_block_lines(cards[:1], [])] == ["  Found 1 source: Pricing tiers."]
+    assert context_block_lines([], []) == [], "nothing found, nothing said"
 
 
-def test_a_card_without_a_title_never_falls_back_to_its_internal_id():
+def test_a_long_title_is_cut_and_the_sentence_wraps_instead_of_being_clipped():
+    (line,) = context_block_lines(many_cards(), SOURCES)
+    assert all(len(part) <= 51 for part in line.plain.split(": ", 1)[1].split(", ")[:1])
+    assert "…" in line.plain
+
+
+def test_a_source_without_a_title_never_falls_back_to_its_internal_id():
     lines = [ln.plain for ln in context_block_lines([{"id": "card:area-aaaaaa", "relevance_score": 0.9}], [])]
-    assert lines == ["Context: 1 card, 0 sources", "  ● Untitled card"]
+    assert lines == ["  Found 1 source: Untitled source."]
+
+
+def test_with_no_cards_the_items_of_the_source_groups_are_the_count():
+    lines = [ln.plain for ln in context_block_lines([], SOURCES)]
+    assert lines == ["  Found 2 sources."]
 
 
 def test_ellipsize_cuts_to_the_limit_on_one_line():
@@ -309,7 +344,7 @@ def test_ellipsize_cuts_to_the_limit_on_one_line():
     assert ellipsize("two\nlines here", 70) == "two lines here"
 
 
-def test_the_context_event_writes_the_calm_block_and_still_feeds_the_live_panel():
+def test_the_context_event_writes_the_sentence_and_still_feeds_the_turns_state():
     async def build(app, pilot):
         rec = RecordingLog()
         app._tlog = rec
@@ -319,14 +354,13 @@ def test_the_context_event_writes_the_calm_block_and_still_feeds_the_live_panel(
         await pilot.pause()
         return rec.lines, app._ctx.cards, cards
 
-    lines, panel_cards, cards = run_app(build)
-    assert len(lines) <= 6
-    assert lines[0] == "Context: 6 cards, 2 sources"
-    assert not any("card:" in ln or "/srv/" in ln or "score" in ln for ln in lines)
-    assert panel_cards == cards, "the in-place panel still receives every card unchanged"
+    lines, kept_cards, cards = run_app(build)
+    assert len(lines) == 1 and lines[0].startswith("  Found 6 sources:")
+    assert not any("card" in ln or "/srv/" in ln or "score" in ln for ln in lines)
+    assert kept_cards == cards, "the turn keeps every card unchanged (behind Alt+C)"
 
 
-# --- the metric before and after: dim, short, one line each -------------------------------------
+# --- the metric before and after: one readable sentence each --------------------------------------
 
 def metric_entry(i: int = 0, **extra) -> dict:
     return {"solution_id": "greet-a-person", "metric_id": f"metric-{i}", "source": "measured", "reason": "",
@@ -334,40 +368,69 @@ def metric_entry(i: int = 0, **extra) -> dict:
             "before": 0.5, "after": 0.75, "delta": 0.25, "disagrees": False, **extra}
 
 
-@pytest.mark.parametrize("width", [20, 30, 60, 100])
-def test_no_metric_line_is_wider_than_the_terminal(width):
-    entries = [metric_entry(0), metric_entry(1, source="recorded", disagrees=True),
-               {"source": "not_applicable", "reason": "It only edits a draft, which no metric covers at all.",
-                "name": "", "metric_id": "", "before": None, "after": None}]
-    for line in metric_lines(entries, True, width=width):
-        assert len(line.plain) <= max(width, 14), (width, line.plain)
-        assert line.style == "dim"
+def test_a_metric_line_keeps_its_whole_name_and_wraps_instead_of_being_cut():
+    (line,) = metric_lines([metric_entry(7)])
+    assert line.plain == ("  Share of sample names greeted in the standard form, variant 7: 0.5 -> 0.75 "
+                          "(measured automatically)")
+    assert "…" not in line.plain and line.style == "", "normal weight, not dim"
 
 
-def test_a_long_metric_name_gives_way_before_the_numbers_and_the_source_do():
-    (line,) = metric_lines([metric_entry(7)], width=60)
-    assert line.plain.endswith(": 0.5 -> 0.75 (measured by QAR)") and "…" in line.plain
-    assert len(line.plain) <= 60
+def test_two_metrics_with_similar_names_stay_distinguishable():
+    first, second = [ln.plain for ln in metric_lines([metric_entry(1), metric_entry(2)])]
+    assert "variant 1" in first and "variant 2" in second
 
 
-def test_a_metric_block_is_a_few_lines_and_how_many_more():
-    lines = [ln.plain for ln in metric_lines([metric_entry(i, name=f"Metric {i}") for i in range(7)], True, width=80)]
+@pytest.mark.parametrize("value, shown", [
+    (0.38, "0.38"), (0.4, "0.4"), (0.380, "0.38"), (1.0, "1"), (0, "0"), (12, "12"), (0.12345, "0.123"),
+    (1234.5678, "1234.568"), (0.0004, "0.0004"), (-0.5, "-0.5"), (None, "unknown"),
+])
+def test_metric_numbers_have_at_most_three_decimals_and_no_trailing_zeros_and_no_invented_unit(value, shown):
+    assert metric_number(value) == shown
+    assert "%" not in metric_number(value)
+
+
+def test_a_measured_and_a_recorded_entry_that_agree_are_one_line():
+    lines = [ln.plain for ln in metric_lines([
+        metric_entry(0, name="Pass rate"), metric_entry(0, name="Pass rate", source="recorded")])]
+    assert lines == ["  Pass rate: 0.5 -> 0.75 (measured automatically)"]
+
+
+def test_a_disagreement_is_stated_neutrally_in_one_line_in_normal_weight():
+    lines = metric_lines([
+        metric_entry(0, name="Pass rate", before=0.38, after=0.91, disagrees=True),
+        metric_entry(0, name="Pass rate", source="recorded", before=0.4, after=0.9, disagrees=True)])
+    assert [ln.plain for ln in lines] == [
+        "  Pass rate: 0.38 -> 0.91 (measured automatically). The AI reported 0.4 -> 0.9."]
+    assert lines[0].style == "" and "disagree" not in lines[0].plain and "QAR" not in lines[0].plain
+
+
+def test_a_disagreement_whose_partner_is_not_in_the_batch_still_says_the_numbers_differ():
+    (line,) = metric_lines([metric_entry(0, name="Pass rate", disagrees=True)])
+    assert line.plain == "  Pass rate: 0.5 -> 0.75 (measured automatically, and the AI reported different numbers)"
+    (line,) = metric_lines([metric_entry(0, name="Pass rate", source="recorded", disagrees=True)])
+    assert line.plain == "  Pass rate: 0.5 -> 0.75 (reported by the AI, and the measured numbers differ)"
+
+
+def test_the_source_is_said_in_plain_words_never_by_an_internal_name():
+    lines = [ln.plain for ln in metric_lines([
+        metric_entry(0, name="Pass rate"), metric_entry(1, name="Latency", source="recorded"),
+        {"source": "not_applicable", "reason": "Only a draft.", "name": "", "metric_id": ""}], True)]
+    assert lines == ["  Pass rate: 0.5 -> 0.75 (measured automatically)",
+                     "  Latency: 0.5 -> 0.75 (reported by the AI)",
+                     "  Nothing to measure: Only a draft.",
+                     f"  {NOT_RECORDED_LINE}"]
+    assert not any("QAR" in ln or "—" in ln for ln in lines)
+
+
+def test_a_metric_block_is_a_few_lines_and_a_count_that_says_where_the_rest_are():
+    entries = [metric_entry(i, name=f"Metric {i}") for i in range(7)]
+    lines = [ln.plain for ln in metric_lines(entries, True, more_hint="Alt+D shows them all.")]
     assert len(lines) == METRIC_LINES_SHOWN + 2
-    assert lines[0] == "  Metric 0: 0.5 -> 0.75 (measured by QAR)"
-    assert lines[METRIC_LINES_SHOWN] == f"  … and {7 - METRIC_LINES_SHOWN} more"
+    assert lines[0] == "  Metric 0: 0.5 -> 0.75 (measured automatically)"
+    assert lines[METRIC_LINES_SHOWN] == f"  {7 - METRIC_LINES_SHOWN} more metric results. Alt+D shows them all."
     assert lines[-1] == f"  {NOT_RECORDED_LINE}"
     assert metric_lines([], False) == [], "nothing to say, nothing written"
-
-
-def test_the_metric_wording_uses_plain_words_an_arrow_made_of_ascii_and_no_em_dash():
-    lines = [ln.plain for ln in metric_lines([
-        metric_entry(0, name="Pass rate"), metric_entry(1, name="Latency", source="recorded", disagrees=True),
-        {"source": "not_applicable", "reason": "Only a draft.", "name": "", "metric_id": ""}], True)]
-    assert lines == ["  Pass rate: 0.5 -> 0.75 (measured by QAR)",
-                     "  Latency: 0.5 -> 0.75 (recorded by the AI, disagrees with QAR)",
-                     "  Metric not applicable: Only a draft.",
-                     f"  {NOT_RECORDED_LINE}"]
-    assert not any("—" in ln for ln in lines)
+    assert len(metric_lines(entries, limit=None)) == 7, "with no limit nothing is folded away"
 
 
 def test_in_the_running_app_a_finished_goals_metric_is_one_transcript_line():
@@ -383,37 +446,119 @@ def test_in_the_running_app_a_finished_goals_metric_is_one_transcript_line():
         return rec.lines
 
     lines = run_app(build)
-    assert lines.count("  Pass rate: 0.5 -> 0.75 (measured by QAR)") == 1
+    assert lines.count("  Pass rate: 0.5 -> 0.75 (measured automatically)") == 1
+
+
+def test_the_metric_block_comes_before_the_result_so_a_long_answer_and_its_link_do_not_bury_it():
+    async def build(app, pilot):
+        rec = RecordingLog()
+        app._tlog = rec
+        app._console.markdown = lambda text: rec.write(SimpleNamespace(plain="ANSWER " + text))
+        app._deep.add_run("r1", "Improve the greeting")
+        app._deep.update_run_output("r1", "Read: greet.py")
+        app._deep.set_final_output("r1", "Changed greet(). Link: https://example.org/x")
+        app._deep.set_metrics("r1", [metric_entry(0, name="Pass rate")])
+        app._flush_deep_run("r1")
+        await pilot.pause()
+        return rec.lines
+
+    lines = run_app(build)
+    metric_at = lines.index("  Pass rate: 0.5 -> 0.75 (measured automatically)")
+    answer_at = next(i for i, ln in enumerate(lines) if ln.startswith("ANSWER"))
+    assert metric_at < answer_at
+
+
+def test_alt_d_lists_every_metric_result_the_transcript_folded_away():
+    async def build(app, pilot):
+        rec = RecordingLog()
+        app._tlog = rec
+        app._deep.add_run("r1", "Improve the greeting")
+        app._deep.update_run_output("r1", "Read: greet.py")
+        entries = [metric_entry(i, name=f"Metric {i}") for i in range(7)]
+        app._deep.set_metrics("r1", entries)
+        app._flush_deep_run("r1")
+        app.action_toggle_deep_detail()
+        await pilot.pause()
+        return rec.lines, str(app._deep_detail._body.render())
+
+    lines, panel = run_app(build)
+    assert "  3 more metric results. Alt+D shows them all." in lines
+    for i in range(7):
+        assert f"Metric {i}: 0.5 -> 0.75 (measured automatically)" in panel
+
+
+def test_with_no_job_to_open_nothing_is_folded_away_so_the_count_is_never_a_dead_end():
+    async def build(app, pilot):
+        rec = RecordingLog()
+        app._tlog = rec
+        app.write_metrics([metric_entry(i, name=f"Metric {i}") for i in range(7)])
+        await pilot.pause()
+        return rec.lines
+
+    lines = run_app(build)
+    assert len([ln for ln in lines if ln.startswith("  Metric ")]) == 7
+    assert not any("more metric results" in ln for ln in lines)
 
 
 # --- a long wait counts its seconds ------------------------------------------------------------
 
-def test_format_elapsed_and_the_status_text():
+def test_format_elapsed_is_the_one_way_a_time_is_written():
     assert format_elapsed(45) == "45s"
     assert format_elapsed(125) == "2m5s"
-    assert with_elapsed("Preparing the deep run…", 45) == "Preparing the deep run… 45s"
-    assert with_elapsed("Gathering context", 7) == "Gathering context  · 7s"
-    assert with_elapsed("Thinking…", None) == "Thinking…"
+    assert format_elapsed(212.4) == "3m32s"
 
 
 def test_the_clock_shows_after_three_seconds_survives_status_changes_and_stops():
     now = [100.0]
     bar = ActivityBar()
     bar.clock = lambda: now[0]
-    bar.set_status("preparing the deep run…")
-    assert bar.render().plain.endswith("Preparing the deep run…"), "status text starts uppercase"
+    bar.set_status("preparing the work…")
+    assert bar.render().plain.endswith("Preparing the work…"), "status text starts uppercase"
+    assert "s  " not in bar.render().plain
     bar.start_clock()
     now[0] = 102.9
-    assert bar.render().plain.endswith("Preparing the deep run…"), "no counter for a short wait"
+    assert bar.render().plain.endswith("●  Preparing the work…"), "no counter for a short wait"
     now[0] = 103.2
-    assert bar.render().plain.endswith("Preparing the deep run… 3s")
+    assert bar.render().plain.endswith("●  3s  Preparing the work…"), "the clock stands before the text"
     now[0] = 145.0
-    bar.set_status("Starting the worker…")
-    assert bar.render().plain.endswith("Starting the worker… 45s"), "a status change does not reset it"
+    bar.set_status("Starting the work…")
+    assert bar.render().plain.endswith("●  45s  Starting the work…"), "a status change does not reset it"
     bar.stop_clock()
-    assert bar.render().plain.endswith("Starting the worker…")
+    assert bar.render().plain.endswith("●  Starting the work…")
     now[0] = 400.0
     assert bar.elapsed_seconds() is None
+
+
+@pytest.mark.parametrize("queued", [0, 2])
+def test_at_80_columns_a_long_status_never_pushes_the_clock_or_the_waiting_count_off_the_end(queued):
+    now = [1000.0]
+    long_status = ("Checking the starting value before any change, which can take a while on a large set of "
+                   "files, so please wait for the first reading to finish")
+
+    async def build(app, pilot):
+        app._activity.clock = lambda: now[0]
+        app._activity.display = True
+        app._activity.set_status(long_status)
+        app._activity.start_clock()
+        app._activity.set_queued(queued)
+        now[0] = 1212.0
+        await pilot.pause()
+        return app._activity.render().plain, app._activity.size.width
+
+    plain, width = run_app(build)
+    assert width == 76 and len(plain) <= width, (len(plain), width)
+    assert "3m32s" in plain and plain.index("3m32s") < 14, "the clock is read first"
+    assert plain.count("…") == 1, "the cut is marked, once"
+    if queued:
+        assert plain.endswith("· 2 messages waiting")
+    else:
+        assert plain.rstrip().endswith("…")
+
+
+def test_a_status_that_fits_is_drawn_whole():
+    bar = ActivityBar()
+    bar.set_status("Starting the work on sonnet.")
+    assert bar.render().plain == "● ● ●  Starting the work on sonnet."
 
 
 def test_a_deep_plan_shows_the_preparing_status_with_a_clock_that_the_first_exec_event_clears():
@@ -427,7 +572,7 @@ def test_a_deep_plan_shows_the_preparing_status_with_a_clock_that_the_first_exec
         shown = {}
         now[0] = 1045.0
         shown["preparing"] = app._activity.render().plain
-        app._handle_event({"type": EVENT_STATUS, "text": "Gathering the context for the run…"})
+        app._handle_event({"type": EVENT_STATUS, "text": "Gathering what I need to start"})
         now[0] = 1046.0
         shown["status"] = app._activity.render().plain
         app._handle_event({"type": EVENT_EXEC, "text": "Reading files",
@@ -437,9 +582,9 @@ def test_a_deep_plan_shows_the_preparing_status_with_a_clock_that_the_first_exec
         return shown
 
     shown = run_app(build)
-    assert shown["preparing"].endswith("Preparing the deep run… 45s")
-    assert shown["status"].endswith("Gathering the context for the run… 46s"), "a real status replaces the text"
-    assert shown["exec"].endswith("Executing…"), shown["exec"]
+    assert shown["preparing"].endswith("●  45s  Getting ready to start the work…")
+    assert shown["status"].endswith("●  46s  Gathering what I need to start"), "a real status replaces the text"
+    assert shown["exec"].endswith("●  Working…"), shown["exec"]
 
 
 def test_the_clock_resets_per_turn_and_stops_when_the_turn_finishes():

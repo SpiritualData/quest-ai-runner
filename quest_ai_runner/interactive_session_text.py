@@ -77,14 +77,14 @@ Keys:
 
   /              Open the command menu (arrows move, Tab completes, Enter runs, Esc closes)
   Esc            Cancel the current turn, or close an open menu
-  (typing)       While a live deep worker runs, a message you send reaches it within seconds
+  (typing)       While the work runs, a note you send is read at its next step (within seconds for a live worker)
   Ctrl+C         Copy the selected text; with nothing selected, exit
-  Ctrl+Y         Copy the last AI reply
+  Alt+Y          Copy the last AI reply
   Ctrl+L         Clear the screen
   Shift+Enter    New line (also Ctrl+J, Alt+Enter, or a backslash before Enter)
   PageUp/Down    Scroll the transcript
-  Tab            Next deep agent's detail (completes a command while the menu is open)
-  Alt+D / Alt+C  Expand the deep agent's detail / show the context used
+  Tab            Next job's detail (completes a command while the menu is open)
+  Alt+D / Alt+C  Show the job's detail and metric results / show the sources used
 
 Resume a conversation later (run outside this session):
 

@@ -42,7 +42,7 @@ from textual.geometry import Offset
 from textual.message import Message
 from textual.selection import Selection
 from textual.strip import Strip
-from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, TextArea
+from textual.widgets import Header, Input, OptionList, RichLog, Static, TextArea
 from textual.widgets.option_list import Option
 
 from rich.markdown import Markdown as RichMarkdown
@@ -74,16 +74,16 @@ from .textual_ui_helpers import (  # noqa: F401
 )
 from .textual_ui_widgets import (  # noqa: F401
     ActivityBar,
-    ContextPanel,
     DeepActivity,
     DeepDetailPanel,
     FutureContextPanel,
+    KeyHints,
+    TurnContext,
     _AWAITING_DECISION_PLACEHOLDER,
     _BUSY_PLACEHOLDER,
     _READY_PLACEHOLDER,
     _RichLogConsole,
     _RichLogHandler,
-    _busy_placeholder,
     newline_hint,
 )
 from .textual_ui_transcript import (  # noqa: F401
@@ -119,18 +119,14 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
 
     #transcript {
         height: 1fr;
+        /* The full width, always: when a panel with side margins (the live work panel, Alt+C) appeared, the
+           log was laid out two columns narrower than the width it had wrapped its lines to, so the last
+           characters of full-width lines were cut off (a long answer lost the end of its first line) and
+           a horizontal scrollbar, a blue band taking one row, appeared. */
+        width: 100%;
         padding: 0 1;
         scrollbar-size-vertical: 1;
-    }
-
-    #context {
-        height: auto;
-        max-height: 16;
-        border-left: thick $accent 30%;
-        padding: 0 1;
-        margin: 0 1;
-        color: $text-muted;
-        overflow: hidden hidden;
+        overflow-x: hidden;
     }
 
     #deep {
@@ -192,32 +188,39 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
     }
 
     #prompt {
-        margin: 0 1 1 1;
+        margin: 0 1;
         border: tall $accent 60%;
         background: $panel;
         height: 3;
         max-height: 10;
     }
     #prompt:focus { border: tall $accent; }
+    /* The hint text in the empty prompt: readable (the default is 3.5:1 on the panel colour, under the 4.5:1 minimum). */
+    #prompt .text-area--placeholder { color: $text-muted; }
     /* The AI is waiting for an answer: its placeholder is the warning colour, not the faint hint. */
     #prompt.-awaiting .text-area--placeholder { color: $warning; }
+    /* The keys that do something now, one line under the prompt. */
+    #keys { height: 1; padding: 0 1; background: $panel; }
     """
 
+    # What shows under the prompt, and in what order, is ``key_hints`` (``KeyHints``), not these
+    # declarations: they are what each key does.
     BINDINGS = [
         Binding("ctrl+c", "copy_or_quit", "Copy / Quit", priority=True),
-        Binding("escape", "cancel", "Cancel turn"),
+        Binding("escape", "cancel", "Cancel"),
         Binding("ctrl+l", "clear_log", "Clear screen"),
-        Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
-        Binding("alt+d", "toggle_deep_detail", "Expand agent", show=True),
-        Binding("alt+c", "toggle_future_context", "Context used", show=True),
+        # Not Ctrl+Y: the prompt's own binding for it (redo) answers first, so a copy bound there never ran.
+        Binding("alt+y", "copy_last", "Copy last reply"),
+        Binding("alt+d", "toggle_deep_detail", "Details"),
+        Binding("alt+c", "toggle_future_context", "Sources used"),
         # priority=True: Textual's Screen has its OWN built-in "tab" binding (app.focus_next,
         # screen.py) which, being closer to the focused PromptTextArea in the DOM chain, would
         # otherwise intercept every Tab press before it ever reaches this action (the textarea
         # itself doesn't consume Tab since tab_behavior="focus"). Priority bindings are checked in
         # a separate App-down pass BEFORE that normal walk, so this wins regardless of focus.
-        Binding("tab", "cycle_deep_run", "Next agent", show=True, priority=True),
-        Binding("pageup", "scroll_up_or_agent", "Scroll up", show=True, priority=True),
-        Binding("pagedown", "scroll_down_or_agent", "Scroll down", show=True, priority=True),
+        Binding("tab", "cycle_deep_run", "Next job", priority=True),
+        Binding("pageup", "scroll_up_or_agent", "Scroll up", priority=True),
+        Binding("pagedown", "scroll_down_or_agent", "Scroll down", priority=True),
     ]
 
     def __init__(
@@ -267,8 +270,11 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         self._deep_flushed: set = set()
         # Metric entries already written to the transcript this turn (a key per entry, counted), so the
         # same result is never written twice: once in a run's record, again under the answer or the
-        # explanation line.
+        # explanation line. ``metrics_listing`` is every one of them, in order, for Alt+D to show in full.
         self.metrics_shown: Counter = Counter()
+        self.metrics_listing: List[dict] = []
+        # What this turn gathered (context sources, files read, plan changes): state only.
+        self._ctx = TurnContext()
         # Counts how many auto-execute passes have fired for the current user turn
         # (0 = the user's turn itself; 1+ = chained auto passes). Reset on each real user message.
         self._auto_pass: int = 0
@@ -331,7 +337,6 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         # width is then cropped off rather than ever reaching a second visual line.
         yield TranscriptLog(id="transcript", max_lines=20000, wrap=True, min_width=1,
                             highlight=True, markup=True, auto_scroll=True)
-        yield ContextPanel(id="context")
         yield DeepActivity(id="deep")
         yield DeepDetailPanel(id="deep-detail")
         yield FutureContextPanel(id="future-context")
@@ -353,17 +358,15 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
                 compact=True,
                 placeholder=_READY_PLACEHOLDER,
             )
-        yield Footer()
+            yield KeyHints(id="keys")
 
     def on_mount(self) -> None:
         self._ui_thread_id = threading.get_ident()
         self._tlog = self.query_one("#transcript", TranscriptLog)
-        self._ctx = self.query_one("#context", ContextPanel)
         self._deep_view = self.query_one("#deep", DeepActivity)
         self._deep_detail = self.query_one("#deep-detail", DeepDetailPanel)
         self._future_ctx_panel = self.query_one("#future-context", FutureContextPanel)
         self._activity = self.query_one("#activity", ActivityBar)
-        self._ctx.reset()
         self._deep_view.hide()
         self._activity.display = False
 
@@ -401,9 +404,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
                 conv = self.deferred_resume
                 self.replay_resumed_history(
                     conv, conv.meta.get("rep_name") or self._deferred_rep_name)
-                self._console.dim("  Loading the rest of the session. You can type now; your "
-                                  "message is sent once it is ready.")
-                self.sub_title = "Resuming conversation..."
+                self.sub_title = "Resuming conversation…"
             self.query_one("#prompt", PromptTextArea).focus()
             self.run_worker(self._build_session_worker, exclusive=True, thread=True)
 

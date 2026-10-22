@@ -224,6 +224,7 @@ async def test_dashboard_arrow_follows_the_detail_panel_not_the_last_streaming_r
     # streaming, even though nothing was open, and stuck once the panel closed.
     app = QuestAITerminal(_FakeSession())
     async with app.run_test() as pilot:
+        app._turn_active = True  # the live panel only exists while the turn runs
         app._deep.add_run("r1", "Goal one")
         app._deep.update_run_output("r1", "r1 output")
         app._cur_deep_run = "r1"  # simulates a live exec event having streamed for r1
@@ -251,6 +252,24 @@ async def test_dashboard_arrow_follows_the_detail_panel_not_the_last_streaming_r
         assert app._deep_detail.display is False
         assert "▸" in app._deep_view._dashboard
         assert "▾" not in app._deep_view._dashboard
+
+
+@pytest.mark.asyncio
+async def test_opening_the_details_after_the_turn_does_not_bring_the_live_panel_back():
+    app = QuestAITerminal(_FakeSession())
+    async with app.run_test() as pilot:
+        app._turn_active = False
+        app._deep.add_run("r1", "Goal one")
+        app._deep.update_run_output("r1", "Read: a.md")
+        app._deep.set_metrics("r1", [{"solution_id": "s", "metric_id": "m", "name": "Pass rate", "before": 0.5,
+                                      "after": 0.75, "source": "measured", "disagrees": False}])
+        app.action_toggle_deep_detail()
+        await pilot.pause()
+        assert app._deep_detail.display is True
+        assert app._deep_view.display is False, "the live panel belongs to the running turn"
+        text = app._deep_detail._body.render().plain
+        assert text.index("Read: a.md") < text.index("Pass rate: 0.5 -> 0.75 (measured automatically)"), (
+            "the results follow the actions, where the panel's follow-the-tail view ends")
 
 
 @pytest.mark.asyncio
@@ -362,7 +381,7 @@ async def test_final_output_rendered_in_record():
 
     body = "\n".join(log.lines)
     assert "Fix the bug" not in body        # one run: its goal is the person's own request, not repeated
-    assert "1 read" in body                 # rolled up, not the path
+    assert "1 file read" in body            # rolled up, not the path
     assert "/a/b.py" not in body            # individual file ops are NOT replayed
     assert "Tester (AI):" in body           # the result reads as the AI's reply, from its speaker
     assert "Result" not in body
@@ -381,7 +400,7 @@ def test_activity_summary_rolls_up_tool_actions():
     app._flush_deep_run("r1")
 
     body = "\n".join(log.lines)
-    assert "3 reads" in body
+    assert "3 files read" in body
     assert "1 edit" in body
     assert "1 command" in body
     assert "1 tool call" in body
@@ -448,7 +467,7 @@ def test_narration_shown_when_no_result():
     app._flush_deep_run("r1")
 
     body = "\n".join(log.lines)
-    assert "1 read" in body
+    assert "1 file read" in body
     assert "I think the issue is in the parser." in body
     assert "✗" not in body
 
@@ -550,8 +569,9 @@ MEASURED = {"solution_id": "greet-a-person", "metric_id": "greeting-pass-rate", 
 RECORDED = {**MEASURED, "after": 0.9, "delta": 0.4, "source": "recorded", "reason": ""}
 NOT_APPLICABLE = {"solution_id": "", "metric_id": "", "name": "", "milestone": "", "before": None, "after": None,
                   "delta": None, "source": "not_applicable", "reason": "Only a draft was edited.", "disagrees": False}
-MEASURED_LINE = "Greeting pass rate: 0.5 -> 0.75 (measured by QAR, disagrees with the AI)"
-RECORDED_LINE = "Greeting pass rate: 0.5 -> 0.9 (recorded by the AI, disagrees with QAR)"
+# The measured entry and the AI's own record of it are one line, the AI's numbers said neutrally.
+PAIR_LINE = "Greeting pass rate: 0.5 -> 0.75 (measured automatically). The AI reported 0.5 -> 0.9."
+MEASURED_LINE = "Greeting pass rate: 0.5 -> 0.75 (measured automatically, and the AI reported different numbers)"
 
 
 def milestone(run_id: str, **data) -> dict:
@@ -574,11 +594,11 @@ def test_a_runs_record_shows_the_metric_before_and_after_once_and_drops_the_plai
     app._flush_deep_run("r1")
 
     lines = stripped(log)
-    assert lines.count(MEASURED_LINE) == 1 and lines.count(RECORDED_LINE) == 1
+    assert lines.count(PAIR_LINE) == 1
     assert not any("Metric:" in ln for ln in lines), "the plain text line is not printed a second time"
     body = "\n".join(log.lines)
     assert "Changed greet()." in body, "the rest of the result is untouched"
-    assert body.index("Changed greet()") < body.index(MEASURED_LINE)
+    assert body.index(PAIR_LINE) < body.index("Changed greet()"), "the numbers come before the result and its link"
 
 
 def test_a_change_with_no_metric_recorded_says_so_in_one_dim_line():
@@ -597,7 +617,7 @@ def test_a_declared_not_applicable_reads_as_such():
     app._deep.add_run("r1", "Draft the note")
     app._handle_event(milestone("r1", deep_output="Drafted.", metrics=[NOT_APPLICABLE]))
     app._flush_deep_run("r1")
-    assert "Metric not applicable: Only a draft was edited." in stripped(log)
+    assert "Nothing to measure: Only a draft was edited." in stripped(log)
 
 
 def test_a_milestone_that_arrives_after_the_record_adds_its_lines_after_it():
@@ -641,7 +661,7 @@ async def test_the_turn_shows_each_metric_line_once_from_milestone_to_finish():
         app._finish_turn("improve the greeting", _FakeMetricFinal(), 3.0, cancelled=False, error=None)
 
         lines = stripped(log)
-        assert lines.count(MEASURED_LINE) == 1 and lines.count(RECORDED_LINE) == 1
+        assert lines.count(PAIR_LINE) == 1
         assert not any("Metric:" in ln for ln in lines)
         assert "".join(log.lines).count("Changed greet().") == 1
 
@@ -689,7 +709,8 @@ async def test_the_plain_text_line_is_not_printed_when_the_answer_falls_back_to_
         app._finish_turn("improve the greeting", WithText(), 3.0, cancelled=False, error=None)
         body = "\n".join(log.lines)
         assert "Changed greet()." in body and "Metric:" not in body
-        assert stripped(log).count(MEASURED_LINE) == 1
+        assert stripped(log).count(PAIR_LINE) == 1
+        assert body.index(PAIR_LINE) < body.index("Changed greet()"), "ahead of the answer it would be buried under"
 
 
 @pytest.mark.asyncio
@@ -715,13 +736,13 @@ async def test_the_explanation_line_counts_the_metric_results_and_adds_only_the_
             steps = 2
             metric_results = []
             metric_missing = False
-            explanation = {"version": 3, "used": {"sources": [{"label": "Corpus files"}]},
+            explanation = {"version": 3, "used": {"sources": [{"label": "Workspace files", "item_count": 1}]},
                            "metrics": [MEASURED], "metric_missing": True}
 
         app._finish_turn("what changed", Answer(), 1.0, cancelled=False, error=None)
         lines = stripped(log)
-        assert "Explain how I got this: 1 source, 1 metric result" in lines
-        explain = lines.index("Explain how I got this: 1 source, 1 metric result")
+        assert "How I got this: 1 source, 1 metric result" in lines
+        explain = lines.index("How I got this: 1 source, 1 metric result")
         assert lines[explain + 1] == MEASURED_LINE and lines[explain + 2] == NOT_RECORDED_LINE
         assert lines.count(MEASURED_LINE) == 1
 
@@ -741,7 +762,7 @@ def test_summarize_exec_lines_counts_and_narration():
         "Read: /a", "Read: /b", "Edit: /a", "$ ls", "WebSearch: x",
         "Using Agent", "[thinking] hmm", "I planned the change.",
     ])
-    assert summary == "2 reads · 1 edit · 1 command · 1 search · 1 tool call"
+    assert summary == "2 files read · 1 edit · 1 command · 1 search · 1 tool call"
     assert narration == ["I planned the change."]  # thinking is dropped, tool ops are not narration
 
 
@@ -753,7 +774,7 @@ def test_summarize_exec_lines_collapses_consecutive_identical_narration():
     summary, narration = QuestAITerminal._summarize_exec_lines([
         "Starting.", err, "Read: /a", err, "[thinking] hmm", err, "Done trying.",
     ])
-    assert summary == "1 read"
+    assert summary == "1 file read"
     # The repeats are consecutive as NARRATION (a tool line and a thinking line between them are
     # not narration and must not split the run of identical messages).
     assert narration == ["Starting.", f"{err} (repeated 3 times)", "Done trying."]
@@ -806,5 +827,6 @@ def test_with_several_runs_each_record_names_its_own_goal():
         app._deep.add_run(rid, goal)
         app._deep.update_run_output(rid, "Edit: /a.py")
     app._flush_pending_deep_runs()
-    headings = [ln for ln in log.lines if ln.startswith("⎅")]
-    assert headings == ["⎅ Fix the parser", "⎅ Update the docs"]
+    headings = [ln for ln in log.lines if ln in ("Fix the parser", "Update the docs")]
+    assert headings == ["Fix the parser", "Update the docs"]
+    assert not any("⎅" in ln for ln in log.lines), "no decorative glyph before a goal"

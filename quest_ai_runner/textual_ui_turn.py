@@ -13,12 +13,14 @@ from .interactive_session import _DeepRunTracker, _model_label
 from .interactive_session_tracker import format_elapsed
 from .textual_ui_widgets import (
     _AWAITING_DECISION_PLACEHOLDER,
+    _BUSY_PLACEHOLDER,
     _READY_PLACEHOLDER,
-    _busy_placeholder,
 )
 from .textual_ui_prompt import PromptTextArea
 from .core.metric_results import without_line
-from .textual_ui_helpers import _build_shallow_context_bullets, context_block_lines, plural
+from .textual_ui_helpers import (
+    _build_shallow_context_bullets, context_block_lines, plural, source_count, working_notes_in,
+)
 from .textual_ui_outcome import (
     MAX_AUTO_PASSES,
     OUTCOME_FINISHED,
@@ -60,6 +62,10 @@ class TurnMixin:
                     deep_goal: Optional[str] = None) -> None:
         if self._turn_active:
             return
+        # The closing line of any warnings so far goes in before the person's message, never after it.
+        log_handler = getattr(self, "log_handler", None)
+        if log_handler is not None:
+            log_handler.write_summary()
         self._turn_active = True
         self._cancel.clear()
         # This turn's control channel (steer, stop, pause; textual_ui_control.py). It only does
@@ -74,11 +80,13 @@ class TurnMixin:
         self._cur_deep_run = None
         self._answer_parts: List[str] = []
         self._t0 = time.monotonic()
-        self._deep = _DeepRunTracker()
+        # The jobs' clocks count from the start of the turn, the one clock the person sees.
+        self._deep = _DeepRunTracker(started_at=time.time())
         self._deep_seen = set()
         self._deep_event_count = 0
         self._deep_flushed = set()
         self.metrics_shown.clear()
+        self.metrics_listing = []
         self._future_context = ""
         self._last_narration = ""
         self.pending_question = ""
@@ -106,7 +114,8 @@ class TurnMixin:
         self._activity.start_clock()
         self._activity.set_queued(0)
         self._activity.display = True
-        self.query_one("#prompt", PromptTextArea).placeholder = _busy_placeholder(0)
+        self.query_one("#prompt", PromptTextArea).placeholder = _BUSY_PLACEHOLDER
+        self.refresh_key_hints()
 
         self._run_stream(user_text)
 
@@ -229,16 +238,19 @@ class TurnMixin:
             return
 
         if t == ev["status"]:
+            # "The work ran on <model>" is a record for the feeds that keep one per attempt (its data names the
+            # tier and the model), said after the run: here the turn's closing line names the model, once.
+            if isinstance(data, dict) and "deep_run_model" in data:
+                return
             self._activity.set_status(text or "Thinking…")
 
         elif t == ev["plan"]:
             if action == "deep":
-                # Don't echo the internal routing rationale — just signal the mode.
-                log.write(Text("  ▸ Deep execution", style="dim"))
-                # The run is being prepared, not started: the status line says so (with the
-                # turn's clock, since this can take minutes) until the core reports a real phase
-                # as a status event, and the first exec event hands over to the deep dashboard.
-                self._activity.set_status("Preparing the deep run…")
+                # The internal routing rationale and the name of the mode are not echoed. The work is
+                # being prepared, not started: the status line says so (with the turn's clock, since
+                # this can take minutes) until the core reports a real phase as a status event, and
+                # the first exec event hands over to the live work panel.
+                self._activity.set_status("Getting ready to start the work…")
             else:
                 if text:
                     label = f"▸ {action}" if action else "▸ plan"
@@ -255,9 +267,7 @@ class TurnMixin:
             paths = data.get("sources") or []
             self._ctx.add_sources(paths)
             total = self._ctx.total_sources
-            self._activity.set_status(
-                f"Gathering context  ({total} source{'s' if total != 1 else ''} so far)"
-            )
+            self._activity.set_status(f"Reading files  ({total} so far)")
 
         elif t == ev["context"]:
             card_meta = data.get("card_metadata") or []
@@ -267,16 +277,16 @@ class TurnMixin:
                 # the message is about, not the quest the person is working on.
                 self._ctx.set_cards(card_meta)
             # One calm block; the per-card detail (files, scores) is in the live context panel.
-            for line in context_block_lines(card_meta, sources, self.transcript_width()):
+            for line in context_block_lines(card_meta, sources):
                 log.write(line)
 
         elif t == ev["understanding"]:
             # Stage 1's resolved goal condition, surfaced the instant it's ready (well before
-            # any plan/answer). Informational only, not blocking, so it gets its own distinct
-            # look (cyan diamond) instead of the yellow decision marker below.
+            # any plan/answer). Informational only, not blocking. It is the AI's reading of the
+            # request, so it is indented, italic and in the plain text colour: never the bold cyan of
+            # the person's own line (``❯``), which it used to be taken for.
             if text:
-                log.write(Text(""))
-                log.write(Text(f"  ◆ {text}", style="bold cyan"))
+                log.write(Text(f"  ◆ {text}", style="italic"))
 
         elif t == ev["exec"]:
             run_id = data.get("run_id") or "default"
@@ -285,7 +295,7 @@ class TurnMixin:
             first_event_of_run = run_id not in self._deep_seen
             if first_event_of_run:
                 self._deep_seen.add(run_id)
-                self._deep.add_run(run_id, goal or "Executing work…")
+                self._deep.add_run(run_id, goal or "Working…")
             elif goal:
                 # A later event may carry the real subgoal even if the first didn't; keep it current.
                 self._deep.update_goal(run_id, goal)
@@ -302,8 +312,8 @@ class TurnMixin:
             self._deep_event_count += 1
             if first_event_of_run or self._deep_event_count % 10 == 0:
                 self._refresh_deep_dashboard()
-            self._activity.set_status("Executing…")
-            self._activity.stop_clock()   # the deep dashboard shows the run's progress from here
+            self._activity.set_status("Working…")
+            self._activity.stop_clock()   # the live work panel shows the job's progress, on the same clock, from here
             # A terminal phase means this deep task is finished: persist its full
             # output to the scrollback transcript now, so it stays readable after
             # the live deep widgets are gone. Each task leaves a permanent record.
@@ -329,6 +339,8 @@ class TurnMixin:
                     self._deep.set_final_output(rid, without_line(deep_out, metrics, metric_missing))
                 if rid and (metrics or metric_missing):
                     self._deep.set_metrics(rid, metrics, metric_missing)
+                    if rid in self._deep_archive:
+                        self._deep_archive[rid]["metrics"] = list(metrics)
                     if rid in self._deep_flushed:
                         # The run's record was written before its milestone arrived: the lines follow it.
                         self.write_metrics(metrics, metric_missing)
@@ -387,7 +399,7 @@ class TurnMixin:
 
         ``inbox.drain`` is called from the worker thread by the orchestrator's own retry/improve
         loops (a long deep run folding steering into its next attempt). Calling it directly left
-        the "↑ queued (N): ..." line written at queue-time sitting on screen forever with no sign
+        the "(waiting)" line written at queue-time sitting on screen forever with no sign
         it was ever acted on — the message was in fact picked up, but only the orchestrator's own
         loop ever knew that. Wrapping it reports the pickup back to the UI thread the same way
         ``_finish_turn``'s end-of-turn drain already does.
@@ -402,13 +414,8 @@ class TurnMixin:
 
     def _note_queued_folded_in(self, messages: List[str], remaining: int) -> None:
         """UI-thread callback: the running turn just picked up queued message(s) mid-run."""
-        n = len(messages)
-        self._tlog.write(Text(
-            f"  ↓ {n} queued message{'s' if n != 1 else ''} picked up mid-run",
-            style="dim yellow",
-        ))
+        self._tlog.write(Text(f"  {working_notes_in(len(messages))}", style="dim"))
         self._activity.set_queued(remaining)
-        self.query_one("#prompt", PromptTextArea).placeholder = _busy_placeholder(remaining)
 
     def _drain_queued_inputs(self) -> List[str]:
         """Pull (and clear) whatever this session's messages are still sitting in the inbox.
@@ -433,7 +440,6 @@ class TurnMixin:
         log = self._tlog
         self._activity.display = False
         self._activity.stop_clock()
-        self._ctx.display = False
         # Persist any deep task output that didn't already emit a terminal phase
         # (incl. cancelled/errored turns) before the live widgets disappear.
         self._flush_pending_deep_runs()
@@ -492,6 +498,10 @@ class TurnMixin:
                 for deep_result in getattr(final, "deep_results", None) or []:
                     answer = without_line(answer, getattr(deep_result, "metric_results", None) or [],
                                           getattr(deep_result, "metric_missing", False) is True)
+            # What the metric was before and after, for any goal whose record did not already show it
+            # (a goal that was not met leaves no milestone), written from the result's own data and ahead
+            # of the answer, so the numbers are not left below a long reply and its link.
+            self.write_metrics(getattr(final, "metric_results", None), getattr(final, "metric_missing", False))
             if answer:
                 self.write_speaker_label()
                 self._console.markdown(answer)
@@ -532,49 +542,45 @@ class TurnMixin:
             # standing next-steps artifact. The session owns the decision and the write (shared by
             # every UI); this is only the call site for "a turn just completed".
             s._maybe_refresh_next_steps(final)
-            # What the metric was before and after, for any goal whose record did not already show it
-            # (a goal that was not met leaves no milestone), written from the result's own data.
-            self.write_metrics(getattr(final, "metric_results", None), getattr(final, "metric_missing", False))
             log.write(Text(""))
-            # If the deep run flagged the context it used, load the panel so Alt+C opens it.
+            # If the work flagged the context it used, load the panel so Alt+C opens it.
             # Shallow turns don't get a future_context bullet list from the orchestrator, but they
-            # do gather context cards (shown live in the ContextPanel): the same panel serves them,
-            # instead of letting the cards be discarded. The closing line says the keys are there.
+            # do gather context sources (named in the transcript): the same panel serves them,
+            # instead of letting them be discarded. The closing line says the keys are there.
             context_bullets = self._future_context or _build_shallow_context_bullets(self._ctx.cards)
             if context_bullets:
                 self._future_ctx_panel.load(context_bullets)
             hints = []
             if any(run_id in self._deep_archive for run_id in self._deep_flushed):
-                hints.append("Alt+D every action")
+                hints.append("Alt+D details")
             if context_bullets:
-                hints.append("Alt+C context used")
+                hints.append("Alt+C sources used")
             self._write_footer(final, elapsed, hints)
-            # "Explain how I got this" (see core/answer_explanation.py), when QAR_EXPLAIN_ANSWER is
+            # "How I got this" (see core/answer_explanation.py), when QAR_EXPLAIN_ANSWER is
             # on and the turn passed the model-free eligibility gate. The terminal has no expandable
             # panel to put the full six-section account behind, so this is deliberately just the
-            # trace-recorded summary line (source/read/action counts), the same "what did this turn
-            # actually touch" idea the Context panel above already shows, not the model-written
-            # prose sections (those are the chat surfaces' job).
+            # trace-recorded summary line (source and action counts), not the model-written
+            # prose sections (those are the chat surfaces' job). "Sources" counts the same things
+            # here as in the context line and behind Alt+C; the files a worker opened are in the
+            # run's own summary line, counted there and nowhere else.
             explanation = getattr(final, "explanation", None)
             if explanation:
                 used = explanation.get("used") or {}
                 bits: List[str] = []
-                n_sources = len(used.get("cards") or []) + len(used.get("sources") or [])
-                n_reads = len(used.get("reads") or [])
+                n_sources = len(used.get("cards") or []) or sum(
+                    int(src.get("item_count") or 0) for src in used.get("sources") or [] if isinstance(src, dict))
                 n_actions = len(used.get("actions") or [])
                 n_metrics = len(explanation.get("metrics") or [])
                 if n_sources:
-                    bits.append(f"{n_sources} source{'s' if n_sources != 1 else ''}")
-                if n_reads:
-                    bits.append(f"{n_reads} read{'s' if n_reads != 1 else ''}")
+                    bits.append(plural(n_sources, "source"))
                 if n_actions:
-                    bits.append(f"{n_actions} action{'s' if n_actions != 1 else ''}")
+                    bits.append(plural(n_actions, "action"))
                 if used.get("web"):
                     bits.append("web search")
                 if n_metrics:
                     bits.append(plural(n_metrics, "metric result"))
                 if bits:
-                    log.write(Text(f"  Explain how I got this: {', '.join(bits)}", style="dim"))
+                    log.write(Text(f"  How I got this: {', '.join(bits)}", style="dim"))
                 # The metric lines of the payload (version 3), when this turn's transcript does not hold
                 # them already.
                 self.write_metrics(explanation.get("metrics"), explanation.get("metric_missing"))
@@ -606,14 +612,9 @@ class TurnMixin:
         if error is None:
             queued = self._drain_queued_inputs()
             if queued:
-                combined = "\n\n".join(queued)
-                log.write(Text(
-                    f"  ↑ Sending {len(queued)} queued message"
-                    f"{'s' if len(queued) != 1 else ''}…",
-                    style="bold yellow",
-                ))
-                log.write(Text(""))
-                self._begin_turn(combined, echo=True, auto=False)
+                # The notes were shown as the person's own lines, tagged waiting, when they were typed;
+                # they go as the next message, which the turn echoes as theirs.
+                self._begin_turn("\n\n".join(queued), echo=True, auto=False)
                 return
 
         # Auto-execute a planned-but-unexecuted deep turn: once at most (MAX_AUTO_PASSES counts the
@@ -655,10 +656,10 @@ class TurnMixin:
             # text (shown as the turn's answer just below), and repeating it as a dim side note
             # would just say the same thing twice.
             if not run and not (getattr(final, "text", "") or "").strip():
-                self._console.dim("  (No deep executor configured; cannot auto-execute)")
+                self._console.dim("  (Nothing is set up to run this, so it was only planned.)")
             return False
         if not run and not getattr(self, "_deep_plan_shown", False):
-            self._console.dim("  Task identified. Planned changes:")
+            self._console.dim("  Here's what I plan to do:")
             for i, g in enumerate(goals, 1):
                 prefix = "▸ " if i == 1 else "  "
                 self._console.dim(f"  {prefix}{g}")
@@ -748,9 +749,11 @@ class TurnMixin:
             steps = getattr(final, "steps", 0)
             if steps:
                 parts.append((f"{steps} step{'s' if steps != 1 else ''}", "dim"))
-            src = self._ctx.total_sources
-            if src:
-                parts.append((f"{src} source{'s' if src != 1 else ''}", "dim"))
+            found = source_count(self._ctx.cards, [])
+            if found:
+                parts.append((plural(found, "source"), "dim"))
+            if self._ctx.total_sources:
+                parts.append((plural(self._ctx.total_sources, "file") + " read", "dim"))
             if self._ctx.replans:
                 parts.append((f"{self._ctx.replans} replan{'s' if self._ctx.replans != 1 else ''}", "dim"))
             tok_in = getattr(final, "tokens_in", 0) or 0
@@ -767,7 +770,7 @@ class TurnMixin:
         if model_lbl:
             parts.append((model_lbl, "dim"))
         if outcome is None:
-            parts.append((f"{elapsed:.1f}s", "dim"))
+            parts.append((format_elapsed(elapsed), "dim"))
         for hint in hints:
             parts.append((hint, "dim"))
 

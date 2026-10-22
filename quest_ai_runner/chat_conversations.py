@@ -64,7 +64,7 @@ class SavedConversation:
 
     def first_message(self, limit: int = 70) -> str:
         text = " ".join((self.history[0][0] if self.history else "").split())
-        return text if len(text) <= limit else text[: limit - 3] + "..."
+        return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def read_conversation(path: Path) -> Optional[SavedConversation]:
@@ -179,7 +179,7 @@ def format_conversation_list(convs: List[SavedConversation], limit: int = 20) ->
         lines.append(f"{conv.short_id[:12]}  {when:>8}  {turns:>3} turn{'s' if turns != 1 else ' '}  "
                      f"{conv.first_message()}")
     if len(convs) > limit:
-        lines.append(f"... and {len(convs) - limit} older")
+        lines.append(f"… and {len(convs) - limit} older")
     lines.append("")
     lines.append("Resume one with: quest-ai-runner chat --resume <id>")
     return "\n".join(lines)

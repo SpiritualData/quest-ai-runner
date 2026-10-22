@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 
 def format_elapsed(seconds: float) -> str:
-    """``45s`` under a minute, ``2m5s`` after: the one way a run's elapsed time is written."""
+    """``45s`` under a minute, ``2m5s`` after: the one way any elapsed time is written on screen."""
     mins, secs = divmod(int(seconds), 60)
     return f"{mins}m{secs}s" if mins else f"{secs}s"
 
@@ -22,7 +22,10 @@ class _DeepRunTracker:
     output from each, and allows toggling to view one run's full progress.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, started_at: Optional[float] = None) -> None:
+        # ``started_at``: the time every run's clock counts from, when it is not the run's own start. A turn
+        # passes its own, so the clock beside a run is the turn's clock and never a second one.
+        self.started_at = started_at
         self._runs: dict = {}  # run_id -> {'goal': str, 'status': str, 'output': str, 'started': float}
         self._lock = threading.Lock()
         self._active_run_id: Optional[str] = None  # which run is currently displayed in detail
@@ -34,7 +37,7 @@ class _DeepRunTracker:
                 'goal': goal,
                 'status': 'running',
                 'output': '',
-                'started': time.time(),
+                'started': self.started_at if self.started_at is not None else time.time(),
                 'exec_lines': [],  # accumulate exec events for this run
                 'final_output': '',  # the worker's final result, set on completion
                 'model': None,  # the LLM model this run actually executed with, set on completion
@@ -143,13 +146,14 @@ class _DeepRunTracker:
                 goal = " ".join((info['goal'] or "").split())
                 if len(goal) > 160:
                     goal = goal[:160].rstrip() + "…"
-                goal_text = goal or "Deep task"
+                goal_text = goal or "The work"
                 if run_id == active_run_id:
-                    lines.append(f"\x1b[1;33m▾ ⎅ {goal_text}\x1b[0m")
+                    lines.append(f"\x1b[1;33m▾ {goal_text}\x1b[0m")
                 else:
-                    lines.append(f"\x1b[1;36m▸ ⎅ {goal_text}\x1b[0m")
-                # Status + elapsed sit under the subgoal, then the latest live action lines.
-                lines.append(f"\x1b[2m  {status_icon} {time_str}\x1b[0m")
+                    lines.append(f"\x1b[1;36m▸ {goal_text}\x1b[0m")
+                # Status + elapsed sit under the subgoal, then the latest live action lines. Not dimmed:
+                # the panel's own colour is already muted, and a second dimming falls below readable contrast.
+                lines.append(f"  {status_icon} {time_str}")
 
                 if info['output']:
                     output_lines = [l.strip() for l in info['output'].split('\n') if l.strip()]

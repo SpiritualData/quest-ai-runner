@@ -7,7 +7,8 @@ from __future__ import annotations
 from rich.text import Text
 
 from .interactive_session import InteractiveSession, _BANNER, _BOLD, _CYAN, _DIM, _RESET
-from .textual_ui_helpers import _missing_model_provider_message
+from .textual_ui_helpers import _missing_model_provider_message, plural
+from .textual_ui_outcome import speaker_label
 
 
 class StartupMixin:
@@ -23,21 +24,20 @@ class StartupMixin:
         """
         history = conv.history
         c = self._console
-        c.dim(f"  Resumed conversation {conv.short_id[:12]} ({len(history)} "
-              f"turn{'s' if len(history) != 1 else ''})")
+        # One plain line. The conversation's id is for the person debugging (``-v``), not for the one chatting.
+        detail = plural(len(history), "turn") + (f", id {conv.short_id[:12]}" if self.verbosity >= 1 else "")
+        c.dim(f"  Picking up your last conversation ({detail}).")
         shown = history[-self.RESUME_REPLAY_TURNS:]
         if len(history) > len(shown):
-            c.dim(f"  ... {len(history) - len(shown)} earlier turn(s) not shown")
+            c.dim(f"  {plural(len(history) - len(shown), 'earlier turn')} not shown.")
         c.line("")
         for user_text, asst_text in shown:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
             self._tlog.write(Text(""))
             if asst_text:
-                self._tlog.write(Text(f"{rep_name} (AI):", style="bold cyan"))
+                self._tlog.write(Text(speaker_label(rep_name), style="bold cyan"))
                 self._console.markdown(asst_text)
             self._tlog.write(Text(""))
-        c.dim("  End of resumed history.")
-        c.line("")
 
     def _build_session_worker(self) -> None:
         """Worker thread: build InteractiveSession (loads embedder, Qdrant, etc.) then hand off."""
@@ -84,25 +84,11 @@ class StartupMixin:
         self._deferred_rep_name = None
         self._deferred_persona = None
         self._deferred_goal_id = None
-        # Banner was already shown by _print_static_banner; just add the session line.
-        c = self._console
-        parts = [f"AI: {session._rep_name}"]
-        corpus = getattr(session._cfg, "corpus_root", None)
-        if corpus:
-            parts.append(f"corpus: {corpus.split('/')[-1] if '/' in corpus else corpus}")
-        if session._goal_id:
-            parts.append(f"goal: {session._goal_id}")
-        if session._model_hint:
-            parts.append(f"model: {session._model_hint}")
-        c.dim("  " + "  •  ".join(parts))
-        c.line("")
-        if getattr(session, "resumed", None) is not None:
-            if self.deferred_resume is None:
-                # Not already shown at mount (a session built outside the deferred path).
-                self.replay_resumed_history(session.resumed, session._rep_name)
-            else:
-                c.dim("  Ready. Continue the conversation below.")
-                c.line("")
+        # Banner was already shown by _print_static_banner; the resumed history too, when there is one.
+        if getattr(session, "resumed", None) is not None and self.deferred_resume is None:
+            # Not already shown at mount (a session built outside the deferred path).
+            self.replay_resumed_history(session.resumed, session._rep_name)
+        self.announce_ready(session)
         self.deferred_resume = None
         listeners = getattr(session, "quest_list_listeners", None)
         if isinstance(listeners, list):
@@ -125,17 +111,22 @@ class StartupMixin:
         self._console.write(_BANNER.format(B=_BOLD, C=_CYAN, R=_RESET, D=_DIM))
 
     def _print_header(self) -> None:
+        self._console.write(_BANNER.format(B=_BOLD, C=_CYAN, R=_RESET, D=_DIM))
+        self.announce_ready(self.sess)
+
+    def announce_ready(self, session: InteractiveSession) -> None:
+        """Who is answering and from which folder, then one ``Ready.``: the same two lines for a fresh start and a resumed one."""
+        parts = [f"AI: {session._rep_name}"]
+        folder = getattr(session._cfg, "corpus_root", None)
+        if folder:
+            parts.append(f"folder: {folder.split('/')[-1] if '/' in folder else folder}")
+        if session._goal_id:
+            parts.append(f"goal: {session._goal_id}")
+        if session._model_hint:
+            parts.append(f"model: {session._model_hint}")
         c = self._console
-        c.write(_BANNER.format(B=_BOLD, C=_CYAN, R=_RESET, D=_DIM))
-        parts = [f"AI: {self.sess._rep_name}"]
-        corpus = getattr(self.sess._cfg, "corpus_root", None)
-        if corpus:
-            parts.append(f"corpus: {corpus.split('/')[-1] if '/' in corpus else corpus}")
-        if self.sess._goal_id:
-            parts.append(f"goal: {self.sess._goal_id}")
-        if self.sess._model_hint:
-            parts.append(f"model: {self.sess._model_hint}")
         c.dim("  " + "  •  ".join(parts))
+        c.dim("  Ready.")
         c.line("")
 
     # -- turn lifecycle --------------------------------------------------------

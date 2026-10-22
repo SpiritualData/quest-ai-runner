@@ -46,13 +46,14 @@ async def test_prompt_stays_docked_at_bottom_when_panels_grow():
     app = QuestAITerminal(_FakeSession())
     async with app.run_test(size=(80, 24)) as pilot:
         prompt = app.query_one("#prompt")
-        footer = app.query_one("Footer")
+        keys = app.query_one("#keys")
 
         # Baseline: even with nothing grown, the prompt sits directly above the
-        # (also bottom-docked) Footer -- the true bottom of the usable screen.
+        # key line -- the true bottom of the usable screen.
         await pilot.pause()
         baseline_bottom = prompt.region.y + prompt.region.height
-        assert baseline_bottom == footer.region.y
+        assert baseline_bottom == keys.region.y
+        assert keys.region.y + keys.region.height == app.size.height
 
         # Now grow every panel well past the viewport height.
         _grow_all_panels(app)
@@ -61,7 +62,7 @@ async def test_prompt_stays_docked_at_bottom_when_panels_grow():
         # The prompt must still end exactly where it started, not be pushed
         # down/off-screen by the now-overflowing panels above it.
         bottom = prompt.region.y + prompt.region.height
-        assert bottom == footer.region.y
+        assert bottom == keys.region.y
         assert bottom == baseline_bottom
 
 
