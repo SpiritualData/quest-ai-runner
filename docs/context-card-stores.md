@@ -388,8 +388,8 @@ keeps its cards there.
   card out (unused first, then least recently touched) to `_quarantine/limit/`, with a line in
   `manifest.jsonl` there. Nothing is deleted. When nothing derived can move, the card is admitted anyway
   and the notice says so;
-- a store already above the limit when it opens is never trimmed by the limit. Only the tidy of provable
-  duplicates removes anything from it, and it gets the notice.
+- a store already above the limit when it opens is never trimmed by the limit. It gets the notice; only the
+  tidy of provable duplicates (off in the runner today, see below) or the cleanup script removes anything from it.
 
 **The notice**, once per process when the limit is first hit, or at open when the store is at or above
 it: three short lines on screen (the terminal shows a package WARNING as a dim line) and the whole text in
@@ -417,11 +417,14 @@ store above its limit.
 
 ## Tidying a store: at open, and by hand
 
-The runner's own store opens with `self_heal`, which moves cards that are provably copies of other cards of
-the store (never a card another system manages, a used card or a card learned from a run, except a
-compounded copy that adds no notes) out to `_quarantine/` before the index is built, paced so the first turn
-is not starved, and says "Tidied N duplicate context cards. They are kept in a folder and can be put back."
-once. `scripts/quarantine_cards.py --cards-dir DIR` is the same classification plus the judgement calls
+**The tidy at open is off in the runner today.** A store built with `self_heal=True` moves cards that are
+provably copies of other cards of the store (never a card another system manages, a used card or a card
+learned from a run, except a compounded copy that adds no notes) out to `_quarantine/` before the index is
+built, paced so the first turn is not starved, and says "Tidied N duplicate context cards. They are kept in a
+folder and can be put back." once. The runner's own builder (`config_assembler.py`) passes `self_heal=False`
+since 2026-10-22: an independent review found the tidy can move a card a person wrote with no provenance and
+can fold edits away on real stores, so it stays off until those findings are fixed. Until then a store that
+already inflated is cleaned only by hand. `scripts/quarantine_cards.py --cards-dir DIR` is the same classification plus the judgement calls
 (excluded folders, overlap, thin cards), a dry run until `--apply`; its output starts with the store's
 health: cards by kind, ids that stack import prefixes, cards pinning the same files, folders of the corpus,
 and, per reason, how many cards were created in the last 14 days (a card carries `provenance.created_at`

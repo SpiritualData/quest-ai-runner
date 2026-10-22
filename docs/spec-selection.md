@@ -63,37 +63,65 @@ a read-only view of its row, is the planned solution `search-cards-and-specs` (`
 
 ## Solution tags
 
-A solution may carry tags (the `tags` column of `esoi/solutions.csv`, ids separated by semicolons). The list of tags is
-`esoi/tags.csv`, the one source of truth: each row is a `tag`, its `meaning` (one sentence a solution can be judged against,
-yes or no) and its `risk` (one sentence naming what goes wrong without it). The solution that owns the list is
+A solution may carry tags (the `tags` column of `esoi/solutions.csv`, ids separated by semicolons), a field of the
+evolvable-structure template: "What classifications may be necessary to avoid risk?" The list of tags is
+`esoi/tags.csv`, the one source of truth: each row is a `tag`, its `meaning` (one sentence a solution can be judged
+against, yes or no) and its `problem_ids`, the problems it mitigates. The solution that owns the list is
 `tag-solutions`.
 
-**The principle: a tag exists to avoid risk, by identifying solutions.** The risks are building a second version of something
-that exists, changing something without consulting the solutions that constrain it, and using a solution where its Avoid line
-says not to (the evolvable-structure skill's principles 6, address risk; 8, leverage existing structure; 9, avoid duplication).
+**The risks a tag mitigates are problems, linked, not prose.** The skill names four structural risks, recorded here
+as problem records under `prob-solution-not-identified`:
 
-- **When a tag exists:** only if the risk its absence leaves open can be named in one sentence, and the tag is the cheapest way
-  to close it, because no existing link, sub-intent or problem already does.
-- **Pragmatic** means it closes a named risk. A tag that closes none is decoration and is not created.
+- R1 (`esoi-r1-duplicate-solution`): adding a new solution that duplicates an existing one.
+- R2 (`esoi-r2-overlap-not-leveraged`): not leveraging the benefits of an existing solution, such as partial
+  overlap of purpose.
+- R3 (`esoi-r3-co-change-missed`): not being aware of solutions that need to change definition or implementation
+  due to something else changing.
+- R4 (`esoi-r4-solution-misused`): using a solution when it should not be for the particular use case.
+
+Every tag links at least one problem: one of R1 to R4, and the problems of this project (or another intent) whose
+risk it mitigates. The explanation of a risk is written on the problem, not on the tag. R1 to R4 belong to ESOI
+itself; they are recorded in this project until the evolvable-structure library defines them and lets another
+project's records link them.
+
+**A solution's connected problems are tags too, but not enough on their own.** The lookup reads a solution's tags
+as its `tags` column plus its `problem_ids`; the problem ids are never copied into the column. A tag is still
+needed where the solutions that must be consulted together do not share a problem, which is the usual case for
+R3 (all the solutions that read the card format) and R4 (the solutions whose misuse is costly).
+
+`python scripts/esoi_rules.py <tag, problem or solution id> ...` lists the solutions that carry any of them, through
+either route; a solution id stands for its own tags.
+
+**What each tag is for** (the R it mitigates is the first link of its row): `prompt`, `specifications`,
+`measurement` and `memory` mitigate R1, a second prompt path, records path, measuring path or memory path;
+`spending`, `model-calls`, `messages-to-people`, `external-calls` and `memory` mitigate R2, guards and budgets that
+already exist; `card-format`, `model-calls`, `private-data` and `public-surface` mitigate R3, solutions that change
+together when a shared shape changes; `irreversible`, `private-data` and `unattended` mitigate R4, solutions whose
+Avoid lines are costly to ignore.
+
+- **When a tag exists:** only if it mitigates a risk that is a linked problem, and no existing link, sub-intent or
+  problem already identifies the same solutions.
 - **The list is flat:** no tag has a parent.
-- **Retirement:** when its risk no longer exists, or another mechanism (a link, a problem, a rule) now covers it.
+- **Retirement:** when the problems it links are solved, or another mechanism (a link, a problem, a rule) now
+  identifies the same solutions.
 
-**How a tag is created, with its back-fill.** A new tag is never created alone, so the list never holds a tag with fewer than
-two solutions:
+**How a tag is created, with its back-fill.**
 
 1. The author of a solution (an AI or a person) first picks from the existing list.
-2. If none fits, propose a tag with its one-sentence meaning and its risk.
-3. Back-fill: judge every existing solution against the meaning, yes or no. The judgement needs a model or a person, so this
-   is a procedure, not a script.
-4. The tag is created only if at least two solutions pass, counting the one being written. Otherwise it is not created and
-   the solution carries no tag.
-5. The new row in `esoi/tags.csv` and every back-filled solution row are committed together.
-6. Whenever a solution is written that fits no tag, ask whether an earlier solution fits the same risk. That is the same
-   back-fill, and it is how a tag appears the moment its second solution exists.
-7. Retiring a tag removes it from every solution in the same commit.
+2. If none fits, propose a tag with its one-sentence meaning and the problems it mitigates (R1 to R4 and any
+   problem of this or another intent).
+3. Back-fill: judge every existing solution against the meaning, yes or no. The judgement needs a model or a person,
+   so this is a procedure, not a script.
+4. Commit the new row in `esoi/tags.csv` and every back-filled solution row together.
+5. Whenever a solution is written that fits no tag, ask whether an earlier solution carries the same risk. That is
+   the same back-fill.
+6. Retiring a tag removes it from every solution in the same commit.
 
-The AI adds and retires tags itself. Rule Q1 (`scripts/esoi_rules.py`, run by `esoi check`) fails what can be checked without
-judgement: a tag a solution uses that is not listed, a listed tag with no meaning or no risk, and a listed tag used by no
-solution, by exactly one, or by every solution. Whether a tag closes its risk is measured by `metric-tag-solutions` (planned,
-unmeasured): on the labelled requests of `search-cards-and-specs`, the share where the right solution is missed without the
-tag. In that search, tags are planned as a cheap filter or boost, unmeasured.
+The AI adds and retires tags itself. Rule Q1 (`scripts/esoi_rules.py`, run by `esoi check`) fails what can be
+checked without judgement: a tag a solution uses that is not listed, a listed tag with no meaning, a listed tag that
+links no problem or links an id that is not a problem record, and a listed tag used by no solution or by every
+solution (it classifies nothing). A tag on one solution only is printed as a note, not a failure: it still lets the
+author of a second solution find the first (R1, R2), but the back-fill is worth a second look. Whether a tag
+mitigates its risk is measured by `metric-tag-solutions` (planned, unmeasured): on the labelled requests of
+`search-cards-and-specs`, the share where the right solution is missed without the tag. In that search, tags are
+planned as a cheap filter or boost, unmeasured.

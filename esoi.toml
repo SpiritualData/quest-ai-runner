@@ -13,14 +13,6 @@ plugins = ["scripts/esoi_rules.py"]
 code_paths = ["quest_ai_runner", "evaluation/components", ":(exclude,glob)**/*.md"]
 
 
-[tracker_extra]
-solutions = ["tags"]
-
-# The specification's owner approved one column beyond the template: a solution's tags (ids from esoi/tags.csv,
-# checked by rule Q1 in scripts/esoi_rules.py).
-[records.approved_fields]
-solutions = ["tags"]
-
 [rules.S13]
 paths = ["quest_ai_runner/core/"]
 hint = 'take the value from RunnerConfig (or add a waiver "migrate into RunnerConfig")'

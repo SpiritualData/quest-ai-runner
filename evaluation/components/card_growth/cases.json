@@ -49,5 +49,36 @@
   "passes": 12,
   "surplus": true,
   "heldout": true
+ },
+ {
+  "id": "CG-09",
+  "area": "person-card",
+  "passes": 3,
+  "surplus": false,
+  "person_card": true
+ },
+ {
+  "id": "CG-10",
+  "area": "notes-on-copy",
+  "passes": 3,
+  "surplus": false,
+  "notes_on_copy": true
+ },
+ {
+  "id": "CG-11",
+  "area": "two-topics-one-file",
+  "passes": 3,
+  "surplus": true,
+  "two_topics_one_file": true
+ },
+ {
+  "id": "CG-12",
+  "area": "all-three",
+  "passes": 7,
+  "surplus": true,
+  "person_card": true,
+  "notes_on_copy": true,
+  "two_topics_one_file": true,
+  "heldout": true
  }
 ]

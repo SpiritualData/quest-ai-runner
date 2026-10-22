@@ -69,7 +69,7 @@ def legacy(args, scratch):
     clean = len(card_ids(top))
     planted = world.plant_legacy_copies(top, bool(args.get("with_provenance")))
     before = len(card_ids(top))
-    start = new_store(top, self_heal=True)           # a runner's first start: open, then refresh
+    start = new_store(top, self_heal=world.runner_self_heal())   # a runner's first start: open, then refresh
     start.prewarm()
     start.refresh_stale(root=str(top), provider=world.DiskProvider(top.resolve()))
     quarantine = top / ".quest-context" / "_quarantine"

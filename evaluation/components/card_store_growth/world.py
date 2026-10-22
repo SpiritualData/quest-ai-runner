@@ -68,6 +68,24 @@ def store_accepts(name: str) -> bool:
     return name in inspect.signature(FileContextStore.__init__).parameters
 
 
+def runner_self_heal() -> bool:
+    """The ``self_heal`` the runner's own builder passes to its ``FileContextStore``, read from the source of
+    ``config_assembler.py``, so the arms measure the setting that ships and follow it when it changes. False when
+    the builder passes none (the store's default) or the value is not a plain constant."""
+    import ast
+    try:
+        from quest_ai_runner import config_assembler
+        tree = ast.parse(Path(inspect.getsourcefile(config_assembler)).read_text(encoding="utf-8"))
+    except (ImportError, OSError, SyntaxError, TypeError):      # an older checkout without that builder module
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", "")) == "FileContextStore":
+            for kw in node.keywords:
+                if kw.arg == "self_heal" and isinstance(kw.value, ast.Constant):
+                    return bool(kw.value.value)
+    return False
+
+
 class DiskProvider:
     """A fake model whose topics follow the files on disk: one topic per folder holding two or more notes."""
 
@@ -158,7 +176,7 @@ class World:
         if store_accepts("max_cards"):
             kwargs["max_cards"] = self.limit or 0
         if store_accepts("self_heal"):
-            kwargs["self_heal"] = True
+            kwargs["self_heal"] = runner_self_heal()     # as the runner ships it, not forced on
         return FileContextStore(cdir, **kwargs)
 
     def index(self, i: int, *, refresh: bool = False, model: bool = True) -> int:

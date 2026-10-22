@@ -144,7 +144,9 @@ served by the solutions `persist-cards`, `select-context`, `index-by-meaning`, `
 **A context card is one JSON object that names one topic of a person's or a team's material and points
 at the sources that carry it**, so a run can be handed that topic's current text without re-reading the
 corpus. Its name, keywords, summary and embedding text are how it is found; its sources are what is read;
-its provenance and usage say who wrote it, from where, and whether it helped. A card holds pointers and a
+its provenance says who wrote it and from where, and its usage says how often runs recorded it and what kind
+of turn last did (`last_outcome` comes from the kind of turn, `answer` or `deep` as `met` and `confirm` as
+`unknown`, never from whether the card helped). A card holds pointers and a
 short orientation, not a copy of its sources: the text a run sees is resolved from the source when the
 card is read (`resolve-references`), and a source that changed flags the card stale
 (`detect-stale-cards`). Persistence is behind the `CardRepository` port (`persist-cards`), so the same
@@ -198,7 +200,8 @@ description or summary, each content item's `why` and note text, keywords), so t
 - **Ids that may never be stored:** one that repeats a namespace segment (a card copied through a loop)
   and one that starts with `card:` (a vector point id, not a card). Every repository's `write` refuses
   them with an ERROR naming the id, so no writer can bring one in; an edit addressed by a point id lands
-  on the card it names.- **A mounted card** appears as `<store_id>:<card_id>`: a read-only view whose paths are rebased at read
+  on the card it names.
+- **A mounted card** appears as `<store_id>:<card_id>`: a read-only view whose paths are rebased at read
   time; nothing is written and a write to it is refused.
 - **Renames that never overwrite:** `merge-into` renames a colliding card to `<id>--m<8 hex of the
   source store id>`; a new card whose id is held by another origin's card is written as
@@ -219,14 +222,14 @@ nothing but speed.
 | **Own card** | written by this store (`origin` is this store) | this store's refresh and runs |
 | **Mounted view** | another store's card read in place, read-only, never copied | its owner; the reader sees the owner's next write |
 | **Copy** | a copy-import of another store's card under an id made of its origin | the importing store re-imports it when the source changes and moves it out when the source stops offering it; `context migrate-imports` converts copies to mounts |
-| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`item-id`, `compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open (`compounded`, `duplicate-files`, `item-id`), by a refresh (`superseded-import`) or by the card limit (`limit`) | restored by moving the file back |
+| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`item-id`, `compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open when it is on (`compounded`, `duplicate-files`, `item-id`; off in the runner today), by a refresh (`superseded-import`) or by the card limit (`limit`) | restored by moving the file back |
 
 ### Growth
 
 A store's size should follow the distinct content of its corpus, not the number of times it was
 re-imported. The solution `bound-card-growth` and its metric `metric-bound-card-growth` hold it to that,
 with two offline arms: `evaluation/components/card_growth/` (cards per source-file group and duplicate
-share on a store that already inflated, for the cleanup tool and for the tidy at open) and
+share on a store that already inflated, for the cleanup tool and for the store opened as the runner ships it) and
 `evaluation/components/card_store_growth/` (a random world of nested stores, a legacy store opened as a
 runner opens it, and the card limit). What holds it, in the order a card meets them:
 
@@ -239,15 +242,21 @@ runner opens it, and the card limit). What holds it, in the order a card meets t
 3. **No restatements.** A copy that pins exactly the files of a card the store holds is not kept (the
    store's own card wins), and a new topic is never merged into a copy.
 4. **The write rule.** No repository stores an id that repeats a namespace segment or starts with `card:`.
-5. **Tidy at open.** The runner's own store (`self_heal`) moves cards that are provably copies of another
-   card of the store to `_quarantine/` when it opens and at the end of a pass (compounded ids whose files
-   another card pins, cards pinning exactly the same files, cards stored under a vector point id), and
-   says so once. It does not embed a store that holds more topic cards than its corpus has folders.
-   Judgement calls stay with `scripts/quarantine_cards.py`, whose dry run prints the store's health.
+5. **Tidy at open, off in the runner today.** A store built with `self_heal=True` moves cards that are
+   provably copies of another card of the store to `_quarantine/` when it opens and at the end of a pass
+   (compounded ids whose files another card pins, cards pinning exactly the same files, cards stored under
+   a vector point id), says so once, and does not embed a store that holds more topic cards than its
+   corpus has folders. The runner's builder passes `self_heal=False` since 2026-10-22, until an
+   independent review's findings are fixed (see [context card stores](context-card-stores.md#tidying-a-store-at-open-and-by-hand)),
+   so a store that already inflated is cleaned only by `scripts/quarantine_cards.py`, whose dry run prints
+   the store's health and which keeps the judgement calls.
 6. **The card limit.** `QAR_MAX_CARDS` (default 1000, `0` or `unlimited` for none): at the limit a new
    topic or imported card is not written, a card learned from a run or written for a quest moves the
    coldest derived card out to `_quarantine/limit/`, and a notice says what fills the store and how to
    change the limit. See [the card limit](context-card-stores.md#the-card-limit).
+
+Growth paths still open (two reviews, 2026-10-22) are listed in the `bootstrap_guards` implementation of
+`bound-card-growth` in `esoi/implementations.csv`, where the next fix is chosen from.
 
 ### ESOI records as cards (planned)
 
@@ -261,7 +270,7 @@ above; a copy would recreate the duplication that inflated card stores.
 The working default ranks **cards, solutions and problems**. Intents, ideals and metrics are reached
 through links: a solution brings its ideals, its metrics and its intent's frame; a problem brings its
 ideals and its intent. When the best match is a problem or an intent that no solution serves, the
-result says **"no solution yet"**, and that is the run's cue to define one (`track-runs-on-records`).
+result says **"no solution yet"**, and that is the run's cue to define one (`iterate-by-spec`, which writes what a run learned back onto the records).
 Context that is not a solution still matters: ideals say what better means (to choose among
 alternatives or write a solution), metrics judge a change, an intent's vision settles direction, and
 problems are where new work starts. A link cannot reach a request whose words match only an ideal or a
@@ -819,7 +828,7 @@ reaches every arm that reads or writes a card/hit:
   ever sees them. On the WRITE side, `record()`'s `outcome["scope_tags"]` and the async card
   updater's `update_card(..., scope_tags=...)` UNION new tags onto a card's existing ones (never
   overwrite), so a card touched from two quests becomes visible to both -- additions are exactly
-  what `managed_fields`/`managed_items` (see `docs/card-schema.md`) already leave unblocked for a
+  what `managed_fields`/`managed_items` (see [What a context card is](#what-a-context-card-is)) already leave unblocked for a
   consumer-managed card.
 - **Anticipation engine** (`core/anticipation.py`, see `docs/anticipation.md`): a different
   subsystem (turn-end learning/precompute, not part of pre-flight assembly), but the same leak

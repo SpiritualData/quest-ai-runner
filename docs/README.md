@@ -109,7 +109,7 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - [Consumer registry](consumer-registry.md): adopting QAR in any system and checking the integration.
 - [A lane is a config file](a-lane-is-a-config-file.md): a lane as data, not a program.
 - [Evolvable structure](evolvable-structure.md): the standing instructions deep runs follow.
-- [Context card schema](card-schema.md), [context assembly](context-assembly.md), [vector context](vector-context.md), [selecting intent specifications](spec-selection.md),
+- [What a context card is](context-assembly.md#what-a-context-card-is), [context assembly](context-assembly.md), [vector context](vector-context.md), [selecting intent specifications](spec-selection.md),
   [conversation cards](conversation-cards.md): what a card is and how context reaches a run.
 - [Multi-source retrieval](multi-source-retrieval.md), [Claude conversations](claude-conversations-integration.md),
   [edited files extraction](edited-files-extraction.md): reading from files, databases and conversations.

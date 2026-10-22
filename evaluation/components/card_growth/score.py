@@ -1,9 +1,12 @@
 """Score one card-growth case: build the inflated store, let the solution settle it, then count what the index
 still holds. A card is what ``FilesystemCardRepository`` would enumerate: a ``.json`` file directly in the store,
-not a sidecar, not a dot file, not under ``_quarantine``. A source-file group is the set of paths a card pins.
+not a sidecar, not a dot file, not under ``_quarantine``. A group is one topic over a set of source files: the
+paths a card pins together with its name, so two distinct topics of one file are two groups and a copy is in its
+original's group.
 
 A case passes when every group the store held is still held (nothing a lane knew is lost), each group is held
-by exactly one card (duplicate share 0, cards per group 1.0), and the taught and managed cards are still there.
+by exactly one card (duplicate share 0, cards per group 1.0), the cards a cleanup must leave alone are still
+there (``fixtures.protected``), and a note a run added to a card is still held by some card.
 ``aggregate`` reports cards per group, the duplicate share and the cards before and after."""
 import json
 import shutil
@@ -26,7 +29,8 @@ def indexed(cards_dir):
 
 
 def group(c):
-    return frozenset(f["path"] if isinstance(f, dict) else f for f in c.get("files") or [])
+    files = frozenset(f["path"] if isinstance(f, dict) else f for f in c.get("files") or [])
+    return files, str(c.get("name") or "")
 
 
 def score_case(fn, case):
@@ -43,7 +47,8 @@ def score_case(fn, case):
     lost = len(groups_before - groups_after)
     per_group = len(after) / max(len(groups_after), 1)
     dup_share = (len(after) - len(groups_after)) / max(len(after), 1)
-    missing = [p for p in fixtures.PROTECTED if p not in after]
+    missing = [p for p in fixtures.protected(case) if p not in after]
+    notes_lost = bool(case.get("notes_on_copy")) and not fixtures.notes_kept(after)
     problems = []
     if lost:
         problems.append(f"{lost} source-file groups lost")
@@ -51,6 +56,8 @@ def score_case(fn, case):
         problems.append(f"{len(after) - len(groups_after)} duplicate cards left")
     if missing:
         problems.append(f"protected cards removed: {missing}")
+    if notes_lost:
+        problems.append("the note a run added is no longer held by any card")
     return dict(ok=not problems, before=len(before), after=len(after), groups=len(groups_before),
                 per_group=round(per_group, 3), dup_share=round(dup_share, 3), lost=lost,
                 got=f"{len(before)} -> {len(after)} cards over {len(groups_before)} groups",
