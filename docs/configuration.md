@@ -119,7 +119,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_LANE_USER_ID` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_LINK_GUARD` |  | `cli_config.py` | `docs/link-guard.md` |
 | `QAR_LINK_POLICY_FILE` |  | `cli_config.py`, `config_core_settings.py` | `.env.example`, `docs/link-guard.md` |
-| `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `adapters/card_limit.py` | `.env.example` |
+| `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `adapters/card_limit.py` | `.env.example`, `docs/context-assembly.md`, `docs/context-card-stores.md` |
 | `QAR_MAX_LOAD_PER_CORE` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MAX_MEMORY_PERCENT` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MAX_PARALLEL` |  | `adapters/context_bootstrap_support.py`, `cli_config.py` | `docs/a-lane-is-a-config-file.md` |
