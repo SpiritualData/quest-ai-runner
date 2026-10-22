@@ -1,0 +1,121 @@
+[
+ {
+  "id": "CWI-01",
+  "area": "series-copy-none",
+  "mode": "copy",
+  "reviewer": "none",
+  "block_series": true
+ },
+ {
+  "id": "CWI-02",
+  "area": "series-copy-off",
+  "mode": "copy",
+  "reviewer": "off",
+  "block_series": true
+ },
+ {
+  "id": "CWI-03",
+  "area": "series-copy-failing",
+  "mode": "copy",
+  "reviewer": "failing",
+  "block_series": true
+ },
+ {
+  "id": "CWI-04",
+  "area": "series-copy-skip",
+  "mode": "copy",
+  "reviewer": "skip",
+  "block_series": true
+ },
+ {
+  "id": "CWI-05",
+  "area": "series-copy-index",
+  "mode": "copy",
+  "reviewer": "index",
+  "block_series": false
+ },
+ {
+  "id": "CWI-06",
+  "area": "series-mount-none",
+  "mode": "mount",
+  "reviewer": "none",
+  "block_series": true
+ },
+ {
+  "id": "CWI-07",
+  "area": "series-mount-off",
+  "mode": "mount",
+  "reviewer": "off",
+  "block_series": true
+ },
+ {
+  "id": "CWI-08",
+  "area": "series-mount-failing",
+  "mode": "mount",
+  "reviewer": "failing",
+  "block_series": true
+ },
+ {
+  "id": "CWI-09",
+  "area": "series-mount-skip",
+  "mode": "mount",
+  "reviewer": "skip",
+  "block_series": true
+ },
+ {
+  "id": "CWI-10",
+  "area": "series-mount-index",
+  "mode": "mount",
+  "reviewer": "index",
+  "block_series": false
+ },
+ {
+  "id": "CWI-11",
+  "area": "large-series-copy-none",
+  "mode": "copy",
+  "reviewer": "none",
+  "large": true,
+  "block_series": true
+ },
+ {
+  "id": "CWI-12",
+  "area": "large-series-copy-failing",
+  "mode": "copy",
+  "reviewer": "failing",
+  "large": true,
+  "block_series": true
+ },
+ {
+  "id": "CWI-13",
+  "area": "large-series-copy-skip",
+  "mode": "copy",
+  "reviewer": "skip",
+  "large": true,
+  "block_series": true
+ },
+ {
+  "id": "CWI-14",
+  "area": "person-says-index",
+  "mode": "copy",
+  "reviewer": "none",
+  "human_index": true,
+  "block_series": false
+ },
+ {
+  "id": "CWI-15",
+  "area": "two-snapshots",
+  "mode": "copy",
+  "reviewer": "none",
+  "dates": 2,
+  "block_series": true
+ },
+ {
+  "id": "CWI-16",
+  "area": "lone-snapshot",
+  "mode": "copy",
+  "reviewer": "none",
+  "dates": 1,
+  "block_series": true,
+  "known_gap": true
+ }
+]

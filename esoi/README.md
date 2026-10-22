@@ -50,6 +50,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `esoi-r2-overlap-not-leveraged`: R2: Not leveraging the benefits of an existing solution, such as partial overlap of purpose.
 - `esoi-r3-co-change-missed`: R3: Not being aware of solutions that need to change definition or implementation due to something else changing.
 - `esoi-r4-solution-misused`: R4: Using a solution when it should not be for the particular use case.
+- `prob-index-walks-into-copies`: A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count. A machine's daily backup snapshots, one dated folder per day and each a copy of the whole tree, each carried the card store the tree had that day: one backups folder held 155 stores with 760,608 cards, and any corpus rooted above it would have walked, imported and mounted every one of them. Earlier, on one real corpus of 81,465 indexable files, most of the files were a single vendored tree present twice and generated data. Before the risk gate, the folder review that decides this ran only above a 2,000-file floor and failed open: with no model, the review switched off or a failed call, every folder was read.
 
 ## Ideals
 
@@ -91,6 +92,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-one-ranked-context`, One Ranked Context: A run's context comes from one search over everything it may be grounded in, with one ranking and one budget, and every result says what kind of thing it is and where it lives.
 - `ideal-checked-improvement`, Checked Improvement per Run: Every run leaves, on the record it served, what it measured, what it moved and what it changed in the record and why, so improvement is checked per run instead of hoped for.
 - `ideal-risks-identified-by-tag`, Constraining Solutions Identified: Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which names the problems it mitigates.
+- `ideal-proportionate-index-scope`, Proportionate Index Scope: The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the risk is real.
 
 ## Solutions
 
@@ -150,6 +152,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `bound-card-growth` | Card store growth control | quarantine_tool | Cards per source-file group and duplicate share after repeated nested bootstrap |
 | `search-cards-and-specs` | Unified card and specification search |  | Mixed card and specification selection, with both existing selection metrics held |
 | `tag-solutions` | Problem-linked tags that identify solutions |  | Right solution missed without the tag |
+| `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
 
 ## Implementations
 
@@ -349,6 +352,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `iterate-by-spec:writeback-on-the-record` | Slice before and write-back onto each record (planned) |  |  |
 | `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (planned, working default) |  |  |
 | `tag-solutions:tag_list_with_check` | Problem-linked tag list with a check rule and a lookup | scripts/esoi_rules.py |  |
+| `choose-what-to-index:risk_gate` | Risk-gated folder review | evaluation/components/choose_what_to_index/impls/risk_gate.py |  |
+| `choose-what-to-index:review_only` | Model-judged folder review before the gate | evaluation/components/choose_what_to_index/impls/review_only.py |  |
+| `choose-what-to-index:index_everything` | Index everything (broken baseline) | evaluation/components/choose_what_to_index/broken/index_everything.py |  |
 
 ## Metrics
 
@@ -412,3 +418,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs`
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed record of what they changed: `esoi run record_tracking`
 - `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_lookup`
+- `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`
