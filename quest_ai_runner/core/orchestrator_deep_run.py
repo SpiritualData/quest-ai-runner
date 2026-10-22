@@ -54,6 +54,8 @@ from .orchestrator_text import (
     _future_context_channel,
     _normalize_future_context,
     _strip_future_context,
+    ellipsize,
+    sentence,
 )
 from .orchestrator_turn import TurnCardCache, _Emitter
 from .requester import requester_from_meta
@@ -335,7 +337,7 @@ class DeepRunMixin:
                 try:
                     # A consumer's classifier is typically a model call, so say so before it runs.
                     if emit is not None:
-                        emit.status("Deciding how to run this work")
+                        emit.status("Deciding how to run this work.")
                     key = self.deep_runner_classifier(user_message, goal, brief)
                     if key == DEFERRED_RUNNER_KEY:
                         # RESERVED KEY, never classifier-selectable. The queue runner returns a
@@ -398,12 +400,12 @@ class DeepRunMixin:
             per_goal_context, per_goal_cards = self._assemble_for_goal_with_cards(
                 goal, ctx_meta=ctx_meta, turn_context=turn_context,
                 status=emit.status if emit is not None else None,
-                gathering_text=(f"Gathering what I need for: {goal[:60]}" if multi
-                                else "Gathering what I need to start"))
+                gathering_text=(sentence(f"Gathering what I need for: {ellipsize(goal, 60)}") if multi
+                                else "Gathering what I need to start."))
             if per_goal_context and emit is not None:
                 # Progress the person can read, not internal state. "Selected context for goal: ..."
                 # named an orchestrator step and read as leaked machinery in the live status pill.
-                emit.status(f"Working on: {goal[:60]}")
+                emit.status(sentence(f"Working on: {ellipsize(goal, 60)}"))
             # THE METRIC RECORD OF THIS GOAL (core/goal_metrics.py): what the relevant metric was before
             # and after the change is kept by code, from here to the result. This is its start, still
             # inside the preparation announced above: the selected iterate-by-spec arm may add the

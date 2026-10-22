@@ -661,7 +661,7 @@ wait rather than a silent one:
   budget, never duplicated) through `TurnCardCache.turn_start_context`. The reuse is skipped when
   the cache's `scope_tags` differ from the run's, and a fan-out's subgoals each still assemble for
   their own focus.
-- The wait is announced first: "Gathering what I need to start" (the same for every runner: it names no
+- The wait is announced first: "Gathering what I need to start." (the same for every runner: it names no
   model), only when a wait really happens, followed by "Starting the work on <model>." for a pinned model
   or the existing "Starting on <model>" line for an automatic choice. A declined self-initiated escalation pays for no assembly.
 

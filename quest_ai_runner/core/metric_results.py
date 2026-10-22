@@ -11,7 +11,8 @@ A ``MetricResult`` is one row. Its ``source`` says who vouches for the numbers, 
   ``recorded``        the worker called ``record_metric_result`` with the values; nobody has checked them
   ``not_applicable``  the worker declared that no metric applies, and gave a reason
 
-A measured and a recorded row for the same metric are both kept; when their numbers differ both carry ``disagrees``. A
+A measured and a recorded row for the same metric are both kept; when their numbers differ (``differs``: the measured one
+rounded to the decimals the recorded one is written with, else exactly) both carry ``disagrees``. A
 number is a finite int or float and nothing else: a string a model produced is rejected at the door, never coerced.
 
 The consumer's view is ``to_dict()``, and a run's list of them is the ``metrics`` payload (``docs/metric-results.md``):
@@ -27,6 +28,7 @@ import os
 import tempfile
 import time
 from dataclasses import dataclass, replace
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
 
 from .jsonl_ledger import KeyedJsonlFiles
@@ -175,8 +177,29 @@ def same_metric(a: MetricResult, b: MetricResult) -> bool:
                                                                    or a.solution_id == b.solution_id)
 
 
-def differs(a: Optional[float], b: Optional[float]) -> bool:
-    return a is not None and b is not None and not math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12)
+def decimals_written(value: float) -> int:
+    """How many decimals ``value`` is written with: those of its shortest exact form (``repr``), so ``0.4`` has one,
+    ``0.38`` two and ``14.0`` one."""
+    exponent = Decimal(repr(float(value))).as_tuple().exponent
+    return max(-int(exponent), 0)
+
+
+def differs(measured: Optional[float], recorded: Optional[float]) -> bool:
+    """True when a measured value and a recorded one are different numbers.
+
+    A worker writes the number it reports with the decimals it chose (``0.4``), and the meter's is more exact
+    (``0.38``): they say the same thing. So the two agree when the measured value, rounded half up to the
+    decimals the RECORDED value is written with, equals the recorded value. Anything else is a real difference,
+    compared exactly: there is no tolerance, and a number written with more decimals than the measured one has
+    cannot be rounded into agreement. A missing value never differs."""
+    if measured is None or recorded is None or measured == recorded:
+        return False
+    try:
+        places = Decimal(1).scaleb(-decimals_written(recorded))
+        rounded = Decimal(repr(float(measured))).quantize(places, rounding=ROUND_HALF_UP)
+    except InvalidOperation:   # a number too large to round to a decimal place: compare as written
+        return True
+    return rounded != Decimal(repr(float(recorded)))
 
 
 def reconcile(rows: Sequence[MetricResult]) -> List[MetricResult]:

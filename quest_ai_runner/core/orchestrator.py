@@ -165,6 +165,8 @@ from .orchestrator_text import (  # noqa: F401
     _parse_future_context,
     _strip_future_context,
     clip_head_and_tail,
+    ellipsize,
+    sentence,
     unconfirmed_no_change_text,
 )
 from .orchestrator_events import (

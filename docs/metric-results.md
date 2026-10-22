@@ -27,7 +27,7 @@ A finished deep goal carries `metrics`, a list with one entry per metric (at mos
 | `delta` | `after - before`, or `null` when either end is missing. |
 | `source` | Who vouches for the numbers: `measured` (the runner's own meter), `recorded` (the worker called `record_metric_result`; nobody checked), or `not_applicable` (the worker said no metric applies, and `reason` says why). |
 | `reason` | How it was measured, or why no metric applies. |
-| `disagrees` | `true` on both rows when a measured and a recorded row for the same metric give different numbers. Both rows are kept; neither overwrites the other. |
+| `disagrees` | `true` on both rows when a measured and a recorded row for the same metric give different numbers (see "When two numbers differ"). Both rows are kept; neither overwrites the other. |
 
 An empty list means nothing to show. `metric_missing: true` is set next to it when the run changed something (by the
 runner's own records) and no metric result was recorded for it, not even a `not_applicable`.
@@ -46,10 +46,22 @@ Where a consumer reads it:
   `explanation["metric_missing"]`, the same entries, kept in the facts half of the panel so no model writes or edits them.
   They are there only when the explanation is on and the turn is eligible; the result and the events above do not depend on it.
 
-The QAR terminal shows the entries without a model and with the explanation off: under a goal's result, one dim line per
-metric (`<name>: <before> -> <after> (measured by QAR)`, `(recorded by the AI)`, `Metric not applicable: <reason>`, a short
-`disagrees with ...` note when they differ, at most four lines then `... and K more`) or `No metric was recorded for this
-change.`, written once per turn however many events carry the same entry.
+The QAR terminal shows the entries without a model and with the explanation off: after a goal's result and its link, and
+before the turn's closing line, one line per metric in normal weight, ordered by the metric's name (a number inside a name
+sorts as a number, a declared not-applicable last), the measured and the reported reading of one metric together:
+`<name>: 0.38 → 0.91 (measured automatically)`, `(reported by the AI)`, `Nothing to measure. <reason>`. When the readings
+differ, the AI's numbers follow as a note in the warning colour (`The AI reported 0.4 → 0.9.`). At most four lines, then
+`K more metric results. Alt+D shows them all.`; or `No metric was recorded for this change.`. Written once per turn
+however many events carry the same entry. The numbers carry no unit: the data has none.
+
+## When two numbers differ
+
+A worker writes the number it reports with the decimals it chose (`0.4`), and the meter's is more exact (`0.38`): they say
+the same thing. `metric_results.differs(measured, recorded)` therefore takes the measured value, rounds it half up to the
+number of decimals the RECORDED value is written with (read from its shortest exact form, so `0.4` has one and `0.38` two),
+and calls the two the same when that equals the recorded value. Anything else is a difference, compared exactly. There is no
+tolerance: `0.38` against `0.4` and `0.91` against `0.9` agree, while `0.38` against `0.3`, or a recorded `0.38` against a
+measured `0.4`, do not (a number written with more decimals than the other cannot be rounded into agreement).
 
 ## How a goal gets its record
 

@@ -39,7 +39,7 @@ from quest_ai_runner.core.orchestrator_turn import TurnCardCache, _Emitter
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
 
-GATHERING = "Gathering what I need to start"
+GATHERING = "Gathering what I need to start."
 # Words a person should never meet in a status line of the default view (they are for the log and the details).
 INTERNAL_TERMS = ("deep run", "deep worker", "deep task", "QAR", "card", "corpus", "[Pass")
 # What the turn-start step derives from the user's message (the query the turn-start assembly runs

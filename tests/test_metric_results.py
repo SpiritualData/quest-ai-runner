@@ -15,7 +15,7 @@ import pytest
 from quest_ai_runner.core import answer_explanation
 from quest_ai_runner.core.metric_results import (
     MAX_METRICS, NOT_RECORDED_LINE, SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger,
-    MetricResult, metric_ledger_from_env, payload_of, reconcile, render_line, without_line)
+    MetricResult, decimals_written, differs, metric_ledger_from_env, payload_of, reconcile, render_line, without_line)
 from quest_ai_runner.core.tools import ToolContext, build_tool_registry
 
 PAYLOAD_KEYS = {"solution_id", "metric_id", "name", "milestone", "before", "after", "delta", "source", "reason",
@@ -156,6 +156,45 @@ def test_measured_and_recorded_stay_two_rows_and_disagreement_flags_both():
     assert [r.source for r in out] == [SOURCE_MEASURED, SOURCE_RECORDED]
     assert all(r.disagrees for r in out)
     assert (out[0].after, out[1].after) == (0.75, 0.9)   # neither overwrote the other
+
+
+@pytest.mark.parametrize("value, places", [(0.4, 1), (0.38, 2), (14.0, 1), (1, 1), (0.125, 3), (100.0, 1), (1e-05, 5),
+                                            (1e22, 0), (0.30000000000000004, 17)])
+def test_the_decimals_a_number_is_written_with_are_those_of_its_shortest_exact_form(value, places):
+    assert decimals_written(value) == places
+
+
+@pytest.mark.parametrize("measured_value, recorded_value", [
+    (0.38, 0.4), (0.91, 0.9), (0.381, 0.38), (0.25, 0.3), (0.35, 0.4), (0.9, 0.9), (14.04, 14.0), (0.1 + 0.2, 0.3),
+    (0.0, 0.0), (0.96, 1.0),
+])
+def test_a_measured_value_rounded_to_the_decimals_the_recorded_one_is_written_with_agrees(measured_value, recorded_value):
+    assert differs(measured_value, recorded_value) is False
+
+
+@pytest.mark.parametrize("measured_value, recorded_value", [
+    (0.38, 0.3), (0.38, 0.5), (0.4, 0.38), (0.6, 1.0), (0.91, 0.89), (0.404, 0.41), (0.0, 0.1), (1e30, 1e29),
+])
+def test_anything_else_is_a_real_difference_and_a_more_exact_recorded_number_cannot_be_rounded_into_agreement(
+        measured_value, recorded_value):
+    assert differs(measured_value, recorded_value) is True
+
+
+def test_a_missing_value_never_differs():
+    assert differs(None, 0.5) is False and differs(0.5, None) is False and differs(None, None) is False
+
+
+def test_there_is_no_tolerance_a_tiny_gap_the_recorded_precision_shows_is_a_difference():
+    assert differs(0.3000001, 0.3000002) is True
+    assert differs(0.30000004, 0.3000000) is False   # the recorded value is written with seven decimals
+
+
+def test_rounding_that_makes_the_numbers_agree_flags_nothing_in_the_ledger_rows():
+    """0.38 measured and 0.4 recorded say the same thing; 0.91 and 0.9 likewise. Only a true difference is flagged."""
+    out = reconcile([measured(before=0.38, after=0.91), recorded(before=0.4, after=0.9)])
+    assert not any(r.disagrees for r in out)
+    out = reconcile([measured(before=0.38, after=0.91), recorded(before=0.4, after=0.8)])
+    assert all(r.disagrees for r in out)
 
 
 def test_agreement_flags_nothing_and_an_unshared_end_is_not_a_disagreement():

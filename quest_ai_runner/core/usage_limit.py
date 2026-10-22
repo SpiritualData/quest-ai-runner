@@ -324,8 +324,10 @@ def record(limit: UsageLimit) -> UsageLimit:
             _current.seen_at = max(_current.seen_at, limit.seen_at)
         else:
             _current = limit
+        # ``in_transcript=False``: the chat terminal tells the person in words of its own (the closing line, or
+        # the failed message's explanation), so this record goes to its log file only.
         log.warning("Claude Code usage limit reached (%s); resets %s", _current.label(),
-                    reset_clause(_current) or "at an unknown time")
+                    reset_clause(_current) or "at an unknown time", extra={"in_transcript": False})
         if _persist_path is not None:
             try:
                 _persist_path.parent.mkdir(parents=True, exist_ok=True)

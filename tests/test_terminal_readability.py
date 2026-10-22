@@ -336,8 +336,8 @@ def test_the_status_strings_say_the_work_and_never_the_deep_run():
     from quest_ai_runner.core.launch_failure import status_text
     text = status_text(DeepResult(met=False, launch_failed=True, launch_problem="missing_program",
                                   error="The deep worker could not start: binary not found (claude)."))
-    assert text == ("Could not start the work: the program that runs the work is not installed on this machine, "
-                    "or is not on its PATH.")
+    assert text == ("Could not start the work: Claude Code (the claude program) isn't installed on this machine, "
+                    "or the terminal can't find it.")
     assert not [term for term in INTERNAL_TERMS if term.lower() in text.lower()]
 
 

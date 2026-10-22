@@ -246,7 +246,7 @@ def test_a_worker_that_could_not_start_is_explained_in_the_transcript_and_not_re
     assert "Tester (AI):" in body
     assert body[body.index("Tester (AI):") + 1:body.index("Tester (AI):") + 4] == [
         "I couldn't start the work, so nothing was changed.",
-        "The reason: the program that runs the work is not installed on this machine, or is not on its PATH.",
+        "The reason: Claude Code (the claude program) isn't installed on this machine, or the terminal can't find it.",
         "Fix that, then send your request again."]
     assert closing_line(log) == "✗ Nothing ran · 7s"
     assert not begun, "a start failure would fail the same way again: no automatic pass"

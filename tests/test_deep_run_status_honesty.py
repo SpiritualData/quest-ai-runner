@@ -201,8 +201,8 @@ def test_a_worker_that_is_not_installed_is_said_in_plain_words_from_the_structur
     failed = DeepResult(met=False, launch_failed=True, launch_problem="missing_program",
                         error="The deep worker could not start: binary not found (claude).")
     _, sink, _ = run_turn(ScriptedRunner([failed]), [NOT_MET])
-    assert ("Could not start the work: the program that runs the work is not installed on this machine, "
-            "or is not on its PATH.") in sink.texts()
+    assert ("Could not start the work: Claude Code (the claude program) isn't installed on this machine, "
+            "or the terminal can't find it.") in sink.texts()
     assert not [t for t in sink.texts() if "deep worker" in t or "binary" in t]
 
 

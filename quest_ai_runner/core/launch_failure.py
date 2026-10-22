@@ -15,8 +15,8 @@ from .adapters_values import LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED
 LAUNCH_FAILED_PREFIX = "The deep worker could not start"
 # What a person reads for the two causes a runner reports as a structured ``launch_problem``.
 PROBLEM_TEXT = {
-    LAUNCH_MISSING_PROGRAM: "the program that runs the work is not installed on this machine, or is not on its PATH.",
-    LAUNCH_PERMISSION_DENIED: "the program that runs the work could not be run, because permission was denied.",
+    LAUNCH_MISSING_PROGRAM: "Claude Code (the claude program) isn't installed on this machine, or the terminal can't find it.",
+    LAUNCH_PERMISSION_DENIED: "Claude Code (the claude program) could not be run, because permission was denied.",
 }
 # The longest cause shown from a runner's own words.
 CAUSE_CHARS = 240
