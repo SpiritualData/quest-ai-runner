@@ -7,6 +7,7 @@ from __future__ import annotations
 import inspect
 import json
 import threading
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from .adapters import Observation
@@ -408,6 +409,20 @@ def context_assembly_timeout_seconds() -> float:
     tells the user the turn has started. Typical assembly is well inside it (1-11s measured on a
     5,800-card store after the 2026-09-26 turn-start cost fixes); a timeout still warns loudly."""
     return core_settings().context_assembly_timeout_seconds
+
+
+def with_assembly_deadline(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """A COPY of ``meta`` carrying the soft ``assembly_deadline`` every bounded assembly passes.
+
+    The deadline is a ``time.monotonic()`` timestamp slightly under ``context_assembly_timeout_seconds()``
+    from now, so a deadline-aware assembler (e.g. ``HybridContextAssembler``) returns whatever its
+    retrieval arms finished as a PARTIAL result before the caller's hard wait gives up on it.
+    One definition for the turn-start prefetch and the deep run's per-goal assembly, so the two
+    cannot drift apart. The caller's ``meta`` is never touched: a deadline left on a shared dict
+    would bound every later unbounded read that reuses it."""
+    hard_budget = context_assembly_timeout_seconds()
+    soft_budget = max(hard_budget - 0.5, hard_budget * 0.5)
+    return {**(meta or {}), "assembly_deadline": time.monotonic() + soft_budget}
 
 
 def guidance_selection_timeout_seconds() -> float:

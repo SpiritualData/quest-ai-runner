@@ -649,6 +649,23 @@ This runs identically under `Mode.BACKGROUND` (the task executor's lane): a back
 only a `quest_id` (no `conv_id` at all) still reads/writes the `quest:<quest_id>` and `global`
 scopes, so two sequential background runs on the same quest warm-start the second from the first.
 
+A deep run's own assembly is bounded and never repeats the turn's, so a slow store costs a stated
+wait rather than a silent one:
+- `Orchestrator.bounded_goal_assembly` runs the assembler read under the same wall-clock budget as
+  the turn-start assembly (`QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`), with the same soft
+  `meta["assembly_deadline"]` so a deadline-aware assembler returns a partial result. On a timeout
+  it logs a WARNING, counts it, says "Continuing without that context, the search took too long."
+  and the run goes on without that context. It never raises.
+- A deep run with exactly ONE goal serves the request the turn-start assembly already served, so
+  it reuses that result (finished: handed over; timed out but still running: waited for within the
+  budget, never duplicated) through `TurnCardCache.turn_start_context`. The reuse is skipped when
+  the cache's `scope_tags` differ from the run's, and a fan-out's subgoals each still assemble for
+  their own focus.
+- The wait is announced first: "Gathering context for the deep run" (or "...for this work" for a
+  runner that does not run the deep-model ladder), only when a wait really happens, followed by
+  "Starting the deep worker on <model>." for a pinned model or the existing "Starting on <model>"
+  line for an automatic choice. A declined self-initiated escalation pays for no assembly.
+
 Disable the whole feature with `QAR_RECENT_CONTEXT=0` (env, read in `cli.py`), or by passing
 `OrchestratorConfig(recent_context_enabled=False)` directly; either turns off BOTH the load and
 the write-back (main turn AND per-goal), leaving `run()` exactly as it behaves with no

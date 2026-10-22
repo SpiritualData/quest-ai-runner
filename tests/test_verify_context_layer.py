@@ -294,7 +294,9 @@ def test_deep_goal_verify_context_layer_matches_the_workers_own_context():
             "rationale": "deep"}
     provider = LayeredScriptedProvider(plans=[plan], verdicts=[{"met": True, "reason": "done"}])
     runner = RecordingRunner([DeepResult(met=True, output="did it")])
-    assembler = PerGoalAssembler({"Implement feature X": "GOAL_CTX_TEXT_UNIQUE_998"})
+    # A single-goal deep run reuses the turn's own start-of-turn assembly instead of assembling the
+    # same request again, so the assembler answers whichever query that was.
+    assembler = PerGoalAssembler({"": "GOAL_CTX_TEXT_UNIQUE_998"})
 
     res = make_orch(provider, deep_runner=runner, context_assembler=assembler,
                config=OrchestratorConfig(deep_goal_max_iterations=3)).run("build X")
@@ -326,7 +328,7 @@ def test_deep_goal_verify_context_layer_stable_across_retry_attempts():
         DeepResult(met=False, output="partial", error="incomplete"),
         DeepResult(met=True, output="done"),
     ])
-    assembler = PerGoalAssembler({"Implement feature X": "STABLE_GOAL_CTX"})
+    assembler = PerGoalAssembler({"": "STABLE_GOAL_CTX"})
 
     res = make_orch(provider, deep_runner=runner, context_assembler=assembler,
                config=OrchestratorConfig(deep_goal_max_iterations=3)).run("build X")

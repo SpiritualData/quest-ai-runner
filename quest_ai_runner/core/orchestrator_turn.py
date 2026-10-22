@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import re
 import threading
-from typing import Any, Callable, Dict, List, Optional
-from concurrent.futures import Future
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 
 from .adapters import (
     EVENT_PARTIAL,
@@ -36,6 +36,10 @@ class TurnCardCache:
     * A mid-loop read for a query with no pre-fetch runs a fresh, bounded ``assemble`` and caches it
       under the query, so repeats within the turn are free.
 
+    A deep run later in the same turn reuses the turn-start assembly the same way
+    (``turn_start_context``) instead of assembling the same request again: a completed one is
+    handed over, a still-running or timed-out one is waited for (bounded), never duplicated.
+
     Everything is best-effort and thread-safe (mid-loop reads run in ``_do_reads``' parallel pool):
     a lock guards the two dicts. No cross-turn persistence -- the cache dies with the run.
     """
@@ -48,6 +52,8 @@ class TurnCardCache:
         self.futures: Dict[str, Future] = {}       # query -> in-flight assemble (may land late)
         self.executor: Optional[ThreadPoolExecutor] = None
         self.emit: Optional[Any] = None            # per-run event sink (set by run()); may stay None
+        self.turn_start_query: Optional[str] = None   # the query the turn-start pre-fetch ran for
+        self.turn_start_result: Any = None            # what the turn-start collect used (full or partial)
 
     def register_prefetch(self, query: str, future: Future) -> None:
         """Register the turn-start eager pre-fetch future under its query. Never raises."""
@@ -56,8 +62,65 @@ class TurnCardCache:
         try:
             with self.lock:
                 self.futures[query] = future
+                self.turn_start_query = query
         except Exception:  # noqa: BLE001
             pass
+
+    def note_turn_start_result(self, assembled: Any) -> None:
+        """Remember the assembly the turn-start collect actually used, FULL or the PARTIAL it settled
+        for. Unlike ``register_result`` this keeps a partial too, because it answers a different
+        question: not "what may a mid-loop read serve" but "what has this turn already paid for".
+        Never raises."""
+        if assembled is None:
+            return
+        try:
+            with self.lock:
+                self.turn_start_result = assembled
+        except Exception:  # noqa: BLE001
+            pass
+
+    def turn_start_context(self, timeout: float,
+                           on_wait: Optional[Callable[[], None]] = None) -> Tuple[Any, str]:
+        """This turn's start-of-turn assembly for a caller that would otherwise run the same one
+        again, plus a one-word ORIGIN. Never raises and never starts an assembly of its own.
+
+        * ``"reused"``: the turn-start collect already holds a result (full, or the partial it
+          settled for); handed back at once.
+        * ``"joined"``: the turn-start fetch timed out but is still running (or has since landed);
+          waited for up to ``timeout`` seconds and it finished in that time. ``on_wait`` is called
+          once, just before blocking on a fetch that is still running, so the caller can say so.
+        * ``"pending"``: that fetch is STILL running after ``timeout``; ``(None, "pending")``. The
+          caller goes on without it rather than start a second identical assembly that would only
+          compete with the first for the same store.
+        * ``""``: there is nothing to reuse (no assembler, no turn-start fetch this turn, or it
+          failed); ``(None, "")``, and the caller assembles for itself."""
+        try:
+            with self.lock:
+                if self.turn_start_result is not None:
+                    return self.turn_start_result, "reused"
+                query = self.turn_start_query
+                future = self.futures.get(query) if query else None
+            if future is None:
+                return None, ""
+            if not future.done() and on_wait is not None:
+                try:
+                    on_wait()
+                except Exception:  # noqa: BLE001 -- a status callback must never break the wait
+                    pass
+            try:
+                assembled = future.result(timeout=timeout)
+            except FuturesTimeoutError:
+                return None, "pending"
+            except Exception:  # noqa: BLE001 -- the fetch itself failed; the caller tries its own
+                return None, ""
+            with self.lock:
+                if not bool(getattr(assembled, "partial", False)):
+                    self.results[query] = assembled
+                self.futures.pop(query, None)
+                self.turn_start_result = assembled
+            return assembled, "joined"
+        except Exception:  # noqa: BLE001
+            return None, ""
 
     def register_result(self, query: str, assembled: Any) -> None:
         """Record a completed AssembledContext so a same-query read is a pure cache hit. Never raises.

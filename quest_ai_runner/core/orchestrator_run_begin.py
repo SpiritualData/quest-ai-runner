@@ -27,6 +27,7 @@ from .orchestrator_capabilities import (
     context_assembly_timeout_seconds,
     guidance_selection_timeout_seconds,
     record_context_assembly_timeout,
+    with_assembly_deadline,
 )
 from .orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
 from .orchestrator_decisions import _truncate_goal, message_forbids_new_task, restates_meaningfully
@@ -665,10 +666,7 @@ class RunBeginMixin:
                     # ``_ctx_meta`` itself is left untouched, so mid-loop reads through
                     # ``TurnCardCache`` stay unbounded and a late full assembly is still
                     # recoverable there.
-                    hard_budget = context_assembly_timeout_seconds()
-                    soft_budget = max(hard_budget - 0.5, hard_budget * 0.5)
-                    assemble_meta = {**(_ctx_meta or {}),
-                                     "assembly_deadline": time.monotonic() + soft_budget}
+                    assemble_meta = with_assembly_deadline(_ctx_meta)
                     # DOCS-FALLBACK GATING (see ``gate_docs_fallback``): usually a miss this early
                     # in the turn (the reach judge was only just prefetched above, around the same
                     # moment as this), which is correct -- this must never wait on it -- but a
@@ -839,6 +837,10 @@ class RunBeginMixin:
                         card_context.discard_prefetch(_ctx_prefetch_query)
                     else:
                         card_context.register_result(_ctx_prefetch_query, _assembled)
+                # Whatever this collect used (full OR the partial it settled for) is what a
+                # single-goal deep run later in this turn reuses, so the same request is never
+                # assembled a second time (see ``TurnCardCache.turn_start_context``).
+                card_context.note_turn_start_result(_assembled)
                 try:
                     if _assembled.context_view:
                         rs.context_view = (_assembled.context_view + "\n\n" + rs.context_view if rs.context_view

@@ -4,6 +4,7 @@ A mixin of ``Orchestrator`` (see ``orchestrator.py``): methods only, state lives
 """
 from __future__ import annotations
 
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .recent_context import (
@@ -14,9 +15,19 @@ from .recent_context import (
     quest_scope_key,
     render_recent_cards,
 )
-from .adapters import runner_uses_deep_model
+from .adapters import ScopedThreadPoolExecutor as ThreadPoolExecutor, runner_uses_deep_model
+from .orchestrator_capabilities import (
+    context_assembly_timeout_seconds,
+    record_context_assembly_timeout,
+    with_assembly_deadline,
+)
 from .orchestrator_decide_tool import DEFERRED_RUNNER_KEY
 from .orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
+from .scope_tags import as_tag_list
+
+# Said when a deep run's own context could not be had in time, so the person is not left thinking
+# the worker was given it. The log WARNING carries the detail.
+CONTEXT_DROPPED_STATUS = "Continuing without that context, the search took too long."
 
 
 class DeepContextMixin:
@@ -148,8 +159,89 @@ class DeepContextMixin:
         text, _cards = self._assemble_for_goal_with_cards(goal, ctx_meta=ctx_meta)
         return text
 
+    def bounded_goal_assembly(
+        self, goal_text: str, goal_meta: Dict[str, Any], *,
+        turn_context: Optional[Any] = None, ctx_meta: Optional[Dict[str, Any]] = None,
+        status: Optional[Callable[[str], None]] = None, gathering_text: str = "",
+    ) -> Optional[Any]:
+        """The context assembler's result for ONE deep goal, or None. Never raises, and never
+        waits past ``context_assembly_timeout_seconds()`` -- the same wall-clock budget the
+        turn-start assembly gets, with the same soft ``assembly_deadline`` in ``meta`` so a
+        deadline-aware assembler hands back a PARTIAL result instead of overrunning it.
+
+        This used to be a bare ``assemble()`` call with no bound at all, run BEFORE the worker
+        spawned and after the turn-start assembly had already timed out on the same store: on a
+        card store large enough to blow the budget once, the deep run sat silent for minutes
+        competing with its own still-running first attempt.
+
+        ``turn_context`` (the run's ``TurnCardCache``) is passed only for a deep run with exactly
+        ONE goal, whose request is the one the turn-start assembly already served: that assembly
+        is reused if it finished, waited for (bounded) if it is still running, and never run a
+        second time. It is ignored when its scope tags differ from ``ctx_meta``'s, so a result
+        assembled for one quest can never ground a run scoped to another. A fan-out subgoal has
+        its own focus and always assembles for itself.
+
+        ``status`` is told (once, with ``gathering_text``) just before this actually waits on an
+        assembly, and again if it gives up, so a slow store is never a silent pause."""
+        budget = context_assembly_timeout_seconds()
+        said_gathering = False
+
+        def say(text: str) -> None:
+            if status is None or not text:
+                return
+            try:
+                status(text)
+            except Exception:  # noqa: BLE001 -- a status callback must never break the run
+                pass
+
+        def announce_gathering() -> None:
+            nonlocal said_gathering
+            if not said_gathering:
+                said_gathering = True
+                say(gathering_text)
+
+        def give_up(reason: str) -> None:
+            timeout_count = record_context_assembly_timeout()
+            log.warning(
+                "Deep-run context assembly timed out after %.1fs %s; the deep run proceeds "
+                "without that context (QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS to adjust; total "
+                "timeouts this process: %d)", budget, reason, timeout_count)
+            say(CONTEXT_DROPPED_STATUS)
+
+        if (turn_context is not None
+                and as_tag_list((getattr(turn_context, "meta", None) or {}).get("scope_tags"))
+                == as_tag_list((ctx_meta or {}).get("scope_tags"))):
+            assembled, origin = turn_context.turn_start_context(budget, on_wait=announce_gathering)
+            if origin in ("reused", "joined"):
+                log.info("Deep-run context: %s the turn-start assembly instead of assembling "
+                         "this goal a second time", origin)
+                return assembled
+            if origin == "pending":
+                give_up("waiting for the turn-start assembly, which is still running")
+                return None
+        announce_gathering()
+        assembler = self.context_assembler
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            future = pool.submit(
+                lambda: assembler.assemble(goal_text, meta=with_assembly_deadline(goal_meta)))
+            return future.result(timeout=budget)
+        except FuturesTimeoutError:
+            give_up("with no partial result")
+            return None
+        except Exception:  # noqa: BLE001 (assembly must never break the run)
+            log.debug("per-goal context assembly failed", exc_info=True)
+            return None
+        finally:
+            try:
+                pool.shutdown(wait=False)
+            except Exception:  # noqa: BLE001
+                pass
+
     def _assemble_for_goal_with_cards(
-        self, goal: str, *, ctx_meta: Optional[Dict[str, Any]]
+        self, goal: str, *, ctx_meta: Optional[Dict[str, Any]],
+        turn_context: Optional[Any] = None,
+        status: Optional[Callable[[str], None]] = None, gathering_text: str = "",
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """Select PER-GOAL context for a single deep goal condition. Renders a block from the
         wired ``context_assembler`` (targeting THIS goal, not the shared run-level message), the
@@ -161,7 +253,11 @@ class DeepContextMixin:
         actually included (fresh cards first, dedupe-fresh-wins), so the caller can ``record()``
         it back to the warm store after the goal completes (see ``run_one`` in ``_run_deep``), the
         same way the main turn does. Returns ``("", [])`` when nothing is wired or found. Never
-        raises — a degraded source is simply skipped."""
+        raises: a degraded source is simply skipped.
+
+        The assembler read is BOUNDED (see ``bounded_goal_assembly``, which also explains
+        ``turn_context``, ``status`` and ``gathering_text``); the warm-set merge and the
+        conversation slice are local reads and unchanged."""
         if (ctx_meta or {}).get(RECIPE_SKIP_GOAL_CONTEXT):
             return "", []           # a saved operation: the runner grounds itself, no context search
         parts: List[str] = []
@@ -194,15 +290,18 @@ class DeepContextMixin:
                     goal_meta["recent_item_usage"] = recent_hint
                 else:
                     goal_meta.pop("recent_item_usage", None)
-                assembled = self.context_assembler.assemble(goal_text, meta=goal_meta or None)
-                cv = self._materialize_deep_context(assembled)
-                if cv:
-                    parts.append("--- CONTEXT SELECTED FOR THIS GOAL ---\n" + cv)
-                fresh_card_meta = [
-                    cm for cm in (getattr(assembled, "card_metadata", None) or [])
-                    if isinstance(cm, dict) and cm.get("id")
-                ]
-                fresh_card_ids = {cm.get("id") for cm in fresh_card_meta}
+                assembled = self.bounded_goal_assembly(
+                    goal_text, goal_meta, turn_context=turn_context, ctx_meta=ctx_meta,
+                    status=status, gathering_text=gathering_text)
+                if assembled is not None:
+                    cv = self._materialize_deep_context(assembled)
+                    if cv:
+                        parts.append("--- CONTEXT SELECTED FOR THIS GOAL ---\n" + cv)
+                    fresh_card_meta = [
+                        cm for cm in (getattr(assembled, "card_metadata", None) or [])
+                        if isinstance(cm, dict) and cm.get("id")
+                    ]
+                    fresh_card_ids = {cm.get("id") for cm in fresh_card_meta}
             except Exception:  # noqa: BLE001 — assembly must never break the run
                 log.debug("per-goal context assembly failed", exc_info=True)
 

@@ -105,7 +105,7 @@ class RunCloseMixin:
                                          runner_override=_deferred_runner,
                                          working_dir_override=working_dir_override,
                                          resume_session_id=take_resume_session(),
-                                         run_control=rs.run_control)
+                                         run_control=rs.run_control, card_context=rs.card_context)
                 if deep_res.kind == "cancelled":
                     return finish(deep_res)
                 # WHAT ACTUALLY CAME BACK? Three outcomes, and the reply must match the one that
@@ -415,7 +415,8 @@ class RunCloseMixin:
                                                       cancel_check=cancel_check,
                                                       working_dir_override=working_dir_override,
                                                       resume_session_id=take_resume_session(),
-                                                      run_control=rs.run_control)
+                                                      run_control=rs.run_control,
+                                                      card_context=rs.card_context)
                             if _rem_res.kind == "cancelled":
                                 return finish(_rem_res)
                             if not attachments:
@@ -488,7 +489,7 @@ class RunCloseMixin:
                             working_dir_override=working_dir_override,
                             resume_session_id=take_resume_session(), self_initiated=True,
                             user_ordered=user_ordered_work(rs.turn_user_intent),
-                            run_control=rs.run_control)
+                            run_control=rs.run_control, card_context=rs.card_context)
                         if _esc_res.kind == "cancelled":
                             return finish(_esc_res)
                         if own_escalation_adds_nothing(_esc_res, exec_record, esc_facts_before):
@@ -587,7 +588,7 @@ class RunCloseMixin:
                     working_dir_override=working_dir_override,
                     resume_session_id=take_resume_session(), self_initiated=True,
                     user_ordered=user_ordered_work(rs.turn_user_intent),
-                    run_control=rs.run_control)
+                    run_control=rs.run_control, card_context=rs.card_context)
                 if _lr_res.kind == "cancelled":
                     return finish(_lr_res)
                 if not own_escalation_adds_nothing(_lr_res, exec_record, lr_facts_before):

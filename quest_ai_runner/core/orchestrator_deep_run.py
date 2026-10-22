@@ -23,6 +23,7 @@ from .adapters import (
     runner_starts_background_work,
     runner_uses_deep_model,
 )
+from .goal_runner import cli_safe_model
 from .guard import ExecutionFact, ExecutionRecord, classify_exec_phase
 from .planner_context import _is_discovery_obs, _render_gathered
 from .orchestrator_decisions import _truncate_goal, apply_quest_data_ladder_guard
@@ -52,7 +53,7 @@ from .orchestrator_text import (
     _normalize_future_context,
     _strip_future_context,
 )
-from .orchestrator_turn import _Emitter
+from .orchestrator_turn import TurnCardCache, _Emitter
 from .requester import requester_from_meta
 from .tools_failure_ledger import (
     STUCK_OUTPUT_ALIKE, STUCK_REASON_ALIKE, ToolOutcome, alike, changed_something,
@@ -78,7 +79,14 @@ class DeepRunMixin:
                   resume_session_id: Optional[str] = None,
                   self_initiated: bool = False,
                   user_ordered: bool = False,
-                  run_control: Optional[Any] = None) -> OrchestratorResult:
+                  run_control: Optional[Any] = None,
+                  card_context: Optional[TurnCardCache] = None) -> OrchestratorResult:
+        # ``card_context``: this turn's ``TurnCardCache``. A deep run with exactly ONE goal serves
+        # the same request the turn-start assembly already did, so that goal REUSES it (a finished
+        # one is handed over, a still-running or timed-out one is waited for within the assembly
+        # budget) instead of running a second full assembly on the same store. A fan-out's subgoals
+        # each have their own focus and assemble for themselves. None = every goal assembles for
+        # itself, as before. Either way the assembly is bounded (``bounded_goal_assembly``).
         # ``run_control``: the ``RunControl`` of THIS run (steer, stop, pause; see
         # ``core/run_control.py``). It is handed to a worker that declares a ``control`` keyword, and
         # only on a single-goal run: the subgoals of a fan-out run concurrently, and one control
@@ -176,6 +184,12 @@ class DeepRunMixin:
         # stays aligned with the whole instead of optimizing its piece in isolation.
         overall_goal = (plan.goal or "").strip() or user_message
         multi = len(subtasks) > 1
+        # How many goals this call runs in all (a sequential group counts each of its tasks): the
+        # turn-start assembly can stand in for a goal only when there is exactly one.
+        goal_count = sum(
+            len([t for t in item if isinstance(t, dict)]) if isinstance(item, list) else 1
+            for item in subtasks if isinstance(item, (dict, list)))
+        turn_context = card_context if goal_count == 1 else None
         # Whether the async post-deep card updater is active (toggle on + provider + card-update
         # store). Computed once: it gates appending the FUTURE-CONTEXT instruction to each deep brief.
         card_update_active = self._card_updater_active()
@@ -208,12 +222,22 @@ class DeepRunMixin:
         result_goals: Dict[int, str] = {}
 
         def announce_model_selection(runner: Any) -> None:
-            if deep_selection is None or emit is None or not runner_uses_deep_model(runner):
+            if emit is None or not runner_uses_deep_model(runner):
                 return
             with selection_lock:
                 if selection_announced.is_set():
                     return
                 selection_announced.set()
+            if deep_selection is None:
+                # Pinned, or never rated: nothing was chosen automatically, but the last thing
+                # said before a worker spawns must still say it is starting. The model is named
+                # only when the worker can really be given it (``cli_safe_model``): a ladder
+                # rung it would replace with its own default must not be claimed.
+                first_rung = planned_deep_models[0] if planned_deep_models else None
+                emit.status(f"Starting the deep worker on {first_rung}."
+                            if first_rung and cli_safe_model(first_rung)
+                            else "Starting the deep worker.")
+                return
             level = deep_selection.get("difficulty")
             start_text = f"Starting on {deep_selection['start_model']}"
             if level:
@@ -274,13 +298,12 @@ class DeepRunMixin:
             # multiple subtasks run concurrently (each closure owns its own ``fact``).
             fact = ExecutionFact(goal=goal) if exec_record is not None else None
 
-            # PER-GOAL CONTEXT: each deep goal selects its OWN context (its own assembler read +
+            # PER-GOAL CONTEXT (assembled below, once the goal's runner is known and it is certain
+            # the run will start): each deep goal selects its OWN context (its own assembler read +
             # conversation slice for THIS goal), distinct from the shared run-level context_view.
-            # Built once here; ``extra_context`` accumulates additional context pulled on retries
-            # that report they did not have enough (the "look at more if it did not learn enough"
-            # widening principle). Empty when no assembler/store is wired (single-goal/no-store path
-            # is byte-for-byte unchanged). The closure mutates ``extra_context`` across iterations.
-            per_goal_context, per_goal_cards = self._assemble_for_goal_with_cards(goal, ctx_meta=ctx_meta)
+            # ``extra_context`` accumulates additional context pulled on retries that report they
+            # did not have enough (the "look at more if it did not learn enough" widening
+            # principle). The closure mutates ``extra_context`` across iterations.
             extra_context: List[str] = []
             # The runner picks the run_id (from its session file); we learn it from the first exec
             # event and reuse it to label the completion milestone, so the consumer can attach this
@@ -307,6 +330,9 @@ class DeepRunMixin:
             if (runner_override is None and self.deep_runners
                     and self.deep_runner_classifier is not None):
                 try:
+                    # A consumer's classifier is typically a model call, so say so before it runs.
+                    if emit is not None:
+                        emit.status("Deciding how to run this work")
                     key = self.deep_runner_classifier(user_message, goal, brief)
                     if key == DEFERRED_RUNNER_KEY:
                         # RESERVED KEY, never classifier-selectable. The queue runner returns a
@@ -361,6 +387,17 @@ class DeepRunMixin:
                 return DeepResult(met=False, output="", declined_background=True,
                                   error="escalation not started: the runner it resolved to "
                                         "starts background work the user did not ask for")
+            # The goal's own context, now that its runner is resolved and the run will start (a
+            # declined escalation above never pays for an assembly). Bounded by the same budget as
+            # the turn-start one, so a slow store costs a stated wait, never a silent one; the
+            # status names the run honestly (only a runner that runs the deep-model ladder is a
+            # "deep run"); built once, as ``per_goal_context`` rides every attempt's preamble.
+            gathering_subject = "the deep run" if runner_uses_deep_model(terminal_runner) else "this work"
+            per_goal_context, per_goal_cards = self._assemble_for_goal_with_cards(
+                goal, ctx_meta=ctx_meta, turn_context=turn_context,
+                status=emit.status if emit is not None else None,
+                gathering_text=(f"Gathering context for: {goal[:60]}" if multi
+                                else f"Gathering context for {gathering_subject}"))
             if per_goal_context and emit is not None:
                 # Progress the person can read, not internal state. "Selected context for goal: ..."
                 # named an orchestrator step and read as leaked machinery in the live status pill.
