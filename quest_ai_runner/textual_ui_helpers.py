@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+from collections import Counter
 from typing import Any, List, Mapping, Optional, Sequence
 from rich.text import Text
 
@@ -325,6 +326,27 @@ def metric_line(lead: Mapping[str, Any], other: Optional[Mapping[str, Any]] = No
 def metric_key(entry: Mapping[str, Any]) -> tuple:
     """What makes two metric entries the same result, so one is never written to the transcript twice."""
     return tuple(entry.get(key) for key in ("solution_id", "metric_id", "source", "reason", "before", "after"))
+
+
+def union_entries(*sources: Sequence[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
+    """The entries of several lists that carry the same results, each result once, in the order first seen.
+
+    A turn reaches the terminal as a job's own entries, the turn's result and the explanation payload, and those
+    are the same entries seen more than once. A result a source holds twice (two metrics that look alike) stays
+    twice: the count of each result is the most any one source has, not the sum."""
+    merged: List[Mapping[str, Any]] = []
+    taken: Counter = Counter()
+    for source in sources:
+        seen: Counter = Counter()
+        for entry in source if isinstance(source, (list, tuple)) else []:
+            if not isinstance(entry, dict):
+                continue
+            key = metric_key(entry)
+            seen[key] += 1
+            if seen[key] > taken[key]:
+                taken[key] += 1
+                merged.append(entry)
+    return merged
 
 
 def metric_lines(entries: Sequence[Mapping[str, Any]], missing: bool = False,

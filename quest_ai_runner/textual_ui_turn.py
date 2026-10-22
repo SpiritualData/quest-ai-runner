@@ -345,12 +345,11 @@ class TurnMixin:
                     # line is left out of the result and the numbers appear once.
                     self._deep.set_final_output(rid, without_line(deep_out, metrics, metric_missing))
                 if rid and (metrics or metric_missing):
+                    # Kept for the turn's metric block, which is written once at the turn's end
+                    # (``write_turn_metrics``), after the answer, wherever this run's record went.
                     self._deep.set_metrics(rid, metrics, metric_missing)
                     if rid in self._deep_archive:
                         self._deep_archive[rid]["metrics"] = list(metrics)
-                    if rid in self._deep_flushed:
-                        # The run's record was written before its milestone arrived: the lines follow it.
-                        self.write_metrics(metrics, metric_missing)
             # The milestone's own text ("Completed: <goal>", a not-met attempt's output, a clarifying
             # question) is not echoed: it printed a green tick before the work was shown, and for a
             # goal that was not met it printed the tick anyway. The run's record, the answer and the
@@ -460,9 +459,11 @@ class TurnMixin:
         if error is not None:
             # A question raised mid-run is only ever written by a turn that finished: this one did not.
             self._awaiting_decision = False
+            self.write_turn_metrics(None)   # what its jobs recorded before it failed
             self.write_provider_error(error)
         elif cancelled or ended == "paused":
             self._awaiting_decision = False
+            self.write_turn_metrics(None)   # what its jobs recorded before it stopped
             paused = ended == "paused"
             if paused or not self.stop_announced:   # Ctrl+C already said "Stopped."
                 self._console.dim("  Paused." if paused else "  Cancelled.")
@@ -524,15 +525,10 @@ class TurnMixin:
                 self.write_speaker_label()
                 for line in limit_lines(limit_reset(final)):
                     log.write(indented_line(f"  {line}"))
-            # What the metric was before and after, for any goal whose record did not already show it (a
-            # goal that was not met leaves no milestone), written from the result's own data after the
-            # answer and its link, and before the closing line.
+            # What the metric was before and after, written from the data (a job's own entries, the
+            # result's, the explanation's) after the answer and its link and before the closing line.
             explanation = getattr(final, "explanation", None)
-            self.write_metrics(getattr(final, "metric_results", None), getattr(final, "metric_missing", False))
-            if explanation:
-                # The metric lines of the explanation payload (version 3), when this turn's transcript does not
-                # hold them already.
-                self.write_metrics(explanation.get("metrics"), explanation.get("metric_missing"))
+            self.write_turn_metrics(final)
             s._last_user = user_text
             # For deep runs, signal completion clearly — goal strings look like unfinished TODOs
             if final.kind == "deep":

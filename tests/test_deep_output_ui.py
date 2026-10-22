@@ -13,6 +13,7 @@ Covers three behaviors of the Textual terminal UI's deep-run display:
 from __future__ import annotations
 
 import pytest
+from rich.text import Text
 
 from quest_ai_runner.core.adapters import EVENT_MILESTONE
 from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE, render_line
@@ -65,6 +66,9 @@ class _FakeConsole:
 
     def rule(self) -> None:
         pass  # _finish_turn draws a divider after every turn; no-op for the recording stub
+
+    def dim(self, text: str) -> None:
+        self._log.write(Text(text))
 
 
 def _make_app() -> tuple[QuestAITerminal, _RecordingLog]:
@@ -595,6 +599,8 @@ def test_a_runs_record_shows_the_metric_before_and_after_once_and_drops_the_plai
     app._handle_event(milestone("r1", deep_output=f"Changed greet().\n\n{render_line(entries)}", metrics=entries))
     app._deep.set_run_status("r1", "done")
     app._flush_deep_run("r1")
+    assert PAIR_LINE not in stripped(log), "a record never writes the numbers: what follows it is not known yet"
+    app.write_turn_metrics()
 
     lines = stripped(log)
     assert lines.count(PAIR_LINE) == 1
@@ -611,6 +617,7 @@ def test_a_change_with_no_metric_recorded_says_so_in_one_dim_line():
                                 metric_missing=True))
     app._deep.set_run_status("r1", "done")
     app._flush_deep_run("r1")
+    app.write_turn_metrics()
     assert stripped(log).count(NOT_RECORDED_LINE) == 1
     assert "".join(log.lines).count("No metric") == 1
 
@@ -620,18 +627,22 @@ def test_a_declared_not_applicable_reads_as_such():
     app._deep.add_run("r1", "Draft the note")
     app._handle_event(milestone("r1", deep_output="Drafted.", metrics=[NOT_APPLICABLE]))
     app._flush_deep_run("r1")
+    app.write_turn_metrics()
     assert "Nothing to measure. Only a draft was edited." in stripped(log)
 
 
-def test_a_milestone_that_arrives_after_the_record_adds_its_lines_after_it():
+def test_a_milestone_that_arrives_after_the_record_adds_its_lines_at_the_turns_end_not_mid_turn():
     app, log = _make_app()
     app._deep.add_run("r1", "Improve the greeting")
     app._deep.set_final_output("r1", "Changed greet().")
     app._flush_deep_run("r1")
     assert MEASURED_LINE not in stripped(log)
     app._handle_event(milestone("r1", metrics=[MEASURED]))
+    assert MEASURED_LINE not in stripped(log), "kept for the turn's one metric block, not written mid-turn"
+    app.write_turn_metrics()
     assert stripped(log).count(MEASURED_LINE) == 1
     app._flush_deep_run("r1")   # a second flush adds nothing
+    app.write_turn_metrics()    # and neither does a second block
     assert stripped(log).count(MEASURED_LINE) == 1
 
 
@@ -691,6 +702,70 @@ async def test_a_goal_that_left_no_milestone_still_shows_its_metrics_at_the_end_
         assert lines.count(MEASURED_LINE) == 1
         closing = next(i for i, ln in enumerate(lines) if "Stopped before finishing" in ln)
         assert lines.index(MEASURED_LINE) < closing, "above the closing line"
+
+
+async def finished_turn(final, runs, *, cancelled=False, error=None, answer_parts=()):
+    """The transcript lines of a turn whose jobs ``runs`` (``(run id, output, entries)``) each ended with a milestone,
+    then the turn was closed with ``final``."""
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
+        app._console = _FakeConsole(log)
+        app._deep = _DeepRunTracker()
+        app._deep_flushed = set()
+        app._answer_parts = list(answer_parts)
+        app._auto_pass = 1
+        for run_id, output, entries in runs:
+            app._deep.add_run(run_id, f"Goal {run_id}")
+            app._deep.update_run_output(run_id, "Edit: greet.py")
+            app._handle_event(milestone(run_id, deep_output=output, metrics=entries))
+            app._deep.set_run_status(run_id, "done")
+        app._finish_turn("improve the greeting", final, 3.0, cancelled=cancelled, error=error)
+        return stripped(log)
+
+
+@pytest.mark.asyncio
+async def test_an_answer_written_after_a_job_comes_before_the_metric_block_which_stays_above_the_closing_line():
+    """The turn answers in words of its own after its job's record: the numbers still come last, as the screen's last
+    block before the closing line (the answer used to sit under them)."""
+    class Answered(_FakeMetricFinal):
+        kind = "answer"
+        text = "The greeting now uses the person's name."
+
+    lines = await finished_turn(Answered(), [("r1", "Changed greet().", [MEASURED, RECORDED])])
+    record = lines.index("Changed greet().")
+    answer = lines.index("The greeting now uses the person's name.")
+    numbers = lines.index(PAIR_LINE)
+    closing = next(i for i, ln in enumerate(lines) if "in 3s" in ln)
+    assert record < answer < numbers < closing
+    assert lines.count(PAIR_LINE) == 1
+    assert [ln for ln in lines[numbers + 1:closing] if ln] == [], "nothing between the numbers and the closing line"
+
+
+@pytest.mark.asyncio
+async def test_several_jobs_leave_one_metric_block_after_every_record_and_above_the_closing_line():
+    other = {**MEASURED, "metric_id": "greeting-length", "name": "Greeting length", "disagrees": False,
+             "before": 12, "after": 9, "delta": -3}
+
+    class Two(_FakeMetricFinal):
+        metric_results = [MEASURED, RECORDED, other]
+
+    lines = await finished_turn(Two(), [("r1", "First job result.", [MEASURED, RECORDED]),
+                                        ("r2", "Second job result.", [other])])
+    other_line = "Greeting length: 12 → 9 (measured automatically)"
+    assert lines.count(PAIR_LINE) == 1 and lines.count(other_line) == 1
+    closing = next(i for i, ln in enumerate(lines) if "in 3s" in ln)
+    assert max(lines.index("First job result."), lines.index("Second job result.")) < min(
+        lines.index(PAIR_LINE), lines.index(other_line))
+    assert max(lines.index(PAIR_LINE), lines.index(other_line)) < closing
+
+
+@pytest.mark.asyncio
+async def test_a_turn_that_was_stopped_still_shows_what_its_jobs_recorded_before_it_says_so():
+    lines = await finished_turn(None, [("r1", "Changed greet().", [MEASURED])], cancelled=True)
+    assert lines.count(MEASURED_LINE) == 1
+    assert lines.index(MEASURED_LINE) < lines.index("Cancelled.")
 
 
 @pytest.mark.asyncio

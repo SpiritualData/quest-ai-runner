@@ -34,7 +34,7 @@ from quest_ai_runner import textual_ui_widgets
 from quest_ai_runner.core.adapters import EVENT_MILESTONE
 from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE
 from quest_ai_runner.textual_ui_helpers import (
-    METRIC_LINES_SHOWN, context_block_lines, ellipsize, metric_lines, metric_number,
+    METRIC_LINES_SHOWN, context_block_lines, ellipsize, metric_lines, metric_number, union_entries,
 )
 from quest_ai_runner.interactive_session_tracker import format_elapsed
 from quest_ai_runner.textual_ui_widgets import (
@@ -495,6 +495,14 @@ def test_a_number_the_measured_entry_lacks_is_not_left_unknown_when_the_ai_repor
     assert alone.plain == "  Pass rate: 1 → unknown (measured automatically)", "nothing to add when nothing else was reported"
 
 
+def test_the_same_results_seen_by_several_sources_are_one_block_and_a_repeat_within_one_source_is_kept():
+    a, b = metric_entry(1, name="A"), metric_entry(2, name="B")
+    assert union_entries([a, b], [a, b], [b]) == [a, b]
+    assert union_entries([a, a], [a]) == [a, a], "two alike results of one source are two results"
+    assert union_entries([a], [b, "not an entry"], None) == [a, b]
+    assert union_entries() == []
+
+
 def test_a_disagreement_whose_partner_is_not_in_the_batch_still_says_the_numbers_differ():
     (line,) = metric_lines([metric_entry(0, name="Pass rate", disagrees=True)])
     assert line.plain == "  Pass rate: 0.5 → 0.75 (measured automatically). The AI reported different numbers."
@@ -533,6 +541,7 @@ def test_in_the_running_app_a_finished_goals_metric_is_one_transcript_line():
         app._handle_event({"type": EVENT_MILESTONE, "text": "Completed: Improve the greeting",
                            "data": {"run_id": "r1", "metrics": [metric_entry(0, name="Pass rate")]}})
         app._flush_deep_run("r1")
+        app.write_turn_metrics()
         await pilot.pause()
         return rec.lines
 
@@ -550,6 +559,7 @@ def test_the_metric_block_comes_after_the_result_and_its_link_and_before_the_clo
         app._deep.set_final_output("r1", "Changed greet(). Link: https://example.org/x")
         app._deep.set_metrics("r1", [metric_entry(0, name="Pass rate")])
         app._flush_deep_run("r1")
+        app.write_turn_metrics()
         await pilot.pause()
         return rec.lines
 
@@ -568,6 +578,7 @@ def test_alt_d_lists_every_metric_result_the_transcript_folded_away():
         entries = [metric_entry(i, name=f"Metric {i}") for i in range(7)]
         app._deep.set_metrics("r1", entries)
         app._flush_deep_run("r1")
+        app.write_turn_metrics()
         app.action_toggle_deep_detail()
         await pilot.pause()
         return rec.lines, str(app._deep_detail._body.render())

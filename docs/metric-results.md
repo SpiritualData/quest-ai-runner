@@ -50,14 +50,16 @@ Where a consumer reads it:
   `explanation["metric_missing"]`, the same entries, kept in the facts half of the panel so no model writes or edits them.
   They are there only when the explanation is on and the turn is eligible; the result and the events above do not depend on it.
 
-The QAR terminal shows the entries without a model and with the explanation off: after a goal's result and its link, and
-before the turn's closing line, one line per metric in normal weight, ordered by the metric's name (a number inside a name
-sorts as a number, a declared not-applicable last), the measured and the reported reading of one metric together:
-`<name>: 0.38 → 0.91 (measured automatically)`, `(reported by the AI)`, `Nothing to measure. <reason>`. When the readings
-differ, or the AI reported a number the measured reading lacks (a metric that could only be read before the work), the
-AI's numbers follow as a note in the warning colour (`The AI reported 0.4 → 0.9.`). At most four lines, then
-`K more metric results. Alt+D shows them all.`; or `No metric was recorded for this change.`. Written once per turn
-however many events carry the same entry. The numbers carry no unit: the data has none.
+The QAR terminal shows the entries without a model and with the explanation off: once per turn, after everything the turn
+said (a goal's result and its link, and an answer that follows it) and directly above the closing line, so the last things
+on screen are the answer, the numbers, then how it ended. One line per metric in normal weight, ordered by the metric's
+name (a number inside a name sorts as a number, a declared not-applicable last), the measured and the reported reading of
+one metric together: `<name>: 0.38 → 0.91 (measured automatically)`, `(reported by the AI)`, `Nothing to measure.
+<reason>`. When the readings differ, or the AI reported a number the measured reading lacks (a metric that could only be
+read before the work), the AI's numbers follow as a note in the warning colour (`The AI reported 0.4 → 0.9.`). At most
+four lines, then `K more metric results. Alt+D shows them all.`; or `No metric was recorded for this change.`. Written
+once per turn however many events carry the same entry; a job's own record never writes it, because what follows a
+record is not known until the turn ends. The numbers carry no unit: the data has none.
 
 ## When two numbers differ
 

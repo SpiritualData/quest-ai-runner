@@ -130,6 +130,9 @@ class _RecordingLog:
     def __init__(self) -> None:
         self.lines: List[str] = []
 
+    def follow_now(self) -> None:
+        """The end of a turn shows the newest output; nothing to scroll in a recording."""
+
     def write(self, x) -> None:  # noqa: ANN001 - mirrors RichLog.write
         if hasattr(x, "plain"):
             self.lines.append(x.plain)

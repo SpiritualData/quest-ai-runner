@@ -8,7 +8,7 @@ from typing import Any, List, Mapping, Optional, Sequence
 from collections import Counter, OrderedDict
 from rich.text import Text
 
-from .textual_ui_helpers import METRIC_LINES_SHOWN, indented_line, metric_key, metric_lines
+from .textual_ui_helpers import METRIC_LINES_SHOWN, indented_line, metric_key, metric_lines, union_entries
 
 # The key standing for the "no metric was recorded" line in ``metrics_shown``.
 METRIC_MISSING_KEY = ("no metric recorded",)
@@ -198,11 +198,27 @@ class DeepMixin:
                 log.write(indented_line(f"  … {len(narration) - len(tail)} earlier steps", "dim"))
             for nl in tail:
                 log.write(indented_line(f"  {nl}"))
-        # 3) What the metric was before and after, written from the run's own data (never by a model),
-        # after the result and its link and before the turn's closing line.
-        self.write_metrics(snap.get("metrics"), snap.get("metric_missing"))
-        # No "complete" line here: a run's record does not know how the turn ended (met, stopped,
-        # paused, waiting). The turn's one closing line says it, from the final result.
+        # No metric lines and no "complete" line here: a run's record does not know what the turn says after
+        # it (an answer of its own) or how it ended (met, stopped, paused, waiting). The metric block and the
+        # one closing line belong to the turn's end (``write_turn_metrics``, ``_write_footer``).
+
+    def write_turn_metrics(self, final: Any = None) -> None:
+        """The turn's metric block, written once: the one place that decides where it goes.
+
+        It goes after everything the turn said (the jobs' records and the answer, whichever of them comes last) and
+        directly above the closing line, so the last things on screen are the answer, the numbers, then how it
+        ended. A job's record never writes it, because what follows a record is not known until the turn ends.
+        The entries are the jobs' own, the turn's result and the explanation payload, each result once; ``final``
+        is None for a turn that was cancelled or failed, which still shows what its jobs recorded."""
+        with self._deep._lock:
+            runs = list(self._deep._runs.values())
+        explanation = getattr(final, "explanation", None) or {}
+        entries = union_entries(
+            [e for info in runs for e in info.get("metrics") or []],
+            getattr(final, "metric_results", None) or [], explanation.get("metrics") or [])
+        missing = (any(info.get("metric_missing") for info in runs) or getattr(final, "metric_missing", False) is True
+                   or explanation.get("metric_missing") is True)
+        self.write_metrics(entries, missing)
 
     def write_metrics(self, entries: Optional[Sequence[Mapping[str, Any]]], missing: Any = False) -> None:
         """Write the metric lines for ``entries`` that this turn's transcript does not hold yet.

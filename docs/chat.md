@@ -206,8 +206,9 @@ one-shot runner a message typed mid-run is queued and acted on when the turn end
   (`3 files read · 1 edit · 3 commands`), never as sources, and `How I got this` counts the same actions as that line and
   counts metric lines (one metric measured and reported is one line), not entries. Nothing in the data says which
   sources the plan went on to use, so the two named are the retrieval's best matches, not a claim about use.
-- **Metrics.** The metric before and after is written from data, after the job's result and its link and before the
-  closing line: `<name>: 0.38 → 0.91 (measured automatically)`, `(reported by the AI)` for the worker's own
+- **Metrics.** The metric before and after is written from data, once per turn, after everything the turn said (the
+  job's result and its link, and an answer that follows it) and directly above the closing line, so the last things on
+  screen are the answer, the numbers, then how it ended: `<name>: 0.38 → 0.91 (measured automatically)`, `(reported by the AI)` for the worker's own
   record, `Nothing to measure. <reason>` for a declared not-applicable. The lines are ordered by metric, with one
   metric's readings together. Numbers have at most 3 decimals and no unit is invented (the data has none). When the
   library flags the measured and reported numbers as different (`docs/metric-results.md`: the measured one rounded to the
