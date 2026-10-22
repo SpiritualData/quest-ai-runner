@@ -287,10 +287,11 @@ async def test_finished_deep_task_output_persisted_to_transcript():
     app._flush_deep_run("r1")
 
     body = "\n".join(log.lines)
-    assert "⎅ [Pass 1] Build the thing" in body
+    assert "Build the thing" not in body, "one run's record does not repeat the person's own request"
+    assert "[Pass" not in body
     assert "reading file [a].py" in body  # not misparsed as markup
     assert "wrote patch" in body
-    assert "✓ Deep task complete" in body
+    assert "Deep task complete" not in body, "how the turn ended is said once, by the closing line"
 
 
 def test_flush_is_idempotent_per_run():
@@ -303,54 +304,30 @@ def test_flush_is_idempotent_per_run():
     assert len(log.lines) == n
 
 
-def test_errored_task_persisted_with_error_marker():
+def test_an_errored_run_is_recorded_without_a_completion_or_error_line():
+    """A run's record cannot know how the turn ended (met, stopped, paused, waiting), so it never
+    carries a "complete" line, and an errored run never gets a green one."""
     app, log = _make_app()
     app._deep.add_run("r1", "Goal")
     app._deep.update_run_output("r1", "tried something")
     app._deep.set_run_status("r1", "error")
     app._flush_deep_run("r1")
-    assert any("✗ Deep task ended with an error" in ln for ln in log.lines)
-
-
-def test_deep_task_complete_shows_which_model_ran_it():
-    """The completion line names the LLM model the run actually executed with, so the user
-    can tell a haiku pass from an opus one at a glance."""
-    app, log = _make_app()
-    app._deep.add_run("r1", "Goal")
-    app._deep.update_run_output("r1", "did a thing")
-    app._deep.set_model("r1", "claude-sonnet-4-6")
-    app._deep.set_run_status("r1", "done")
-    app._flush_deep_run("r1")
-
     body = "\n".join(log.lines)
-    assert "✓ Deep task complete" in body
-    assert "claude-sonnet-4-6" in body
+    assert "tried something" in body
+    assert "complete" not in body.lower() and "✓" not in body and "✗" not in body
 
 
-def test_errored_run_also_shows_the_model_it_was_attempted_with():
+def test_a_heartbeat_is_live_only_and_never_part_of_the_record():
+    """The worker's sign of life shows on the live dashboard, not in the permanent record."""
     app, log = _make_app()
     app._deep.add_run("r1", "Goal")
-    app._deep.update_run_output("r1", "tried something")
-    app._deep.set_model("r1", "claude-haiku-4-5")
-    app._deep.set_run_status("r1", "error")
+    app._deep.update_run_output("r1", "Read: /a.py")
+    app._deep.update_run_output("r1", "Deep run active, 90s elapsed, 12 actions so far", record=False)
+    app._deep.update_run_output("r1", "Wrote 14 rows.")
+    assert "Deep run active" in app._deep.get_dashboard()
     app._flush_deep_run("r1")
-
-    body = "\n".join(log.lines)
-    assert "✗ Deep task ended with an error" in body
-    assert "claude-haiku-4-5" in body
-
-
-def test_deep_task_complete_omits_model_suffix_when_unknown():
-    """No model reported (an older orchestrator, or a runner that never resolved one) leaves the
-    completion line exactly as before -- no stray separator or empty label."""
-    app, log = _make_app()
-    app._deep.add_run("r1", "Goal")
-    app._deep.update_run_output("r1", "did a thing")
-    app._deep.set_run_status("r1", "done")
-    app._flush_deep_run("r1")
-
-    line = next(ln for ln in log.lines if "Deep task complete" in ln)
-    assert line.strip() == "✓ Deep task complete · 0s"
+    assert "Deep run active" not in "\n".join(log.lines)
+    assert "Wrote 14 rows." in "\n".join(log.lines)
 
 
 def test_pending_runs_flushed_at_turn_end():
@@ -361,7 +338,8 @@ def test_pending_runs_flushed_at_turn_end():
     # no set_run_status / no terminal phase
     app._flush_pending_deep_runs()
     assert any("some progress" in ln for ln in log.lines)
-    assert any("Unfinished goal" in ln for ln in log.lines)
+    # One run: its goal is the person's own request, so the record does not repeat it.
+    assert not any("Unfinished goal" in ln for ln in log.lines)
 
 
 def test_empty_run_writes_no_block_but_is_marked():
@@ -374,7 +352,7 @@ def test_empty_run_writes_no_block_but_is_marked():
 
 @pytest.mark.asyncio
 async def test_final_output_rendered_in_record():
-    """The worker's final result is shown under a 'Result' header, not the per-op trace."""
+    """The worker's final result is shown as the AI's reply, not the per-op trace."""
     app, log = await _make_app_after_begin_turn("Fix the bug")
     app._deep.add_run("r1", "Fix the bug")
     app._deep.update_run_output("r1", "Read: /a/b.py")
@@ -383,10 +361,11 @@ async def test_final_output_rendered_in_record():
     app._flush_deep_run("r1")
 
     body = "\n".join(log.lines)
-    assert "⎅ [Pass 1] Fix the bug" in body
+    assert "Fix the bug" not in body        # one run: its goal is the person's own request, not repeated
     assert "1 read" in body                 # rolled up, not the path
     assert "/a/b.py" not in body            # individual file ops are NOT replayed
-    assert "Result" in body
+    assert "Tester (AI):" in body           # the result reads as the AI's reply, from its speaker
+    assert "Result" not in body
     assert "Patched the off-by-one in foo()." in body
     assert "Committed as abc123." in body
 
@@ -449,18 +428,14 @@ def test_result_only_run_not_archived():
     assert "r1" not in app._deep_archive
 
 
-def test_actions_hint_shown_only_when_there_are_actions():
+def test_a_record_never_carries_the_actions_hint_the_closing_line_does():
+    """The Alt+D hint is part of the turn's one closing line (tests/test_terminal_run_outcome.py)."""
     app, log = _make_app()
     app._deep.add_run("r1", "Do work")
     app._deep.update_run_output("r1", "Read: /a.py")
     app._flush_deep_run("r1")
-    assert any("Alt+D" in ln for ln in log.lines)
-
-    app2, log2 = _make_app()
-    app2._deep.add_run("r2", "Answer")
-    app2._deep.set_final_output("r2", "42.")
-    app2._flush_deep_run("r2")
-    assert not any("Alt+D" in ln for ln in log2.lines)  # no actions -> no hint
+    assert not any("Alt+D" in ln for ln in log.lines)
+    assert "r1" in app._deep_archive          # but the actions are kept for Alt+D to replay
 
 
 def test_narration_shown_when_no_result():
@@ -475,7 +450,7 @@ def test_narration_shown_when_no_result():
     body = "\n".join(log.lines)
     assert "1 read" in body
     assert "I think the issue is in the parser." in body
-    assert "✗ Deep task ended with an error" in body
+    assert "✗" not in body
 
 
 def test_final_output_alone_is_enough_to_flush():
@@ -561,9 +536,10 @@ async def test_deep_turn_answer_not_duplicated_after_flush():
 
         body = "\n".join(log.lines)
         assert body.count(output) == 1  # the result body appears exactly once, not twice
-        assert "⎅ [Pass 1] Build the thing" in body
-        assert "✓ Deep task complete" in body
-        assert f"{app.rep_name} (AI):" not in body  # no second generic answer bubble
+        assert "[Pass" not in body
+        assert body.count("✓") == 1 and "✓ Done in 3s" in body   # one closing line, not three "done" lines
+        assert "Deep task complete" not in body
+        assert body.count(f"{app.rep_name} (AI):") == 1  # the result's own label, no second bubble
 
 
 # --- the metric before and after, written by code, shown once --------------
@@ -602,7 +578,7 @@ def test_a_runs_record_shows_the_metric_before_and_after_once_and_drops_the_plai
     assert not any("Metric:" in ln for ln in lines), "the plain text line is not printed a second time"
     body = "\n".join(log.lines)
     assert "Changed greet()." in body, "the rest of the result is untouched"
-    assert body.index("Changed greet()") < body.index(MEASURED_LINE) < body.index("✓ Deep task complete")
+    assert body.index("Changed greet()") < body.index(MEASURED_LINE)
 
 
 def test_a_change_with_no_metric_recorded_says_so_in_one_dim_line():
@@ -690,7 +666,8 @@ async def test_a_goal_that_left_no_milestone_still_shows_its_metrics_at_the_end_
         app._finish_turn("improve the greeting", Unmet(), 3.0, cancelled=False, error=None)
         lines = stripped(log)
         assert lines.count(MEASURED_LINE) == 1
-        assert lines.index(MEASURED_LINE) < next(i for i, ln in enumerate(lines) if "Partial" in ln), "above the footer"
+        closing = next(i for i, ln in enumerate(lines) if "Stopped before finishing" in ln)
+        assert lines.index(MEASURED_LINE) < closing, "above the closing line"
 
 
 @pytest.mark.asyncio
@@ -820,3 +797,14 @@ async def test_detail_panel_keeps_full_history_and_follow_toggle():
         await pilot.pause()
         assert panel._follow is False
         assert len(panel._lines) == 201
+
+
+def test_with_several_runs_each_record_names_its_own_goal():
+    """The goal is the one thing that tells two runs of a turn apart, so it heads each record."""
+    app, log = _make_app()
+    for rid, goal in (("r1", "Fix the parser"), ("r2", "Update the docs")):
+        app._deep.add_run(rid, goal)
+        app._deep.update_run_output(rid, "Edit: /a.py")
+    app._flush_pending_deep_runs()
+    headings = [ln for ln in log.lines if ln.startswith("⎅")]
+    assert headings == ["⎅ Fix the parser", "⎅ Update the docs"]

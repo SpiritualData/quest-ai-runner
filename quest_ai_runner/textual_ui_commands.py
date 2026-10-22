@@ -29,6 +29,7 @@ class CommandsMixin:
 
         # Any submitted message answers a pending decision question, if there was one.
         self._awaiting_decision = False
+        event.textarea.remove_class("-awaiting")
 
         # Session still initializing — queue the message for replay once ready.
         if self.sess is None:

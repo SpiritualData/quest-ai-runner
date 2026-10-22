@@ -4,12 +4,10 @@ A mixin of ``QuestAITerminal`` (see ``textual_ui.py``): methods only, state live
 """
 from __future__ import annotations
 
-import time
 from typing import Any, List, Mapping, Optional, Sequence
 from collections import Counter, OrderedDict
 from rich.text import Text
 
-from .interactive_session_tracker import format_elapsed
 from .textual_ui_helpers import metric_key, metric_lines
 
 # The key standing for the "no metric was recorded" line in ``metrics_shown``.
@@ -132,6 +130,7 @@ class DeepMixin:
         with self._deep._lock:
             info = self._deep._runs.get(run_id)
             snap = dict(info) if info else None
+            runs_this_turn = len(self._deep._runs)
         if not snap:
             return
         lines = [l.strip() for l in (snap.get("exec_lines") or []) if l and l.strip()]
@@ -152,22 +151,19 @@ class DeepMixin:
                 self._deep_archive.popitem(last=False)
         log = self._tlog
         goal = (snap.get("goal") or "").strip()
-        status = snap.get("status") or "running"
-        time_str = format_elapsed(time.time() - snap.get("started", time.time()))
         summary, narration = self._summarize_exec_lines(lines)
 
-        pass_num = self._auto_pass
-        pass_label = f" [Pass {pass_num}]"
-
         log.write(Text(""))
-        # 1) The subgoal this task was assigned — the most important orientation.
-        log.write(Text(f"⎅{pass_label} {goal}" if goal else f"⎅{pass_label} Deep task", style="bold cyan"))
+        # 1) The subgoal this task was assigned, but only when it tells runs apart: with one run
+        # it is the person's own request again, already on screen above.
+        if runs_this_turn > 1:
+            log.write(Text(f"⎅ {goal}" if goal else "⎅ Task", style="bold cyan"))
         # 2) A one-line roll-up of activity, instead of every read/write/command.
         if summary:
             log.write(Text(f"  {summary}", style="dim"))
         if final_output:
-            log.write(Text(""))
-            log.write(Text("  Result", style="bold green"))
+            # The result is the AI's reply, so it is introduced by its speaker like any answer.
+            self.write_speaker_label()
             self._console.markdown(final_output)
         elif narration:
             # No structured result (e.g. an errored/incomplete run): fall back to the worker's own
@@ -180,17 +176,8 @@ class DeepMixin:
         # What the metric was before and after, written from the run's own data (never by a model), as
         # its closing detail, even when no explanation is on.
         self.write_metrics(snap.get("metrics"), snap.get("metric_missing"))
-        model = (snap.get("model") or "").strip()
-        model_suffix = f" · {model}" if model else ""
-        if status == "error":
-            log.write(Text(f"  ✗ Deep task ended with an error · {time_str}{model_suffix}", style="red"))
-        else:
-            log.write(Text(f"  ✓ Deep task complete · {time_str}{model_suffix}", style="green"))
-        # Point at the full per-action trace (the summary above is a roll-up). Only when there are
-        # actions to replay; the panel stays available after the turn via the archive.
-        if lines:
-            log.write(Text("  Alt+D: see every action", style="dim"))
-        log.write(Text(""))
+        # No "complete" line here: a run's record does not know how the turn ended (met, stopped,
+        # paused, waiting). The turn's one closing line says it, from the final result.
 
     def write_metrics(self, entries: Optional[Sequence[Mapping[str, Any]]], missing: Any = False) -> None:
         """Write the metric lines for ``entries`` that this turn's transcript does not hold yet.
@@ -269,12 +256,12 @@ class DeepMixin:
         """Toggle the "context it used" panel (key: Alt+C).
 
         Alt+C is used (not a bare letter) because the prompt Input consumes printable keys, so a
-        plain 'c' would be typed into the message instead of toggling. Only opens when there is
-        non-empty context from the most recent deep run. Pressing Alt+C again closes it; when there
-        is nothing to show the action is a no-op.
+        plain 'c' would be typed into the message instead of toggling. Opens whatever the last turn
+        loaded into the panel (a deep run's context, or the cards a short answer used). Pressing
+        Alt+C again closes it; when nothing was loaded the action is a no-op.
         """
         if self._future_ctx_panel.display:
             self._future_ctx_panel.display = False
-        elif self._future_context:
+        elif self._future_ctx_panel.has_bullets:
             self._future_ctx_panel._rerender()
             self._future_ctx_panel.display = True

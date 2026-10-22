@@ -18,16 +18,19 @@ from textual.strip import Strip
 #
 # Standard RichLog with auto_scroll=True yanks the view to the bottom on every
 # write(), fighting any manual scroll the user makes during an active turn.
-# TranscriptLog overrides write() to only auto-scroll when the view is already
-# at the tail — so scrolling up actually sticks until the user returns to the bottom.
+# TranscriptLog follows the tail only while the person has not scrolled away from it, so
+# scrolling up actually sticks until they return to the bottom.
 
 class TranscriptLog(RichLog):
     """RichLog that respects manual scroll position AND supports drag-to-select.
 
     Two additions over a plain RichLog:
 
-    1. Manual-scroll-aware ``write`` — streaming only auto-follows the tail when the
-       user is already at the bottom (so scrolling up sticks).
+    1. Manual-scroll-aware ``write``: streaming follows the tail until the person scrolls up
+       (``following``), and follows again once they are back at the bottom. It is a state
+       and not a measurement of the view, because the view changes size without the person
+       touching it (the live work panel appearing shrinks the transcript, and a measurement
+       taken then said "not at the bottom" for every later line).
 
     2. Real drag-to-select + copy. A stock ``RichLog`` stores pre-rendered ``Strip``s
        and its ``render_line`` returns them verbatim — it never applies Textual's
@@ -61,15 +64,31 @@ class TranscriptLog(RichLog):
         self._sel_anchor: Optional[Offset] = None
         self._sel_head: Optional[Offset] = None
         self._selecting = False
+        # True until the person scrolls away from the bottom; True again when they return to it.
+        self.following = True
 
     def write(self, content, width=None, expand=False, shrink=True,
               scroll_end=None, animate=False):
         if scroll_end is None and self.auto_scroll:
-            # Checked BEFORE new content is added: if the user is at (or within 1
-            # line of) the current tail, follow; otherwise leave them where they are.
-            scroll_end = self.scroll_y >= self.max_scroll_y - 1
+            scroll_end = self.following
         return super().write(content, width=width, expand=expand, shrink=shrink,
                              scroll_end=scroll_end, animate=animate)
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        """The scroll position moved: following is whether it moved to (within a row of) the bottom.
+
+        Only an actual move of the view reaches here. Our own scroll to the end lands on the
+        bottom, so it keeps following; a person's PgUp, wheel or scrollbar drag lands above it and
+        stops following; scrolling back down resumes. A change in the log's size moves nothing,
+        so it never changes the state.
+        """
+        super().watch_scroll_y(old_value, new_value)
+        self.following = new_value >= self.max_scroll_y - 1
+
+    def on_resize(self, event) -> None:
+        """Keep the bottom in view when the log changes size while it is following the tail."""
+        if self.following and self._size_known:
+            self.scroll_end(animate=False, immediate=False, x_axis=False)
 
     # -- drag selection --------------------------------------------------------
 

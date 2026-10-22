@@ -75,9 +75,12 @@ def test_activity_bar_renders_queued_count_as_a_suffix():
     bar.set_queued(2)
     rendered = bar.render().plain
     assert "Thinking…" in rendered
-    assert "2 queued" in rendered
+    assert "2 messages waiting" in rendered
+    assert "—" not in rendered, "no em dash on screen"
+    bar.set_queued(1)
+    assert "1 message waiting" in bar.render().plain
     bar.set_queued(0)
-    assert "queued" not in bar.render().plain
+    assert "waiting" not in bar.render().plain
 
 
 # --- submitting a message mid-turn: queued, counted, never claimed as sent without being one ----

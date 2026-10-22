@@ -26,7 +26,7 @@ from .textual_ui_helpers import _build_future_context_text, ellipsize, notice_li
 
 # Prompt placeholder shown while a turn is waiting on the user's reply to a decision question
 # raised mid-turn (EVENT_DECISION) — makes it obvious the AI is paused for input, not just idle.
-_AWAITING_DECISION_PLACEHOLDER = "Reply to the question above to continue…"
+_AWAITING_DECISION_PLACEHOLDER = "Type your answer to the question above…"
 
 
 # Prompt placeholder shown while a turn is running — makes it explicit that typing now is safe
@@ -364,7 +364,7 @@ class ActivityBar(Static):
         if self._queued:
             t.append("  ")
             t.append(
-                f"· {self._queued} queued message{'s' if self._queued != 1 else ''} — sends next",
+                f"· {self._queued} message{'s' if self._queued != 1 else ''} waiting",
                 style="bold yellow",
             )
         return t
@@ -614,6 +614,12 @@ class FutureContextPanel(VerticalScroll):
 
     def compose(self) -> ComposeResult:
         yield self._body
+
+    @property
+    def has_bullets(self) -> bool:
+        """True when a turn loaded something for Alt+C to open (a deep run's context or a short
+        answer's context cards)."""
+        return bool(self._bullets)
 
     def load(self, bullets: str) -> None:
         """Store the bullet lines without changing visibility.

@@ -337,11 +337,13 @@ class _FakeSessionForFinishTurn:
 
 @pytest.mark.asyncio
 async def test_shallow_turn_with_context_cards_shows_alt_c_hint():
-    """A shallow (non-deep) turn that gathered context cards gets the same
-    "[Alt+C] Context it used" footer hint that deep turns get, and the cards survive
-    into the FutureContextPanel instead of being discarded when the turn ends."""
+    """A shallow (non-deep) turn that gathered context cards gets the same "Alt+C context used" hint,
+    on the turn's one closing line, that deep turns get, and the cards survive into the
+    FutureContextPanel instead of being discarded when the turn ends."""
     app = QuestAITerminal(_FakeSessionForFinishTurn())
     async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
         app._ctx.set_cards([
             {"id": "card-1", "title": "Pricing tiers", "adapter": "keyword"},
         ])
@@ -354,6 +356,9 @@ async def test_shallow_turn_with_context_cards_shows_alt_c_hint():
 
         # The panel picked up bullets built from the ContextPanel's cards (not discarded).
         assert "Pricing tiers" in app._future_ctx_panel._bullets
+        # And the closing line says the keys are there: one line, no separate hint line.
+        hinted = [ln for ln in log.lines if "Alt+C" in ln]
+        assert len(hinted) == 1 and hinted[0].strip().endswith("Alt+C context used")
 
 
 @pytest.mark.asyncio

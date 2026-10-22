@@ -5,12 +5,12 @@ A mixin of ``QuestAITerminal`` (see ``textual_ui.py``): methods only, state live
 from __future__ import annotations
 
 import time
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Sequence
 from rich.text import Text
 from textual import work
 
-from .interactive_session import _DeepRunTracker, _model_display, _model_label
-from .adapters.retry_utils import format_provider_error
+from .interactive_session import _DeepRunTracker, _model_label
+from .interactive_session_tracker import format_elapsed
 from .textual_ui_widgets import (
     _AWAITING_DECISION_PLACEHOLDER,
     _READY_PLACEHOLDER,
@@ -18,7 +18,20 @@ from .textual_ui_widgets import (
 )
 from .textual_ui_prompt import PromptTextArea
 from .core.metric_results import without_line
-from .textual_ui_helpers import _build_shallow_context_bullets, card_score, context_block_lines, plural
+from .textual_ui_helpers import _build_shallow_context_bullets, context_block_lines, plural
+from .textual_ui_outcome import (
+    MAX_AUTO_PASSES,
+    OUTCOME_FINISHED,
+    OUTCOME_LIMIT,
+    allows_second_pass,
+    closing_text,
+    launch_failure_lines,
+    limit_reset,
+    model_text,
+    provider_error_lines,
+    speaker_label,
+    turn_outcome,
+)
 
 
 class TurnMixin:
@@ -68,6 +81,8 @@ class TurnMixin:
         self.metrics_shown.clear()
         self._future_context = ""
         self._last_narration = ""
+        self.pending_question = ""
+        self.retry_text = user_text if echo else ""
         self._ctx.reset()
         self._deep_view.hide()
         self._deep_detail.hide()
@@ -82,9 +97,6 @@ class TurnMixin:
 
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
-            self._tlog.write(Text(""))
-        elif auto:
-            self._tlog.write(Text(f"↻ Pass {self._auto_pass}: auto-executing planned work…", style="bold yellow"))
             self._tlog.write(Text(""))
 
         # Loading strip on; keep input enabled so mid-turn messages can be queued. Reset the
@@ -251,10 +263,9 @@ class TurnMixin:
             card_meta = data.get("card_metadata") or []
             sources = data.get("sources") or []
             if card_meta:
+                # The title stays what the app is called: the best-scoring card is a guess at what
+                # the message is about, not the quest the person is working on.
                 self._ctx.set_cards(card_meta)
-                top = max(card_meta, key=card_score)
-                if top.get("title"):
-                    self._set_terminal_title(top["title"])
             # One calm block; the per-card detail (files, scores) is in the live context panel.
             for line in context_block_lines(card_meta, sources, self.transcript_width()):
                 log.write(line)
@@ -280,7 +291,10 @@ class TurnMixin:
                 self._deep.update_goal(run_id, goal)
             self._cur_deep_run = run_id
             if text:
-                self._deep.update_run_output(run_id, text)
+                # A heartbeat (the worker's sign of life, named by its phase) shows live but is not
+                # one of the run's actions, so it stays out of the record and the Alt+D replay.
+                is_heartbeat = isinstance(data, dict) and data.get("phase") == "heartbeat"
+                self._deep.update_run_output(run_id, text, record=not is_heartbeat)
                 # Push to detail panel live (it scrolls / holds full history).
                 self._deep_detail.push_line(run_id, text)
             # Show a run's dashboard the moment its first event lands (a run with fewer than ten
@@ -318,16 +332,10 @@ class TurnMixin:
                     if rid in self._deep_flushed:
                         # The run's record was written before its milestone arrived: the lines follow it.
                         self.write_metrics(metrics, metric_missing)
-                model = _model_display(data.get("model"), data.get("resolved_model"))
-                if rid and model:
-                    self._deep.set_model(rid, model)
-            if text:
-                # Show the first sentence of the goal as a clean completion line.
-                first = text.split(".")[0].strip()
-                label = first if first else text[:70]
-                log.write(Text(""))
-                log.write(f"  [green bold]✓[/green bold]  {label}")
-                log.write(Text(""))
+            # The milestone's own text ("Completed: <goal>", a not-met attempt's output, a clarifying
+            # question) is not echoed: it printed a green tick before the work was shown, and for a
+            # goal that was not met it printed the tick anyway. The run's record, the answer and the
+            # turn's closing line say what happened, in the order it did.
 
         elif t == ev["intent"]:
             # "Executing: <goal>" — an announcement that work is about to start. Written straight
@@ -350,12 +358,13 @@ class TurnMixin:
                     self._future_context = fc
 
         elif t == ev["decision"]:
+            # The question is written once, as the last thing of the turn (``write_pending_question``):
+            # written now it would be followed by the rest of the run's record and a closing line. Until
+            # then the prompt keeps taking messages for the running turn, so its placeholder is not
+            # changed to point at a question that is not on screen yet.
             self._awaiting_decision = True
-            log.write(Text(""))
-            # Rendered visually distinct (yellow border prefix) so a question the AI needs
-            # answered before it can continue doesn't blend into the rest of the transcript.
-            log.write(Text(f"  ┃ {text}", style="bold yellow"))
-            self.query_one("#prompt", PromptTextArea).placeholder = _AWAITING_DECISION_PLACEHOLDER
+            self.pending_question = text
+            self._activity.set_status("Waiting for your answer…")
 
         # done: terminal signal only.
 
@@ -435,8 +444,7 @@ class TurnMixin:
         ended = self._settle_run_control(final, cancelled, error)
 
         if error is not None:
-            friendly = format_provider_error(error)
-            log.write(f"  [red]Error:[/red] {friendly}")
+            self.write_provider_error(error)
         elif cancelled or ended == "paused":
             paused = ended == "paused"
             self._console.dim("  Paused." if paused else "  Cancelled.")
@@ -473,7 +481,8 @@ class TurnMixin:
             # showing that interim sentence as the turn's answer: a completion report for work
             # that had not run. When nothing ran because no executor is wired, ``final.text``
             # carries the honest explanation and is what gets shown instead.
-            if final.kind == "deep" and self._deep_flushed:
+            launch_lines = launch_failure_lines(final)
+            if launch_lines or (final.kind == "deep" and self._deep_flushed):
                 answer = None
             else:
                 answer = final.text or ("\n".join(self._answer_parts).strip() or None)
@@ -484,11 +493,14 @@ class TurnMixin:
                     answer = without_line(answer, getattr(deep_result, "metric_results", None) or [],
                                           getattr(deep_result, "metric_missing", False) is True)
             if answer:
-                if not self._ai_label_shown:
-                    log.write(Text(""))
-                    log.write(Text(f"{self.rep_name} (AI):", style="bold cyan"))
-                    self._ai_label_shown = True
+                self.write_speaker_label()
                 self._console.markdown(answer)
+            if launch_lines:
+                # Why nothing ran, in plain words, in the transcript: the status line that said it
+                # while it happened is gone by now.
+                self.write_speaker_label()
+                for line in launch_lines:
+                    log.write(Text(f"  {line}"))
             s._last_user = user_text
             # For deep runs, signal completion clearly — goal strings look like unfinished TODOs
             if final.kind == "deep":
@@ -501,6 +513,8 @@ class TurnMixin:
                 # session history the NEXT turn reads back as context.
                 if all_met:
                     prefix = "Completed"
+                elif launch_lines:
+                    prefix = "Could not start"
                 elif deep_results:
                     prefix = "Attempted"
                 else:
@@ -522,20 +536,19 @@ class TurnMixin:
             # (a goal that was not met leaves no milestone), written from the result's own data.
             self.write_metrics(getattr(final, "metric_results", None), getattr(final, "metric_missing", False))
             log.write(Text(""))
-            self._write_footer(final, elapsed)
-            # If the deep run flagged the context it used, load the panel and show a
-            # subtle hint in the transcript so the user knows it is available. Shallow
-            # turns don't get a future_context bullet list from the orchestrator, but they
-            # do gather context cards (shown live in the ContextPanel) — reuse the same
-            # Alt+C panel/hint for those instead of letting the cards be discarded.
+            # If the deep run flagged the context it used, load the panel so Alt+C opens it.
+            # Shallow turns don't get a future_context bullet list from the orchestrator, but they
+            # do gather context cards (shown live in the ContextPanel): the same panel serves them,
+            # instead of letting the cards be discarded. The closing line says the keys are there.
             context_bullets = self._future_context or _build_shallow_context_bullets(self._ctx.cards)
             if context_bullets:
                 self._future_ctx_panel.load(context_bullets)
-                count = sum(1 for ln in context_bullets.splitlines() if ln.strip())
-                log.write(Text(
-                    f"  [Alt+C] Context it used  ({count})",
-                    style="dim",
-                ))
+            hints = []
+            if any(run_id in self._deep_archive for run_id in self._deep_flushed):
+                hints.append("Alt+D every action")
+            if context_bullets:
+                hints.append("Alt+C context used")
+            self._write_footer(final, elapsed, hints)
             # "Explain how I got this" (see core/answer_explanation.py), when QAR_EXPLAIN_ANSWER is
             # on and the turn passed the model-free eligibility gate. The terminal has no expandable
             # panel to put the full six-section account behind, so this is deliberately just the
@@ -565,6 +578,7 @@ class TurnMixin:
                 # The metric lines of the payload (version 3), when this turn's transcript does not hold
                 # them already.
                 self.write_metrics(explanation.get("metrics"), explanation.get("metric_missing"))
+            self.write_pending_question(final)
 
         log.write(Text(""))
         self._console.rule()
@@ -575,6 +589,7 @@ class TurnMixin:
         inp = self.query_one("#prompt", PromptTextArea)
         # A decision question leaves the prompt awaiting the user's reply; don't clobber that
         # placeholder with the normal one until they actually answer it.
+        inp.set_class(bool(self._awaiting_decision), "-awaiting")
         if self._awaiting_decision:
             inp.placeholder = _AWAITING_DECISION_PLACEHOLDER
         else:
@@ -601,12 +616,13 @@ class TurnMixin:
                 self._begin_turn(combined, echo=True, auto=False)
                 return
 
-        # Auto-execute a planned-but-unexecuted deep turn.
-        if not cancelled and error is None and final is not None:
+        # Auto-execute a planned-but-unexecuted deep turn: once at most (MAX_AUTO_PASSES counts the
+        # person's own pass), and never when something other than "nothing ran" is why it did not
+        # run (``allows_second_pass``), with the reason said.
+        if not cancelled and error is None and final is not None and self._auto_pass < MAX_AUTO_PASSES:
             if self._maybe_handle_deep_plan(final, run=True):
-                next_pass = self._auto_pass + 1
                 log.write(Text(
-                    f"  ↻ Planned work not yet executed — starting pass {next_pass}…",
+                    "  ↻ Nothing ran the first time, so I'm trying once more.",
                     style="bold yellow",
                 ))
                 log.write(Text(""))
@@ -624,6 +640,8 @@ class TurnMixin:
             return False
         goals = final.goals or []
         if not goals:
+            return False
+        if not allows_second_pass(final):
             return False
         executed = any(
             getattr(d, "met", False) or (getattr(d, "output", "") or "").strip()
@@ -662,19 +680,70 @@ class TurnMixin:
         })
         self._deep_plan_shown = False
 
-    def _write_footer(self, final, elapsed: float) -> None:
+    def write_speaker_label(self, force: bool = False) -> None:
+        """The AI's name above what it says: once per reply, or again (``force``) for a new message."""
+        if self._ai_label_shown and not force:
+            return
+        self._tlog.write(Text(""))
+        self._tlog.write(Text(speaker_label(self.rep_name), style="bold cyan"))
+        self._ai_label_shown = True
+
+    def write_provider_error(self, error: Exception) -> None:
+        """A failed model call in plain words, with the way forward, and the message put back to retry.
+
+        The failed message goes back into the prompt box when the box is empty, so Enter sends it
+        again; a box the person already typed in is left alone and the text says to send it again."""
+        inp = self.query_one("#prompt", PromptTextArea)
+        restored = bool(self.retry_text) and not inp.text.strip()
+        if restored:
+            inp.text = self.retry_text
+        self.write_speaker_label(force=True)
+        for line in provider_error_lines(error, message_restored=restored):
+            self._tlog.write(Text(f"  {line}", style="yellow"))
+
+    def write_pending_question(self, final) -> None:
+        """End a turn that waits for the person's answer on the question itself, from its speaker.
+
+        The last thing on screen, so the prompt below it is answering something in view. The words
+        are the question as the orchestrator raised it (an event, or the confirm result's own
+        ``question``); a turn that waits with no question text (a parked approval) writes nothing."""
+        waiting = turn_outcome(final) == "waiting"
+        question = (self.pending_question or getattr(final, "question", None) or "").strip()
+        if not waiting and not question:
+            return
+        self._awaiting_decision = True
+        if not question:
+            return
+        self.write_speaker_label(force=True)
+        # Visually distinct (a yellow bar) so a question the AI needs answered before it can
+        # continue does not blend into the rest of the transcript.
+        for line in question.splitlines():
+            self._tlog.write(Text(f"  ┃ {line}" if line.strip() else "  ┃", style="bold yellow"))
+
+    def _write_footer(self, final, elapsed: float, hints: Sequence[str] = ()) -> None:
+        """The turn's one quiet closing line: how it ended, how long, the model, and the keys that
+        open more (``hints``). A deep turn, or one waiting for the person, says its outcome in words
+        of its own (finished, stopped, paused, waiting); a plain answer keeps its counts."""
         def _k(n: int) -> str:
             return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
 
         parts: List[tuple] = []   # (text, style)
+        verbose = self.verbosity >= 1
+        outcome = turn_outcome(final)
+        deep_results = final.deep_results or [] if final.kind == "deep" else []
 
-        if final.kind == "deep":
-            deep_results = final.deep_results or []
-            all_met = bool(deep_results) and all(d.met for d in deep_results)
-            parts.append(("✓ Done" if all_met else "~ Partial", "green" if all_met else "yellow"))
-            deep_tokens = sum(getattr(d, "tokens", 0) for d in deep_results)
-            if deep_tokens:
-                parts.append((f"{_k(deep_tokens)} tokens", "dim"))
+        if outcome is not None:
+            text, style = closing_text(outcome, limit_reset(final) if outcome == OUTCOME_LIMIT else "")
+            took = format_elapsed(elapsed)
+            if outcome == OUTCOME_FINISHED:
+                parts.append((f"{text} in {took}", style))
+            else:
+                parts.append((text, style))
+                parts.append((took, "dim"))
+            if verbose:
+                deep_tokens = sum(getattr(d, "tokens", 0) for d in deep_results)
+                if deep_tokens:
+                    parts.append((f"{_k(deep_tokens)} tokens", "dim"))
         else:
             steps = getattr(final, "steps", 0)
             if steps:
@@ -690,18 +759,23 @@ class TurnMixin:
                 parts.append((f"↥ {_k(tok_in)} in · ↦ {_k(tok_out)} out", "dim"))
 
         if final.kind == "deep":
-            model_lbl = ", ".join(sorted({
-                _model_display(getattr(d, "model", None), getattr(d, "resolved_model", None))
-                for d in (final.deep_results or []) if getattr(d, "model", None)}))
+            models = [(getattr(d, "model", None), getattr(d, "resolved_model", None))
+                      for d in deep_results if getattr(d, "model", None)]
         else:
-            model_lbl = _model_display(getattr(final, "model", None))
+            models = [(getattr(final, "model", None), None)]
+        model_lbl = model_text(models, verbose)
         if model_lbl:
             parts.append((model_lbl, "dim"))
-        parts.append((f"{elapsed:.1f}s", "dim"))
+        if outcome is None:
+            parts.append((f"{elapsed:.1f}s", "dim"))
+        for hint in hints:
+            parts.append((hint, "dim"))
 
+        # One space around the dot on a closing line (hints and all must fit one 80 column row).
+        separator = " · " if outcome is not None else "  ·  "
         t = Text("  ")
         for i, (label, style) in enumerate(parts):
             if i > 0:
-                t.append("  ·  ", style="dim")
+                t.append(separator, style="dim")
             t.append(label, style=style)
         self._tlog.write(t)

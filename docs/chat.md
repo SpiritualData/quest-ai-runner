@@ -181,6 +181,27 @@ within a second, `/pause` pauses it and `/resume` continues the same session (st
 run of the paused goal, never through the planner). With the default
 one-shot runner a message typed mid-run is queued and acted on when the turn ends.
 
+## How a turn ends
+
+Each turn ends with one quiet closing line that says how it ended, how long it took, the model it
+ran on (the short name, such as `sonnet`; the full id with `-v`) and the keys that open more:
+
+| Line | Meaning |
+|---|---|
+| `✓ Done in 3m32s` | Every goal was met. |
+| `~ Stopped before finishing · 1m29s` | The work ran and did not finish. |
+| `✗ Nothing ran` | The work could not start. A short note above says why, in plain words, and nothing is retried. |
+| `Paused at Claude Code's usage limit. It resets at 15:40 UTC.` | The subscription's limit was reached. The time is only ever one Claude Code reported; without one the line says it has not said when. |
+| `Waiting for your answer` | The AI asked a question. The question is the last thing on screen, from its speaker. |
+
+A plan that was written but never ran gets one automatic second try, with the reason on screen.
+There is never a third pass, and none after a start failure, a usage limit, a question or a pause.
+A failed model call is explained in a sentence, and your message is put back in the prompt box so
+Enter sends it again.
+
+The transcript follows the newest output. Scrolling up (PageUp, the wheel, the scrollbar) stops it
+following, so you can read in peace; scrolling back to the bottom makes it follow again.
+
 ## Keys
 
 | Key | What it does |
@@ -192,10 +213,10 @@ one-shot runner a message typed mid-run is queued and acted on when the turn end
 | Ctrl+L | Clear the screen. |
 | Enter | Send the message. |
 | Shift+Enter | New line. Where the terminal cannot tell Shift+Enter from Enter, use Ctrl+J, Alt+Enter, or type `\` before Enter. |
-| PageUp / PageDown | Scroll the transcript. |
+| PageUp / PageDown | Scroll the transcript. Scrolling up stops it following new output; scrolling back to the bottom resumes. |
 | Tab | Show the next deep agent's detail (or complete a command while the menu is open). |
 | Alt+D | Expand the running deep agent's detail. |
-| Alt+C | Show the context the last answer used. |
+| Alt+C | Show the context the last turn used (a deep run's, or the cards a short answer read). |
 
 Click and drag selects text without holding Shift; Ctrl+C copies it (over SSH too).
 

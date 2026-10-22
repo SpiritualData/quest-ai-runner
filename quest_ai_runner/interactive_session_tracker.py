@@ -69,15 +69,20 @@ class _DeepRunTracker:
             if run_id in self._runs and goal:
                 self._runs[run_id]['goal'] = goal
 
-    def update_run_output(self, run_id: str, text: str) -> None:
-        """Add output to a deep run's progress."""
+    def update_run_output(self, run_id: str, text: str, record: bool = True) -> None:
+        """Add output to a deep run's progress.
+
+        ``record=False`` is for a line that is only a sign of life (the worker's heartbeat): the live
+        dashboard shows it, but it is not one of the run's actions, so it never reaches the run's
+        record, the Alt+D replay or the activity roll-up."""
         with self._lock:
             if run_id in self._runs:
                 # Keep latest 10 lines of output for dashboard view
                 current = self._runs[run_id]['output']
                 lines = (current + '\n' + text).strip().split('\n')
                 self._runs[run_id]['output'] = '\n'.join(lines[-10:])
-                self._runs[run_id]['exec_lines'].append(text)
+                if record:
+                    self._runs[run_id]['exec_lines'].append(text)
 
     def set_run_status(self, run_id: str, status: str) -> None:
         """Update a run's status (running/done/error)."""

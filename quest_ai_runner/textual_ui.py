@@ -199,6 +199,8 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         max-height: 10;
     }
     #prompt:focus { border: tall $accent; }
+    /* The AI is waiting for an answer: its placeholder is the warning colour, not the faint hint. */
+    #prompt.-awaiting .text-area--placeholder { color: $warning; }
     """
 
     BINDINGS = [
@@ -285,6 +287,10 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         # mid-turn. Drives the prompt placeholder + a visually distinct rendering of the
         # question; cleared as soon as the user submits their next message.
         self._awaiting_decision: bool = False
+        # The question of that decision, written once as the last thing of the turn that raised it.
+        self.pending_question: str = ""
+        # What the person typed to start the turn, to put back in the prompt if the AI call fails.
+        self.retry_text: str = ""
 
         # When set, the next submitted line is a menu selection, not a turn.
         self._pending_select: Optional[Callable[[str], None]] = None
@@ -307,6 +313,15 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         self._pre_session_queue: List[str] = []
 
     # -- layout ----------------------------------------------------------------
+
+    def format_title(self, title: str, sub_title: str):
+        """The header line: ``<title> · <sub-title>``. Textual's own separator is a long dash,
+        which nothing this app shows may contain."""
+        from textual.content import Content
+        title_content = Content(title)
+        if not sub_title:
+            return title_content
+        return Content.assemble(title_content, (" · ", "dim"), Content(sub_title).stylize("dim"))
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
