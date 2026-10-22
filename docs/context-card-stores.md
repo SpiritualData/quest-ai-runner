@@ -418,31 +418,42 @@ keeps its cards there.
   files for a card first), never about every folder to have most of its cards refused; the other files
   wait, not "seen", and raising the limit (or a card moving out) indexes them. A full store asks the model
   nothing;
-- a new card learned from a run or written for a quest is admitted by moving the least valuable derived
-  card out (unused first, then least recently touched) to `_quarantine/limit/`, with a line in
-  `manifest.jsonl` there. Nothing is deleted. Only a card an index pass wrote and nobody has touched can
-  move (`card_origin.protection`): never one with notes or edits, quest tags, conventions, usage, an owner,
-  or a hand-written or learned origin. Each candidate is read again from disk, under the folder's lock,
-  just before it moves. When nothing can move, the card is admitted anyway and the notice says so;
+- a new card learned from a run or written for a quest, in a store that holds exactly its limit, is admitted
+  by moving the least valuable derived card out (unused first, then least recently touched) to
+  `_quarantine/limit/`, with a line in `manifest.jsonl` there. Nothing is deleted. Only a card an index pass
+  wrote and nobody has touched can move (`card_origin.protection`): never one with notes or edits, quest
+  tags, conventions, usage (the card's, or retrievals that rendered its files), an owner, a hand-written or
+  learned origin, or a summary, keywords or field somebody edited since the pass wrote the card. Each
+  candidate is read again from disk, under the folder's lock, just before it moves. When nothing can move,
+  the card is admitted anyway and the notice says so;
+- a store already ABOVE the limit moves nothing for a learned or quest card: swapping them one for one would
+  exchange the regenerable cards for learned ones for good. The card is admitted and counted as kept above the
+  limit, and the report says so. The limit never trims a store it finds above it; only the tidy of provable
+  duplicates (see below) or the cleanup script removes anything from it;
 - the folder's lock (`.store.lock`, `adapters/card_store_lock.py`) is shared by every process that changes
   the folder (the lanes, a terminal chat, a tidy), so four writers at the limit still end at the limit and
-  every move is counted once;
-- a store already above the limit when it opens is never trimmed by the limit. It gets the notice; only the
-  tidy of provable duplicates (see below) or the cleanup script removes anything from it.
+  every move is counted once. Nothing done while it is held is proportional to the size of the store: the
+  count is a listing of file names, remembered until the folder changes; the cold cards that may move are
+  chosen before the lock is taken and each is read again under it; the notice (which reads every card) is
+  built only after every lock is released. A turn never waits for it: the usage stamp in `assemble()` takes it
+  only if it is free and skips the stamp when another process holds it.
 
 **The notice**, once per process, when a pass that hit the limit ends (so it describes the store as it is),
 when a write is refused, or at open when the store is at or above the limit. On screen it is two warning
 lines that fit an 80 column terminal (the transcript shows the first sentence of a warning, cut to the
 window): the four counts on one line, then how to change the limit.
 
-    Context store full at 1,000: 812 topic, 150 imported, 30 learned, 8 quest
-    Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it.
+    Store full at 1,000: 812 topic, 150 imported, 30 learned, 8 quest
+    Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it
 
-A larger store shortens the first line step by step (`Store over limit 1,000 (1,430): ...`, then without
-thousands separators, then `12k`). The log carries the whole text: the biggest folders, where the report is,
-the variable, where a lane reads its environment from, and the way to put a moved card back. A startup
-callback gets the same two lines. A lane has no screen, so the first task that starts afterwards carries
-them as a status line on its live progress feed, once. The breakdown is also written to
+A larger store shortens the first line step by step (`Over limit 1,000 (1,430): ...`, then without thousands
+separators, then `12k` and `1.4M`, then shorter words): all four counts are always on it, within 72
+characters, at any size. The log carries the whole text: the biggest folders, where the report is, the
+variable, where a lane reads its environment from, and the way to put a moved card back. A startup callback
+gets the same two lines. A lane has no screen, so the first task that starts afterwards carries them as a
+status line on its live progress feed, once, as two sentences that say they are about the context store and
+not about the task ("About the context store, not this task: Store full at 1,000: ... . Set QAR_MAX_CARDS
+higher ..."). The breakdown is also written to
 `card_limit_report.md` in the store and printed by `quest-ai-runner cards report [--cards-dir DIR]`: counts
 by kind (topic cards by top-level folder, imports by source store, learned, managed, moved out), what the
 limit has refused or moved since it was reached, the coldest derived cards, and the ways to change the limit.
@@ -456,7 +467,10 @@ needs to know only the variable, that `0` means no limit, and which of those pla
 
 **Looking at what moved.** `<store>/_quarantine/<reason>/` holds each moved card as it was (reasons:
 `limit`, `compounded`, `duplicate-files`, `item-id`, `superseded-import`, and the ones the cleanup script
-adds); moving the file back into the store puts the card back.
+adds). Moving the file back into the store puts a card back that was only moved. A card whose notes, tags or
+usage were JOINED onto another card first (a protected copy, a stray `card:<id>`) is undone exactly with
+`quest-ai-runner cards tidy --undo <manifest>` (see below); moving such a file back by hand would leave what
+was joined on both cards.
 
 **Merging** a store into a wider one (`merge-into`) refuses, as a problem in its plan, to leave the wide
 store above its limit.
@@ -466,21 +480,33 @@ store above its limit.
 **The tidy at open.** A store built with `self_heal=True` (the runner's builder does) moves cards that are
 provably copies of other cards of the store out to `_quarantine/` before the index is built and at the end of
 a pass, paced so the first turn is not starved, and says "Tidied N duplicate context cards. They are kept in
-a folder and can be put back." once. What may never move is one definition, `card_origin.protection`: a card
-another system manages, a used card, one with notes or edits, quest tags or conventions, one learned from a
-run, and one with no provenance (a person wrote it). Of the rest, a compounded copy and an exact duplicate
+a folder and can be put back." once. The startup tidy costs a clean store one listing of file names: it plans
+nothing unless a name shows a vector point id (`card:<id>`) or an id that stacks import prefixes, and a plan
+is made from the cards the store has already parsed for its turns, so a large store is not read twice. The
+tidy after a pass that wrote cards plans in full. What may never move is one definition,
+`card_origin.protection`: a card another system manages, a used card (its `usage_count`, or retrievals that
+rendered its files), one with notes or edits, quest tags or conventions, one learned from a run, one with no
+provenance (a person wrote it), and one whose summary, keywords or any field changed since the index pass
+wrote it (the pass records `provenance.index_hash`; a card without one is judged as before). Of the rest, a compounded copy and an exact duplicate
 (the same files and the same name) move; the same files under a different name are two topics of one file,
 and both stay. A protected compounded copy, or a card stored under a vector point id (`card:<id>`), moves
 only after everything it holds is joined onto the card it stands for: notes by item id (of two items with one
-id, the newer by `ts`), quest tags as a union, usage added; a name, description or summary that differs
-cannot be joined, a card of another system is never folded, and a stray naming a card of another store is
-left, so those stay where they are and are counted ("left in place on purpose"). Each card is read again,
-under the folder's lock, just before it moves; one manifest line per move is appended as it happens
-(`_quarantine/<time>-<pid>-<random>-tidy-manifest.jsonl`, one file per process), and only one process
-tidies a folder at a time. A failure is logged as a warning with the trace.
+id, the newer by `ts`; two that differ with the same `ts` cannot be told apart), quest tags as a union, usage
+and the heat on the files added; a name, description or summary that differs cannot be joined, a card of
+another system is never folded, and a stray naming a card of another store is left, so those stay where they
+are and are counted ("left in place on purpose"). A join is done once: the card joined onto records the ids
+already joined (`provenance.joined_copies`), so a tidy killed between the join and the move does not count the
+copy's usage twice when it runs again. Each card is read again, under the folder's lock, just before it moves;
+one manifest line per move is appended as it happens (`_quarantine/<time>-<pid>-<random>-tidy-manifest.jsonl`,
+one file per process; it names the card that stands for the one moved and what was joined onto it), and only
+one process tidies a folder at a time. A failure is logged as a warning with the trace. An edit that comes
+for a card after it moved (a run's note) goes to the card that stands for it, a card the limit moved out
+comes back with the note, and one that can land nowhere is logged in full at WARNING.
 
 `quest-ai-runner cards tidy [--cards-dir DIR]` does the same by hand with what the package ships: a dry run
-that lists what would move and what stays and why, and `--apply` to move it. `scripts/quarantine_cards.py
+that lists what would move and what stays and why, and `--apply` to move it. `--undo MANIFEST` takes a tidy
+back: each card returns to the index and what was joined onto the card that stood for it is taken off again.
+`scripts/quarantine_cards.py
 --cards-dir DIR` (in the source tree) is the same classification plus the judgement calls (excluded folders,
 overlap, thin cards), a dry run until `--apply`; its output starts with the store's health: cards by kind, ids
 that stack import prefixes, cards pinning the same files, folders of the corpus, and, per reason, how many
@@ -730,7 +756,8 @@ records in `bootstrap_meta.json` are ignored in `copy` mode.
   and ranks by keywords only.
 - `quest-ai-runner cards report [--cards-dir DIR]` prints what fills a store, what its card limit has refused
   or moved, and how to change the limit (read only; `--write` also rewrites `card_limit_report.md` in the store).
-- `quest-ai-runner cards tidy [--cards-dir DIR] [--apply]` lists, or with `--apply` moves, the cards that are
-  provably copies; a card with notes, usage, quest tags or a hand-written origin is never moved.
+- `quest-ai-runner cards tidy [--cards-dir DIR] [--apply | --undo MANIFEST]` lists, or with `--apply` moves, the
+  cards that are provably copies; a card with notes, usage, quest tags or a hand-written origin is never moved.
+  `--undo` takes a tidy back, including what it joined onto the cards that stood for the ones it moved.
 - `quest-ai-runner reconcile-plan <quest_id>` compares a quest's plan with what happened and prints the
   changes it would make; `--write` applies them.
