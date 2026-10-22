@@ -63,6 +63,7 @@ from .card_content_render import (
     rank_content_by_recency_relevance as _rank_content_by_recency_relevance,
     tokenize as _tokenize,
 )
+from . import card_limit as card_limit_policy
 from .card_repository import CardRepository, FilesystemCardRepository
 from .card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
 from .card_store_mounts import MODE_MOUNT, Mount, MountedCardRepository, mount_mode_from_env
@@ -132,12 +133,14 @@ from .context_store_cards import CardsMixin
 from .context_store_assembly import AssemblyMixin
 from .context_store_bootstrap import BootstrapMixin
 from .context_store_bootstrap_walk import BootstrapWalkMixin
+from .context_store_heal import HealMixin
 
 
 
 
 @implementation("select-context", "file")
-class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, BootstrapWalkMixin, ContextAssemblerBase):
+class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, BootstrapWalkMixin, HealMixin,
+                       ContextAssemblerBase):
     """Stdlib-only ContextAssembler backed by per-card JSON files.
 
     Constructor args:
@@ -161,6 +164,15 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
                           (see ``_QUEST_FOLDER_BOOST``) so a run already known to be about that
                           quest grounds preferentially on its linked folder. Entries whose folder
                           isn't under ``repo_root`` are ignored (logged once at construction).
+      max_cards         -- the most cards this store holds before it stops adding derived ones (see
+                          ``card_limit``). ``None`` (the default) reads ``QAR_MAX_CARDS``, which is 1,000
+                          when unset; ``0`` means no limit. Applies to the default filesystem repository
+                          only: an injected repository (the Quest backend) keeps its own cards.
+      self_heal         -- when True, ``prewarm()`` and the end of an indexing pass move cards that are
+                          provably copies of other cards out of the index (``card_store_hygiene``;
+                          moved to ``_quarantine/``, never deleted), and a store holding more topic cards
+                          than its corpus has folders is not embedded. Default False; the runner's own
+                          builder (``config_assembler``) turns it on.
       reuse_nested_cards -- when True (default; env ``QAR_REUSE_NESTED_CARDS=0`` to disable),
                           ``bootstrap()``/``refresh_stale()`` reuse any sub-corpus that already has
                           its own completed bootstrap (a ``.quest-context/bootstrap_meta.json``
@@ -217,6 +229,8 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         quest_folder_map: Optional[Dict[str, str]] = None,
         reuse_nested_cards: Optional[bool] = None,
         mount_mode: Optional[str] = None,
+        max_cards: Optional[int] = None,
+        self_heal: bool = False,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         # Card PERSISTENCE is pluggable behind a CardRepository. Default: per-card JSON files under
@@ -253,6 +267,21 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
                 mounts=self.current_mounts,
             )
             self._repo = self._mounted_repo
+        # SELF-HEALING (see context_store_heal): off unless the builder asks. ``moving_ids`` holds the ids
+        # of cards being moved out right now; the loader leaves them out.
+        self.heal_enabled = bool(self_heal)
+        self.moving_ids: frozenset = frozenset()
+        self.tidy_lock = threading.Lock()
+        self.inflation_verdict: Optional[bool] = None
+        self.in_second_pass = False        # an indexing pass re-running itself once (see _bootstrap_walk)
+        # THE CARD LIMIT (see card_limit): one admission function every writer goes through, in
+        # ``_store_write``. A shared backend keeps its own cards, so only the local store is limited.
+        self.limit_guard = card_limit_policy.CardLimit(
+            str(cards_dir),
+            0 if card_repository is not None else (
+                max_cards if max_cards is not None else card_limit_policy.max_cards_from_env()),
+            repo=self._own_repo, cards=self._own_cards, revision=self._repo.revision,
+        )
         # Precompute {quest_id: repo-root-relative POSIX prefix} once, so per-assemble() lookup is
         # a plain dict get. A folder outside repo_root can't be matched against card file paths
         # (which are stored relative to repo_root), so such entries are dropped with a warning.

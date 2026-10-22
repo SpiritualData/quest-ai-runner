@@ -368,6 +368,64 @@ All environment variables (in a lane's `qar.toml` `[env]` table or its unit envi
 | `QAR_VECTOR_SPACE` | name of the vector server/collection this lane uses (must match the owners' `vector_space` to query their points) | unset |
 | `QAR_VECTOR_UNATTRIBUTED` | `1` serves pre-fence task associations that carry no `store_id` | off |
 | `QAR_REUSE_NESTED_CARDS` | `0` turns off copy-import in `copy` mode (unchanged) | on |
+| `QAR_MAX_CARDS` | the most cards one local store holds; `0` or `unlimited` for none (see [the card limit](#the-card-limit)) | `1000` |
+
+## The card limit
+
+A store holds at most `QAR_MAX_CARDS` cards (1,000 unless set; `0` or the word `unlimited` for no limit).
+The quarantine folder, the sidecars and the turn files do not count. A limit like this was tried and
+removed on 2026-10-05 because it refused to index without saying so and left a person to guess the number,
+so this one never acts silently. It applies to the default local folder store; a store on the Quest backend
+keeps its cards there.
+
+**At the limit**, one function (`CardLimit.admit`) answers every writer:
+
+- a card that already exists is refreshed in place, always;
+- a new derived card (a topic card or an import, regenerable from the corpus) is not written, and the
+  model is not asked to write cards it would have to refuse; the files wait, and raising the limit
+  indexes them;
+- a new card learned from a run or written for a quest is admitted by moving the least valuable derived
+  card out (unused first, then least recently touched) to `_quarantine/limit/`, with a line in
+  `manifest.jsonl` there. Nothing is deleted. When nothing derived can move, the card is admitted anyway
+  and the notice says so;
+- a store already above the limit when it opens is never trimmed by the limit. Only the tidy of provable
+  duplicates removes anything from it, and it gets the notice.
+
+**The notice**, once per process when the limit is first hit, or at open when the store is at or above
+it: three short lines on screen (the terminal shows a package WARNING as a dim line) and the whole text in
+the log. For example: "Your context store is full at 1000 cards, so new topic cards are not being added.
+It holds 620 topic cards (the biggest folders: a 340, b 190, c 120), 200 imported from other stores, 150
+learned from runs, 30 from quests. To allow more, set QAR_MAX_CARDS to a bigger number, or ask the AI:
+raise the QAR card limit to 2000." The breakdown is also written to `card_limit_report.md` in the store
+and printed by `quest-ai-runner cards report [--cards-dir DIR]`: counts by kind (topic cards by top-level
+folder, imports by source store, learned, managed, moved out), what the limit has refused or moved since it
+was reached, the coldest derived cards, and the ways to change the limit.
+
+**Changing it.** Set `QAR_MAX_CARDS=<number>` where the lane reads its environment, then restart the lane.
+A lane reads it from, strongest first: the process environment (the service unit's `Environment=` or
+`EnvironmentFile=`), the `.env` files named in `env_files` of its `qar.toml`, and the `[env]` table of that
+`qar.toml` (see [a lane is a config file](a-lane-is-a-config-file.md)); a terminal chat reads the shell
+environment. An AI that runs the lane can do this on request ("raise the QAR card limit to 2000"): it
+needs to know only the variable, that `0` means no limit, and which of those places this lane uses.
+
+**Looking at what moved.** `<store>/_quarantine/<reason>/` holds each moved card as it was (reasons:
+`limit`, `compounded`, `duplicate-files`, `item-id`, `superseded-import`, and the ones the cleanup script
+adds); moving the file back into the store puts the card back.
+
+**Merging** a store into a wider one (`merge-into`) refuses, as a problem in its plan, to leave the wide
+store above its limit.
+
+## Tidying a store: at open, and by hand
+
+The runner's own store opens with `self_heal`, which moves cards that are provably copies of other cards of
+the store (never a card another system manages, a used card or a card learned from a run, except a
+compounded copy that adds no notes) out to `_quarantine/` before the index is built, paced so the first turn
+is not starved, and says "Tidied N duplicate context cards. They are kept in a folder and can be put back."
+once. `scripts/quarantine_cards.py --cards-dir DIR` is the same classification plus the judgement calls
+(excluded folders, overlap, thin cards), a dry run until `--apply`; its output starts with the store's
+health: cards by kind, ids that stack import prefixes, cards pinning the same files, folders of the corpus,
+and, per reason, how many cards were created in the last 14 days (a card carries `provenance.created_at`
+from when it is first written; older cards have no date and are reported as such).
 
 ## A person who belongs to an org and also runs a personal lane
 
@@ -606,5 +664,7 @@ records in `bootstrap_meta.json` are ignored in `copy` mode.
   `--goal-id` ties it to a goal.
 - `quest-ai-runner search-context "<query>"` shows which cards a query selects; `--no-llm` skips the model
   and ranks by keywords only.
+- `quest-ai-runner cards report [--cards-dir DIR]` prints what fills a store, what its card limit has refused
+  or moved, and how to change the limit (read only; `--write` also rewrites `card_limit_report.md` in the store).
 - `quest-ai-runner reconcile-plan <quest_id>` compares a quest's plan with what happened and prints the
   changes it would make; `--write` applies them.

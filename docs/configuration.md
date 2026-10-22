@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-216 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+217 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -63,7 +63,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CLI_PLAN_THINKING_TOKENS` |  | `cli_config.py` | `docs/cheap-model-routing.md` |
 | `QAR_CONFIG_FILE` |  | `cli_config.py`, `config_environment.py` | `README.md`, `docs/chat.md`, `docs/writing-a-consumer.md` |
 | `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `config_core_settings.py`, `runner/lane.py` | `.env.example`, `docs/context-assembly.md` |
-| `QAR_CONTEXT_CARDS_DIR` |  | `cli_chat.py`, `cli_context.py` | `.env.example`, `docs/context-assembly.md` |
+| `QAR_CONTEXT_CARDS_DIR` |  | `cli_cards.py`, `cli_chat.py`, `cli_context.py` | `.env.example`, `docs/context-assembly.md` |
 | `QAR_CONTEXT_POLL_SECONDS` |  | `cli_config.py` | `docs/quest-api-contract.md` |
 | `QAR_CONTEXT_PREAMBLE` |  | `cli_config.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_CONTEXT_PREAMBLE_FILE` |  | `cli_config.py` | `docs/a-lane-is-a-config-file.md`, `docs/tutorial-your-first-lane.md`, `docs/writing-a-consumer.md` |
@@ -71,7 +71,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS` |  | `cli_config.py` | `docs/context-updates.md` |
 | `QAR_CONTEXT_UPDATES_STATE_PATH` |  | `cli_config.py` | `docs/context-updates.md` |
 | `QAR_CONVERSATION_SEARCH` | false/0/off disables searching past conversations as context. | `cli_config.py` | - |
-| `QAR_CORPUS_ROOT` |  | `cli_chat.py`, `cli_config.py`, `cli_context.py` +1 | `README.md`, `.env.example`, `docs/chat.md` +5 |
+| `QAR_CORPUS_ROOT` |  | `cli_cards.py`, `cli_chat.py`, `cli_config.py` +2 | `README.md`, `.env.example`, `docs/chat.md` +5 |
 | `QAR_DAILY_TOKEN_LIMIT` |  | `usage.py` | `.env.example` |
 | `QAR_DAILY_USAGE_PATH` |  | `interactive_session_status.py`, `usage.py` | `.env.example` |
 | `QAR_DECISION_ASSIGNEE` |  | `cli_config.py`, `config_environment.py` | `README.md`, `.env.example`, `docs/a-lane-is-a-config-file.md` +3 |
@@ -119,6 +119,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_LANE_USER_ID` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_LINK_GUARD` |  | `cli_config.py` | `docs/link-guard.md` |
 | `QAR_LINK_POLICY_FILE` |  | `cli_config.py`, `config_core_settings.py` | `.env.example`, `docs/link-guard.md` |
+| `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `adapters/card_limit.py` | `.env.example` |
 | `QAR_MAX_LOAD_PER_CORE` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MAX_MEMORY_PERCENT` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MAX_PARALLEL` |  | `adapters/context_bootstrap_support.py`, `cli_config.py` | `docs/a-lane-is-a-config-file.md` |

@@ -8,6 +8,7 @@ import heapq
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
+from . import card_origin
 from .card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
 from .card_content_render import (
     dedupe_content as _dedupe_content,
@@ -206,6 +207,9 @@ class CardsMixin:
             if self.is_mounted_card(card_id):
                 _log.warning("write_card refused: %s belongs to a mounted store (read-only)", card_id)
                 return False
+            if self._cache is not None:
+                # The listing in hand says whether this id is new here; without one the date is not guessed.
+                card_origin.stamp_created_at(card, self._cache.get(card_id))
             self._write_card_atomic(card_id, card)
             return True
         except Exception:  # noqa: BLE001
@@ -312,6 +316,9 @@ class CardsMixin:
         ``scope_tags`` -- a pure addition, so it is safe even for a managed card (nothing is ever
         removed): a card touched from a turn scoped to a new quest becomes visible to that quest too.
         """
+        # A vector point id (``card:<id>``) names the card it stands for. Written under its own name
+        # it would be a second card, next to the one the edit was meant for.
+        card_id = card_origin.card_id_of_item(card_id)
         if self.is_mounted_card(card_id):
             # A mounted store is read-only here: its owner keeps its cards. Never an error for the
             # caller (the post-deep updater may have been shown a mounted card), just not written.
@@ -385,6 +392,7 @@ class CardsMixin:
 
         # 4) recency trim + persist
         card["content"] = _trim_content_by_recency(content)
+        card_origin.stamp_created_at(card, loaded if isinstance(loaded, dict) else None)
         self._write_card_atomic(card_id, card)
         return not self._dry_run
 
@@ -477,6 +485,8 @@ class CardsMixin:
         outcome_scope_tags = outcome.get("scope_tags")
         if outcome_scope_tags:
             card["scope_tags"] = union_scope_tags(card.get("scope_tags"), outcome_scope_tags)
+
+        card_origin.stamp_created_at(card, loaded if isinstance(loaded, dict) else None)
 
         # Persist via the repository (skip if dry-run mode). Re-raise on failure so the outer
         # try/except in record() catches it; the cache is invalidated so assemble() sees the card.
@@ -572,6 +582,8 @@ class CardsMixin:
             # arm of a HybridContextAssembler) before the keyword arm has had a chance
             # to call assemble() and trigger its own auto-bootstrap.
             self._maybe_auto_bootstrap()
+            if self.inflated():
+                return []     # never embed or sync an inflated store (see context_store_heal)
             # OWN cards only. A mounted store's cards are embedded by their owner; a reader that
             # exported them would embed every card once per corpus that mounts it.
             cards = self._own_cards()
@@ -658,10 +670,13 @@ class CardsMixin:
         - the repository's ``revision()`` change-stamp changed (external write).
         """
         current_stamp = self._repo.revision()
+        moving = self.moving_ids
         need_reload = (
             self._cache is None
             or self._cache_dirty
-            or current_stamp != self._cache_dir_stamp
+            # While a tidy moves cards out, every move changes the stamp: keep the snapshot already
+            # held (which leaves the moving cards out) instead of reloading the store after each one.
+            or (current_stamp != self._cache_dir_stamp and not moving)
         )
         if not need_reload:
             return self._cache  # type: ignore[return-value]
@@ -672,9 +687,10 @@ class CardsMixin:
         with self._load_lock:
             current_stamp = self._repo.revision()
             if (self._cache is not None and not self._cache_dirty
-                    and current_stamp == self._cache_dir_stamp):
+                    and (current_stamp == self._cache_dir_stamp or moving)):
                 return self._cache
             self._cache_dirty = False
             self._cache_dir_stamp = current_stamp
-            self._cache = self._repo.load_all()
+            loaded = self._repo.load_all()
+            self._cache = {cid: c for cid, c in loaded.items() if cid not in moving} if moving else loaded
             return self._cache

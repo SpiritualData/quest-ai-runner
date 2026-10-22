@@ -20,12 +20,14 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
+from unittest.mock import MagicMock
 
 from quest_ai_runner.adapters.card_repository import (
     QUARANTINE_DIR_NAME,
     FilesystemCardRepository,
 )
 from quest_ai_runner.adapters.file_context_store import (
+    FileContextStore,
     apply_card_ceilings,
     card_folder_key,
     card_is_too_thin,
@@ -40,6 +42,14 @@ from quest_ai_runner.adapters.file_context_store import (
     _is_excluded_folder,
     effective_skip_dirs,
 )
+
+
+def topic_provider(topics):
+    """A fake model whose answer is the topics as JSON."""
+    provider = MagicMock()
+    provider.list_models.return_value = []
+    provider.answer.return_value = json.dumps(topics)
+    return provider
 
 
 def make_card(card_id: str, files: List[str], **fields: Any) -> Dict[str, Any]:
@@ -367,12 +377,39 @@ class TestCardCeilings:
                  for i in range(40)]
         assert len(apply_card_ceilings(cards, [])) == 40
 
-    def test_a_store_full_of_cards_still_indexes_a_new_folder(self):
-        # The failure the removed budget caused: a store that came out of a cleanup holding more
-        # cards than the budget allowed could never card anything new again.
+    def test_the_ceilings_themselves_never_look_at_how_many_cards_the_store_holds(self):
+        # The ceilings are about folders, and only folders: a store that holds 500 cards still admits a
+        # card for a folder nobody has carded. The card COUNT is the card limit's business, one place
+        # (adapters/card_limit.py), because the failure the removed budget caused (2026-10-05) was a count
+        # buried in the ceilings that refused silently, for ever, and left a person to guess the number.
         existing = [make_card(f"old{i}", [f"old{i}/a.py", f"old{i}/b.py"]) for i in range(500)]
         fresh = [make_card("new", ["new/a.py", "new/b.py"])]
         assert [c["id"] for c in apply_card_ceilings(fresh, existing)] == ["new"]
+
+    def test_a_full_store_refuses_a_new_folder_and_says_so(self, tmp_path, caplog):
+        # What is true now: the owner's number (QAR_MAX_CARDS, 1,000 unless set) is enforced where cards
+        # are written, a new folder is refused, and the refusal is ANNOUNCED with what fills the store and
+        # how to change the limit, so it is never the silent permanent refusal that was removed.
+        from quest_ai_runner.adapters import card_limit
+        card_limit.reset_announcements()
+        repo = tmp_path / "repo"
+        (repo / "pkg").mkdir(parents=True)
+        for n in ("a.py", "b.py"):
+            (repo / "pkg" / n).write_text("x = 1\n", encoding="utf-8")
+            for i in range(3):                       # the files the three old cards pin are real
+                (repo / f"old{i}").mkdir(exist_ok=True)
+                (repo / f"old{i}" / n).write_text("y = 2\n", encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False, max_cards=3)
+        for i in range(3):
+            assert FilesystemCardRepository(str(cards_dir)).write(
+                f"old{i}", make_card(f"old{i}", [f"old{i}/a.py", f"old{i}/b.py"]))
+        one = [{"id": "pkg", "name": "Pkg", "keywords": ["pkg"], "summary": "The package.",
+                "files": ["pkg/a.py", "pkg/b.py"]}]
+        with caplog.at_level(logging.WARNING, logger="quest-ai-runner.card-limit"):
+            assert store.bootstrap(root=str(repo), provider=topic_provider(one)) == 0
+        assert sorted(FilesystemCardRepository(str(cards_dir)).load_all()) == ["old0", "old1", "old2"]
+        assert "Your context store is full at 3 cards" in caplog.text and "QAR_MAX_CARDS" in caplog.text
 
     def test_existing_cards_hold_their_own_folder(self):
         existing = [make_card("already", ["app/one.py", "app/two.py"])]

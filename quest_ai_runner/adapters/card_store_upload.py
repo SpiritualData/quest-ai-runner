@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
+from . import card_origin
 from . import card_store_identity as ident
 from .card_repository import FilesystemCardRepository
 from .card_store_merge import item_id
@@ -33,6 +34,7 @@ from .quest_api_card_repository import BULK_MAX_CARDS, runner_env_id, strip_serv
 
 REASON_IMPORTED = "namespaced copy-import: the source store uploads them"
 REASON_NO_ID = "no usable card id"
+REASON_REFUSED_ID = "an id that may never be stored (it repeats an import namespace or is a vector point id)"
 ANCESTOR_PREFIX = ".."
 
 
@@ -104,18 +106,23 @@ def plan_upload(
         prov = card.get("provenance")
         imported_from = str(prov.get("imported_from") or "") if isinstance(prov, dict) else ""
         adopt = bool(imported_from) and adopt_ancestor_copies and imported_from.startswith(ANCESTOR_PREFIX)
-        if imported_from and not adopt:
+        if (imported_from or card_origin.is_copy(card)) and not adopt:
             plan.skipped.setdefault(REASON_IMPORTED, []).append(card_id)
             continue
         if not str(card_id).strip():
             plan.skipped.setdefault(REASON_NO_ID, []).append(card_id)
+            continue
+        if card_origin.card_id_problem(str(card_id)):
+            plan.skipped.setdefault(REASON_REFUSED_ID, []).append(card_id)
             continue
         body = strip_server_owned(card)
         body["id"] = str(card.get("id") or card_id)
         body.pop("team_id", None)          # the request's scope decides, never a stale field
         body.pop("org_id", None)
         if adopt:
-            adopted_prov = {k: v for k, v in prov.items() if k != "imported_from"}
+            adopted_prov = {k: v for k, v in prov.items()
+                            if k not in ("imported_from", card_origin.ORIGIN_STORE, card_origin.ORIGIN_ID,
+                                         card_origin.ORIGIN_ROOT)}
             adopted_prov["adopted_from"] = imported_from
             body["provenance"] = adopted_prov
             plan.adopted.append(str(card_id))

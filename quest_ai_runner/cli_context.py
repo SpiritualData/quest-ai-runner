@@ -491,32 +491,11 @@ def _cmd_paste_context(args, log) -> int:
     if args.goal_id:
         card["goal_id"] = args.goal_id
 
-    # Ensure cards directory exists
-    Path(cards_dir).mkdir(parents=True, exist_ok=True)
-
-    # Write card atomically
+    # Write through the card repository, the one place that refuses an id that may never be stored.
+    from .adapters.card_repository import FilesystemCardRepository
     card_path = Path(cards_dir) / f"{card_id}.json"
-    try:
-        tmp_fd, tmp_path = __import__("tempfile").mkstemp(
-            dir=str(cards_dir),
-            prefix=".tmp_",
-            suffix=".json"
-        )
-        from .core.file_modes import match_umask
-        match_umask(tmp_fd)  # mkstemp makes 0600; another account sharing the corpus must read it
-        try:
-            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-                json.dump(card, fh, indent=2, ensure_ascii=False)
-                fh.write("\n")
-            os.replace(tmp_path, str(card_path))
-        except Exception:  # noqa: BLE001
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
-    except Exception as e:  # noqa: BLE001
-        log.error("failed to write card: %s", e)
+    if not FilesystemCardRepository(str(cards_dir)).write(card_id, card):
+        log.error("failed to write card %s (see the error above if the id was refused)", card_id)
         return 1
 
     print(f"Saved to {card_path}")

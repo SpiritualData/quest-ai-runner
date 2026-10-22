@@ -58,6 +58,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
+from . import card_limit, card_origin
 from .card_repository import QUARANTINE_DIR_NAME, FilesystemCardRepository
 from .card_store_mounts import copy_origin_root
 from .card_store_identity import (
@@ -278,8 +279,13 @@ def same_bytes(a: Path, b: Path) -> bool:
 
 
 def plan_merge(narrow_dir: str, wide_dir: str, *, vector_store: Any = None,
-               prune_source: bool = False) -> MergePlan:
-    """What merging ``narrow_dir`` into ``wide_dir`` would do. Reads only (and reads points)."""
+               prune_source: bool = False, max_cards: Optional[int] = None) -> MergePlan:
+    """What merging ``narrow_dir`` into ``wide_dir`` would do. Reads only (and reads points).
+
+    ``max_cards`` is the wide store's card limit (``None``: ``QAR_MAX_CARDS``; ``0``: none). A merge
+    that would leave the wide store above it is a problem, so nothing is applied: the cards would
+    be written around the limit that every other writer answers to.
+    """
     narrow_meta = read_meta(narrow_dir)
     wide_meta = read_meta(wide_dir)
     plan = MergePlan(narrow_dir=str(narrow_dir), wide_dir=str(wide_dir), prune_source=prune_source,
@@ -316,21 +322,29 @@ def plan_merge(narrow_dir: str, wide_dir: str, *, vector_store: Any = None,
     narrow_cards = FilesystemCardRepository(narrow_dir).load_all()
     wide_cards = FilesystemCardRepository(wide_dir).load_all() if wide_meta else {}
     taken = set(wide_cards)
+    wide_by_files: Dict[frozenset, str] = {}
     for wide_id, wide_card in sorted(wide_cards.items()):
         origin = copy_origin_root(wide_card, plan.wide_root)
-        if origin is not None and os.path.realpath(origin) == os.path.realpath(plan.narrow_root):
+        if (origin is not None and os.path.realpath(origin) == os.path.realpath(plan.narrow_root)) \
+                or card_origin.provenance_of(wide_card).get(card_origin.ORIGIN_STORE) == plan.narrow_store_id:
             plan.wide_copies.append(wide_id)
+        elif not card_origin.is_copy(wide_card) and card_origin.file_set(wide_card):
+            wide_by_files.setdefault(card_origin.file_set(wide_card), wide_id)
     plan.wide_item_ids = {item_id(plan.wide_scheme, plan.wide_store_id or PLACEHOLDER_STORE_ID, cid)
                           for cid in wide_cards}
     for old_id in sorted(narrow_cards):
         card = narrow_cards[old_id]
-        prov = card.get("provenance")
-        if isinstance(prov, dict) and prov.get("imported_from"):
+        if card_origin.is_copy(card):
             plan.skipped_copies += 1
             continue
         incoming = moved_card(card, old_id, rel, plan.narrow_store_id)
         existing = wide_cards.get(old_id)
-        if existing is None:
+        same_files = wide_by_files.get(card_origin.file_set(incoming))
+        if same_files is not None:
+            # The wide store already has a card of its own pinning exactly these files (it carded
+            # them before the narrow store existed): two cards pinning the same paths are one card.
+            plan.moves.append(CardMove(old_id, same_files, STATUS_ALREADY, incoming))
+        elif existing is None:
             plan.moves.append(CardMove(old_id, old_id, STATUS_MOVE, incoming))
             taken.add(old_id)
         elif is_same_card(existing, incoming, plan.narrow_store_id, old_id):
@@ -346,6 +360,13 @@ def plan_merge(narrow_dir: str, wide_dir: str, *, vector_store: Any = None,
                 plan.moves.append(CardMove(old_id, new_id, STATUS_ALREADY, incoming))
             else:
                 plan.moves.append(CardMove(old_id, new_id, STATUS_UNRESOLVED, incoming))
+    limit = card_limit.max_cards_from_env() if max_cards is None else max_cards
+    arriving = plan.count(STATUS_MOVE, STATUS_RENAMED)
+    leaving = len(plan.wide_copies) if prune_source else 0
+    if limit and len(wide_cards) + arriving - leaving > limit:
+        plan.problems.append(
+            f"the wide store would hold {len(wide_cards) + arriving - leaving:,} cards after the merge, over "
+            f"its limit of {limit:,} ({card_limit.ENV_MAX_CARDS}); raise the limit first, or tidy the wide store")
     for mv in plan.moves:
         if mv.status in (STATUS_MOVE, STATUS_RENAMED):
             for p in card_paths(mv.card):
@@ -472,15 +493,16 @@ def record_merge_in_wide(plan: MergePlan) -> bool:
 
 
 def apply_merge(narrow_dir: str, wide_dir: str, *, vector_store: Any = None,
-                prune_source_after: bool = False) -> MergePlan:
+                prune_source_after: bool = False, max_cards: Optional[int] = None) -> MergePlan:
     """Carry out the merge (see the module docstring for the order). Idempotent."""
-    plan = plan_merge(narrow_dir, wide_dir, prune_source=prune_source_after)
+    plan = plan_merge(narrow_dir, wide_dir, prune_source=prune_source_after, max_cards=max_cards)
     if plan.problems:
         return plan
     if not prepare_wide(plan):
         plan.problems.append("could not create or update the wide store's bootstrap_meta.json")
         return plan
-    plan = plan_merge(narrow_dir, wide_dir, vector_store=vector_store, prune_source=prune_source_after)
+    plan = plan_merge(narrow_dir, wide_dir, vector_store=vector_store, prune_source=prune_source_after,
+                      max_cards=max_cards)
     if plan.problems:
         return plan
 

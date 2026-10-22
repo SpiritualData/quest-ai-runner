@@ -48,6 +48,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
 from esoi import implementation
+from . import card_origin
 
 _log = logging.getLogger("quest-ai-runner.quest_api_cards")
 
@@ -551,6 +552,8 @@ class QuestApiCardRepository:
 
     def write(self, card_id: str, card: Dict[str, Any]) -> bool:
         """Upsert a card (to its team scope, or privately). True on success; False, loudly, on failure."""
+        if card_origin.refuse(card_id):
+            return False
         scope = self._write_scope(card_id, card)
         try:
             enriched = _enrich_card(card, self.user_id, self.team_id or scope[0])
@@ -778,9 +781,12 @@ class QuestApiCardRepository:
         else:
             org_scope = org_id or ""
             team_scope = "" if org_scope else (self.team_id if team_id is None else team_id)
-        pairs = [(str(cid), strip_server_owned(c)) for cid, c in cards]
-        totals = {"written": 0, "embedded": 0, "vectors_accepted": 0, "vectors_rejected": 0, "failed": 0}
-        failed: List[str] = []
+        cards = list(cards)
+        refused = [str(cid) for cid, _ in cards if card_origin.refuse(str(cid))]
+        pairs = [(str(cid), strip_server_owned(c)) for cid, c in cards if str(cid) not in refused]
+        totals = {"written": 0, "embedded": 0, "vectors_accepted": 0, "vectors_rejected": 0,
+                  "failed": len(refused)}
+        failed: List[str] = list(refused)
         errors: List[str] = []
         batches = 0
         for start in range(0, len(pairs), BULK_MAX_CARDS):

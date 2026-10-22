@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 from esoi import implementation
 from ..core.file_modes import match_umask
+from . import card_origin
 
 # Name of the bootstrap meta sidecar written next to cards on the filesystem. The filesystem repo
 # ignores it when enumerating cards (it is store meta-state, not a card). Kept in sync with
@@ -252,8 +253,11 @@ class FilesystemCardRepository:
         """Atomically upsert ``card`` (temp file + ``os.replace``). Returns ``True`` on success.
 
         Creates ``cards_dir`` on first write. On any failure the temp file is cleaned up and
-        ``False`` is returned (never raises).
+        ``False`` is returned (never raises). An id that may never be stored (``card_origin.refuse``)
+        is logged at ERROR and returns ``False``.
         """
+        if card_origin.refuse(card_id):
+            return False
         try:
             self._cards_dir.mkdir(parents=True, exist_ok=True)
             tmp_fd, tmp_path = tempfile.mkstemp(
@@ -286,6 +290,29 @@ class FilesystemCardRepository:
                 return True
             except OSError:
                 return False
+        except Exception:  # noqa: BLE001
+            return False
+
+    def quarantine(self, card_id: str, reason: str) -> bool:
+        """MOVE the card into ``<cards_dir>/_quarantine/<reason>/`` instead of deleting it.
+
+        The index ignores that folder, so the card leaves the store, and moving the file back puts it
+        back. A name already taken there gets a numeric suffix, so nothing is overwritten. Returns
+        ``True`` when no card remains at the old place; never raises.
+        """
+        try:
+            source = self._card_path(card_id)
+            if not source.exists():
+                return True
+            target_dir = self._cards_dir / QUARANTINE_DIR_NAME / reason
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target = target_dir / source.name
+            suffix = 1
+            while target.exists():
+                target = target_dir / f"{source.stem}.{suffix}.json"
+                suffix += 1
+            os.replace(str(source), str(target))
+            return True
         except Exception:  # noqa: BLE001
             return False
 

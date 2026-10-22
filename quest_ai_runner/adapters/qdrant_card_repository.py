@@ -58,6 +58,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
 from ..core.adapters import VectorHit, VectorStoreBase
+from . import card_origin
 from .card_repository import card_embed_text
 
 logger = logging.getLogger(__name__)
@@ -291,6 +292,8 @@ class QdrantCardRepository:
         the full card plus the scope key/values, ``card_id``, ``_search_text`` and ``updated_at``.
         Embedding happens HERE (once) via the injected document ``embedder``. Never raises.
         """
+        if card_origin.refuse(card_id):
+            return False
         try:
             if not isinstance(card, dict):
                 return False

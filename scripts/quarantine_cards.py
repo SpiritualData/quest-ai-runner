@@ -36,6 +36,13 @@ what already happened, for the ways it happened:
                   ``--covered-by``. ``--covered-prefix-strip PATH`` drops a leading folder from
                   paths before comparing, when one store is rooted a level above the other.
 
+The classification of what is PROVABLY a copy (compounded ids, cards pinning the same files) and which cards
+are protected lives in ``quest_ai_runner/adapters/card_store_hygiene.py`` and ``card_origin.py``; the runner's
+own store applies the provable part when it opens, so this tool is for the judgement calls above and for
+looking at a store: a dry run starts with the store's health (cards by kind, ids that stack import prefixes,
+cards pinning the same files, the corpus's folders) and shows, per reason, how many of the cards it would move
+were created in the last 14 days.
+
 NOTHING IS DELETED. Every card moves to ``<cards_dir>/_quarantine/<reason>/`` and the card store
 ignores that directory, so the index shrinks and a wrong call is undone by moving files back. The
 run is a DRY RUN unless ``--apply`` is passed, and it always writes a manifest naming every card
@@ -73,7 +80,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from quest_ai_runner.adapters.card_origin import compounding_evidence  # noqa: E402,F401  (re-exported)
 from quest_ai_runner.adapters.card_repository import QUARANTINE_DIR_NAME  # noqa: E402
+from quest_ai_runner.adapters.card_store_hygiene import (  # noqa: E402,F401  (re-exported)
+    card_paths,
+    jaccard,
+    keeper_rank,
+    name_match_score,
+    name_tokens,
+    protection_reason as is_protected,
+    render_health_report,
+)
 from quest_ai_runner.adapters.file_context_store import (  # noqa: E402
     _FILE_SET_DEDUP_JACCARD,
     _has_kept_child,
@@ -84,7 +101,6 @@ from quest_ai_runner.adapters.file_context_store import (  # noqa: E402
 
 ALL_REASONS = ("compounded", "excluded", "surplus", "thin", "covered")
 DEFAULT_REASONS = ("compounded", "excluded", "surplus", "thin")
-NAMESPACE_PREFIX = re.compile(r"^(?:[a-z0-9]+-)+[0-9a-f]{6}$")
 SKIP_FILES = {"bootstrap_meta.json", "folder_review.json"}
 
 
@@ -105,16 +121,6 @@ def load_cards(cards_dir: Path) -> List[Tuple[Path, Dict[str, Any]]]:
             continue
         if isinstance(card, dict):
             out.append((entry, card))
-    return out
-
-
-def card_paths(card: Dict[str, Any]) -> List[str]:
-    """A card's file entries as plain strings, in either stored shape."""
-    out: List[str] = []
-    for entry in card.get("files") or []:
-        value = entry.get("path", "") if isinstance(entry, dict) else entry
-        if value:
-            out.append(str(value).replace("\\", "/"))
     return out
 
 
@@ -163,70 +169,6 @@ def under_any_prefix(rel: str, prefixes: List[str]) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # The four reasons
 # ---------------------------------------------------------------------------
-def compounding_evidence(card_id: str) -> str:
-    """Why this id is a compounded import copy, or "" when it is not.
-
-    Two shapes, both provable from the id alone. An import namespaces the imported card's id with
-    the source root's path, so a chain of imports leaves a chain of namespace segments: a repeated
-    segment means the same root appears twice in one id, and an interior ``root-`` hop means a
-    store imported another store's own imports. Two or more namespace prefixes (``<words>-<6 hex>``
-    segments before the topic) mean the card was imported more than once. A single leading
-    namespace is a legitimate one-level import and is NOT evidence.
-    """
-    segments = [s for s in str(card_id or "").split("--") if s]
-    if len(segments) < 2:
-        return ""
-    for segment in segments[1:]:
-        if segment.startswith("root-"):
-            return "interior root- import hop"
-    seen: Set[str] = set()
-    for segment in segments:
-        if segment in seen:
-            return f"namespace segment repeated ({segment})"
-        seen.add(segment)
-    prefixes = [s for s in segments[:-1] if NAMESPACE_PREFIX.match(s)]
-    if len(prefixes) >= 2:
-        return f"{len(prefixes)} import namespace prefixes ({', '.join(prefixes)})"
-    return ""
-
-
-def name_tokens(text: str) -> Set[str]:
-    """Lowercase alphanumeric words of ``text`` (two letters or more)."""
-    return {t for t in re.split(r"[^a-z0-9]+", str(text or "").lower()) if len(t) >= 2}
-
-
-def name_match_score(card: Dict[str, Any]) -> float:
-    """How well a card's name and keywords match the words in its file and folder names.
-
-    The share of the card's name/keyword words found among the words of its files' basenames and
-    parent folders, from 0.0 to 1.0. Pure: reads only the card.
-    """
-    keywords = card.get("keywords") or []
-    if isinstance(keywords, str):
-        keywords = [keywords]
-    own = name_tokens(card.get("name", ""))
-    for keyword in keywords:
-        own |= name_tokens(keyword)
-    if not own:
-        return 0.0
-    seen: Set[str] = set()
-    for rel in card_paths(card):
-        seen |= name_tokens(rel)
-    return len(own & seen) / len(own)
-
-
-def keeper_rank(card: Dict[str, Any], fallback_id: str) -> Tuple[Any, ...]:
-    """Sort key for surplus candidates; the first one sorted is kept."""
-    try:
-        usage = int(card.get("usage_count") or 0)
-    except (TypeError, ValueError):
-        usage = 0
-    provenance = card.get("provenance")
-    created = str(provenance.get("created_at") or "") if isinstance(provenance, dict) else ""
-    return (-usage, -name_match_score(card), created or "\uffff",
-            str(card.get("id") or fallback_id))
-
-
 def strip_prefix(rel: str, prefixes: List[str]) -> str:
     """``rel`` without the first leading prefix folder it sits under."""
     for prefix in prefixes:
@@ -234,35 +176,6 @@ def strip_prefix(rel: str, prefixes: List[str]) -> str:
         if head and rel.startswith(head + "/"):
             return rel[len(head) + 1:]
     return rel
-
-
-def is_protected(card: Dict[str, Any]) -> str:
-    """Why this card must not be moved, or "" when it may be.
-
-    ``managed_by`` is absolute: another system owns the card and rewrites it from its own source
-    of truth, so moving it achieves nothing except breaking that system. Usage and non-bootstrap
-    provenance mean a human or a run put something here that no file can regenerate.
-    """
-    if card.get("managed_by"):
-        return "managed by another system"
-    try:
-        if int(card.get("usage_count") or 0) > 0:
-            return "has been used"
-    except (TypeError, ValueError):
-        pass
-    provenance = card.get("provenance")
-    created_by = ""
-    if isinstance(provenance, dict):
-        created_by = str(provenance.get("created_by_task") or "")
-    if created_by and created_by != "bootstrap":
-        return f"provenance {created_by}"
-    return ""
-
-
-def jaccard(a: Set[str], b: Set[str]) -> float:
-    if not a or not b:
-        return 0.0
-    return len(a & b) / len(a | b)
 
 
 def plan(
@@ -289,6 +202,8 @@ def plan(
             "file": path.name,
             "files": len(card_paths(card)),
             "usage_count": card.get("usage_count", 0),
+            "created_at": str((card.get("provenance") or {}).get("created_at") or "")
+            if isinstance(card.get("provenance"), dict) else "",
         })
         decided.add(path)
         moved_reason[path] = reason
@@ -576,6 +491,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="file-set overlap at which two cards count as the same card")
     parser.add_argument("--manifest", default=None,
                         help="where to write the manifest (default: inside the quarantine dir)")
+    parser.add_argument("--root", default=None, metavar="DIR",
+                        help="the corpus root this store indexes, to count its folders in the health "
+                             "table (default: the root the store recorded)")
     args = parser.parse_args(argv)
 
     cards_dir = Path(os.path.expanduser(args.cards_dir)).resolve()
@@ -611,6 +529,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                            covered_by=covered_stores, strip_prefixes=args.covered_prefix_strip)
 
     print_report(cards_dir, len(cards), entries, skipped, excluded, args.apply)
+    print("")
+    print(render_health_report(cards_dir, entries, root=Path(os.path.expanduser(args.root)).resolve()
+                               if args.root else None))
 
     if args.apply and entries:
         moved, failed = move_entries(cards_dir, entries)

@@ -1,0 +1,277 @@
+[
+ {
+  "id": "CSG-01",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 0,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-02",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 1,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-03",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 2,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-04",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 3,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-05",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 5,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-06",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 6,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-07",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 9,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-08",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 24,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-09",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 28,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-10",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 36,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  }
+ },
+ {
+  "id": "CSG-11",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 41,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "CSG-12",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 43,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "CSG-13",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 47,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "CSG-14",
+  "area": "random-world",
+  "kind": "fuzz",
+  "args": {
+   "seed": 52,
+   "steps": 20
+  },
+  "expect": {
+   "eq": {
+    "violations": 0
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "CSG-15",
+  "area": "legacy-store",
+  "kind": "legacy",
+  "args": {
+   "with_provenance": true
+  },
+  "expect": {
+   "eq": {
+    "excess": 0,
+    "kept_on_disk": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-16",
+  "area": "legacy-store",
+  "kind": "legacy",
+  "args": {
+   "with_provenance": false
+  },
+  "expect": {
+   "eq": {
+    "excess": 0,
+    "kept_on_disk": 1
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "CSG-17",
+  "area": "card-limit",
+  "kind": "limit",
+  "args": {
+   "folders": 9,
+   "limit": 4,
+   "passes": 3
+  },
+  "expect": {
+   "eq": {
+    "at_or_below_limit": 1,
+    "notice_with_breakdown": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-18",
+  "area": "card-limit",
+  "kind": "limit_learned",
+  "args": {
+   "limit": 4
+  },
+  "expect": {
+   "eq": {
+    "total_at_limit": 1,
+    "nothing_deleted": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-19",
+  "area": "card-limit",
+  "kind": "limit_open",
+  "args": {
+   "cards": 9,
+   "limit": 4
+  },
+  "expect": {
+   "eq": {
+    "notice_with_breakdown": 1,
+    "nothing_removed": 1
+   }
+  },
+  "heldout": true
+ }
+]

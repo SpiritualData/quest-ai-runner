@@ -189,6 +189,19 @@ def _build_parser() -> argparse.ArgumentParser:
                        help="TOML config file (see docs/writing-a-consumer.md); QAR_CONFIG_FILE "
                             "also works. Environment variables always win over the file.")
 
+    # --- cards subcommand: look at a context card store ----------------------------
+    cards_p = sub.add_parser(
+        "cards", help="look at a context card store: `cards report` says what fills it, what its card "
+                      "limit (QAR_MAX_CARDS) has done, and how to change the limit")
+    cards_sub = cards_p.add_subparsers(dest="cards_op", required=True)
+    report_p = cards_sub.add_parser("report", help="print the card limit report for a store (read only)")
+    report_p.add_argument("--cards-dir", default=None, metavar="PATH",
+                          help="cards directory (default: <corpus>/.quest-context or QAR_CONTEXT_CARDS_DIR)")
+    report_p.add_argument("--corpus", default=None, metavar="PATH",
+                          help="corpus root (default: QAR_CORPUS_ROOT env var or cwd)")
+    report_p.add_argument("--write", action="store_true",
+                          help="also rewrite card_limit_report.md inside the store with this report")
+
     # --- sync-quest-folder subcommand: pull/push a quest <-> a local folder --
     sync_p = sub.add_parser("sync-quest-folder",
                             help="sync a Quest quest's state/notes with a local folder's QUEST_SYNC.md")

@@ -27,6 +27,7 @@ QAR_GOAL_TOKEN_BUDGET,Token budget of the goal loop (OrchestratorConfig.goal_tok
 QAR_GREP_BUDGET_SECONDS,Wall-clock budget for one corpus grep (default 20).
 QAR_GREP_MAX_FILES,Most files one grep opens (default 20000).
 QAR_INTENT_JUDGE_TIMEOUT_SECONDS,Budget for the intent-directive judgment call (default 8). CoreSettings.intent_judge_timeout_seconds.
+QAR_MAX_CARDS,"Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead."
 QAR_MODE_RELEASE_TIMEOUT_SECONDS,Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds.
 QAR_NOTE_FLOOR_FRESH_MINUTES,A note learned within this many minutes bypasses the floor's relevance gate (default 5). CoreSettings.note_floor_fresh_minutes.
 QAR_NOTE_FLOOR_RELEVANCE_GATED,0/false/no/off restores the unconditional always-recent notes floor (default gated). CoreSettings.note_floor_relevance_gated.

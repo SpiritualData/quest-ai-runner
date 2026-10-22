@@ -462,6 +462,9 @@ from .cli_quest import (  # noqa: F401
     _quest_method_is_read_only,
     _run_quest_command,
 )
+from .cli_cards import (  # noqa: F401
+    run_cards_command,
+)
 from .cli_poll import (  # noqa: F401
     _cmd_channel,
     _cmd_poll,
@@ -504,6 +507,7 @@ def main(argv=None) -> int:
         "reconcile-plan": _cmd_reconcile_plan,
         "create-goal": _cmd_create_goal,
         "context": _cmd_context,
+        "cards": run_cards_command,
         "sync-quest-folder": _cmd_sync_quest_folder,
         "bootstrap": _cmd_bootstrap,
         "paste-context": _cmd_paste_context,

@@ -10,7 +10,9 @@ import os
 from typing import Any, Dict, List, Optional, Set
 from pathlib import Path
 
+from . import card_origin
 from .card_store_mounts import MODE_MOUNT
+from ..core.background_pacing import Pacer
 from .card_content_render import tokenize as _tokenize
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 from .context_bootstrap_support import (
@@ -165,6 +167,7 @@ class BootstrapWalkMixin:
         existing = self._own_cards()
         existing_cards = list(existing.values())
         self._backfill_origins(existing)
+        self.limit_guard.begin_pass()
 
         # --- Nested-store reuse: a sub-corpus already bootstrapped by its OWN QAR instance is
         # reused wholesale instead of re-discovered here. Pure filesystem reuse (no LLM call, no
@@ -173,6 +176,7 @@ class BootstrapWalkMixin:
         # is pruned so imports never drift from their source.
         imported_cards: List[Dict[str, Any]] = []
         imported_covered: Set[str] = set()
+        skipped_for_own: List[Dict[str, Any]] = []
         if self._mount_mode == MODE_MOUNT:
             # Mounted stores are read in place: nothing is copied or pruned here. Files a mounted
             # store already covers (an ancestor's cards over this root) are not this corpus's to card.
@@ -215,6 +219,22 @@ class BootstrapWalkMixin:
                 for ic in self._import_ancestor_cards(ancestor_root, walk_root):
                     imported_cards.append(ic)
                     imported_covered.update(ic.get("files", []))
+            # A card whose every file is gone is dead weight, and is pruned further down. Judge the
+            # imports against the cards that will remain, so what is kept does not depend on the order
+            # of the steps: a copy of a dead card is not imported (it would only be pruned next pass),
+            # and a dead own card does not shadow a live copy of the same files.
+            walked_now = set(file_paths)
+            dead_now = set(self.dead_card_ids(existing_cards, walked_now, walk_root, skip_dirs)) \
+                if _prune_dead_cards() else set()
+            imported_cards = [
+                ic for ic in imported_cards
+                if not _prune_dead_cards()
+                or not all(self._file_entry_is_dead(p, walked_now, walk_root, skip_dirs)
+                           for p in ic.get("files", []))]
+            # One copy per id and per file set, whichever routes offered it (see card_origin).
+            imported_cards = card_origin.choose_imports(
+                imported_cards, [c for c in existing_cards if c.get("id") not in dead_now], skipped_for_own)
+            imported_covered = {path for ic in imported_cards for path in ic.get("files", [])}
             if imported_cards:
                 _log.info(
                     "context index: reusing %d card(s) from %d corpus root(s) (nested and/or "
@@ -224,19 +244,25 @@ class BootstrapWalkMixin:
                     len(imported_covered),
                 )
             imported_ids_now = {ic["id"] for ic in imported_cards}
-            for card in existing_cards:
-                prov = card.get("provenance")
-                cid = card.get("id")
-                if (
-                    isinstance(prov, dict)
-                    and prov.get("imported_from")
-                    and cid
-                    and cid not in imported_ids_now
-                ):
-                    try:
-                        self._repo.delete(cid)
-                    except Exception:  # noqa: BLE001
-                        pass
+            retired = [
+                c["id"] for c in existing_cards
+                if c.get("id") and card_origin.is_copy(c) and c["id"] not in imported_ids_now
+                and c["id"] not in dead_now
+            ]
+            if retired:
+                pace = Pacer()
+                moved = 0
+                for cid in retired:
+                    if not self._dry_run:
+                        try:
+                            moved += 1 if self.retire_copy(cid) else 0
+                        except Exception:  # noqa: BLE001
+                            pass
+                        pace()
+                gone = set(retired)
+                existing_cards = [c for c in existing_cards if c.get("id") not in gone]
+                _log.info("context index: %d copied card(s) are no longer offered by their source "
+                          "store; moved out of the index", moved)
 
         # Topic cards for genuinely NEW content require semantic understanding. Without a
         # provider, only cards reused from a nested store (above) can be produced.
@@ -287,26 +313,8 @@ class BootstrapWalkMixin:
         # ``--dry-run`` promises to estimate WITHOUT running the bootstrap, so it must not
         # delete either: an estimate that mutates the thing it is estimating is not an estimate.
         if _prune_dead_cards() and existing_cards and not self._dry_run:
-            walked_now = set(file_paths)
-            survivors: List[Dict[str, Any]] = []
-            dead_ids: List[str] = []
-            for card in existing_cards:
-                entries = [fe.get("path", "") if isinstance(fe, dict) else fe
-                           for fe in card.get("files", [])]
-                entries = [e for e in entries if e]
-                # A card with NO file entries is not file-derived at all (a conversation/turn
-                # card, or one recorded from a run). Nothing here can judge it, so it is never
-                # pruned -- this step only ever removes cards whose every pinned file is gone.
-                if not entries:
-                    survivors.append(card)
-                    continue
-                if all(self._file_entry_is_dead(e, walked_now, walk_root, skip_dirs)
-                       for e in entries) or self._card_is_degenerate(card):
-                    cid = card.get("id")
-                    if cid:
-                        dead_ids.append(cid)
-                        continue
-                survivors.append(card)
+            dead_ids = self.dead_card_ids(existing_cards, set(file_paths), walk_root, skip_dirs)
+            survivors = [c for c in existing_cards if c.get("id") not in set(dead_ids)]
             if dead_ids:
                 removed = 0
                 for cid in dead_ids:
@@ -342,13 +350,16 @@ class BootstrapWalkMixin:
                 p = fe.get("path", "") if isinstance(fe, dict) else fe
                 if p:
                     covered.add(p)
+        # A copy of another store's card is that store's to keep fresh: this store re-imports it
+        # when it changes. Nothing below regenerates, migrates or merges new topics into one.
+        own_cards = [c for c in existing_cards if not card_origin.is_copy(c)]
 
         uncovered = [p for p in file_paths if p not in covered and p not in imported_covered]
         # A covered file is stale when its current sha256 differs from any card's stored sha.
         stale_covered: List[str] = []
         if covered:
             walked = set(file_paths)
-            for card in existing_cards:
+            for card in own_cards:
                 for fe in card.get("files", []):
                     if not isinstance(fe, dict):
                         continue
@@ -382,7 +393,7 @@ class BootstrapWalkMixin:
         # The per-entry "tfdfidf_v" field IS the checkpoint: entries already at _TFDFIDF_VERSION
         # are skipped automatically, so an interrupted migration resumes on the next startup.
         tfdfidf_migration_cards: List[Dict[str, Any]] = []
-        for card in existing_cards:
+        for card in own_cards:
             cid = card.get("id", "")
             if not cid:
                 continue
@@ -413,10 +424,18 @@ class BootstrapWalkMixin:
 
         # --- LLM: identify topic cards for the NEW (uncovered) files, deduping vs existing ---
         topic_cards: List[Dict[str, Any]] = []
-        if uncovered and provider is not None:
+        room = self.limit_guard.room()
+        if uncovered and room is not None and room <= 0:
+            # The store is full: a new topic card would be refused, so do not pay a model to write it.
+            # Said once, with the breakdown (see card_limit); the files stay unindexed, not "seen".
+            self.limit_guard.note_unindexed(len(uncovered))
+            uncovered_discoverable = False
+        else:
+            uncovered_discoverable = True
+        if uncovered and provider is not None and uncovered_discoverable:
             _log.info("context index: stage 2 — analyzing %d new files for topics", len(uncovered))
             topic_cards = _llm_topic_cards(
-                uncovered, provider, model=model, existing_cards=existing_cards, walk_root=walk_root
+                uncovered, provider, model=model, existing_cards=own_cards, walk_root=walk_root
             )
             _log.info("context index: identified %d topic card(s) from new files", len(topic_cards))
         discovered_now: List[str] = list(uncovered) if (uncovered and topic_cards) else []
@@ -445,12 +464,12 @@ class BootstrapWalkMixin:
             stale_set = set(stale_covered)
             regen_ids = {
                 card.get("id")
-                for card in existing_cards
+                for card in own_cards
                 for fe in card.get("files", [])
                 if isinstance(fe, dict) and fe.get("path", "") in stale_set
             }
             existing_ids_new = {tc.get("id") for tc in topic_cards}
-            for card in existing_cards:
+            for card in own_cards:
                 cid = card.get("id")
                 if cid not in regen_ids or cid in existing_ids_new:
                     continue
@@ -618,6 +637,14 @@ class BootstrapWalkMixin:
                 # this lane's card gets its own, deterministic id instead.
                 card_id = f"{card_id}-{hashlib.sha1(self.origin_id().encode()).hexdigest()[:6]}"
                 loaded_existing = self._repo.read(card_id)
+            if (not tc.get("origin_fields") and isinstance(loaded_existing, dict)
+                    and card_origin.is_copy(loaded_existing)):
+                # The id belongs to a copy of another store's card. A card that is not that copy never
+                # takes it over (it would keep the copy's name and lose its origin, and the copy is
+                # then nobody's): it gets an id of its own, from the files it pins.
+                digest = hashlib.sha1("\0".join(sorted(rels)).encode("utf-8", "replace")).hexdigest()[:6]
+                card_id = f"{card_id}-{digest}"
+                loaded_existing = self._repo.read(card_id)
             existing: Dict[str, Any] = loaded_existing if isinstance(loaded_existing, dict) else {}
 
             # Incremental refresh: skip a topic only if every file's sha256 is unchanged AND
@@ -637,7 +664,15 @@ class BootstrapWalkMixin:
                 if unchanged:
                     continue
 
+            # A card that already exists keeps what it was given by someone else: the notes a run added,
+            # the quest fence, who owns it, and who wrote it. Rewriting it from the topic alone turned a
+            # card learned from a run (one that pins files) into a "bootstrap" card at the next pass and
+            # dropped its notes, after which the card limit would have treated it as regenerable.
+            prior = card_origin.provenance_of(existing)
+            kept = {k: existing[k] for k in ("content", "scope_tags", "managed_by", "managed_fields",
+                                             "managed_items", "origin") if k in existing}
             card: Dict[str, Any] = {
+                **kept,
                 "id": card_id,
                 "name": tc.get("name", ""),
                 "keywords": tc.get("keywords", []),
@@ -646,15 +681,19 @@ class BootstrapWalkMixin:
                 "files": file_dicts,
                 "conventions": [],
                 "provenance": {
-                    "created_by_task": "bootstrap",
-                    "model": "",
-                    "created_at": "",
-                    "last_verified_at": "",
+                    **prior,
+                    "created_by_task": prior.get("created_by_task") or "bootstrap",
+                    "model": prior.get("model", ""),
+                    "created_at": prior.get("created_at", ""),
+                    "last_verified_at": prior.get("last_verified_at", ""),
                     **({"imported_from": tc["imported_from"]} if tc.get("imported_from") else {}),
+                    **(tc.get("origin_fields") or {}),
                 },
                 "usage_count": existing.get("usage_count", 0),
                 "last_outcome": existing.get("last_outcome", "unknown"),
             }
+
+            card_origin.stamp_created_at(card, loaded_existing)
 
             # Persist via the repository (skip if dry-run mode).
             if not self._dry_run:
@@ -664,10 +703,29 @@ class BootstrapWalkMixin:
                 # In dry-run mode, count the card but don't write it.
                 cards_written += 1
 
+        # A pass that left cards unwritten for lack of room records nothing as seen: those files are
+        # not "analysed and unchanged", they are waiting, and raising the limit must pick them up.
+        refused = self.limit_guard.end_pass()
         # Recorded last, once the cards are written, so an interrupted pass re-discovers.
-        if discovered_now and not self._dry_run:
+        if discovered_now and not self._dry_run and not refused:
             self._record_discovered(discovered_now, discovered, set(file_paths))
 
         # Invalidate cache after all writes.
         self._cache_dirty = True
+        if cards_written and not self._dry_run:
+            self.reconcile_copies()
+            if skipped_for_own and not self.in_second_pass:
+                # An import was left out because a card of this store's own pinned the same files, and
+                # this pass has just changed the own cards. Settle it now, so a second run of the same
+                # pass finds nothing to do: one more look, which is cheap (nothing is uncovered).
+                own_now = {card_origin.file_set(c) for c in self._own_cards().values()
+                           if not card_origin.is_copy(c)}
+                if any(card_origin.file_set(item) not in own_now for item in skipped_for_own):
+                    self.in_second_pass = True
+                    try:
+                        cards_written += self._bootstrap_walk(
+                            root, provider=provider, model=model, max_files=max_files,
+                            max_cards=max_cards, skip_unchanged=True)
+                    finally:
+                        self.in_second_pass = False
         return cards_written

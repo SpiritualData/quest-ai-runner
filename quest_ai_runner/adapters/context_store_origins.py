@@ -163,9 +163,18 @@ class OriginsMixin:
         return stamped
 
     def _store_write(self, card_id: str, card: Dict[str, Any]) -> bool:
-        """The ONE place this store persists a card: stamp the writer origin, then write."""
+        """The ONE place this store persists a card: stamp the writer origin, ask the card limit, write.
+
+        The limit's answer is final for a new derived card; a card already stored, and every learned
+        or quest card, is let through (see ``card_limit``). The repository refuses an id that may
+        never be stored (``card_origin.card_id_problem``) on its own.
+        """
         self._stamp_origin(card_id, card)
-        return self._repo.write(card_id, card)
+        if not self.limit_guard.admit(card_id, card):
+            return False
+        ok = self._repo.write(card_id, card)
+        self.limit_guard.wrote(ok)
+        return ok
 
     def _own_cards(self) -> Dict[str, Dict[str, Any]]:
         """The cards THIS store owns: ``_load_all()`` minus any mounted views and, with an injected

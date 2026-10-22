@@ -173,6 +173,9 @@ def _resolve_context_assembler_base(
             # RunnerConfig.quest_folder_map): boosts automated context selection toward a quest's
             # linked folder whenever a run's quest_id matches.
             quest_folder_map=cfg.quest_folder_map,
+            # The runner's own store tidies provable copies at open and will not embed an inflated
+            # store (adapters/context_store_heal); a library caller or a test builds without this.
+            self_heal=True,
         )
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.
@@ -358,8 +361,8 @@ def _resolve_context_assembler_base(
         # Warm the card cache and scoring index while the session waits for its first message,
         # so the first turn's context budget is not spent parsing and weighting every card.
         if callable(getattr(keyword, "prewarm", None)):
-            _prewarm_thread = threading.Thread(target=keyword.prewarm, daemon=True,
-                                               name="qar-prewarm")
+            _prewarm_thread = threading.Thread(target=keyword.prewarm, kwargs={"notify": notify},
+                                               daemon=True, name="qar-prewarm")
             _register_index_thread(_prewarm_thread, keyword)
             _prewarm_thread.start()
 

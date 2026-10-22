@@ -166,7 +166,7 @@ empty or never used, so old cards need no migration.
 | `files[]` | pinned files: `path` (relative to the card's own store root), the fingerprints `sha256`, `mtime`, `git_sha`, plus `why`, `symbols`, the bootstrap term index `tfdfidf_terms`/`tfdfidf_v`, and the render-time usage stamps `last_used_ts`/`use_count`. An entry may also be a bare path string | bootstrap, `record`; usage stamped at render |
 | `content[]` | typed references `{id, type, locator, ts, why, last_used_ts, use_count}`; `type` is one of `file`, `collection`, `conversation`, `chat_thread`, `notion_page`, `query`, `note` (`reference_resolver.CONTENT_TYPES`), `note` when missing; at most 200 items, the oldest `ts` dropped first | `record`, `add_content`, `update_card`, quest sync |
 | `conventions` | pointers to rules that apply to the topic | `record`, bootstrap |
-| `provenance` | `created_by_task`, `task_id`, `model`, `created_at`, `last_verified_at`; on a moved or copied card also `imported_from`, `merged_from` (`{store_id, card_id}`) or `adopted_from` | every writer |
+| `provenance` | `created_by_task`, `task_id`, `model`, `created_at` (UTC, ISO: stamped when the card is first written; a card written before dates were kept stays undated), `last_verified_at`; on a copied card also `imported_from` (the store it was read from) and its origin: `origin_store` (the authoring store), `origin_id` (the id there) and `origin_root` (that store's root relative to this store's); on a moved card `merged_from` (`{store_id, card_id}`) or `adopted_from` | every writer |
 | `usage_count`, `last_outcome` | how often a run recorded the card, and the outcome of the last one (`met`, `failed` or `unknown`; a run's `answer` or `deep` kind counts as `met`, `confirm` as `unknown`) | `record` |
 | `scope_tags` | the quest fence; tags are added by union and never overwritten | `record`, `add_content`, `update_card` |
 | `origin` | the store that wrote the card (its `store_id`, or `env_<hash>` of runner env and root); a lane rewrites or deletes only cards of its own origin | the store on write, `context upload` |
@@ -186,11 +186,19 @@ description or summary, each content item's `why` and note text, keywords), so t
 - **Ids the store makes:** a card recorded from a run is `<first four sorted keywords>-<8 hex of its
   text>` (`card-<8 hex>` with no keywords; a thread's own record hashes `thread record <task id>`); a
   bootstrap topic card keeps the id its topic builder gives it.
-- **A copy** (legacy copy mode, `QAR_CARD_MOUNT=copy`) is `<namespace>--<id>` cut to 200 characters, the
-  namespace being the source root's relative path slugged with 6 hex of its digest, with
-  `provenance.imported_from`. A copy of a copy stacks another prefix; that chain is
-  how stores inflated (see [Growth](#growth)).
-- **A mounted card** appears as `<store_id>:<card_id>`: a read-only view whose paths are rebased at read
+- **A copy** (copy mode, `QAR_CARD_MOUNT=copy`) is `<namespace>--<origin id>`, cut to 200 characters,
+  the namespace being the slug of the AUTHORING store's root relative to this store's, with 6 hex of its
+  digest. It is a function of the origin alone (`origin_store`, `origin_id`, `origin_root`), so a card
+  that reaches a store by two routes (straight from its store, or through a store between) is one id,
+  an id never grows by hop, and a store never imports a card whose origin is itself, whichever way it
+  came back and whatever happened to its `imported_from` on the way (`adapters/card_origin.py`). Copies
+  made before origins were kept were `<namespace>--<id in the store it was read from>`, which stacked a
+  prefix per hop; they are no longer offered, so the next refresh moves them out
+  (`_quarantine/superseded-import/`).
+- **Ids that may never be stored:** one that repeats a namespace segment (a card copied through a loop)
+  and one that starts with `card:` (a vector point id, not a card). Every repository's `write` refuses
+  them with an ERROR naming the id, so no writer can bring one in; an edit addressed by a point id lands
+  on the card it names.- **A mounted card** appears as `<store_id>:<card_id>`: a read-only view whose paths are rebased at read
   time; nothing is written and a write to it is refused.
 - **Renames that never overwrite:** `merge-into` renames a colliding card to `<id>--m<8 hex of the
   source store id>`; a new card whose id is held by another origin's card is written as
@@ -210,16 +218,36 @@ nothing but speed.
 |---|---|---|
 | **Own card** | written by this store (`origin` is this store) | this store's refresh and runs |
 | **Mounted view** | another store's card read in place, read-only, never copied | its owner; the reader sees the owner's next write |
-| **Copy** | a legacy copy-import of another store's card under a namespaced id | nobody reliably: it duplicates the original, is re-embedded per importer and is converted by `context migrate-imports` |
-| **Quarantined** | moved under `_quarantine/<reason>/` by `scripts/quarantine_cards.py` (reasons `compounded`, `excluded`, `surplus`, `thin`, `covered`), out of the index, never deleted | restored by moving the file back |
+| **Copy** | a copy-import of another store's card under an id made of its origin | the importing store re-imports it when the source changes and moves it out when the source stops offering it; `context migrate-imports` converts copies to mounts |
+| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open (`compounded`, `duplicate-files`, `item-id`), by a refresh (`superseded-import`) or by the card limit (`limit`) | restored by moving the file back |
 
 ### Growth
 
 A store's size should follow the distinct content of its corpus, not the number of times it was
-re-imported. The solution `bound-card-growth` and its metric `metric-bound-card-growth` (offline arm
-`evaluation/components/card_growth/`: cards per source-file group and duplicate share on a store
-inflated by repeated nested bootstrap passes) hold the cleanup tool to that, and are where the
-bootstrap guards and the card-count notice are recorded as they land.
+re-imported. The solution `bound-card-growth` and its metric `metric-bound-card-growth` hold it to that,
+with two offline arms: `evaluation/components/card_growth/` (cards per source-file group and duplicate
+share on a store that already inflated, for the cleanup tool and for the tidy at open) and
+`evaluation/components/card_store_growth/` (a random world of nested stores, a legacy store opened as a
+runner opens it, and the card limit). What holds it, in the order a card meets them:
+
+1. **Origins, not directions.** A copy's id is made of its origin, a store never imports its own cards,
+   and a store is never a source for itself (a cards folder inside or above its own corpus): see
+   [Identity and ids](#identity-and-ids).
+2. **One root per store.** A store records the corpus root it was built for; indexing it under another
+   root is refused with an ERROR that names `context move-root` and `context merge-into`, because its
+   cards name files relative to the first.
+3. **No restatements.** A copy that pins exactly the files of a card the store holds is not kept (the
+   store's own card wins), and a new topic is never merged into a copy.
+4. **The write rule.** No repository stores an id that repeats a namespace segment or starts with `card:`.
+5. **Tidy at open.** The runner's own store (`self_heal`) moves cards that are provably copies of another
+   card of the store to `_quarantine/` when it opens and at the end of a pass (compounded ids whose files
+   another card pins, cards pinning exactly the same files, cards stored under a vector point id), and
+   says so once. It does not embed a store that holds more topic cards than its corpus has folders.
+   Judgement calls stay with `scripts/quarantine_cards.py`, whose dry run prints the store's health.
+6. **The card limit.** `QAR_MAX_CARDS` (default 1000, `0` or `unlimited` for none): at the limit a new
+   topic or imported card is not written, a card learned from a run or written for a quest moves the
+   coldest derived card out to `_quarantine/limit/`, and a notice says what fills the store and how to
+   change the limit. See [the card limit](context-card-stores.md#the-card-limit).
 
 ### ESOI records as cards (planned)
 

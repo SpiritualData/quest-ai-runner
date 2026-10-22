@@ -9,7 +9,7 @@ import json
 import os
 import subprocess
 import tempfile
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
 from .card_repository import FilesystemCardRepository
@@ -17,6 +17,7 @@ from .card_store_mounts import MODE_MOUNT, resolve_mounts
 from .card_content_render import MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_CHARS
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames, skip_subtrees
 from .card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
+from . import card_origin
 from .bootstrap_reporter import mark_bootstrap_completed
 from ..core.background_pacing import Pacer
 from ..core.file_modes import match_umask
@@ -126,6 +127,7 @@ class BootstrapMixin:
                 root=str(Path(root).resolve() if root else self._repo_root or ""),
             )
             mark_bootstrap_completed(str(self._cards_dir))
+            self.tidy()
         return n
 
     def _completed_feature_versions(self) -> Dict[str, int]:
@@ -268,7 +270,10 @@ class BootstrapMixin:
         number of cards written (0 = everything was already up to date).
         """
         try:
-            return self._bootstrap_inner(root=root, provider=provider, model=model, skip_unchanged=True)
+            n = self._bootstrap_inner(root=root, provider=provider, model=model, skip_unchanged=True)
+            if n > 0 and not self._dry_run:
+                self.tidy()
+            return n
         except Exception:  # noqa: BLE001
             return 0
 
@@ -325,6 +330,23 @@ class BootstrapMixin:
         return any(path == head or path.endswith("/" + head) or head.endswith("/" + path)
                    for path in entries)
 
+    def dead_card_ids(self, cards: List[Dict[str, Any]], walked: Set[str], walk_root: Path,
+                       skip_dirs: Set[str]) -> List[str]:
+        """Ids of the cards whose every pinned file this corpus will never index (or that only restate
+        their own path). A card with no file entries is not file-derived and is never judged."""
+        dead: List[str] = []
+        for card in cards:
+            entries = [fe.get("path", "") if isinstance(fe, dict) else fe for fe in card.get("files", [])]
+            entries = [e for e in entries if e]
+            if not entries:
+                continue
+            if all(self._file_entry_is_dead(e, walked, walk_root, skip_dirs) for e in entries) \
+                    or self._card_is_degenerate(card):
+                cid = card.get("id")
+                if cid:
+                    dead.append(cid)
+        return dead
+
     @staticmethod
     def _file_entry_is_dead(rel_path: str, walked: Set[str], walk_root: Path,
                             skip_dirs: Set[str]) -> bool:
@@ -368,6 +390,23 @@ class BootstrapMixin:
         except Exception:  # noqa: BLE001 -- unreadable, malformed, or anything else: keep it
             return False
 
+    def is_own_store(self, store_dir: Path) -> bool:
+        """Whether the store in ``store_dir/.quest-context`` is THIS store.
+
+        A store is never a source for itself, whether it is found by its path (a cards directory that
+        sits inside, or above, the corpus root it indexes: ``QAR_CONTEXT_CARDS_DIR`` set away from the
+        root) or by its identity (a copy of the whole folder, such as a backup snapshot). Importing
+        itself added a full copy of the store to the store on every refresh. Never raises.
+        """
+        try:
+            theirs = store_dir / ".quest-context"
+            if theirs.resolve() == self._cards_dir.resolve():
+                return True
+            mine = str(read_store_meta(str(self._cards_dir)).get("store_id") or "")
+            return bool(mine) and mine == str(read_store_meta(str(theirs)).get("store_id") or "")
+        except Exception:  # noqa: BLE001
+            return False
+
     def _discover_nested_card_dirs(self, walk_root: Path, skip_dirs: Set[str]) -> List[Path]:
         """Find sub-corpora under ``walk_root`` that already have their OWN completed bootstrap.
 
@@ -376,6 +415,7 @@ class BootstrapMixin:
         a ``product/`` corpus nested under a wider ``~/hq`` corpus. Recursion stops at each match:
         a nested store is trusted to have already reused whatever is bootstrapped beneath IT (if it
         implements the same reuse), so importing its cards transitively covers its own subtree too.
+        This store's own directory is not a match (see ``is_own_store``): it is part of the corpus.
         Never raises; returns [] on any failure.
         """
         found: List[Path] = []
@@ -391,7 +431,8 @@ class BootstrapMixin:
                     dirnames[:] = []
                     continue
                 if (current_dir / ".quest-context" / _BOOTSTRAP_META_FILE).is_file() \
-                        and not is_merged_store(str(current_dir / ".quest-context")):
+                        and not is_merged_store(str(current_dir / ".quest-context")) \
+                        and not self.is_own_store(current_dir):
                     found.append(current_dir)
                     dirnames[:] = []  # trust it transitively; don't look for nested-within-nested
                     continue
@@ -416,6 +457,11 @@ class BootstrapMixin:
             if (stored.get("name", "") != imported.get("name", "")
                     or stored.get("keywords", []) != imported.get("keywords", [])
                     or stored.get("summary", "") != imported.get("summary", "")):
+                return False
+            # A copy that does not yet record its origin (made before origins were kept) is
+            # rewritten once, so every copy names where it came from.
+            stored_prov = card_origin.provenance_of(stored)
+            if any(stored_prov.get(k) != v for k, v in (imported.get("origin_fields") or {}).items()):
                 return False
             entries = [fe for fe in stored.get("files", []) if isinstance(fe, dict)]
             if [fe.get("path", "") for fe in entries] != list(imported.get("files", [])):
@@ -446,26 +492,116 @@ class BootstrapMixin:
         prov = card.get("provenance")
         return str(prov.get("imported_from") or "") if isinstance(prov, dict) else ""
 
+    def retire_copy(self, card_id: str) -> bool:
+        """Take a copy that its source store no longer offers out of the index.
+
+        Moved, not deleted, where the repository can (the filesystem one keeps it under
+        ``_quarantine/superseded-import/``): a copy is redundant by construction, but anything a
+        run learned onto it is not, and moving the file back undoes the retirement.
+        """
+        repo = getattr(self, "_own_repo", self._repo)
+        quarantine = getattr(repo, "quarantine", None)
+        if callable(quarantine):
+            return bool(quarantine(card_id, "superseded-import"))
+        return bool(self._repo.delete(card_id))
+
+    def reconcile_copies(self) -> int:
+        """After a pass: retire a copy that pins exactly the files another card of the store pins.
+
+        The imports were chosen against the cards as they stood at the start of the pass, and the
+        pass can change them (a stale card regenerated over the files a copy also covers). Two cards
+        pinning the same paths are one card; the store's own wins, and between copies the one from
+        the more deeply rooted store (``card_origin.choose_imports``). Returns how many were retired.
+        """
+        try:
+            self._cache_dirty = True
+            cards = list(self._own_cards().values())
+            copies = [c for c in cards if card_origin.is_copy(c) and c.get("id")]
+            if not copies:
+                return 0
+            offered = [{"id": c["id"], "files": sorted(card_origin.file_set(c)),
+                        "origin_fields": {k: v for k, v in card_origin.provenance_of(c).items()
+                                          if k.startswith("origin_")},
+                        "hops": 0} for c in copies]
+            keep = {item["id"] for item in card_origin.choose_imports(offered, cards)}
+            retired = 0
+            for item in offered:
+                if item["id"] not in keep and self.retire_copy(item["id"]):
+                    retired += 1
+            if retired:
+                self._cache_dirty = True
+                _log.info("context index: %d copied card(s) pinned the same files as another card; "
+                          "moved out of the index", retired)
+            return retired
+        except Exception:  # noqa: BLE001
+            return 0
+
+    def own_refs_of_store(self) -> Set[str]:
+        """Every identity this store's own cards may be attributed to (see ``card_origin``)."""
+        refs = {card_origin.path_ref(str(self._cards_dir))}
+        mine = str(read_store_meta(str(self._cards_dir)).get("store_id") or "")
+        if mine:
+            refs.add(mine)
+        try:
+            refs |= set(self._origins()[1])
+        except Exception:  # noqa: BLE001
+            pass
+        return refs
+
+    def offered_import(self, card: Dict[str, Any], files: List[str], source_ref: str, source_root: Path,
+                        source_rel: str, walk_root: Path, own_refs: Set[str]) -> Optional[Dict[str, Any]]:
+        """One import offered by a source store's ``card``, or None when it must not be imported.
+
+        The copy is identified by its ORIGIN, not by the store it was read from: the id is
+        ``card_origin.import_id(<origin root, relative to this root>, <id in the authoring store>)``,
+        so the same card reached by two routes is one id and an id never grows by hop. A card whose
+        origin is this store is never imported, whichever way it came back, whatever happened to its
+        provenance on the way. Judged on the SOURCE card, before its paths are rewritten.
+        """
+        # Never import a card that carries nothing but its own path. Reuse is a shortcut past LLM
+        # work, not a licence to spread another store's dead weight: an ancestor store full of
+        # these re-seeded the corpus below it on every bootstrap, silently undoing each prune.
+        if self._card_is_degenerate(card):
+            return None
+        origin = card_origin.exported_origin(card, source_ref, source_root)
+        if origin is None or origin.store in own_refs:
+            return None
+        origin_root = card_origin.origin_relative_to(origin, source_root, walk_root)
+        if origin_root == ".":
+            return None
+        return {
+            "id": card_origin.import_id(origin_root, origin.id),
+            "name": card.get("name", ""),
+            "keywords": card.get("keywords", []),
+            "summary": card.get("summary", ""),
+            "description": card.get("description") or card.get("summary", ""),
+            "files": files,
+            "imported_from": source_rel,
+            "origin_fields": card_origin.origin_fields(origin.store, origin.id, origin_root),
+            "hops": 0 if origin.root in ("", ".") else 1,
+        }
+
     def _import_nested_cards(self, nested_root: Path, walk_root: Path) -> List[Dict[str, Any]]:
         """Reuse a nested corpus's already-bootstrapped cards instead of re-discovering them.
 
         Pure filesystem reuse: reads the nested store's on-disk cards directly (no LLM call), then
         rewrites each file path from nested-root-relative to THIS store's walk-root-relative and
-        namespaces the card id by the nested root's path so ids from unrelated sub-corpora never
-        collide. Each returned dict carries ``imported_from`` (the nested root, relative to
-        ``walk_root``) so ``_bootstrap_inner`` can both write it into the card's provenance and
-        prune it later if the nested store stops offering it. Never raises; returns [] on failure.
+        names the copy after its origin (see ``offered_import``). Each returned dict carries
+        ``imported_from`` (the nested root, relative to ``walk_root``) and its ``origin``, so
+        ``_bootstrap_inner`` can write both into the card's provenance and prune it later if the
+        nested store stops offering it. Never raises; returns [] on failure.
         """
         try:
             rel_root = nested_root.relative_to(walk_root)
         except ValueError:
             return []
         prefix = rel_root.as_posix()
-        id_prefix = _path_slug(prefix)
         try:
             nested_cards = FilesystemCardRepository(str(nested_root / ".quest-context")).load_all()
         except Exception:  # noqa: BLE001
             return []
+        source_ref = card_origin.store_ref(str(nested_root / ".quest-context"))
+        own_refs = self.own_refs_of_store()
         imported: List[Dict[str, Any]] = []
         for card in nested_cards.values():
             try:
@@ -476,34 +612,9 @@ class BootstrapMixin:
                 ]
                 if not files:
                     continue
-                # Never import a card that carries nothing but its own path. Reuse is a
-                # shortcut past LLM work, not a licence to spread another store's dead weight:
-                # an ancestor store full of these re-seeded the corpus below it on every
-                # bootstrap, silently undoing each prune. Judged on the SOURCE card, before its
-                # paths are rewritten, so the summary and the path are still in the same terms.
-                # Never re-import a card that came FROM the opposite direction (copied down from an ancestor). Two
-                # stores that are each other's ancestor/nested source (spiritual_data over product/)
-                # otherwise re-import each other's imports every bootstrap, each round wrapping the
-                # id in another namespace prefix: ~8,700 real cards became 31,600 copies up to eight
-                # prefixes deep. File paths round-trip unchanged, so the copies were the same cards
-                # under new ids, each embedded and scored separately. Same-direction chains stay
-                # (a nested store reusing ITS nested store is the intended transitive reuse).
-                if self._card_imported_from(card).startswith(".."):
-                    continue
-                if self._card_is_degenerate(card):
-                    continue
-                cid = str(card.get("id") or "")
-                if not cid:
-                    continue
-                imported.append({
-                    "id": f"{id_prefix}--{cid}"[:200],
-                    "name": card.get("name", ""),
-                    "keywords": card.get("keywords", []),
-                    "summary": card.get("summary", ""),
-                    "description": card.get("description") or card.get("summary", ""),
-                    "files": files,
-                    "imported_from": prefix,
-                })
+                offered = self.offered_import(card, files, source_ref, nested_root, prefix, walk_root, own_refs)
+                if offered is not None:
+                    imported.append(offered)
             except Exception:  # noqa: BLE001
                 continue
         return imported
@@ -521,14 +632,16 @@ class BootstrapMixin:
         Walks up from ``walk_root``'s parent, checking each ancestor for
         ``<ancestor>/.quest-context/bootstrap_meta.json``, and returns the FIRST (nearest) match --
         trusting it transitively, same as the downward case trusts a nested match to have already
-        reused whatever is beneath IT. Bounded by ``_MAX_ANCESTOR_WALK_LEVELS`` and stops at the
-        filesystem root either way. Never raises; returns ``None`` on any failure or no match.
+        reused whatever is beneath IT. This store's own directory is not a match (``is_own_store``).
+        Bounded by ``_MAX_ANCESTOR_WALK_LEVELS`` and stops at the filesystem root either way. Never
+        raises; returns ``None`` on any failure or no match.
         """
         try:
             current = walk_root.resolve().parent
             for _ in range(_MAX_ANCESTOR_WALK_LEVELS):
                 if (current / ".quest-context" / _BOOTSTRAP_META_FILE).is_file() \
-                        and not is_merged_store(str(current / ".quest-context")):
+                        and not is_merged_store(str(current / ".quest-context")) \
+                        and not self.is_own_store(current):
                     return current
                 parent = current.parent
                 if parent == current:  # reached filesystem root
@@ -563,11 +676,12 @@ class BootstrapMixin:
         except Exception:  # noqa: BLE001
             return []
         imported_from = "/".join([".."] * depth)
-        id_prefix = _path_slug(imported_from)
         try:
             ancestor_cards = FilesystemCardRepository(str(ancestor_root / ".quest-context")).load_all()
         except Exception:  # noqa: BLE001
             return []
+        source_ref = card_origin.store_ref(str(ancestor_root / ".quest-context"))
+        own_refs = self.own_refs_of_store()
         imported: List[Dict[str, Any]] = []
         for card in ancestor_cards.values():
             try:
@@ -583,34 +697,9 @@ class BootstrapMixin:
                     files.append(rel.as_posix())
                 if not files:
                     continue
-                # Never import a card that carries nothing but its own path. Reuse is a
-                # shortcut past LLM work, not a licence to spread another store's dead weight:
-                # an ancestor store full of these re-seeded the corpus below it on every
-                # bootstrap, silently undoing each prune. Judged on the SOURCE card, before its
-                # paths are rewritten, so the summary and the path are still in the same terms.
-                # Never re-import a card that came FROM the opposite direction (copied up from a descendant). Two
-                # stores that are each other's ancestor/nested source (spiritual_data over product/)
-                # otherwise re-import each other's imports every bootstrap, each round wrapping the
-                # id in another namespace prefix: ~8,700 real cards became 31,600 copies up to eight
-                # prefixes deep. File paths round-trip unchanged, so the copies were the same cards
-                # under new ids, each embedded and scored separately. Same-direction chains stay
-                # (a nested store reusing ITS nested store is the intended transitive reuse).
-                if self._card_imported_from(card) and not self._card_imported_from(card).startswith(".."):
-                    continue
-                if self._card_is_degenerate(card):
-                    continue
-                cid = str(card.get("id") or "")
-                if not cid:
-                    continue
-                imported.append({
-                    "id": f"{id_prefix}--{cid}"[:200],
-                    "name": card.get("name", ""),
-                    "keywords": card.get("keywords", []),
-                    "summary": card.get("summary", ""),
-                    "description": card.get("description") or card.get("summary", ""),
-                    "files": files,
-                    "imported_from": imported_from,
-                })
+                offered = self.offered_import(card, files, source_ref, ancestor_root, imported_from, walk_root, own_refs)
+                if offered is not None:
+                    imported.append(offered)
             except Exception:  # noqa: BLE001
                 continue
         return imported
@@ -636,14 +725,22 @@ class BootstrapMixin:
         corpus indexes its own root as usual. ``copy`` mode (the default) is the legacy behaviour,
         unchanged.
         """
-        if self._mount_mode != MODE_MOUNT:
-            return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
-                                        max_cards=max_cards, skip_unchanged=skip_unchanged)
         if self._closed.is_set():
             return 0
         walk_root = Path(root).resolve() if root else self._repo_root
         if walk_root is None or not walk_root.is_dir():
             return 0
+        built_for = self.built_for_another_root(walk_root)
+        if built_for:
+            _log.error(
+                "context index: not indexing %s: this card store was built for the corpus root %s, "
+                "and its cards name files relative to that root. Point the lane at its own cards "
+                "folder, or move the store with `quest-ai-runner context move-root`, or merge it "
+                "into the wider store with `quest-ai-runner context merge-into`.", walk_root, built_for)
+            return 0
+        if self._mount_mode != MODE_MOUNT:
+            return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
+                                        max_cards=max_cards, skip_unchanged=skip_unchanged)
         outcome = resolve_mounts(str(self._cards_dir), walk_root, effective_skip_dirs(walk_root))
         if not self._dry_run and outcome.mounts and not read_store_meta(str(self._cards_dir)):
             # A corpus that mounts stores is itself a store with an identity, even before it has a
@@ -661,6 +758,23 @@ class BootstrapMixin:
         with skip_subtrees(outcome.claimed_roots):
             return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
                                         max_cards=max_cards, skip_unchanged=skip_unchanged)
+
+    def built_for_another_root(self, walk_root: Path) -> str:
+        """The corpus root this store was built for when it is not ``walk_root``, else "".
+
+        A card names its files relative to the root the store was built for. Run under another root
+        (two lanes sharing one cards folder, a lane whose root was widened without moving the store),
+        every card points at the wrong place: the other lane's cards look dead and are pruned, and
+        each lane re-cards what the other just lost. A store belongs to one root; changing it is what
+        ``move-root`` and ``merge-into`` are for. Never raises.
+        """
+        try:
+            recorded = str(read_store_meta(str(self._cards_dir)).get("root") or "")
+            if recorded and os.path.realpath(recorded) != os.path.realpath(str(walk_root)):
+                return recorded
+        except Exception:  # noqa: BLE001
+            pass
+        return ""
 
     def _gate_new_cards(
         self,
@@ -756,15 +870,19 @@ class BootstrapMixin:
         except Exception:  # noqa: BLE001
             _log.debug("context index: could not write %s", _DISCOVERED_FILE, exc_info=True)
 
-    def prewarm(self) -> None:
+    def prewarm(self, notify: Optional[Callable[[str], None]] = None) -> None:
         """Load the cards and build the scoring index ahead of the first turn. Never raises.
 
         A cold first turn otherwise pays for parsing every card and weighting every term (~7s on
         a 5,800-card store) inside its turn-start context budget. Meant to run in a background
-        thread while the session waits for its first message.
+        thread while the session waits for its first message. A store already at or above its card
+        limit says so here, once (see ``card_limit``); nothing is removed to fit the limit.
         """
         try:
+            self.tidy(notify)       # first: so the index built below never holds a card on its way out
             cards = self._load_all()
+            self.limit_guard.check_at_open()
+            self.inflated()
             if cards:
                 self._scoring_index(cards, Pacer())
         except Exception:  # noqa: BLE001

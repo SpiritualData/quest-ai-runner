@@ -151,3 +151,18 @@ def test_missing_credentials_is_a_clear_error(tmp_path, monkeypatch, capsys):
     cards_dir = build_store(tmp_path)
     assert run_cli("--cards-dir", str(cards_dir), "--private") == 1
     assert "no Quest credentials" in capsys.readouterr().err
+
+
+def test_copies_recording_their_origin_and_ids_that_may_never_be_stored_are_not_uploaded(tmp_path):
+    """A copy that records its origin (not only ``imported_from``) is the source store's to upload, and a
+    card under an id that repeats an import namespace never goes up (it would be refused there anyway)."""
+    from quest_ai_runner.adapters.card_store_upload import REASON_REFUSED_ID
+    copy = card("sd-aaaaaa--topic", ["src/c.py"])
+    copy["provenance"] = {"origin_store": "st_other", "origin_id": "topic", "origin_root": "sd"}
+    looped = card("sd-aaaaaa--root-bbbbbb--sd-aaaaaa--topic", ["src/l.py"])
+    cards_dir = make_owner(tmp_path / "repo", [card("topic-0", ["src/f0.py"]), copy])
+    (Path(cards_dir) / f"{looped['id']}.json").write_text(__import__("json").dumps(looped))
+    plan = plan_upload(cards_dir)
+    assert [cid for cid, _ in plan.uploads] == ["topic-0"]
+    assert plan.skipped[REASON_IMPORTED] == ["sd-aaaaaa--topic"]
+    assert plan.skipped[REASON_REFUSED_ID] == [looped["id"]]
