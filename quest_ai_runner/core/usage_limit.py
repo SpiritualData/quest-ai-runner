@@ -40,7 +40,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -212,6 +212,41 @@ def detect_usage_limit(text: Optional[str], now: Optional[datetime] = None) -> O
     return None
 
 
+def reset_clause(limit: Optional[UsageLimit], now: Optional[datetime] = None,
+                 tz: Optional[tzinfo] = None) -> str:
+    """When the limit resets, as a clause a sentence can end with: ``at 15:40``, ``on Mon at 15:40``,
+    ``on Sep 26 at 15:40``; ``""`` when the limit did not say.
+
+    Only a reset time Claude Code reported is ever written. The wait the lane would use when it
+    could not read one (``UsageLimit.resume_at``'s backoff) is a guess and is never shown as a time.
+    The time is in ``tz`` (the host's own zone by default) with its abbreviation, so it is the
+    person's clock.
+    """
+    if limit is None or limit.resets_at is None:
+        return ""
+    now = now or datetime.now(timezone.utc)
+    local_now = now.astimezone(tz)
+    local = limit.resets_at.astimezone(tz)
+    clock = local.strftime("%H:%M") + (f" {local.tzname()}" if local.tzname() else "")
+    days = (local.date() - local_now.date()).days
+    if days <= 0:
+        return f"at {clock}"
+    if days < 7:
+        return f"on {local.strftime('%a')} at {clock}"
+    return f"on {local.strftime('%b')} {local.day} at {clock}"
+
+
+def pause_sentence(when: str) -> str:
+    """The sentence for work paused at the usage limit; ``when`` is a ``reset_clause`` (empty: not known).
+    Short enough for the status strip of an 80 column terminal."""
+    return "Paused at Claude Code's usage limit. " + (f"It resets {when}." if when else "It has not said when it resets.")
+
+
+def pause_status(limit: Optional[UsageLimit], now: Optional[datetime] = None) -> str:
+    """The status line for work paused at the usage limit, with the reset time when it is known."""
+    return pause_sentence(reset_clause(limit, now))
+
+
 def limit_from_session_file(path: Optional[Path]) -> Optional[UsageLimit]:
     """The usage limit recorded at the END of a Claude Code session file, if it ended on one.
 
@@ -290,7 +325,7 @@ def record(limit: UsageLimit) -> UsageLimit:
         else:
             _current = limit
         log.warning("Claude Code usage limit reached (%s); resets %s", _current.label(),
-                    _current.resets_at.isoformat() if _current.resets_at else "at an unknown time")
+                    reset_clause(_current) or "at an unknown time")
         if _persist_path is not None:
             try:
                 _persist_path.parent.mkdir(parents=True, exist_ok=True)

@@ -45,7 +45,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from esoi import implementation
 
 from . import usage_limit
-from .adapters import DeepResult, EVENT_EXEC, ProgressEvent
+from .adapters import DeepResult, EVENT_EXEC, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent
 from .goal_runner import SubprocessGoalRunner
 from .goal_runner_contract import (
     BALANCED_CLI_MODEL,
@@ -537,11 +537,11 @@ class StreamJsonGoalRunner(SubprocessGoalRunner):
                 encoding="utf-8", errors="replace")
         except FileNotFoundError:
             stop_monitor.set()
-            return DeepResult(met=False, launch_failed=True,
+            return DeepResult(met=False, launch_failed=True, launch_problem=LAUNCH_MISSING_PROGRAM,
                               error=f"The deep worker could not start: binary not found ({binary}).")
         except PermissionError as e:
             stop_monitor.set()
-            return DeepResult(met=False, launch_failed=True,
+            return DeepResult(met=False, launch_failed=True, launch_problem=LAUNCH_PERMISSION_DENIED,
                               error=f"The deep worker could not start: permission denied ({e}).")
 
         started = time.time()

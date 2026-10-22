@@ -55,7 +55,7 @@ class CommandsMixin:
         if not arg:
             current = self._model_hint or "auto (orchestrator decides)"
             c.dim(f"  Model: {current}")
-            c.dim("  Usage: /model fast | balanced | quality | best  — or /models for a menu")
+            c.dim("  Usage: /model fast | balanced | quality | best, or /models for a menu")
             return
         tier = arg.lower().strip()
         if tier in ("auto", "reset", "clear"):
@@ -76,7 +76,7 @@ class CommandsMixin:
         if not arg:
             current = self._model_hint or "auto"
             c.dim(f"  Depth/model: {current}")
-            c.dim("  Usage: /depth light | standard | deep  —  or /models for the full menu")
+            c.dim("  Usage: /depth light | standard | deep, or /models for the full menu")
             return
         level = arg.lower().strip()
         tier = self._DEPTH_ALIASES.get(level, level)
@@ -96,7 +96,7 @@ class CommandsMixin:
                 c.dim("  Use '/system clear' to remove, or '/system <text>' to replace.")
             else:
                 c.dim("  No custom system prompt set.")
-                c.dim("  Usage: /system <text>  —  sets a custom prompt prepended to the persona.")
+                c.dim("  Usage: /system <text> sets a custom prompt prepended to the persona.")
             return
         if arg.lower() == "clear":
             self._system = None
@@ -116,10 +116,10 @@ class CommandsMixin:
         # Build menu with semantic tiers and actual model names
         self._model_tiers = [
             ("auto",      "orchestrator decides (recommended)"),
-            ("fast",      f"light-weight tasks — {models['fast']}"),
-            ("balanced",  f"general chat and coding — {models['balanced']}"),
-            ("quality",   f"thorough, deep reasoning — {models['quality']}"),
-            ("best",      f"best available (if needed) — {models['best']}"),
+            ("fast",      f"light-weight tasks: {models['fast']}"),
+            ("balanced",  f"general chat and coding: {models['balanced']}"),
+            ("quality",   f"thorough, deep reasoning: {models['quality']}"),
+            ("best",      f"best available (if needed): {models['best']}"),
         ]
 
     def _skills_dir(self) -> Optional[str]:

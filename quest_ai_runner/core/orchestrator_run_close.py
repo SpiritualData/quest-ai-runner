@@ -463,7 +463,7 @@ class RunCloseMixin:
                             and not rs.own_escalation_settled
                             and self._has_deep_execution_capability()):
                         if emit is not None:
-                            emit.status("Need more context to answer — searching further…")
+                            emit.status("Need more context to answer, searching further…")
                         _context_q = verdict.get("context_query") or rs.user_message
                         _esc_plan = PlanDecision(
                             action="deep",

@@ -401,3 +401,48 @@ def test_an_older_backend_gets_a_plain_requeue_and_the_lane_pause_holds_it():
     assert outcome.status == "waiting"
     assert ("update_task", ("atask_3", {"status": "queued"}), {}) in client.calls
     assert not client.named("report_failed")
+
+
+# --- saying when it resets, in words a person reads -----------------------------------------------
+
+UTC = timezone.utc
+
+
+def test_the_reset_clause_is_a_time_a_sentence_can_end_with():
+    soon = usage_limit.UsageLimit(message=WEEKLY, resets_at=datetime(2026, 9, 25, 20, 0, tzinfo=UTC))
+    assert usage_limit.reset_clause(soon, NOW, UTC) == "at 20:00 UTC"
+    tomorrow = usage_limit.UsageLimit(message=WEEKLY, resets_at=datetime(2026, 9, 26, 15, 30, tzinfo=UTC))
+    assert usage_limit.reset_clause(tomorrow, NOW, UTC) == "on Sat at 15:30 UTC"
+    far = usage_limit.UsageLimit(message=WEEKLY, resets_at=datetime(2026, 10, 9, 20, 0, tzinfo=UTC))
+    assert usage_limit.reset_clause(far, NOW, UTC) == "on Oct 9 at 20:00 UTC"
+
+
+def test_the_reset_clause_is_in_the_given_zone():
+    limit = usage_limit.UsageLimit(message=WEEKLY, resets_at=datetime(2026, 9, 25, 20, 0, tzinfo=UTC))
+    pacific = timezone(timedelta(hours=-7), "PDT")
+    assert usage_limit.reset_clause(limit, NOW, pacific) == "at 13:00 PDT"
+
+
+def test_the_reset_clause_never_turns_a_backoff_guess_into_a_time():
+    assert usage_limit.reset_clause(None, NOW) == ""
+    unknown = usage_limit.UsageLimit(message="You've hit your usage limit")
+    assert unknown.resets_at is None and usage_limit.reset_clause(unknown, NOW) == ""
+    # The lane's own wait for that case exists, and is not what a person is told.
+    assert unknown.resume_at(now=NOW) > NOW
+
+
+def test_the_pause_status_says_when_it_resets_only_when_that_is_known(monkeypatch):
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    try:
+        known = usage_limit.UsageLimit(message=WEEKLY, resets_at=datetime(2026, 9, 25, 20, 0, tzinfo=UTC))
+        status = usage_limit.pause_status(known, NOW)
+        assert status == "Paused at Claude Code's usage limit. It resets at 20:00 UTC."
+        assert len(status) <= 66, "fits the status strip of an 80 column terminal"
+        assert "\u2014" not in status
+        unknown = usage_limit.UsageLimit(message="You've hit your usage limit")
+        assert usage_limit.pause_status(unknown, NOW) == "Paused at Claude Code's usage limit. It has not said when it resets."
+        assert usage_limit.pause_status(None, NOW) == usage_limit.pause_status(unknown, NOW)
+    finally:
+        monkeypatch.undo()
+        time.tzset()

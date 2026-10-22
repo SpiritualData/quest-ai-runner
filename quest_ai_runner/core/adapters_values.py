@@ -152,6 +152,11 @@ class PlanDecision:
     pending_read: List[Dict[str, Any]] = field(default_factory=list)
 
 
+# ``DeepResult.launch_problem`` values.
+LAUNCH_MISSING_PROGRAM = "missing_program"
+LAUNCH_PERMISSION_DENIED = "permission_denied"
+
+
 @dataclass
 class DeepResult:
     """The outcome of a goal-driven deep run."""
@@ -227,6 +232,12 @@ class DeepResult:
     # model on it (a stronger model was never the problem). Structural, set by the runner from the
     # process outcome and its reported usage, never inferred from the wording of the output.
     launch_failed: bool = False
+    # WHY the worker never started, when the runner knows it from the process outcome itself and never
+    # from text: ``LAUNCH_MISSING_PROGRAM`` (the program is not installed, or not on the PATH) or
+    # ``LAUNCH_PERMISSION_DENIED`` (it cannot be run). Empty for any other start failure (the CLI refused
+    # before its first model turn: ``error`` carries its own words). A consumer that tells a person why
+    # nothing ran words these two in its own plain language; only meaningful with ``launch_failed``.
+    launch_problem: str = ""
     # The words in ``output`` were WRITTEN BY A MODEL answering in-process (a runner that declares
     # ``uses_deep_model = False``), not produced by a Claude Code worker that went and read things.
     # Set by the orchestrator from the runner it dispatched to, never by a runner. The link guard's

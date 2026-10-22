@@ -24,6 +24,7 @@ from .adapters import (
     runner_uses_deep_model,
 )
 from .goal_metrics import GoalMetrics, run_hint, working_dir_of
+from . import usage_limit
 from .goal_runner import cli_safe_model
 from .guard import ExecutionFact, ExecutionRecord, classify_exec_phase
 from .planner_context import _is_discovery_obs, _render_gathered
@@ -773,8 +774,8 @@ class DeepRunMixin:
                 # the queue until the limit resets (``core.usage_limit``).
                 if getattr(res, "usage_limited", False):
                     if emit is not None:
-                        emit.status("Claude Code reached its usage limit; pausing this work "
-                                    "until it resets.")
+                        # The reset time the runner recorded when it hit the limit, never a guess.
+                        emit.status(usage_limit.pause_status(usage_limit.active_limit()))
                     break
                 # THE WORKER NEVER STARTED (``DeepResult.launch_failed``): nothing ran, so there is
                 # nothing to verify, and a stronger model was never the problem. Verifying the CLI's

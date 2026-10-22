@@ -42,7 +42,9 @@ from esoi import implementation
 from . import usage_limit
 from .requester import apply_requester_env
 from .runtime_settings import process_environment
-from .adapters import DeepResult, DeepRunner, EVENT_EXEC, ProgressEvent
+from .adapters import (
+    DeepResult, DeepRunner, EVENT_EXEC, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent,
+)
 
 from .goal_runner_contract import (  # noqa: F401
     BALANCED_CLI_MODEL,
@@ -437,14 +439,14 @@ class SubprocessGoalRunner(DeepRunner):
             stop_monitor.set()
             if monitor_thread:
                 monitor_thread.join(timeout=1)
-            return DeepResult(met=False, launch_failed=True,
+            return DeepResult(met=False, launch_failed=True, launch_problem=LAUNCH_MISSING_PROGRAM,
                               error=f"The deep worker could not start: binary not found "
                                     f"({self.cfg.claude_path}).")
         except PermissionError as e:
             stop_monitor.set()
             if monitor_thread:
                 monitor_thread.join(timeout=1)
-            return DeepResult(met=False, launch_failed=True,
+            return DeepResult(met=False, launch_failed=True, launch_problem=LAUNCH_PERMISSION_DENIED,
                               error=f"The deep worker could not start: permission denied ({e}).")
 
         # Communicate with the process (send prompt and wait for completion) in slices of one review

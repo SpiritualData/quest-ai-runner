@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import json
 import stat
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -141,6 +143,39 @@ def test_a_model_running_worker_still_announces_and_escalates():
     assert [t for t in texts if t.startswith("Starting on sonnet")]
     assert runner.models == ["sonnet", "opus"]
     assert "Goal not met yet, retrying with opus…" in texts
+
+
+# --- a worker refused at the usage limit ----------------------------------------------------------
+
+def test_a_usage_limit_status_says_when_it_resets_from_the_limit_the_runner_recorded(monkeypatch):
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    try:
+        reset = datetime.now(timezone.utc) + timedelta(hours=2)
+        limit = usage_limit.UsageLimit(message="You've hit your weekly limit", kind="weekly", resets_at=reset)
+
+        class Limited(ScriptedRunner):
+            def run_goal(self, *, goal, brief, model=None, max_turns=None):
+                usage_limit.record(limit)      # what the real runner does when the CLI refuses
+                return super().run_goal(goal=goal, brief=brief, model=model, max_turns=max_turns)
+
+        runner = Limited([DeepResult(met=False, usage_limited=True, error="You've hit your weekly limit")])
+        result, sink, provider = run_turn(runner, [NOT_MET, {"met": True}])
+        paused = [t for t in sink.texts() if t.startswith("Paused at Claude Code's usage limit")]
+        assert paused == [f"Paused at Claude Code's usage limit. It resets {usage_limit.reset_clause(limit)}."]
+        assert "UTC" in paused[0] and "—" not in paused[0]
+        assert runner.models == ["sonnet"], "terminal for the turn: no verifier call, no stronger model"
+        assert provider.verify_calls == 0
+        assert result.deep_results[0].usage_limited
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+
+
+def test_a_usage_limit_with_no_known_reset_says_so_and_invents_no_time():
+    runner = ScriptedRunner([DeepResult(met=False, usage_limited=True, error="You've hit your usage limit")])
+    _, sink, _ = run_turn(runner, [NOT_MET])
+    assert "Paused at Claude Code's usage limit. It has not said when it resets." in sink.texts()
 
 
 # --- a worker that never started ----------------------------------------------------------------
