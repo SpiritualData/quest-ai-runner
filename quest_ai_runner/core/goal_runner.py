@@ -203,7 +203,7 @@ class SubprocessGoalRunner(DeepRunner):
             try:
                 emit(ProgressEvent(
                     type=EVENT_EXEC,
-                    text=f"Not stopping the deep run: {reason}",
+                    text=f"Not stopping the work: {reason}",
                     data={"run_id": run_id, "phase": "liveness_review", "stopped": False}))
             except Exception:  # noqa: BLE001 — progress is best effort
                 pass

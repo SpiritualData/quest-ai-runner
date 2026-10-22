@@ -332,8 +332,8 @@ def test_slice_and_writeback_measures_before_and_after_and_keeps_the_workers_row
     assert by_source["measured"]["disagrees"] and by_source["recorded"]["disagrees"]   # both kept, both flagged
     assert by_source["measured"]["solution_id"] == "greet-a-person" and by_source["measured"]["milestone"].startswith("Share")
     order = [e.text for e in timeline.events if e.type in (EVENT_STATUS, "worker")]
-    before = order.index("Measuring Greeting pass rate before the change.")
-    after = order.index("Measuring Greeting pass rate after the change.")
+    before = order.index("Checking the starting value before any change.")
+    after = order.index("Checking the result after the change.")
     assert before < order.index(GREETING) < after   # announced before the worker starts, and again once it is done
 
 

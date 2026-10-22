@@ -61,7 +61,7 @@ def run_goal(orch, timeline):
 
 
 def measuring(timeline):
-    return [t for t in timeline.statuses() if t.startswith(("Measuring", "No reading"))]
+    return [t for t in timeline.statuses() if t.startswith(("Checking the", "Could not check"))]
 
 
 # -- nothing to read: nothing paid ---------------------------------------------------------------------
@@ -136,7 +136,8 @@ def test_a_slow_reading_is_announced_before_it_runs_and_again_after_the_work(wor
     timeline = Timeline()
     worker = Worker(world.registry, [["change"]], working_dir=str(repo), timeline=timeline)
     run_goal(orchestrate(world, worker, iteration=SliceAndWriteback(meters=[FixedMeter(0.5, 0.6)])), timeline)
-    assert measuring(timeline) == [f"Measuring {LABEL} before the change.", f"Measuring {LABEL} after the change."]
+    assert measuring(timeline) == ["Checking the starting value before any change.", "Checking the result after the change."]
+    assert not [t for t in timeline.statuses() if LABEL in t], "the status never prints the metric's name"
 
 
 def test_the_wait_is_announced_before_the_line_that_says_the_worker_is_starting(world, repo):  # noqa: F811
@@ -145,7 +146,7 @@ def test_the_wait_is_announced_before_the_line_that_says_the_worker_is_starting(
     worker = Worker(world.registry, [["change"]], working_dir=str(repo), timeline=timeline)
     run_goal(orchestrate(world, worker, iteration=SliceAndWriteback(meters=[FixedMeter(0.5, 0.6)])), timeline)
     order = [e.text for e in timeline.events if e.type in ("status", "worker")]
-    before = order.index(f"Measuring {LABEL} before the change.")
+    before = order.index("Checking the starting value before any change.")
     starting = next(i for i, t in enumerate(order) if t.startswith("Starting"))
     assert before < starting < order.index(GOAL_TEXT)
 
@@ -163,8 +164,8 @@ def test_a_meter_that_never_answers_does_not_hold_the_worker_back(world, repo, m
     assert elapsed < 3   # two readings of 0.3s each, and the run itself
     assert stuck.reads == 2 and len(worker.calls) == 2   # the worker did start, and was asked, as without a meter
     said = measuring(timeline)
-    assert f"Measuring {LABEL} before the change." in said
-    assert f"No reading of {LABEL} before the change: stuck did not finish within 0.3s. Going on without it." in said
+    assert "Checking the starting value before any change." in said
+    assert "Could not check the starting value in time. Going on without it." in said
     assert not [t for t in said if "—" in t]
     assert [m["source"] for m in done.metric_results] == ["not_applicable"]   # no row without a number
 

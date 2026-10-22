@@ -270,7 +270,7 @@ def _monitor_claude_session(
         elapsed = now - monitor_start
         callback(ProgressEvent(
             type=EVENT_EXEC,
-            text=f"Deep run active, {elapsed:.0f}s elapsed, {note}",
+            text=f"Still working, {note}",
             data={"run_id": beat_run_id, "phase": "heartbeat", "elapsed_seconds": round(elapsed, 1)},
         ))
 

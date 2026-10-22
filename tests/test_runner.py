@@ -951,7 +951,7 @@ def test_deep_run_has_no_fixed_kill_and_reviews_on_an_interval(monkeypatch):
     assert res.met is True and not killed
     assert procs[0].timeouts[0] == 300.0
     assert len(prompts) == 2
-    assert any("Not stopping the deep run: It is monitoring a build" in getattr(e, "text", "")
+    assert any("Not stopping the work: It is monitoring a build" in getattr(e, "text", "")
                for e in events)
 
 

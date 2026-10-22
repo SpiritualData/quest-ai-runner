@@ -137,14 +137,15 @@ nothing, select `slice-only`.
 The reading before the work happens before the worker spawns, so it is bounded and told:
 
 - it tries the cheap meter first (`recorded_row` reads a file) and announces nothing for it;
-- before a meter that takes time (`offline_arm` runs a command) it says, as a status line, `Measuring <metric> before the
-  change.`, and again `... after the change.` for the second reading;
+- before a meter that takes time (`offline_arm` runs a command) it says, as a status line, `Checking the starting value before
+  any change.`, and again `Checking the result after the change.` for the second reading (never the metric's name, which a
+  narrow screen cut mid-word);
 - the whole reading has one budget, `QAR_METRIC_ARM_TIMEOUT_SECONDS` (default 15 seconds), whatever the number of meters;
   each meter runs on its own thread and one that has not answered when the budget is spent is left behind, and an offline arm
   is stopped at the limit with its process group;
 - a reading that ran out of time gives no number and writes no row (a row without a number would count as a record). A status
-  line says so (`No reading of <metric> before the change: <meter> did not finish within 15s. Going on without it.`), and the
-  `measured` row written after the work carries it in its `reason`;
+  line says so (`Could not check the starting value in time. Going on without it.`), and the `measured` row written after the
+  work carries the meter and the budget in its `reason`;
 - the slice lookup is local and lexical (tens of milliseconds, bounded at 3 seconds) and starts nothing when there is no
   folder to look in.
 

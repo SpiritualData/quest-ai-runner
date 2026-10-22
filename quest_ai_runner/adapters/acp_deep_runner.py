@@ -397,7 +397,7 @@ class AcpDeepRunner(DeepRunnerBase):
             if now - run.last_activity >= heartbeat and now - last_beat >= heartbeat:
                 last_beat = now
                 elapsed = now - run.started
-                run.emit_exec(f"Deep run active, {elapsed:.0f}s elapsed, waiting on the agent",
+                run.emit_exec("Still working, waiting on the agent",
                               PHASE_HEARTBEAT, elapsed_seconds=round(elapsed, 1))
 
     def _result_from_response(self, run: AcpRun, response: Any) -> DeepResult:

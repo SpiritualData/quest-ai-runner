@@ -6,7 +6,7 @@ Two separate causes, both pinned here:
 
 * **A runner that does not run the ladder's model** (a consumer's in-process answerer or data-op
   runner, or a queue hand-off whose lane picks its own model) was announced and escalated exactly
-  like a Claude Code worker: "Starting on sonnet", "Deep run used sonnet", "retrying with opus",
+  like a Claude Code worker: "Starting on sonnet", "The work ran on sonnet", "retrying with opus",
   while every attempt was the same in-process call. Such a runner declares
   ``uses_deep_model = False`` and the goal loop then makes no model claim for it.
 * **A worker that never started** (Claude Code refusing an unrecognized ``--model``, bad
@@ -127,7 +127,7 @@ def test_an_in_process_runner_is_never_described_as_running_a_model():
     texts = sink.texts()
     assert not [t for t in texts if t.startswith("Starting on")]
     assert not [e for e in sink.events if "deep_model_selection" in (e.data or {})]
-    assert not [t for t in texts if t.startswith("Deep run used")]
+    assert not [t for t in texts if t.startswith("The work ran on")]
     assert not [e for e in sink.events if "deep_run_model" in (e.data or {})]
     retries = [t for t in texts if t.startswith("Goal not met yet, retrying")]
     assert retries and all(" with " not in t for t in retries)
@@ -190,10 +190,20 @@ def test_a_launch_failure_is_reported_as_an_error_not_verified_and_not_escalated
     assert runner.models == ["sonnet"], "a launch failure must not be retried on a stronger model"
     assert provider.verify_calls == 0, "there is no work product to verify"
     assert not [t for t in texts if t.startswith("Goal not met")]
-    assert not [t for t in texts if t.startswith("Deep run used")]
-    assert [t for t in texts if "could not start" in t]
+    assert not [t for t in texts if t.startswith("The work ran on")]
+    assert ["Could not start the work: There's an issue with the selected model (claude-bogus-9)."] == \
+        [t for t in texts if "could not start" in t.lower()], "the status says it plainly, without the runner's stock opening"
     assert result.deep_results and result.deep_results[0].launch_failed
     assert not result.deep_results[0].met
+
+
+def test_a_worker_that_is_not_installed_is_said_in_plain_words_from_the_structured_cause():
+    failed = DeepResult(met=False, launch_failed=True, launch_problem="missing_program",
+                        error="The deep worker could not start: binary not found (claude).")
+    _, sink, _ = run_turn(ScriptedRunner([failed]), [NOT_MET])
+    assert ("Could not start the work: the program that runs the work is not installed on this machine, "
+            "or is not on its PATH.") in sink.texts()
+    assert not [t for t in sink.texts() if "deep worker" in t or "binary" in t]
 
 
 def fake_claude(tmp_path, envelope: dict, code: int) -> str:

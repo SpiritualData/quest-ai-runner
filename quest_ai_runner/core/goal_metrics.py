@@ -43,8 +43,12 @@ NUDGE_BRIEF = (
 NUDGE_STATUS = "This change has no metric result on record; asking the worker to record it."
 # A run that did none of the work leaves nothing to measure or to find missing.
 UNFINISHED_FLAGS = ("launch_failed", "cancelled", "usage_limited", "paused", "deferred")
-# What the status line says about a reading, by the moment it is taken.
+# The moment a reading is taken, as the ledger's reason names it.
 READING_PHASES = {"before": "before the change", "after": "after the change"}
+# What the status line says while a reading runs, and what it calls the reading when none could be taken. Plain
+# words for a person: never the metric's name (a long one was cut mid-word on a narrow screen).
+READING_STATUS = {"before": ("Checking the starting value before any change.", "the starting value"),
+                  "after": ("Checking the result after the change.", "the result")}
 
 
 def working_dir_of(runner: Any, override: Optional[str]) -> Optional[str]:
@@ -101,10 +105,6 @@ class GoalMetrics:
         if self.status is not None:
             self.status(text)
 
-    def label(self) -> str:
-        found = self.spec_slice
-        return ((found.metric_name or found.metric_id)[:60]) if found is not None else "the metric"
-
     # -- before the first attempt ------------------------------------------------------------------
 
     def begin(self) -> str:
@@ -125,18 +125,19 @@ class GoalMetrics:
 
         The reading is bounded, and announced only if a meter that takes time is about to run. One that gives nothing
         writes no row (a row without a number would count as a record); when it ran out of time that is said on the status
-        line and, for a reading before the change, on the row written after the work."""
+        line and, for a reading before the change, on the row written after the work (the note names the meter; the
+        status line does not)."""
         found = self.spec_slice
         if found is None:
             return
         phase = READING_PHASES[when]
-        reading = self.iteration.read_metric(
-            found, self.working_dir, announce=lambda: self.say(f"Measuring {self.label()} {phase}."))
+        checking, what = READING_STATUS[when]
+        reading = self.iteration.read_metric(found, self.working_dir, announce=lambda: self.say(checking))
         if reading.value is not None:
             self.keep(reading.meter, **{when: reading.value})
         elif reading.note:
             self.gaps.append(f"no reading {phase}: {reading.note}")
-            self.say(f"No reading of {self.label()} {phase}: {reading.note}. Going on without it.")
+            self.say(f"Could not check {what} in time. Going on without it.")
 
     def keep(self, meter: str, before: Optional[float] = None, after: Optional[float] = None) -> None:
         found = self.spec_slice

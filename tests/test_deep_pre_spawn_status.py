@@ -39,8 +39,9 @@ from quest_ai_runner.core.orchestrator_turn import TurnCardCache, _Emitter
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
 
-GATHERING_DEEP = "Gathering context for the deep run"
-GATHERING_WORK = "Gathering context for this work"
+GATHERING = "Gathering what I need to start"
+# Words a person should never meet in a status line of the default view (they are for the log and the details).
+INTERNAL_TERMS = ("deep run", "deep worker", "deep task", "QAR", "card", "corpus", "[Pass")
 # What the turn-start step derives from the user's message (the query the turn-start assembly runs
 # for), fixed here so a test can name it.
 CONDITION = "Parser fixed"
@@ -160,7 +161,7 @@ def test_the_statuses_come_before_the_worker_and_in_order():
     orch = build(runner, CountingAssembler())
     run_deep_directly(orch, timeline, "Fix the parser bug")
 
-    gathering = timeline.status_index(GATHERING_DEEP)
+    gathering = timeline.status_index(GATHERING)
     working = timeline.status_index("Working on: Fix the parser bug")
     starting = timeline.status_index("Starting on sonnet")
     worker = timeline.worker_index("Fix the parser bug")
@@ -172,8 +173,8 @@ def test_a_pinned_model_still_says_the_worker_is_starting_and_on_what():
     orch = build(OrderedRunner(timeline), CountingAssembler())
     run_deep_directly(orch, timeline, "Fix the parser bug", model_hint="fable")
 
-    starting = timeline.status_index("Starting the deep worker on fable.")
-    assert timeline.status_index(GATHERING_DEEP) < starting < timeline.worker_index("Fix the parser bug")
+    starting = timeline.status_index("Starting the work on fable.")
+    assert timeline.status_index(GATHERING) < starting < timeline.worker_index("Fix the parser bug")
     assert not [t for t in timeline.statuses() if t.startswith("Starting on")]
 
 
@@ -186,11 +187,27 @@ def test_a_runner_that_does_not_run_the_model_never_names_a_model_or_a_deep_run(
 
     statuses = timeline.statuses()
     decide = timeline.status_index("Deciding how to run this work")
-    gathering = timeline.status_index(GATHERING_WORK)
+    gathering = timeline.status_index(GATHERING)
     assert decide < gathering < timeline.worker_index("Fix the parser bug")
     for text in statuses:
-        assert "Starting" not in text and "deep run" not in text and "deep worker" not in text
+        assert "Starting" not in text and not [t for t in INTERNAL_TERMS if t.lower() in text.lower()]
         assert "sonnet" not in text and "haiku" not in text and "opus" not in text
+
+
+def test_no_status_of_a_run_uses_an_internal_word_whatever_runner_it_goes_to():
+    """A person reads "the work", never "the deep run" or "the deep worker" (those words stay in the log and the details)."""
+    seen = []
+    for uses_model in (True, False):
+        timeline = Timeline()
+        runner = OrderedRunner(timeline, uses_model=uses_model)
+        orch = build(runner if uses_model else None, CountingAssembler(),
+                     **({} if uses_model else {"deep_runners": {"code": runner},
+                                               "deep_runner_classifier": lambda user_message, goal, brief: "code"}))
+        run_deep_directly(orch, timeline, "Fix the parser bug")
+        seen += timeline.statuses()
+    assert GATHERING in seen and "Starting on sonnet" in " ".join(seen)
+    assert [t for t in seen if t.startswith("Starting")], "the model-running worker says it is starting"
+    assert not [t for t in seen if any(word.lower() in t.lower() for word in INTERNAL_TERMS)], seen
 
 
 def test_no_status_uses_an_em_dash():
@@ -204,7 +221,7 @@ def test_nothing_is_said_about_gathering_when_there_is_nothing_to_gather():
     timeline = Timeline()
     orch = build(OrderedRunner(timeline), None)
     run_deep_directly(orch, timeline, "Fix the parser bug")
-    assert not [t for t in timeline.statuses() if t.startswith("Gathering context")]
+    assert not [t for t in timeline.statuses() if t.startswith("Gathering")]
 
 
 # --- the per-goal assembly is bounded ------------------------------------------------------------
@@ -229,7 +246,7 @@ def test_a_hung_per_goal_assembly_is_bounded_and_the_run_proceeds(monkeypatch, c
     assert runner.calls and "CTX[" not in runner.calls[0]["context_preamble"]
     assert any("timed out" in r.message.lower() and "proceeds without" in r.message.lower()
                for r in caplog.records), "the timeout must be a loud WARNING"
-    assert timeline.status_index(GATHERING_DEEP) < timeline.status_index(CONTEXT_DROPPED_STATUS) \
+    assert timeline.status_index(GATHERING) < timeline.status_index(CONTEXT_DROPPED_STATUS) \
         < timeline.worker_index("Fix the parser bug")
 
 
@@ -270,7 +287,7 @@ def test_a_single_goal_reuses_the_finished_turn_start_assembly():
     assert result.kind == "deep"
     assert assembler.calls == [CONDITION], "the request must be assembled once, not twice"
     assert f"CTX[{CONDITION}]" in runner.calls[0]["context_preamble"]
-    assert not [t for t in timeline.statuses() if t.startswith("Gathering context")], \
+    assert not [t for t in timeline.statuses() if t.startswith("Gathering")], \
         "reusing a finished assembly is instant, so nothing is announced"
 
 
@@ -288,7 +305,7 @@ def test_fanned_out_subgoals_still_assemble_for_themselves():
     assert "CTX[Add the export feature]" not in by_goal["Fix the parser bug"]
     assert "CTX[Add the export feature]" in by_goal["Add the export feature"]
     for goal in by_goal:
-        assert timeline.status_index(f"Gathering context for: {goal}") < timeline.worker_index(goal)
+        assert timeline.status_index(f"Gathering what I need for: {goal}") < timeline.worker_index(goal)
 
 
 def test_a_sequential_group_is_not_a_single_goal():
@@ -321,7 +338,7 @@ def test_a_turn_start_assembly_that_lands_late_is_joined_not_repeated(monkeypatc
     assert result.kind == "deep"
     assert assembler.calls == [CONDITION], "joining the in-flight assembly, not starting a second"
     assert f"CTX[{CONDITION}]" in runner.calls[0]["context_preamble"]
-    assert timeline.status_index(GATHERING_DEEP) < timeline.worker_index("Fix the parser bug")
+    assert timeline.status_index(GATHERING) < timeline.worker_index("Fix the parser bug")
 
 
 def test_a_turn_start_assembly_that_never_lands_is_waited_on_once_then_dropped(monkeypatch, caplog):
@@ -345,7 +362,7 @@ def test_a_turn_start_assembly_that_never_lands_is_waited_on_once_then_dropped(m
     assert "CTX[" not in runner.calls[0]["context_preamble"]
     messages = [r.message.lower() for r in caplog.records]
     assert any("turn-start" in m and "proceeds without" in m for m in messages)
-    assert timeline.status_index(GATHERING_DEEP) < timeline.status_index(CONTEXT_DROPPED_STATUS) \
+    assert timeline.status_index(GATHERING) < timeline.status_index(CONTEXT_DROPPED_STATUS) \
         < timeline.worker_index("Fix the parser bug")
 
 

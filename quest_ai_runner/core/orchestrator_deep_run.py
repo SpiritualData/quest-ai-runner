@@ -24,7 +24,7 @@ from .adapters import (
     runner_uses_deep_model,
 )
 from .goal_metrics import GoalMetrics, run_hint, working_dir_of
-from . import usage_limit
+from . import launch_failure, usage_limit
 from .goal_runner import cli_safe_model
 from .guard import ExecutionFact, ExecutionRecord, classify_exec_phase
 from .planner_context import _is_discovery_obs, _render_gathered
@@ -236,9 +236,9 @@ class DeepRunMixin:
                 # only when the worker can really be given it (``cli_safe_model``): a ladder
                 # rung it would replace with its own default must not be claimed.
                 first_rung = planned_deep_models[0] if planned_deep_models else None
-                emit.status(f"Starting the deep worker on {first_rung}."
+                emit.status(f"Starting the work on {first_rung}."
                             if first_rung and cli_safe_model(first_rung)
-                            else "Starting the deep worker.")
+                            else "Starting the work.")
                 return
             level = deep_selection.get("difficulty")
             start_text = f"Starting on {deep_selection['start_model']}"
@@ -393,14 +393,13 @@ class DeepRunMixin:
             # The goal's own context, now that its runner is resolved and the run will start (a
             # declined escalation above never pays for an assembly). Bounded by the same budget as
             # the turn-start one, so a slow store costs a stated wait, never a silent one; the
-            # status names the run honestly (only a runner that runs the deep-model ladder is a
-            # "deep run"); built once, as ``per_goal_context`` rides every attempt's preamble.
-            gathering_subject = "the deep run" if runner_uses_deep_model(terminal_runner) else "this work"
+            # status names no model, so it is true of every runner; built once, as ``per_goal_context``
+            # rides every attempt's preamble.
             per_goal_context, per_goal_cards = self._assemble_for_goal_with_cards(
                 goal, ctx_meta=ctx_meta, turn_context=turn_context,
                 status=emit.status if emit is not None else None,
-                gathering_text=(f"Gathering context for: {goal[:60]}" if multi
-                                else f"Gathering context for {gathering_subject}"))
+                gathering_text=(f"Gathering what I need for: {goal[:60]}" if multi
+                                else "Gathering what I need to start"))
             if per_goal_context and emit is not None:
                 # Progress the person can read, not internal state. "Selected context for goal: ..."
                 # named an orchestrator step and read as leaked machinery in the live status pill.
@@ -659,8 +658,8 @@ class DeepRunMixin:
                 nonlocal continued, resume_session, attempt_turns, current_brief
                 if budget is not None and tokens_used >= budget:
                     if emit is not None:
-                        emit.status(f"Deep token budget reached ({tokens_used}/{budget}); "
-                                    "stopping without continuing the run.")
+                        emit.status(f"The budget for this work is used up ({tokens_used}/{budget} tokens); "
+                                    "stopping without continuing it.")
                     return False
                 continued += 1
                 resume_session = prev.session_id
@@ -739,11 +738,10 @@ class DeepRunMixin:
                 res.model_written = not model_applies
                 if emit is not None and res.model and not res.launch_failed:
                     # WHICH model this attempt ran on: the tier it was asked for and the full id the
-                    # CLI resolved it to, as structured data the task feed can show per attempt.
-                    ran_on = (f"{res.model} ({res.resolved_model})"
-                              if res.resolved_model and res.resolved_model != res.model else res.model)
+                    # CLI resolved it to, as structured data the task feed can show per attempt. The
+                    # words say the short name only (the full id is in the data and the log).
                     emit.emit(ProgressEvent(
-                        type=EVENT_STATUS, text=f"Deep run used {ran_on}.",
+                        type=EVENT_STATUS, text=f"The work ran on {res.model}.",
                         data={"deep_run_model": {"attempt": attempt, "tier": res.model,
                                                  "model": res.resolved_model or res.model,
                                                  "run_id": captured_run_id["id"]}}))
@@ -784,7 +782,7 @@ class DeepRunMixin:
                 # stop. A further RUNG is a different runner, so it still gets its turn.
                 if getattr(res, "launch_failed", False):
                     if emit is not None:
-                        emit.status(res.error or "The deep run could not start.")
+                        emit.status(launch_failure.status_text(res))
                     if has_more_rungs:
                         continue
                     break
@@ -824,8 +822,7 @@ class DeepRunMixin:
                     if res.decision_id or not has_more_rungs:
                         break
                     if emit is not None:
-                        emit.status("That did not produce anything; escalating to the full "
-                                    "deep runner…")
+                        emit.status("That did not produce anything; trying another way…")
                     continue
                 # THE RUNNER IS OUT OF MOVES (``DeepResult.exhausted``): it already spent its own
                 # attempt budget this turn, or its retry reproduced a result it had returned before.
@@ -1033,7 +1030,7 @@ class DeepRunMixin:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
                     if emit is not None:
-                        emit.status(f"Deep token budget reached ({tokens_used}/{budget}); stopping.")
+                        emit.status(f"The budget for this work is used up ({tokens_used}/{budget} tokens); stopping.")
                     break
                 current_brief = self._augment_brief(base_brief, res.output or "", verdict)
                 verified_not_met = True
