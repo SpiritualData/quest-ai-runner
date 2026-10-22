@@ -337,7 +337,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `spec-selection:lexical-vector-gated` | Lexical vector gated | quest_ai_runner/core/spec_selection.py |  |
 | `bound-card-growth:quarantine_tool` | Card quarantine tool | evaluation/components/card_growth/impls/quarantine_tool.py |  |
 | `bound-card-growth:no_cleanup` | Store as copy mode leaves it | evaluation/components/card_growth/impls/no_cleanup.py |  |
-| `bound-card-growth:bootstrap_guards` | Bootstrap guards against re-import (planned) |  |  |
+| `bound-card-growth:bootstrap_guards` | Bootstrap guards against re-import (planned) | evaluation/components/card_growth/impls/bootstrap_guards.py |  |
 | `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | quest_ai_runner/core/spec_selection.py |  |
 | `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
 | `search-cards-and-specs:solution_views_with_links` | Cards and solutions ranked, intents reached through links (planned) |  |  |
@@ -402,6 +402,6 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
 - `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
-- `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup`
+- `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup; esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store`
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs`
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed improvement record: `esoi run record_tracking`
