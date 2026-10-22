@@ -247,6 +247,9 @@ class CardLimit:
                 self.state.admitted_over += 1
             held[card_id] = card
             self.membership_changed = True
+            # The move changed the folder; the snapshot in hand is right for it (it has the card that is
+            # about to be written), so it must not be rebuilt from disk by the notice below.
+            self.stamp = self.revision_of()
             self.reached()
             self.flush()
             return True

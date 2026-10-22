@@ -222,7 +222,7 @@ nothing but speed.
 | **Own card** | written by this store (`origin` is this store) | this store's refresh and runs |
 | **Mounted view** | another store's card read in place, read-only, never copied | its owner; the reader sees the owner's next write |
 | **Copy** | a copy-import of another store's card under an id made of its origin | the importing store re-imports it when the source changes and moves it out when the source stops offering it; `context migrate-imports` converts copies to mounts |
-| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`item-id`, `compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open when it is on (`compounded`, `duplicate-files`, `item-id`; off in the runner today), by a refresh (`superseded-import`) or by the card limit (`limit`) | restored by moving the file back |
+| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`item-id`, `compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open (`compounded`, `duplicate-files`, `item-id`; also `quest-ai-runner cards tidy`), by a refresh (`superseded-import`) or by the card limit (`limit`) | restored by moving the file back |
 
 ### Growth
 
@@ -242,18 +242,21 @@ runner opens it, and the card limit). What holds it, in the order a card meets t
 3. **No restatements.** A copy that pins exactly the files of a card the store holds is not kept (the
    store's own card wins), and a new topic is never merged into a copy.
 4. **The write rule.** No repository stores an id that repeats a namespace segment or starts with `card:`.
-5. **Tidy at open, off in the runner today.** A store built with `self_heal=True` moves cards that are
+5. **Tidy at open.** A store built with `self_heal=True` (the runner's builder does) moves cards that are
    provably copies of another card of the store to `_quarantine/` when it opens and at the end of a pass
    (compounded ids whose files another card pins, cards pinning exactly the same files, cards stored under
    a vector point id), says so once, and does not embed a store that holds more topic cards than its
-   corpus has folders. The runner's builder passes `self_heal=False` since 2026-10-22, until an
-   independent review's findings are fixed (see [context card stores](context-card-stores.md#tidying-a-store-at-open-and-by-hand)),
-   so a store that already inflated is cleaned only by `scripts/quarantine_cards.py`, whose dry run prints
-   the store's health and which keeps the judgement calls.
-6. **The card limit.** `QAR_MAX_CARDS` (default 1000, `0` or `unlimited` for none): at the limit a new
-   topic or imported card is not written, a card learned from a run or written for a quest moves the
-   coldest derived card out to `_quarantine/limit/`, and a notice says what fills the store and how to
-   change the limit. See [the card limit](context-card-stores.md#the-card-limit).
+   corpus has folders. A card with notes, quest tags, conventions, usage, an owner or a hand-written or
+   learned origin is never moved (`card_origin.protection`, the one definition the tidy, the card limit, the
+   retirement of copies and `scripts/quarantine_cards.py` share); a protected compounded copy moves only after
+   what it holds is joined onto the card it copies. See
+   [context card stores](context-card-stores.md#tidying-a-store-at-open-and-by-hand). `scripts/quarantine_cards.py`
+   keeps the judgement calls, and its dry run prints the store's health.
+6. **The card limit.** `QAR_MAX_CARDS` (the runner's default 1000, `0` or `unlimited` for none; the library
+   applies none unless its caller passes one): at the limit a new topic or imported card is not written, a
+   card learned from a run or written for a quest moves the coldest untouched derived card out to
+   `_quarantine/limit/` (never one with notes, tags or usage), and a two-line notice says what fills the
+   store and how to change the limit. See [the card limit](context-card-stores.md#the-card-limit).
 
 Growth paths still open (two reviews, 2026-10-22) are listed in the `bootstrap_guards` implementation of
 `bound-card-growth` in `esoi/implementations.csv`, where the next fix is chosen from.
@@ -277,6 +280,13 @@ problems are where new work starts. A link cannot reach a request whose words ma
 metric when neither its problem nor its solution matches, nor an intent that holds no problem or
 solution; ranking every record kind (`every_record_a_view`) is the recorded alternative, and the
 metric decides between them.
+
+The working default is built, not selected: `core/unified_search.py` (`solutions_and_problems_with_links`)
+ranks card views (`adapters/card_views.py`, from any `CardRepository`, text `card_embed_text`) and record
+views (`views_from_spec_index`) with the spec-selection stages, and a run reaches it through the read-only
+tool `search_cards_and_specs`. The context assembler is unchanged: nothing here enters a run's assembled
+context until `metric-search-cards-and-specs` says so. Details: `docs/spec-selection.md`, Cards and records
+in one ranking.
 
 ## The two prompt gates (doctrine, generic)
 

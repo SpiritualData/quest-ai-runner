@@ -402,8 +402,10 @@ All environment variables (in a lane's `qar.toml` `[env]` table or its unit envi
 
 ## The card limit
 
-A store holds at most `QAR_MAX_CARDS` cards (1,000 unless set; `0` or the word `unlimited` for no limit).
-The quarantine folder, the sidecars and the turn files do not count. A limit like this was tried and
+A store the runner builds holds at most `QAR_MAX_CARDS` cards (1,000 unless set; `0` or the word `unlimited`
+for no limit). The number belongs to the runner: `FileContextStore(max_cards=...)` called from code applies
+no limit unless its caller passes one, and the runner's builders (`config_assembler.py`, the `bootstrap`
+command) pass `card_limit.max_cards_from_env()`. The quarantine folder, the sidecars and the turn files do not count. A limit like this was tried and
 removed on 2026-10-05 because it refused to index without saying so and left a person to guess the number,
 so this one never acts silently. It applies to the default local folder store; a store on the Quest backend
 keeps its cards there.
@@ -411,25 +413,39 @@ keeps its cards there.
 **At the limit**, one function (`CardLimit.admit`) answers every writer:
 
 - a card that already exists is refreshed in place, always;
-- a new derived card (a topic card or an import, regenerable from the corpus) is not written, and the
-  model is not asked to write cards it would have to refuse; the files wait, and raising the limit
-  indexes them;
+- a new derived card (a topic card or an import, regenerable from the corpus) is not written. A store with
+  room for N more cards asks the model about the N most recently changed folders only (those with enough
+  files for a card first), never about every folder to have most of its cards refused; the other files
+  wait, not "seen", and raising the limit (or a card moving out) indexes them. A full store asks the model
+  nothing;
 - a new card learned from a run or written for a quest is admitted by moving the least valuable derived
   card out (unused first, then least recently touched) to `_quarantine/limit/`, with a line in
-  `manifest.jsonl` there. Nothing is deleted. When nothing derived can move, the card is admitted anyway
-  and the notice says so;
+  `manifest.jsonl` there. Nothing is deleted. Only a card an index pass wrote and nobody has touched can
+  move (`card_origin.protection`): never one with notes or edits, quest tags, conventions, usage, an owner,
+  or a hand-written or learned origin. Each candidate is read again from disk, under the folder's lock,
+  just before it moves. When nothing can move, the card is admitted anyway and the notice says so;
+- the folder's lock (`.store.lock`, `adapters/card_store_lock.py`) is shared by every process that changes
+  the folder (the lanes, a terminal chat, a tidy), so four writers at the limit still end at the limit and
+  every move is counted once;
 - a store already above the limit when it opens is never trimmed by the limit. It gets the notice; only the
-  tidy of provable duplicates (off in the runner today, see below) or the cleanup script removes anything from it.
+  tidy of provable duplicates (see below) or the cleanup script removes anything from it.
 
-**The notice**, once per process when the limit is first hit, or at open when the store is at or above
-it: three short lines on screen (the terminal shows a package WARNING as a dim line) and the whole text in
-the log. For example: "Your context store is full at 1000 cards, so new topic cards are not being added.
-It holds 620 topic cards (the biggest folders: a 340, b 190, c 120), 200 imported from other stores, 150
-learned from runs, 30 from quests. To allow more, set QAR_MAX_CARDS to a bigger number, or ask the AI:
-raise the QAR card limit to 2000." The breakdown is also written to `card_limit_report.md` in the store
-and printed by `quest-ai-runner cards report [--cards-dir DIR]`: counts by kind (topic cards by top-level
-folder, imports by source store, learned, managed, moved out), what the limit has refused or moved since it
-was reached, the coldest derived cards, and the ways to change the limit.
+**The notice**, once per process, when a pass that hit the limit ends (so it describes the store as it is),
+when a write is refused, or at open when the store is at or above the limit. On screen it is two warning
+lines that fit an 80 column terminal (the transcript shows the first sentence of a warning, cut to the
+window): the four counts on one line, then how to change the limit.
+
+    Context store full at 1,000: 812 topic, 150 imported, 30 learned, 8 quest
+    Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it.
+
+A larger store shortens the first line step by step (`Store over limit 1,000 (1,430): ...`, then without
+thousands separators, then `12k`). The log carries the whole text: the biggest folders, where the report is,
+the variable, where a lane reads its environment from, and the way to put a moved card back. A startup
+callback gets the same two lines. A lane has no screen, so the first task that starts afterwards carries
+them as a status line on its live progress feed, once. The breakdown is also written to
+`card_limit_report.md` in the store and printed by `quest-ai-runner cards report [--cards-dir DIR]`: counts
+by kind (topic cards by top-level folder, imports by source store, learned, managed, moved out), what the
+limit has refused or moved since it was reached, the coldest derived cards, and the ways to change the limit.
 
 **Changing it.** Set `QAR_MAX_CARDS=<number>` where the lane reads its environment, then restart the lane.
 A lane reads it from, strongest first: the process environment (the service unit's `Environment=` or
@@ -447,18 +463,33 @@ store above its limit.
 
 ## Tidying a store: at open, and by hand
 
-**The tidy at open is off in the runner today.** A store built with `self_heal=True` moves cards that are
-provably copies of other cards of the store (never a card another system manages, a used card or a card
-learned from a run, except a compounded copy that adds no notes) out to `_quarantine/` before the index is
-built, paced so the first turn is not starved, and says "Tidied N duplicate context cards. They are kept in a
-folder and can be put back." once. The runner's own builder (`config_assembler.py`) passes `self_heal=False`
-since 2026-10-22: an independent review found the tidy can move a card a person wrote with no provenance and
-can fold edits away on real stores, so it stays off until those findings are fixed. Until then a store that
-already inflated is cleaned only by hand. `scripts/quarantine_cards.py --cards-dir DIR` is the same classification plus the judgement calls
-(excluded folders, overlap, thin cards), a dry run until `--apply`; its output starts with the store's
-health: cards by kind, ids that stack import prefixes, cards pinning the same files, folders of the corpus,
-and, per reason, how many cards were created in the last 14 days (a card carries `provenance.created_at`
-from when it is first written; older cards have no date and are reported as such).
+**The tidy at open.** A store built with `self_heal=True` (the runner's builder does) moves cards that are
+provably copies of other cards of the store out to `_quarantine/` before the index is built and at the end of
+a pass, paced so the first turn is not starved, and says "Tidied N duplicate context cards. They are kept in
+a folder and can be put back." once. What may never move is one definition, `card_origin.protection`: a card
+another system manages, a used card, one with notes or edits, quest tags or conventions, one learned from a
+run, and one with no provenance (a person wrote it). Of the rest, a compounded copy and an exact duplicate
+(the same files and the same name) move; the same files under a different name are two topics of one file,
+and both stay. A protected compounded copy, or a card stored under a vector point id (`card:<id>`), moves
+only after everything it holds is joined onto the card it stands for: notes by item id (of two items with one
+id, the newer by `ts`), quest tags as a union, usage added; a name, description or summary that differs
+cannot be joined, a card of another system is never folded, and a stray naming a card of another store is
+left, so those stay where they are and are counted ("left in place on purpose"). Each card is read again,
+under the folder's lock, just before it moves; one manifest line per move is appended as it happens
+(`_quarantine/<time>-<pid>-<random>-tidy-manifest.jsonl`, one file per process), and only one process
+tidies a folder at a time. A failure is logged as a warning with the trace.
+
+`quest-ai-runner cards tidy [--cards-dir DIR]` does the same by hand with what the package ships: a dry run
+that lists what would move and what stays and why, and `--apply` to move it. `scripts/quarantine_cards.py
+--cards-dir DIR` (in the source tree) is the same classification plus the judgement calls (excluded folders,
+overlap, thin cards), a dry run until `--apply`; its output starts with the store's health: cards by kind, ids
+that stack import prefixes, cards pinning the same files, folders of the corpus, and, per reason, how many
+cards were created in the last 14 days (a card carries `provenance.created_at` from when it is first
+written; older cards have no date and are reported as such).
+
+A corpus folder that is renamed together with the store inside it (`<root>/.quest-context`) records its new
+root at the next pass instead of being refused; a store kept elsewhere for a root that still exists is still
+refused (use `context move-root`).
 
 ## A person who belongs to an org and also runs a personal lane
 
@@ -699,5 +730,7 @@ records in `bootstrap_meta.json` are ignored in `copy` mode.
   and ranks by keywords only.
 - `quest-ai-runner cards report [--cards-dir DIR]` prints what fills a store, what its card limit has refused
   or moved, and how to change the limit (read only; `--write` also rewrites `card_limit_report.md` in the store).
+- `quest-ai-runner cards tidy [--cards-dir DIR] [--apply]` lists, or with `--apply` moves, the cards that are
+  provably copies; a card with notes, usage, quest tags or a hand-written origin is never moved.
 - `quest-ai-runner reconcile-plan <quest_id>` compares a quest's plan with what happened and prints the
   changes it would make; `--write` applies them.

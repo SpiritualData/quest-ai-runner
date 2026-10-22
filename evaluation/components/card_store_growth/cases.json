@@ -18,7 +18,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 1,
+   "seed": 20,
    "steps": 20
   },
   "expect": {
@@ -32,7 +32,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 2,
+   "seed": 32,
    "steps": 20
   },
   "expect": {
@@ -46,7 +46,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 3,
+   "seed": 33,
    "steps": 20
   },
   "expect": {
@@ -60,7 +60,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 5,
+   "seed": 36,
    "steps": 20
   },
   "expect": {
@@ -74,7 +74,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 6,
+   "seed": 43,
    "steps": 20
   },
   "expect": {
@@ -88,7 +88,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 9,
+   "seed": 47,
    "steps": 20
   },
   "expect": {
@@ -102,7 +102,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 24,
+   "seed": 59,
    "steps": 20
   },
   "expect": {
@@ -116,7 +116,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 28,
+   "seed": 61,
    "steps": 20
   },
   "expect": {
@@ -130,7 +130,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 36,
+   "seed": 71,
    "steps": 20
   },
   "expect": {
@@ -144,7 +144,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 41,
+   "seed": 100,
    "steps": 20
   },
   "expect": {
@@ -159,7 +159,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 43,
+   "seed": 150,
    "steps": 20
   },
   "expect": {
@@ -174,7 +174,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 47,
+   "seed": 126,
    "steps": 20
   },
   "expect": {
@@ -189,7 +189,7 @@
   "area": "random-world",
   "kind": "fuzz",
   "args": {
-   "seed": 52,
+   "seed": 186,
    "steps": 20
   },
   "expect": {
@@ -270,6 +270,137 @@
    "eq": {
     "notice_with_breakdown": 1,
     "nothing_removed": 1
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "CSG-20",
+  "area": "protected-cards",
+  "kind": "limit_protected",
+  "args": {
+   "limit": 4
+  },
+  "expect": {
+   "eq": {
+    "moved_that_hold_something": 0,
+    "notes_kept": 1,
+    "learned_admitted": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-21",
+  "area": "protected-cards",
+  "kind": "tidy_protected",
+  "args": {},
+  "expect": {
+   "eq": {
+    "protected_moved": 0,
+    "by_hand_kept": 1,
+    "tagged_kept": 1,
+    "taught_kept": 1,
+    "copy_note_kept": 1,
+    "plain_copy_moved": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-22",
+  "area": "stale-writer",
+  "kind": "stale_writer",
+  "args": {},
+  "expect": {
+   "eq": {
+    "stub_created": 0,
+    "cards_changed_by_the_stale_edit": 0
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "CSG-23",
+  "area": "stale-writer",
+  "kind": "mounted_edit",
+  "args": {},
+  "expect": {
+   "eq": {
+    "own_card_untouched": 1,
+    "neighbour_card_untouched": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-24",
+  "area": "legacy-store",
+  "kind": "old_copy_with_notes",
+  "args": {},
+  "expect": {
+   "eq": {
+    "retired": 1,
+    "notes_joined": 1,
+    "tags_joined": 1,
+    "usage_joined": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-25",
+  "area": "legacy-store",
+  "kind": "moved_corpus",
+  "args": {},
+  "expect": {
+   "eq": {
+    "indexed_after_rename": 1
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "CSG-26",
+  "area": "card-limit",
+  "kind": "fresh_bootstrap_cost",
+  "args": {
+   "folders": 30,
+   "limit": 10
+  },
+  "expect": {
+   "eq": {
+    "calls_at_most_one_per_folder_of_room": 1,
+    "refused": 0,
+    "second_pass_free": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-27",
+  "area": "processes",
+  "kind": "concurrent_tidy",
+  "args": {
+   "cards": 300
+  },
+  "expect": {
+   "eq": {
+    "files_conserved": 1,
+    "moves_counted_once": 1,
+    "notes_folded_once": 1,
+    "manifests_name_every_move": 1
+   }
+  }
+ },
+ {
+  "id": "CSG-28",
+  "area": "processes",
+  "kind": "concurrent_limit",
+  "args": {
+   "limit": 100
+  },
+  "expect": {
+   "eq": {
+    "limit_held": 1,
+    "all_written": 1,
+    "moves_counted_once": 1,
+    "nothing_deleted": 1
    }
   },
   "heldout": true

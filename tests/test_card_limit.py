@@ -265,6 +265,15 @@ class TestLearnedAndManagedCards:
         assert line["moved"] == "topic-3" and line["kind"] == "topic" and "limit" in line["why"]
         assert store.limit_guard.state.evicted == 1
 
+    def test_learned_cards_in_a_row_each_move_one_cold_card_and_the_total_stays_at_the_limit(self, tmp_path):
+        """The notice rebuilt the snapshot in the middle of an admission, so the card being admitted was forgotten
+        and every second learned card went in without making room (a store of 4 held 5 after two)."""
+        store = self.full_store(tmp_path)
+        for text in ("fix the chat bug", "add billing export", "explain search"):
+            store.record(text, {"kind": "met", "files": []})
+            assert len(card_ids(tmp_path / "cards")) == 4
+        assert len(list((tmp_path / "cards" / "_quarantine" / "limit").glob("*.json"))) == 3
+
     def test_a_card_written_for_a_quest_is_admitted_the_same_way(self, tmp_path):
         store = self.full_store(tmp_path)
         assert store.write_card("quest-1", card("quest-1", kind="managed"))

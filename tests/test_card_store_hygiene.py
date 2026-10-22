@@ -26,7 +26,8 @@ SD, PRODUCT, ROOT = "sd-aaaaaa", "product-bbbbbb", "root-cccccc"
 
 
 def card(card_id: str, files: List[str] = (), **extra: Any) -> Dict[str, Any]:
-    out = {"id": card_id, "name": card_id, "summary": f"about {card_id}", "keywords": [card_id],
+    # A copy carries the name of the card it copies, so the default name is the id without its import prefixes.
+    out = {"id": card_id, "name": card_id.split("--")[-1].replace("card:", "", 1), "summary": f"about {card_id}", "keywords": [card_id],
            "files": [{"path": p} for p in files], "usage_count": 0,
            "provenance": {"created_by_task": "bootstrap"}}
     out.update(extra)
@@ -115,7 +116,7 @@ class TestCompoundedCopies:
         seed(cards, [card("t", files), card(f"{SD}--{PRODUCT}--t", files, content=[note])])   # its summary was edited
         plan, result = plan_and_apply(cards)
         assert result.moved == 0 and ids(cards) == sorted(["t", f"{SD}--{PRODUCT}--t"])
-        assert len(plan.kept) == 1 and "its name differs" in next(iter(plan.kept))
+        assert len(plan.kept) == 1 and "its summary differs" in next(iter(plan.kept))
 
     def test_a_copy_owned_by_another_system_stays(self, tmp_path):
         cards = tmp_path / "cards"
@@ -128,9 +129,9 @@ class TestExactDuplicates:
     def test_the_most_used_of_two_cards_pinning_the_same_files_stays(self, tmp_path):
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
-        seed(cards, [card("plain", files), card("busy", files, usage_count=0)])
+        seed(cards, [card("plain", files, name="a topic"), card("busy", files, usage_count=0, name="a topic")])
         busy = FilesystemCardRepository(str(cards)).read("busy")
-        busy["name"] = "a"          # a name matching the files outranks one that does not
+        busy["keywords"] = ["a", "one"]       # keywords matching the files outrank ones that do not
         FilesystemCardRepository(str(cards)).write("busy", busy)
         plan_and_apply(cards)
         assert len(ids(cards)) == 1
@@ -138,8 +139,8 @@ class TestExactDuplicates:
     def test_a_used_or_learned_duplicate_is_kept_and_a_plain_one_is_not(self, tmp_path):
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
-        seed(cards, [card("plain", files), card("used", files, usage_count=4),
-                     card("taught", files, provenance={"created_by_task": "a run"})])
+        seed(cards, [card("plain", files, name="a topic"), card("used", files, usage_count=4, name="a topic"),
+                     card("taught", files, provenance={"created_by_task": "a run"}, name="a topic")])
         plan, result = plan_and_apply(cards)
         assert ids(cards) == ["taught", "used"] and result.moved == 1
         assert moved(cards, "duplicate-files") == ["plain"]
@@ -151,6 +152,15 @@ class TestExactDuplicates:
                                                            provenance={"created_by_task": "a run"})])
         plan, result = plan_and_apply(cards)
         assert result.moved == 0 and plan.kept
+
+    def test_two_topics_about_one_file_are_two_cards_and_both_stay(self, tmp_path):
+        cards = tmp_path / "cards"
+        files = ["handbook.md"]
+        seed(cards, [card("handbook-billing", files, name="handbook billing"),
+                     card("handbook-auth", files, name="handbook auth")])
+        plan, result = plan_and_apply(cards)
+        assert result.moved == 0 and ids(cards) == ["handbook-auth", "handbook-billing"]
+        assert any("its name differs" in why for why in plan.kept)
 
     def test_a_card_that_pins_no_file_is_never_a_duplicate(self, tmp_path):
         cards = tmp_path / "cards"
@@ -213,8 +223,9 @@ class TestWhatAPersonAddedIsNeverMoved:
     def test_a_card_somebody_added_to_is_kept_whatever_its_rank_and_a_used_one_displaces_only_a_plain_one(self, tmp_path):
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
-        seed(cards, [card("busy", files, usage_count=3), card("plain", files),
-                     card("taught", files, content=[NOTE]), card("tagged", files, scope_tags=["quest:q1"])])
+        seed(cards, [card("busy", files, usage_count=3, name="a topic"), card("plain", files, name="a topic"),
+                     card("taught", files, content=[NOTE], name="a topic"),
+                     card("tagged", files, scope_tags=["quest:q1"], name="a topic")])
         plan, result = plan_and_apply(cards)
         assert ids(cards) == ["busy", "tagged", "taught"] and moved(cards, "duplicate-files") == ["plain"]
 
@@ -239,6 +250,14 @@ class TestWhatAPersonAddedIsNeverMoved:
         plan, result = plan_and_apply(cards)
         assert result.moved == 0 and ids(cards) == ["card:topic", "topic"]
         assert any("summary differs" in why for why in plan.kept)
+
+    def test_two_versions_of_a_note_with_the_same_time_cannot_be_told_apart_so_the_stray_stays(self, tmp_path):
+        cards = tmp_path / "cards"
+        seed(cards, [card("topic", ["a/one.md", "a/two.md"], content=[dict(NOTE, locator={"text": "one"})]),
+                     card("card:topic", name="topic", summary="about topic",
+                          content=[dict(NOTE, locator={"text": "another"})])])
+        plan, result = plan_and_apply(cards)
+        assert result.moved == 0 and any("same time" in why for why in plan.kept)
 
     def test_a_stray_owned_by_another_system_is_left(self, tmp_path):
         cards = tmp_path / "cards"
@@ -268,10 +287,10 @@ class TestTheMoveLooksAgain:
     def test_a_note_added_between_the_scan_and_the_move_keeps_the_card_where_it_is(self, tmp_path):
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
-        seed(cards, [card("a-topic", files, provenance={"created_by_task": "bootstrap",
-                                                        "created_at": "2026-01-01T00:00:00+00:00"}),
-                     card("a-topic-2", files, provenance={"created_by_task": "bootstrap",
-                                                          "created_at": "2026-02-01T00:00:00+00:00"})])
+        seed(cards, [card("a-topic", files, name="a topic", provenance={"created_by_task": "bootstrap",
+                                                                        "created_at": "2026-01-01T00:00:00+00:00"}),
+                     card("a-topic-2", files, name="a topic", provenance={"created_by_task": "bootstrap",
+                                                                          "created_at": "2026-02-01T00:00:00+00:00"})])
         plan = hygiene.plan_tidy(hygiene.card_files_in(cards))
         assert [m.card_id for m in plan.moves] == ["a-topic-2"]
         other = store(tmp_path)
@@ -283,7 +302,7 @@ class TestTheMoveLooksAgain:
     def test_a_card_somebody_else_already_moved_is_not_counted_twice(self, tmp_path):
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
-        seed(cards, [card("t", files), card("dup", files)])
+        seed(cards, [card("t", files, name="a topic"), card("dup", files, name="a topic")])
         plan = hygiene.plan_tidy(hygiene.card_files_in(cards))
         first, second = hygiene.apply_tidy(cards, plan), hygiene.apply_tidy(cards, plan)
         assert (first.moved, second.moved) == (1, 0)
@@ -306,11 +325,11 @@ class TestSeveralProcessesTidyOneStore:
         count = 40
         for i in range(count):
             files = [f"f{i}/a.md", f"f{i}/b.md"]
-            seed(cards, [card(f"f{i}-topic", files, provenance={"created_by_task": "bootstrap",
-                                                                "created_at": "2026-01-01T00:00:00+00:00"}),
-                         card(f"f{i}-dup", files, provenance={"created_by_task": "bootstrap",
-                                                              "created_at": "2026-02-01T00:00:00+00:00"}),
-                         card(f"card:f{i}-topic", name=f"f{i}-topic", summary=f"about f{i}-topic",
+            seed(cards, [card(f"f{i}-topic", files, name=f"f{i}", provenance={"created_by_task": "bootstrap",
+                                                                              "created_at": "2026-01-01T00:00:00+00:00"}),
+                         card(f"f{i}-dup", files, name=f"f{i}", provenance={"created_by_task": "bootstrap",
+                                                                            "created_at": "2026-02-01T00:00:00+00:00"}),
+                         card(f"card:f{i}-topic", name=f"f{i}", summary=f"about f{i}-topic",
                               content=[dict(NOTE, id=f"c{i}")])])
         before = len(list(cards.glob("*.json")))
         context = mp.get_context("fork")

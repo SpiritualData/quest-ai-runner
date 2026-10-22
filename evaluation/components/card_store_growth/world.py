@@ -25,6 +25,11 @@ After EVERY operation:
       operations added since the last check (times the stores that can hold a copy)
   I6  no store holds more cards than its limit, unless everything it holds was learned or written for a
       quest (those are admitted whatever the limit)
+  I7  nothing a person or a run added is ever moved out of a store by the tidy, the card limit or a copy's
+      retirement: (a) no card holding notes, quest tags, usage, conventions, an owner, or a hand-written or
+      learned origin sits in ``_quarantine/limit`` or ``_quarantine/duplicate-files``; (b) one that sits in
+      ``_quarantine/compounded`` or ``_quarantine/superseded-import`` has its notes and quest tags on a card
+      the store still holds
 """
 from __future__ import annotations
 
@@ -52,7 +57,10 @@ NOTES = ["fix the chat bug", "add billing export", "explain search", "document t
 OPERATIONS = (["bootstrap"] * 22 + ["refresh"] * 10 + ["bootstrap_nollm"] * 3 + ["edit"] * 10
               + ["add_folder"] * 7 + ["add_file"] * 6 + ["del_file"] * 4 + ["del_folder"] * 3
               + ["record"] * 5 + ["record_files"] * 2 + ["update"] * 5 + ["managed"] * 2 + ["prune"] * 2
-              + ["merge"] * 2 + ["widen"] * 2)
+              + ["merge"] * 2 + ["widen"] * 2 + ["scope"] * 3 + ["handwrite"] * 2 + ["tidy"] * 3)
+# Some worlds are lived in by people and runs: they teach cards, tag them for quests, write their own, and a
+# tidy runs often. Nothing that is added this way may ever be moved out (I7).
+MEDDLING = ["scope", "handwrite", "tidy", "update", "record", "refresh", "bootstrap"] * 6
 SETTLE_EVERY = 8
 
 
@@ -120,6 +128,33 @@ def file_set(card: Dict[str, Any]) -> frozenset:
     return frozenset((f["path"] if isinstance(f, dict) else f) for f in card.get("files", []))
 
 
+def holds_something(card: Dict[str, Any]) -> bool:
+    """Whether a card holds what no file can regenerate: notes, quest tags, conventions, usage, an owner, or an
+    origin other than an index pass (a learned card, or one a person wrote with none). Written here, apart from the
+    library, so the check does not agree with the library by construction."""
+    prov = card.get("provenance") if isinstance(card.get("provenance"), dict) else {}
+    try:
+        used = int(card.get("usage_count") or 0) > 0
+    except (TypeError, ValueError):
+        used = False
+    return bool(card.get("managed_by") or card.get("managed_fields") or card.get("managed_items") or used
+                or prov.get("created_by_task") != "bootstrap" or "content" in card
+                or card.get("scope_tags") or card.get("conventions"))
+
+
+def quarantined_cards(cards_dir: Path, reason: str) -> List[Dict[str, Any]]:
+    folder = cards_dir / "_quarantine" / reason
+    out: List[Dict[str, Any]] = []
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        try:
+            card = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(card, dict):
+            out.append(card)
+    return out
+
+
 def is_derived(card: Dict[str, Any]) -> bool:
     """A topic card or a copy of one: what the corpus can regenerate. Everything else was learned or written for a quest."""
     prov = card.get("provenance") if isinstance(card.get("provenance"), dict) else {}
@@ -130,8 +165,9 @@ class World:
     """The corpora, their stores, and the operations (all seeded; nothing here is random without ``rng``)."""
 
     def __init__(self, base: Path, rng: random.Random, *, depth: int, shared: bool = False, symlink: bool = False,
-                 cards_below: bool = False, tree_link: bool = False, limit: Optional[int] = None):
-        self.base, self.rng, self.limit = base, rng, limit
+                 cards_below: bool = False, tree_link: bool = False, limit: Optional[int] = None,
+                 meddle: bool = False):
+        self.base, self.rng, self.limit, self.meddle = base, rng, limit, meddle
         self.roots = [base / "top"]
         for i in range(1, depth):
             self.roots.append(self.roots[-1] / LEVEL_NAMES[i - 1])
@@ -145,7 +181,7 @@ class World:
         self.widened: Dict[int, int] = {}
         self.added = 0           # folders, files and cards the operations have added (for I5)
         self.trace = [f"world depth={depth} shared={shared} symlink={symlink} cards_below={cards_below} "
-                      f"tree_link={tree_link} limit={limit}"]
+                      f"tree_link={tree_link} limit={limit} meddle={meddle}"]
         for i, root in enumerate(self.roots):
             root.mkdir(parents=True, exist_ok=True)
             for _ in range(rng.randint(2, 3)):
@@ -165,7 +201,7 @@ class World:
     def root_for(self, i: int) -> Path:
         return self.roots[self.widened.get(i, i)]
 
-    def store(self, i: int) -> FileContextStore:
+    def store(self, i: int, heal: Optional[bool] = None) -> FileContextStore:
         root = self.root_for(i)
         root_s, cdir = str(root), str(self.cards[i])
         if self.alias is not None and self.alias.resolve() == root.resolve():
@@ -176,7 +212,9 @@ class World:
         if store_accepts("max_cards"):
             kwargs["max_cards"] = self.limit or 0
         if store_accepts("self_heal"):
-            kwargs["self_heal"] = runner_self_heal()     # as the runner ships it, not forced on
+            # As the runner ships it, not forced on; the ``tidy`` operation asks for it on, because what the
+            # tidy may move is exactly what I7 is about, whether or not a runner runs it at open today.
+            kwargs["self_heal"] = runner_self_heal() if heal is None else heal
         return FileContextStore(cdir, **kwargs)
 
     def index(self, i: int, *, refresh: bool = False, model: bool = True) -> int:
@@ -252,6 +290,24 @@ class World:
                     card_id = "card:" + card_id      # how a vector hit names a card
                 self.store(i).add_content(card_id, {"type": "note", "locator": {"text": "learned"}, "why": "w"})
                 self.added += 1
+        elif op == "scope":
+            ids = sorted(cards_in(self.cards[i]))
+            if ids:
+                self.store(i).update_card(self.rng.choice(ids), scope_tags=[f"quest:q{self.rng.randint(0, 3)}"])
+                self.added += 1
+        elif op == "handwrite":
+            # A card a person wrote: no provenance, pinning the very files a topic card pins.
+            topics = [c for c in cards_in(self.cards[i]).values() if is_derived(c) and file_set(c)]
+            if topics:
+                source = self.rng.choice(sorted(topics, key=lambda c: c["id"]))
+                name = f"by-hand-{self.rng.randint(0, 9999)}"
+                self.store(i).write_card(name, {"id": name, "name": "by hand", "summary": "written by a person",
+                                                "keywords": ["by-hand"], "files": list(source["files"])})
+                self.added += 1
+        elif op == "tidy":
+            if store_accepts("self_heal"):
+                for level in self.levels():       # a runner starting in every corpus of the world
+                    self.store(level, heal=True).tidy()
         elif op == "managed":
             quest = f"quest-{self.rng.randint(0, 9)}"
             self.store(i).write_card(quest, {"id": quest, "name": "quest", "summary": "a quest",
@@ -300,6 +356,20 @@ def check(world: World) -> List[str]:
                 bad.append(f"I3 {name}: {' | '.join(i[:50] for i in ids[:3])} pin the same files")
         if world.limit and len(cards) > world.limit and any(is_derived(c) for c in cards.values()):
             bad.append(f"I6 {name}: {len(cards)} cards, over the limit of {world.limit}")
+        for reason in ("limit", "duplicate-files"):
+            for card in quarantined_cards(cdir, reason):
+                if holds_something(card):
+                    bad.append(f"I7a {name}: {str(card.get('id'))[:60]} holds something added to it and was moved "
+                               f"to {reason}")
+        held_notes = {i.get("id") for c in cards.values() for i in (c.get("content") or []) if isinstance(i, dict)}
+        held_tags = {t for c in cards.values() for t in (c.get("scope_tags") or [])}
+        for reason in ("compounded", "superseded-import"):
+            for card in quarantined_cards(cdir, reason):
+                lost_notes = {i.get("id") for i in (card.get("content") or []) if isinstance(i, dict)} - held_notes
+                lost_tags = set(card.get("scope_tags") or []) - held_tags
+                if lost_notes or lost_tags:
+                    bad.append(f"I7b {name}: {str(card.get('id'))[:60]} was moved to {reason} and its "
+                               f"{len(lost_notes)} notes and {len(lost_tags)} quest tags are on no card")
     return bad
 
 
@@ -333,7 +403,8 @@ def run(seed: int, steps: int = 24, keep: bool = False) -> Dict[str, Any]:
     rng = random.Random(seed)
     depth = rng.randint(2, 5)
     options = dict(shared=rng.random() < 0.15, symlink=rng.random() < 0.15, cards_below=rng.random() < 0.15,
-                   tree_link=rng.random() < 0.1, limit=rng.choice([None, None, rng.randint(6, 14)]))
+                   tree_link=rng.random() < 0.1, limit=rng.choice([None, None, rng.randint(6, 14)]),
+                   meddle=rng.random() < 0.35)
     scratch = Path(tempfile.mkdtemp(prefix=f"qar_growth_{seed}_"))
     violations: List[str] = []
     ops_done = 0
@@ -345,7 +416,7 @@ def run(seed: int, steps: int = 24, keep: bool = False) -> Dict[str, Any]:
             trace = world.trace
             last_total, last_added = 0, 0
             for step in range(steps):
-                op, level = rng.choice(OPERATIONS), rng.randrange(depth)
+                op, level = rng.choice(OPERATIONS + MEDDLING if world.meddle else OPERATIONS), rng.randrange(depth)
                 world.trace.append(f"{step}: {op}({level})")
                 try:
                     world.apply(op, level)

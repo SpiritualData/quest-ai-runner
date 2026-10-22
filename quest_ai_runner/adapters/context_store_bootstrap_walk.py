@@ -695,7 +695,11 @@ class BootstrapWalkMixin:
                 "conventions": [],
                 "provenance": {
                     **prior,
-                    "created_by_task": prior.get("created_by_task") or "bootstrap",
+                    # A card that already exists keeps who wrote it; one with no author at all (written by a
+                    # person) is not turned into an index-pass card by being refreshed, which would make it
+                    # movable. Only a new card is "bootstrap".
+                    "created_by_task": prior.get("created_by_task") or (
+                        "" if existing and not tc.get("origin_fields") else "bootstrap"),
                     "model": prior.get("model", ""),
                     "created_at": prior.get("created_at", ""),
                     "last_verified_at": prior.get("last_verified_at", ""),

@@ -6,8 +6,9 @@ looking:
   compounded      a copy under an id that stacks import prefixes (``a--root-x--root-y--topic``: see
                   ``card_origin.compounding_evidence``) whose files are pinned, exactly, by another card of
                   the store. It is a copy of that card;
-  duplicate-files two cards pinning exactly the same paths are one card. The most used stays, else the
-                  earliest, else the first by name;
+  duplicate-files two cards pinning exactly the same paths and carrying the same name are one card. The most
+                  used stays, else the earliest, else the first by name. The same files under a different name
+                  are two topics of one file, and both stay;
   item-id         a card stored under a vector point id (``card:<id>``): the card it was meant for is
                   ``<id>``. Its notes are folded into that card, and the stray one is moved.
 
@@ -158,6 +159,11 @@ class Facts:
     segments: int = 1
     compounded: str = ""
     name_match: float = 0.0
+    name_key: str = ""                # the card's name, lower case on one line: what it is about
+
+
+def name_key_of(card: Dict[str, Any]) -> str:
+    return " ".join(str(card.get("name") or "").lower().split())
 
 
 def store_id_of(cards_dir: Path) -> str:
@@ -185,6 +191,7 @@ def facts_of(path: Path, card: Dict[str, Any]) -> Facts:
         protection=card_origin.protection(card),
         segments=len(card_origin.namespace_segments(card_id)),
         compounded=card_origin.compounding_evidence(card_id),
+        name_key=name_key_of(card),
     )
 
 
@@ -226,9 +233,9 @@ def fold_card(source: Dict[str, Any], target: Dict[str, Any]) -> Tuple[Optional[
 
     Used when a card that a person or a run touched is about to leave the index because another card
     stands for it (a stray stored under a vector point id, a compounded or superseded copy). Nothing may
-    be lost, so: the notes of both are kept by item id (of two items with one id, the newer by ``ts``),
-    quest tags are the union, usage adds up, conventions are the union. A card another system owns is
-    never folded. A name, description or summary that differs from the target's cannot be joined (which
+    be lost, so: the notes of both are kept by item id (of two items with one id, the newer by ``ts``; two
+    that differ with the same ``ts`` cannot be told apart, so the source stays), quest tags are the union,
+    usage adds up, conventions are the union. A card another system owns is never folded. A name, description or summary that differs from the target's cannot be joined (which
     one is right is a judgement), so the source stays where it is and the reason is returned.
     """
     if source.get("managed_by") or source.get("managed_fields") or source.get("managed_items"):
@@ -248,7 +255,10 @@ def fold_card(source: Dict[str, Any], target: Dict[str, Any]) -> Tuple[Optional[
             continue
         key = str(item.get("id") or "")
         if key and key in at:
-            if item_stamp(item) > item_stamp(items[at[key]]):
+            held = items[at[key]]
+            if item != held and item_stamp(item) == item_stamp(held):
+                return None, f"note {key} differs and carries the same time, so neither is the newer"
+            if item_stamp(item) > item_stamp(held):
                 items[at[key]] = item
         elif item not in items:
             items.append(item)
@@ -396,6 +406,11 @@ def plan_tidy(files: List[Path], pace: Pace = no_pace,
             if candidate.protection and (not candidate.compounded or candidate.protection.startswith("managed")):
                 plan.keep(candidate.protection)
                 continue
+            if not candidate.compounded and candidate.name_key != keeper.name_key:
+                # Two topics about one file are two cards (a handbook that says how billing works and how
+                # sign-in works): the same files with a different name is not a copy.
+                plan.keep("pins the same files as another card but is about something else (its name differs)")
+                continue
             reason = REASON_COMPOUNDED if candidate.compounded else REASON_DUPLICATE
             detail = f"pins the same files as {keeper.card_id}"
             if candidate.protection:
@@ -497,6 +512,8 @@ def settle_move(cards_dir: Path, move: Move, own_store_id: str) -> Tuple[Optiona
             return None, "the card it duplicates is gone"
         if set(card_paths(keeper)) != set(card_paths(card)) or not card_paths(card):
             return None, "it no longer pins the same files as the card it duplicates"
+        if move.reason == REASON_DUPLICATE and name_key_of(card) != name_key_of(keeper):
+            return None, "it is no longer named like the card it duplicates"
         why = card_origin.protection(card)
         if why:
             if move.reason != REASON_COMPOUNDED or card.get("managed_by"):

@@ -12,9 +12,13 @@ which the ESOI arm measures too):
   I4  indexing a store again right away changes nothing, and the settled world is a fixed point
   I5  the settled total rises only with the files, folders and cards the steps added
   I6  no store is over its card limit, unless everything in it was learned or written for a quest
+  I7  nothing a person or a run added (notes, quest tags, usage, a hand-written or learned origin) is ever moved
+      out by the tidy, the card limit or a copy's retirement, and what a moved copy held is on a card that stays
 
-The seeds below are ones the library before this change failed (at least 8 in 10 of any 40 did). Each route
-that was found has its own named test after them, with the number it produced.
+The seeds below, except 0, are ones the library as reviewed (before the review fixes) failed: 9 of the first 80
+seeds, by I7a (a hand-written card moved as a duplicate), I7b (a copy retired with its notes behind) and I3
+(a hand-written card turned into an index-pass card by a refresh). Each route that was found has its own named
+test after them, with the number it produced.
 """
 from __future__ import annotations
 
@@ -33,7 +37,7 @@ from quest_ai_runner.adapters.file_context_store import FileContextStore
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
 from card_store_growth import world  # noqa: E402
 
-SEEDS = (0, 1, 2, 3, 5, 6, 9, 24, 28, 36)
+SEEDS = (0, 20, 32, 33, 36, 43, 47, 59, 61, 71)
 STEPS = 20
 
 
@@ -418,6 +422,22 @@ def test_a_card_written_before_dates_were_kept_stays_undated(tmp_path):
     path.write_text(json.dumps(card))
     open_store(root).add_content("auth-topic", {"type": "note", "locator": {"text": "n"}, "why": "w"})
     assert provenance(load(root)["auth-topic"]).get("created_at") == ""
+
+
+def test_a_card_a_person_wrote_stays_theirs_through_a_refresh_that_regenerates_it(tmp_path):
+    """Found by the review fuzz: a card with no author (written by hand) pinning files that changed was regenerated
+    and labelled as an index-pass card, which made it movable by the tidy and the card limit."""
+    from quest_ai_runner.adapters.card_origin import protection
+    root = notes(tmp_path / "top", ["auth", "chat"])
+    index(root)
+    mine = open_store(root)
+    assert mine.write_card("by-hand", {"id": "by-hand", "name": "by hand", "summary": "written by a person",
+                                       "keywords": ["by-hand"], "files": [{"path": "auth/n0.md"}, {"path": "auth/n1.md"}]})
+    assert protection(load(root)["by-hand"])
+    (root / "auth" / "n0.md").write_text("# auth changed\nnew words\n")
+    index(root, refresh=True)
+    assert "by-hand" in load(root)
+    assert protection(load(root)["by-hand"]) == "written by a person (no provenance)"
 
 
 def test_a_card_learned_from_a_run_that_pins_files_stays_learned_through_a_refresh(tmp_path):

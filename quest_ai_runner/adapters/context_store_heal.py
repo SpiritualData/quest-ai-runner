@@ -99,7 +99,7 @@ class HealMixin:
                     "This context store holds %d topic cards but its corpus has only %d folders "
                     "(%d allowed per folder), so something wrote cards the corpus did not call for. "
                     "It will not be embedded or synced this session. Nothing was removed: run "
-                    "'quest-ai-runner cards report --cards-dir %s' to see what is redundant.",
+                    "'quest-ai-runner cards tidy --cards-dir %s' to see what is provably redundant.",
                     health.topic, health.folders or 0, health.per_folder, self._cards_dir)
         except Exception:  # noqa: BLE001
             _log.debug("context index: inflation check failed", exc_info=True)
