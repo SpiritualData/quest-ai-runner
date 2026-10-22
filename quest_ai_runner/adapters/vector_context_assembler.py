@@ -64,6 +64,7 @@ different quest, without a second collection or a second embedding.
 from __future__ import annotations
 
 import concurrent.futures
+import inspect
 import logging
 import os
 import re
@@ -93,8 +94,23 @@ from .reference_resolver import build_resolver_registry
 from .specificity import SpecificityResult, rerank_factor, score_candidates
 
 # Type alias for a seed source callable: returns a list of items suitable for
-# ``VectorStore.sync()`` (each has id/text/payload/fingerprint keys).
-_SeedSource = Callable[[], List[Dict[str, Any]]]
+# ``VectorStore.sync()`` (each has id/text/payload/fingerprint keys). It takes no arguments, or an
+# optional ``limit`` keyword: the seed ceiling, so a source can build items for that many cards
+# only. A source that builds a ``SeedItems`` also says how many cards it holds in all.
+_SeedSource = Callable[..., List[Dict[str, Any]]]
+
+
+def seed_source_takes_limit(source: Any) -> bool:
+    """True when ``source`` declares a ``limit`` parameter, so it can be handed the seed ceiling.
+
+    A source without one (a zero-argument callable, a lambda, a mock) is still called with no
+    arguments, exactly as before. Never raises.
+    """
+    try:
+        return "limit" in inspect.signature(source).parameters
+    except (TypeError, ValueError):
+        return False
+
 
 # Default ceiling on ONE seed pass, i.e. on how many cards may be embedded to make the semantic
 # arm work from cold. A corpus's card store is meant to hold HUNDREDS of cards (that is what the
@@ -320,6 +336,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         self._max_seed_items = (default_max_seed_items() if max_seed_items is None
                                 else max_seed_items)
         self._seed_source: Optional[_SeedSource] = seed_source
+        self._seed_takes_limit = seed_source is not None and seed_source_takes_limit(seed_source)
         # Recency-bound limits for resolving a vector-selected card's ``content`` references.
         self._max_card_refs = max_card_refs
         self._max_card_ref_chars = max_card_ref_chars
@@ -382,7 +399,7 @@ class VectorContextAssembler(ContextAssemblerBase):
             self._seed_done = True
             return
         try:
-            items = self._seed_source()
+            items = self.read_seed_source()
             items = self._seed_items_within_budget(items)
             if items:
                 # Seeded cards live in their OWN scope, which the store treats as visible under
@@ -400,6 +417,18 @@ class VectorContextAssembler(ContextAssemblerBase):
             # A hard failure is final (don't retry a broken source forever).
             self._seed_done = True
 
+    def read_seed_source(self) -> Any:
+        """Ask the seed source for its items, handing it the ceiling when it can use one.
+
+        A source that takes ``limit`` ranks its cards cheaply and builds items for the best
+        ``max_seed_items`` only. Without that, a store of 140,000 cards paid the full per-card cost
+        of 140,000 items on the seed thread, competing with the first turn's context assembly, only
+        for ``_seed_items_within_budget`` to throw all but the first 1,000 away.
+        """
+        if self._seed_takes_limit and self._max_seed_items:
+            return self._seed_source(limit=self._max_seed_items)
+        return self._seed_source()
+
     def _seed_items_within_budget(self, items: Any) -> List[Dict[str, Any]]:
         """Truncate the seed to ``max_seed_items``, newest-looking work dropped last.
 
@@ -413,15 +442,18 @@ class VectorContextAssembler(ContextAssemblerBase):
             seed_items = list(items or [])
         except TypeError:
             return []
+        # A source that was handed the ceiling returns at most that many items; it says how many
+        # cards it holds in all (``SeedItems.offered``). Any other source offered what it returned.
+        offered = max(len(seed_items), int(getattr(items, "offered", 0) or 0))
         cap = self._max_seed_items
-        if not cap or len(seed_items) <= cap:
+        if not cap or offered <= cap:
             return seed_items
         # One short sentence: a terminal chat shows its first line as-is, and the remedy is to
         # prune the store (scripts/quarantine_cards.py), not to raise the ceiling.
         logger.warning(
             "Card store has %d cards; only the first %d are searched by meaning "
             "(prune it with quarantine_cards.py).",
-            len(seed_items), cap,
+            offered, cap,
         )
         return seed_items[:cap]
 

@@ -1,4 +1,4 @@
-"""Reserved vector-store scopes shared by the store and the arms that write to it.
+"""Reserved vector-store scopes and the seed list type, shared by the store and its writers.
 
 One collection holds points of different KINDS: the context CARDS seeded from the keyword store
 (``FileContextStore.export_for_embedding``), and the task-to-context ASSOCIATIONS that
@@ -22,9 +22,23 @@ The value is a plain dict because that is what every ``VectorStore`` method alre
 ``scope``; the key is namespaced so it cannot collide with a consumer's own scope keys.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
 
-__all__ = ["CARD_SEED_SCOPE"]
+__all__ = ["CARD_SEED_SCOPE", "SeedItems"]
 
 
 CARD_SEED_SCOPE: Dict[str, Any] = {"qar_point_class": "card_seed"}
+
+
+class SeedItems(list):
+    """The items a seed source built, plus how many cards the source holds in all (``offered``).
+
+    A seed source that is handed the ceiling builds embed items for that many cards only, so the
+    list it returns is no longer the whole store and its length no longer says how far over the
+    ceiling the store is. ``offered`` carries that, for the one warning that tells a person to
+    prune. A plain list from any other source is still accepted everywhere.
+    """
+
+    def __init__(self, items: Iterable[Dict[str, Any]] = (), offered: int = 0) -> None:
+        super().__init__(items)
+        self.offered = max(int(offered), len(self))

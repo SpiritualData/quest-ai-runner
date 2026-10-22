@@ -4,7 +4,10 @@ A mixin of ``FileContextStore`` (see ``file_context_store.py``): methods only, s
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+import heapq
+import time
+from datetime import datetime
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
 from .card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
 from .card_content_render import (
@@ -15,9 +18,88 @@ from .card_content_render import (
 )
 from .card_repository import card_embed_text
 from ..core.scope_tags import union_scope_tags
+from ..core.vector_scopes import SeedItems
 from .context_card_extraction import _card_slug, _managed_names, _trim_content_by_recency
 from .context_card_dedup import _record_summary
 from .context_bootstrap_support import _log
+
+# How many cards a pass over the whole store handles before it lets another thread run. The
+# embedding export runs on a background thread while the session's first turn assembles context on
+# another; a pure-Python loop over tens of thousands of cards otherwise keeps the GIL for whole
+# switch intervals, and every blocking call the turn makes (a stat, a read) waits one out. Yielding
+# is a courtesy to that thread, not a throttle: it costs the export nothing measurable.
+EXPORT_YIELD_EVERY = 200
+
+
+def card_last_touched(card: Dict[str, Any]) -> float:
+    """Newest time anything on ``card`` was used, learned or changed; 0.0 when it carries none.
+
+    Reads only what the card already holds, so it does no I/O: the ``last_used_ts`` and ``ts`` of
+    its content items, the ``last_used_ts`` and ``mtime`` of its pinned files (when that file last
+    changed, as of the card's last refresh), and ``provenance.last_verified_at``. Never raises.
+    """
+    newest = 0.0
+    try:
+        # Compared as stored (seconds since the epoch): a card is a few dozen stamps and a store can
+        # hold hundreds of thousands, so this loop converts and allocates nothing.
+        for entries in (card.get("content"), card.get("files")):
+            for entry in entries or ():
+                if isinstance(entry, dict):
+                    for field in ("last_used_ts", "ts", "mtime"):
+                        stamp = entry.get(field)
+                        if stamp and stamp > newest:
+                            newest = stamp
+        provenance = card.get("provenance")
+        verified = provenance.get("last_verified_at") if isinstance(provenance, dict) else None
+        if verified:
+            try:
+                newest = max(newest, float(verified))
+            except ValueError:
+                newest = max(newest, datetime.fromisoformat(str(verified)).timestamp())
+    except (TypeError, ValueError, OverflowError):
+        pass
+    return newest
+
+
+def card_seed_key(card_id: str, card: Dict[str, Any]) -> Tuple[int, float, int, str]:
+    """Sort key ranking which cards are worth EMBEDDING first (smallest key first). No I/O.
+
+    Managed cards (one per quest, rebuilt from the consumer's own source of truth) come first: they
+    are what a quest turn is grounded in, they are few, and they carry no timestamps of their own,
+    so ranking them by recency alone would put them last. Then cards that earned their place by
+    being used (``usage_count``), then the rest. Within each group the card used, learned or
+    changed most recently comes first (``card_last_touched``), then the more used, then the id, so
+    the choice is the same on every run and on every filesystem.
+    """
+    try:
+        used = int(card.get("usage_count") or 0)
+    except (TypeError, ValueError):
+        used = 0
+    tier = 0 if card.get("managed_by") else (1 if used > 0 else 2)
+    return (tier, -card_last_touched(card), -used, card_id)
+
+
+def cards_in_seed_order(cards: Dict[str, Dict[str, Any]]) -> Iterator[Tuple[str, Dict[str, Any]]]:
+    """``(card_id, card)`` pairs, the cards most worth embedding first (see ``card_seed_key``).
+
+    Only a key per card is computed, never an embed item, so ranking a store of any size costs a
+    fraction of building items for it. The keys are sorted a slice at a time and merged lazily, so
+    no single call holds the GIL for more than a slice (one sort of 140,000 keys is ~80 ms of
+    stall for another thread) and a caller that stops after the best few never merges the rest.
+    """
+    slices: List[List[Tuple[int, float, int, str]]] = []
+    current: List[Tuple[int, float, int, str]] = []
+    for card_id, card in cards.items():
+        current.append(card_seed_key(card_id, card))
+        if len(current) >= EXPORT_YIELD_EVERY:
+            current.sort()
+            slices.append(current)
+            current = []
+            time.sleep(0)
+    if current:
+        current.sort()
+        slices.append(current)
+    return ((key[3], cards[key[3]]) for key in heapq.merge(*slices))
 
 
 class CardsMixin:
@@ -451,7 +533,7 @@ class CardsMixin:
         except Exception:  # noqa: BLE001
             return 0
 
-    def export_for_embedding(self) -> List[Dict[str, Any]]:
+    def export_for_embedding(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Return one item per card suitable for ``VectorStore.sync()``.
 
         Each item is::
@@ -474,6 +556,13 @@ class CardsMixin:
         ``bootstrap()`` and the fingerprint changes, causing ``sync()`` to
         re-embed only those cards (AUTO-UPDATE). Unchanged cards are skipped.
 
+        ``limit`` (normally the vector arm's seed ceiling) caps how many items are BUILT. A store
+        over it is ranked first by a cheap per-card key (``card_seed_key``: managed cards, then used
+        ones, the most recently used or changed first) and items are built for only the best
+        ``limit`` cards, so the caller no longer pays to build every card's item and then drop all
+        but the first few. The result is a ``SeedItems`` whose ``offered`` is the store's card
+        count. With no ``limit``, or a store within it, every card gets an item, in store order.
+
         Builds the in-memory card cache if it has not been loaded yet. Returns
         ``[]`` on any error. Never raises.
         """
@@ -491,7 +580,13 @@ class CardsMixin:
             store_id = str(meta.get("store_id") or "")
             qualified = store_id and meta.get("vector_id_scheme") == SCHEME_QUALIFIED
             result: List[Dict[str, Any]] = []
-            for card_id, card in cards.items():
+            capped = bool(limit) and limit > 0 and len(cards) > limit
+            ordered = cards_in_seed_order(cards) if capped else cards.items()
+            for count, (card_id, card) in enumerate(ordered):
+                if capped and len(result) >= limit:
+                    break
+                if count % EXPORT_YIELD_EVERY == 0:
+                    time.sleep(0)
                 try:
                     # --- Text: the SHARED card embed-text helper (``card_embed_text``) — the topic
                     # NAME, the docstring-rich description (fall back to summary), the card's
@@ -550,7 +645,7 @@ class CardsMixin:
                     })
                 except Exception:  # noqa: BLE001 — skip malformed card
                     continue
-            return result
+            return SeedItems(result, offered=len(cards)) if limit else result
         except Exception:  # noqa: BLE001
             return []
 
