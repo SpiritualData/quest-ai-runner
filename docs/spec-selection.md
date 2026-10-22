@@ -56,5 +56,7 @@ A deep worker calls them from its own shell, a new process that may start in ano
 quest_ai_runner.tools --spec-root <folder> call ...` (the flag sets `QAR_SPEC_ROOT` for that one call), and the four tools are
 not named in a brief at all when no root is found (`ToolSpec.needs_spec_root`): a brief never names a tool its worker could not call.
 
-It is the slice source that `iterate-by-spec` and `ground-in-intent` were waiting for; neither calls it yet. Wiring it into a
-run's context is a decision for those solutions' own metrics, not assumed here.
+It is the slice source that `iterate-by-spec` and `ground-in-intent` were waiting for. `iterate-by-spec` calls it, lexical only
+and for deep goals only (`core/spec_slice.py`); `ground-in-intent` does not. A record is otherwise not part of the context a run
+is assembled with: it reaches a run only through the tools above. Searching cards and records in one pipeline, with a record as
+a read-only view of its row, is the planned solution `search-cards-and-specs` (`esoi/solutions.csv`), decided by its own metric.

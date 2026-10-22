@@ -35,10 +35,10 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | track-usage-and-cost |
 | `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | expose-the-public-api |
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |
-| `prompts` | prompts | Standing deep-run instructions shipped as data (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
+| `prompts` | prompts | Prompt text shipped as data and the scripts that keep each copy equal to its source: standing deep-run instructions (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) and the vendored quest field guidance | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
 | `vendor` | vendor | Vendored third-party code, unmodified | expose-the-public-api |
 | `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset | verify-offline, spec-selection |
-| `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (persist-cards), restart-if-idle (run-queued-tasks) | search-the-web, persist-cards, run-queued-tasks |
+| `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (bound-card-growth), restart-if-idle (run-queued-tasks) | search-the-web, bound-card-growth, run-queued-tasks |
 | `examples` | examples | Runnable reference consumers (env-driven, no real data) | learn-by-example |
 | `tests` | tests | Offline test suite and shared fakes | verify-offline |
 | `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | verify-offline, keep-secrets-out |

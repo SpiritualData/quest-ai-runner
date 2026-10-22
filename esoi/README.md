@@ -41,6 +41,10 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-work-misses-its-why`: Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed.
 - `prob-core-ml-tasks-unspecified`: Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). Each has had alternative implementations, but QAR's records do not name them as one solution, so no alternative is compared on a metric.
 - `prob-intent-specs-not-found-for-input`: A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads all, or relies on whichever the person remembers to mention.
+- `prob-context-rediscovered-each-run`: An agent asked to answer or work from a person's own material has to find the relevant part of it first. With nothing kept between runs it re-discovers the same files and facts on every run (the planner asks what to read, retrieval searches, the loop re-plans), which costs tokens and latency, can miss what an earlier run already found, and leaves no record of where an answer came from.
+- `prob-card-store-inflates`: A card store grows far past the distinct content of its corpus. In copy mode a store nested in another store's corpus copied that store's cards under a namespaced id on every bootstrap pass, copies of copies were kept, and each pass stacked another namespace, so two real stores reached 8,557 and 32,070 cards on 2026-10-05 for corpora that need hundreds, and a search over them took minutes.
+- `prob-two-searches-for-one-context`: A run's context comes from two retrieval pipelines that repeat the same stages separately: context card selection (keyword IDF, vector search, weighted reciprocal-rank fusion, then a cheap-model filter and consolidation) and ESOI record selection (field-weighted TF-IDF, an optional vector search, reciprocal-rank fusion, then a gated cheap-model choice). They keep separate indexes, budgets and output shapes, and only the card result is put into a run's context: ESOI records reach a run only through tools it has to think to call, or as a lexical-only slice for a deep goal, so the problem, ideal and metric a run serves are often not in view.
+- `prob-run-improvement-unchecked`: Whether a run improved anything is recorded only in part and only for a while. A deep run records a metric reading before and after (the record_metric_result tool and GoalMetrics) into a per-run ledger in a temporary folder that is cleared after two days, and the task report carries it to Quest; but nothing says what the run moved, the reading never reaches the record it concerns, a card's last_outcome comes from the kind of turn rather than from any metric, and when the work shows a record is wrong or missing there is no tracked way to propose the change. Improvement is hoped for rather than checked per run.
 
 ## Ideals
 
@@ -77,6 +81,10 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-purposeful-work`, Purposeful Work: Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
 - `ideal-measured-core-ml`, Measured Core ML: Every classification and recommendation Quest depends on has a defined input and output, a held-out labelled case set, and a recorded comparison of its alternatives.
 - `ideal-specs-that-apply-are-in-view`, Specifications that apply are in view: Every run sees the intent specifications that concern its input, and only those, at the cheapest tier that lets it decide.
+- `ideal-compounding-context`, Compounding Context: What one run found is kept as a card that later runs reuse, so every run starts grounded in the person's material at little cost, reads only what is current, and can name where each piece came from.
+- `ideal-proportionate-store`, Proportionate Card Store: A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
+- `ideal-one-ranked-context`, One Ranked Context: A run's context comes from one search over everything it may be grounded in, with one ranking and one budget, and every result says what kind of thing it is and where it lives.
+- `ideal-checked-improvement`, Checked Improvement per Run: Every run leaves, on the record it served, what it measured, what it moved and what it learned, and any change the record itself needs waits there as a proposal for its owner.
 
 ## Solutions
 
@@ -133,6 +141,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
+| `bound-card-growth` | Card store growth control | quarantine_tool | Cards per source-file group and duplicate share after repeated nested bootstrap |
+| `search-cards-and-specs` | Unified card and specification search |  | Mixed card and specification selection, with both existing selection metrics held |
+| `track-runs-on-records` | Per-record run tracking and change proposals |  | Runs that leave a durable, attributed improvement record |
 
 ## Implementations
 
@@ -324,6 +335,14 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `spec-selection:lexical-vector-llm` | Lexical TF-IDF, optional vector search, parallel batched model judging | quest_ai_runner/core/spec_selection.py |  |
 | `spec-selection:lexical-only` | Lexical top few only | quest_ai_runner/core/spec_selection.py |  |
 | `spec-selection:lexical-vector-gated` | Lexical vector gated | quest_ai_runner/core/spec_selection.py |  |
+| `bound-card-growth:quarantine_tool` | Card quarantine tool | evaluation/components/card_growth/impls/quarantine_tool.py |  |
+| `bound-card-growth:no_cleanup` | Store as copy mode leaves it | evaluation/components/card_growth/impls/no_cleanup.py |  |
+| `bound-card-growth:bootstrap_guards` | Bootstrap guards against re-import (planned) |  |  |
+| `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | quest_ai_runner/core/spec_selection.py |  |
+| `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
+| `search-cards-and-specs:solution_views_with_links` | Cards and solutions ranked, intents reached through links (planned) |  |  |
+| `track-runs-on-records:per_run_ledger` | Per-run metric ledger and card counters (today) | quest_ai_runner/core/metric_results.py |  |
+| `track-runs-on-records:tracking_on_the_record` | Tracking kept on each record's existing home (planned) |  |  |
 
 ## Metrics
 
@@ -383,3 +402,6 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
 - `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
+- `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup`
+- `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs`
+- `metric-track-runs-on-records`, Runs that leave a durable, attributed improvement record: `esoi run record_tracking`

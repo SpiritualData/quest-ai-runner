@@ -93,29 +93,10 @@ that wires no assembler gets exactly today's behavior.
 Cards are the **source of truth**, as plain files; everything else is a rebuildable accelerator.
 Matches the repo's zero-dependency rule (core + runner import only the stdlib).
 
-- **Storage:** one JSON file per card under a configurable `cards_dir` (default `.quest-context/cards/`).
-  Inspectable, diffable, versioned by git alongside the code it describes.
-- **Card schema:**
-  ```json
-  {
-    "id": "subsystem-or-hash",
-    "keywords": ["chat", "ai", "conversation"],
-    "summary": "what this subsystem is + how it's wired (a few lines)",
-    "description": "full orientation text for the vector arm (module docstring + key defs)",
-    "is_test": false,
-    "weight": 1.0,
-    "files": [
-      {"path": "rel/path.py", "git_sha": "…", "mtime": 1700000000.0,
-       "sha256": "…", "why": "entry point", "symbols": ["run", "execute"],
-       "last_used_ts": 1700000000.0, "use_count": 3}
-    ],
-    "conventions": ["pointer to a rule that applies"],
-    "provenance": {"created_by_task": "…", "model": "…", "created_at": "…",
-                   "last_verified_at": "…"},
-    "usage_count": 0,
-    "last_outcome": "met|failed|unknown"
-  }
-  ```
+- **Storage:** one JSON file per card, `<cards_dir>/<id>.json` (default `cards_dir` `.quest-context/`,
+  see [Where the cards are stored](#where-the-cards-are-stored-and-git)). Inspectable and diffable.
+- **Card schema:** [What a context card is](#what-a-context-card-is), below. That section is the one
+  definition; other pages link to it.
 - **No-LLM summary (initial pass).** Bootstrap extracts the code's **own docstrings** with no
   LLM call.  For `.py` files: module docstring first line + top-level class/function names
   with their docstring first lines (``ast`` module only).  For `.md`/`.rst`/`.txt`: first
@@ -151,6 +132,105 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
   same seam through `ClaudeConversationsAdapter`'s cross-session recall learning: see
   [Cross-session recall becomes card-scoped learning](claude-conversations-integration.md#card-scoped-learning-cross-session-recall-joins-the-card-system)
   for how a recall hit is chosen and attached in the first place.
+
+## What a context card is
+
+This section is the definition of a card; [context card stores](context-card-stores.md) covers where a
+store lives and how stores relate, and links here for the card itself. Why cards exist is recorded as
+ESOI records in `esoi/` (problem `prob-context-rediscovered-each-run`, ideal `ideal-compounding-context`,
+served by the solutions `persist-cards`, `select-context`, `index-by-meaning`, `detect-stale-cards`,
+`resolve-references` and `recall-recent-context`; see `esoi/README.md`).
+
+**A context card is one JSON object that names one topic of a person's or a team's material and points
+at the sources that carry it**, so a run can be handed that topic's current text without re-reading the
+corpus. Its name, keywords, summary and embedding text are how it is found; its sources are what is read;
+its provenance and usage say who wrote it, from where, and whether it helped. A card holds pointers and a
+short orientation, not a copy of its sources: the text a run sees is resolved from the source when the
+card is read (`resolve-references`), and a source that changed flags the card stale
+(`detect-stale-cards`). Persistence is behind the `CardRepository` port (`persist-cards`), so the same
+card lives in a folder, a Qdrant collection or the Quest backend.
+
+### Fields
+
+Read from the code (`adapters/context_store_cards.py`, `context_store_bootstrap_walk.py`,
+`card_content_render.py`, `card_repository.py`, `quest_api_card_repository.py`,
+`runner/quest_folder_index.py`). Every field is optional except `id`; a reader treats a missing field as
+empty or never used, so old cards need no migration.
+
+| Field | What it holds | Written by |
+|---|---|---|
+| `id` | the card's key inside its store (rules below); the file stem when absent | every writer |
+| `name` | the topic's name, the first line of the embedding text | bootstrap, `update_card` |
+| `keywords` | words the keyword arm scores (weight 3.0, with `name`) | bootstrap, `record` |
+| `summary`, `description` | a short orientation (bootstrap: the code's own docstrings, no model) and the longer text the vector arm embeds (bootstrap writes the summary to both today) | bootstrap, `record`, `update_card` |
+| `files[]` | pinned files: `path` (relative to the card's own store root), the fingerprints `sha256`, `mtime`, `git_sha`, plus `why`, `symbols`, the bootstrap term index `tfdfidf_terms`/`tfdfidf_v`, and the render-time usage stamps `last_used_ts`/`use_count`. An entry may also be a bare path string | bootstrap, `record`; usage stamped at render |
+| `content[]` | typed references `{id, type, locator, ts, why, last_used_ts, use_count}`; `type` is one of `file`, `collection`, `conversation`, `chat_thread`, `notion_page`, `query`, `note` (`reference_resolver.CONTENT_TYPES`), `note` when missing; at most 200 items, the oldest `ts` dropped first | `record`, `add_content`, `update_card`, quest sync |
+| `conventions` | pointers to rules that apply to the topic | `record`, bootstrap |
+| `provenance` | `created_by_task`, `task_id`, `model`, `created_at`, `last_verified_at`; on a moved or copied card also `imported_from`, `merged_from` (`{store_id, card_id}`) or `adopted_from` | every writer |
+| `usage_count`, `last_outcome` | how often a run recorded the card, and the outcome of the last one (`met`, `failed` or `unknown`; a run's `answer` or `deep` kind counts as `met`, `confirm` as `unknown`) | `record` |
+| `scope_tags` | the quest fence; tags are added by union and never overwritten | `record`, `add_content`, `update_card` |
+| `origin` | the store that wrote the card (its `store_id`, or `env_<hash>` of runner env and root); a lane rewrites or deletes only cards of its own origin | the store on write, `context upload` |
+| `managed_by`, `managed_fields`, `managed_items` | a card another system owns (quest folder sync); the store does not rewrite the listed parts | that system |
+| `runner_env_id`, `team_id`/`org_id`, `source_environment` | Quest backend scope and provenance; `updated_at`, `revision`, `owner_user_id`, `user_id`, `card_id` are server-owned and never sent | `QuestApiCardRepository` |
+| `weight`, `card_type` | read only: a ranking multiplier (default 1.0) and a consumer's kind label surfaced in card metadata | a consumer |
+
+A conversation card (`ConversationCardBuilder`) carries `title` and `sources` in place of `name` and
+`files`. The text every arm embeds or searches is built by one helper, `card_embed_text` (name,
+description or summary, each content item's `why` and note text, keywords), so the arms cannot drift.
+
+### Identity and ids
+
+- **Identity is the pair (store, id).** A local store's `store_id` (`st_` plus 16 random hex characters
+  in `bootstrap_meta.json`, never derived from a path); on the Quest backend, the scope (private, a team
+  or an org) and the id. The same id may exist in two stores or two scopes.
+- **Ids the store makes:** a card recorded from a run is `<first four sorted keywords>-<8 hex of its
+  text>` (`card-<8 hex>` with no keywords; a thread's own record hashes `thread record <task id>`); a
+  bootstrap topic card keeps the id its topic builder gives it.
+- **A copy** (legacy copy mode, `QAR_CARD_MOUNT=copy`) is `<namespace>--<id>` cut to 200 characters, the
+  namespace being the source root's relative path slugged with 6 hex of its digest, with
+  `provenance.imported_from`. A copy of a copy stacks another prefix; that chain is
+  how stores inflated (see [Growth](#growth)).
+- **A mounted card** appears as `<store_id>:<card_id>`: a read-only view whose paths are rebased at read
+  time; nothing is written and a write to it is refused.
+- **Renames that never overwrite:** `merge-into` renames a colliding card to `<id>--m<8 hex of the
+  source store id>`; a new card whose id is held by another origin's card is written as
+  `<id>-<6 hex of its origin>`.
+
+### What is not a card
+
+The store's sidecars (`bootstrap_meta.json`, `folder_review.json`, `discovered_files.json`,
+`bootstrap_report_state.json`), dot-prefixed temp files, anything under `_quarantine/`, and the
+non-card state directories beside the cards (`index-state`, the embedded Qdrant folders, turns, per-rep
+notes, recent context). A vector point is an index entry for a card, not a card: deleting it loses
+nothing but speed.
+
+### A card and its store
+
+| Form | What it is | Who keeps it current |
+|---|---|---|
+| **Own card** | written by this store (`origin` is this store) | this store's refresh and runs |
+| **Mounted view** | another store's card read in place, read-only, never copied | its owner; the reader sees the owner's next write |
+| **Copy** | a legacy copy-import of another store's card under a namespaced id | nobody reliably: it duplicates the original, is re-embedded per importer and is converted by `context migrate-imports` |
+| **Quarantined** | moved under `_quarantine/<reason>/` by `scripts/quarantine_cards.py` (reasons `compounded`, `excluded`, `surplus`, `thin`, `covered`), out of the index, never deleted | restored by moving the file back |
+
+### Growth
+
+A store's size should follow the distinct content of its corpus, not the number of times it was
+re-imported. The solution `bound-card-growth` and its metric `metric-bound-card-growth` (offline arm
+`evaluation/components/card_growth/`: cards per source-file group and duplicate share on a store
+inflated by repeated nested bootstrap passes) hold the cleanup tool to that, and are where the
+bootstrap guards and the card-count notice are recorded as they land.
+
+### ESOI records as cards (planned)
+
+The records in `esoi/*.csv` are the same kind of thing a card is: a named topic, found by words and
+meaning, read by runs and updated from what runs learn. The planned solution `search-cards-and-specs`
+searches both in one pipeline. An ESOI record is then a **read-only view** of the record, keyed by
+(source, record id), for example (`esoi`, `persist-cards`), read from `esoi/*.csv` at query time and
+never copied into `.quest-context`: the CSV stays the one source of truth. This is the mount principle
+above; a copy would recreate the duplication that inflated card stores. Which record kinds are ranked
+as views (every kind, or solutions only with their intent, problems and ideals reached through links)
+is an open decision recorded as that solution's implementations.
 
 ## The two prompt gates (doctrine, generic)
 

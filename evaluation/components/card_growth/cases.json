@@ -1,0 +1,53 @@
+[
+ {
+  "id": "CG-01",
+  "area": "fresh",
+  "passes": 0,
+  "surplus": false
+ },
+ {
+  "id": "CG-02",
+  "area": "single-hop",
+  "passes": 1,
+  "surplus": false
+ },
+ {
+  "id": "CG-03",
+  "area": "compounded",
+  "passes": 3,
+  "surplus": false
+ },
+ {
+  "id": "CG-04",
+  "area": "compounded",
+  "passes": 4,
+  "surplus": true
+ },
+ {
+  "id": "CG-05",
+  "area": "compounded",
+  "passes": 6,
+  "surplus": true
+ },
+ {
+  "id": "CG-06",
+  "area": "compounded",
+  "passes": 5,
+  "surplus": false,
+  "heldout": true
+ },
+ {
+  "id": "CG-07",
+  "area": "compounded",
+  "passes": 8,
+  "surplus": true,
+  "heldout": true
+ },
+ {
+  "id": "CG-08",
+  "area": "truncated",
+  "passes": 12,
+  "surplus": true,
+  "heldout": true
+ }
+]

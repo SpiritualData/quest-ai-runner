@@ -45,7 +45,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CARDS_BACKEND` |  | `config_assembler.py` | `docs/context-card-stores.md` |
 | `QAR_CARDS_COLLECTION` | Qdrant collection the cards live in (default quest_ai_cards). | `config_context_index.py` | - |
 | `QAR_CARDS_SCOPE` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
-| `QAR_CARD_MOUNT` |  | `adapters/card_store_mounts.py` | `docs/context-card-stores.md` |
+| `QAR_CARD_MOUNT` |  | `adapters/card_store_mounts.py` | `docs/context-assembly.md`, `docs/context-card-stores.md` |
 | `QAR_CHANNEL_ACK_AFTER_SECONDS` |  | `cli_config.py` | `docs/live-channels.md` |
 | `QAR_CHANNEL_ALLOWED_SENDERS` |  | `cli_config.py` | `docs/live-channels.md` |
 | `QAR_CHANNEL_NAME` |  | `cli_config.py` | `docs/live-channels.md` |

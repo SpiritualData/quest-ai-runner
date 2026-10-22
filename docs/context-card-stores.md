@@ -8,6 +8,9 @@
 > backend and works exactly as written when a lane opts out. See
 > [The Quest backend](#the-quest-backend-default) and [Uploading a local store](#uploading-a-local-store-context-upload).
 
+What a card is (its fields, id rules, and what is not a card) is defined once in
+[context-assembly.md, What a context card is](context-assembly.md#what-a-context-card-is).
+
 How one card is stored, found, embedded and read when several corpora (lanes) overlap on disk. This
 page is the design of record for store identity, read-only mounting, `context move-root` and
 `context migrate-imports`, and it records the access model that was found in the code and the one
