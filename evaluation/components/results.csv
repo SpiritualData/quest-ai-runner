@@ -1417,3 +1417,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-22,card_growth,quarantine_tool,12,10,7/8,3/4,0,0,0,0.0,0.1,0d641cb,34fd9ffe,none,,,
 2026-10-22,card_growth,no_cleanup,12,2,2/8,0/4,0,0,0,0.0,0.1,0d641cb,34fd9ffe,none,,,
 2026-10-22,card_store_growth,live_store,28,28,19/19,9/9,0,0,0,0.0,21.7,0d641cb,15f5a2eb,none,,,
+2026-10-22,choose_what_to_index,risk_gate,16,16,16/16,0/0,0,0,0,0.0,2.2,130aadb,f18fd265,none,,,
+2026-10-22,choose_what_to_index,review_only,16,4,4/16,0/0,0,0,0,0.0,2.1,130aadb,f18fd265,none,,,
