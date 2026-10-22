@@ -176,9 +176,10 @@ def _resolve_context_assembler_base(
             quest_folder_map=cfg.quest_folder_map,
             # The runner's own store tidies provable copies at open and will not embed an inflated
             # store (adapters/context_store_heal); a library caller or a test builds without this.
-            # OFF for now: an independent review (2026-10-22) found the tidy can move a card a person
-            # wrote and can fold edits away on the real stores. It goes back on when those are fixed.
-            self_heal=False,
+            # It was off for a day (commit 6980d7c) while an independent review's findings were fixed: it
+            # now moves only a card an index pass wrote and nobody touched, and joins what a copy holds onto
+            # the card it copies first (card_origin.protection, card_store_hygiene.fold_card).
+            self_heal=True,
             # The card limit is the runner's policy (QAR_MAX_CARDS, 1,000 when unset, 0 for none); the
             # library itself applies no limit unless its caller passes one.
             max_cards=card_limit.max_cards_from_env(),

@@ -134,6 +134,7 @@ class TestTheKnob:
             pending.extend(getattr(node, "assemblers", None) or [])
             pending.extend(n for n in (getattr(node, attr, None) for attr in ("_keyword", "keyword")) if n is not None)
         assert found is not None and found.limit_guard.limit == expected
+        assert found.heal_enabled is True, "the runner's store tidies provable copies at open"
 
     def test_a_shared_backend_is_not_limited_by_a_local_number(self, tmp_path):
         backend = FilesystemCardRepository(str(tmp_path / "elsewhere"))
