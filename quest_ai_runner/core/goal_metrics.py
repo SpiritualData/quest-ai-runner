@@ -45,15 +45,18 @@ NUDGE_BRIEF = (
     "metric this work serves before and after your change, or not_applicable with a one-sentence reason if no metric "
     "applies. Do not redo or extend the work, and do not repeat your earlier summary: reply with one sentence saying "
     "what you recorded.")
-NUDGE_STATUS = "This change has no metric result on record; asking the worker to record it."
+# The two statuses below are fixed sentences a person reads on an 80-column screen beside the clock and the spinner, so
+# they stay near 50 characters (the terminal cuts a longer one with an ellipsis).
+NUDGE_STATUS = "Asking the worker to record the metric result."
 # A run that did none of the work leaves nothing to measure or to find missing.
 UNFINISHED_FLAGS = ("launch_failed", "cancelled", "usage_limited", "paused", "deferred")
 # The moment a reading is taken, as the ledger's reason names it.
 READING_PHASES = {"before": "before the change", "after": "after the change"}
-# What the status line says while a reading runs, and what it calls the reading when none could be taken. Plain
-# words for a person: never the metric's name (a long one was cut mid-word on a narrow screen).
-READING_STATUS = {"before": ("Checking the starting value before any change.", "the starting value"),
-                  "after": ("Checking the result after the change.", "the result")}
+# What the status line says while a reading runs, and what it says when none could be taken in time. Plain words for a
+# person: never the metric's name (a long one was cut mid-word on a narrow screen).
+READING_STATUS = {
+    "before": ("Checking the starting value before any change.", "No starting value in time. Going on without it."),
+    "after": ("Checking the result after the change.", "No result check in time. Going on without it.")}
 
 
 def working_dir_of(runner: Any, override: Optional[str]) -> Optional[str]:
@@ -136,13 +139,13 @@ class GoalMetrics:
         if found is None:
             return
         phase = READING_PHASES[when]
-        checking, what = READING_STATUS[when]
+        checking, missed = READING_STATUS[when]
         reading = self.iteration.read_metric(found, self.working_dir, when=when, announce=lambda: self.say(checking))
         if reading.value is not None:
             self.keep(reading.meter, **{when: reading.value})
         elif reading.note:
             self.gaps.append(f"no reading {phase}: {reading.note}")
-            self.say(f"Could not check {what} in time. Going on without it.")
+            self.say(missed)
 
     def keep(self, meter: str, before: Optional[float] = None, after: Optional[float] = None) -> None:
         found = self.spec_slice

@@ -61,7 +61,7 @@ def run_goal(orch, timeline):
 
 
 def measuring(timeline):
-    return [t for t in timeline.statuses() if t.startswith(("Checking the", "Could not check"))]
+    return [t for t in timeline.statuses() if t.startswith(("Checking the", "No starting value", "No result check"))]
 
 
 # -- nothing to read: nothing paid ---------------------------------------------------------------------
@@ -165,7 +165,7 @@ def test_a_meter_that_never_answers_does_not_hold_the_worker_back(world, repo, m
     assert stuck.reads == 2 and len(worker.calls) == 2   # the worker did start, and was asked, as without a meter
     said = measuring(timeline)
     assert "Checking the starting value before any change." in said
-    assert "Could not check the starting value in time. Going on without it." in said
+    assert "No starting value in time. Going on without it." in said
     assert not [t for t in said if "—" in t]
     assert [m["source"] for m in done.metric_results] == ["not_applicable"]   # no row without a number
 

@@ -166,8 +166,8 @@ The reading before the work happens before the worker spawns, so it is bounded a
   each meter runs on its own thread and one that has not answered when the budget is spent is left behind, and an offline arm
   is stopped at the limit with its process group;
 - a reading that ran out of time gives no number and writes no row (a row without a number would count as a record). A status
-  line says so (`Could not check the starting value in time. Going on without it.`), and the `measured` row written after the
-  work carries the meter and the budget in its `reason`;
+  line says so (`No starting value in time. Going on without it.`, or `No result check in time. Going on without it.`
+  after the work), and the `measured` row written after the work carries the meter and the budget in its `reason`;
 - the slice lookup is local and lexical (tens of milliseconds, bounded at 3 seconds) and starts nothing when there is no
   folder to look in.
 

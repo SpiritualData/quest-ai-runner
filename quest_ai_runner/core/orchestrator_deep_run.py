@@ -23,6 +23,7 @@ from .adapters import (
     runner_starts_background_work,
     runner_uses_deep_model,
 )
+from .deep_model_selection import start_status_text
 from .goal_metrics import GoalMetrics, run_hint, working_dir_of
 from . import launch_failure, usage_limit
 from .goal_runner import cli_safe_model
@@ -242,13 +243,7 @@ class DeepRunMixin:
                             if first_rung and cli_safe_model(first_rung)
                             else "Starting the work.")
                 return
-            level = deep_selection.get("difficulty")
-            start_text = f"Starting on {deep_selection['start_model']}"
-            if level:
-                start_text += f" ({level} task)"
-            if len(deep_selection["ladder"]) > 1:
-                start_text += ", with a stronger model ready if the result falls short"
-            emit.emit(ProgressEvent(type=EVENT_STATUS, text=start_text + ".",
+            emit.emit(ProgressEvent(type=EVENT_STATUS, text=start_status_text(deep_selection),
                                     data={"deep_model_selection": dict(deep_selection)}))
 
         def run_one(task: Dict[str, Any], task_index: int = 0) -> DeepResult:

@@ -387,6 +387,47 @@ def test_the_work_panels_clock_is_the_turns_clock_not_a_second_one():
     assert "● 2m30s" in dashboard, "150 seconds into the turn, though the worker started at 121"
 
 
+# --- the sentences the core says before the work starts fit an 80-column screen -----------------------
+
+# What the activity bar leaves for a status at 80 columns beside the spinner and a clock in minutes (measured with the
+# real widget below): about 60 characters, 52 with the room a count of waiting messages needs on top of that.
+FITS_BESIDE_THE_CLOCK = 52
+
+
+def fixed_start_statuses():
+    from quest_ai_runner.core.deep_model_selection import start_status_text
+    from quest_ai_runner.core.goal_metrics import NUDGE_STATUS, READING_STATUS
+    ladder = {"start_model": "sonnet", "ladder": ["sonnet", "opus"], "difficulty": "simple"}
+    pinned = {"start_model": "opus", "ladder": ["opus"]}
+    return [start_status_text(ladder), start_status_text(pinned), NUDGE_STATUS,
+            *[text for pair in READING_STATUS.values() for text in pair]]
+
+
+def test_every_fixed_sentence_said_before_or_just_after_the_work_starts_is_short_enough_to_read_whole():
+    texts = fixed_start_statuses()
+    assert "Starting on sonnet, with a stronger model ready." in texts and "Starting on opus." in texts
+    assert "Asking the worker to record the metric result." in texts
+    for text in texts:
+        assert len(text) <= FITS_BESIDE_THE_CLOCK, text
+        assert "—" not in text and text[0].isupper() and text.endswith(".")
+
+
+def test_the_activity_bar_shows_each_of_them_whole_at_80_columns_with_a_long_clock():
+    async def build(app, pilot):
+        bar = app._activity
+        bar.display = True
+        shown = []
+        for text in fixed_start_statuses():
+            bar.wait_started = bar.clock() - 754   # 12m34s, the widest clock a normal turn reaches
+            bar.set_status(text)
+            shown.append((text, bar.render().plain))
+        return shown
+
+    for text, line in run_app(build):
+        assert text in line and "…" not in line, line
+        assert len(line) <= 76, "the bar is 76 columns wide inside an 80-column screen"
+
+
 # --- the transcript keeps its width and the live panel grows with its text --------------------------
 
 def test_the_transcript_is_as_wide_with_a_panel_open_as_without_and_has_no_sideways_scrollbar():

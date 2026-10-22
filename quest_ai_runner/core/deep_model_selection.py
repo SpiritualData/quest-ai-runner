@@ -121,3 +121,13 @@ def select_deep_start(difficulty: Optional[str],
         return start_ladder, selection
     except Exception:  # noqa: BLE001 (selection must never break a deep run)
         return None
+
+
+def start_status_text(selection: Dict[str, Any]) -> str:
+    """The status line for the start of a deep run: which model it starts on and, when the ladder has a stronger rung,
+    that one is ready. One short plain sentence (the task's difficulty is in ``selection`` for whoever records it): it
+    has to fit the terminal's 80-column activity bar beside the clock and the spinner, so it stays near 50 characters."""
+    text = f"Starting on {selection['start_model']}"
+    if len(selection.get("ladder") or []) > 1:
+        text += ", with a stronger model ready"
+    return text + "."
