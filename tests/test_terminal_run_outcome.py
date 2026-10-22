@@ -16,14 +16,12 @@ from __future__ import annotations
 import ast
 import asyncio
 import glob
-import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from rich.text import Text
 
 from quest_ai_runner.core import usage_limit
 from quest_ai_runner.core.adapters import (
