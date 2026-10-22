@@ -1,8 +1,10 @@
 """Tools that let a run find and walk the ESOI specifications of the repository it works in.
 
-Four read-only tools over ``repo_specs`` (offered only when an ``esoi.toml`` is found above the working folder, or at
+Five read-only tools over ``repo_specs`` (offered only when an ``esoi.toml`` is found above the working folder, or at
 ``QAR_SPEC_ROOT``): ``find_specs`` (which records does this request concern), ``related_specs`` (what is connected to a
-record, ``depth`` steps out), ``intent_specs`` (every record of an intent) and ``show_spec`` (one record, tier 0 to 2). They load
+record, ``depth`` steps out), ``intent_specs`` (every record of an intent), ``show_spec`` (one record, tier 0 to 2) and
+``search_cards_and_specs`` (cards and records in one ranking, ``unified_search``; selected nowhere, offered beside
+``find_specs``). They load
 only what the run asks for, so a run starts from the few records that apply and reaches the rest on demand. No model is called:
 the run itself is the judge of the short list.
 
@@ -11,11 +13,22 @@ root it found (``python -m quest_ai_runner.tools --spec-root <root> call ...``, 
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from . import repo_specs
 from .spec_selection import intent_specs, related_specs
 from .tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec
+from .unified_search import RecordView, render as render_unified
+
+# Where search_cards_and_specs gets cards: a callable returning card views (``adapters.card_views.card_views`` over the run's
+# card repository), registered by the consumer that owns the store. None: the tool searches the records alone and says so.
+CardViewsSource = Callable[[], List[RecordView]]
+card_views_source: Optional[CardViewsSource] = None
+
+
+def set_card_views_source(source: Optional[CardViewsSource]) -> None:
+    global card_views_source
+    card_views_source = source
 
 KEYWORDS = ("spec", "specification", "esoi", "problem", "ideal", "solution", "metric", "intent", "records", "related")
 
@@ -108,6 +121,49 @@ def show_spec_spec(env: Mapping[str, str]) -> ToolSpec:
         mutates=False, origin="standard", workflow_step=False, needs_spec_root=True, keywords=KEYWORDS, timeout_seconds=30.0)
 
 
+def search_cards_and_specs_spec(env: Mapping[str, str]) -> ToolSpec:
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        request = str(args.get("request") or "").strip()
+        if not request:
+            return ToolResult(ok=False, text="Needs request: the words of the task or question.")
+        raw_tags = args.get("tags") or []
+        tags = [t.strip() for t in (raw_tags.replace(";", ",").split(",") if isinstance(raw_tags, str) else raw_tags) if str(t).strip()]
+        mode = str(args.get("tag_mode") or "boost")
+        if mode not in ("boost", "filter"):
+            return ToolResult(ok=False, text="tag_mode is boost or filter.")
+        try:
+            cards = card_views_source() if card_views_source else []
+        except Exception:  # noqa: BLE001  a failing card store leaves the records
+            cards = []
+        got = repo_specs.search(request, cards=cards, tags=tags or None, tag_mode=mode)
+        scope = "" if card_views_source else "\n(No card store is registered here: records only.)"
+        data = {"items": [{"kind": i.kind, "key": i.key, "source": i.source, "linked_from": i.linked_from,
+                           "no_solution": i.no_solution} for i in got.items],
+                "no_solution_yet": got.no_solution_yet, "route": got.route, "calls": got.calls}
+        if not got.items:
+            return ToolResult(ok=True, data=data, text="No card or specification concerns that request." + scope)
+        return ToolResult(ok=True, data=data, text=(
+            "Cards and specifications this request concerns, best first (linked ones were brought in by a ranked record):\n"
+            + render_unified(got) + "\nRead a record in full with show_spec." + scope))
+
+    return ToolSpec(
+        name="search_cards_and_specs", handler=handler,
+        description=("One ranked list of the context cards and ESOI records (cards, solutions, problems; with the ideals, metrics, "
+                     "intents and implementations they link) a request concerns, each line kind first. Says NO SOLUTION YET "
+                     "when the best record is a problem or intent nothing solves. Free without a model."),
+        when_to_use=("At the start of work in a repository with ESOI records, to see the cards and the records together, and "
+                     "to learn whether a solution exists yet; optional tags (esoi/tags.csv ids or problem ids) boost or filter."),
+        when_not_to_use="Records alone (find_specs); walking one record's links (related_specs).",
+        parameters={"type": "object", "properties": {
+            "request": {"type": "string", "description": "The task or question, in its own words."},
+            "tags": {"type": "string", "description": "Optional tag ids or problem ids, comma separated (off by default)."},
+            "tag_mode": {"type": "string", "enum": ["boost", "filter"], "description": "boost (default) or filter."}},
+            "required": ["request"]},
+        mutates=False, origin="standard", workflow_step=False, needs_spec_root=True, keywords=KEYWORDS + ("card", "cards", "context"),
+        timeout_seconds=60.0)
+
+
 REPO_SPEC_BUILDERS = {"find_specs": with_repo(find_specs_spec), "related_specs": with_repo(related_specs_spec),
-                      "intent_specs": with_repo(intent_specs_spec), "show_spec": with_repo(show_spec_spec)}
+                      "intent_specs": with_repo(intent_specs_spec), "show_spec": with_repo(show_spec_spec),
+                      "search_cards_and_specs": with_repo(search_cards_and_specs_spec)}
 STANDARD_TOOL_BUILDERS.update(REPO_SPEC_BUILDERS)

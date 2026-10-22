@@ -49,7 +49,7 @@ The metric ranks by a balanced score of accuracy (70%), cost (15%) and time (15%
 
 ## Day-to-day use (`core/repo_specs.py`)
 
-A run working in a repository with an `esoi.toml` (or `QAR_SPEC_ROOT`) gets four read-only tools, `find_specs`, `related_specs`, `intent_specs` and `show_spec` (`core/tools_repo_specs.py`). The index is cached and rebuilt only when a record file changes, a local vector search is added when `fastembed` is installed, and the run walks links on demand instead of reading every record. The same functions run free from a shell: `python -m quest_ai_runner.core.repo_specs find|related|intent|show`.
+A run working in a repository with an `esoi.toml` (or `QAR_SPEC_ROOT`) gets four read-only tools, `find_specs`, `related_specs`, `intent_specs` and `show_spec` (`core/tools_repo_specs.py`), plus `search_cards_and_specs` (below). The index is cached and rebuilt only when a record file changes, a local vector search is added when `fastembed` is installed, and the run walks links on demand instead of reading every record. The same functions run free from a shell: `python -m quest_ai_runner.core.repo_specs find|related|intent|show`.
 
 A deep worker calls them from its own shell, a new process that may start in another folder and so would not find the repository
 (`unknown tool 'find_specs'`). The brief's command therefore carries the root the run's process found, `python -m
@@ -59,7 +59,41 @@ not named in a brief at all when no root is found (`ToolSpec.needs_spec_root`): 
 It is the slice source that `iterate-by-spec` and `ground-in-intent` were waiting for. `iterate-by-spec` calls it, lexical only
 and for deep goals only (`core/spec_slice.py`); `ground-in-intent` does not. A record is otherwise not part of the context a run
 is assembled with: it reaches a run only through the tools above. Searching cards and records in one pipeline, with a record as
-a read-only view of its row, is the planned solution `search-cards-and-specs` (`esoi/solutions.csv`), decided by its own metric.
+a read-only view of its row, is the solution `search-cards-and-specs` (`esoi/solutions.csv`), decided by its own metric; its
+first implementation is below.
+
+## Cards and records in one ranking (`core/unified_search.py`, built, not selected)
+
+`solutions_and_problems_with_links` ranks context cards and ESOI records in one list. It is not a third pipeline: it runs the
+stages above (`narrow_lexical_scored`, `semantic_scored`, `fuse`, `gate_decision`, `parse_ids`, `attach_links`) over a list of
+views instead of an index's entries. Nothing selects it: `find_specs` and the context assembler are unchanged, and no metric has
+compared it with them yet.
+
+- **A view, never a copy.** `RecordView` (`kind`, `id`, `title`, `text`, `source`, `links`, `tags`) points at its item's own
+  fields and weighted terms. `views_from_spec_index(index)` makes one per record of every kind (source `esoi`);
+  `adapters.card_views.card_views(repository)` makes one per card from any `CardRepository` (source `cards`, search text
+  `card_embed_text`, key `card:<id>` so a card never shadows a record). Neither writes anything.
+- **What is ranked.** Cards, solutions and problems (`RANKED_KINDS`) compete in one field-weighted TF-IDF, an optional vector
+  search over the same keys, one fusion, the same gate, and at most one cheap model call over the best `GATE_POOL`. One item
+  budget, `max_ranked` (default 5), covers both sources; `render(result, budget)` caps the characters.
+- **What is linked.** Each ranked record brings up to `expand` (default 3) ideals, metrics, intents (its own `intent` field
+  counts) and implementations, one of each kind before a second of any, marked `linked_from`.
+- **No solution yet.** A problem is served when it links a solution or a solution links it; an intent is served when a solution
+  belongs to it or it links one. When the first ranked record (cards skipped) is a problem or an intent that is not served,
+  `no_solution_yet` holds its key and the rendering leads with `NO SOLUTION YET for <key>`: the run's cue to define a solution
+  and record it (`iterate-by-spec`). Intents are ranked only when `ranked_kinds` includes `intent`.
+- **Tags (off by default).** `tags=[...]` with a `TagTable` (`repo_specs.repo_tag_table(root)` reads `esoi/tags.csv` and the
+  solutions' `tags` column): a solution carries its listed tags plus its connected problems, a problem its own id plus every tag
+  that mitigates it, and a requested tag also stands for the problems it mitigates. `tag_mode="boost"` adds the tagged
+  candidates as one more list in the fusion; `"filter"` keeps only them.
+- **Rendering.** One line per item, kind first: `solution <id>: <title>`, `ideal <id>: <title>  (linked from <id>)`,
+  `card card:<id>: <title>`, `problem <id>: <title>  [no solution yet]`.
+
+The run reaches it through the read-only tool `search_cards_and_specs` (beside `find_specs`, same `needs_spec_root`, so it is
+offered only where records are found). Cards come from a callable the consumer registers with
+`tools_repo_specs.set_card_views_source`; with none registered the tool searches the records and says "records only". The local
+vector search embeds records only, so `repo_specs.search` uses it only when there are no cards (a stage that sees one source
+would lift that source in the fusion). The gate thresholds are the ones tuned on records alone.
 
 ## Solution tags
 
@@ -123,5 +157,5 @@ links no problem or links an id that is not a problem record, and a listed tag u
 solution (it classifies nothing). A tag on one solution only is printed as a note, not a failure: it still lets the
 author of a second solution find the first (R1, R2), but the back-fill is worth a second look. Whether a tag
 mitigates its risk is measured by `metric-tag-solutions` (planned, unmeasured): on the labelled requests of
-`search-cards-and-specs`, the share where the right solution is missed without the tag. In that search, tags are
-planned as a cheap filter or boost, unmeasured.
+`search-cards-and-specs`, the share where the right solution is missed without the tag. In that search, tags are a
+cheap filter or boost (`tags=`, off by default; see Cards and records in one ranking), unmeasured.

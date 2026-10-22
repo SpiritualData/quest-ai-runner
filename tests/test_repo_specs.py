@@ -60,7 +60,7 @@ def test_find_without_a_model_is_free_and_the_offline_cli_prints_records(repo, c
 def test_the_four_tools_are_offered_only_in_a_repository_and_read_without_writing(repo, monkeypatch):
     builders = tools_repo_specs.REPO_SPEC_BUILDERS
     specs = {name: build({}) for name, build in builders.items()}
-    assert set(specs) == {"find_specs", "related_specs", "intent_specs", "show_spec"} and all(s and not s.mutates for s in specs.values())
+    assert set(specs) == {"find_specs", "related_specs", "intent_specs", "show_spec", "search_cards_and_specs"} and all(s and not s.mutates for s in specs.values())
     registered = {t["name"] for t in build_tool_registry({"QAR_STANDARD_TOOLS": "1"}).listing()} if hasattr(ToolRegistry, "listing") else set(specs)
     assert set(specs) <= registered
     ctx = ToolContext()

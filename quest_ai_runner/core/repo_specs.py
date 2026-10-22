@@ -13,6 +13,7 @@ The tools ``find_specs``, ``related_specs``, ``intent_specs`` and ``show_spec`` 
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import logging
 import os
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .spec_selection import (SpecSelection, VectorSearch, card_line, intent_specs, related_specs, select_specs)
+from .unified_search import RecordView, TagTable, UnifiedSelection, solutions_and_problems_with_links, views_from_spec_index
 
 log = logging.getLogger("quest-ai-runner.repo-specs")
 CONFIG_NAME = "esoi.toml"
@@ -93,6 +95,42 @@ def find(task: str, root: Optional[Path] = None, *, provider: Any = None, model:
         raise LookupError("no esoi.toml above the working folder (set QAR_SPEC_ROOT)")
     index = repo_index(root)
     return select_specs(task, index, provider=provider, model=model, vector_search=local_vector_search(index), expand=expand), index
+
+
+def repo_tag_table(root: Path) -> TagTable:
+    """``esoi/tags.csv`` and the solutions' ``tags`` column, read from the record files (never copied). Empty when absent."""
+    from esoi import config as esoi_config
+    folder = Path(root) / esoi_config.load(Path(root)).structure_dir
+
+    def rows(name: str) -> List[Dict[str, str]]:
+        try:
+            with open(folder / name, newline="", encoding="utf-8") as handle:
+                return list(csv.DictReader(handle))
+        except OSError:
+            return []
+
+    def split(value: Optional[str]) -> Tuple[str, ...]:
+        return tuple(p.strip() for p in (value or "").split(";") if p.strip())
+    return TagTable(tag_problems={r["tag"].strip(): split(r.get("problem_ids")) for r in rows("tags.csv") if (r.get("tag") or "").strip()},
+                    solution_tags={r["solution_id"]: split(r.get("tags")) for r in rows("solutions.csv") if r.get("solution_id")})
+
+
+def search(task: str, root: Optional[Path] = None, *, cards: List[RecordView] = (), provider: Any = None,
+           model: Optional[str] = None, tags: Optional[List[str]] = None, tag_mode: str = "boost",
+           max_ranked: int = 5, expand: int = 3) -> UnifiedSelection:
+    """Cards and the working repository's records in one ranking (``unified_search``, not selected anywhere): ``cards`` are
+    views a caller already has (``adapters.card_views.card_views``); the records are views over the cached index. The local
+    vector search embeds the records only, so it is used only when there are no cards: a stage that sees one source would
+    rank that source above the other in the fusion. With cards the ranking is lexical, then the gate and the model."""
+    root = root or find_root()
+    if root is None:
+        raise LookupError("no esoi.toml above the working folder (set QAR_SPEC_ROOT)")
+    index = repo_index(root)
+    table = repo_tag_table(root) if tags else None
+    views = list(cards) + views_from_spec_index(index, table)
+    vector = None if cards else local_vector_search(index)
+    return solutions_and_problems_with_links(task, views, provider=provider, model=model, vector_search=vector,
+                                             tags=tags, tag_table=table, tag_mode=tag_mode, max_ranked=max_ranked, expand=expand)
 
 
 def render(index: Dict[str, Any], ids: List[str], linked: Optional[Dict[str, str]] = None) -> str:
