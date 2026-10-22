@@ -50,23 +50,20 @@ def record_metric_result_spec(env: Mapping[str, str]) -> ToolSpec:
 
     return ToolSpec(
         name=TOOL_NAME, handler=handler,
-        description=("Put the metric result of your change on this run's record: the value of the metric the work serves "
-                     "before and after your change, or that no metric applies and why. The runner keeps it beside the "
-                     "values it measured itself and shows both."),
-        when_to_use=("Before you finish any work that changes something: record the value of the metric the work serves, "
-                     "before and after your change (the brief names the metric when it is known; find_specs finds it "
-                     "otherwise); if you measured only one end, record that one. If no metric applies to what you did, "
-                     "record not_applicable with a one-sentence reason."),
-        when_not_to_use="Anything that is not a metric value: findings, summaries and plans belong in your final message.",
+        description=("Put the metric result of your change on this run's record: the metric's value before and after, or "
+                     "that no metric applies. The runner shows it beside the values it measured itself."),
+        when_to_use=("Before you finish work that changes something: pass the metric's before and after numbers (one end "
+                     "is fine; ids come from the brief or find_specs), or not_applicable with a one-sentence reason if "
+                     "no metric applies."),
+        when_not_to_use="Anything that is not a metric value: findings and summaries go in your final message.",
         parameters={"type": "object", "properties": {
-            "metric_id": {"type": "string", "description": "The metric's id (required unless not_applicable)."},
-            "solution_id": {"type": "string", "description": "The solution the work serves, when known."},
-            "milestone": {"type": "string", "description": "The milestone this change moves, in a few words."},
-            "before": {"type": "number", "description": "The metric's value before your change (a number only)."},
-            "after": {"type": "number", "description": "The metric's value after your change (a number only)."},
-            "not_applicable": {"type": "boolean",
-                               "description": "true when no metric applies to this work; give a reason, no values."},
-            "reason": {"type": "string", "description": "Why no metric applies, or how you measured (one sentence)."}}},
+            "metric_id": {"type": "string", "description": "The metric's id (needed unless not_applicable)."},
+            "solution_id": {"type": "string", "description": "The solution it serves, if known."},
+            "milestone": {"type": "string", "description": "The milestone this moves, in a few words."},
+            "before": {"type": "number", "description": "Value before your change (a number only)."},
+            "after": {"type": "number", "description": "Value after your change (a number only)."},
+            "not_applicable": {"type": "boolean", "description": "true if no metric applies (give a reason, no values)."},
+            "reason": {"type": "string", "description": "Why none applies, or how you measured."}}},
         mutates=False, origin="standard", workflow_step=False, keywords=KEYWORDS, timeout_seconds=30.0,
         on_request_only=True, standing_deep=True)
 

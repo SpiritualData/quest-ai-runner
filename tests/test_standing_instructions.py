@@ -23,6 +23,14 @@ def test_default_ships_and_is_applied_when_unset(monkeypatch):
     assert prompt.index(default_text()) < prompt.index("TASK:")
 
 
+def test_the_metric_rule_names_the_tool_and_never_its_syntax():
+    """A change is finished when its metric result is recorded: the instruction names the operation, the tool's own entry
+    in the brief says how to call it (a command in the standing text would be copied into every run's prompt)."""
+    text = default_text()
+    assert "record_metric_result" in text and "before and after" in text
+    assert "--run" not in text and "--kw" not in text and "python -m" not in text
+
+
 def test_a_persona_preamble_does_not_replace_them(monkeypatch):
     monkeypatch.delenv(si.DEEP_INSTRUCTIONS_ENV, raising=False)
     prompt = compose_goal_prompt("done", "do the task",
