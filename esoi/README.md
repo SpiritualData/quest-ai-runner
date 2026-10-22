@@ -415,7 +415,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
 - `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
-- `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup; esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store`
+- `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl bootstrap_guards; esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup; esoi run card_store_growth --impl live_store`
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs --impl two_pipelines; esoi run context_and_specs --impl solutions_and_problems_with_links`
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed record of what they changed: `esoi run record_tracking`
 - `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_lookup`
