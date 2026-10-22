@@ -16,6 +16,11 @@ cannot. Two meters ship, tried in the order ``CoreSettings.metric_meters`` names
 
 A meter never raises and never calls a model. What it returns is what ``esoi leaderboard`` ranks by: the balanced score when
 the component records one, else the share of cases passed.
+
+A reading is never a wait without a bound. ``read_value`` gives the whole reading one budget (``CoreSettings.
+metric_arm_timeout_seconds``), tries the meters in the configured order (the cheap one first by default), says so on the
+status line before a meter that takes time runs, runs every meter on its own thread, and gives up on one that has not
+answered when the budget is spent: the reading is then ``None`` with a note that says why, and the work goes on without it.
 """
 from __future__ import annotations
 
@@ -24,8 +29,10 @@ import os
 import re
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Sequence, Tuple
 
 from .goal_runner_contract import kill_process_group
 from .runtime_settings import core_settings, process_environment
@@ -39,10 +46,22 @@ PASSED_LINE = re.compile(r":\s*(\d+)/(\d+) passed")
 SECRETISH = re.compile(r"API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", re.IGNORECASE)
 # Where a repository's own virtual environment keeps its esoi command, tried before the running interpreter's.
 REPO_ESOI_COMMANDS = (".venv/bin/esoi", "venv/bin/esoi")
+# How long past the budget a meter's thread is waited for: enough for an arm stopped at its limit to be reaped and answer.
+JOIN_GRACE_SECONDS = 1.0
+
+
+class Reading(NamedTuple):
+    """One reading of a metric: ``value`` from the meter named ``meter``, or no value and a ``note`` saying why."""
+    value: Optional[float] = None
+    meter: str = ""
+    note: str = ""
 
 
 class MetricMeter(Protocol):
-    """Reads one metric's current value."""
+    """Reads one metric's current value.
+
+    Two optional attributes: ``cheap`` (default True) says the reading takes no noticeable time, so nothing is announced
+    before it; ``within(seconds)`` returns a meter of the same kind that stops at that limit, for one that can be stopped."""
     name: str
 
     def measure(self, spec_slice: SpecSlice, working_dir: Optional[str] = None) -> Optional[float]:
@@ -66,6 +85,7 @@ def latest_row(config: Any, component: str, arm: str) -> Optional[Dict[str, str]
 class RecordedRowMeter:
     """The metric's value from the latest row of the results log, while that row is current."""
     name = "recorded_row"
+    cheap = True
 
     def measure(self, spec_slice: SpecSlice, working_dir: Optional[str] = None) -> Optional[float]:
         try:
@@ -83,9 +103,15 @@ class RecordedRowMeter:
 class OfflineArmMeter:
     """The metric's value from running its offline arm now."""
     name = "offline_arm"
+    cheap = False
 
     def __init__(self, timeout_seconds: Optional[float] = None):
         self.timeout_seconds = timeout_seconds
+        self.timed_out = False   # set when the arm was stopped at its limit; read on a meter made for one reading (``within``)
+
+    def within(self, seconds: float) -> "OfflineArmMeter":
+        """A meter for one reading that stops the arm at ``seconds`` (the shared meter is left as it is)."""
+        return OfflineArmMeter(timeout_seconds=max(seconds, 0.001))
 
     def measure(self, spec_slice: SpecSlice, working_dir: Optional[str] = None) -> Optional[float]:
         try:
@@ -115,6 +141,7 @@ class OfflineArmMeter:
         except subprocess.TimeoutExpired:
             kill_process_group(proc)
             proc.communicate()
+            self.timed_out = True
             log.info("offline arm %s ran longer than %.0fs; no value", argv[-1], limit)
             return None
         return score_from_output(out) if proc.returncode == 0 else None
@@ -166,11 +193,53 @@ def meters_from_names(names: str) -> List[MetricMeter]:
     return meters
 
 
-def read_value(meters: Sequence[MetricMeter], spec_slice: SpecSlice,
-               working_dir: Optional[str] = None) -> Tuple[Optional[float], str]:
-    """``(value, meter name)`` from the first meter that has a number, else ``(None, "")``."""
+def run_bounded(call: Callable[[], Any], seconds: float) -> Tuple[Any, bool]:
+    """``(result, finished)`` of ``call`` run on its own thread for at most ``seconds``; a call that raises gives ``None``.
+
+    A call still running when the time is up is left to finish on its own (the thread is a daemon): the caller moves on."""
+    box: Dict[str, Any] = {}
+
+    def go() -> None:
+        try:
+            box["value"] = call()
+        except Exception:  # noqa: BLE001  a meter that fails says so with no value
+            log.debug("meter failed", exc_info=True)
+            box["value"] = None
+
+    worker = threading.Thread(target=go, name="metric-meter", daemon=True)
+    worker.start()
+    worker.join(max(seconds, 0.0))
+    return box.get("value"), not worker.is_alive()
+
+
+def read_value(meters: Sequence[MetricMeter], spec_slice: SpecSlice, working_dir: Optional[str] = None, *,
+               budget_seconds: Optional[float] = None, announce: Optional[Callable[[], None]] = None,
+               clock: Callable[[], float] = time.monotonic) -> Reading:
+    """The first number a meter gives, within one budget, as a ``Reading``.
+
+    ``budget_seconds`` (default ``CoreSettings.metric_arm_timeout_seconds``) bounds the whole reading, whatever the number
+    of meters. ``announce`` is called once, just before the first meter that takes time (not ``cheap``) runs, so the person
+    is told about a wait before it starts and never about one that does not happen. A meter that has not answered when
+    the budget is spent is left behind; the reading is then empty with a note naming the meter and the budget."""
+    budget = float(budget_seconds if budget_seconds is not None else core_settings().metric_arm_timeout_seconds)
+    deadline = clock() + budget
+    announced, note = False, ""
     for meter in meters:
-        value = meter.measure(spec_slice, working_dir)
+        left = deadline - clock()
+        if left <= 0:
+            return Reading(note=note or f"the {budget:g}s for the reading were used up before {meter.name} could run")
+        if not getattr(meter, "cheap", True) and not announced:
+            announced = True
+            if announce is not None:
+                announce()
+        # A meter that can stop itself at the limit gets a moment past it to be reaped and answer; one that cannot is
+        # left behind at the limit.
+        stoppable = hasattr(meter, "within")
+        bounded = meter.within(left) if stoppable else meter
+        value, finished = run_bounded(lambda m=bounded: m.measure(spec_slice, working_dir),
+                                      left + (JOIN_GRACE_SECONDS if stoppable else 0.0))
         if value is not None:
-            return value, meter.name
-    return None, ""
+            return Reading(value, meter.name)
+        if not finished or getattr(bounded, "timed_out", False):
+            note = f"{meter.name} did not finish within {budget:g}s"
+    return Reading(note=note)

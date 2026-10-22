@@ -47,7 +47,7 @@ from .adapters import (
 )
 from .anticipation import Anticipator
 from .inbox import InputInbox
-from .goal_iteration import DoctrineOnly
+from .resolve import resolve
 from .tools import ToolRegistry
 
 from .recipes import RecipeStore
@@ -319,8 +319,10 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         # How much the code adds around a deep goal beyond the standing instructions (``core/goal_iteration.py``,
         # solution iterate-by-spec): the slice of the specification in the brief, and the runner's own readings of
         # the metric before and after. The metric record every deep goal keeps (``core/goal_metrics.py``) runs under
-        # every arm; this only says how much of it the code fills in itself. None = the doctrine alone.
-        self.goal_iteration: Any = goal_iteration if goal_iteration is not None else DoctrineOnly()
+        # every arm; this only says how much of it the code fills in itself. None = the selected arm, the same default
+        # ``build_orchestrator`` uses, so a consumer that builds the brain itself (quest-backend does) records the
+        # metric before and after by code too; it turns that off the way any selection is turned off.
+        self.goal_iteration: Any = goal_iteration if goal_iteration is not None else resolve("iterate-by-spec")()
         # Optional LIVE WEB adapter (the ``WebResearch`` interface, ``core/adapters.py``). When
         # wired, the planner gains its own two read keys -- {"web": "<query>"} and
         # {"web_page": "<url>", "focus": "<...>"} -- dispatched directly in ``_exec_one_read``,

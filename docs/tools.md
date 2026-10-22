@@ -148,9 +148,10 @@ command also gets `QAR_TOOL_QUEST_ID` and `QAR_TOOL_TASK_ID` in its environment,
 
 **The call ledger.** `ToolRegistry.invoke` appends every call's outcome (tool, ok, a failure
 signature, whether the tool acts) to a per-task file under `QAR_TOOL_LEDGER_DIR` (default: a folder
-in the system temp directory), keyed by the task id. The brain and a deep worker's shell command
-(`python -m quest_ai_runner.tools call ... --task ID`) write to the same file. The goal loop reads
-it to tell a tool that keeps failing from a worker's mistake, whatever the verifier called the gap.
+in the system temp directory), keyed by the task id, or by the run's id (`--run`, `QAR_TOOL_RUN_ID`) when the call has no
+task. The brain and a deep worker's shell command (`python -m quest_ai_runner.tools call ... --task ID`) write to the same
+file. The goal loop reads it to tell a tool that keeps failing from a worker's mistake, whatever the verifier called the gap,
+and to know that a tool that acts has changed something (`docs/metric-results.md`).
 
 **Python tools.** `handler = "package.module:function"` instead of `command`. The function takes
 `(args: dict, ctx: ToolContext)` and returns a `ToolResult`, a dict, or a string.

@@ -57,9 +57,11 @@ For each goal the loop creates one `GoalMetrics` and calls it at four points.
 
 1. **Before the first attempt**, inside the preparation that is already announced: the selected `iterate-by-spec` arm
    may add a short NEXT PRIORITY block to the brief (the next milestone, the metric, what to record) and may read the
-   metric with its meters. The worker is also told, in the tool list, the id to pass as `--run`.
+   metric with its meters, within a short bound and with a status line when the reading takes time (see "Measuring
+   costs no silent wait"). The worker is also told, in the tool list, the id to pass as `--run`, and a worker the runner
+   starts has it in its environment as `QAR_TOOL_RUN_ID`, so a call that forgets the flag still lands on this run.
 2. **After each attempt**: the loop notes whether the run changed something, from the runner's own records (a tool that
-   acts succeeded in the tool-call ledger, or `DeepResult.has_write_receipt`).
+   acts succeeded in the tool-call ledger, `DeepResult.has_write_receipt`, or `DeepResult.changes_landed`, below).
 3. **Before the attempt is verified**, the gate. A run that changed something and has no row at all is asked once, in its
    own session, to record one. That request is an attempt of the goal's existing budget. After it the flow accepts what
    there is and sets `metric_missing`; it never loops. The gate is judged on the ledger and the runner's records, never
@@ -70,10 +72,36 @@ For each goal the loop creates one `GoalMetrics` and calls it at four points.
 Where the gate does not apply, the record is still kept and shown, and `metric_missing` stays false:
 
 - the worker was not offered `record_metric_result` (it could not have complied);
-- the runner cannot resume a session (a re-run would repeat the work);
 - no attempt of the budget is left;
-- the runner exposes no record of change. The tool-call ledger is keyed by the task id, so a run with no task id has none,
-  and a Claude Code worker that edits files with its own tools reports no write receipt. Such a run is not gated.
+- the runner exposes no record of change (see the table below for the ones that do not).
+
+A runner that cannot resume a session (a re-run would repeat the work) is not asked, but the gap is not hidden: the
+run is marked `metric_missing` unless a row exists.
+
+### What tells the flow a run changed something
+
+`DeepResult.changes_landed` is a count the runner writes from its own records, never from anyone's words. It is not
+`has_write_receipt`: that flag means a governed quest-data write and feeds recipe learning, which a file edit must not.
+The flow reads the tool-call ledger, `has_write_receipt` and `changes_landed`, and a run with a task id or without one
+is read the same way (the tool-call ledger is keyed by the run id when there is no task id).
+
+| Runner | The count is | Asked to record? | Without a row |
+|---|---|---|---|
+| `SubprocessGoalRunner` (`claude -p`) | the worker's file-changing tool uses (`Edit`, `Write`, `MultiEdit`, `NotebookEdit`) that finished without an error, from its own session record (matched by the `--session-id` the runner generated), subagents' records included; a resumed run counts only what it added | yes, once, in its own session (`--resume`) | `metric_missing` |
+| `StreamJsonGoalRunner` | the same, from the same session record | yes, as above | `metric_missing` |
+| `AcpDeepRunner` | the agent's tool calls of kind `edit`, `delete` or `move` (or named like a file edit) whose status reached `completed` | no: it cannot resume a session | `metric_missing` |
+| `FastEditRunner` | the files its `FileWriter` accepted, across its attempts | no: there is no worker, only one model call | `metric_missing` |
+| `MCPOperationRunner` | 1 when the writer accepted the operation | no, as above | `metric_missing` |
+
+In every row the code's own measurement (the selected arm, below) is still a record: when a slice resolves, a `measured` row
+exists and the run is not marked missing.
+
+**What is not covered.** A change made through a shell command (`sed -i`, a redirect, `git apply`, a script) is not a
+file-changing tool use. The only way to tell it from any other command would be to read the command's text, which is a
+decision on words a model wrote and is not made here. A Claude Code worker that changes files only through its shell is
+therefore seen as having changed nothing (`changes_landed` 0), and is not asked. Such a run still gets the code's own
+`measured` rows when a slice resolves, and the worker is still told the rule in its brief. A tool of the runner's own
+(`ToolSpec.mutates`) that a worker calls from its shell is seen through the tool-call ledger, whichever way it changed things.
 
 ## The tool a worker calls
 
@@ -89,13 +117,36 @@ The record, the tool and the gate run under every arm. The arms differ in what t
 
 | Arm | What the code does | Selected |
 |---|---|---|
-| `generic-doctrine` | Nothing. The standing instructions are the whole method; the record holds what the worker records. | yes |
+| `generic-doctrine` | Nothing. The standing instructions are the whole method; the record holds what the worker records. | no (the off switch) |
 | `slice-only` | Adds the NEXT PRIORITY block for the solution the goal serves. | no |
-| `slice-and-writeback` | The slice, plus the runner reads the metric before and after with its own meters and writes `measured` rows. | no |
+| `slice-and-writeback` | The slice, plus the runner reads the metric before and after with its own meters and writes `measured` rows. | yes |
 
-The records say the slice arms are proposals until the solution's replay metric is run by decision, so the selection is
-unchanged. A lane turns an arm on with `ESOI_SELECT_QUEST_AI_RUNNER_ITERATE_BY_SPEC=slice-and-writeback` or the
-`iterate-by-spec` key of `RunnerConfig.selections`.
+`slice-and-writeback` is selected because Joshua directed on 2026-10-21 that every run's metric result before and after is
+recorded by code. The solution's replay metric (`task_replay`) is not built, so that is a direction and not a measured win.
+Every consumer gets it: `build_orchestrator` (the terminal, the poll lanes) and a consumer that builds `Orchestrator` itself
+(quest-backend does), which falls back to the selected arm when it is given none. A repository without ESOI records, or a
+goal whose working folder is not known, has no slice, so such a run reads nothing, announces nothing and waits for nothing;
+the gate and the worker's own record are the same as under any arm.
+
+To turn the measuring off, select the doctrine: `ESOI_SELECT_QUEST_AI_RUNNER_ITERATE_BY_SPEC=generic-doctrine` for a whole
+process, or `selections={"iterate-by-spec": "generic-doctrine"}` in `RunnerConfig`. To add only the slice to the brief and read
+nothing, select `slice-only`.
+
+### Measuring costs no silent wait
+
+The reading before the work happens before the worker spawns, so it is bounded and told:
+
+- it tries the cheap meter first (`recorded_row` reads a file) and announces nothing for it;
+- before a meter that takes time (`offline_arm` runs a command) it says, as a status line, `Measuring <metric> before the
+  change.`, and again `... after the change.` for the second reading;
+- the whole reading has one budget, `QAR_METRIC_ARM_TIMEOUT_SECONDS` (default 15 seconds), whatever the number of meters;
+  each meter runs on its own thread and one that has not answered when the budget is spent is left behind, and an offline arm
+  is stopped at the limit with its process group;
+- a reading that ran out of time gives no number and writes no row (a row without a number would count as a record). A status
+  line says so (`No reading of <metric> before the change: <meter> did not finish within 15s. Going on without it.`), and the
+  `measured` row written after the work carries it in its `reason`;
+- the slice lookup is local and lexical (tens of milliseconds, bounded at 3 seconds) and starts nothing when there is no
+  folder to look in.
 
 **The slice** (`spec_slice`) is found without a model, from the `esoi/` records of the repository around the goal's working
 folder, by the same lexical selection `find_specs` uses. It is given only when it is clear: the selection is confident, or
@@ -110,8 +161,8 @@ only metric. A goal whose working folder is not known gets no slice.
   before the measured code changed gives nothing.
 - `offline_arm` runs the metric's command (`esoi run <component> --impl <arm>`) only for an arm that cannot spend money: its
   latest row exists and shows no model call, and it is neither listed nor declared as paid. It runs with a budget of zero
-  model calls, a scrubbed environment and a time limit (`QAR_METRIC_ARM_TIMEOUT_SECONDS`, default 60). A refusal, a
-  failure or a timeout gives no reading.
+  model calls, a scrubbed environment and the reading's time limit (`QAR_METRIC_ARM_TIMEOUT_SECONDS`, default 15). A refusal,
+  a failure or a timeout gives no reading.
 
 A meter that has no reading writes no row. A row with no number would otherwise count as a record.
 

@@ -105,7 +105,7 @@
   }
  },
  "iterate-by-spec": {
-  "default": "generic-doctrine",
+  "default": "slice-and-writeback",
   "modules": {
    "generic-doctrine": "quest_ai_runner.core.goal_iteration",
    "slice-and-writeback": "quest_ai_runner.core.goal_iteration",

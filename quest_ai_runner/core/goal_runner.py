@@ -85,6 +85,7 @@ from .goal_runner_contract import (  # noqa: F401
     resume_target_missing,
 )
 from .goal_runner_session import (  # noqa: F401
+    FILE_CHANGE_TOOLS,
     SESSION_TAIL_MAX_ACTIONS,
     SESSION_TAIL_MAX_BYTES,
     SESSION_TAIL_MAX_CHARS,
@@ -99,6 +100,7 @@ from .goal_runner_session import (  # noqa: F401
     _monitor_claude_session,
     _truncate_keep_end,
     describe_session_activity,
+    landed_file_changes,
     read_session_activity_tail,
     resolve_session_file,
     resolved_model_from_session,
@@ -129,10 +131,15 @@ class SubprocessGoalRunner(DeepRunner):
         # cannot import the adapter that owns the real translator, so the config layer passes it.
         self._model_translator = model_translator
 
-    def _build_env(self, requester_user_id: Optional[str] = None) -> dict:
+    def _build_env(self, requester_user_id: Optional[str] = None, run_id: Optional[str] = None) -> dict:
         env = dict(process_environment())
         apply_requester_env(env, requester_user_id)
         env["PYTHONUNBUFFERED"] = "1"
+        # The id the brief tells the worker to pass as ``--run`` to a tool call (``core/tools.py``), also in its shell's
+        # environment, so a call that forgets the flag still lands on this run's record (its metric result, its tool-call
+        # ledger) instead of on none.
+        if run_id:
+            env["QAR_TOOL_RUN_ID"] = run_id
         # Don't let a spawned headless run reuse our own session / API billing.
         env.pop("CLAUDECODE", None)
         env.pop("ANTHROPIC_API_KEY", None)
@@ -231,6 +238,7 @@ class SubprocessGoalRunner(DeepRunner):
         configured grace period, then kill) and the result comes back ``cancelled`` with the
         session id, instead of the worker carrying on until it exits or the liveness review
         notices."""
+        landed_already = self.landed_in(working_dir, resume_session_id)
         try:
             res = self.run_goal_once(goal=goal, brief=brief, model=model, max_turns=max_turns,
                                      emit=emit, context_preamble=context_preamble, run_id=run_id,
@@ -243,7 +251,23 @@ class SubprocessGoalRunner(DeepRunner):
         if res.resolved_model is None and res.session_id:
             res.resolved_model = resolved_model_from_session(
                 self.cfg.working_dir if working_dir is None else working_dir, res.session_id)
+        self.count_landed(res, working_dir, landed_already)
         return res
+
+    def landed_in(self, working_dir: Optional[str], session_id: Optional[str]) -> Set[str]:
+        """The file changes a session already holds, taken before a resumed run so only its own are counted."""
+        if not session_id:
+            return set()
+        return landed_file_changes(self.cfg.working_dir if working_dir is None else working_dir, session_id)
+
+    def count_landed(self, res: DeepResult, working_dir: Optional[str], already: Set[str]) -> None:
+        """Put the run's file changes on its result (``DeepResult.changes_landed``), read from its own session record.
+
+        Counts the file-changing tool uses that finished without an error and that were not in the session before this
+        run began. Whatever way the run ended, a change it made before it stopped is a change."""
+        if res.session_id:
+            res.changes_landed = len(landed_file_changes(
+                self.cfg.working_dir if working_dir is None else working_dir, res.session_id) - already)
 
     def run_goal_once(self, *, goal: str, brief: str, model: Optional[str] = None,
                       max_turns: Optional[int] = None,
@@ -404,7 +428,7 @@ class SubprocessGoalRunner(DeepRunner):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=effective_working_dir,
-                env=self._build_env(requester_user_id),
+                env=self._build_env(requester_user_id, run_id),
                 # Own process group: on a timeout we must kill the worker AND every child it
                 # spawned, not just the top pid. See kill_process_group().
                 start_new_session=True,

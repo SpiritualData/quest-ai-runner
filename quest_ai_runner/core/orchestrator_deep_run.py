@@ -404,19 +404,20 @@ class DeepRunMixin:
                 # Progress the person can read, not internal state. "Selected context for goal: ..."
                 # named an orchestrator step and read as leaked machinery in the live status pill.
                 emit.status(f"Working on: {goal[:60]}")
-            announce_model_selection(terminal_runner)
-
             # THE METRIC RECORD OF THIS GOAL (core/goal_metrics.py): what the relevant metric was before
             # and after the change is kept by code, from here to the result. This is its start, still
             # inside the preparation announced above: the selected iterate-by-spec arm may add the
             # slice of the specification this goal serves (the next milestone and its metric) to the
-            # brief, and read the metric now; an arm that does neither adds nothing, and the record
-            # still holds what the worker records. No model call.
+            # brief, and read the metric now (bounded, and announced when the reading takes time, so
+            # the worker is never held back silently); an arm that does neither adds nothing, and the
+            # record still holds what the worker records. No model call. It comes BEFORE the "Starting"
+            # line below, because the last thing said before a worker spawns says that it is starting.
             metrics = GoalMetrics.for_goal(
                 self.tools, self.goal_iteration, task_uuid, task_id=(ctx_meta or {}).get("task_id"),
                 request=f"{user_message}\n{goal}", working_dir=working_dir_of(terminal_runner, working_dir_override),
                 status=emit.status if emit is not None else None)
             brief = brief + metrics.begin()
+            announce_model_selection(terminal_runner)
 
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
             # is active, EVERY runner is asked for future context (a code generator knows the most
@@ -681,8 +682,10 @@ class DeepRunMixin:
             # read per attempt so a tool that keeps failing is recognised without the verifier's
             # label: ``prior_failures`` are the previous attempt's unrecovered failures, ``prior_gap``
             # its (verdict reason, output) when it fell short.
+            # Keyed by the task id, else by this run's id: a run with no task still has a record of its calls (the worker's
+            # shell passes the run id with every call, ``QAR_TOOL_RUN_ID``).
             ledger = getattr(self.tools, "ledger", None) if self.tools is not None else None
-            ledger_task = (ctx_meta or {}).get("task_id")
+            ledger_task = (ctx_meta or {}).get("task_id") or task_uuid
             prior_failures: Dict[str, ToolOutcome] = {}
             prior_gap: Optional[Tuple[str, str]] = None
             for attempt in range(1, max_iters + 1):

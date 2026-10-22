@@ -38,7 +38,7 @@ from .spec_selection import select_specs
 
 log = logging.getLogger("quest-ai-runner.spec-slice")
 
-SLICE_TIMEOUT_SECONDS = 10.0
+SLICE_TIMEOUT_SECONDS = 3.0   # the lookup is local and lexical (tens of milliseconds); a brief never waits long for it
 MILESTONE_CHARS = 280
 
 NUMBERED_ITEM = re.compile(r"(?:(?<=\s)|^)(\d{1,2})\.\s+(?=\S)")
@@ -153,11 +153,18 @@ def authoritative_metric(solution: Dict[str, str], metrics: Dict[str, Dict[str, 
     return metrics.get(pick)
 
 
+def has_folder_to_look_from(working_dir: Optional[str]) -> bool:
+    """Whether there is a folder to find the records from: the goal's own, or the one ``QAR_SPEC_ROOT`` names.
+
+    The process's own folder is not one: it would be a guess about where the work happens."""
+    return bool(working_dir or process_environment().get("QAR_SPEC_ROOT"))
+
+
 def slice_from_repo(request: str, working_dir: Optional[str]) -> Optional[SpecSlice]:
     """The slice for a request, or None. Reads the records; never raises."""
     try:
-        if not working_dir and not process_environment().get("QAR_SPEC_ROOT"):
-            return None   # no folder to look from: the process's own would be a guess about where the work happens
+        if not has_folder_to_look_from(working_dir):
+            return None
         root = repo_specs.find_root(Path(working_dir) if working_dir else None)
         if root is None:
             return None
@@ -210,6 +217,8 @@ class RepoSliceSource:
         self.timeout_seconds = timeout_seconds
 
     def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
+        if not has_folder_to_look_from(working_dir):
+            return None   # nothing is read and no thread is started
         box: Dict[str, Optional[SpecSlice]] = {}
         worker = threading.Thread(target=lambda: box.update(found=slice_from_repo(request, working_dir)),
                                   name="spec-slice", daemon=True)

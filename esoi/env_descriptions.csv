@@ -68,5 +68,5 @@ HF_HUB_VERBOSITY,"Hugging Face hub log level; the CLI sets it to error (unless a
 QAR_CHAT_LOG_FILE,"File the terminal chat writes its full diagnostic log to (default: logs/chat.log beside the saved conversations)."
 QAR_METRIC_LEDGER_DIR,"Folder where each deep run's metric results are kept, one file per run, shared by the runner and the worker's shell commands (default: a folder in the system temp directory)."
 QAR_METRIC_METERS,"Which meters read a metric's value around a deep goal, comma-separated and tried in order: recorded_row, offline_arm (default both; used only by the iterate-by-spec arms that measure)."
-QAR_METRIC_ARM_TIMEOUT_SECONDS,"Longest an offline arm may run to measure a metric (default 60); a longer run gives no reading."
+QAR_METRIC_ARM_TIMEOUT_SECONDS,"Longest one reading of a metric may take before and after a deep goal (default 15); an offline arm is stopped at that limit, and a reading that has not finished gives no value, with a note on the row."
 QAR_TOOL_RUN_ID,"This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command."

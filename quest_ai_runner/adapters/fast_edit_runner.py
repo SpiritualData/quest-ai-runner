@@ -463,6 +463,9 @@ class FastEditRunner(DeepRunnerBase):
             failures: List[str] = []
             edited: List[str] = []
             diffs: Dict[str, str] = {}
+            # Every file the FileWriter accepted across the attempts, once each: a retry that fixes the second file leaves
+            # the first one it wrote earlier in place, and that change landed too.
+            landed: List[str] = []
 
             for attempt in range(self.config.max_retries + 1):
                 prompt = self.build_prompt(goal=goal, brief=brief,
@@ -479,7 +482,8 @@ class FastEditRunner(DeepRunnerBase):
                     return DeepResult(met=False,
                                       output="The fast edit could not run because the model call "
                                              "failed.",
-                                      error=f"fast edit: model call failed: {type(e).__name__}: {e}")
+                                      error=f"fast edit: model call failed: {type(e).__name__}: {e}",
+                                      changes_landed=len(landed))
                 # An ESTIMATE, not a report: ``ModelProvider.answer`` returns text with no usage,
                 # so there is nothing authoritative to pass on. The goal loop only uses this to
                 # spend down a budget, and an estimate that is roughly right is far better there
@@ -492,10 +496,12 @@ class FastEditRunner(DeepRunnerBase):
                         met=False,
                         output="No edit was made: the model judged that the files provided already "
                                "satisfy the goal.",
-                        error="fast edit: model reported no change was needed", tokens=tokens)
+                        error="fast edit: model reported no change was needed", tokens=tokens,
+                        changes_landed=len(landed))
 
                 tick(PHASE_APPLYING, "Applying the edit…", attempt=attempt + 1)
                 edited, failures, diffs = self.apply_response(response, targets, fmt)
+                landed.extend(p for p in edited if p not in landed)
                 if edited and not failures:
                     break
                 if attempt < self.config.max_retries:
@@ -518,7 +524,7 @@ class FastEditRunner(DeepRunnerBase):
                            "(one direct model call, no agent spawned)."
                            + (f"\n\n{evidence}" if evidence else ""))
                 return DeepResult(
-                    met=True, output=summary, tokens=tokens,
+                    met=True, output=summary, tokens=tokens, changes_landed=len(landed),
                     future_context="- Files changed by this run: " + ", ".join(edited))
             if edited and failures:
                 # Partial: some files changed, some did not. Reported as NOT met so the goal loop
@@ -529,7 +535,7 @@ class FastEditRunner(DeepRunnerBase):
                     met=False,
                     output="Partly applied. Edited " + ", ".join(edited) +
                            ". These did not apply:\n" + "\n\n".join(failures),
-                    error="fast edit: some edits did not apply", tokens=tokens,
+                    error="fast edit: some edits did not apply", tokens=tokens, changes_landed=len(landed),
                     future_context="- Files changed by this run: " + ", ".join(edited))
             tick(PHASE_ERROR, "The fast edit did not apply.")
             detail = ("\n\n" + "\n\n".join(failures)) if failures else (
@@ -538,7 +544,7 @@ class FastEditRunner(DeepRunnerBase):
             return DeepResult(
                 met=False,
                 output="No fast edit was applied; the files are unchanged." + detail,
-                error="fast edit: no edit applied", tokens=tokens)
+                error="fast edit: no edit applied", tokens=tokens, changes_landed=len(landed))
         except Exception as e:  # noqa: BLE001 — a DeepRunner NEVER raises; it reports
             _log.error("fast edit runner failed: %s", e, exc_info=True)
             return DeepResult(met=False,

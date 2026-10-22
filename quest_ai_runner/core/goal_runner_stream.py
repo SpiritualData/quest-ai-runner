@@ -440,6 +440,7 @@ class StreamJsonGoalRunner(SubprocessGoalRunner):
                  cancel_check: Optional[Callable[[], bool]] = None,
                  control: Optional[RunControl] = None) -> DeepResult:
         """Run the goal over a live session. Never raises (the DeepRunner port)."""
+        landed_already = self.landed_in(working_dir, resume_session_id)
         try:
             res = self.run_goal_once(goal=goal, brief=brief, model=model, max_turns=max_turns,
                                      emit=emit, context_preamble=context_preamble, run_id=run_id,
@@ -453,6 +454,7 @@ class StreamJsonGoalRunner(SubprocessGoalRunner):
         if res.resolved_model is None and res.session_id:
             res.resolved_model = resolved_model_from_session(
                 self.cfg.working_dir if working_dir is None else working_dir, res.session_id)
+        self.count_landed(res, working_dir, landed_already)
         return res
 
     def run_goal_once(self, *, goal: str, brief: str, model: Optional[str] = None,  # type: ignore[override]
@@ -466,7 +468,7 @@ class StreamJsonGoalRunner(SubprocessGoalRunner):
                       requester_user_id: Optional[str] = None,
                       cancel_check: Optional[Callable[[], bool]] = None,
                       control: Optional[RunControl] = None) -> DeepResult:
-        env = self._build_env(requester_user_id)
+        env = self._build_env(requester_user_id, run_id)
         binary = self.cfg.claude_path
         version = cli_version(binary, env)
         if version is None or version < MIN_STREAM_CONTROL_VERSION:

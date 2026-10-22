@@ -130,7 +130,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `gate-an-autopilot-pass` | Autopilot run-or-skip gate | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py | Autopilot gate decision correctness |
 | `evolve-by-metric` | Evolve by metric | structure-library | Parts selected by measurement |
 | `ground-in-intent` | Intent frame for quest-scoped prompts | none | Intent-grounded pass rate |
-| `iterate-by-spec` | Specification slice before a task and write-back after | generic-doctrine | First-pass acceptance and exploration before the first edit |
+| `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 

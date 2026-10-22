@@ -11,7 +11,7 @@ import time
 import uuid
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import Escalation, EVENT_EXEC, ProgressEvent
 from .acp_deep_runner_config import (
@@ -27,6 +27,7 @@ from .acp_deep_runner_protocol import (
     AcpUnavailable,
     chunk_text,
     field_of,
+    landed_file_change,
     log,
     MAX_MESSAGE_CHARS,
     PHASE_ESCALATED,
@@ -93,6 +94,11 @@ class AcpRun:
         # the orchestrator's own between-attempts drain.
         self.steering_open = True
         self.decision_id: Optional[str] = None
+        # What the agent's own tool-call updates say it changed: the ids of the file-changing calls that completed
+        # (``landed_file_change``), with the kind and name each call announced. Becomes ``DeepResult.changes_landed``.
+        self.landed_changes: Set[str] = set()
+        self.tool_kinds: Dict[str, str] = {}
+        self.tool_names: Dict[str, str] = {}
         self.permission_notes: List[str] = []
         self.injected: List[str] = []
         self.tokens = 0
@@ -288,6 +294,9 @@ class AcpSessionClient:
         run = self.run
         try:
             run.note_activity()
+            landed = landed_file_change(update, run.tool_kinds, run.tool_names)
+            if landed:
+                run.landed_changes.add(landed)
             usage = usage_from_update(update)
             if usage is not None:
                 if usage.get("cost_usd"):

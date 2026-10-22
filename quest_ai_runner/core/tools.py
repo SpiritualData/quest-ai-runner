@@ -489,8 +489,9 @@ class ToolRegistry:
         if len(result.text) > MAX_RESULT_CHARS:
             result.text = result.text[:MAX_RESULT_CHARS] + " …[truncated]"
         if self.ledger is not None:
-            self.ledger.record(ctx.task_id, outcome_from_result(name, result.ok, result.text,
-                                                                spec.mutates))
+            # By the task, else by the run: a deep run with no task is read back under its run id.
+            self.ledger.record(ctx.task_id or ctx.value("run_id"),
+                               outcome_from_result(name, result.ok, result.text, spec.mutates))
         return result
 
 

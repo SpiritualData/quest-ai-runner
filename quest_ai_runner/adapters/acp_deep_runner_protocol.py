@@ -11,6 +11,8 @@ import logging
 
 from typing import Any, Dict, Optional, Tuple
 
+from ..core.goal_runner_session import FILE_CHANGE_TOOLS
+
 log = logging.getLogger("quest-ai-runner.acp_deep_runner")
 
 
@@ -135,6 +137,35 @@ TOOL_STATUS_PHASES = {
     "completed": PHASE_TOOL_RESULT,
     "failed": PHASE_TOOL_ERROR,
 }
+
+
+# The ACP tool kinds of a call that changes files (the protocol's own typed field on a ``tool_call``), and the point at which
+# such a call has landed: its status reached ``completed``. ``failed`` never counts. The Claude agent also names the tool
+# itself (``_meta.claudeCode.toolName``), which is the second, equally structural way to tell a file edit from a read.
+FILE_CHANGE_KINDS = frozenset({"edit", "delete", "move"})
+TOOL_COMPLETED = "completed"
+
+
+def landed_file_change(update: Any, kinds: Dict[str, str], names: Dict[str, str]) -> Optional[str]:
+    """The id of the tool call this update shows as a file change that completed, else None.
+
+    ``kinds`` and ``names`` remember what earlier updates of each call said (the kind and the tool name usually arrive on
+    the first update and the status on a later one); both are filled in here. Reads three protocol fields: the call's id,
+    its kind (or its tool name) and its status. Never the title or any text the agent composed."""
+    if field_of(update, "session_update", "sessionUpdate") not in ("tool_call", "tool_call_update"):
+        return None
+    call_id = field_of(update, "tool_call_id", "toolCallId")
+    if not isinstance(call_id, str) or not call_id:
+        return None
+    kind, name = field_of(update, "kind"), tool_name_of(update)
+    if isinstance(kind, str):
+        kinds[call_id] = kind
+    if name:
+        names[call_id] = name
+    if field_of(update, "status") != TOOL_COMPLETED:
+        return None
+    changes_files = kinds.get(call_id) in FILE_CHANGE_KINDS or (names.get(call_id) or "").lower() in FILE_CHANGE_TOOLS
+    return call_id if changes_files else None
 
 
 def chunk_text(update: Any) -> str:

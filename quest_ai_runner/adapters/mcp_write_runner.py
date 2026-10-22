@@ -222,7 +222,7 @@ class MCPOperationRunner(DeepRunnerBase):
             summary = (f"Executed MCP operation {operation!r} with args {json.dumps(args, default=str)} "
                       f"in {elapsed:.1f}s (one direct model call, no agent spawned).")
             return DeepResult(
-                met=True, output=summary,
+                met=True, output=summary, changes_landed=1,
                 future_context=f"- Executed MCP operation {operation!r} with args "
                                f"{json.dumps(args, default=str)}.")
         except Exception as exc:  # noqa: BLE001 -- a DeepRunner must never raise

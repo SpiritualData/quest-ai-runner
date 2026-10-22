@@ -9,7 +9,7 @@ import json
 import re
 import threading
 import time
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional, Set
 from pathlib import Path
 
 from .adapters import EVENT_EXEC, ProgressEvent
@@ -661,6 +661,67 @@ def describe_session_activity(
         else "Its own session record shows it last did"
     )
     return f"{lead} (most recent last):\n{block}"
+
+
+# --- What the run's OWN record says it changed ------------------------------------------------------------
+#
+# The metric flow (``core/goal_metrics.py``) must know whether a worker changed something, and a Claude Code worker
+# reports no write receipt. Its session record does hold the answer, structurally: every tool use is a ``tool_use`` block
+# that NAMES the tool, and its result comes back as a ``tool_result`` block that says whether it was an error. A file
+# changed when a file-changing tool was used and its result was not an error. Only those two fields are read: never a
+# message's words, never a shell command's text (hard rule #3). A change made through a shell command (``sed -i``, a
+# redirect, ``git apply``) is not a file-changing tool use and cannot be told from any other command, so it is not counted:
+# 0 means none were seen, not that none happened.
+
+# The tools Claude Code changes files with, as its transcripts name them (compared without regard to case).
+FILE_CHANGE_TOOLS = frozenset({"edit", "write", "multiedit", "notebookedit"})
+
+
+def session_record_paths(path: Path) -> List[Path]:
+    """The run's session record and the records of the subagents it started (``<session>/subagents/*.jsonl``)."""
+    paths = [path]
+    try:
+        paths.extend(sorted((path.with_suffix("") / "subagents").glob("*.jsonl")))
+    except OSError:
+        pass
+    return paths
+
+
+def landed_file_changes(working_dir: Optional[str], session_id: Optional[str]) -> Set[str]:
+    """The ids of the tool uses in the session's record that changed a file and finished without an error.
+
+    A tool use with no result yet (the worker was stopped in the middle of it) is not counted, and neither is one whose
+    result was an error (a refused permission, an edit that matched nothing). Empty when the record cannot be found or
+    read. Never raises."""
+    path = resolve_session_file(working_dir, session_id)
+    if path is None:
+        return set()
+    uses: Set[str] = set()
+    failed: Set[str] = set()
+    answered: Set[str] = set()
+    for record_path in session_record_paths(path):
+        try:
+            with open(record_path, "r", encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if '"tool_use"' not in line and '"tool_result"' not in line:
+                        continue   # most lines are text; the two block types are the only ones read
+                    try:
+                        content = (json.loads(line).get("message") or {}).get("content")
+                    except (ValueError, AttributeError):
+                        continue
+                    for block in content if isinstance(content, list) else []:
+                        if not isinstance(block, dict):
+                            continue
+                        if block.get("type") == "tool_use" and str(block.get("name") or "").lower() in FILE_CHANGE_TOOLS:
+                            uses.add(str(block.get("id") or ""))
+                        elif block.get("type") == "tool_result":
+                            answered.add(str(block.get("tool_use_id") or ""))
+                            if block.get("is_error") is True:
+                                failed.add(str(block.get("tool_use_id") or ""))
+        except OSError as e:
+            _log.debug("could not read session record %s: %s", record_path, e)
+    uses.discard("")
+    return (uses & answered) - failed
 
 
 def worker_output_is_thin(output: Optional[str]) -> bool:

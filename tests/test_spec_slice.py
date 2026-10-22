@@ -7,6 +7,7 @@ the records, the results log and the evaluation component are the real shapes. O
 """
 import csv
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from esoi import scaffold
 
 from quest_ai_runner.core import spec_selection, spec_slice
 from quest_ai_runner.core.metric_meter import (
-    OfflineArmMeter, RecordedRowMeter, meters_from_names, read_value, score_from_output)
+    OfflineArmMeter, Reading, RecordedRowMeter, meters_from_names, read_value, run_bounded, score_from_output)
 from quest_ai_runner.core.spec_slice import (
     RepoSliceSource, SpecSlice, next_milestone, next_priority_block, parse_milestones, target_of)
 
@@ -233,6 +234,93 @@ def test_the_first_meter_with_a_number_wins_and_unknown_names_are_left_out():
             return self.value
 
     found = SpecSlice(root="/x", solution_id="s")
-    assert read_value([Fixed("a", None), Fixed("b", 0.4), Fixed("c", 0.9)], found) == (0.4, "b")
-    assert read_value([Fixed("a", None)], found) == (None, "")
+    assert read_value([Fixed("a", None), Fixed("b", 0.4), Fixed("c", 0.9)], found) == Reading(0.4, "b")
+    assert read_value([Fixed("a", None)], found) == Reading()
     assert [m.name for m in meters_from_names("offline_arm, nonsense ,recorded_row")] == ["offline_arm", "recorded_row"]
+
+
+# -- a reading is bounded -------------------------------------------------------------------------
+
+class Stub:
+    """A meter that answers at once, or after ``seconds`` on the fake clock, or never (``stuck``)."""
+
+    def __init__(self, name, value=None, *, cheap=True, advance=0.0, clock=None, stuck=None):
+        self.name, self.value, self.cheap = name, value, cheap
+        self.advance, self.clock, self.stuck = advance, clock, stuck
+        self.calls = 0
+
+    def measure(self, spec_slice, working_dir=None):
+        self.calls += 1
+        if self.clock is not None:
+            self.clock["now"] += self.advance
+        if self.stuck is not None:
+            self.stuck.wait(30)
+        return self.value
+
+
+def test_the_whole_reading_has_one_budget_not_one_per_meter():
+    clock = {"now": 0.0}
+    first = Stub("first", None, cheap=False, advance=10.0, clock=clock)
+    second = Stub("second", 0.9, cheap=False, clock=clock)
+    told = []
+    done = read_value([first, second], SpecSlice(root="/x", solution_id="s"), budget_seconds=8.0,
+                      announce=lambda: told.append("measuring"), clock=lambda: clock["now"])
+    assert done.value is None and second.calls == 0   # the budget was gone before the second meter could start
+    assert "8s" in done.note and "second" in done.note
+    assert told == ["measuring"]
+
+
+def test_the_wait_is_announced_once_before_the_first_meter_that_takes_time_and_never_for_a_cheap_one():
+    found = SpecSlice(root="/x", solution_id="s")
+    told = []
+    assert read_value([Stub("cheap", 0.4)], found, announce=lambda: told.append(1)).value == 0.4
+    assert told == []
+    both = [Stub("cheap", None), Stub("slow", None, cheap=False), Stub("slower", 0.7, cheap=False)]
+    assert read_value(both, found, announce=lambda: told.append(1)).value == 0.7
+    assert told == [1]   # once, before "slow" ran; the cheap one before it was silent
+
+
+def test_a_meter_that_never_answers_is_left_behind_at_the_budget():
+    stuck = threading.Event()
+    started = time.monotonic()
+    done = read_value([Stub("stuck", 0.5, cheap=False, stuck=stuck)], SpecSlice(root="/x", solution_id="s"),
+                      budget_seconds=0.3)
+    assert time.monotonic() - started < 2 and done.value is None
+    assert done.note == "stuck did not finish within 0.3s"
+    stuck.set()
+
+
+def test_a_meter_that_raises_gives_no_value_and_the_next_one_is_tried():
+    class Boom:
+        name, cheap = "boom", True
+
+        def measure(self, spec_slice, working_dir=None):
+            raise RuntimeError("broken")
+
+    done = read_value([Boom(), Stub("fine", 0.2)], SpecSlice(root="/x", solution_id="s"))
+    assert done == Reading(0.2, "fine")
+
+
+def test_run_bounded_reports_whether_the_call_finished():
+    assert run_bounded(lambda: 7, 1.0) == (7, True)
+    release = threading.Event()
+    value, finished = run_bounded(lambda: release.wait(30), 0.1)
+    assert value is None and finished is False
+    release.set()
+
+
+def test_a_slow_offline_arm_costs_the_budget_and_no_more(repo):
+    impl = repo / "evaluation" / "components" / "greet_a_person" / "impls" / "live.py"
+    impl.write_text("import time\ntime.sleep(60)\n" + impl.read_text(encoding="utf-8"), encoding="utf-8")
+    announced = []
+    started = time.monotonic()
+    done = read_value([OfflineArmMeter()], slice_of(repo), budget_seconds=1.0, announce=lambda: announced.append(1))
+    assert time.monotonic() - started < 6
+    assert done.value is None and done.note == "offline_arm did not finish within 1s" and announced == [1]
+
+
+def test_an_offline_arm_made_for_one_reading_carries_its_own_limit_and_the_shared_one_is_untouched():
+    shared = OfflineArmMeter()
+    own = shared.within(2.5)
+    assert own.timeout_seconds == 2.5 and shared.timeout_seconds is None and own is not shared
+    assert shared.cheap is False and RecordedRowMeter.cheap is True

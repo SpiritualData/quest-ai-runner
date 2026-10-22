@@ -6,7 +6,8 @@ shell command does, and the tests pin what the FLOW does with the ledger: the on
 has none (once, never a loop, only where the runner's own records say something changed), the measured and the recorded
 rows kept side by side, the payload on the result, the events and the text, and that nothing in all of it asks a model.
 
-Offline: no model, no network, no real worker.
+Offline: no model, no network, no real worker. The arm under the loop is the selected one (slice-and-writeback) unless a test
+names another; with no specification records around, it reads nothing, so the gate tests below stand under it as they did.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from esoi import scaffold
 
 from quest_ai_runner.config import build_orchestrator
 from quest_ai_runner.core.adapters import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, DeepResult, Mode
+from quest_ai_runner.core import spec_slice
 from quest_ai_runner.core.goal_iteration import DoctrineOnly, SliceAndWriteback, SliceOnly
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
 from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE, MetricResult
@@ -59,9 +61,11 @@ class Worker:
     ``("record", args)`` and ``("na", reason)`` (calls to record_metric_result, keyed by the run id the brief told it)."""
 
     def __init__(self, registry, steps, *, output="Changed the file.", session_id: Optional[str] = "sess-1",
-                 working_dir: Optional[str] = None, write_receipt: bool = False, timeline: Optional[Timeline] = None):
+                 working_dir: Optional[str] = None, write_receipt: bool = False, timeline: Optional[Timeline] = None,
+                 landed: int = 0, task_id: Optional[str] = TASK):
         self.registry, self.steps, self.output, self.session_id = registry, list(steps), output, session_id
         self.write_receipt, self.timeline = write_receipt, timeline
+        self.landed, self.task_id = landed, task_id   # file changes counted as landed; the id the worker's calls carry
         self.cfg = SimpleNamespace(working_dir=working_dir)
         self.calls: List[Dict[str, Any]] = []
         self.run_id: Optional[str] = None
@@ -74,27 +78,30 @@ class Worker:
         self.run_id = self.run_id or (found.group(1) if found else None)
         for step in (self.steps.pop(0) if self.steps else []):
             if step == "change":
-                assert self.registry.invoke("write_things", {}, ToolContext(task_id=TASK)).ok
+                assert self.registry.invoke("write_things", {}, ToolContext(task_id=self.task_id,
+                                                                            meta={"run_id": self.run_id})).ok
             elif step[0] == "record":
                 out = self.registry.invoke("record_metric_result", step[1],
-                                           ToolContext(task_id=TASK, meta={"run_id": self.run_id}))
+                                           ToolContext(task_id=self.task_id, meta={"run_id": self.run_id}))
                 assert out.ok, out.text
             elif step[0] == "na":
                 out = self.registry.invoke("record_metric_result", {"not_applicable": True, "reason": step[1]},
-                                           ToolContext(task_id=TASK, meta={"run_id": self.run_id}))
+                                           ToolContext(task_id=self.task_id, meta={"run_id": self.run_id}))
                 assert out.ok, out.text
         resumed = len(self.calls) > 1 and resume_session_id
         return DeepResult(met=True, output="Recorded it." if resumed else self.output, session_id=self.session_id,
-                          has_write_receipt=self.write_receipt and not resumed)
+                          has_write_receipt=self.write_receipt and not resumed,
+                          changes_landed=0 if resumed else self.landed)
 
 
 class FixedMeter:
-    """A meter that answers from a list, one value per reading."""
+    """A meter that answers from a list, one value per reading. ``cheap`` says whether a reading takes no time."""
     name = "fixed"
 
-    def __init__(self, *values):
+    def __init__(self, *values, cheap: bool = False):
         self.values = list(values)
         self.reads = 0
+        self.cheap = cheap
 
     def measure(self, spec_slice, working_dir=None):
         self.reads += 1
@@ -197,11 +204,37 @@ def test_with_no_attempt_left_the_gap_is_marked_not_asked(world):
     assert len(worker.calls) == 1 and done.metric_missing
 
 
-def test_without_a_task_id_the_tool_ledger_cannot_say_a_change_happened_so_the_run_is_not_gated(world):
-    worker = Worker(world.registry, [["change"]])
+def test_a_run_with_no_task_id_is_still_gated_from_its_run_id(world):
+    """The tool-call ledger is keyed by the run id when there is no task, and the metric ledger always is."""
+    worker = Worker(world.registry, [["change"], [("record", {"metric_id": "metric-x", "after": 0.7})]], task_id=None)
     plan = PlanDecision(action="deep", goal="g", deep_brief="b")
     done = orchestrate(world, worker)._run_deep(plan, "g", "sonnet", ctx_meta={}).deep_results[0]
-    assert len(worker.calls) == 1 and not done.metric_missing   # no reliable signal for this run: not gated
+    assert len(worker.calls) == 2 and worker.calls[1]["brief"] == NUDGE_BRIEF
+    assert sources(done) == ["recorded"] and not done.metric_missing
+
+
+def test_a_run_with_no_task_id_and_a_worker_that_ignores_the_request_is_marked(world):
+    worker = Worker(world.registry, [["change"], []], task_id=None)
+    plan = PlanDecision(action="deep", goal="g", deep_brief="b")
+    done = orchestrate(world, worker)._run_deep(plan, "g", "sonnet", ctx_meta={}).deep_results[0]
+    assert len(worker.calls) == 2 and done.metric_missing and done.metric_results == []
+
+
+def test_changes_the_runner_counts_as_landed_gate_a_run_that_has_no_other_record(world):
+    """A Claude Code worker reports no write receipt and its edits are no tool of ours: the landed count is the signal."""
+    worker = Worker(world.registry, [[], [("na", "Edited a draft; no metric measures it.")]], landed=2, task_id=None)
+    plan = PlanDecision(action="deep", goal="g", deep_brief="b")
+    done = orchestrate(world, worker)._run_deep(plan, "g", "sonnet", ctx_meta={}).deep_results[0]
+    assert len(worker.calls) == 2 and worker.calls[1]["brief"] == NUDGE_BRIEF
+    assert sources(done) == ["not_applicable"] and not done.metric_missing
+    assert done.changes_landed == 2   # the request's own session added none; the first attempt's count is kept
+
+
+def test_a_run_whose_runner_counted_no_change_is_not_asked(world):
+    worker = Worker(world.registry, [[]], landed=0, task_id=None)
+    plan = PlanDecision(action="deep", goal="g", deep_brief="b")
+    done = orchestrate(world, worker)._run_deep(plan, "g", "sonnet", ctx_meta={}).deep_results[0]
+    assert len(worker.calls) == 1 and not done.metric_missing and done.metric_results == []
 
 
 def test_the_gate_applies_only_when_the_worker_was_offered_the_tool(world):
@@ -299,8 +332,8 @@ def test_slice_and_writeback_measures_before_and_after_and_keeps_the_workers_row
     assert by_source["measured"]["disagrees"] and by_source["recorded"]["disagrees"]   # both kept, both flagged
     assert by_source["measured"]["solution_id"] == "greet-a-person" and by_source["measured"]["milestone"].startswith("Share")
     order = [e.text for e in timeline.events if e.type in (EVENT_STATUS, "worker")]
-    before = order.index("Measuring Greeting pass rate before the work starts.")
-    after = order.index("Measuring Greeting pass rate after the work.")
+    before = order.index("Measuring Greeting pass rate before the change.")
+    after = order.index("Measuring Greeting pass rate after the change.")
     assert before < order.index(GREETING) < after   # announced before the worker starts, and again once it is done
 
 
@@ -340,17 +373,36 @@ def test_a_run_that_never_started_is_not_measured_after(world, repo):
 
 # -- selection through resolve -------------------------------------------------------------------------
 
-def test_the_three_arms_are_declared_and_the_doctrine_stays_selected():
-    assert default_name("iterate-by-spec") == "generic-doctrine"
+def test_the_three_arms_are_declared_and_the_runners_own_measuring_is_selected():
+    assert default_name("iterate-by-spec") == "slice-and-writeback"
     assert names("iterate-by-spec") == ["generic-doctrine", "slice-and-writeback", "slice-only"]
-    assert resolve("iterate-by-spec") is DoctrineOnly
+    assert resolve("iterate-by-spec") is SliceAndWriteback
     assert resolve("iterate-by-spec", "slice-only") is SliceOnly
+    assert resolve("iterate-by-spec", "generic-doctrine") is DoctrineOnly
 
 
-def test_a_built_orchestrator_follows_the_selection():
-    assert isinstance(build_orchestrator(_cfg()).goal_iteration, DoctrineOnly)
-    chosen = build_orchestrator(_cfg(selections={"iterate-by-spec": "slice-and-writeback"})).goal_iteration
+def test_a_built_orchestrator_follows_the_selection_and_the_doctrine_is_the_off_switch():
+    chosen = build_orchestrator(_cfg()).goal_iteration
     assert isinstance(chosen, SliceAndWriteback) and [m.name for m in chosen.meters] == ["recorded_row", "offline_arm"]
+    assert isinstance(build_orchestrator(_cfg(selections={"iterate-by-spec": "generic-doctrine"})).goal_iteration,
+                      DoctrineOnly)
+
+
+def test_the_environment_turns_the_measuring_off_for_every_consumer(monkeypatch):
+    monkeypatch.setenv("ESOI_SELECT_QUEST_AI_RUNNER_ITERATE_BY_SPEC", "generic-doctrine")
+    assert isinstance(build_orchestrator(_cfg()).goal_iteration, DoctrineOnly)
+    assert isinstance(Orchestrator(retrieval=StubRetrieval(), provider=StubProvider([]),
+                                   registry=ModelRegistry(StubProvider([]))).goal_iteration, DoctrineOnly)
+
+
+def test_a_consumer_that_builds_the_brain_itself_gets_the_selected_arm_too():
+    """quest-backend constructs ``Orchestrator`` directly and never passes an arm."""
+    provider = StubProvider([])
+    brain = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider))
+    assert isinstance(brain.goal_iteration, SliceAndWriteback)
+    explicit = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+                            goal_iteration=DoctrineOnly())
+    assert isinstance(explicit.goal_iteration, DoctrineOnly)
 
 
 # -- what every consumer is handed ---------------------------------------------------------------------

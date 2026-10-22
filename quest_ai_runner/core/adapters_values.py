@@ -302,6 +302,14 @@ class DeepResult:
     # cannot tell leaves it False, which keeps today's "exhausted and not met -> not landed" rule
     # exactly as it was for every runner that does not set it.
     has_write_receipt: bool = False
+    # HOW MANY CHANGES the runner's own records show LANDED in this attempt: an agent's file-changing tool uses that
+    # completed without an error (the transcript of a Claude Code worker, an ACP tool call that reached ``completed``),
+    # a file the fast editor wrote through its ``FileWriter``, an operation an ``OperationWriter`` accepted. Structural,
+    # set by the runner from those records, never from its words. It is NOT ``has_write_receipt``: that flag means a
+    # governed quest-data write and feeds recipe learning, which a file edit must not. The metric flow reads both
+    # (``core/goal_metrics.py``) to know the run changed something. 0 means none were seen, not that none happened:
+    # a command a worker ran in a shell can change files and no record says so.
+    changes_landed: int = 0
     # THE METRIC RECORD OF THIS GOAL, written by the goal loop from its metric ledger (``core/goal_metrics.py``), never by a
     # runner: one dict per metric, ``MetricResult.to_dict()`` (solution_id, metric_id, name, milestone, before, after, delta,
     # source, reason, disagrees; see docs/metric-results.md). Empty means nothing to show. ``metric_missing`` is set when

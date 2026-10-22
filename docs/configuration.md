@@ -122,7 +122,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_MAX_LOAD_PER_CORE` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MAX_MEMORY_PERCENT` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MAX_PARALLEL` |  | `adapters/context_bootstrap_support.py`, `cli_config.py` | `docs/a-lane-is-a-config-file.md` |
-| `QAR_METRIC_ARM_TIMEOUT_SECONDS` | Longest an offline arm may run to measure a metric (default 60); a longer run gives no reading. | `config_core_settings.py` | `docs/metric-results.md` |
+| `QAR_METRIC_ARM_TIMEOUT_SECONDS` | Longest one reading of a metric may take before and after a deep goal (default 15); an offline arm is stopped at that limit, and a reading that has not finished gives no value, with a note on the row. | `config_core_settings.py` | `docs/metric-results.md` |
 | `QAR_METRIC_LEDGER_DIR` | Folder where each deep run's metric results are kept, one file per run, shared by the runner and the worker's shell commands (default: a folder in the system temp directory). | `core/metric_results.py` | `docs/metric-results.md` |
 | `QAR_METRIC_METERS` | Which meters read a metric's value around a deep goal, comma-separated and tried in order: recorded_row, offline_arm (default both; used only by the iterate-by-spec arms that measure). | `config_core_settings.py` | `docs/metric-results.md` |
 | `QAR_MIN_FREE_MEMORY_MB` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
@@ -189,7 +189,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_TOOLS_FILE` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_TOOL_LEDGER_DIR` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_TOOL_QUEST_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/tools.md` |
-| `QAR_TOOL_RUN_ID` | This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command. | `core/tools.py`, `tools/__main__.py` | `docs/metric-results.md`, `docs/tools.md` |
+| `QAR_TOOL_RUN_ID` | This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command. | `adapters/acp_deep_runner.py`, `core/goal_runner.py`, `core/tools.py` +1 | `docs/metric-results.md`, `docs/tools.md` |
 | `QAR_TOOL_TASK_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/tools.md` |
 | `QAR_USER_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
 | `QAR_VECTOR_BACKEND` |  | `config_assembler.py`, `runner/lane.py` | `docs/vector-context.md` |

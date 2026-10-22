@@ -175,7 +175,7 @@ class AcpDeepRunner(DeepRunnerBase):
                 box["result"] = asyncio.run(
                     self._run_session(run, argv=argv, prompt=prompt, model=model,
                                       working_dir=effective_working_dir, timeout=timeout,
-                                      requester_user_id=requester_user_id)
+                                      requester_user_id=requester_user_id, run_id=run_id)
                 )
             except BaseException as e:  # noqa: BLE001 — carried out, never raised at the caller
                 box["error"] = e
@@ -194,13 +194,17 @@ class AcpDeepRunner(DeepRunnerBase):
                        f"{timeout:.0f}s turn timeout should have fired first). Treating it as a "
                        "hard failure; the agent process is torn down when its thread ends."),
             )
+        # What the agent's tool calls show it changed, kept whatever way the run ended: a change made before a failure is
+        # still a change.
+        landed = len(run.landed_changes)
         if "error" in box:
             e = box["error"]
             log.error("acp deep run failed: %s: %s", type(e).__name__, e, exc_info=True)
-            return DeepResult(met=False, error=f"ACP deep run failed: {type(e).__name__}: {e}")
+            return DeepResult(met=False, error=f"ACP deep run failed: {type(e).__name__}: {e}", changes_landed=landed)
         result = box.get("result")
         if not isinstance(result, DeepResult):
-            return DeepResult(met=False, error="ACP deep run produced no result")
+            return DeepResult(met=False, error="ACP deep run produced no result", changes_landed=landed)
+        result.changes_landed = landed
         return result
 
     # --- internals -----------------------------------------------------------------------
@@ -212,12 +216,15 @@ class AcpDeepRunner(DeepRunnerBase):
         with self._runs_lock:
             self._runs.pop(run.key, None)
 
-    def build_env(self, requester_user_id: Optional[str] = None) -> Dict[str, str]:
+    def build_env(self, requester_user_id: Optional[str] = None, run_id: Optional[str] = None) -> Dict[str, str]:
         """The child's environment. Mirrors ``SubprocessGoalRunner._build_env``: the spawned agent
         must not inherit our own Claude Code session or API billing, so those keys are dropped and
-        it authenticates the same way the reference deep runner's worker does."""
+        it authenticates the same way the reference deep runner's worker does. The run's id rides in
+        ``QAR_TOOL_RUN_ID`` so a tool call from the agent's shell lands on this run's record."""
         env = os.environ.copy()
         apply_requester_env(env, requester_user_id)
+        if run_id:
+            env["QAR_TOOL_RUN_ID"] = run_id
         env.pop("CLAUDECODE", None)
         env.pop("ANTHROPIC_API_KEY", None)
         env.pop("ANTHROPIC_AUTH_TOKEN", None)
@@ -237,11 +244,11 @@ class AcpDeepRunner(DeepRunnerBase):
 
     async def _run_session(self, run: AcpRun, *, argv: List[str], prompt: str,
                            model: Optional[str], working_dir: str, timeout: float,
-                           requester_user_id: Optional[str] = None) -> DeepResult:
+                           requester_user_id: Optional[str] = None, run_id: Optional[str] = None) -> DeepResult:
         run.loop = asyncio.get_running_loop()
         client = AcpSessionClient(run)
         try:
-            async with open_agent_connection(client, argv, env=self.build_env(requester_user_id), cwd=working_dir) as (conn, _proc):
+            async with open_agent_connection(client, argv, env=self.build_env(requester_user_id, run_id), cwd=working_dir) as (conn, _proc):
                 run.conn = conn
                 return await self._drive_turn(run, conn, prompt=prompt, model=model,
                                               working_dir=working_dir, timeout=timeout)

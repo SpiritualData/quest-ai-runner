@@ -5,9 +5,12 @@ meets it without trusting anyone's closing words. For each goal the goal loop cr
 points, all in code, none of them a model call:
 
   ``begin``         before the first attempt: the arm's slice of the specification becomes a short NEXT PRIORITY block for
-                    the brief, and an arm that measures reads the metric and writes the ``measured`` ``before`` row.
+                    the brief, and an arm that measures reads the metric and writes the ``measured`` ``before`` row. That
+                    reading is bounded and announced (``metric_meter.read_value``): it never holds the worker back for
+                    longer than its budget, and with no slice (no records, no folder) nothing is read and nothing waits.
   ``note_attempt``  after each attempt: whether the run CHANGED something, from the runner's own records (a tool that acts
-                    succeeded in the tool-call ledger, or the runner's write receipts), never from the worker's words.
+                    succeeded in the tool-call ledger, the runner's write receipts, or the changes it counted as landed),
+                    never from the worker's words.
   ``wants_nudge``   before the attempt is verified: the gate. A run that changed something and holds no row at all (no
                     measured row, no result the worker recorded, no declared not-applicable) is asked once, in the worker's
                     own session, to record it. That one request is an attempt of the goal's existing budget; after it the
@@ -40,6 +43,8 @@ NUDGE_BRIEF = (
 NUDGE_STATUS = "This change has no metric result on record; asking the worker to record it."
 # A run that did none of the work leaves nothing to measure or to find missing.
 UNFINISHED_FLAGS = ("launch_failed", "cancelled", "usage_limited", "paused", "deferred")
+# What the status line says about a reading, by the moment it is taken.
+READING_PHASES = {"before": "before the change", "after": "after the change"}
 
 
 def working_dir_of(runner: Any, override: Optional[str]) -> Optional[str]:
@@ -83,6 +88,7 @@ class GoalMetrics:
         self.nudged = False
         self.carried: Any = None
         self.missing = False
+        self.gaps: List[str] = []   # readings that could not be taken, said on the rows written after them
 
     @classmethod
     def for_goal(cls, tools: Any, iteration: Any, run_id: str, **kwargs: Any) -> "GoalMetrics":
@@ -109,29 +115,45 @@ class GoalMetrics:
             if found is None:
                 return ""
             if self.iteration.measures and found.metric_id:
-                self.say(f"Measuring {self.label()} before the work starts.")
-                value, meter = self.iteration.read_metric(found, self.working_dir)
-                if value is not None:
-                    self.keep(meter, before=value)
+                self.read("before")
             return "\n\n" + next_priority_block(found)
         except Exception:  # noqa: BLE001  the record must never stop the work it records
             return ""
+
+    def read(self, when: str) -> None:
+        """Take one reading of the slice's metric, ``before`` or ``after`` the change, and keep it as a measured row.
+
+        The reading is bounded, and announced only if a meter that takes time is about to run. One that gives nothing
+        writes no row (a row without a number would count as a record); when it ran out of time that is said on the status
+        line and, for a reading before the change, on the row written after the work."""
+        found = self.spec_slice
+        if found is None:
+            return
+        phase = READING_PHASES[when]
+        reading = self.iteration.read_metric(
+            found, self.working_dir, announce=lambda: self.say(f"Measuring {self.label()} {phase}."))
+        if reading.value is not None:
+            self.keep(reading.meter, **{when: reading.value})
+        elif reading.note:
+            self.gaps.append(f"no reading {phase}: {reading.note}")
+            self.say(f"No reading of {self.label()} {phase}: {reading.note}. Going on without it.")
 
     def keep(self, meter: str, before: Optional[float] = None, after: Optional[float] = None) -> None:
         found = self.spec_slice
         if found is None:
             return
+        reason = f"measured by {meter}" + (f"; {'; '.join(self.gaps)}" if self.gaps and after is not None else "")
         self.ledger.record(MetricResult(
             source=SOURCE_MEASURED, run_id=self.run_id, task_id=self.task_id, solution_id=found.solution_id,
             metric_id=found.metric_id, name=found.metric_name, milestone=found.milestone, before=before,
-            after=after, reason=f"measured by {meter}"))
+            after=after, reason=reason))
 
     # -- around the attempts -----------------------------------------------------------------------
 
     def note_attempt(self, res: Any, window: Sequence[ToolOutcome]) -> None:
         """Count the attempt, and remember that the run changed something when its own records say so."""
         self.attempts += 1
-        if changed_something(window) or getattr(res, "has_write_receipt", False):
+        if changed_something(window) or getattr(res, "has_write_receipt", False) or getattr(res, "changes_landed", 0):
             self.changed = True
 
     def rows(self) -> List[MetricResult]:
@@ -166,6 +188,7 @@ class GoalMetrics:
         res.output = (earlier.output or "").rstrip() + "\n\n" + res.output.strip()
         res.observations = list(earlier.observations or []) + list(res.observations or [])
         res.has_write_receipt = bool(res.has_write_receipt or earlier.has_write_receipt)
+        res.changes_landed = (res.changes_landed or 0) + (earlier.changes_landed or 0)
         res.observations_reported = bool(res.observations_reported or earlier.observations_reported)
         res.future_context = res.future_context or earlier.future_context
         return res
@@ -179,10 +202,7 @@ class GoalMetrics:
                         and not any(getattr(res, flag, False) for flag in UNFINISHED_FLAGS))
             found = self.spec_slice
             if did_work and found is not None and self.iteration.measures and found.metric_id:
-                self.say(f"Measuring {self.label()} after the work.")
-                value, meter = self.iteration.read_metric(found, self.working_dir)
-                if value is not None:
-                    self.keep(meter, after=value)
+                self.read("after")
             results = reconcile(self.rows())
             self.missing = bool(did_work and self.gate_applies and self.changed and not results)
             res.metric_results = payload_of(results)
