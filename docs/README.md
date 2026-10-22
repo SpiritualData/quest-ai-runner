@@ -89,6 +89,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Answer explanation](answer-explanation.md)**: the user-facing "Explain how I got this" panel:
   why it is a second call after the answer, the model-free eligibility gate, and which half of the
   payload is a record rather than prose.
+- **[The metric record of a deep goal](metric-results.md)**: how "what the relevant metric was before and
+  after your change" is kept by code instead of claimed in prose: the ledger, the `record_metric_result` tool, the
+  `metrics` payload every consumer reads, the one-request gate for a change that has no result, and the
+  `iterate-by-spec` arms that add a slice of the specification and the runner's own readings.
 - **[Personal lexicon](personal-lexicon.md)**: ranking one person's distinctive vocabulary by
   TF-DF-IDF, the two background sources and why they are combined with a minimum, and the
   `min_documents` safeguard that stops a mis-recognition feeding back into the recognizer.

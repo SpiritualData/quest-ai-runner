@@ -302,6 +302,13 @@ class DeepResult:
     # cannot tell leaves it False, which keeps today's "exhausted and not met -> not landed" rule
     # exactly as it was for every runner that does not set it.
     has_write_receipt: bool = False
+    # THE METRIC RECORD OF THIS GOAL, written by the goal loop from its metric ledger (``core/goal_metrics.py``), never by a
+    # runner: one dict per metric, ``MetricResult.to_dict()`` (solution_id, metric_id, name, milestone, before, after, delta,
+    # source, reason, disagrees; see docs/metric-results.md). Empty means nothing to show. ``metric_missing`` is set when
+    # the run changed something (by the runner's own records) and no metric result was recorded for it, not even a
+    # not-applicable, after the one request made for it.
+    metric_results: List[Dict[str, Any]] = field(default_factory=list)
+    metric_missing: bool = False
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as

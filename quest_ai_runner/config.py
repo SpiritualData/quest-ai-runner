@@ -829,6 +829,9 @@ def build_orchestrator(
         # Which first look fronts the planner: the selected operate-a-quest implementation (or
         # ``cfg.selections["operate-a-quest"]``); "orchestrator" turns the pre-route off.
         pre_router_cls=resolve("operate-a-quest", overrides=cfg.selections),
+        # How much the code adds around a deep goal: the selected iterate-by-spec implementation (or
+        # ``cfg.selections["iterate-by-spec"]``); the default is the standing instructions alone.
+        goal_iteration=resolve("iterate-by-spec", overrides=cfg.selections)(),
         edited_files_card_updater=update_cards_from_deep_edits,
         background_thread_registrar=_register_index_thread,
     )

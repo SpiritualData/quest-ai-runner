@@ -47,6 +47,7 @@ from .adapters import (
 )
 from .anticipation import Anticipator
 from .inbox import InputInbox
+from .goal_iteration import DoctrineOnly
 from .tools import ToolRegistry
 
 from .recipes import RecipeStore
@@ -229,6 +230,7 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         web: Optional[Any] = None,
         recipes: Optional[RecipeStore] = None,
         pre_router_cls: Optional[Any] = None,
+        goal_iteration: Optional[Any] = None,
         edited_files_card_updater: Optional[Callable[..., None]] = None,
         background_thread_registrar: Optional[Callable[[threading.Thread, Any], None]] = None,
     ):
@@ -314,6 +316,11 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         # briefs list the same tools with the shell command that calls them. None/empty = the
         # loop is exactly what it was before tools existed.
         self.tools: Optional[ToolRegistry] = tools if tools else None
+        # How much the code adds around a deep goal beyond the standing instructions (``core/goal_iteration.py``,
+        # solution iterate-by-spec): the slice of the specification in the brief, and the runner's own readings of
+        # the metric before and after. The metric record every deep goal keeps (``core/goal_metrics.py``) runs under
+        # every arm; this only says how much of it the code fills in itself. None = the doctrine alone.
+        self.goal_iteration: Any = goal_iteration if goal_iteration is not None else DoctrineOnly()
         # Optional LIVE WEB adapter (the ``WebResearch`` interface, ``core/adapters.py``). When
         # wired, the planner gains its own two read keys -- {"web": "<query>"} and
         # {"web_page": "<url>", "focus": "<...>"} -- dispatched directly in ``_exec_one_read``,

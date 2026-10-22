@@ -27,6 +27,7 @@ from .adapters import (
 )
 from .answer_explanation import is_eligible, trace_from_result
 from .card_thread import CardThreadDecision, parse_card_thread
+from .goal_metrics import deep_metric_data
 from .orchestrator_capabilities import (
     planner_full_view_start,
     planner_note_observation,
@@ -70,6 +71,11 @@ class RunLoopMixin:
             res.steps = rs.steps
             res.gathered = gathered_content(gathered)
             res.execution_record = exec_record
+            # The metric record of the turn's deep goals, as data on the result itself (and on the terminal event
+            # below), taken from the deep results alone: whoever shows a turn reads it here, not from any text.
+            metric_data = deep_metric_data(res)
+            res.metric_results = list(metric_data["metrics"])
+            res.metric_missing = bool(metric_data.get("metric_missing"))
             res.retrieval_constraints = rs.retrieval_constraints
             res.mode_signal = rs.mode_signal_detected
             # PER-IDEA THREADING: the topic this turn was assigned to. Present on EVERY terminal
@@ -227,8 +233,9 @@ class RunLoopMixin:
                 else:
                     result_text = res.text
                 emit.emit(ProgressEvent(type=EVENT_RESULT, text=result_text, result_kind="answer",
-                                        data={"exit_reason": res.exit_reason,
-                                              "goal_verdict": res.goal_verdict} if res.exit_reason else {}))
+                                        data={**({"exit_reason": res.exit_reason,
+                                                  "goal_verdict": res.goal_verdict} if res.exit_reason else {}),
+                                              **(metric_data if res.deep_results else {})}))
             elif res.kind == "confirm":
                 emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.question,
                                         decision_id=res.decision_id, result_kind="confirm"))
@@ -241,9 +248,10 @@ class RunLoopMixin:
                 _future = _future_context_for_display(res.deep_results)
                 emit.emit(ProgressEvent(
                     type=EVENT_RESULT, text=out, result_kind="deep",
-                    data={"future_context": _future,
-                          "exit_reason": res.exit_reason,
-                          "goal_verdict": res.goal_verdict} if (_future or res.exit_reason) else {}))
+                    data={**({"future_context": _future,
+                              "exit_reason": res.exit_reason,
+                              "goal_verdict": res.goal_verdict} if (_future or res.exit_reason) else {}),
+                          **metric_data}))
             # --- "EXPLAIN HOW I GOT THIS" (opt-in; see core/answer_explanation.py) -------------
             # ORDER IS THE POINT: this runs AFTER the terminal EVENT_RESULT above, so the answer
             # has already left for the consumer's screen. The reader is reading while this is

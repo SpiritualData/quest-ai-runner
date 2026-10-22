@@ -43,6 +43,10 @@ class CoreSettings:
     deep_instructions_files: Optional[str] = None
     link_policy_file: str = ""  # [QAR_LINK_POLICY_FILE]
     claude_config_dir: Optional[str] = None  # [CLAUDE_CONFIG_DIR]
+    # Which meters read a metric's value, in the order tried (core/metric_meter.py) [QAR_METRIC_METERS]
+    metric_meters: str = "recorded_row,offline_arm"
+    # The longest an offline arm may run to measure a metric [QAR_METRIC_ARM_TIMEOUT_SECONDS]
+    metric_arm_timeout_seconds: float = 60.0
 
 
 SettingsSource = Union[CoreSettings, Callable[[], CoreSettings]]

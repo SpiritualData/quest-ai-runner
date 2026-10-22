@@ -11,8 +11,8 @@ nested values; ``--kw`` entries win over it. ``show NAME`` prints one tool's how
 
 The catalog is rebuilt from the same env the lane uses (``QUEST_*`` credentials for the standard
 tools, ``QAR_TOOLS_FILE`` for custom ones), so a deep run sees exactly what the brain saw.
-``--quest``/``--task`` (or ``QAR_TOOL_QUEST_ID``/``QAR_TOOL_TASK_ID``) fill a tool's context args
-the way the in-process loop does. Exit codes: 0 success, 1 failure (reason printed), 2 usage.
+``--quest``/``--task``/``--run`` (or ``QAR_TOOL_QUEST_ID``/``QAR_TOOL_TASK_ID``/``QAR_TOOL_RUN_ID``) fill a
+tool's context args the way the in-process loop does. Exit codes: 0 success, 1 failure (reason printed), 2 usage.
 """
 from __future__ import annotations
 
@@ -44,6 +44,8 @@ def main(argv: Optional[list] = None) -> int:
     p_call.add_argument("--quest", default=os.getenv("QAR_TOOL_QUEST_ID"),
                         help="quest id for tools that take it from context")
     p_call.add_argument("--task", default=os.getenv("QAR_TOOL_TASK_ID"))
+    p_call.add_argument("--run", default=os.getenv("QAR_TOOL_RUN_ID"),
+                        help="this run's id, for tools that record against the run (record_metric_result)")
     args = parser.parse_args(argv)
 
     registry = build_tool_registry()
@@ -90,7 +92,8 @@ def main(argv: Optional[list] = None) -> int:
         print(f"Bad --args/--kw: {e}", file=sys.stderr)
         return 2
     result = registry.invoke(args.name, call_args,
-                             ToolContext(quest_id=args.quest, task_id=args.task))
+                             ToolContext(quest_id=args.quest, task_id=args.task,
+                                         meta={"run_id": args.run} if args.run else {}))
     print(result.text, file=sys.stdout if result.ok else sys.stderr)
     return 0 if result.ok else 1
 

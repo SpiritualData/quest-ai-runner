@@ -23,6 +23,7 @@ from .adapters import (
     runner_starts_background_work,
     runner_uses_deep_model,
 )
+from .goal_metrics import GoalMetrics, run_hint, working_dir_of
 from .goal_runner import cli_safe_model
 from .guard import ExecutionFact, ExecutionRecord, classify_exec_phase
 from .planner_context import _is_discovery_obs, _render_gathered
@@ -288,6 +289,7 @@ class DeepRunMixin:
                         deep_tools_block += (f"\nThis run's task is {brief_task_id}: add "
                                              f"--task {brief_task_id} to a call so tools that "
                                              f"need the task (who asked, what they replied) get it.")
+                    deep_tools_block += run_hint(self.tools, task_uuid)
                     brief = brief + "\n\n" + deep_tools_block
             # NOTE: the FUTURE-CONTEXT instruction is appended further down, once the runner that will
             # handle THIS goal is resolved: which of the two instructions applies depends on that
@@ -403,6 +405,18 @@ class DeepRunMixin:
                 # named an orchestrator step and read as leaked machinery in the live status pill.
                 emit.status(f"Working on: {goal[:60]}")
             announce_model_selection(terminal_runner)
+
+            # THE METRIC RECORD OF THIS GOAL (core/goal_metrics.py): what the relevant metric was before
+            # and after the change is kept by code, from here to the result. This is its start, still
+            # inside the preparation announced above: the selected iterate-by-spec arm may add the
+            # slice of the specification this goal serves (the next milestone and its metric) to the
+            # brief, and read the metric now; an arm that does neither adds nothing, and the record
+            # still holds what the worker records. No model call.
+            metrics = GoalMetrics.for_goal(
+                self.tools, self.goal_iteration, task_uuid, task_id=(ctx_meta or {}).get("task_id"),
+                request=f"{user_message}\n{goal}", working_dir=working_dir_of(terminal_runner, working_dir_override),
+                status=emit.status if emit is not None else None)
+            brief = brief + metrics.begin()
 
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
             # is active, EVERY runner is asked for future context (a code generator knows the most
@@ -709,6 +723,10 @@ class DeepRunMixin:
                 ledger_mark = ledger.mark(ledger_task) if ledger is not None else 0
                 res = _do_run(run_brief, run_model, active_runner,
                               resume_session_id=resume_session, max_turns=attempt_turns)
+                # An attempt made only to record the metric result is joined to the work it follows; and
+                # whether THIS attempt changed something is read from the runner's own records.
+                res = metrics.merge(res)
+                metrics.note_attempt(res, ledger.since(ledger_task, ledger_mark) if ledger is not None else [])
                 if model_applies:
                     res.model = res.model or run_model
                 # A runner that does not run the deep-model ladder answers in-process with a model of
@@ -818,6 +836,18 @@ class DeepRunMixin:
                         emit.status("Nothing new left to try on this; stopping instead of "
                                     "repeating the same attempt.")
                     break
+                # THE METRIC GATE (core/goal_metrics.py). A run that changed something, by the runner's
+                # own records, and holds no metric row at all (measured, recorded or declared not
+                # applicable) is asked ONCE, in its own session, to record it. That request is an
+                # attempt of this goal's budget and the goal is not verified until the worker has
+                # answered it. Judged on the ledger and the records, never on anyone's wording; a runner
+                # that cannot resume a session is not asked (a re-run would repeat the work), and after
+                # the one request the flow accepts what there is and marks ``metric_missing``.
+                if metrics.wants_nudge(attempt, max_iters,
+                                       bool(res.session_id) and caps_for(active_runner)["resume"]):
+                    current_brief = metrics.nudge(res)
+                    resume_session = res.session_id
+                    continue
                 # Verify the done-standard ourselves, applying the quality standards (guidance) and
                 # the rep persona. verdict is None => verification could not run (LLM outage, no
                 # verify tier, parse failure) => this run is UNVERIFIED, and must NEVER be reported
@@ -1004,6 +1034,9 @@ class DeepRunMixin:
                 current_brief = self._augment_brief(base_brief, res.output or "", verdict)
                 verified_not_met = True
 
+            # The metric record closes: the arm reads the metric again, the ledger's rows are reconciled and
+            # ride on the result (``DeepResult.metric_results``), with one plain line in its text.
+            metrics.finish(res)
             # This subgoal parked on a human decision: tell siblings so none of them starts a new
             # attempt after this (see ``fanout_parked`` above; checked at the aggregation step too,
             # which is what actually keeps a second ask out of the reply regardless of timing).
@@ -1027,7 +1060,8 @@ class DeepRunMixin:
                                               "run_id": captured_run_id["id"],
                                               "deep_output": _strip_future_context(res.output).strip() or None,
                                               "model": res.model,
-                                              "resolved_model": res.resolved_model}))
+                                              "resolved_model": res.resolved_model,
+                                              **metrics.event_data(res)}))
             # WARM recent-context write-back (see core/recent_context.py): record the cards+items
             # THIS goal's context actually included, under every applicable scope key, so a task
             # follow-up (another deep goal on the same quest/conversation, or the next chat turn)

@@ -95,6 +95,9 @@ def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSetti
         deep_instructions_files=env.get("QAR_DEEP_INSTRUCTIONS_FILES"),
         link_policy_file=env.get("QAR_LINK_POLICY_FILE", ""),
         claude_config_dir=env.get("CLAUDE_CONFIG_DIR"),
+        metric_meters=(env.get("QAR_METRIC_METERS") or d.metric_meters).strip(),
+        metric_arm_timeout_seconds=_float_or(
+            env.get("QAR_METRIC_ARM_TIMEOUT_SECONDS"), d.metric_arm_timeout_seconds),
     )
 
 

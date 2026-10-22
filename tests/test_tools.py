@@ -33,11 +33,21 @@ from quest_ai_runner.core.tools import (
 )
 from quest_ai_runner.core.tools_quest_ops import QUEST_OPERATION_BUILDERS
 
+# The tool every deep run is offered with or without credentials (core/tools_metric_results.py).
+CREDENTIAL_FREE = ["record_metric_result"]
+
 # The standard catalog with Quest credentials: the two mail tools, one quest-data tool per field,
-# goal, strategy and habit (core/tools.py QUEST_DATA_TOOLS), and the Quest operations
-# (core/tools_quest_ops.py).
+# goal, strategy and habit (core/tools.py QUEST_DATA_TOOLS), the Quest operations
+# (core/tools_quest_ops.py) and the credential-free tools.
 STANDARD_WITH_QUEST = sorted(["file_email_draft", "send_quest_email", "find_quest_experiments",
-                              *QUEST_DATA_TOOLS, *QUEST_OPERATION_BUILDERS])
+                              *QUEST_DATA_TOOLS, *QUEST_OPERATION_BUILDERS, *CREDENTIAL_FREE])
+
+
+@pytest.fixture(autouse=True)
+def outside_a_specification_repository(monkeypatch, tmp_path):
+    """The spec tools (find_specs and friends) appear wherever an esoi.toml sits above the working folder, which
+    includes this repository's own checkout; the catalog tests below count tools, so they run from a bare folder."""
+    monkeypatch.chdir(tmp_path)
 
 
 def make_spec(name, *, handler=None, mutates=True, keywords=(), description=None, **kw):
@@ -204,10 +214,10 @@ def test_quest_client_posts_the_draft_to_the_email_drafts_route():
 
 
 def test_build_registry_standard_tool_needs_quest_credentials():
-    assert build_tool_registry({}).names() == []
+    assert build_tool_registry({}).names() == CREDENTIAL_FREE
     env = {"QUEST_BASE_URL": "https://api.example.org", "QUEST_API_KEY": "qsk_x"}
     assert sorted(build_tool_registry(env).names()) == STANDARD_WITH_QUEST
-    assert build_tool_registry({**env, "QAR_STANDARD_TOOLS": "0"}).names() == []
+    assert build_tool_registry({**env, "QAR_STANDARD_TOOLS": "0"}).names() == []   # off means off, this one too
 
 
 def test_toml_custom_command_tool_and_standard_override(tmp_path):
@@ -264,7 +274,7 @@ def test_toml_entry_without_when_not_to_use_is_rejected(tmp_path, caplog):
     toml.write_text('[[tool]]\nname = "x"\ndescription = "d"\nwhen_to_use = "w"\n'
                     'command = ["true"]\n')
     reg = build_tool_registry({"QAR_TOOLS_FILE": str(toml)})
-    assert reg.names() == []          # a broken file is logged and skipped, never fatal
+    assert reg.names() == CREDENTIAL_FREE   # a broken file is logged and skipped, never fatal
     assert "when_not_to_use" in caplog.text
 
 

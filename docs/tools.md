@@ -182,6 +182,12 @@ python -m quest_ai_runner.tools call send_quest_email --args '{"subject": "Weekl
 `--args-file PATH` (or `-` for stdin) takes the JSON from a file. Exit code 0 is success, 1 a failed
 call (the reason on stderr), 2 bad arguments.
 
+`--quest`, `--task` and `--run` (or `QAR_TOOL_QUEST_ID`, `QAR_TOOL_TASK_ID`, `QAR_TOOL_RUN_ID`) fill the
+context a tool takes from the turn. One standard tool is listed in every deep brief whatever the brief says,
+`record_metric_result`: the worker records the value of the metric its change serves, before and after, or
+that none applies and why, under the run id the brief gives it as `--run`
+([the metric record](metric-results.md)).
+
 ## Offering tools and connectors to Quest Workflows
 
 Quest Workflows can run a step as one action. Quest does not hard-code this runner's tools: the

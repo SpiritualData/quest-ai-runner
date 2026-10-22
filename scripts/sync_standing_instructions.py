@@ -33,7 +33,9 @@ PUBLIC_OUTPUT = REPO / "docs" / "evolvable-structure.md"
 TAG = "Evolvable Structure that Optimizes Intent"
 RUNNER_LINE = ("In whatever work you do (unless the human tells you otherwise), ensure that ESOI is generally "
                "applied, resulting in the effective creation of collaborative innovation tools, and the "
-               "effective use of preexisting tools for collective progress over time.")
+               "effective use of preexisting tools for collective progress over time. A change is finished only when "
+               "its metric result is recorded with record_metric_result, before and after the change, or marked "
+               "not applicable with the reason.")
 PUBLIC_INTRO = """\
 <!-- Generated from the evolvable-structure skill by scripts/sync_standing_instructions.py. Do not
 edit by hand: change the skill and rerun the script. -->

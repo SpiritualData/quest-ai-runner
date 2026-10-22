@@ -107,8 +107,9 @@
  "iterate-by-spec": {
   "default": "generic-doctrine",
   "modules": {
-   "slice-and-writeback": "quest_ai_runner.core.goal_runner_contract",
-   "slice-only": "quest_ai_runner.core.goal_runner_contract"
+   "generic-doctrine": "quest_ai_runner.core.goal_iteration",
+   "slice-and-writeback": "quest_ai_runner.core.goal_iteration",
+   "slice-only": "quest_ai_runner.core.goal_iteration"
   }
  },
  "learn-by-example": {

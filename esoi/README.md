@@ -309,9 +309,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `ground-in-intent:frame-line` | Computed frame in the prompt | quest_ai_runner/runner/autopilot_briefs.py |  |
 | `ground-in-intent:frame-card-drilldown` | Frame plus intent card and record drill-down | quest_ai_runner/runner/quest_client_intents.py |  |
 | `ground-in-intent:frame-lazy-spec` | Frame plus a lazily generated quest specification | quest_ai_runner/core/tools_quest_intents.py |  |
-| `iterate-by-spec:generic-doctrine` | Generic method in the standing instructions | quest_ai_runner/prompts/evolvable_structure.md |  |
-| `iterate-by-spec:slice-only` | Slice of the specification before the task | quest_ai_runner/core/goal_runner_contract.py |  |
-| `iterate-by-spec:slice-and-writeback` | Slice before and write-back after | quest_ai_runner/core/goal_runner_contract.py |  |
+| `iterate-by-spec:generic-doctrine` | Generic method in the standing instructions | quest_ai_runner/core/goal_iteration.py |  |
+| `iterate-by-spec:slice-only` | Slice of the specification before the task | quest_ai_runner/core/goal_iteration.py |  |
+| `iterate-by-spec:slice-and-writeback` | Slice before and write-back after | quest_ai_runner/core/goal_iteration.py |  |
 | `run-deep-work:stream_json` | Persistent stream-json runner | quest_ai_runner/core/goal_runner_stream.py |  |
 | `core-ml-tasks:message-route-family` | Classify through the message router alternatives | evaluation/components/classification/impls |  |
 | `core-ml-tasks:registry-conditioned-routing` | Route with the registry of examples, by model tier |  |  |

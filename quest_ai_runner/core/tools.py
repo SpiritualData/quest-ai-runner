@@ -73,6 +73,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from .requester import apply_requester_env, requester_from_meta
 from .runtime_settings import process_environment
+from .metric_results import metric_ledger_from_env
 from .tools_failure_ledger import FileToolLedger, outcome_from_result
 
 log = logging.getLogger(__name__)
@@ -139,6 +140,11 @@ class ToolSpec:
     # "search the catalog" read, so a chat turn cannot drift into it; a run whose context lists it
     # in ``tool_pins`` is shown it, and it stays callable by name.
     on_request_only: bool = False
+    # An operation EVERY deep run owes, whatever its brief says (a standing instruction asks for it, as
+    # ``record_metric_result`` is asked for). ``render_deep_block`` lists it after the tools the brief's
+    # words selected, so it never takes one of their places; a chat turn still never sees it when it is
+    # also ``on_request_only``.
+    standing_deep: bool = False
     # A plain, reversible create, change or find that the pre-route (``core/pre_route.py``) may call
     # on a sure reading of the user's message, without the planner. Only for a tool whose every
     # argument the message itself can supply: never a destructive, outward or confirm-gated tool,
@@ -223,11 +229,16 @@ class ToolRegistry:
     """The catalog. Thread-safe for reads; registration happens at build time."""
 
     def __init__(self, specs: Optional[Sequence[ToolSpec]] = None,
-                 ledger: Optional[FileToolLedger] = None):
+                 ledger: Optional[FileToolLedger] = None,
+                 metric_ledger: Optional[Any] = None):
         self._specs: Dict[str, ToolSpec] = {}
         # Where every call's outcome is written, keyed by the task it ran for (see
         # ``core/tools_failure_ledger.py``). None = nothing is recorded.
         self.ledger = ledger
+        # Where a run's metric results are kept, keyed by the run (``core/metric_results.py``); the
+        # ``record_metric_result`` tool writes to it and the goal loop reads it. None = the flow uses
+        # the environment's default ledger.
+        self.metric_ledger = metric_ledger
         for spec in specs or ():
             self.register(spec)
 
@@ -397,17 +408,18 @@ class ToolRegistry:
                           python: Optional[str] = None, pins: Sequence[str] = ()) -> str:
         """The tool section of a deep brief: relevant tools plus the exact command for each."""
         shown = self.select(query, k, pins)
-        if not shown:
+        standing = [s for s in self.all() if s.standing_deep and s not in shown]
+        if not (shown or standing):
             return ""
         py = python or sys.executable
         cmd = f"{shlex.quote(py)} -m quest_ai_runner.tools"
         parts = ["TOOLS YOU CAN CALL (use these instead of writing your own script for the same "
                  "job; each prints its result and exits 0 on success, 1 on failure):",
-                 self.render_catalog(shown),
+                 self.render_catalog(shown + standing),
                  f"Call one:   {cmd} call <name> --kw arg=value [--kw arg=value ...]   "
                  f"(or --args '<json object>' for nested values)",
                  f"Find more:  {cmd} list --query '<what you need>'"]
-        example = shown[0]
+        example = (shown or standing)[0]
         example_kw = " ".join(f"--kw {shlex.quote(f'{p}=<{p}>')}" for p in example.required()
                               if p not in example.auto_filled())
         parts.append(f"Example:    {cmd} call {example.name} {example_kw}".rstrip())
@@ -552,6 +564,8 @@ def make_command_handler(command: Sequence[str], parameters: Dict[str, Any],
             run_env.setdefault("QAR_TOOL_QUEST_ID", ctx.quest_id)
         if ctx.task_id:
             run_env.setdefault("QAR_TOOL_TASK_ID", ctx.task_id)
+        if (ctx.meta or {}).get("run_id"):
+            run_env.setdefault("QAR_TOOL_RUN_ID", str(ctx.meta["run_id"]))
         apply_requester_env(run_env, requester_from_meta({"user_id": ctx.user_id, **(ctx.meta or {})}))
         proc = subprocess.run(argv, input=stdin, capture_output=True, text=True,
                               cwd=expand_placeholders(cwd) if cwd else None, env=run_env,
@@ -694,9 +708,11 @@ def build_tool_registry(env: Optional[Mapping[str, str]] = None) -> ToolRegistry
     ``QAR_TOOLS_FILE``      ``:``-separated TOML files of custom tools and standard overrides.
     ``QAR_TOOL_LEDGER_DIR`` where each task's tool-call ledger lives (default: a folder in the
                             system temp directory); the brain and the deep worker must share it.
+    ``QAR_METRIC_LEDGER_DIR`` the same for each run's metric results (``core/metric_results.py``).
     """
     env = process_environment() if env is None else env
-    registry = ToolRegistry(ledger=FileToolLedger(env.get("QAR_TOOL_LEDGER_DIR") or None))
+    registry = ToolRegistry(ledger=FileToolLedger(env.get("QAR_TOOL_LEDGER_DIR") or None),
+                            metric_ledger=metric_ledger_from_env(env))
     if env_flag(env.get("QAR_STANDARD_TOOLS"), default=True):
         for name, builder in STANDARD_TOOL_BUILDERS.items():
             try:
@@ -728,6 +744,7 @@ from . import tools_quest_ops  # noqa: E402,F401
 from . import tools_quest_work  # noqa: E402,F401
 from . import tools_quest_intents  # noqa: E402,F401
 from . import tools_repo_specs  # noqa: E402,F401
+from . import tools_metric_results  # noqa: E402,F401
 from .tools_quest_experiments import (  # noqa: E402,F401  (kept importable from here)
     EXPERIMENT_STATUSES, create_quest_experiment_spec, delete_quest_experiment_spec,
     find_quest_experiments_spec,

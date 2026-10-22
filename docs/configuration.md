@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-212 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+216 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -62,7 +62,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CLI_HAIKU_THINKING_TOKENS` | Thinking-token cap for Haiku completions through the CLI provider (unset = CLI default). | `adapters/claude_cli_provider.py` | - |
 | `QAR_CLI_PLAN_THINKING_TOKENS` |  | `cli_config.py` | `docs/cheap-model-routing.md` |
 | `QAR_CONFIG_FILE` |  | `cli_config.py`, `config_environment.py` | `README.md`, `docs/chat.md`, `docs/writing-a-consumer.md` |
-| `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `config_core_settings.py`, `runner/lane.py` | `.env.example` |
+| `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `config_core_settings.py`, `runner/lane.py` | `.env.example`, `docs/context-assembly.md` |
 | `QAR_CONTEXT_CARDS_DIR` |  | `cli_chat.py`, `cli_context.py` | `.env.example`, `docs/context-assembly.md` |
 | `QAR_CONTEXT_POLL_SECONDS` |  | `cli_config.py` | `docs/quest-api-contract.md` |
 | `QAR_CONTEXT_PREAMBLE` |  | `cli_config.py` | `.env.example`, `docs/writing-a-consumer.md` |
@@ -122,6 +122,9 @@ the docs and `.env.example` that describe what it does.
 | `QAR_MAX_LOAD_PER_CORE` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MAX_MEMORY_PERCENT` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MAX_PARALLEL` |  | `adapters/context_bootstrap_support.py`, `cli_config.py` | `docs/a-lane-is-a-config-file.md` |
+| `QAR_METRIC_ARM_TIMEOUT_SECONDS` | Longest an offline arm may run to measure a metric (default 60); a longer run gives no reading. | `config_core_settings.py` | - |
+| `QAR_METRIC_LEDGER_DIR` | Folder where each deep run's metric results are kept, one file per run, shared by the runner and the worker's shell commands (default: a folder in the system temp directory). | `core/metric_results.py` | - |
+| `QAR_METRIC_METERS` | Which meters read a metric's value around a deep goal, comma-separated and tried in order: recorded_row, offline_arm (default both; used only by the iterate-by-spec arms that measure). | `config_core_settings.py` | - |
 | `QAR_MIN_FREE_MEMORY_MB` |  | `resources.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_MODEL_BACKEND` |  | `cli_chat.py`, `cli_config.py`, `pricing.py` +1 | `.env.example`, `docs/adapters.md` |
 | `QAR_MODE_RELEASE_TIMEOUT_SECONDS` | Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds. | `config_core_settings.py` | `.env.example` |
@@ -176,7 +179,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `adapters/_walk.py`, `adapters/files_search_worker.py`, `adapters/files_server.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `adapters/context_folder_review.py` | - |
 | `QAR_SPEC_CACHE` | Folder for the cached specification index, rebuilt when a record file changes (default ~/.cache/quest-ai-runner/spec_index). | `core/repo_specs.py` | - |
-| `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `core/repo_specs.py` | `docs/spec-selection.md` |
+| `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `core/repo_specs.py`, `core/spec_slice.py` | `docs/spec-selection.md` |
 | `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STANDARD_TOOLS` |  | `core/tools.py` | `docs/tools.md` |
@@ -186,6 +189,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_TOOLS_FILE` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_TOOL_LEDGER_DIR` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_TOOL_QUEST_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/tools.md` |
+| `QAR_TOOL_RUN_ID` | This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command. | `core/tools.py`, `tools/__main__.py` | - |
 | `QAR_TOOL_TASK_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/tools.md` |
 | `QAR_USER_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
 | `QAR_VECTOR_BACKEND` |  | `config_assembler.py`, `runner/lane.py` | `docs/vector-context.md` |

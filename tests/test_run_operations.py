@@ -269,16 +269,18 @@ def test_an_autopilot_batch_is_given_the_asks_and_progress_how_to_without_any_pr
 
 def test_an_unrelated_run_gets_none_of_it():
     brief = deep_brief_for(PLAIN_TASK, build_tool_registry(CREDS))
-    assert "TOOLS YOU CAN CALL" not in brief
     for name in ops.QUEST_OPERATION_BUILDERS:
         assert f"- {name} (" not in brief
+    # the one tool every deep run is offered (the metric result), and no other
+    assert "- record_metric_result (" in brief and brief.count("(standard, ") == 1
 
 
 def test_a_run_that_names_an_ask_in_its_words_finds_the_operation_through_relevance():
     registry = build_tool_registry(CREDS)
     shown = [s.name for s in registry.select("Ana asked us to email the board, track it in the ledger")]
     assert "record_ask" in shown and "list_asks" in shown
-    assert registry.render_deep_block("summarize this pdf of grants") == ""
+    unrelated = registry.render_deep_block("summarize this pdf of grants")
+    assert "- record_metric_result (" in unrelated and unrelated.count("(standard, ") == 1
 
 
 def test_only_autopilot_composed_tasks_are_pinned():

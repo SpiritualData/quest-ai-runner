@@ -18,7 +18,6 @@ a worker's mistake: running the worker again is the thing that cannot help.
 from __future__ import annotations
 
 import difflib
-import json
 import logging
 import os
 import re
@@ -27,10 +26,9 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Dict, Iterable, List, Optional
 
-log = logging.getLogger("quest-ai-runner.tool_ledger")
+from .jsonl_ledger import LEDGER_MAX_AGE_SECONDS, KeyedJsonlFiles  # noqa: F401  (age re-exported)
 
-# A ledger file untouched for this long belongs to a finished task and is removed.
-LEDGER_MAX_AGE_SECONDS = 2 * 24 * 3600
+log = logging.getLogger("quest-ai-runner.tool_ledger")
 
 # Two attempts "say the same thing" when their verdict reasons overlap this much, and their outputs
 # do (the no-progress guard in the goal loop).
@@ -79,30 +77,24 @@ def outcome_from_result(tool: str, ok: bool, text: str, mutates: bool) -> ToolOu
 
 
 class FileToolLedger:
-    """An append-only JSON-lines file per task in a shared directory.
+    """An append-only JSON-lines file per task in a shared directory (``jsonl_ledger.KeyedJsonlFiles``).
 
     A file, because the deep worker calls tools from a separate process: the brain and the worker
-    share nothing in memory, but they share the machine's temp directory. One short ``write`` in
-    append mode per call, so concurrent calls do not interleave.
+    share nothing in memory, but they share the machine's temp directory. One whole-line append
+    per call under a lock, so concurrent calls do not interleave.
     """
 
     def __init__(self, directory: Optional[str] = None):
         self.directory = directory or os.path.join(tempfile.gettempdir(), "qar-tool-ledger")
+        self.files = KeyedJsonlFiles(self.directory)
 
     def path_for(self, task_id: str) -> str:
-        return os.path.join(self.directory, re.sub(r"[^A-Za-z0-9_.-]", "_", str(task_id)) + ".jsonl")
+        return self.files.path_for(task_id)
 
     def record(self, task_id: Optional[str], outcome: ToolOutcome) -> None:
         """Append one call. Never raises: a missing ledger must not break a tool call."""
-        if not task_id:
-            return
-        try:
-            os.makedirs(self.directory, exist_ok=True)
-            with open(self.path_for(task_id), "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(asdict(outcome)) + "\n")
+        if task_id and self.files.append(task_id, asdict(outcome)):
             self.prune()
-        except OSError as e:
-            log.debug("tool ledger not written for %s: %s", task_id, e)
 
     def mark(self, task_id: Optional[str]) -> int:
         """How many calls the task has recorded so far: the start of the next window."""
@@ -113,26 +105,15 @@ class FileToolLedger:
         if not task_id:
             return []
         rows: List[ToolOutcome] = []
-        try:
-            with open(self.path_for(task_id), "r", encoding="utf-8") as fh:
-                for line in fh:
-                    try:
-                        rows.append(ToolOutcome(**json.loads(line)))
-                    except (ValueError, TypeError):
-                        continue
-        except OSError:
-            return []
+        for row in self.files.read(task_id):
+            try:
+                rows.append(ToolOutcome(**row))
+            except TypeError:
+                continue
         return rows[max(0, mark):]
 
     def prune(self) -> None:
-        cutoff = time.time() - LEDGER_MAX_AGE_SECONDS
-        try:
-            for name in os.listdir(self.directory):
-                path = os.path.join(self.directory, name)
-                if name.endswith(".jsonl") and os.path.getmtime(path) < cutoff:
-                    os.remove(path)
-        except OSError:
-            pass
+        self.files.prune()
 
 
 def unrecovered_failures(window: Iterable[ToolOutcome]) -> Dict[str, ToolOutcome]:
