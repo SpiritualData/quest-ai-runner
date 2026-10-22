@@ -127,15 +127,17 @@ def name_match_score(card: Dict[str, Any]) -> float:
 def keeper_rank(card: Dict[str, Any], fallback_id: str) -> Tuple[Any, ...]:
     """Sort key for cards pinning the same files; the first one sorted is kept.
 
-    The most used, then the best match between its name/keywords and its file and folder names, then
-    the earliest created (an undated card after every dated one), then the id.
+    The most used, then (usage being equal) a card an index pass wrote before one somebody added to,
+    then the best match between its name/keywords and its file and folder names, then the earliest
+    created (an undated card after every dated one), then the id.
     """
     try:
         usage = int(card.get("usage_count") or 0)
     except (TypeError, ValueError):
         usage = 0
     created = str(card_origin.provenance_of(card).get("created_at") or "")
-    return (-usage, -name_match_score(card), created or "\uffff", str(card.get("id") or fallback_id))
+    return (-usage, 1 if card_origin.protection(card) else 0, -name_match_score(card), created or "\uffff",
+            str(card.get("id") or fallback_id))
 
 
 def protection_reason(card: Dict[str, Any]) -> str:
@@ -304,13 +306,15 @@ class TidyPlan:
 def best_first(facts: Facts) -> Tuple[Any, ...]:
     """Order inside a group of cards pinning the same files: the card to keep sorts first.
 
-    Not a compounded copy before a compounded copy, then the fewest import prefixes, then the
-    ``keeper_rank`` the cleanup script uses (most used, best name match, earliest, id), so the choice is
-    the same every run and the same one a person running the script would make. Whether a card may be
-    MOVED is a separate question (``Facts.protection``): a card somebody added to is kept whatever its rank.
+    Not a compounded copy before a compounded copy, then the fewest import prefixes, then the most
+    used, then (usage being equal) a card an index pass wrote before one somebody added to, so a hand-written
+    or annotated card never displaces the topic card it sits beside; then the rest of the ``keeper_rank``
+    the cleanup script uses (best name match, earliest, id). The choice is the same every run. Whether a
+    card may be MOVED is a separate question (``Facts.protection``): a card somebody added to is kept
+    whatever its rank.
     """
-    return (1 if facts.compounded else 0, facts.segments, -facts.usage, -facts.name_match,
-            facts.created or "\uffff", facts.card_id)
+    return (1 if facts.compounded else 0, facts.segments, -facts.usage, 1 if facts.protection else 0,
+            -facts.name_match, facts.created or "\uffff", facts.card_id)
 
 
 def in_quarantine(cards_dir: Path, card_id: str) -> bool:

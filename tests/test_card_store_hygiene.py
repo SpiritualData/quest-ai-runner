@@ -485,6 +485,29 @@ class TestHealth:
         assert len(ids(tmp_path / "cards")) == 3, "a dry run moves nothing"
 
 
+class TestTheTidyCommand:
+    """``quest-ai-runner cards tidy``: the installed package's way to do what the cleanup script does for provable copies."""
+
+    def test_it_is_a_dry_run_unless_asked(self, tmp_path, capsys):
+        from quest_ai_runner.cli import main
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        seed(cards, [card("t", files), card(f"{SD}--{PRODUCT}--t", files), card("mine", files, provenance={})])
+        assert main(["cards", "tidy", "--cards-dir", str(cards)]) == 0
+        out = capsys.readouterr().out
+        assert "would move      : 1" in out and "written by a person" in out and "dry run" in out
+        assert len(ids(cards)) == 3
+
+    def test_apply_moves_the_copy_and_never_the_card_a_person_wrote(self, tmp_path, capsys):
+        from quest_ai_runner.cli import main
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        seed(cards, [card("t", files), card(f"{SD}--{PRODUCT}--t", files), card("mine", files, provenance={})])
+        assert main(["cards", "tidy", "--cards-dir", str(cards), "--apply"]) == 0
+        assert ids(cards) == ["mine", "t"] and moved(cards, "compounded") == [f"{SD}--{PRODUCT}--t"]
+        assert "manifest" in capsys.readouterr().out
+
+
 def test_the_limit_and_the_tidy_agree_on_what_a_topic_card_is():
     assert card_limit.card_kind(card("t", ["a/one.md"])) == card_limit.KIND_TOPIC
     assert card_limit.card_kind(card("t", managed_by="x")) == card_limit.KIND_MANAGED

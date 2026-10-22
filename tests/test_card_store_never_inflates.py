@@ -211,6 +211,32 @@ def test_a_store_is_not_indexed_under_a_root_it_was_not_built_for(tmp_path, capl
     assert sorted(load(root)) == before
 
 
+def test_a_corpus_renamed_with_its_store_inside_it_keeps_being_indexed(tmp_path, caplog):
+    """Review finding (move root): the refusal above also stopped a corpus folder that was simply renamed, for
+    good, until somebody ran ``move-root``. The cards name files relative to the root, so only the record is stale."""
+    old = notes(tmp_path / "corpus", ["auth", "chat"])
+    index(old)
+    before = sorted(load(old))
+    new = tmp_path / "renamed"
+    old.rename(new)
+    notes(new, ["search"])
+    with caplog.at_level(logging.INFO, logger="quest-ai-runner.context"):
+        assert index(new, refresh=True) == 1
+    assert sorted(load(new)) == sorted(before + ["search-topic"])
+    meta = json.loads((new / ".quest-context" / "bootstrap_meta.json").read_text())
+    assert Path(meta["root"]).resolve() == new.resolve() and meta.get("root_history")
+    assert "the corpus folder moved" in caplog.text and "not indexing" not in caplog.text
+
+
+def test_a_store_kept_elsewhere_for_a_root_that_still_exists_is_not_adopted(tmp_path):
+    root = notes(tmp_path / "top", ["auth"])
+    sub = notes(root / "sub", ["search"])
+    index(root)
+    recorded = json.loads((root / ".quest-context" / "bootstrap_meta.json").read_text())["root"]
+    assert index(sub, root / ".quest-context", refresh=True) == 0
+    assert json.loads((root / ".quest-context" / "bootstrap_meta.json").read_text())["root"] == recorded
+
+
 # --- route: a vector point id used as a card id ------------------------------------------------------------
 
 @pytest.mark.parametrize("qualified", [False, True])

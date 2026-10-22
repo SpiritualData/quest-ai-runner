@@ -11,7 +11,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import card_limit as limit_mod
 from . import card_origin
@@ -21,7 +21,8 @@ from .context_card_ceilings import card_folder_key
 log = logging.getLogger("quest-ai-runner.card-limit")
 
 REPORT_NAME = "card_limit_report.md"
-SCREEN_FOLDERS = 3          # folders named in the on-screen line
+SCREEN_FOLDERS = 3          # folders named in the log text
+SCREEN_CHARS = 72           # an 80 column terminal shows 72 characters of a warning line
 REPORT_FOLDERS = 15
 REPORT_COLDEST = 8
 NAME_CHARS = 18
@@ -108,22 +109,58 @@ def short(name: str) -> str:
     return name if len(name) <= NAME_CHARS else name[: NAME_CHARS - 1] + "…"
 
 
+def grouped(n: int) -> str:
+    return f"{n:,}"
+
+
+def plain(n: int) -> str:
+    return str(n)
+
+
+def thousands(n: int) -> str:
+    return f"{round(n / 1000)}k" if n >= 10_000 else str(n)
+
+
+def compact(n: int) -> str:
+    if n < 1000:
+        return str(n)
+    return f"{n / 1000:.1f}".rstrip("0").rstrip(".") + "k"
+
+
+def count_line(b: Breakdown) -> str:
+    """The one line that says the store is full and what fills it, at most ``SCREEN_CHARS`` long when it can be.
+
+    ``Context store full at 1,000: 812 topic, 150 imported, 30 learned, 8 quest``. The terminal shows the first
+    sentence of a warning cut to the width of the window (80 columns leave 72 characters), so this is one line
+    with no full stop inside it, and when the numbers are large it shortens its first words, drops the thousands
+    separators, then writes thousands as ``12k``, then every count as ``1.4k``. Nothing is ever left out of it: all four counts are
+    always there, and the longest form that fits is the one used.
+    """
+    over = b.total > b.limit
+    for fmt in (grouped, plain, thousands, compact):
+        for head in (("Context store over its limit of {limit} ({total})", "Store over limit {limit} ({total})",
+                      "Over limit {limit} ({total})") if over
+                     else ("Context store full at {limit}", "Store full at {limit}", "Full at {limit}")):
+            line = (head.format(limit=fmt(b.limit), total=fmt(b.total))
+                    + f": {fmt(b.topic)} topic, {fmt(b.imported)} imported, {fmt(b.learned)} learned, "
+                      f"{fmt(b.managed)} quest")
+            if len(line) <= SCREEN_CHARS:
+                return line
+    return line
+
+
+def how_to_change_line() -> str:
+    """The second line: how to allow more. Short enough for the same window, and no full stop inside it."""
+    return f"Set {limit_mod.ENV_MAX_CARDS} higher (0 = no limit), or ask the AI to raise it."
+
+
 def notice_lines(b: Breakdown, *, admitted_over: int = 0) -> List[str]:
-    """The three short lines the person sees. Each is one sentence, so the terminal shows it whole."""
-    if b.total > b.limit:
-        first = (f"Your context store holds {b.total:,} cards, over its limit of {b.limit:,}, "
-                 "so new topic cards are not being added.")
-    else:
-        first = f"Your context store is full at {b.limit:,} cards, so new topic cards are not being added."
-    biggest = ", ".join(f"{short(name)} {n:,}" for name, n in b.topic_by_folder[:SCREEN_FOLDERS])
-    topic = f"{b.topic:,} topic cards" + (f" (the biggest folders: {biggest})" if biggest else "")
-    second = (f"It holds {topic}, {b.imported:,} imported from other stores, {b.learned:,} learned from runs, "
-              f"{b.managed:,} from quests.")
-    if admitted_over:
-        second = second.rstrip(".") + f", and {admitted_over:,} learned cards were kept above the limit."
-    third = (f"To allow more, set {limit_mod.ENV_MAX_CARDS} to a bigger number, or ask the AI: "
-             f"raise the QAR card limit to {max(2 * b.limit, 2000)}.")
-    return [first, second, third]
+    """What the person sees on screen: two lines, the counts and then how to change the limit.
+
+    The whole notice is two lines because the terminal shows a few lines per turn, each cut to one
+    sentence; the full text (where the report is, the exact steps) goes to the log (``full_text``).
+    """
+    return [count_line(b), how_to_change_line()]
 
 
 def change_instructions(cards_dir: Path) -> List[str]:
@@ -140,15 +177,23 @@ def change_instructions(cards_dir: Path) -> List[str]:
         "change where this lane reads its environment and restart it.",
         f"Cards the limit moved out are in {cards_dir / QUARANTINE_DIR_NAME / limit_mod.QUARANTINE_REASON} "
         f"(one line per card in {limit_mod.MANIFEST_NAME}). Move a file back into {cards_dir} to put it back.",
-        "A full store can also be tidied: python scripts/quarantine_cards.py --cards-dir "
-        f"{cards_dir} shows what is provably redundant (a dry run; nothing moves without --apply).",
+        f"A full store can also be tidied: quest-ai-runner cards tidy --cards-dir {cards_dir} lists what is "
+        "provably a copy of another card (a dry run; nothing moves without --apply, and a card with notes, "
+        "usage, quest tags or a hand-written origin never moves).",
     ]
 
 
 def full_text(b: Breakdown, state: limit_mod.LimitState, cards_dir: Path) -> str:
-    lines = notice_lines(b, admitted_over=state.admitted_over)
-    lines.append(f"Card store: {cards_dir}. Full list: {cards_dir / REPORT_NAME}, or run: "
-                 f"quest-ai-runner cards report --cards-dir {cards_dir}")
+    """The notice in full, for the log and for an AI asked to change the limit. Not shown on screen."""
+    biggest = ", ".join(f"{short(name)} {n:,}" for name, n in b.topic_by_folder[:SCREEN_FOLDERS])
+    holds = (f"It holds {b.topic:,} topic cards" + (f" (the biggest folders: {biggest})" if biggest else "")
+             + f", {b.imported:,} imported from other stores, {b.learned:,} learned from runs and "
+               f"{b.managed:,} from quests. New topic and imported cards are not being added.")
+    if state.admitted_over:
+        holds += f" {state.admitted_over:,} learned or quest cards were kept above the limit."
+    lines = [count_line(b), holds, how_to_change_line(),
+             f"Card store: {cards_dir}. Full list: {cards_dir / REPORT_NAME}, or run: "
+             f"quest-ai-runner cards report --cards-dir {cards_dir}"]
     lines.extend(change_instructions(cards_dir))
     return "\n".join(lines)
 
@@ -207,14 +252,27 @@ def write_report(cards_dir: Path, text: str) -> bool:
         return False
 
 
-def announce_full(guard: Any, *, at_open: bool = False) -> None:
-    """Write the report file and say it on screen (three short lines) and in the log (all of it)."""
+def announce_full(guard: Any, *, at_open: bool = False, notify: Optional[Callable[[str], None]] = None) -> None:
+    """Write the report file and say it: two lines on screen, everything in the log, and on the next task's feed.
+
+    On screen (a terminal chat): two warning lines, the counts and how to change the limit. In the log: the
+    whole text with the report's path and the exact steps. Where there is a startup callback (``notify``) it
+    is given the same two lines. A lane has no screen, so the same two lines are also held for the next task's
+    progress feed (``take_task_notes``), which is where a person watching that lane will read them.
+    """
     b = breakdown(guard.snapshot(), guard.cards_dir, guard.limit)
     write_report(guard.cards_dir, render_report(b, guard.state, guard.cards_dir))
-    for line in notice_lines(b, admitted_over=guard.state.admitted_over):
+    lines = notice_lines(b, admitted_over=guard.state.admitted_over)
+    for line in lines:
         log.warning("%s", line)
+        if notify is not None:
+            try:
+                notify(line)
+            except Exception:  # noqa: BLE001 -- a broken callback must not stop the notice
+                log.debug("card limit notice callback failed", exc_info=True)
     # The whole text, for the log file and for an AI asked to change the limit; not repeated on screen.
     log.warning("%s", full_text(b, guard.state, guard.cards_dir), extra={"in_transcript": False})
+    limit_mod.hold_task_note(str(guard.cards_dir), " ".join(lines))
 
 
 def report_for(cards_dir: str, limit: int) -> str:

@@ -409,7 +409,7 @@ class TestCardCeilings:
         with caplog.at_level(logging.WARNING, logger="quest-ai-runner.card-limit"):
             assert store.bootstrap(root=str(repo), provider=topic_provider(one)) == 0
         assert sorted(FilesystemCardRepository(str(cards_dir)).load_all()) == ["old0", "old1", "old2"]
-        assert "Your context store is full at 3 cards" in caplog.text and "QAR_MAX_CARDS" in caplog.text
+        assert "Context store full at 3: 3 topic" in caplog.text and "QAR_MAX_CARDS" in caplog.text
 
     def test_existing_cards_hold_their_own_folder(self):
         existing = [make_card("already", ["app/one.py", "app/two.py"])]

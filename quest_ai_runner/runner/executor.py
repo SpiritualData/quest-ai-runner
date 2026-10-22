@@ -391,6 +391,11 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         self._report_progress(task_id, "started", text=f"Started working on this: {text}")
         self._post_conv(conv_id, f"Started working on this: {text}", kind="started",
                         task_id=task_id, card_id=card_id)
+        # A card store at its limit says so in the lane's log; nobody watches a lane's log, so the first
+        # task to start afterwards carries the same two lines on its live feed (once per notice).
+        from ..adapters.card_limit import take_task_notes
+        for store_note in take_task_notes():
+            self._report_progress(task_id, "status", text=store_note)
 
         # ONE initial drain: claim any messages the human sent while this task sat queued (e.g. a
         # steer sent right after delegating, before a background lane picked it up) and fold them

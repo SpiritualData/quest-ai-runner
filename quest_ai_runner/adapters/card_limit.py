@@ -55,6 +55,22 @@ DERIVED_KINDS = frozenset({KIND_TOPIC, KIND_IMPORTED})
 
 announced_stores: Set[str] = set()
 announce_lock = threading.Lock()
+# Notices a lane has no screen for, waiting for the next task's progress feed: {card folder: one line}.
+task_notes: Dict[str, str] = {}
+
+
+def hold_task_note(cards_dir: str, text: str) -> None:
+    """Keep ``text`` for the next task that starts in this process (see ``take_task_notes``)."""
+    with announce_lock:
+        task_notes[cards_dir] = text
+
+
+def take_task_notes() -> List[str]:
+    """The notices held for a task's progress feed, each handed out once. Never raises."""
+    with announce_lock:
+        notes = list(task_notes.values())
+        task_notes.clear()
+    return notes
 
 
 def max_cards_from_env(env: Optional[Dict[str, str]] = None) -> int:
@@ -89,6 +105,7 @@ def reset_announcements() -> None:
     """Forget which stores this process has already announced (for tests)."""
     with announce_lock:
         announced_stores.clear()
+        task_notes.clear()
 
 
 @dataclass
@@ -259,11 +276,13 @@ class CardLimit:
             self.pass_unindexed = 0
 
     def note_unindexed(self, files: int) -> None:
-        """Files this pass left without a card because the store was full (no card could hold them)."""
+        """Files this pass left without a card because the store was full (no card could hold them).
+
+        Counted only: the notice is given when the pass ends (``end_pass``), once the cards it did write are
+        in the store, so what it says the store holds is true."""
         if files > 0:
             with self.lock:
                 self.pass_unindexed += files
-                self.reached()
 
     def end_pass(self) -> int:
         """The pass is over: record what is waiting for room. Returns how many cards it refused."""
@@ -272,6 +291,8 @@ class CardLimit:
             if refused or self.pass_unindexed or self.state.waiting or self.state.unindexed_files:
                 self.state.waiting = refused
                 self.state.unindexed_files = self.pass_unindexed
+                if refused or self.pass_unindexed:
+                    self.reached()
                 self.flush()
             return refused
 
@@ -335,7 +356,7 @@ class CardLimit:
             self.state.reached_at = card_origin.now_iso()
         self.announce()
 
-    def announce(self, *, at_open: bool = False) -> bool:
+    def announce(self, *, at_open: bool = False, notify: Optional[Callable[[str], None]] = None) -> bool:
         """Say, once per process, that this store is full, with what fills it. True when it spoke."""
         key = str(self.cards_dir.resolve())
         with announce_lock:
@@ -344,17 +365,17 @@ class CardLimit:
             announced_stores.add(key)
         try:
             from .card_limit_report import announce_full
-            announce_full(self, at_open=at_open)
+            announce_full(self, at_open=at_open, notify=notify)
         except Exception:  # noqa: BLE001 -- the limit must never fail a write because it could not talk
             log.warning("Your context store is at its card limit of %d cards.", self.limit, exc_info=True)
         self.state.last_notice_at = card_origin.now_iso()
         self.flush()
         return True
 
-    def check_at_open(self) -> bool:
+    def check_at_open(self, notify: Optional[Callable[[str], None]] = None) -> bool:
         """At open: say so when the store is already at or above its limit. Nothing is removed."""
         if self.enabled and self.count() >= self.limit:
             if not self.state.reached_at:
                 self.state.reached_at = card_origin.now_iso()
-            return self.announce(at_open=True)
+            return self.announce(at_open=True, notify=notify)
         return False

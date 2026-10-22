@@ -201,6 +201,7 @@ def _cmd_context(args, log) -> int:
 
 def _cmd_bootstrap(args, log) -> int:
     """Run the `bootstrap` subcommand; returns the process exit code."""
+    from .adapters.card_limit import max_cards_from_env
     from .adapters.file_context_store import FileContextStore
     from .adapters._walk import effective_skip_dirs, prune_dirnames
     import shutil
@@ -347,7 +348,7 @@ def _cmd_bootstrap(args, log) -> int:
                     return 0
 
     provider = _model_provider_from_env()
-    store = FileContextStore(cards_dir, repo_root=corpus)
+    store = FileContextStore(cards_dir, repo_root=corpus, max_cards=max_cards_from_env())
     log.info("bootstrapping context store for %s", corpus)
 
     # Resolve a model from the provider. QAR_MODEL_* is honoured HERE too, not only in

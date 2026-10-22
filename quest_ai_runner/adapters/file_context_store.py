@@ -165,9 +165,12 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
                           quest grounds preferentially on its linked folder. Entries whose folder
                           isn't under ``repo_root`` are ignored (logged once at construction).
       max_cards         -- the most cards this store holds before it stops adding derived ones (see
-                          ``card_limit``). ``None`` (the default) reads ``QAR_MAX_CARDS``, which is 1,000
-                          when unset; ``0`` means no limit. Applies to the default filesystem repository
-                          only: an injected repository (the Quest backend) keeps its own cards.
+                          ``card_limit``). ``None`` (the default) and ``0`` mean NO limit: the library
+                          never applies a number its caller did not choose. The runner's own builders
+                          (``config_assembler``, ``cli_context``) pass ``card_limit.max_cards_from_env()``,
+                          which is ``QAR_MAX_CARDS`` and 1,000 when unset. Applies to the default
+                          filesystem repository only: an injected repository (the Quest backend) keeps
+                          its own cards.
       self_heal         -- when True, ``prewarm()`` and the end of an indexing pass move cards that are
                           provably copies of other cards out of the index (``card_store_hygiene``;
                           moved to ``_quarantine/``, never deleted), and a store holding more topic cards
@@ -278,8 +281,7 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         # ``_store_write``. A shared backend keeps its own cards, so only the local store is limited.
         self.limit_guard = card_limit_policy.CardLimit(
             str(cards_dir),
-            0 if card_repository is not None else (
-                max_cards if max_cards is not None else card_limit_policy.max_cards_from_env()),
+            0 if card_repository is not None else (max_cards or 0),
             repo=self._own_repo, cards=self._own_cards, revision=self._repo.revision,
         )
         # Precompute {quest_id: repo-root-relative POSIX prefix} once, so per-assemble() lookup is

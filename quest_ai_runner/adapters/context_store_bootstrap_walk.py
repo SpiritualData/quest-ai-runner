@@ -31,6 +31,7 @@ from .context_folder_review import (
     _prune_dead_cards,
 )
 from .context_risk_gate import FolderGate, folder_gate
+from .context_card_ceilings import folders_for_room
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
 from .context_topic_cards import _llm_topic_cards
 
@@ -428,13 +429,22 @@ class BootstrapWalkMixin:
             uncovered_discoverable = False
         else:
             uncovered_discoverable = True
+        analysed = list(uncovered)
+        if uncovered and uncovered_discoverable and room is not None and provider is not None:
+            # Room for only so many cards: the model is asked about that many folders (the most recently
+            # changed first), not about every folder and left to have most of its cards refused.
+            analysed, waiting_files = folders_for_room(uncovered, room, walk_root)
+            if waiting_files:
+                self.limit_guard.note_unindexed(len(waiting_files))
+                _log.info("context index: room for %d more card(s); analysing the %d file(s) of the most "
+                          "recently changed folders, %d file(s) wait for room", room, len(analysed), len(waiting_files))
         if uncovered and provider is not None and uncovered_discoverable:
-            _log.info("context index: stage 2 — analyzing %d new files for topics", len(uncovered))
+            _log.info("context index: stage 2 — analyzing %d new files for topics", len(analysed))
             topic_cards = _llm_topic_cards(
-                uncovered, provider, model=model, existing_cards=own_cards, walk_root=walk_root
+                analysed, provider, model=model, existing_cards=own_cards, walk_root=walk_root
             )
             _log.info("context index: identified %d topic card(s) from new files", len(topic_cards))
-        discovered_now: List[str] = list(uncovered) if (uncovered and topic_cards) else []
+        discovered_now: List[str] = list(analysed) if (uncovered and topic_cards) else []
 
         # Merge nested-imported cards now (before stale-covered regen below): a file re-imported
         # unchanged from a nested store can also show up in ``stale_covered`` versus THIS store's
@@ -515,6 +525,7 @@ class BootstrapWalkMixin:
                                            max_cards=max_cards)
 
         if not topic_cards:
+            self.limit_guard.end_pass()
             if kept_copies and not self._dry_run:
                 self.reconcile_copies()
             return 0

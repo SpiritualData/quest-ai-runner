@@ -85,6 +85,40 @@ def max_cards_per_folder() -> int:
     return _positive_int_env("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", _MAX_CARDS_PER_FOLDER_DEFAULT)
 
 
+def folders_for_room(uncovered: List[str], room: int, walk_root: Any) -> Tuple[List[str], List[str]]:
+    """Of the files no card covers, the ones worth sending to the model when only ``room`` cards still fit.
+
+    ``(sent, waiting)``. A card needs a folder, and a store with room for ``room`` more cards cannot hold
+    cards for more than ``room`` folders, so the model is asked about that many folders and no more. The
+    folders are chosen by how recently one of their files changed (newest first; ties by path), those with at
+    least ``_MIN_FILES_PER_CARD`` uncovered files before those with fewer, since a thinner folder cannot
+    be a card by itself. No folder is judged by its name: the folders the review excludes (an archive, a
+    backup, generated output) are not in ``uncovered`` at all. What is not sent is returned as ``waiting``:
+    those files are neither analysed nor "seen", so raising the limit (or a card moving out) picks them up
+    on the next pass, and no model call is spent on a card the store would refuse.
+    """
+    by_folder: Dict[str, List[str]] = {}
+    for rel in uncovered:
+        by_folder.setdefault(rel.rsplit("/", 1)[0] if "/" in rel else ".", []).append(rel)
+    if room <= 0 or len(by_folder) <= room:
+        return list(uncovered), []
+
+    def newest(folder: str) -> float:
+        best = 0.0
+        for rel in by_folder[folder]:
+            try:
+                best = max(best, os.stat(os.path.join(str(walk_root), rel)).st_mtime)
+            except OSError:
+                continue
+        return best
+
+    ranked = sorted(by_folder, key=lambda f: (0 if len(by_folder[f]) >= _MIN_FILES_PER_CARD else 1, -newest(f), f))
+    chosen = set(ranked[:room])
+    sent = [rel for rel in uncovered if (rel.rsplit("/", 1)[0] if "/" in rel else ".") in chosen]
+    waiting = [rel for rel in uncovered if (rel.rsplit("/", 1)[0] if "/" in rel else ".") not in chosen]
+    return sent, waiting
+
+
 def path_is_data_file(rel: str) -> bool:
     """Whether ``rel`` is generated/derived data rather than something a card can be about."""
     text = str(rel or "").replace("\\", "/")

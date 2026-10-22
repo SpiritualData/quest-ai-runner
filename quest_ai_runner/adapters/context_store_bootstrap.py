@@ -948,7 +948,7 @@ class BootstrapMixin:
         try:
             self.tidy(notify)       # first: so the index built below never holds a card on its way out
             cards = self._load_all()
-            self.limit_guard.check_at_open()
+            self.limit_guard.check_at_open(notify)
             self.inflated()
             if cards:
                 self._scoring_index(cards, Pacer())

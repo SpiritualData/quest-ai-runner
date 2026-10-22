@@ -96,11 +96,44 @@ class TestTheKnob:
             assert card_limit.max_cards_from_env({"QAR_MAX_CARDS": "lots"}) == 1000
         assert "QAR_MAX_CARDS" in caplog.text and "0 for no limit" in caplog.text
 
-    def test_a_store_takes_its_limit_from_the_environment_unless_told(self, tmp_path, monkeypatch):
+    def test_the_library_applies_no_limit_unless_its_caller_passes_one(self, tmp_path, monkeypatch):
         monkeypatch.setenv("QAR_MAX_CARDS", "77")
-        assert store_for(tmp_path, tmp_path).limit_guard.limit == 77
+        assert store_for(tmp_path, tmp_path).limit_guard.enabled is False, "a library caller never gets a number it did not choose"
         assert store_for(tmp_path, tmp_path, max_cards=5).limit_guard.limit == 5
         assert store_for(tmp_path, tmp_path, max_cards=0).limit_guard.enabled is False
+
+    @pytest.mark.parametrize("env,expected", [(None, 1000), ("77", 77), ("0", 0), ("unlimited", 0)])
+    def test_the_runner_builds_its_store_with_the_limit_from_the_environment(self, tmp_path, monkeypatch, env, expected):
+        """The 1,000 default belongs to the runner (its builder), not to the library under it."""
+        from unittest.mock import MagicMock
+        import quest_ai_runner.adapters as adapters_mod
+        import quest_ai_runner.adapters.qdrant_vector_store as qdrant_module
+        from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
+        for name in ("QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QUEST_BASE_URL", "QUEST_API_KEY", "QUEST_TEAM_ID",
+                     "QAR_QDRANT_URL", "QAR_VECTOR_QDRANT_URL", "QDRANT_URL", "QAR_EMBEDDER_BACKEND",
+                     "QAR_VECTOR_BACKEND", "QAR_CARD_MOUNT", "QAR_MAX_CARDS"):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setattr(adapters_mod, "QdrantVectorStore", MagicMock(name="QdrantVectorStore"))
+        monkeypatch.setattr(qdrant_module, "make_voyage_embedder", MagicMock(name="make_voyage_embedder"))
+        monkeypatch.setenv("QAR_CARDS_BACKEND", "local")
+        if env is not None:
+            monkeypatch.setenv("QAR_MAX_CARDS", env)
+        monkeypatch.setattr("quest_ai_runner.config_assembler._bootstrap_if_needed", lambda *a, **k: None)
+        monkeypatch.setattr(FileContextStore, "prewarm", lambda self, notify=None: 0)
+        root = tmp_path / "repo"
+        root.mkdir()
+        cfg = RunnerConfig(retrieval=None, model_provider=MagicMock(), corpus_root=str(root),
+                           context_cards_dir=str(tmp_path / "cards"))
+        assembler = resolve_context_assembler(cfg)
+        pending = [assembler]
+        found = None
+        while pending and found is None:
+            node = pending.pop()
+            if isinstance(node, FileContextStore):
+                found = node
+            pending.extend(getattr(node, "assemblers", None) or [])
+            pending.extend(n for n in (getattr(node, attr, None) for attr in ("_keyword", "keyword")) if n is not None)
+        assert found is not None and found.limit_guard.limit == expected
 
     def test_a_shared_backend_is_not_limited_by_a_local_number(self, tmp_path):
         backend = FilesystemCardRepository(str(tmp_path / "elsewhere"))
@@ -117,8 +150,56 @@ class TestAtTheLimit:
         store = store_for(tmp_path, root, max_cards=3)
         index(store, root)
         assert len(card_ids(tmp_path / "cards")) == 3
-        assert store.limit_guard.state.waiting == 2
-        assert len(store.limit_guard.refused_ids) == 2
+        assert store.limit_guard.state.unindexed_files == 4, "two folders of two files wait for room"
+        assert not store.limit_guard.refused_ids, "and no model call was spent on cards that would be refused"
+
+    def test_the_notice_describes_the_store_as_it_is_after_the_pass_not_before(self, tmp_path, caplog):
+        root = corpus(tmp_path / "corpus", ["a", "b", "c", "d", "e"])
+        with caplog.at_level(logging.WARNING, logger=LOGGER):
+            index(store_for(tmp_path, root, max_cards=3), root)
+        first = next(r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True))
+        assert first == "Context store full at 3: 3 topic, 0 imported, 0 learned, 0 quest"
+
+    def test_a_fresh_bootstrap_asks_the_model_about_as_many_folders_as_there_is_room_for_newest_first(self, tmp_path):
+        """Review finding 11: 30 folders at a limit of 10 cost 31 calls over 80 files, kept an arbitrary 10
+        (the alphabetically first, archives included) and paid the same again at every refresh."""
+        import os
+        folders = [f"{kind}-{i:02d}" for kind in ("archive", "product") for i in range(8)]
+        root = corpus(tmp_path / "corpus", folders)
+        for number, name in enumerate(folders):                         # archives are the oldest, products the newest
+            for note in (root / name).glob("*.md"):
+                os.utime(note, (1_700_000_000 + number * 100, 1_700_000_000 + number * 100))
+        sent: List[str] = []
+
+        class Counting:
+            calls = 0
+
+            def list_models(self):
+                return []
+
+            def answer(self, messages, model=None, **kwargs):
+                Counting.calls += 1
+                text = json.dumps(messages)
+                topics = []
+                for name in folders:
+                    files = [f"{name}/note{i}.md" for i in range(2) if f"{name}/note{i}.md" in text]
+                    if files:
+                        sent.extend(files)
+                        topics.append({"id": f"{name}-topic", "name": name, "keywords": [name, "x"],
+                                       "summary": f"Covers {name}.", "files": files})
+                return json.dumps(topics)
+
+        store = store_for(tmp_path, root, max_cards=6)
+        written = store.bootstrap(root=str(root), provider=Counting())
+        kept = card_ids(tmp_path / "cards")
+        assert written == 6 and len(kept) == 6
+        assert kept == sorted(f"product-{i:02d}-topic" for i in range(2, 8)), "the most recently changed folders"
+        assert {rel.split("/")[0] for rel in sent} <= {f"product-{i:02d}" for i in range(2, 8)}, "only they were sent"
+        assert not store.limit_guard.refused_ids
+        assert store.limit_guard.state.unindexed_files == 20, "the other ten folders wait, they are not 'seen'"
+        calls = Counting.calls
+        store_for(tmp_path, root, max_cards=6).refresh_stale(root=str(root), provider=Counting())
+        assert Counting.calls == calls, "a full store does not pay again at the next refresh"
 
     def test_a_card_that_already_exists_is_refreshed_in_place(self, tmp_path):
         root = corpus(tmp_path / "corpus", ["a", "b"])
@@ -199,7 +280,7 @@ class TestLearnedAndManagedCards:
         assert len(card_ids(tmp_path / "cards")) == 3
         assert store.limit_guard.state.admitted_over == 1
         assert not (tmp_path / "cards" / "_quarantine").exists()
-        assert "1 learned cards were kept above the limit" in caplog.text
+        assert "1 learned or quest cards were kept above the limit" in caplog.text
 
     def test_an_edit_to_a_card_that_exists_is_not_a_new_card(self, tmp_path):
         store = self.full_store(tmp_path)
@@ -324,18 +405,62 @@ class TestTheNotice:
     def refuse_one(self, store: FileContextStore) -> bool:
         return store._store_write("new-topic", card("new-topic", files=["new/a.md", "new/b.md"]))
 
-    def test_it_says_what_fills_the_store_in_three_short_lines(self, tmp_path, caplog):
+    def test_it_says_what_fills_the_store_in_two_short_lines(self, tmp_path, caplog):
         store = mixed_store(tmp_path)
         with caplog.at_level(logging.WARNING, logger=LOGGER):
             assert self.refuse_one(store) is False
         shown = [r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True)]
         assert shown == [
-            "Your context store is full at 10 cards, so new topic cards are not being added.",
-            "It holds 4 topic cards (the biggest folders: alpha 2, beta 1, gamma 1), 2 imported from other "
-            "stores, 3 learned from runs, 1 from quests.",
-            "To allow more, set QAR_MAX_CARDS to a bigger number, or ask the AI: raise the QAR card limit to 2000.",
+            "Context store full at 10: 4 topic, 2 imported, 3 learned, 1 quest",
+            "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it.",
         ]
         assert all("—" not in line for line in shown)
+
+    @pytest.mark.parametrize("width", [60, 80, 120])
+    def test_both_lines_survive_the_terminals_cut_whatever_the_window(self, tmp_path, caplog, width):
+        """Review finding 10: the transcript shows the first sentence of a warning, cut to the window (width - 8);
+        the counts and the instruction both have to be on screen in full, and the report path never is."""
+        from quest_ai_runner.textual_ui_widgets import LOG_LINE_CHARS, short_log_text
+        store = mixed_store(tmp_path)
+        with caplog.at_level(logging.WARNING, logger=LOGGER):
+            self.refuse_one(store)
+        shown = [r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True)]
+        limit = min(LOG_LINE_CHARS, width - 8)
+        if width >= 80:
+            assert [short_log_text(line, limit) for line in shown] == [line.rstrip(".") for line in shown], (
+                "nothing was cut or ended early")
+        assert not any("card_limit_report" in line or "/" in line for line in shown), "the path is in the log only"
+
+    def test_the_counts_fit_one_80_column_line_even_for_the_incident_sized_store(self):
+        from quest_ai_runner.adapters.card_limit_report import Breakdown, count_line
+        for numbers in ((1000, 1000, 812, 150, 30, 8), (1000, 1430, 1200, 200, 25, 5),
+                        (1000, 142781, 130000, 10000, 2000, 781)):
+            line = count_line(Breakdown(*numbers))
+            assert len(line) <= 72 and "topic" in line and "imported" in line and "learned" in line and "quest" in line
+            assert ". " not in line, "the terminal ends a warning at the first full stop"
+
+    def test_the_names_of_the_biggest_folders_are_in_the_log_not_on_screen(self, tmp_path, caplog):
+        store = mixed_store(tmp_path)
+        with caplog.at_level(logging.WARNING, logger=LOGGER):
+            self.refuse_one(store)
+        full = next(r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True) is False)
+        assert "the biggest folders: alpha 2, beta 1, gamma 1" in full
+        assert "New topic and imported cards are not being added" in full
+
+    def test_a_lane_has_no_screen_so_the_next_task_feed_carries_the_same_two_lines_once(self, tmp_path):
+        store = mixed_store(tmp_path)
+        self.refuse_one(store)
+        notes = card_limit.take_task_notes()
+        assert notes == ["Context store full at 10: 4 topic, 2 imported, 3 learned, 1 quest "
+                         "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it."]
+        assert card_limit.take_task_notes() == []
+
+    def test_a_startup_callback_is_told_both_lines_when_the_store_is_opened_full(self, tmp_path):
+        said = []
+        store = mixed_store(tmp_path)
+        store.prewarm(notify=said.append)
+        assert said == ["Context store full at 10: 4 topic, 2 imported, 3 learned, 1 quest",
+                        "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it."]
 
     def test_the_log_carries_the_instructions_an_ai_needs_to_change_it(self, tmp_path, caplog):
         store = mixed_store(tmp_path)
@@ -344,7 +469,7 @@ class TestTheNotice:
         full = next(r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True) is False)
         for needed in ("QAR_MAX_CARDS", "0 (or the word unlimited) means no limit", "env_files", "[env]",
                        "Environment=", "restart", str(tmp_path / "cards" / REPORT_NAME),
-                       "quest-ai-runner cards report", "_quarantine"):
+                       "quest-ai-runner cards report", "_quarantine", "quest-ai-runner cards tidy"):
             assert needed in full, needed
 
     def test_it_fires_once_per_process(self, tmp_path, caplog):
@@ -354,7 +479,7 @@ class TestTheNotice:
             first = len(caplog.records)
             self.refuse_one(store)
             store._store_write("another", card("another", files=["z/a.md", "z/b.md"]))
-        assert first == 4 and len(caplog.records) == 4
+        assert first == 3 and len(caplog.records) == 3
 
     def test_the_report_file_has_the_breakdown_and_the_ways_to_change_the_limit(self, tmp_path):
         store = mixed_store(tmp_path)
@@ -394,8 +519,7 @@ class TestTheNotice:
         with caplog.at_level(logging.WARNING, logger=LOGGER):
             store.prewarm()
         shown = [r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True)]
-        assert shown[0] == ("Your context store holds 12 cards, over its limit of 5, so new topic cards "
-                            "are not being added.")
+        assert shown[0] == "Store over limit 5 (12): 12 topic, 0 imported, 0 learned, 0 quest"
         assert card_ids(tmp_path / "cards") == before
         assert not (tmp_path / "cards" / "_quarantine").exists()
 
@@ -410,7 +534,7 @@ class TestTheNotice:
         cards = FilesystemCardRepository(str(tmp_path / "cards")).load_all()
         b = breakdown(cards, tmp_path / "cards", 10)
         assert (b.topic, b.imported, b.learned, b.managed, b.total) == (4, 2, 3, 1, 10)
-        assert notice_lines(b)[0].startswith("Your context store is full at 10 cards")
+        assert notice_lines(b)[0].startswith("Context store full at 10:")
 
 
 # --- the other writers -------------------------------------------------------------------------------
