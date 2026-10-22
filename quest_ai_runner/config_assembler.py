@@ -175,7 +175,9 @@ def _resolve_context_assembler_base(
             quest_folder_map=cfg.quest_folder_map,
             # The runner's own store tidies provable copies at open and will not embed an inflated
             # store (adapters/context_store_heal); a library caller or a test builds without this.
-            self_heal=True,
+            # OFF for now: an independent review (2026-10-22) found the tidy can move a card a person
+            # wrote and can fold edits away on the real stores. It goes back on when those are fixed.
+            self_heal=False,
         )
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.
