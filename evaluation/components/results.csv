@@ -1004,3 +1004,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-22,card_growth,no_cleanup,8,2,2/5,0/3,0,0,0,0.0,0.0,259c7cd-dirty,415cb11e,none,,,
 2026-10-22,card_growth,bootstrap_guards,8,8,5/5,3/3,0,0,0,0.0,0.1,4a34629,415cb11e,none,,,
 2026-10-22,card_store_growth,live_store,19,19,13/13,6/6,0,0,0,0.0,14.7,4a34629,1c6cbb6a,none,,,
+2026-10-22,card_store_growth,live_store,19,19,13/13,6/6,0,0,0,0.0,7.9,d42a04a,1c6cbb6a,none,,,
+2026-10-22,card_growth,bootstrap_guards,8,8,5/5,3/3,0,0,0,0.0,0.0,d42a04a,415cb11e,none,,,
