@@ -6,6 +6,8 @@ real stores reached 8,557 and 32,070. The bootstrap gates in
 ``quest_ai_runner/adapters/file_context_store.py`` stop that happening again; this tool cleans up
 what already happened, for the ways it happened:
 
+  item-id         a card stored under a vector point id (``card:<id>``), a second card next to the one the
+                  edit was meant for. Its notes are folded into the card it names before it is moved.
   compounded      a card imported from another store through a chain of import hops, so the same
                   card exists several times over under ids like
                   ``a--root-xxxx--root-yyyy--topic`` or with a namespace segment repeated. Two
@@ -80,10 +82,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from quest_ai_runner.adapters.card_origin import compounding_evidence  # noqa: E402,F401  (re-exported)
+from quest_ai_runner.adapters.card_origin import card_id_of_item, compounding_evidence  # noqa: E402,F401
 from quest_ai_runner.adapters.card_repository import QUARANTINE_DIR_NAME  # noqa: E402
 from quest_ai_runner.adapters.card_store_hygiene import (  # noqa: E402,F401  (re-exported)
     card_paths,
+    fold_item_card,
     jaccard,
     keeper_rank,
     name_match_score,
@@ -99,8 +102,8 @@ from quest_ai_runner.adapters.file_context_store import (  # noqa: E402
     verdict_is_final,
 )
 
-ALL_REASONS = ("compounded", "excluded", "surplus", "thin", "covered")
-DEFAULT_REASONS = ("compounded", "excluded", "surplus", "thin")
+ALL_REASONS = ("item-id", "compounded", "excluded", "surplus", "thin", "covered")
+DEFAULT_REASONS = ("item-id", "compounded", "excluded", "surplus", "thin")
 SKIP_FILES = {"bootstrap_meta.json", "folder_review.json"}
 
 
@@ -210,6 +213,17 @@ def plan(
 
     def note_skip(why: str) -> None:
         skipped[why] = skipped.get(why, 0) + 1
+
+    # 0. Cards stored under a vector point id. Provable from the id; their notes are folded into the card
+    #    they name when the move is applied, so nothing a run taught is lost.
+    if "item-id" in reasons:
+        for path, card in cards:
+            card_id = str(card.get("id") or path.stem)
+            if card_id.startswith("card:"):
+                if card.get("managed_by"):
+                    note_skip("vector-point-id card kept: managed by another system")
+                    continue
+                record(path, card, "item-id", f"stored under a vector point id; the card is {card_id_of_item(card_id)}")
 
     # 1. Compounded candidates. Provable from the id alone and overriding protection, but only
     #    MOVED in step 6, once the other reasons are planned and the survivors are known. Until
@@ -449,6 +463,8 @@ def move_entries(cards_dir: Path, entries: List[Dict[str, Any]]) -> Tuple[int, i
     for entry in entries:
         source = cards_dir / entry["file"]
         destination_dir = cards_dir / QUARANTINE_DIR_NAME / entry["reason"]
+        if entry["reason"] == "item-id":
+            fold_item_card(cards_dir, source)
         try:
             destination_dir.mkdir(parents=True, exist_ok=True)
             destination = destination_dir / source.name

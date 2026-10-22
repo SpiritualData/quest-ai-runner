@@ -219,7 +219,7 @@ nothing but speed.
 | **Own card** | written by this store (`origin` is this store) | this store's refresh and runs |
 | **Mounted view** | another store's card read in place, read-only, never copied | its owner; the reader sees the owner's next write |
 | **Copy** | a copy-import of another store's card under an id made of its origin | the importing store re-imports it when the source changes and moves it out when the source stops offering it; `context migrate-imports` converts copies to mounts |
-| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open (`compounded`, `duplicate-files`, `item-id`), by a refresh (`superseded-import`) or by the card limit (`limit`) | restored by moving the file back |
+| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`item-id`, `compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open (`compounded`, `duplicate-files`, `item-id`), by a refresh (`superseded-import`) or by the card limit (`limit`) | restored by moving the file back |
 
 ### Growth
 

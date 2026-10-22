@@ -412,3 +412,20 @@ def test_covered_applies_through_main_and_moves_instead_of_deleting(store: Path,
                       "--covered-by", str(shared), "--apply"]) == 0
     assert (store / tool.QUARANTINE_DIR_NAME / "covered" / "inside.json").exists()
     assert (shared / "big.json").exists()
+
+
+# --- a card stored under a vector point id --------------------------------------------------------
+def test_a_card_stored_under_a_vector_point_id_is_moved_and_its_notes_join_the_card_it_names(store: Path):
+    note = {"id": "n1", "type": "note", "locator": {"text": "kept"}}
+    write_card(store, "topic", files=["a/one.py", "a/two.py"])
+    write_card(store, "card:topic", content=[note])
+    assert tool.main(["--cards-dir", str(store), "--apply"]) == 0
+    assert not (store / "card:topic.json").exists()
+    assert (store / "_quarantine" / "item-id" / "card:topic.json").exists()
+    assert [i["id"] for i in json.loads((store / "topic.json").read_text())["content"]] == ["n1"]
+
+
+def test_a_vector_point_id_card_owned_by_another_system_is_left(store: Path):
+    write_card(store, "card:quest", managed_by="quest-sync")
+    assert tool.main(["--cards-dir", str(store), "--apply"]) == 0
+    assert (store / "card:quest.json").exists()
