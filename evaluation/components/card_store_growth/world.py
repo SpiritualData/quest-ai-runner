@@ -165,6 +165,10 @@ class World:
         root = self.root_for(i)
         store = self.store(i)
         provider = DiskProvider(root.resolve()) if model else None
+        # A runner refreshes a store that has a completed bootstrap and bootstraps one that has none
+        # (``config_context_index._bootstrap_if_needed``): a store with no ``bootstrap_meta.json`` is not a
+        # store to its neighbours, and a refresh never writes one.
+        refresh = refresh and (self.cards[i] / "bootstrap_meta.json").exists()
         call = store.refresh_stale if refresh else store.bootstrap
         return call(root=str(root), provider=provider)
 
@@ -306,7 +310,7 @@ def settled(world: World, scratch: Path) -> Dict[str, Any]:
     return {"first": rounds[0], "second": rounds[1], "total": total, "world": twin}
 
 
-def run(seed: int, steps: int = 24) -> Dict[str, Any]:
+def run(seed: int, steps: int = 24, keep: bool = False) -> Dict[str, Any]:
     """Play one seeded sequence. ``violations`` is empty when every invariant held after every operation."""
     rng = random.Random(seed)
     depth = rng.randint(2, 5)
@@ -362,8 +366,10 @@ def run(seed: int, steps: int = 24) -> Dict[str, Any]:
                 violations += [f"after settling: {v}" for v in check(result["world"])]
     finally:
         logging.disable(logging.NOTSET)
-        shutil.rmtree(scratch, ignore_errors=True)
-    return {"seed": seed, "operations": ops_done, "violations": violations, "trace": trace}
+        if not keep:
+            shutil.rmtree(scratch, ignore_errors=True)
+    return {"seed": seed, "operations": ops_done, "violations": violations, "trace": trace,
+            "scratch": str(scratch) if keep else ""}
 
 
 # -- stores an older version left behind ---------------------------------------------------------------
