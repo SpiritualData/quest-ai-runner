@@ -9,7 +9,7 @@ A ``MetricResult`` is one row. Its ``source`` says who vouches for the numbers, 
 
   ``measured``        the runner's own meter read the value (``metric_meter``), in code, before and after the work
   ``recorded``        the worker called ``record_metric_result`` with the values; nobody has checked them
-  ``not_applicable``  the worker declared that no metric applies, and gave a reason
+  ``not_applicable``  the worker declared that no metric applies, and gave a reason (shown only when no row holds a number)
 
 A measured and a recorded row for the same metric are both kept; when their numbers differ (``differs``: the measured one
 rounded to the decimals the recorded one is written with, else exactly) both carry ``disagrees``. A
@@ -208,7 +208,11 @@ def reconcile(rows: Sequence[MetricResult]) -> List[MetricResult]:
     Rows of one source for one metric are folded into one (a later non-empty value replaces an earlier one, so the measured
     ``before`` written first and the ``after`` written when the work ends become one row, and so do a worker's two calls).
     Rows of different sources are never merged and never overwrite each other: when a measured row and a recorded row for
-    the same metric give different numbers for before or for after, both stay and both carry ``disagrees``."""
+    the same metric give different numbers for before or for after, both stay and both carry ``disagrees``.
+
+    A reading beats a shrug: once any row holds a number (before or after), the declared not-applicable rows are left out
+    of what is shown, so a run never says a metric moved and that there was nothing to measure in one breath. They stay in
+    the ledger file; a run whose only rows are not-applicable ones still shows them."""
     folded: Dict[tuple, MetricResult] = {}
     for row in rows:
         key = (row.source, row.reason) if row.source == SOURCE_NOT_APPLICABLE else (row.source, row.solution_id, row.metric_id)
@@ -228,6 +232,8 @@ def reconcile(rows: Sequence[MetricResult]) -> List[MetricResult]:
                 flagged.update((id(m), id(r)))
     order = {SOURCE_MEASURED: 0, SOURCE_RECORDED: 1, SOURCE_NOT_APPLICABLE: 2}
     out = [replace(r, disagrees=True) if id(r) in flagged else r for r in out]
+    if any(r.before is not None or r.after is not None for r in out):
+        out = [r for r in out if r.source != SOURCE_NOT_APPLICABLE]
     return sorted(out, key=lambda r: order[r.source])[:MAX_METRICS]
 
 

@@ -202,10 +202,30 @@ def test_agreement_flags_nothing_and_an_unshared_end_is_not_a_disagreement():
     assert not any(r.disagrees for r in out)
 
 
-def test_not_applicable_rows_are_kept_apart_from_values_and_deduplicated_by_reason():
-    na = lambda reason: MetricResult(source=SOURCE_NOT_APPLICABLE, run_id="r1", reason=reason)  # noqa: E731
-    out = reconcile([na("a draft"), recorded(after=1), na("a draft"), na("an edit")])
-    assert [r.source for r in out] == [SOURCE_RECORDED, SOURCE_NOT_APPLICABLE, SOURCE_NOT_APPLICABLE]
+def na(reason):
+    return MetricResult(source=SOURCE_NOT_APPLICABLE, run_id="r1", reason=reason)
+
+
+def test_not_applicable_rows_are_deduplicated_by_reason_and_stay_when_they_are_all_there_is():
+    out = reconcile([na("a draft"), na("a draft"), na("an edit")])
+    assert [(r.source, r.reason) for r in out] == [(SOURCE_NOT_APPLICABLE, "a draft"), (SOURCE_NOT_APPLICABLE, "an edit")]
+
+
+@pytest.mark.parametrize("number", [dict(before=0.5), dict(after=1), dict(before=0.5, after=1)])
+def test_a_reading_beats_a_shrug_a_not_applicable_row_is_dropped_once_any_row_holds_a_number(number):
+    """The same run showed "1 -> 1 (measured)" and "Nothing to measure" together; the ledger still holds both."""
+    rows = [measured(**number), na("a draft"), recorded(**number), na("an edit")]
+    assert [r.source for r in reconcile(rows)] == [SOURCE_MEASURED, SOURCE_RECORDED]
+    assert [r.source for r in reconcile([na("a draft"), recorded(**number)])] == [SOURCE_RECORDED]
+    assert [r.source for r in reconcile([measured(**number), na("a draft")])] == [SOURCE_MEASURED]
+
+
+def test_the_dropped_not_applicable_rows_stay_in_the_ledger_file(tmp_path):
+    ledger = FileMetricLedger(str(tmp_path))
+    for row in (measured(before=1.0), na("a draft"), measured(after=1.0)):
+        assert ledger.record(row)
+    assert [r.source for r in ledger.for_run("r1")] == [SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_MEASURED]
+    assert [r.source for r in reconcile(ledger.for_run("r1"))] == [SOURCE_MEASURED]
 
 
 def test_the_payload_is_capped():

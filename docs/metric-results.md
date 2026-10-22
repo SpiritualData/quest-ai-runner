@@ -29,6 +29,10 @@ A finished deep goal carries `metrics`, a list with one entry per metric (at mos
 | `reason` | How it was measured, or why no metric applies. |
 | `disagrees` | `true` on both rows when a measured and a recorded row for the same metric give different numbers (see "When two numbers differ"). Both rows are kept; neither overwrites the other. |
 
+A reading beats a shrug: when any entry of a goal holds a number (`before` or `after`, measured or recorded), the
+`not_applicable` entries are left out of the payload, so one result never says a metric moved and that there was nothing to
+measure. They stay in the ledger file, and a goal whose only entries are `not_applicable` ones still shows them.
+
 An empty list means nothing to show. `metric_missing: true` is set next to it when the run changed something (by the
 runner's own records) and no metric result was recorded for it, not even a `not_applicable`.
 

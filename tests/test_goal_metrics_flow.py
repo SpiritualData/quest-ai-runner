@@ -364,6 +364,21 @@ def test_a_recorded_row_serves_the_reading_before_and_the_arm_the_reading_after(
     assert [(m["before"], m["after"]) for m in done.metric_results] == [(1.0, 0.9977)]
 
 
+def test_a_declared_not_applicable_is_not_shown_beside_a_reading_but_stays_in_the_ledger(world, repo):
+    """A run showed "1 -> 1 (measured)" and "Nothing to measure" together: a reading beats a shrug."""
+    worker = Worker(world.registry, [["change", ("na", "One sentence reworded; no metric covers prose.")]],
+                    working_dir=str(repo))
+    orch = orchestrate(world, worker, iteration=SliceAndWriteback(meters=[FixedMeter(0.5, 0.6)]))
+    done = request_for(orch, worker)
+    assert sources(done) == ["measured"] and not done.metric_missing
+    assert "not applicable" not in done.output and done.output.rstrip().endswith("(measured)")
+    assert [r.source for r in orch.tools.metric_ledger.for_run(worker.run_id)].count("not_applicable") == 1
+    alone = Worker(world.registry, [["change", ("na", "One sentence reworded; no metric covers prose.")]],
+                   working_dir=str(repo), task_id="task_2")
+    assert sources(request_for(orchestrate(world, alone, iteration=SliceAndWriteback(meters=[FixedMeter()])), alone)) == \
+        ["not_applicable"]   # with no reading, the worker's declaration is all there is and it still shows
+
+
 def test_with_no_meter_for_the_reading_after_the_workers_row_stands_beside_the_one_before(world, repo):
     worker = Worker(world.registry, [["change", ("record", {"metric_id": "greeting-pass-rate", "before": 1, "after": 1})]],
                     working_dir=str(repo))
