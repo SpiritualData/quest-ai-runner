@@ -109,7 +109,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_FILES_ROOT` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILES_TOKEN` |  | `cli_serve_files.py` | `docs/file-server.md` |
 | `QAR_FILE_BACKUP_DIR` |  | `adapters/files_writer.py` | `docs/fast-edit-runner.md` |
-| `QAR_FOLDER_REVIEW` | 0 turns off the LLM folder-relevance review during bootstrap. | `adapters/context_folder_review.py` | - |
+| `QAR_FOLDER_REVIEW` | 0 turns off the LLM folder-relevance review during bootstrap. | `adapters/context_folder_review.py` | `docs/context-card-stores.md` |
 | `QAR_GOAL_MAX_ATTEMPTS` | Max attempts of the goal loop (OrchestratorConfig.goal_max_attempts). | `cli_config.py` | - |
 | `QAR_GOAL_TOKEN_BUDGET` | Token budget of the goal loop (OrchestratorConfig.goal_token_budget). | `cli_config.py` | - |
 | `QAR_GREP_BUDGET_SECONDS` | Wall-clock budget for one corpus grep (default 20). | `adapters/files_adapter.py` | `docs/file-server.md` |
