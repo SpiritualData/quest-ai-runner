@@ -206,7 +206,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
     # What shows under the prompt, and in what order, is ``key_hints`` (``KeyHints``), not these
     # declarations: they are what each key does.
     BINDINGS = [
-        Binding("ctrl+c", "copy_or_quit", "Copy / Quit", priority=True),
+        Binding("ctrl+c", "copy_or_quit", "Quit", priority=True),
         Binding("escape", "cancel", "Cancel"),
         Binding("ctrl+l", "clear_log", "Clear screen"),
         # Not Ctrl+Y: the prompt's own binding for it (redo) answers first, so a copy bound there never ran.
@@ -308,6 +308,11 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         self._turn_request: str = ""
         self._resumable: Optional[dict] = None
         self._held_for_resume: List[str] = []
+
+        # Until when a second Ctrl+C quits (``time.monotonic`` seconds): one press never ends the app. And whether
+        # this turn was stopped by a Ctrl+C that already said so (the turn's end then does not say it again).
+        self.quit_armed_until: float = 0.0
+        self.stop_announced: bool = False
 
         # Stable session key for the input inbox so mid-turn messages can be queued.
         self._session_id = str(id(self))

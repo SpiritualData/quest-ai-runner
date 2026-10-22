@@ -73,6 +73,7 @@ class TurnMixin:
         self._run_control = self._new_terminal_control()
         self._turn_request = request if request is not None else user_text
         self._resume_session_id = resume_session_id
+        self.stop_announced = False
         # A turn that goes straight to a deep run of this goal, with no planner routing (/resume).
         self._deep_goal = deep_goal
         self._partial_started = False
@@ -453,7 +454,8 @@ class TurnMixin:
             self.write_provider_error(error)
         elif cancelled or ended == "paused":
             paused = ended == "paused"
-            self._console.dim("  Paused." if paused else "  Cancelled.")
+            if paused or not self.stop_announced:   # Ctrl+C already said "Stopped."
+                self._console.dim("  Paused." if paused else "  Cancelled.")
             if ended:
                 self._console.dim("  Finished work is kept. /resume continues the same session.")
             marker = "[paused by user]" if paused else "[cancelled by user]"

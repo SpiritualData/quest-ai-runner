@@ -5,11 +5,16 @@ A mixin of ``QuestAITerminal`` (see ``textual_ui.py``): methods only, state live
 from __future__ import annotations
 
 import os
+import time
 from typing import List, Tuple
 from rich.text import Text
 
 from .textual_ui_prompt import PromptTextArea
 from .textual_ui_helpers import _copy_to_clipboard_tool
+
+# Seconds after a first Ctrl+C within which a second one quits. Long enough to read the line, short enough that
+# a stray press minutes later never counts.
+QUIT_CONFIRM_SECONDS = 3.0
 
 
 class ActionsMixin:
@@ -61,7 +66,8 @@ class ActionsMixin:
         """The keys worth showing right now, most useful first: only those that would do something.
 
         Esc while the AI works (or a chooser is open); Alt+D once there is work to open; Alt+C once there
-        are sources to show; Tab only when there is more than one job to cycle through."""
+        are sources to show; Tab only when there is more than one job to cycle through; Ctrl+C to quit
+        only when nothing runs (while it works Ctrl+C stops the work, the same as Esc, so Esc is the one named)."""
         hints: List[Tuple[str, str]] = []
         if self._turn_active or self._pending_select is not None:
             hints.append(("esc", "Cancel"))
@@ -73,7 +79,8 @@ class ActionsMixin:
         if len(runs) > 1:
             hints.append(("tab", "Next job"))
         hints.append(("pgup/pgdn", "Scroll"))
-        hints.append(("ctrl+c", "Copy / Quit"))
+        if not self._turn_active:
+            hints.append(("ctrl+c", "Quit"))
         return hints
 
     def refresh_key_hints(self) -> None:
@@ -110,13 +117,15 @@ class ActionsMixin:
         self.exit()
 
     def action_copy_or_quit(self) -> None:
-        """Ctrl+C: copy the current text selection if there is one, else quit.
+        """Ctrl+C: copy the selected text if there is any; otherwise stop the work, or ask to quit.
 
         Mirrors Claude Code / Textual's own convention. Because the app runs with mouse
         reporting on (see textual_session.py), a plain click-drag produces a Textual
         in-app selection (no Shift needed); this copies it to the clipboard via OSC-52
         (works locally and over SSH/mobile), clears the highlight, and stays running.
-        With nothing selected, Ctrl+C quits as before. This is a priority binding so it
+        With nothing selected one press never ends the app: while the AI works it stops the work
+        (the same as Esc) and says a second press quits; when idle the first press only says so. A
+        second press within ``QUIT_CONFIRM_SECONDS`` quits. This is a priority binding so it
         fires reliably even while the prompt TextArea is focused.
         """
         try:
@@ -133,7 +142,17 @@ class ActionsMixin:
             preview = (preview[:60] + "…") if len(preview) > 60 else preview
             self._tlog.write(Text(f"  Copied: {preview}", style="dim"))
             return
-        self.exit()
+        now = time.monotonic()
+        if now < self.quit_armed_until:
+            self.exit()
+            return
+        self.quit_armed_until = now + QUIT_CONFIRM_SECONDS
+        if self._turn_active:
+            self.action_cancel()
+            self.stop_announced = True
+            self._tlog.write(Text("  Stopped. Press Ctrl+C again to quit.", style="dim"))
+        else:
+            self._tlog.write(Text("  Press Ctrl+C again to quit.", style="dim"))
 
     def action_scroll_up_or_agent(self) -> None:
         """PageUp: scroll transcript up; if agent detail panel is open, scroll that instead."""

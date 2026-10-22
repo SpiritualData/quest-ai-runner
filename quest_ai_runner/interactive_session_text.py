@@ -78,7 +78,7 @@ Keys:
   /              Open the command menu (arrows move, Tab completes, Enter runs, Esc closes)
   Esc            Cancel the current turn, or close an open menu
   (typing)       While the work runs, a note you send is read at its next step (within seconds for a live worker)
-  Ctrl+C         Copy the selected text; with nothing selected, exit
+  Ctrl+C         Copy the selected text; with nothing selected, stop the work (like Esc), and a second press quits
   Alt+Y          Copy the last AI reply
   Ctrl+L         Clear the screen
   Shift+Enter    New line (also Ctrl+J, Alt+Enter, or a backslash before Enter)

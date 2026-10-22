@@ -238,7 +238,7 @@ following, so you can read in peace; scrolling back to the bottom makes it follo
 |---|---|
 | `/` | Open the command menu. |
 | Esc | Cancel the current turn, or close an open menu or chooser. With the `stream_json` deep runner, a stop that keeps the session: `/resume` continues it. |
-| Ctrl+C | Copy the selected text; with nothing selected, exit. |
+| Ctrl+C | Copy the selected text. With nothing selected one press never ends the app: while the AI works it stops the work like Esc (`Stopped. Press Ctrl+C again to quit.`), when idle it says `Press Ctrl+C again to quit.`, and a second press within 3 seconds quits. |
 | Alt+Y | Copy the last AI reply (not Ctrl+Y: the prompt's own redo answers that key first). |
 | Ctrl+L | Clear the screen. |
 | Enter | Send the message. |
@@ -249,8 +249,9 @@ following, so you can read in peace; scrolling back to the bottom makes it follo
 | Alt+C | Show the sources the last turn used. |
 
 The line under the prompt lists only the keys that would do something now, most useful first: Esc while the
-AI works, then Alt+D, Alt+C, Tab (only when there is more than one job), PgUp/PgDn and Ctrl+C. It shows
-whole hints and drops the last ones that do not fit, so Esc is always the one that stays.
+AI works, then Alt+D, Alt+C, Tab (only when there is more than one job), PgUp/PgDn and, when nothing runs, Ctrl+C
+Quit (copying is a mouse selection or Alt+Y). It shows whole hints and drops the last ones that do not fit, so Esc
+is always the one that stays.
 
 Click and drag selects text without holding Shift; Ctrl+C copies it (over SSH too).
 

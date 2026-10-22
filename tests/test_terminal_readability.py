@@ -126,8 +126,9 @@ def test_the_keys_start_with_the_one_that_stops_the_work_in_the_order_cancel_det
         return app.key_hints(), keys_drawn(app)
 
     hints, drawn = run_app(build)
-    assert [key for key, _ in hints] == ["esc", "alt+d", "alt+c", "pgup/pgdn", "ctrl+c"]
-    assert drawn == ["esc Cancel", "alt+d Details", "alt+c Sources", "pgup/pgdn Scroll", "ctrl+c Copy / Quit"]
+    assert [key for key, _ in hints] == ["esc", "alt+d", "alt+c", "pgup/pgdn"], \
+        "while the AI works Ctrl+C stops the work like Esc, so only Esc is named"
+    assert drawn == ["esc Cancel", "alt+d Details", "alt+c Sources", "pgup/pgdn Scroll"]
 
 
 def test_tab_is_shown_only_when_there_is_more_than_one_job_to_cycle_through():
