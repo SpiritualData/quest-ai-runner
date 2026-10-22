@@ -308,3 +308,22 @@ def test_writes_are_on_request_only_and_reads_are_not():
 
 def test_no_credentials_means_no_intent_tools():
     assert all(build({}) is None for build in intents.QUEST_INTENT_BUILDERS.values())
+
+
+def test_create_sub_intent_passes_reveal_and_rejects_unknown_levels():
+    seen = {}
+
+    class Backend:
+        def create_sub_intent(self, record_id, name, opportunity, **kw):
+            seen.update(kw)
+            return {"pending": True, "decisionId": "teamdec_1"}
+
+    ok = invoke(intents.create_sub_intent_spec, Backend(),
+                {"record_id": "esr_9", "name": "Running", "opportunity": "Its own needs.", "reveal": "name"})
+    assert ok.ok and seen["reveal"] == "name"
+    seen.clear()
+    assert invoke(intents.create_sub_intent_spec, Backend(),
+                  {"record_id": "esr_9", "name": "Running", "opportunity": "x", "reveal": "everyone"}).ok is False
+    assert not seen
+    invoke(intents.create_sub_intent_spec, Backend(), {"record_id": "esr_9", "name": "Running", "opportunity": "x"})
+    assert seen["reveal"] is None

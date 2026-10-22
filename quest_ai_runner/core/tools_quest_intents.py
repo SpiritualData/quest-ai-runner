@@ -23,6 +23,7 @@ SUBJECT_TYPES = ("intent", "quest")
 REFRESH_REASONS = ("first_open", "autopilot", "onboarding", "chat", "task", "manual")
 OWNER_TYPES = ("user", "team", "org")
 OPPORTUNITY_MAX = 400
+REVEAL_LEVELS = ("private", "existence", "name", "full")
 
 OWNER_PARAMS = {
     "owner_type": {"type": "string", "enum": list(OWNER_TYPES),
@@ -325,8 +326,11 @@ def create_sub_intent_spec(env: Mapping[str, str], client_factory=None) -> ToolS
                 "opportunity (why it earns its own intent)."))
         if len(opportunity) > OPPORTUNITY_MAX:
             return ToolResult(ok=False, text=f"opportunity is {len(opportunity)} characters; keep it under {OPPORTUNITY_MAX}.")
+        reveal = str(args.get("reveal") or "").strip() or None
+        if reveal is not None and reveal not in REVEAL_LEVELS:
+            return ToolResult(ok=False, text=f"reveal must be one of {', '.join(REVEAL_LEVELS)} (default private).")
         client = factory()
-        result = client.create_sub_intent(record_id, name, opportunity,
+        result = client.create_sub_intent(record_id, name, opportunity, reveal=reveal,
                                           vision_statement=str(args.get("vision_statement") or "").strip())
         if result.get("refused"):
             return ToolResult(ok=False, text=refusal_text(result, record_id))
@@ -354,6 +358,8 @@ def create_sub_intent_spec(env: Mapping[str, str], client_factory=None) -> ToolS
                           "description": "The parent's implementation record (esr_...) from get_spec."},
             "name": {"type": "string", "description": "The sub-intent's name."},
             "vision_statement": {"type": "string", "description": "Its vision statement, in the person's voice."},
+            "reveal": {"type": "string", "enum": list(REVEAL_LEVELS),
+                       "description": "How much of the new intent other owners may see; default private. Leave unset unless the person asked."},
             "opportunity": {"type": "string",
                             "description": f"Why it earns its own intent, one or two sentences (max {OPPORTUNITY_MAX} characters)."}}},
         mutates=True, workflow_step=False, origin="standard", on_request_only=True,
