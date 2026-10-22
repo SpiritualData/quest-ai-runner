@@ -37,6 +37,12 @@ class OriginsMixin:
             return StoreLock.for_dir(str(self._cards_dir))
         return contextlib.nullcontext()
 
+    def folder_bump(self) -> None:
+        """Record that a card joined or left this store's folder, so other processes count it again."""
+        from .card_repository import FilesystemCardRepository
+        if isinstance(self._own_repo, FilesystemCardRepository) and not self._dry_run:
+            StoreLock.for_dir(str(self._cards_dir)).bump()
+
     def own_store_id(self) -> str:
         """This store's recorded ``store_id``, or "" when it has none yet (never creates one)."""
         return str(read_store_meta(str(self._cards_dir)).get("store_id") or "")

@@ -300,11 +300,21 @@ def choose_imports(offered: List[Dict[str, Any]], own_cards: List[Dict[str, Any]
         held = best.get(item["id"])
         if held is None or item.get("hops", 0) < held.get("hops", 0):
             best[item["id"]] = item
-    own_sets = {file_set(c) for c in own_cards if not is_copy(c)} - {frozenset()}
+    # A card of this store's own that is NOT marked as a copy but carries the id (and pins the files) of an
+    # offered import is that import, written by an older version that did not record where it came from.
+    # It must not shadow the import for ever as an "original": the import is written over it, keeping
+    # what was added to it.
+    unmarked_copies = {c.get("id") for c in own_cards
+                       if c.get("id") in best and not is_copy(c) and file_set(c) == file_set(best[c["id"]])}
+    own_sets = {file_set(c) for c in own_cards
+                if not is_copy(c) and c.get("id") not in unmarked_copies} - {frozenset()}
 
     def rank(item: Dict[str, Any]):
         root = str((item.get("origin_fields") or {}).get(ORIGIN_ROOT) or ".")
-        return (item.get("hops", 0), -len([p for p in root.split("/") if p not in ("", "..", ".")]), item["id"])
+        # A copy somebody added to loses to an untouched one pinning the same files: it is the one that
+        # is joined onto the other and retired, so what is offered again each pass is what stays.
+        return (1 if item.get("protected") else 0, item.get("hops", 0),
+                -len([p for p in root.split("/") if p not in ("", "..", ".")]), item["id"])
 
     winner: Dict[frozenset, Dict[str, Any]] = {}
     for item in best.values():

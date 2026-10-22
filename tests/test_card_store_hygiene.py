@@ -200,8 +200,8 @@ class TestWhatAPersonAddedIsNeverMoved:
         files = ["docs/release.md", "docs/checklist.md"]
         seed(cards, [card("release-topic", files), card("release--checklist", files, provenance={})])
         plan, result = plan_and_apply(cards)
-        assert ids(cards) == ["release--checklist"], "the card a person wrote is the one that stays"
-        assert moved(cards, "duplicate-files") == ["release-topic"], "only what an index pass wrote moves"
+        assert result.moved == 0 and ids(cards) == ["release--checklist", "release-topic"]
+        assert plan.kept == {"written by a person (no provenance)": 1}
 
     def test_two_cards_written_by_hand_are_both_kept(self, tmp_path):
         cards = tmp_path / "cards"
@@ -210,13 +210,13 @@ class TestWhatAPersonAddedIsNeverMoved:
         plan, result = plan_and_apply(cards)
         assert result.moved == 0 and plan.kept == {"written by a person (no provenance)": 1}
 
-    def test_the_card_somebody_added_to_is_the_one_kept_and_the_plain_one_moves(self, tmp_path):
+    def test_a_card_somebody_added_to_is_kept_whatever_its_rank_and_a_used_one_displaces_only_a_plain_one(self, tmp_path):
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
-        seed(cards, [card("plain", files), card("taught", files, content=[NOTE]),
-                     card("tagged", files, scope_tags=["quest:q1"])])
+        seed(cards, [card("busy", files, usage_count=3), card("plain", files),
+                     card("taught", files, content=[NOTE]), card("tagged", files, scope_tags=["quest:q1"])])
         plan, result = plan_and_apply(cards)
-        assert ids(cards) == ["tagged", "taught"] and moved(cards, "duplicate-files") == ["plain"]
+        assert ids(cards) == ["busy", "tagged", "taught"] and moved(cards, "duplicate-files") == ["plain"]
 
     def test_a_stray_folds_by_item_id_the_newer_item_wins_and_tags_are_the_union(self, tmp_path):
         cards = tmp_path / "cards"

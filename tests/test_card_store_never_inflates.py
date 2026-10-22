@@ -301,6 +301,69 @@ def test_old_compounded_copies_leave_on_the_first_refresh(tmp_path, with_provena
     assert len(kept) == planted, "every one of them is still on disk, moved, not deleted"
 
 
+def top_with_one_import(tmp_path: Path):
+    """A top corpus that imports the cards of the store under it. Returns ``(top, the import of "api")``."""
+    top = notes(tmp_path / "top", ["docs"])
+    prod = notes(top / "prod", ["api", "db"])
+    index(prod)
+    index(top)
+    copies = {cid: c for cid, c in load(top).items() if is_copy(c)}
+    api = next(cid for cid, c in copies.items() if provenance(c).get("origin_id") == "api-topic")
+    return top, api
+
+
+def old_copy(top: Path, source_id: str, new_id: str, **extra: Any) -> None:
+    """The copy of an import as an older version left it: another id, marked only by ``imported_from``."""
+    card = dict(load(top)[source_id])
+    card["id"] = new_id
+    card["provenance"] = {"created_by_task": "bootstrap", "imported_from": "prod"}
+    card.update(extra)
+    (top / ".quest-context" / f"{new_id}.json").write_text(json.dumps(card), encoding="utf-8")
+
+
+def test_a_copy_with_notes_is_joined_onto_the_card_that_replaces_it_before_it_is_retired(tmp_path):
+    """Review finding 7: an old copy that is no longer offered was moved with its notes and usage left behind."""
+    top, api = top_with_one_import(tmp_path)
+    note = {"id": "legacy-note", "type": "note", "locator": {"text": "learned on the old copy"}, "ts": 5.0}
+    old_copy(top, api, "legacy--api-topic", usage_count=4, content=[note], scope_tags=["quest:q1"])
+    index(top, refresh=True)
+    live = load(top)
+    assert "legacy--api-topic" not in live
+    assert (top / ".quest-context" / "_quarantine" / "superseded-import" / "legacy--api-topic.json").exists()
+    kept = live[api]
+    assert [i["id"] for i in kept["content"]] == ["legacy-note"] and kept["usage_count"] == 4
+    assert kept["scope_tags"] == ["quest:q1"]
+
+
+def test_a_copy_that_cannot_join_without_loss_stays_and_is_not_retried_into_churn(tmp_path):
+    top, api = top_with_one_import(tmp_path)
+    note = {"id": "legacy-note", "type": "note", "locator": {"text": "learned on the old copy"}, "ts": 5.0}
+    old_copy(top, api, "legacy--api-topic", content=[note], summary="a summary somebody improved")
+    for _ in range(3):
+        index(top, refresh=True)
+    assert "legacy--api-topic" in load(top), "what it holds cannot be joined, so it is not moved"
+    quarantine = top / ".quest-context" / "_quarantine"
+    assert not list(quarantine.glob("superseded-import/*.json")) if quarantine.exists() else True
+    assert len(load(top)) == len(set(load(top)))
+
+
+def test_a_copy_that_lost_its_mark_is_replaced_by_the_import_not_kept_as_an_original(tmp_path):
+    """Review finding 7: a copy without ``imported_from`` was taken for a card of the store's own, and its
+    existence stopped the import of the card it was a copy of for ever."""
+    top, api = top_with_one_import(tmp_path)
+    path = top / ".quest-context" / f"{api}.json"
+    card = json.loads(path.read_text())
+    card["provenance"] = {"created_by_task": "bootstrap"}
+    card["usage_count"] = 2
+    path.write_text(json.dumps(card), encoding="utf-8")
+    before = len(load(top))
+    index(top, refresh=True)
+    again = load(top)
+    assert len(again) == before
+    assert provenance(again[api]).get("origin_id") == "api-topic", "marked as the import it is"
+    assert again[api]["usage_count"] == 2, "and what was added to it is kept"
+
+
 # --- when a card was first written ----------------------------------------------------------------------
 
 def test_created_at_is_stamped_when_a_card_is_first_written_and_never_again(tmp_path):

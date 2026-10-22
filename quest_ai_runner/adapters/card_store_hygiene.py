@@ -304,13 +304,13 @@ class TidyPlan:
 def best_first(facts: Facts) -> Tuple[Any, ...]:
     """Order inside a group of cards pinning the same files: the card to keep sorts first.
 
-    Not a compounded copy before a compounded copy, then a card somebody added to before one an index
-    pass wrote (it is the one that cannot be moved), then the fewest import prefixes, then the
+    Not a compounded copy before a compounded copy, then the fewest import prefixes, then the
     ``keeper_rank`` the cleanup script uses (most used, best name match, earliest, id), so the choice is
-    the same every run and the same one a person running the script would make.
+    the same every run and the same one a person running the script would make. Whether a card may be
+    MOVED is a separate question (``Facts.protection``): a card somebody added to is kept whatever its rank.
     """
-    return (1 if facts.compounded else 0, 0 if facts.protection else 1, facts.segments, -facts.usage,
-            -facts.name_match, facts.created or "\uffff", facts.card_id)
+    return (1 if facts.compounded else 0, facts.segments, -facts.usage, -facts.name_match,
+            facts.created or "\uffff", facts.card_id)
 
 
 def in_quarantine(cards_dir: Path, card_id: str) -> bool:

@@ -492,18 +492,35 @@ class BootstrapMixin:
         prov = card.get("provenance")
         return str(prov.get("imported_from") or "") if isinstance(prov, dict) else ""
 
-    def retire_copy(self, card_id: str) -> bool:
-        """Take a copy that its source store no longer offers out of the index.
+    def retire_copy(self, card_id: str, survivor_id: str = "") -> bool:
+        """Take a copy that its source store no longer offers out of the index. True when THIS call moved it.
 
         Moved, not deleted, where the repository can (the filesystem one keeps it under
-        ``_quarantine/superseded-import/``): a copy is redundant by construction, but anything a
-        run learned onto it is not, and moving the file back undoes the retirement.
+        ``_quarantine/superseded-import/``). A copy is redundant by construction, but anything added to it
+        is not: a copy that carries notes, usage or quest tags moves only after all of that is joined
+        onto ``survivor_id``, the card that stands for it now (``card_store_hygiene.fold_card``). With no
+        survivor, or when it cannot be joined without loss, the copy stays where it is.
         """
+        from . import card_store_hygiene as hygiene
         repo = getattr(self, "_own_repo", self._repo)
         quarantine = getattr(repo, "quarantine", None)
-        if callable(quarantine):
-            return bool(quarantine(card_id, "superseded-import"))
-        return bool(self._repo.delete(card_id))
+        with self.folder_lock():
+            card = repo.read(card_id)
+            if not isinstance(card, dict):
+                return False                        # somebody else moved it already
+            why = card_origin.protection(card)
+            if why:
+                survivor_path = self._cards_dir / f"{survivor_id}.json" if survivor_id else None
+                if survivor_path is None or not survivor_path.is_file() or not callable(quarantine) \
+                        or hygiene.join_onto(self._cards_dir, card, survivor_path):
+                    _log.info("context index: copy %s stays: %s, and no card it can join stands for it", card_id, why)
+                    return False
+            if callable(quarantine):
+                moved = bool(quarantine(card_id, "superseded-import"))
+                if moved:
+                    self.folder_bump()
+                return moved
+            return bool(self._repo.delete(card_id))
 
     def reconcile_copies(self) -> int:
         """After a pass: retire a copy that pins exactly the files another card of the store pins.
@@ -522,11 +539,16 @@ class BootstrapMixin:
             offered = [{"id": c["id"], "files": sorted(card_origin.file_set(c)),
                         "origin_fields": {k: v for k, v in card_origin.provenance_of(c).items()
                                           if k.startswith("origin_")},
-                        "hops": 0} for c in copies]
+                        "hops": 0, "protected": bool(card_origin.protection(c))} for c in copies]
             keep = {item["id"] for item in card_origin.choose_imports(offered, cards)}
+            standing: Dict[frozenset, str] = {}      # the card that stands for each file set
+            for c in sorted(cards, key=lambda c: (card_origin.is_copy(c), str(c.get("id")))):
+                if c.get("id") and (not card_origin.is_copy(c) or c["id"] in keep):
+                    standing.setdefault(card_origin.file_set(c), c["id"])
             retired = 0
             for item in offered:
-                if item["id"] not in keep and self.retire_copy(item["id"]):
+                if item["id"] not in keep and self.retire_copy(
+                        item["id"], standing.get(frozenset(item["files"]), "")):
                     retired += 1
             if retired:
                 self._cache_dirty = True

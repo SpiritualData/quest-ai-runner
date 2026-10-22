@@ -177,6 +177,7 @@ class BootstrapWalkMixin:
         imported_cards: List[Dict[str, Any]] = []
         imported_covered: Set[str] = set()
         skipped_for_own: List[Dict[str, Any]] = []
+        kept_copies: List[str] = []          # copies somebody added to that their source no longer offers
         if self._mount_mode == MODE_MOUNT:
             # Mounted stores are read in place: nothing is copied or pruned here. Files a mounted
             # store already covers (an ancestor's cards over this root) are not this corpus's to card.
@@ -249,6 +250,12 @@ class BootstrapWalkMixin:
                 if c.get("id") and card_origin.is_copy(c) and c["id"] not in imported_ids_now
                 and c["id"] not in dead_now
             ]
+            # A copy somebody added to (notes, usage, quest tags) is not retired here: the card that stands
+            # for it may not be written yet. After the pass, ``reconcile_copies`` joins it onto that card
+            # and then retires it (or leaves it if there is none).
+            kept_copies = [cid for cid in retired
+                           if card_origin.protection(next((c for c in existing_cards if c.get("id") == cid), {}))]
+            retired = [cid for cid in retired if cid not in set(kept_copies)]
             if retired:
                 pace = Pacer()
                 moved = 0
@@ -415,6 +422,8 @@ class BootstrapWalkMixin:
 
         if not uncovered and not stale_covered and not tfdfidf_migration_cards and not imported_cards:
             _log.info("context index: all files covered and up to date")
+            if kept_copies and not self._dry_run:
+                self.reconcile_copies()
             return 0
 
         _log.info(
@@ -519,6 +528,8 @@ class BootstrapWalkMixin:
                                            max_cards=max_cards)
 
         if not topic_cards:
+            if kept_copies and not self._dry_run:
+                self.reconcile_copies()
             return 0
 
         self._cards_dir.mkdir(parents=True, exist_ok=True)
@@ -649,7 +660,11 @@ class BootstrapWalkMixin:
 
             # Incremental refresh: skip a topic only if every file's sha256 is unchanged AND
             # every file entry already carries the current per-feature versions.
-            if skip_unchanged and existing:
+            # An import whose stored copy does not say where it came from (written by an older version) is
+            # never "unchanged": it is written once so that the copy names its origin.
+            stored_prov = card_origin.provenance_of(existing)
+            names_its_origin = all(stored_prov.get(k) == v for k, v in (tc.get("origin_fields") or {}).items())
+            if skip_unchanged and existing and names_its_origin:
                 old_file_data = {
                     fe.get("path", ""): fe
                     for fe in existing.get("files", [])
@@ -712,9 +727,9 @@ class BootstrapWalkMixin:
 
         # Invalidate cache after all writes.
         self._cache_dirty = True
-        if cards_written and not self._dry_run:
+        if (cards_written or kept_copies) and not self._dry_run:
             self.reconcile_copies()
-            if skipped_for_own and not self.in_second_pass:
+            if cards_written and skipped_for_own and not self.in_second_pass:
                 # An import was left out because a card of this store's own pinned the same files, and
                 # this pass has just changed the own cards. Settle it now, so a second run of the same
                 # pass finds nothing to do: one more look, which is cheap (nothing is uncovered).
