@@ -144,30 +144,81 @@ def test_pull_preserves_existing_human_content():
 
 # --- push -----------------------------------------------------------------------
 
-def test_push_reads_skill_file_and_puts_profile():
+def test_push_unchanged_file_pushes_nothing():
+    """Right after a pull the file equals its baseline, so push must not PUT anything (a PUT of
+    the pulled copy would replace the server's learned_notes and overwrite other writers)."""
     client = MockProfileClient()
     with tempfile.TemporaryDirectory() as d:
-        pull_rep_to_skill(client, "team1", "u1", d)    # render a valid file first
+        pull_rep_to_skill(client, "team1", "u1", d)
         res = push_skill_to_rep(client, "team1", "u1", d)
-    assert res.pushed and res.direction == "push"
-    assert len(client.updates) == 1
-    up = client.updates[0]
-    assert up["team_id"] == "team1" and up["user_id"] == "u1"
-    assert up["persona"] == "You are decisive and concise."
-    texts = [n["text"] for n in up["learned_notes"]]
-    assert "never schedule meetings on Fridays" in texts
-    # ids round-trip back up
-    assert {n.get("id") for n in up["learned_notes"]} == {"note_1", "note_2"}
+    assert client.updates == []
+    assert not res.pushed and "nothing to push" in res.notes
 
 
-def test_push_picks_up_a_local_edit():
+def test_push_local_persona_edit_sends_persona_only():
     client = MockProfileClient()
     with tempfile.TemporaryDirectory() as d:
         pull_rep_to_skill(client, "team1", "u1", d)
         p = Path(d, "SKILL.md")
         p.write_text(p.read_text().replace("decisive and concise", "warm and thorough"))
+        res = push_skill_to_rep(client, "team1", "u1", d)
+        again = push_skill_to_rep(client, "team1", "u1", d)   # baseline advanced: no resend
+    assert len(client.updates) == 1
+    up = client.updates[0]
+    assert up["team_id"] == "team1" and up["user_id"] == "u1"
+    assert up["persona"] == "You are warm and thorough."
+    assert up["learned_notes"] is None and up["display_name"] is None
+    assert res.pushed and res.sent_fields == ["persona"]
+    assert not again.pushed
+
+
+def test_push_merges_local_note_onto_server_note_added_meanwhile():
+    """A note added on Quest between pull and push, and one added locally, both survive; the
+    untouched server notes go back whole (created_at/source kept, not restamped)."""
+    client = MockProfileClient()
+    with tempfile.TemporaryDirectory() as d:
+        pull_rep_to_skill(client, "team1", "u1", d)
+        server_note = {"id": "note_3", "text": "cite sources", "created_at": "2026-10-21",
+                       "source": "correction"}
+        client._profile["learned_notes"] = client._profile["learned_notes"] + [server_note]
+        p = Path(d, "SKILL.md")
+        p.write_text(p.read_text().replace(
+            "- <!-- id:note_2 --> never schedule meetings on Fridays",
+            "- <!-- id:note_2 --> never schedule meetings on Fridays\n- reply within a day"))
         push_skill_to_rep(client, "team1", "u1", d)
-    assert client.updates[0]["persona"] == "You are warm and thorough."
+    assert len(client.updates) == 1
+    up = client.updates[0]
+    assert up["persona"] is None                         # persona untouched locally
+    notes = up["learned_notes"]
+    assert [n.get("id") for n in notes] == ["note_1", "note_2", "note_3", None]
+    assert notes[0] == {"id": "note_1", "text": "be concise in status updates",
+                        "created_at": "2026-01-01"}      # server dict passes through whole
+    assert notes[2] == server_note
+    assert notes[3] == {"text": "reply within a day"}
+
+
+def test_push_local_note_removal_and_edit_apply_to_server_list():
+    client = MockProfileClient()
+    with tempfile.TemporaryDirectory() as d:
+        pull_rep_to_skill(client, "team1", "u1", d)
+        p = Path(d, "SKILL.md")
+        text = p.read_text()
+        text = text.replace("- <!-- id:note_1 --> be concise in status updates\n", "")
+        text = text.replace("never schedule meetings on Fridays", "no meetings on Fridays")
+        p.write_text(text)
+        push_skill_to_rep(client, "team1", "u1", d)
+    assert client.updates[0]["learned_notes"] == [{"id": "note_2", "text": "no meetings on Fridays"}]
+
+
+def test_push_without_baseline_pushes_nothing():
+    """A file from before baselines existed must not blindly replace server data."""
+    client = MockProfileClient()
+    with tempfile.TemporaryDirectory() as d:
+        Path(d, "SKILL.md").write_text(render_skill_file("", {
+            "persona": "LOCAL", "learned_notes": [{"id": "x", "text": "stale"}]}))
+        res = push_skill_to_rep(client, "team1", "u1", d)
+    assert client.updates == [] and client.get_calls == []
+    assert not res.pushed and "no baseline: push skipped" in res.notes
 
 
 def test_push_missing_file_raises():
@@ -190,6 +241,8 @@ def test_sync_rep_push():
     client = MockProfileClient()
     with tempfile.TemporaryDirectory() as d:
         pull_rep_to_skill(client, "team1", "u1", d)
+        p = Path(d, "SKILL.md")
+        p.write_text(p.read_text().replace("decisive", "gentle"))
         res = sync_rep(client, "team1", "u1", d, direction="push")
     assert res.direction == "push" and res.pushed
 
@@ -198,8 +251,9 @@ def test_sync_rep_both_pulls_then_pushes():
     client = MockProfileClient()
     with tempfile.TemporaryDirectory() as d:
         res = sync_rep(client, "team1", "u1", d, direction="both")
-    assert res.pulled and res.pushed and res.direction == "both"
-    assert client.get_calls and client.updates       # both sides exercised
+    assert res.pulled and res.direction == "both"
+    assert client.get_calls == [("team1", "u1")]
+    assert client.updates == [] and not res.pushed   # nothing edited since the pull
 
 
 def test_sync_rep_unknown_direction_raises():
@@ -369,10 +423,11 @@ def test_replace_between_refuses_body_containing_its_own_markers():
 def test_push_never_sends_a_persona_containing_markers(tmp_path):
     skill_dir = tmp_path / "rep"
     skill_dir.mkdir()
+    client = MockProfileClient()
+    pull_rep_to_skill(client, "t1", "u1", str(skill_dir))   # records the baseline
     # a corrupt, already-nested file on disk
     (skill_dir / "SKILL.md").write_text(
         f"{PERSONA_BLOCK_START}\nreal\n{PERSONA_BLOCK_START}\nnested\n{PERSONA_BLOCK_END}\n"
         f"{PERSONA_BLOCK_END}\n", encoding="utf-8")
-    client = MockProfileClient()
     push_skill_to_rep(client, "t1", "u1", str(skill_dir))
     assert "QAR:MANAGED" not in client.updates[0]["persona"]

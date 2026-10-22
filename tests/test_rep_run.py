@@ -138,10 +138,10 @@ def test_direction_both_pulls_then_pushes():
         poller._orchestrator = _brain(cfg.model_provider, deep)
         handled = poller.run_once()
     assert handled == ["rep-task"]
-    # Pulled before the run AND pushed back after it.
+    # Pulled before the run; the push after it found no local edit, so nothing went up
+    # (re-sending the pulled copy would replace the server's learned notes).
     assert profile_client.get_calls == [("team1", "u1")]
-    assert len(profile_client.updates) == 1
-    assert profile_client.updates[0]["user_id"] == "u1"
+    assert profile_client.updates == []
     # The run still got the rep persona (both pulls first).
     assert deep.calls and deep.calls[0]["context_preamble"] is not None
 
@@ -155,6 +155,8 @@ def test_direction_push_only_pushes_and_does_not_pull():
         # best-effort, and is logged — but here we prove the push path runs cleanly).
         from quest_ai_runner.runner.rep_sync import pull_rep_to_skill
         pull_rep_to_skill(client, "team1", "u1", d)
+        skill = Path(d, "SKILL.md")   # a local persona edit, so the push has something to send
+        skill.write_text(skill.read_text().replace("decisive", "gentle"))
         profile_client.get_calls.clear()  # reset: the seed pull is not part of the scan
         cfg = RunnerConfig(
             quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
@@ -169,8 +171,10 @@ def test_direction_push_only_pushes_and_does_not_pull():
         poller.run_once()
     # No pre-run pull happened during the scan (push-only direction).
     assert profile_client.get_calls == []
-    # A push DID fire after the run.
+    # A push DID fire after the run, carrying only the edited persona.
     assert len(profile_client.updates) == 1
+    assert profile_client.updates[0]["persona"] == "You are gentle and concise."
+    assert profile_client.updates[0]["learned_notes"] is None
     # No rep_preamble was injected (nothing was pulled to build it from).
     assert deep.calls and deep.calls[0]["context_preamble"] is None
 
