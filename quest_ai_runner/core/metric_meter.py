@@ -6,7 +6,10 @@ cannot. Two meters ship, tried in the order ``CoreSettings.metric_meters`` names
 
   ``recorded_row``   the latest row of the repository's results log for the metric's arm, read as the leaderboard reads it.
                      It is cheap, runs nothing, and answers only while the row is current: a row recorded before the
-                     measured code changed says nothing about the code now, so a stale row gives ``None``.
+                     measured code changed says nothing about the code now, so a stale row gives ``None``. It answers the
+                     reading BEFORE the work only (``serves``): the row's own staleness check sees the files the
+                     repository lists as measured code, so a change it does not list (prose, say) leaves a row looking
+                     current that no longer describes the tree, and a reading after the work must not rest on it.
   ``offline_arm``    runs the metric's declared command (``esoi run <component> --impl <arm>``) and reads the score. It
                      does so ONLY for an arm that cannot spend money (the metric run policy: offline arms are run on
                      every change, live arms only by decision): its latest row must exist, show no model call (or a
@@ -16,6 +19,12 @@ cannot. Two meters ship, tried in the order ``CoreSettings.metric_meters`` names
 
 A meter never raises and never calls a model. What it returns is what ``esoi leaderboard`` ranks by: the balanced score when
 the component records one, else the share of cases passed.
+
+A reading is taken at one of two moments, ``BEFORE`` the work or ``AFTER`` it, and a meter declares the moments it can answer
+(``serves``; both when it says nothing). After the work the tree is no longer the one the reading before described, and the
+runner does not decide that from its own records of what the worker touched (a shell command changes files unseen), so the
+meters that read the tree as it is now answer, and a metric none of them can read (no offline arm) gets no reading after: the
+code takes no measured row for it and the worker's own recorded row stands alone.
 
 A reading is never a wait without a bound. ``read_value`` gives the whole reading one budget (``CoreSettings.
 metric_arm_timeout_seconds``), tries the meters in the configured order (the cheap one first by default), says so on the
@@ -48,6 +57,9 @@ SECRETISH = re.compile(r"API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", re.IGNORECAS
 REPO_ESOI_COMMANDS = (".venv/bin/esoi", "venv/bin/esoi")
 # How long past the budget a meter's thread is waited for: enough for an arm stopped at its limit to be reaped and answer.
 JOIN_GRACE_SECONDS = 1.0
+# The two moments a metric is read: before the worker starts, and after the last attempt.
+BEFORE, AFTER = "before", "after"
+EVERY_MOMENT = (BEFORE, AFTER)
 
 
 class Reading(NamedTuple):
@@ -60,8 +72,9 @@ class Reading(NamedTuple):
 class MetricMeter(Protocol):
     """Reads one metric's current value.
 
-    Two optional attributes: ``cheap`` (default True) says the reading takes no noticeable time, so nothing is announced
-    before it; ``within(seconds)`` returns a meter of the same kind that stops at that limit, for one that can be stopped."""
+    Three optional attributes: ``cheap`` (default True) says the reading takes no noticeable time, so nothing is announced
+    before it; ``within(seconds)`` returns a meter of the same kind that stops at that limit, for one that can be stopped;
+    ``serves`` (default ``EVERY_MOMENT``) names the moments, ``BEFORE`` and ``AFTER`` the work, it can answer."""
     name: str
 
     def measure(self, spec_slice: SpecSlice, working_dir: Optional[str] = None) -> Optional[float]:
@@ -86,6 +99,7 @@ class RecordedRowMeter:
     """The metric's value from the latest row of the results log, while that row is current."""
     name = "recorded_row"
     cheap = True
+    serves = (BEFORE,)   # a row describes the tree it was recorded on, which only the reading before the work can rely on
 
     def measure(self, spec_slice: SpecSlice, working_dir: Optional[str] = None) -> Optional[float]:
         try:
@@ -104,6 +118,7 @@ class OfflineArmMeter:
     """The metric's value from running its offline arm now."""
     name = "offline_arm"
     cheap = False
+    serves = EVERY_MOMENT   # it runs the arm on the tree as it is now
 
     def __init__(self, timeout_seconds: Optional[float] = None):
         self.timeout_seconds = timeout_seconds
@@ -213,18 +228,22 @@ def run_bounded(call: Callable[[], Any], seconds: float) -> Tuple[Any, bool]:
 
 
 def read_value(meters: Sequence[MetricMeter], spec_slice: SpecSlice, working_dir: Optional[str] = None, *,
-               budget_seconds: Optional[float] = None, announce: Optional[Callable[[], None]] = None,
-               clock: Callable[[], float] = time.monotonic) -> Reading:
-    """The first number a meter gives, within one budget, as a ``Reading``.
+               when: str = BEFORE, budget_seconds: Optional[float] = None,
+               announce: Optional[Callable[[], None]] = None, clock: Callable[[], float] = time.monotonic) -> Reading:
+    """The first number a meter gives, within one budget, as a ``Reading`` taken ``when`` (``BEFORE`` or ``AFTER`` the work).
 
-    ``budget_seconds`` (default ``CoreSettings.metric_arm_timeout_seconds``) bounds the whole reading, whatever the number
-    of meters. ``announce`` is called once, just before the first meter that takes time (not ``cheap``) runs, so the person
-    is told about a wait before it starts and never about one that does not happen. A meter that has not answered when
-    the budget is spent is left behind; the reading is then empty with a note naming the meter and the budget."""
+    Only the meters that serve that moment are asked; when none can, the reading is empty and carries no note (nothing ran,
+    so there is no wait or failure to explain). ``budget_seconds`` (default ``CoreSettings.metric_arm_timeout_seconds``)
+    bounds the whole reading, whatever the number of meters. ``announce`` is called once, just before the first meter that
+    takes time (not ``cheap``) runs, so the person is told about a wait before it starts and never about one that does not
+    happen. A meter that has not answered when the budget is spent is left behind; the reading is then empty with a note
+    naming the meter and the budget."""
     budget = float(budget_seconds if budget_seconds is not None else core_settings().metric_arm_timeout_seconds)
     deadline = clock() + budget
     announced, note = False, ""
     for meter in meters:
+        if when not in getattr(meter, "serves", EVERY_MOMENT):
+            continue
         left = deadline - clock()
         if left <= 0:
             return Reading(note=note or f"the {budget:g}s for the reading were used up before {meter.name} could run")

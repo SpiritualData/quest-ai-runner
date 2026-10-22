@@ -273,15 +273,18 @@ def metric_entry_parts(lead: Mapping[str, Any], other: Optional[Mapping[str, Any
     says what the other record of the same metric reported when the two differ.
 
     ``<name>: 0.38 → 0.91 (measured automatically)``. When the core flagged the two records as different
-    (``disagrees``, which this never decides), the note is the AI's numbers, said neutrally:
-    ``The AI reported 0.4 → 0.9.`` A declared not-applicable reads ``Nothing to measure. <reason>`` (a sentence of
+    (``disagrees``, which this never decides), or the other record has a number the lead lacks, the note is the AI's
+    numbers, said neutrally: ``The AI reported 0.4 → 0.9.`` A declared not-applicable reads ``Nothing to measure. <reason>`` (a sentence of
     its own, so the reason's capital is right)."""
     if lead.get("source") == SOURCE_NOT_APPLICABLE:
         return f"Nothing to measure. {sentence(sentence_case(lead.get('reason') or 'No reason given'))}", ""
     name = lead.get("name") or lead.get("metric_id") or "Metric"
     how = METRIC_SOURCE_LABELS.get(lead.get("source"), str(lead.get("source")))
     text = f"{name}: {metric_pair(lead)} ({how})"
-    if not lead.get("disagrees"):
+    # The other record also speaks when it holds a number the lead lacks (a metric that could only be read before the work),
+    # so the person is not left with "unknown" while the AI reported a result.
+    fills = other is not None and any(lead.get(end) is None and other.get(end) is not None for end in ("before", "after"))
+    if not lead.get("disagrees") and not fills:
         return text, ""
     if other is not None:
         return text, f"The AI reported {metric_pair(other)}."

@@ -28,7 +28,7 @@ from typing import Callable, Optional, Protocol, Sequence
 
 from esoi import implementation
 
-from .metric_meter import MetricMeter, Reading, meters_from_names, read_value
+from .metric_meter import BEFORE, MetricMeter, Reading, meters_from_names, read_value
 from .runtime_settings import core_settings
 from .spec_slice import RepoSliceSource, SliceSource, SpecSlice
 
@@ -42,9 +42,10 @@ class GoalIteration(Protocol):
         """The slice of the specification the goal serves, or None."""
         ...
 
-    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *,
+    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *, when: str = BEFORE,
                     announce: Optional[Callable[[], None]] = None) -> Reading:
-        """The slice's metric now, as a bounded ``Reading``; ``announce`` is called before a meter that takes time runs."""
+        """The slice's metric now, as a bounded ``Reading`` taken ``when`` (``BEFORE`` or ``AFTER`` the work);
+        ``announce`` is called before a meter that takes time runs."""
         ...
 
 
@@ -57,7 +58,7 @@ class DoctrineOnly:
     def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
         return None
 
-    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *,
+    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *, when: str = BEFORE,
                     announce: Optional[Callable[[], None]] = None) -> Reading:
         return Reading()
 
@@ -84,6 +85,6 @@ class SliceAndWriteback(SliceOnly):
         super().__init__(source)
         self.meters = list(meters) if meters is not None else meters_from_names(core_settings().metric_meters)
 
-    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *,
+    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *, when: str = BEFORE,
                     announce: Optional[Callable[[], None]] = None) -> Reading:
-        return read_value(self.meters, spec_slice, working_dir, announce=announce)
+        return read_value(self.meters, spec_slice, working_dir, when=when, announce=announce)

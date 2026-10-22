@@ -50,7 +50,8 @@ The QAR terminal shows the entries without a model and with the explanation off:
 before the turn's closing line, one line per metric in normal weight, ordered by the metric's name (a number inside a name
 sorts as a number, a declared not-applicable last), the measured and the reported reading of one metric together:
 `<name>: 0.38 → 0.91 (measured automatically)`, `(reported by the AI)`, `Nothing to measure. <reason>`. When the readings
-differ, the AI's numbers follow as a note in the warning colour (`The AI reported 0.4 → 0.9.`). At most four lines, then
+differ, or the AI reported a number the measured reading lacks (a metric that could only be read before the work), the
+AI's numbers follow as a note in the warning colour (`The AI reported 0.4 → 0.9.`). At most four lines, then
 `K more metric results. Alt+D shows them all.`; or `No metric was recorded for this change.`. Written once per turn
 however many events carry the same entry. The numbers carry no unit: the data has none.
 
@@ -78,8 +79,8 @@ For each goal the loop creates one `GoalMetrics` and calls it at four points.
    own session, to record one. That request is an attempt of the goal's existing budget. After it the flow accepts what
    there is and sets `metric_missing`; it never loops. The gate is judged on the ledger and the runner's records, never
    on the worker's or the verifier's wording.
-4. **After the last attempt**: the arm reads the metric again, the ledger's rows are reconciled, and the result carries
-   them.
+4. **After the last attempt**: the arm reads the metric again with the meters that read the tree as it is now (a recorded
+   row is not asked), the ledger's rows are reconciled, and the result carries them.
 
 Where the gate does not apply, the record is still kept and shown, and `metric_missing` stays false:
 
@@ -171,11 +172,20 @@ only metric. A goal whose working folder is not known gets no slice.
 **The meters** (`metric_meter`), tried in the order `QAR_METRIC_METERS` names (default `recorded_row,offline_arm`):
 
 - `recorded_row` reads the latest row of the results log for the metric's arm, while that row is current. A row recorded
-  before the measured code changed gives nothing.
+  before the measured code changed gives nothing. It answers the reading before the work only: the row's staleness check
+  sees the files the repository lists as measured code, so a change it does not list (a prose file, say) leaves a row that
+  looks current and no longer describes the tree. A meter declares the moments it serves (`serves`; both when it says
+  nothing), and the reading after the work asks only the meters that read the tree as it is now.
 - `offline_arm` runs the metric's command (`esoi run <component> --impl <arm>`) only for an arm that cannot spend money: its
   latest row exists and shows no model call, and it is neither listed nor declared as paid. It runs with a budget of zero
   model calls, a scrubbed environment and the reading's time limit (`QAR_METRIC_ARM_TIMEOUT_SECONDS`, default 15). A refusal,
   a failure or a timeout gives no reading.
+
+So after the work the offline arm is run (bounded and announced like any slow reading), and a metric with no offline arm
+(a live one, which is run only by decision) gets no reading after: the code takes no `measured` after value for it, and the
+worker's own `recorded` row stands alone. The runner does not first ask whether the work changed anything: its records
+miss a change made through a shell command (see "What is not covered"), and a rule that rested on them would be blind to
+exactly that.
 
 A meter that has no reading writes no row. A row with no number would otherwise count as a record.
 

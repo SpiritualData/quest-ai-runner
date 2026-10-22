@@ -16,7 +16,8 @@ points, all in code, none of them a model call:
                     own session, to record it. That one request is an attempt of the goal's existing budget; after it the
                     flow accepts what there is and marks ``metric_missing``. It never loops, and it needs a runner that can
                     resume the session (a re-run would repeat the work), so a runner that cannot is not gated.
-  ``finish``        after the last attempt: the arm reads the metric again (``after``), the ledger's rows are reconciled
+  ``finish``        after the last attempt: the arm reads the metric again (``after``, by the meters that read the tree as
+                    it is now, never a recorded row), the ledger's rows are reconciled
                     (``metric_results.reconcile``), and the result carries them: ``DeepResult.metric_results`` and
                     ``metric_missing``, plus one plain line appended to its text for consumers that show text only.
 
@@ -132,7 +133,7 @@ class GoalMetrics:
             return
         phase = READING_PHASES[when]
         checking, what = READING_STATUS[when]
-        reading = self.iteration.read_metric(found, self.working_dir, announce=lambda: self.say(checking))
+        reading = self.iteration.read_metric(found, self.working_dir, when=when, announce=lambda: self.say(checking))
         if reading.value is not None:
             self.keep(reading.meter, **{when: reading.value})
         elif reading.note:

@@ -24,6 +24,7 @@ from quest_ai_runner.core.adapters import EVENT_MILESTONE, EVENT_RESULT, EVENT_S
 from quest_ai_runner.core import spec_slice
 from quest_ai_runner.core.goal_iteration import DoctrineOnly, SliceAndWriteback, SliceOnly
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
+from quest_ai_runner.core.metric_meter import AFTER, BEFORE, EVERY_MOMENT
 from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE, MetricResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision
@@ -95,13 +96,15 @@ class Worker:
 
 
 class FixedMeter:
-    """A meter that answers from a list, one value per reading. ``cheap`` says whether a reading takes no time."""
+    """A meter that answers from a list, one value per reading. ``cheap`` says whether a reading takes no time, ``serves``
+    which moments (before the work, after it) it can answer."""
     name = "fixed"
 
-    def __init__(self, *values, cheap: bool = False):
+    def __init__(self, *values, cheap: bool = False, serves=EVERY_MOMENT):
         self.values = list(values)
         self.reads = 0
         self.cheap = cheap
+        self.serves = serves
 
     def measure(self, spec_slice, working_dir=None):
         self.reads += 1
@@ -335,6 +338,26 @@ def test_slice_and_writeback_measures_before_and_after_and_keeps_the_workers_row
     before = order.index("Checking the starting value before any change.")
     after = order.index("Checking the result after the change.")
     assert before < order.index(GREETING) < after   # announced before the worker starts, and again once it is done
+
+
+def test_a_recorded_row_serves_the_reading_before_and_the_arm_the_reading_after(world, repo):
+    """Once the work is done the tree may differ from the one a recorded row describes, so the row is not asked again."""
+    worker = Worker(world.registry, [["change"]], working_dir=str(repo))
+    row, arm = FixedMeter(1.0, serves=(BEFORE,), cheap=True), FixedMeter(0.9977)
+    done = request_for(orchestrate(world, worker, iteration=SliceAndWriteback(meters=[row, arm])), worker)
+    assert (row.reads, arm.reads) == (1, 1)
+    assert [(m["before"], m["after"]) for m in done.metric_results] == [(1.0, 0.9977)]
+
+
+def test_with_no_meter_for_the_reading_after_the_workers_row_stands_beside_the_one_before(world, repo):
+    worker = Worker(world.registry, [["change", ("record", {"metric_id": "greeting-pass-rate", "before": 1, "after": 1})]],
+                    working_dir=str(repo))
+    row = FixedMeter(1.0, serves=(BEFORE,), cheap=True)
+    done = request_for(orchestrate(world, worker, iteration=SliceAndWriteback(meters=[row])), worker)
+    assert row.reads == 1   # the reading after the work was not taken from it
+    by_source = {m["source"]: m for m in done.metric_results}
+    assert (by_source["measured"]["before"], by_source["measured"]["after"]) == (1.0, None)   # no measured after is invented
+    assert (by_source["recorded"]["before"], by_source["recorded"]["after"]) == (1, 1) and not done.metric_missing
 
 
 def test_a_measured_row_alone_satisfies_the_rule_and_the_worker_is_not_asked(world, repo):

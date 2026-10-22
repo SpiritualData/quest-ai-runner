@@ -486,6 +486,15 @@ def test_a_disagreement_is_stated_neutrally_in_one_line_in_normal_weight_and_onl
         "the warning colour is on the note, not on the whole line"
 
 
+def test_a_number_the_measured_entry_lacks_is_not_left_unknown_when_the_ai_reported_it():
+    """A metric the runner could read only before the work: the AI's after is stated beside it, not hidden behind "unknown"."""
+    (line,) = metric_lines([metric_entry(0, name="Pass rate", before=1.0, after=None, delta=None),
+                            metric_entry(0, name="Pass rate", source="recorded", before=1.0, after=0.9)])
+    assert line.plain == "  Pass rate: 1 → unknown (measured automatically). The AI reported 1 → 0.9."
+    (alone,) = metric_lines([metric_entry(0, name="Pass rate", before=1.0, after=None, delta=None)])
+    assert alone.plain == "  Pass rate: 1 → unknown (measured automatically)", "nothing to add when nothing else was reported"
+
+
 def test_a_disagreement_whose_partner_is_not_in_the_batch_still_says_the_numbers_differ():
     (line,) = metric_lines([metric_entry(0, name="Pass rate", disagrees=True)])
     assert line.plain == "  Pass rate: 0.5 → 0.75 (measured automatically). The AI reported different numbers."

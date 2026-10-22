@@ -16,7 +16,8 @@ from esoi import scaffold
 
 from quest_ai_runner.core import spec_selection, spec_slice
 from quest_ai_runner.core.metric_meter import (
-    OfflineArmMeter, Reading, RecordedRowMeter, meters_from_names, read_value, run_bounded, score_from_output)
+    AFTER, BEFORE, OfflineArmMeter, Reading, RecordedRowMeter, meters_from_names, read_value, run_bounded,
+    score_from_output)
 from quest_ai_runner.core.spec_slice import (
     RepoSliceSource, SpecSlice, next_milestone, next_priority_block, parse_milestones, target_of)
 
@@ -237,6 +238,36 @@ def test_the_first_meter_with_a_number_wins_and_unknown_names_are_left_out():
     assert read_value([Fixed("a", None), Fixed("b", 0.4), Fixed("c", 0.9)], found) == Reading(0.4, "b")
     assert read_value([Fixed("a", None)], found) == Reading()
     assert [m.name for m in meters_from_names("offline_arm, nonsense ,recorded_row")] == ["offline_arm", "recorded_row"]
+
+
+def test_after_the_work_the_arm_reads_what_a_current_looking_row_cannot_see(repo):
+    """A change the row's staleness check does not see (here a non-git folder, in the repository a prose file the
+    configuration leaves out of the measured code) leaves the row looking current: only a run of the arm sees it."""
+    (repo / "demo_pkg" / "greet.py").write_text(
+        (repo / "demo_pkg" / "greet.py").read_text(encoding="utf-8").replace('f"Hello, {name}!"', 'f"Hi {name}"'),
+        encoding="utf-8")
+    both = [RecordedRowMeter(), OfflineArmMeter()]
+    assert RecordedRowMeter().measure(slice_of(repo)) == 1.0   # the premise: the row still reads as current
+    assert read_value(both, slice_of(repo), when=BEFORE) == Reading(1.0, "recorded_row")
+    assert read_value(both, slice_of(repo), when=AFTER) == Reading(0.5, "offline_arm")
+
+
+def test_each_meter_declares_the_moments_it_can_answer():
+    assert RecordedRowMeter.serves == (BEFORE,) and OfflineArmMeter.serves == (BEFORE, AFTER)
+
+
+def test_a_reading_after_the_work_asks_only_the_meters_that_serve_it_and_a_missing_one_is_not_a_failure():
+    class Row(Stub):
+        serves = (BEFORE,)
+
+    found = SpecSlice(root="/x", solution_id="s")
+    row, arm = Row("row", 1.0), Stub("arm", 0.4, cheap=False)
+    told = []
+    assert read_value([row, arm], found, when=AFTER, announce=lambda: told.append(1)) == Reading(0.4, "arm")
+    assert row.calls == 0 and told == [1]   # the row was never asked, and the wait is announced for the meter that runs
+    assert read_value([row, arm], found, when=BEFORE).value == 1.0 and arm.calls == 1
+    alone = Row("row", 1.0)
+    assert read_value([alone], found, when=AFTER) == Reading() and alone.calls == 0   # no note: nothing ran, nothing failed
 
 
 # -- a reading is bounded -------------------------------------------------------------------------
