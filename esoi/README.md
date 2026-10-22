@@ -98,7 +98,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 
 | Solution | Name | Selected | Metric |
 |---|---|---|---|
-| `QS1` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | QM1 | Passing chat turns per dollar;Delegated tasks meeting their standard;Exact and consented changes;Data kept in scope;Engine reuse;Measured coverage |
+| `QS1` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | QM1 | QAR overall: QS1's sub-metrics weighted by its ideals, with floor and ceiling;Passing chat turns per dollar;Delegated tasks meeting their standard;Exact and consented changes;Data kept in scope;Engine reuse;Measured coverage |
 | `route-a-message` | Cost-aware message router | evaluation/components/classification/impls/qar_planner.py | Routing correctness over the classification cases |
 | `answer-a-turn` | Grounded chat turn handler | evaluation/components/chat_quality/impls/dev_quest_chat.py | Judge pass rate over the chat quality cases |
 | `operate-a-quest` | Quest change executor | pre_route | Final quest state against the request over the quest operation cases |
@@ -150,7 +150,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 | `bound-card-growth` | Card store growth control | quarantine_tool | Cards per source-file group and duplicate share after repeated nested bootstrap |
-| `search-cards-and-specs` | Unified card and specification search |  | Mixed card and specification selection, with both existing selection metrics held |
+| `search-cards-and-specs` | Unified card and specification search | two_pipelines | Mixed card and specification selection, with both existing selection metrics held |
 | `tag-solutions` | Problem-linked tags that identify solutions |  | Right solution missed without the tag |
 | `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
 
@@ -350,7 +350,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | quest_ai_runner/core/spec_selection.py |  |
 | `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
 | `iterate-by-spec:writeback-on-the-record` | Slice before and write-back onto each record (planned) |  |  |
-| `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (planned, working default) |  |  |
+| `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links | quest_ai_runner/core/unified_search.py |  |
 | `tag-solutions:tag_list_with_check` | Problem-linked tag list with a check rule and a lookup | scripts/esoi_rules.py |  |
 | `choose-what-to-index:risk_gate` | Risk-gated folder review | evaluation/components/choose_what_to_index/impls/risk_gate.py |  |
 | `choose-what-to-index:review_only` | Model-judged folder review before the gate | evaluation/components/choose_what_to_index/impls/review_only.py |  |
@@ -358,12 +358,13 @@ Goals keep moving between a person's sessions, because the work they delegated g
 
 ## Metrics
 
-- `QME1`, Passing chat turns per dollar: `none`
+- `QME1`, Passing chat turns per dollar: `esoi run chat_quality --impl dev_quest_chat --sample 10 --max-calls 300`
 - `QME2`, Delegated tasks meeting their standard: `none`
 - `QME3`, Exact and consented changes: `none`
 - `QME4`, Data kept in scope: `none`
 - `QME5`, Engine reuse: `none`
 - `QME6`, Measured coverage: `none`
+- `metric-qar-overall`, QAR overall: QS1's sub-metrics weighted by its ideals, with floor and ceiling: `esoi run qar_overall --impl recorded_rows`
 - `metric-route-a-message`, Routing correctness over the classification cases: `esoi run classification --impl qar_planner`
 - `metric-answer-a-turn`, Judge pass rate over the chat quality cases: `esoi run chat_quality --impl dev_quest_chat`
 - `metric-operate-a-quest`, Final quest state against the request over the quest operation cases: `esoi run quest_ops --impl orchestrator_pre_route`
@@ -415,7 +416,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
 - `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
 - `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup; esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store`
-- `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs`
+- `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs --impl two_pipelines; esoi run context_and_specs --impl solutions_and_problems_with_links`
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed record of what they changed: `esoi run record_tracking`
 - `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_lookup`
 - `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`

@@ -1,0 +1,32 @@
+{
+ "about": "Generic fixture world for the mixed card and specification cases. The records are the spec_selection fixture index (spec_selection/fixture_index.json) plus the extra records below; the cards and the tag table are invented here. No real person, team or account.",
+ "cards": {
+  "note-release-checklist": {"name": "Release checklist", "summary": "Note: before publishing the package, tag the version, update the changelog, build the wheel and upload it.", "keywords": ["release", "publish", "changelog", "version"]},
+  "runbook-card-backend-outage": {"name": "Runbook: card backend outage", "summary": "Runbook for when the hosted card service is unreachable: confirm the outage, keep serving the cached card listing, and replay the held card writes once the service answers again.", "keywords": ["runbook", "outage", "replay", "cache"]},
+  "file-staleness-check": {"name": "staleness_check.py", "summary": "Compares the content hash of each card's source files with the stored fingerprint and lists the cards whose sources changed or were deleted.", "keywords": ["staleness", "fingerprint", "hash"], "files": [{"path": "src/staleness_check.py", "symbols": ["stale_cards", "fingerprint"]}]},
+  "note-onboarding": {"name": "Welcoming a new teammate", "summary": "Steps for someone who joins the team: create their accounts, pair them with a buddy, and give them a small first task in their first week.", "keywords": ["onboarding", "new hire", "buddy"]},
+  "conversation-annual-discount": {"name": "Conversation: pricing page discount", "summary": "Past conversation about the pricing page: we discussed moving everyone to monthly plans and decided to keep the annual discount for now.", "keywords": ["pricing", "annual discount", "monthly plans", "decision"]},
+  "note-misrouted-question": {"name": "Note: a plain question started a deep run", "summary": "Observed twice this week: a plain question about a goal's due date was routed to an expensive autonomous deep run instead of a short answer.", "keywords": ["routing", "deep run", "plain question", "cost"]},
+  "note-weekly-standup": {"name": "Weekly standup format", "summary": "Each person says what they finished, what they are doing next and what blocks them; ten minutes, cameras optional.", "keywords": ["standup", "meeting"]},
+  "file-billing-export": {"name": "billing_export.py", "summary": "Exports the month's invoices to a CSV file for the accountant.", "keywords": ["invoices", "csv", "export"], "files": [{"path": "src/billing_export.py", "symbols": ["export_invoices"]}]},
+  "conversation-settings-colours": {"name": "Conversation: settings screen colours", "summary": "Past conversation reviewing the colour palette and contrast of the settings screen.", "keywords": ["design", "colours", "settings screen"]},
+  "runbook-rotate-api-key": {"name": "Runbook: rotate a service key", "summary": "How to rotate a service API key: create the new key, update the deployment secret, then revoke the old key.", "keywords": ["runbook", "api key", "rotate", "secret"]},
+  "note-travel-policy": {"name": "Travel policy", "summary": "Book trains over flights for trips under four hours; submit receipts within a month.", "keywords": ["travel", "expenses"]}
+ },
+ "extra_records": [
+  {"id": "prob-fixture-reminders-wrong-time-zone", "kind": "problem", "intent": "quest-ai-runner", "refs": [],
+   "title": "Scheduled reminders arrive in the wrong time zone",
+   "summary": "Reminders a person scheduled arrive in the wrong time zone, so a nudge meant for the morning lands in the middle of the night."},
+  {"id": "fixture-household-meals", "kind": "intent", "intent": "fixture-household-meals", "refs": ["prob-fixture-pantry-food-expires"],
+   "title": "Household meals planned from the pantry",
+   "summary": "Every household meal of the week is planned ahead from what is already in the pantry."},
+  {"id": "prob-fixture-pantry-food-expires", "kind": "problem", "intent": "fixture-household-meals", "refs": ["fixture-household-meals"],
+   "title": "Pantry food expires unused",
+   "summary": "Food in the cupboard expires unused because nobody knows what is there when the shopping list is written."}
+ ],
+ "tag_table": {
+  "about": "A fixture tag (not esoi/tags.csv): store-layout marks the solutions that read or write cards by their stored layout, so a change to that layout must change them (R3).",
+  "tag_problems": {"store-layout": ["esoi-r3-co-change-missed"]},
+  "solution_tags": {"persist-cards": ["store-layout"], "cache-cards": ["store-layout"], "detect-stale-cards": ["store-layout"]}
+ }
+}

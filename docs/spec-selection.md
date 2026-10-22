@@ -66,8 +66,11 @@ first implementation is below.
 
 `solutions_and_problems_with_links` ranks context cards and ESOI records in one list. It is not a third pipeline: it runs the
 stages above (`narrow_lexical_scored`, `semantic_scored`, `fuse`, `gate_decision`, `parse_ids`, `attach_links`) over a list of
-views instead of an index's entries. Nothing selects it: `find_specs` and the context assembler are unchanged, and no metric has
-compared it with them yet.
+views instead of an index's entries. Nothing selects it: `find_specs` and the context assembler are unchanged. Its metric,
+`esoi run context_and_specs --impl solutions_and_problems_with_links` (and `--impl two_pipelines`, the two pipelines side by
+side), scores both offline on mixed requests over fixture cards and the spec_selection fixture index; the results log has the
+numbers. The selection waits on the two halves (the spec_selection and context_selection cases), which the metric says the
+merged arm must also hold.
 
 - **A view, never a copy.** `RecordView` (`kind`, `id`, `title`, `text`, `source`, `links`, `tags`) points at its item's own
   fields and weighted terms. `views_from_spec_index(index)` makes one per record of every kind (source `esoi`);

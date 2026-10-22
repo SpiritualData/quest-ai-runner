@@ -31,3 +31,20 @@ set = { QAR_STANDARD_TOOLS = "0", QAR_CLAUDE_PATH = "qar-eval-no-such-claude", Q
 weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
 cost_per_case_usd = 0.005
 seconds_per_case = 10
+
+# The combined QAR metric (metric-qar-overall, the authoritative metric of QS1; evaluation/components/qar_overall). Keyed by
+# the metric id, not a component name, because the harness reads [balance.<component>] as an accuracy/cost/time balance.
+# Each of QS1's ideals carries a weight (summing to 1), split equally over the sub-metrics QME1 to QME7 whose ideal_ids name
+# it (esoi/metrics.csv). Joshua can change any weight; the reason beside it says why it is what it is now.
+[balance.metric-qar-overall]
+ideals = { QI1 = 0.25, QI2 = 0.25, QI3 = 0.15, QI4 = 0.10, QI5 = 0.10, QI6 = 0.15 }
+bar = 0.8                         # a sub-metric "passes" its case at or above this value on current rows
+cost_per_passing_turn_usd = 0.05  # QME1: "a few cents" per passing turn (answer-a-turn milestone); dearer turns scale down
+
+[balance.metric-qar-overall.reasons]
+QI1 = "The top intent's first clause: goals keep moving because delegated work gets done to the standard written. The reason QAR exists."
+QI2 = "The top intent's second clause: every answer rests on the person's own material, never another's. Wrong or leaked help is worse than none."
+QI3 = "Acting first without taking a human-only step decides whether people can delegate at all; weighted below the two clauses of the vision."
+QI4 = "One engine for every consumer is how QAR stays worth maintaining, but it serves the person only indirectly."
+QI5 = "Selection by metric is the method that keeps the other ideals improving; it is a means, so it carries less than the outcomes it protects."
+QI6 = "Cost and quality known before they surprise anyone: spend is a real constraint (a daily cap), so it weighs as much as consent."

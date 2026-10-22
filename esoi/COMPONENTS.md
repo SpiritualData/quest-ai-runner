@@ -25,7 +25,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `runner-learning` | runner | What a person asked for and has said: ledger, insights, reflections | store-feedback |
 | `adapters-model-providers` | adapters | Swappable ModelProvider implementations routed by model name | call-a-model |
 | `adapters-retrieval` | adapters | RetrievalAdapter and writer implementations over files, DBs, MCP, Notion, Google, Quest | gather-evidence, write-files, write-through-mcp, talk-over-a-channel |
-| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository) | persist-cards, resolve-references, cache-cards, detect-stale-cards |
+| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository),  card views for the unified search (card_views) | persist-cards, resolve-references, cache-cards, detect-stale-cards, search-cards-and-specs |
 | `adapters-vector-context` | adapters | Semantic and keyword context assemblers and their scoring helpers | index-by-meaning, select-context |
 | `adapters-web` | adapters | Live web search and page fetch behind pluggable backends | search-the-web |
 | `adapters-deep-runners` | adapters | Alternative DeepRunner implementations | run-deep-work |
@@ -37,7 +37,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |
 | `prompts` | prompts | Prompt text shipped as data and the scripts that keep each copy equal to its source: standing deep-run instructions (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) and the vendored quest field guidance | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
 | `vendor` | vendor | Vendored third-party code, unmodified | expose-the-public-api |
-| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset | verify-offline, spec-selection |
+| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset,  the combined QAR metric (qar_overall) reads their recorded rows | verify-offline, spec-selection, QS1 |
 | `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (bound-card-growth), restart-if-idle (run-queued-tasks) | search-the-web, bound-card-growth, run-queued-tasks |
 | `examples` | examples | Runnable reference consumers (env-driven, no real data) | learn-by-example |
 | `tests` | tests | Offline test suite and shared fakes | verify-offline |
@@ -45,6 +45,6 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `docs-and-meta` | docs | Documentation and repo-level project files | explain-qar |
 | `core-selection` | core | Selection by name: resolve(solution_id, name) turns a name into the implementation declared beside its code, with the records as the only list and the snapshot for an installed copy, so switching an implementation is a data or config change | select-an-implementation |
 | `core-consumer-helpers` | core | Plumbing every consumer needs and must not copy: one persistent background loop for sync adapters calling async I/O, and signature probes that drop keywords an older installed library lacks | expose-the-public-api |
-| `core-spec-selection` | core | Finding the intent specifications a new input concerns: lexical narrowing over an ESOI specification index, an optional vector search, and parallel batched model selection. | spec-selection |
+| `core-spec-selection` | core | Finding the intent specifications a new input concerns: lexical narrowing over an ESOI specification index, an optional vector search, and parallel batched model selection,  and the unified card and specification search: one ranking over read-only views of cards and records (unified_search). | spec-selection, search-cards-and-specs |
 | `core-iterate-by-spec` | core | The metric record of a deep goal: the slice of the specification it serves, the runner's own readings of its metric, the ledger of results every run keeps and the check that a change has one | iterate-by-spec |
 | `adapters-index-scope` | adapters | Which folders and card stores a corpus may read: the folder review, its cached verdicts and the risk gate every card source asks | choose-what-to-index |

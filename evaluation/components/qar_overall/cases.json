@@ -1,0 +1,71 @@
+[
+ {"id": "QME1", "kind": "chat", "area": "Passing chat turns per dollar",
+  "args": {"rule": "pass_per_dollar", "what": "chat turns that pass their rubric on the disposable dev world, scaled by cost per passing turn",
+   "cheap": [
+    {"arm": "chat_quality/dev_quest_chat", "share": 1.0, "paid": true, "cheap_cases": 10,
+     "run": {"cheap": "esoi run chat_quality --impl dev_quest_chat --sample 10 --max-calls 300 --record"}}],
+   "full": [
+    {"arm": "chat_quality/dev_quest_chat", "share": 0.5, "paid": true,
+     "run": {"full": "esoi run chat_quality --impl dev_quest_chat --max-calls 7000 --record"}},
+    {"arm": "intent_grounding", "share": 0.5, "planned": true, "cheap_cases": 3, "planned_cases": 30,
+     "estimate_from": "chat_quality/dev_quest_chat",
+     "what": "metric-ground-in-intent: chat turns whose right answer depends on the person's intent, judged like chat_quality",
+     "run": {"cheap": "esoi run intent_grounding --impl <arm> --sample 3 --record", "full": "esoi run intent_grounding --impl <arm> --record"}}]}},
+ {"id": "QME2", "kind": "tasks", "area": "Delegated tasks meeting their standard",
+  "args": {"rule": "pass_rate", "what": "queued and deep tasks that meet their written goal",
+   "cheap": [
+    {"arm": "run_queued_tasks/qar_runner", "share": 0.34, "proxy": "task lifecycle correctness, not task outcomes",
+     "run": {"cheap": "esoi run run_queued_tasks --impl qar_runner --record"}},
+    {"arm": "deep_run/goal_contract", "share": 0.33, "proxy": "deep-run contract rules, not task outcomes",
+     "run": {"cheap": "esoi run deep_run --impl goal_contract --record"}},
+    {"arm": "deep_runner/subprocess_runner", "share": 0.33, "proxy": "outcome reporting of the runner, not task outcomes",
+     "run": {"cheap": "esoi run deep_runner --impl subprocess_runner --record"}}],
+   "full": [
+    {"arm": "run_queued_tasks/qar_runner", "share": 0.17, "proxy": "task lifecycle correctness, not task outcomes",
+     "run": {"full": "esoi run run_queued_tasks --impl qar_runner --record"}},
+    {"arm": "deep_run/goal_contract", "share": 0.17, "proxy": "deep-run contract rules, not task outcomes",
+     "run": {"full": "esoi run deep_run --impl goal_contract --record"}},
+    {"arm": "deep_runner/subprocess_runner", "share": 0.16, "proxy": "outcome reporting of the runner, not task outcomes",
+     "run": {"full": "esoi run deep_runner --impl subprocess_runner --record"}},
+    {"arm": "task_replay", "share": 0.5, "planned": true, "cheap_cases": 3, "planned_cases": 10,
+     "what": "metric-iterate-by-spec: replayed tasks the done verifier accepts on the first attempt, through a real deep run",
+     "run": {"cheap": "esoi run task_replay --impl <arm> --sample 3 --record", "full": "esoi run task_replay --impl <arm> --record"}}]}},
+ {"id": "QME3", "kind": "changes", "area": "Exact and consented changes",
+  "args": {"rule": "pass_rate", "what": "no unrequested writes, every requested write, no human-only step taken alone",
+   "cheap": [
+    {"arm": "escalate_to_a_human/quest_decision_sink", "share": 0.34, "run": {"cheap": "esoi run escalate_to_a_human --impl quest_decision_sink --record"}},
+    {"arm": "write_through_mcp/allowlist_writer", "share": 0.33, "run": {"cheap": "esoi run write_through_mcp --impl allowlist_writer --record"}},
+    {"arm": "write_files/bounded_writer", "share": 0.33, "run": {"cheap": "esoi run write_files --impl bounded_writer --record"}}],
+   "full": [
+    {"arm": "escalate_to_a_human/quest_decision_sink", "share": 0.17, "run": {"full": "esoi run escalate_to_a_human --impl quest_decision_sink --record"}},
+    {"arm": "write_through_mcp/allowlist_writer", "share": 0.17, "run": {"full": "esoi run write_through_mcp --impl allowlist_writer --record"}},
+    {"arm": "write_files/bounded_writer", "share": 0.16, "run": {"full": "esoi run write_files --impl bounded_writer --record"}},
+    {"arm": "quest_ops/orchestrator_pre_route", "share": 0.5, "paid": true,
+     "run": {"full": "esoi run quest_ops --impl orchestrator_pre_route --max-calls 400 --record"}}]}},
+ {"id": "QME4", "kind": "scope", "area": "Data kept in scope",
+  "args": {"rule": "pass_rate", "what": "nothing from another user, team or quest reaches a prompt or store", "full_same_as_cheap": true,
+   "cheap": [
+    {"arm": "conversation_recall/session_files", "share": 0.5, "proxy": "recall and isolation cases together",
+     "run": {"cheap": "esoi run conversation_recall --impl session_files --record"}},
+    {"arm": "recent_context/file_store_filter", "share": 0.5, "proxy": "warm-start accuracy and cross-work-item leakage together",
+     "run": {"cheap": "esoi run recent_context --impl file_store_filter --record"}}],
+   "full": [
+    {"arm": "conversation_recall/session_files", "share": 0.5, "proxy": "recall and isolation cases together",
+     "run": {"full": "esoi run conversation_recall --impl session_files --record"}},
+    {"arm": "recent_context/file_store_filter", "share": 0.5, "proxy": "warm-start accuracy and cross-work-item leakage together",
+     "run": {"full": "esoi run recent_context --impl file_store_filter --record"}}]}},
+ {"id": "QME5", "kind": "reuse", "area": "Engine reuse",
+  "args": {"rule": "pass_rate", "what": "the engine stays generic: nothing consumer specific in it, a stable public surface, examples a new consumer can start from", "full_same_as_cheap": true,
+   "cheap": [
+    {"arm": "keep_secrets_out/live_scanner", "share": 0.34, "run": {"cheap": "esoi run keep_secrets_out --impl live_scanner --record"}},
+    {"arm": "expose_the_public_api/live_surface", "share": 0.33, "run": {"cheap": "esoi run expose_the_public_api --impl live_surface --record"}},
+    {"arm": "learn_by_example/live_examples", "share": 0.33, "run": {"cheap": "esoi run learn_by_example --impl live_examples --record"}}],
+   "full": [
+    {"arm": "keep_secrets_out/live_scanner", "share": 0.34, "run": {"full": "esoi run keep_secrets_out --impl live_scanner --record"}},
+    {"arm": "expose_the_public_api/live_surface", "share": 0.33, "run": {"full": "esoi run expose_the_public_api --impl live_surface --record"}},
+    {"arm": "learn_by_example/live_examples", "share": 0.33, "run": {"full": "esoi run learn_by_example --impl live_examples --record"}}]}},
+ {"id": "QME6", "kind": "structure", "area": "Measured coverage",
+  "args": {"rule": "structure_coverage", "what": "share of all solutions with a current measured result whose selection follows it"}},
+ {"id": "QME7", "kind": "structure", "area": "Parts selected by measurement",
+  "args": {"rule": "structure_selection", "what": "share of measured solutions whose selected arm has a current row no rival beats"}}
+]
