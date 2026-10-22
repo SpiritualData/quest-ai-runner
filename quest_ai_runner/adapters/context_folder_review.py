@@ -55,6 +55,11 @@ _FOLDER_REVIEW_MAX_DEPTH = 6     # never descend past this
 _FOLDER_REVIEW_EXPAND_OVER = 400 # a kept folder with more files than this gets opened up a level
 
 
+# Risk signal kinds (``context_risk_gate``) that make a folder unsafe to index when the review
+# cannot judge it. "large" is context for the model only: a big folder is not dangerous by itself.
+HARD_RISK_KINDS = ("stores", "series")
+
+
 _FOLDER_REVIEW_PROMPT = """You decide which folders of a knowledge corpus are worth indexing for
 semantic search. The index is used to recall context for work on this project.
 
@@ -79,6 +84,12 @@ When a folder plainly holds BOTH kinds -- a workspace with real notes next to a 
 dependency, say -- do not guess. Answer "mixed": true and it will be opened up and its children
 judged individually. Prefer "mixed" over a confident SKIP whenever a folder is large and varied:
 excluding it wholesale throws away everything beneath it.
+
+A folder marked [RISK: ...] tripped a cheap structural check: it holds several card stores of
+its own, or it looks like a series of dated or numbered copies of one tree (daily backups,
+snapshots, release archives), or it is very large. A series of copies and the card stores inside
+them describe the same material many times over, so lean toward SKIP unless the folder plainly
+holds the only copy of real, current knowledge.
 
 Reply with ONLY a JSON array, one object per folder given, no prose:
 [{"folder": "<exact folder string>", "index": true, "mixed": false, "reason": "<at most 8 words>"}]
@@ -177,14 +188,21 @@ def _sample_filenames(walk_root: Path, folder: str, limit: int = 6) -> List[str]
 
 
 def _review_folder_batch(batch: List[Tuple[str, int]], walk_root: Path, provider,
-                         model: Optional[str]) -> Dict[str, Dict[str, Any]]:
-    """One LLM call judging up to ``_FOLDER_REVIEW_BATCH`` folders. Never raises; {} on failure."""
+                         model: Optional[str],
+                         notes: Optional[Dict[str, str]] = None) -> Dict[str, Dict[str, Any]]:
+    """One LLM call judging up to ``_FOLDER_REVIEW_BATCH`` folders. Never raises; {} on failure.
+
+    ``notes`` maps a folder to the risk signals that put it in front of the model (see
+    ``context_risk_gate``); they are shown beside the folder as ``[RISK: ...]``.
+    """
     lines = []
     for folder, count in batch:
         samples = ", ".join(_sample_filenames(walk_root, folder)) or "(none)"
         guides = _ai_instruction_files_in(walk_root, folder)
         hint = f" [contains {', '.join(guides)}]" if guides else ""
-        lines.append(f'- "{folder}" ({count} files){hint} e.g. {samples}')
+        risk = f" [RISK: {notes[folder]}]" if notes and notes.get(folder) else ""
+        size = f"{count} files" if count else "size not measured"
+        lines.append(f'- "{folder}" ({size}){hint}{risk} e.g. {samples}')
     prompt = _FOLDER_REVIEW_PROMPT + "\n\nFOLDERS:\n" + "\n".join(lines)
     try:
         raw = provider.answer([{"role": "user", "content": prompt}], model=model)
@@ -425,6 +443,19 @@ def drop_verdicts_under_final_exclusions(verdicts: Dict[str, Dict[str, Any]]) ->
     return dropped
 
 
+def load_verdicts(cards_dir: Path) -> Dict[str, Dict[str, Any]]:
+    """The cached ``folder_review.json`` verdicts, ``{}`` when missing or unreadable."""
+    try:
+        cache_path = Path(cards_dir) / _FOLDER_REVIEW_FILE
+        if cache_path.exists():
+            loaded = json.loads(cache_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict) and isinstance(loaded.get("folders"), dict):
+                return loaded["folders"]
+    except Exception:  # noqa: BLE001
+        pass
+    return {}
+
+
 def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[str],
                    cards_dir: Path) -> Set[str]:
     """Relative folders to EXCLUDE from indexing, judged by batched LLM review.
@@ -432,29 +463,77 @@ def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Option
     Adaptive: judge the shallow level, then open up only the folders that were kept AND are large
     enough that their contents could still be mostly junk. Cached in the cards dir; delete or edit
     that file to redo or override. Returns an empty set on any failure -- an unreviewable corpus is
-    indexed in full, exactly as before this existed.
+    indexed in full, exactly as before this existed. (Folders with a structural risk signal are the
+    exception, and are handled by ``context_risk_gate.folder_gate``, which calls ``review_corpus``.)
     """
-    cache_path = cards_dir / _FOLDER_REVIEW_FILE
-    verdicts: Dict[str, Dict[str, Any]] = {}
-    try:
-        if cache_path.exists():
-            loaded = json.loads(cache_path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict) and isinstance(loaded.get("folders"), dict):
-                verdicts = loaded["folders"]
-    except Exception:  # noqa: BLE001
-        verdicts = {}
+    return review_corpus(walk_root, skip_dirs, provider, model, cards_dir)[0]
 
-    counts = _dir_file_counts(walk_root, skip_dirs)
-    if not counts:
-        return set()
+
+def _review_risk_folders(verdicts: Dict[str, Dict[str, Any]], risk: Dict[str, List[Tuple[str, str]]],
+                         counts: Dict[str, int], walk_root: Path, provider,
+                         model: Optional[str], notes: Dict[str, str]) -> None:
+    """Judge every folder that carries a HARD risk signal and has no verdict yet, in place.
+
+    This is the one place a risk-signalled folder reaches the model, and it does so whatever the
+    corpus size (the file-count floor does not apply). A verdict already in the cache, from a
+    model or from a human, is never re-asked. A skip is ``final``: nothing beneath it is judged or
+    re-opened. The model's answer is recorded with ``source: risk_signal`` and the signals that
+    triggered it, so the file stays readable and editable like every other verdict.
+    """
+    pending = [(f, _folder_file_count(counts, f)) for f, sigs in risk.items()
+               if any(kind in HARD_RISK_KINDS for kind, _ in sigs)
+               and f not in verdicts and final_exclusion_covering(verdicts, f) is None]
+    if provider is None or not pending:
+        return
+    for i in range(0, len(pending), _FOLDER_REVIEW_BATCH):
+        judged = _review_folder_batch(pending[i:i + _FOLDER_REVIEW_BATCH], walk_root, provider,
+                                      model, notes=notes)
+        for folder, verdict in judged.items():
+            verdict["mixed"] = False
+            verdict["source"] = "risk_signal"
+            verdict["signals"] = sorted({kind for kind, _ in risk.get(folder, [])})
+            if not verdict.get("index", True):
+                verdict["final"] = True
+            verdicts[folder] = verdict
+
+
+def review_corpus(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[str],
+                  cards_dir: Path,
+                  risk: Optional[Dict[str, List[Tuple[str, str]]]] = None,
+                  counts: Optional[Dict[str, int]] = None,
+                  persist: bool = True,
+                  ) -> Tuple[Set[str], Dict[str, Dict[str, Any]]]:
+    """The folder review proper: ``(folders to exclude, every verdict now held)``.
+
+    ``risk`` maps a folder to its structural risk signals (see ``context_risk_gate``). Those
+    folders are always sent to the model, below the file-count floor too, with the signal as
+    context. ``counts`` lets the caller supply the per-directory file counts it already took.
+    ``persist=False`` leaves ``folder_review.json`` untouched (a read-only report).
+    """
+    risk = risk or {}
+    cache_path = cards_dir / _FOLDER_REVIEW_FILE
+    verdicts: Dict[str, Dict[str, Any]] = load_verdicts(cards_dir)
+    hard_risk = {f: sigs for f, sigs in risk.items()
+                 if any(kind in HARD_RISK_KINDS for kind, _ in sigs)}
+    notes = {f: "; ".join(text for _, text in sigs) for f, sigs in risk.items()}
+
+    if counts is None:
+        counts = _dir_file_counts(walk_root, skip_dirs)
+    if not counts and not hard_risk:
+        return set(), verdicts
 
     # Only worth doing on a corpus big enough for the answer to matter. A small project root has
     # nothing to prune that the skip list has not already caught, and spending model calls to
     # confirm that would make every ordinary bootstrap slower and dearer for no gain. The problem
     # this solves only appears at scale -- one corpus where 91% of 81,464 files were dependency
-    # checkouts, generated data and build output.
+    # checkouts, generated data and build output. A folder with a structural risk signal is the
+    # one exception: the floor is about ordinary folders, and a series of dated copies is small
+    # in the files it shows and enormous in the cards it would make.
     if sum(counts.values()) < _FOLDER_REVIEW_MIN_FILES:
-        return set()
+        if not hard_risk:
+            return set(), verdicts
+        _review_risk_folders(verdicts, risk, counts, walk_root, provider, model, notes)
+        return _finish_review(verdicts, counts, cards_dir, cache_path, persist), verdicts
 
     # --- Safeguard 1: nested repositories, decided without a model call --------------------
     # Recorded as verdicts so they are visible and editable in the cache file like any other.
@@ -514,7 +593,10 @@ def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Option
             len(stale_under_final),
         )
 
-    # --- Safeguard 3: the model, for what the two above cannot see -------------------------
+    # --- Safeguard 3a: folders with a structural risk signal, always asked ----------------
+    _review_risk_folders(verdicts, risk, counts, walk_root, provider, model, notes)
+
+    # --- Safeguard 3b: the model, for what the two above cannot see ------------------------
     if provider is not None:
         depth = _FOLDER_REVIEW_START_DEPTH
         pending = [(f, n) for f, n in _roll_up_to_depth(counts, depth).items()
@@ -522,7 +604,7 @@ def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Option
         while depth <= _FOLDER_REVIEW_MAX_DEPTH:
             for i in range(0, len(pending), _FOLDER_REVIEW_BATCH):
                 verdicts.update(_review_folder_batch(pending[i:i + _FOLDER_REVIEW_BATCH],
-                                                     walk_root, provider, model))
+                                                     walk_root, provider, model, notes=notes))
             # Descend only into folders that survived AND are big enough to still hide junk.
             depth += 1
             if depth > _FOLDER_REVIEW_MAX_DEPTH:
@@ -556,11 +638,17 @@ def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Option
             if not pending:
                 break
 
+    return _finish_review(verdicts, counts, cards_dir, cache_path, persist), verdicts
+
+
+def _finish_review(verdicts: Dict[str, Dict[str, Any]], counts: Dict[str, int], cards_dir: Path,
+                   cache_path: Path, persist: bool = True) -> Set[str]:
+    """Write the verdict file and return the folders those verdicts exclude."""
     # Written whether or not a model took part: with no provider this pass still re-applies the
     # deterministic safeguards and drops the verdicts that sat under them, and that correction
     # belongs on disk rather than being recomputed in memory forever. The file stays what it has
     # always been, the record a human can read and edit to override any decision.
-    if verdicts:
+    if verdicts and persist:
         try:
             cards_dir.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(

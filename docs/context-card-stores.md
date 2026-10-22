@@ -358,6 +358,36 @@ turns, associations) to that server, because other users can reach it.
 - **One embedding per query.** The query embedding is computed once and re-used for the reader's own
   store and every remote mount.
 
+## The risk gate: folders that must not be read, whatever a model is available
+
+Some folders are dangerous for a reason a file count never shows. The case that motivated this: a
+machine's daily backup snapshots (one folder per date, each a copy of the whole tree) each carry their
+own card store, so one backups folder held 155 stores and 760,608 cards, and a corpus rooted above it
+would have walked, imported and mounted every one. `folder_gate` (`context_risk_gate.py`) is the one
+function every card source asks, so there is one answer and no per-path copy of it: the file walk,
+nested store discovery, ancestor imports, mounts discovery and the `migrate-imports` report.
+
+- **Signals, no model, computed in one cheap walk** (`risk_signals` is a pure function): a folder whose
+  subtree holds three or more card stores (one nested store is normal and is no signal); a series of
+  sibling folders named like dates, timestamps or version numbers that share one child structure;
+  a very large folder (the folder review's own `_FOLDER_REVIEW_MIN_FILES`). A folder is reported at the
+  shallowest level that holds the pattern, and a confirmed series is not walked into.
+- **Always reviewed.** A folder with a signal is put to the folder review whatever the corpus size (the
+  2,000-file floor does not apply), with the signal in the prompt (`[RISK: contains N card stores]`,
+  `looks like a series of N dated or numbered copies`). The verdict is cached in `folder_review.json`
+  with a reason and `source: risk_signal`, and stays human-editable: set `"index": true` on the folder
+  to override a skip.
+- **If the review cannot run** (`QAR_FOLDER_REVIEW=0`, no provider, a failed call), a folder with a
+  stores or series signal is not indexed, not descended into, and no store beneath it is imported or
+  mounted. One warning per run names the folder, why, and the override. A very large folder alone is
+  context for the model, never a block. Folders with no signal keep the fail-open behaviour: an
+  unreviewable ordinary corpus is indexed in full.
+- **Ancestors.** An ancestor's cards are trimmed of files in a turned-away folder, and an ancestor
+  store that is itself one of a series of dated copies is ignored until it has a verdict (the key is
+  the series' folder relative to the corpus root, such as `"../.."`).
+- **`context migrate-imports`** shows folders the gate turned away (`RISK, NOT READ`); like the rest of
+  the report it makes no model call and changes nothing.
+
 ## Config keys
 
 All environment variables (in a lane's `qar.toml` `[env]` table or its unit environment):

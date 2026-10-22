@@ -27,11 +27,10 @@ from .context_bootstrap_support import (
 )
 from .context_card_extraction import _extract_topic_cards
 from .context_folder_review import (
-    _folder_review,
-    _folder_review_enabled,
     _is_excluded_folder,
     _prune_dead_cards,
 )
+from .context_risk_gate import FolderGate, folder_gate
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
 from .context_topic_cards import _llm_topic_cards
 
@@ -48,8 +47,12 @@ class BootstrapWalkMixin:
         max_files: Optional[int] = None,
         max_cards: Optional[int] = None,
         skip_unchanged: bool = False,
+        gate: Optional[FolderGate] = None,
     ) -> int:
         """Actual bootstrap logic. May raise; callers wrap in try/except.
+
+        ``gate`` is the folder decision for this pass (see ``context_risk_gate.folder_gate``); the
+        caller that already settled mounts passes the one it used, otherwise it is taken here.
 
         Topic cards are semantic: the LLM (``provider``) decides what the topics are and which
         files belong to each, so a card can span unrelated directories. The pass is INCREMENTAL:
@@ -82,18 +85,14 @@ class BootstrapWalkMixin:
         skip_dirs = effective_skip_dirs(walk_root)
 
         # --- Pass 1: walk the tree and collect qualifying source file paths (flat list) ---
-        # Which folders are worth indexing AT ALL, decided before a single file is collected.
-        # Three layers, cheapest first: nested repositories and fuzzy duplicates are settled
-        # deterministically, and only what is left goes to the model. See _folder_review.
-        excluded_folders: Set[str] = set()
-        if _folder_review_enabled():
-            try:
-                excluded_folders = _folder_review(walk_root, skip_dirs, provider, model,
-                                                  self._cards_dir)
-            except Exception:  # noqa: BLE001 -- an unreviewable corpus is indexed in full
-                _log.info("context index: folder review failed; indexing everything",
-                          exc_info=True)
-                excluded_folders = set()
+        # Which folders are worth indexing AT ALL, decided before a single file is collected, by
+        # the ONE gate every card source asks (this walk, nested and ancestor imports, mounts):
+        # nested repositories and fuzzy duplicates settled deterministically, folders with a risk
+        # signal (many card stores, a series of dated copies) always put to the model and, if it
+        # cannot be asked, kept out, and only what is left reviewed as before. See folder_gate.
+        if gate is None:
+            gate = folder_gate(walk_root, skip_dirs, provider, model, self._cards_dir)
+        excluded_folders: Set[str] = gate.excluded
 
         if max_files is None:
             max_files = _bootstrap_max_files()
@@ -195,19 +194,7 @@ class BootstrapWalkMixin:
                     "this store alongside the mounts. Run `quest-ai-runner context migrate-imports` "
                     "to convert them; nothing is deleted automatically.", len(stale_copies))
         elif self._reuse_nested_cards:
-            for nested_root in self._discover_nested_card_dirs(walk_root, skip_dirs):
-                # A store inside a folder the review excluded is not a shortcut, it is the same
-                # dead weight arriving by another door. Backup snapshots are the clearest case:
-                # a daily copy of the corpus carries its own .quest-context, so reuse happily
-                # imported cards describing yesterday's copy of files that already exist here.
-                try:
-                    nested_rel = nested_root.resolve().relative_to(walk_root.resolve()).as_posix()
-                except ValueError:
-                    nested_rel = ""
-                if nested_rel and _is_excluded_folder(nested_rel, excluded_folders):
-                    _log.info("context index: not importing the card store under %s — that folder "
-                              "is excluded from this corpus", nested_rel)
-                    continue
+            for nested_root in self._discover_nested_card_dirs(walk_root, skip_dirs, gate):
                 for ic in self._import_nested_cards(nested_root, walk_root):
                     imported_cards.append(ic)
                     imported_covered.update(ic.get("files", []))
@@ -215,9 +202,9 @@ class BootstrapWalkMixin:
             # the narrower one, e.g. bootstrapping a subfolder of an already-indexed wide corpus).
             # Both directions can contribute at once (an indexed ancestor above AND an indexed
             # descendant below), so this is not an elif.
-            ancestor_root = self._discover_ancestor_card_dir(walk_root)
+            ancestor_root = self._discover_ancestor_card_dir(walk_root, gate)
             if ancestor_root is not None:
-                for ic in self._import_ancestor_cards(ancestor_root, walk_root):
+                for ic in self._import_ancestor_cards(ancestor_root, walk_root, gate):
                     imported_cards.append(ic)
                     imported_covered.update(ic.get("files", []))
             # A card whose every file is gone is dead weight, and is pruned further down. Judge the

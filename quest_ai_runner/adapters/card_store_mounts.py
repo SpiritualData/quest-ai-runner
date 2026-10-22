@@ -148,11 +148,14 @@ def claims_subtree(directory: Path) -> bool:
         return True
 
 
-def discover_nested_stores(walk_root: Path, own_cards_dir: Path, skip_dirs: Set[str]) -> List[Path]:
+def discover_nested_stores(walk_root: Path, own_cards_dir: Path, skip_dirs: Set[str],
+                           gate: Any = None) -> List[Path]:
     """Every bootstrapped store BELOW ``walk_root``, flat (a store inside a store is found too).
 
     Returns each store's corpus ROOT (the directory holding its card directory). The reader mounts
     them side by side rather than through each other, so a card is reachable by exactly one path.
+    A folder the ``gate`` (``context_risk_gate.folder_gate``) turned away is not entered, so no
+    store beneath it is found, claimed or mounted.
     """
     found: List[Path] = []
     try:
@@ -160,6 +163,9 @@ def discover_nested_stores(walk_root: Path, own_cards_dir: Path, skip_dirs: Set[
         for dirpath, dirnames, _files in os.walk(walk_root):
             current = Path(dirpath).resolve()
             if current == own:
+                dirnames[:] = []
+                continue
+            if gate is not None and gate.excludes_dir(current):
                 dirnames[:] = []
                 continue
             if current != walk_root.resolve() and claims_subtree(current):
@@ -170,13 +176,15 @@ def discover_nested_stores(walk_root: Path, own_cards_dir: Path, skip_dirs: Set[
     return found
 
 
-def discover_ancestor_stores(walk_root: Path) -> List[Path]:
-    """Every bootstrapped store ABOVE ``walk_root`` (nearest first), as corpus roots."""
+def discover_ancestor_stores(walk_root: Path, gate: Any = None) -> List[Path]:
+    """Every bootstrapped store ABOVE ``walk_root`` (nearest first), as corpus roots.
+
+    A store that is one of a series of dated copies, which the ``gate`` turned away, is left out."""
     found: List[Path] = []
     try:
         current = walk_root.resolve().parent
         for _ in range(MAX_ANCESTOR_LEVELS):
-            if claims_subtree(current):
+            if claims_subtree(current) and not (gate is not None and gate.ancestor_blocked(current)):
                 found.append(current)
             if current.parent == current:
                 break
@@ -187,7 +195,7 @@ def discover_ancestor_stores(walk_root: Path) -> List[Path]:
 
 
 def resolve_mounts(own_cards_dir: str, walk_root: Path,
-                   skip_dirs: Optional[Set[str]] = None) -> MountOutcome:
+                   skip_dirs: Optional[Set[str]] = None, gate: Any = None) -> MountOutcome:
     """Decide which stores around ``walk_root`` this process mounts, and which it must leave alone.
 
     Every nested and ancestor store is CLAIMED (its subtree is not the reader's to index). Each
@@ -197,8 +205,8 @@ def resolve_mounts(own_cards_dir: str, walk_root: Path,
     out = MountOutcome()
     skip = skip_dirs if skip_dirs is not None else effective_skip_dirs(walk_root)
     own_resolved = os.path.realpath(own_cards_dir)
-    nested = discover_nested_stores(walk_root, Path(own_cards_dir), skip)
-    ancestors = discover_ancestor_stores(walk_root)
+    nested = discover_nested_stores(walk_root, Path(own_cards_dir), skip, gate)
+    ancestors = discover_ancestor_stores(walk_root, gate)
     for kind, roots in (("nested", nested), ("ancestor", ancestors)):
         for store_root in roots:
             cards_dir = store_root / CARDS_DIR_NAME
@@ -650,6 +658,7 @@ class MigratePlan:
     mounts: List[Mount] = field(default_factory=list)
     refused: List[Tuple[str, str]] = field(default_factory=list)
     needs_store_id: List[str] = field(default_factory=list)  # nested stores that cannot be mounted yet
+    risk_blocked: List[Tuple[str, str]] = field(default_factory=list)  # folders the risk gate turned away
     orphan_point_ids: List[str] = field(default_factory=list)  # vector item ids the copies left
     orphans_checked: bool = False
     applied: bool = False
@@ -675,6 +684,9 @@ class MigratePlan:
         else:
             lines.append(f"  vector items the copies would have embedded: {len(self.orphan_point_ids)} "
                          f"(pass --qdrant-url or --qdrant-path to check which exist)")
+        for d, why in self.risk_blocked:
+            lines.append(f"    RISK, NOT READ {d}: {why} (no verdict yet; set \"index\": true for it in "
+                         f"folder_review.json to include it)")
         for p in self.problems:
             lines.append(f"  PROBLEM: {p}")
         lines.append("  APPLIED" if self.applied else "  dry run: nothing was changed")
@@ -705,13 +717,17 @@ def plan_migrate_imports(cards_dir: str, root: Optional[str],
     if not os.path.isdir(own_root):
         plan.problems.append("the root is not an existing directory")
         return plan
-    outcome = resolve_mounts(cards_dir, Path(own_root))
+    # The same gate every card source asks, from cached verdicts only: a report makes no model call.
+    from .context_risk_gate import folder_gate
+    skip = effective_skip_dirs(Path(own_root))
+    gate = folder_gate(Path(own_root), skip, None, None, Path(cards_dir), persist=False)
+    plan.risk_blocked = gate.blocked_report()
+    outcome = resolve_mounts(cards_dir, Path(own_root), skip, gate=gate)
     plan.mounts = outcome.mounts
     plan.refused = outcome.refused
     mounted_roots = {os.path.realpath(m.root) for m in outcome.mounts}
-    for store_root in [*discover_nested_stores(Path(own_root), Path(cards_dir),
-                                               effective_skip_dirs(Path(own_root))),
-                       *discover_ancestor_stores(Path(own_root))]:
+    for store_root in [*discover_nested_stores(Path(own_root), Path(cards_dir), skip, gate),
+                       *discover_ancestor_stores(Path(own_root), gate)]:
         if not store_id_of(str(store_root / CARDS_DIR_NAME)):
             plan.needs_store_id.append(str(store_root / CARDS_DIR_NAME))
     cards = FilesystemCardRepository(cards_dir).load_all()

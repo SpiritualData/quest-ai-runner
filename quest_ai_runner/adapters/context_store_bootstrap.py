@@ -36,6 +36,7 @@ from .context_bootstrap_support import (
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
 from .context_card_ceilings import _MIN_FILES_PER_CARD, apply_card_ceilings, card_is_too_thin
 from .context_folder_review import _dir_file_counts
+from .context_risk_gate import folder_gate
 from .context_card_extraction import _path_slug
 
 
@@ -407,7 +408,8 @@ class BootstrapMixin:
         except Exception:  # noqa: BLE001
             return False
 
-    def _discover_nested_card_dirs(self, walk_root: Path, skip_dirs: Set[str]) -> List[Path]:
+    def _discover_nested_card_dirs(self, walk_root: Path, skip_dirs: Set[str],
+                                   gate: Any = None) -> List[Path]:
         """Find sub-corpora under ``walk_root`` that already have their OWN completed bootstrap.
 
         A directory qualifies when ``<dir>/.quest-context/bootstrap_meta.json`` exists — the
@@ -416,7 +418,9 @@ class BootstrapMixin:
         a nested store is trusted to have already reused whatever is bootstrapped beneath IT (if it
         implements the same reuse), so importing its cards transitively covers its own subtree too.
         This store's own directory is not a match (see ``is_own_store``): it is part of the corpus.
-        Never raises; returns [] on any failure.
+        A folder the ``gate`` (``context_risk_gate.folder_gate``) turned away is neither entered nor
+        searched: a store inside it is the same dead weight arriving by another door (a backup
+        snapshot carries its own store). Never raises; returns [] on any failure.
         """
         found: List[Path] = []
         try:
@@ -428,6 +432,9 @@ class BootstrapMixin:
                     prune_dirnames(dirnames, current=current_dir, base_skip=skip_dirs)
                     continue
                 if current_dir == cards_dir_resolved:
+                    dirnames[:] = []
+                    continue
+                if gate is not None and gate.excludes_dir(current_dir):
                     dirnames[:] = []
                     continue
                 if (current_dir / ".quest-context" / _BOOTSTRAP_META_FILE).is_file() \
@@ -641,7 +648,7 @@ class BootstrapMixin:
                 continue
         return imported
 
-    def _discover_ancestor_card_dir(self, walk_root: Path) -> Optional[Path]:
+    def _discover_ancestor_card_dir(self, walk_root: Path, gate: Any = None) -> Optional[Path]:
         """Find the nearest ANCESTOR of ``walk_root`` that already has its own completed bootstrap.
 
         Mirror image of ``_discover_nested_card_dirs``: that one walks DOWN into ``walk_root``'s
@@ -663,7 +670,8 @@ class BootstrapMixin:
             for _ in range(_MAX_ANCESTOR_WALK_LEVELS):
                 if (current / ".quest-context" / _BOOTSTRAP_META_FILE).is_file() \
                         and not is_merged_store(str(current / ".quest-context")) \
-                        and not self.is_own_store(current):
+                        and not self.is_own_store(current) \
+                        and not (gate is not None and gate.ancestor_blocked(current)):
                     return current
                 parent = current.parent
                 if parent == current:  # reached filesystem root
@@ -673,7 +681,8 @@ class BootstrapMixin:
             pass
         return None
 
-    def _import_ancestor_cards(self, ancestor_root: Path, walk_root: Path) -> List[Dict[str, Any]]:
+    def _import_ancestor_cards(self, ancestor_root: Path, walk_root: Path,
+                               gate: Any = None) -> List[Dict[str, Any]]:
         """Reuse an ANCESTOR corpus's already-bootstrapped cards, filtered down to ``walk_root``.
 
         Mirror image of ``_import_nested_cards`` for the upward direction. An ancestor's cards can
@@ -716,6 +725,10 @@ class BootstrapMixin:
                         rel = abs_path.relative_to(walk_root_resolved)
                     except ValueError:
                         continue  # this file is outside walk_root; drop it, keep the rest of the card
+                    # A file inside a folder the gate turned away is not this corpus's to cover,
+                    # whichever store offers it.
+                    if gate is not None and gate.excludes_rel(rel.parent.as_posix()):
+                        continue
                     files.append(rel.as_posix())
                 if not files:
                     continue
@@ -752,6 +765,7 @@ class BootstrapMixin:
         walk_root = Path(root).resolve() if root else self._repo_root
         if walk_root is None or not walk_root.is_dir():
             return 0
+        self.adopt_moved_root(walk_root)
         built_for = self.built_for_another_root(walk_root)
         if built_for:
             _log.error(
@@ -763,7 +777,11 @@ class BootstrapMixin:
         if self._mount_mode != MODE_MOUNT:
             return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
                                         max_cards=max_cards, skip_unchanged=skip_unchanged)
-        outcome = resolve_mounts(str(self._cards_dir), walk_root, effective_skip_dirs(walk_root))
+        # The gate is settled FIRST: a store inside a folder it turns away is neither claimed nor
+        # mounted, and the walk below is handed the very same decision.
+        skip_dirs = effective_skip_dirs(walk_root)
+        gate = folder_gate(walk_root, skip_dirs, provider, model, self._cards_dir)
+        outcome = resolve_mounts(str(self._cards_dir), walk_root, skip_dirs, gate=gate)
         if not self._dry_run and outcome.mounts and not read_store_meta(str(self._cards_dir)):
             # A corpus that mounts stores is itself a store with an identity, even before it has a
             # card of its own: record it, so its mounts (and its own cards, later) have a home.
@@ -779,7 +797,34 @@ class BootstrapMixin:
                       "are not indexed here", len(outcome.mounts))
         with skip_subtrees(outcome.claimed_roots):
             return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
-                                        max_cards=max_cards, skip_unchanged=skip_unchanged)
+                                        max_cards=max_cards, skip_unchanged=skip_unchanged,
+                                        gate=gate)
+
+    def adopt_moved_root(self, walk_root: Path) -> bool:
+        """Record ``walk_root`` as the store's root when the corpus folder was renamed or moved. True when it did.
+
+        A card names its files relative to the root, so a corpus renamed together with the store inside
+        it (``<root>/.quest-context``) still points at the right files: only the recorded root is stale,
+        and refusing to index until someone runs ``move-root`` stopped a renamed corpus for good. The
+        recorded root is replaced (and kept in the store's history, as ``move-root`` does) when it no
+        longer exists, or when this store sits directly inside ``walk_root``. A store kept elsewhere that
+        was built for a root that still exists is NOT adopted: that is the shared or widened store the
+        refusal is for. Never raises.
+        """
+        try:
+            recorded = str(read_store_meta(str(self._cards_dir)).get("root") or "")
+            if not recorded or self._dry_run or os.path.realpath(recorded) == os.path.realpath(str(walk_root)):
+                return False
+            inside = os.path.realpath(str(self._cards_dir)) == os.path.realpath(str(walk_root / ".quest-context"))
+            if os.path.isdir(recorded) and not inside:
+                return False
+            from .card_store_identity import apply_move_root
+            apply_move_root(str(self._cards_dir), str(walk_root), force=True)
+            _log.info("context index: the corpus folder moved from %s to %s; its card store now records the new "
+                      "root (the cards name files relative to it, so nothing else changes)", recorded, walk_root)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
 
     def built_for_another_root(self, walk_root: Path) -> str:
         """The corpus root this store was built for when it is not ``walk_root``, else "".
