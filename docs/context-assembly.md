@@ -657,12 +657,20 @@ wait rather than a silent one:
   it logs a WARNING, counts it, says "Continuing without that context, the search took too long."
   and the run goes on without that context. It never raises.
 - A deep run with exactly ONE goal serves the request the turn-start assembly already served, so
-  it reuses that result (finished: handed over; timed out but still running: waited for within the
-  budget, never duplicated) through `TurnCardCache.turn_start_context`. The reuse is skipped when
-  the cache's `scope_tags` differ from the run's, and a fan-out's subgoals each still assemble for
-  their own focus.
+  it reuses that result (finished: handed over; still running: waited for only what is left of
+  the budget counted from when the turn-start search began, so a search that already used the whole
+  budget is not given a second one; never duplicated) through `TurnCardCache.turn_start_context`.
+  The reuse is skipped when the cache's `scope_tags` differ from the run's, and a fan-out's
+  subgoals each still assemble for their own focus.
+- A search the turn has stopped waiting for keeps running, because its index is what makes the next
+  turn fast. It does not starve the rest of the process: past the soft deadline the keyword index
+  build calls a `Pacer` (`core/background_pacing.py`), a real 2 ms pause after each 30 ms of work.
+  The prewarm and the vector seed export use the same pacer. (`time.sleep(0)` does not work: with a
+  busy thread beside it, a thread's 3,000 blocking calls took 7.4 s with `sleep(0)` every 200 items
+  and 8.1 s without, against 35 ms with the pause.)
 - The wait is announced first: "Gathering what I need to start." (the same for every runner: it names no
-  model), only when a wait really happens, followed by "Starting the work on <model>." for a pinned model
+  model), only when a wait really happens (nothing is announced when the budget is already spent: the
+  line "Continuing without that context" comes at once), followed by "Starting the work on <model>." for a pinned model
   or the existing "Starting on <model>" line for an automatic choice. A declined self-initiated escalation pays for no assembly.
 
 Disable the whole feature with `QAR_RECENT_CONTEXT=0` (env, read in `cli.py`), or by passing
