@@ -1409,3 +1409,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-22,choose_what_to_index,risk_gate,16,15,15/16,0/0,0,0,0,0.0,1.5,2e49e60,edb41e9c,none,,,
 2026-10-22,choose_what_to_index,choose_what_to_index.broken.index_everything:build,16,3,3/16,0/0,0,0,0,0.0,1.8,2e49e60,edb41e9c,none,,,
 2026-10-22,choose_what_to_index,review_only,16,4,4/16,0/0,0,0,0,0.0,1.9,2e49e60,edb41e9c,none,,,
+2026-10-22,spec_selection,lexical_vector_llm,76,24,16/50,8/26,222,331193,62298,0.0973,328.9,7f651e8,0a2ef76a,unknown,,,0.4177
