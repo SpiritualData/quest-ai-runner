@@ -256,9 +256,18 @@ meaning, read by runs and updated from what runs learn. The planned solution `se
 searches both in one pipeline. An ESOI record is then a **read-only view** of the record, keyed by
 (source, record id), for example (`esoi`, `persist-cards`), read from `esoi/*.csv` at query time and
 never copied into `.quest-context`: the CSV stays the one source of truth. This is the mount principle
-above; a copy would recreate the duplication that inflated card stores. Which record kinds are ranked
-as views (every kind, or solutions only with their intent, problems and ideals reached through links)
-is an open decision recorded as that solution's implementations.
+above; a copy would recreate the duplication that inflated card stores.
+
+The working default ranks **cards, solutions and problems**. Intents, ideals and metrics are reached
+through links: a solution brings its ideals, its metrics and its intent's frame; a problem brings its
+ideals and its intent. When the best match is a problem or an intent that no solution serves, the
+result says **"no solution yet"**, and that is the run's cue to define one (`track-runs-on-records`).
+Context that is not a solution still matters: ideals say what better means (to choose among
+alternatives or write a solution), metrics judge a change, an intent's vision settles direction, and
+problems are where new work starts. A link cannot reach a request whose words match only an ideal or a
+metric when neither its problem nor its solution matches, nor an intent that holds no problem or
+solution; ranking every record kind (`every_record_a_view`) is the recorded alternative, and the
+metric decides between them.
 
 ## The two prompt gates (doctrine, generic)
 

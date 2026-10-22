@@ -1,5 +1,10 @@
 # Context Card Schema
 
+> **Superseded.** This page is the earlier design of a unified card with one `sources` list. The card the
+> code writes (fields, id rules, what is not a card) is defined in
+> [context-assembly.md, What a context card is](context-assembly.md#what-a-context-card-is); only conversation
+> cards still carry `sources`.
+
 A **context card** is a discoverable unit of knowledge that can come from many sources: files, conversations, chat history, quest docs, etc.
 
 ## Schema

@@ -1,10 +1,11 @@
-"""QAR's own rule: S15 (environment variables are documented), which stays in quest-ai-runner.
+"""QAR's own rules: S15 (environment variables are documented) and Q1 (solution tags come from the maintained list).
 
 It depends on QAR's naming convention (``QAR_*``) and its generated configuration page, and sits beside
 ``env_vars.py`` (the scanner QAR keeps) in ``scripts/``. It is named in ``esoi.toml`` as a plugin; ``esoi rules``
 lists it with esoi's own rules. The top intent and its records are native esoi (``esoi/``), so no rule of
 QAR's is needed for them.
 """
+import csv
 import functools
 from pathlib import Path
 
@@ -57,5 +58,49 @@ def write_docs(ctx: Context) -> None:
     (Path(ctx.root) / "docs" / "configuration.md").write_text(env_vars.render_env_doc(Path(ctx.root)))
 
 
+TAG_PROCEDURE = "see docs/spec-selection.md, Solution tags: a tag names a risk and exists only with its back-fill"
+
+
+def tag_problems(listed: list, solutions: list) -> list:
+    """Q1 problem lines for the tag list ``listed`` (rows with tag, meaning, risk) and the solutions' tags columns.
+
+    What can be checked without judgement: every tag a solution uses is listed, every listed tag states its meaning
+    and its risk, and every listed tag is used by at least two solutions and by fewer than all of them."""
+    known = {row.get("tag", "").strip(): row for row in listed if row.get("tag", "").strip()}
+    users = {tag: [] for tag in known}
+    bad = []
+    for solution in solutions:
+        sid = solution.get("solution_id", "")
+        for tag in [t.strip() for t in (solution.get("tags") or "").split(";") if t.strip()]:
+            if tag in users:
+                users[tag].append(sid)
+            else:
+                bad.append(f"Q1 {sid}: tag `{tag}` is not in esoi/tags.csv ({TAG_PROCEDURE})")
+    for tag, row in known.items():
+        for column in ("meaning", "risk"):
+            if not (row.get(column) or "").strip():
+                bad.append(f"Q1 esoi/tags.csv {tag}: no {column} stated ({TAG_PROCEDURE})")
+        count = len(users[tag])
+        if count == 0:
+            bad.append(f"Q1 esoi/tags.csv {tag}: used by no solution; retire it ({TAG_PROCEDURE})")
+        elif count == 1:
+            bad.append(f"Q1 esoi/tags.csv {tag}: used by one solution only ({users[tag][0]}); back-fill it or retire it "
+                       f"({TAG_PROCEDURE})")
+        elif solutions and count == len(solutions):
+            bad.append(f"Q1 esoi/tags.csv {tag}: on every solution, so it identifies nothing; retire it ({TAG_PROCEDURE})")
+    return bad
+
+
+def solution_tags(ctx: Context) -> list:
+    path = Path(ctx.root) / ctx.config.structure_dir / "tags.csv"
+    if not path.exists():
+        return []
+    with path.open(newline="") as handle:
+        listed = list(csv.DictReader(handle))
+    return tag_problems(listed, ctx.every_solution())
+
+
 RULES = [RuleGroup({"S15": "Every environment variable read in the package is a row of docs/configuration.md "
-                           "(generated from the code, described in env_descriptions.csv)."}, env_docs)]
+                           "(generated from the code, described in env_descriptions.csv)."}, env_docs),
+         RuleGroup({"Q1": "Every solution tag is a row of esoi/tags.csv with a meaning and a risk, and every listed tag is "
+                          "used by at least two solutions and not by all."}, solution_tags)]

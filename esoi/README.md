@@ -44,7 +44,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-context-rediscovered-each-run`: An agent asked to answer or work from a person's own material has to find the relevant part of it first. With nothing kept between runs it re-discovers the same files and facts on every run (the planner asks what to read, retrieval searches, the loop re-plans), which costs tokens and latency, can miss what an earlier run already found, and leaves no record of where an answer came from.
 - `prob-card-store-inflates`: A card store grows far past the distinct content of its corpus. In copy mode a store nested in another store's corpus copied that store's cards under a namespaced id on every bootstrap pass, copies of copies were kept, and each pass stacked another namespace, so two real stores reached 8,557 and 32,070 cards on 2026-10-05 for corpora that need hundreds, and a search over them took minutes.
 - `prob-two-searches-for-one-context`: A run's context comes from two retrieval pipelines that repeat the same stages separately: context card selection (keyword IDF, vector search, weighted reciprocal-rank fusion, then a cheap-model filter and consolidation) and ESOI record selection (field-weighted TF-IDF, an optional vector search, reciprocal-rank fusion, then a gated cheap-model choice). They keep separate indexes, budgets and output shapes, and only the card result is put into a run's context: ESOI records reach a run only through tools it has to think to call, or as a lexical-only slice for a deep goal, so the problem, ideal and metric a run serves are often not in view.
-- `prob-run-improvement-unchecked`: Whether a run improved anything is recorded only in part and only for a while. A deep run records a metric reading before and after (the record_metric_result tool and GoalMetrics) into a per-run ledger in a temporary folder that is cleared after two days, and the task report carries it to Quest; but nothing says what the run moved, the reading never reaches the record it concerns, a card's last_outcome comes from the kind of turn rather than from any metric, and when the work shows a record is wrong or missing there is no tracked way to propose the change. Improvement is hoped for rather than checked per run.
+- `prob-run-improvement-unchecked`: Whether a run improved anything is recorded only in part and only for a while. A deep run records a metric reading before and after (the record_metric_result tool and GoalMetrics) into a per-run file of readings in a temporary folder that is cleared after two days, and the task report carries it to Quest; but nothing says what the run moved, the reading never reaches the record it concerns, a card's last_outcome comes from the kind of turn rather than from any metric, and when the work shows a record is wrong or missing nothing makes the run fix it. Improvement is hoped for rather than checked per run.
+- `prob-solution-not-identified`: A person or a run about to build or change something does not identify the solutions that already cover it or constrain it, so a second version of something that exists gets built, a change is made without consulting the solutions whose standing conditions it touches, or a solution is used where its Avoid line says not to. The former area column grouped solutions under numbered names that closed none of these risks.
 
 ## Ideals
 
@@ -84,7 +85,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-compounding-context`, Compounding Context: What one run found is kept as a card that later runs reuse, so every run starts grounded in the person's material at little cost, reads only what is current, and can name where each piece came from.
 - `ideal-proportionate-store`, Proportionate Card Store: A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
 - `ideal-one-ranked-context`, One Ranked Context: A run's context comes from one search over everything it may be grounded in, with one ranking and one budget, and every result says what kind of thing it is and where it lives.
-- `ideal-checked-improvement`, Checked Improvement per Run: Every run leaves, on the record it served, what it measured, what it moved and what it learned, and any change the record itself needs waits there as a proposal for its owner.
+- `ideal-checked-improvement`, Checked Improvement per Run: Every run leaves, on the record it served, what it measured, what it moved and what it changed in the record and why, so improvement is checked per run instead of hoped for.
+- `ideal-risks-identified-by-tag`, Constraining Solutions Identified: Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which closes one named risk.
 
 ## Solutions
 
@@ -143,7 +145,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 | `bound-card-growth` | Card store growth control | quarantine_tool | Cards per source-file group and duplicate share after repeated nested bootstrap |
 | `search-cards-and-specs` | Unified card and specification search |  | Mixed card and specification selection, with both existing selection metrics held |
-| `track-runs-on-records` | Per-record run tracking and change proposals |  | Runs that leave a durable, attributed improvement record |
+| `track-runs-on-records` | Per-record run tracking and specification upkeep |  | Runs that leave a durable, attributed improvement record |
+| `tag-solutions` | Risk tags that identify solutions |  | Right solution missed without the tag |
 
 ## Implementations
 
@@ -340,9 +343,10 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `bound-card-growth:bootstrap_guards` | Bootstrap guards against re-import (planned) | evaluation/components/card_growth/impls/bootstrap_guards.py |  |
 | `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | quest_ai_runner/core/spec_selection.py |  |
 | `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
-| `search-cards-and-specs:solution_views_with_links` | Cards and solutions ranked, intents reached through links (planned) |  |  |
-| `track-runs-on-records:per_run_ledger` | Per-run metric ledger and card counters (today) | quest_ai_runner/core/metric_results.py |  |
+| `track-runs-on-records:per_run_readings` | Per-run file of readings and card counters (today) | quest_ai_runner/core/metric_results.py |  |
 | `track-runs-on-records:tracking_on_the_record` | Tracking kept on each record's existing home (planned) |  |  |
+| `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (planned, working default) |  |  |
+| `tag-solutions:tag_list_with_check` | Risk tag list with a check rule | scripts/esoi_rules.py |  |
 
 ## Metrics
 
@@ -405,3 +409,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup; esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store`
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs`
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed improvement record: `esoi run record_tracking`
+- `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_lookup`
