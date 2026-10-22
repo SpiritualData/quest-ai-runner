@@ -115,7 +115,6 @@
   "mode": "copy",
   "reviewer": "none",
   "dates": 1,
-  "block_series": true,
-  "known_gap": true
+  "block_series": true
  }
 ]

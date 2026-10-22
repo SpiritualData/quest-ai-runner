@@ -17,14 +17,15 @@ from .cli_config import _config_from_env, _model_provider_from_env
 
 def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
                              cards_dir: Optional[str] = None,
-                             use_llm: bool = False):
+                             use_llm: bool = False, read_only: bool = False):
     """Resolve which existing context cards ``text`` selects, via the same card store the
     ``search-context`` command and card-aware task creation (``send``) both use.
 
     ``corpus``/``cards_dir`` default the same way ``search-context`` does (QAR_CORPUS_ROOT / cwd,
     and ``<corpus>/.quest-context`` or QAR_CONTEXT_CARDS_DIR). ``use_llm`` defaults to False
     (keyword/IDF selection only, no model call) so a caller that doesn't ask for it explicitly
-    gets an instant, offline result; pass ``use_llm=True`` to opt into the LLM relevance filter
+    gets an instant, offline result; ``read_only`` stamps no usage heat on the cards it selects
+    (``search-context`` uses it; a task being sent does want its cards warmed); pass ``use_llm=True`` to opt into the LLM relevance filter
     (what ``search-context`` does unless its ``--no-llm`` flag is given).
 
     Best-effort by design: building the model provider or the card store can fail (unconfigured
@@ -62,7 +63,7 @@ def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
     try:
         store = FileContextStore(resolved_cards_dir, repo_root=resolved_corpus, auto_bootstrap=False,
                                  provider=provider, model=filter_model)
-        return store.assemble(text)
+        return store.assemble(text, read_only=True) if read_only else store.assemble(text)
     except Exception as e:  # noqa: BLE001 -- card selection must never block the caller
         log.warning("card selection failed, sending with no auto-attached cards: %s", e)
         return AssembledContext()
@@ -511,6 +512,7 @@ def _cmd_search_context(args, log) -> int:
         corpus=getattr(args, "corpus", None),
         cards_dir=getattr(args, "cards_dir", None),
         use_llm=not getattr(args, "no_llm", False),
+        read_only=True,     # a report that only looks: it stamps no usage on any card
     )
 
     if not result.card_ids:

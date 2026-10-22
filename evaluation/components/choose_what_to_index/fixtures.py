@@ -42,8 +42,11 @@ def card(card_id, files):
             "provenance": {"created_by_task": "bootstrap"}}
 
 
-def write_store(root, cards):
-    """A bootstrapped store under ``root``: the cards, the files they pin, and the store's identity."""
+def write_store(root, cards, recorded_root=None):
+    """A bootstrapped store under ``root``: the cards, the files they pin, and the store's identity.
+
+    ``recorded_root`` is the root the store records for itself (default ``root``); a backup copy of a
+    live store carries the live corpus's root, not its own location."""
     cards_dir = root / ".quest-context"
     cards_dir.mkdir(parents=True, exist_ok=True)
     repo = FilesystemCardRepository(str(cards_dir))
@@ -53,7 +56,7 @@ def write_store(root, cards):
             target = root / fe["path"]
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("def f():\n    pass\n", encoding="utf-8")
-    _write_bootstrap_meta(str(cards_dir), len(cards), root=str(root))
+    _write_bootstrap_meta(str(cards_dir), len(cards), root=str(recorded_root or root))
     return cards_dir
 
 
@@ -71,7 +74,11 @@ def build(corpus: Path, cards_dir: Path, case):
     write_store(corpus / NESTED_DIR, [card(NESTED_CARD, ["pkg/m.py", "pkg/n.py"])])
     for d in dates(case.get("dates", 4)):
         snap = corpus / SERIES_DIR / d
-        write_store(snap, [card(f"snap-{d}", ["hq/docs/a.py", "hq/docs/b.py"])])
+        # A snapshot is a copy of the live tree: its notes folder, its nested project, and the live
+        # store as it was that day (so it records the live corpus's root).
+        write_store(snap, [card(f"snap-{d}", ["hq/docs/a.py", "hq/docs/b.py"])], recorded_root=corpus)
+        (snap / DOCS_DIR).mkdir(exist_ok=True)
+        (snap / DOCS_DIR / "guide.md").write_text("# guide\nnotes about the guide\n", encoding="utf-8")
         write_store(snap / NESTED_DIR, [card(f"snapprod-{d}", ["pkg/m.py", "pkg/n.py"])])
     if case.get("human_index"):
         cards_dir.mkdir(parents=True, exist_ok=True)

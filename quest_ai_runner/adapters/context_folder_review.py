@@ -57,7 +57,7 @@ _FOLDER_REVIEW_EXPAND_OVER = 400 # a kept folder with more files than this gets 
 
 # Risk signal kinds (``context_risk_gate``) that make a folder unsafe to index when the review
 # cannot judge it. "large" is context for the model only: a big folder is not dangerous by itself.
-HARD_RISK_KINDS = ("stores", "series")
+HARD_RISK_KINDS = ("stores", "series", "copy")
 
 
 _FOLDER_REVIEW_PROMPT = """You decide which folders of a knowledge corpus are worth indexing for

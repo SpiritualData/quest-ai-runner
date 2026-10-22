@@ -22,6 +22,7 @@ from .card_content_render import (
     render_card_content_blocks,
     tokenize as _tokenize,
 )
+from . import card_origin
 from ._walk import effective_skip_dirs, prune_dirnames
 from ..core.scope_tags import scope_tags_allow
 from .context_card_extraction import (
@@ -108,9 +109,12 @@ class AssemblyMixin:
     # ------------------------------------------------------------------
 
     def assemble(
-        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, read_only: bool = False
     ) -> AssembledContext:
         """Select and render relevant cards for ``task_text``. Never raises.
+
+        ``read_only=True`` is for a report that only looks (``search-context``): no per-source
+        usage heat is stamped, so no card file is written by the call.
 
         On the first call, if ``auto_bootstrap`` is enabled and the cards
         directory is empty (or absent), triggers ``bootstrap()`` once to seed
@@ -122,7 +126,7 @@ class AssemblyMixin:
         except Exception:  # noqa: BLE001
             pass
         try:
-            result = self._assemble_inner(task_text, meta=meta)
+            result = self._assemble_inner(task_text, meta=meta, read_only=read_only)
         except Exception:  # noqa: BLE001
             result = AssembledContext()
         return self._with_backend_health(result)
@@ -351,7 +355,8 @@ class AssemblyMixin:
         )
 
     def _assemble_inner(self, task_text: str, *,
-                        meta: Optional[Dict[str, Any]] = None) -> AssembledContext:
+                        meta: Optional[Dict[str, Any]] = None,
+                        read_only: bool = False) -> AssembledContext:
         task_kws = _tokenize(task_text)
         if not task_kws and not (meta or {}).get("priority_card_ids"):
             return AssembledContext()
@@ -401,6 +406,7 @@ class AssemblyMixin:
         cards = {
             cid: c for cid, c in cards.items()
             if scope_tags_allow(c.get("scope_tags"), turn_scope_tags)
+            and not card_origin.is_run_brief_record(c)
             and not (own_task and str(((c.get("provenance") or {}) if isinstance(
                 c.get("provenance"), dict) else {}).get("task_id") or "") == own_task)
         }
@@ -798,7 +804,8 @@ class AssemblyMixin:
         # data never enters the rendered text, and every rendered item is re-warmed by the same
         # amount, which cannot reorder them). Best-effort: never raises, never blocks assembly.
         try:
-            self._bump_source_usage(top_cards, card_metadata, llm_meta_map)
+            if not read_only:
+                self._bump_source_usage(top_cards, card_metadata, llm_meta_map)
         except Exception:  # noqa: BLE001 — usage bookkeeping must never break assembly
             _log.debug("per-source usage bump failed", exc_info=True)
 

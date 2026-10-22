@@ -386,3 +386,91 @@ def test_an_ancestor_store_that_is_one_of_a_series_of_copies_is_not_imported(tmp
     store2 = FileContextStore(str(cards), repo_root=str(walk_root), auto_bootstrap=False)
     store2.bootstrap(root=str(walk_root))
     assert store2._load_all()
+
+
+# --- a lone backup copy of the corpus itself ------------------------------------------------------
+
+
+def _live_corpus(root: Path) -> None:
+    for sub in ("docs", "src", "notes"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+        (root / sub / "a.md").write_text(f"# {sub}\nnotes\n")
+
+
+def _snapshot(root: Path, name: str, *, recorded_root=None, layout=(), store_id=None):
+    """One backup folder with a card store, optionally recording another root or the live layout."""
+    from quest_ai_runner.adapters.card_store_identity import update_identity
+    snap = root / "backups" / name
+    make_owner(snap, [card(f"snap-{name}", ["hq/docs/a.py", "hq/docs/b.py"])])
+    for sub in layout:
+        (snap / sub).mkdir(exist_ok=True)
+        (snap / sub / "a.md").write_text("# copy\n")
+    fields = {}
+    if recorded_root is not None:
+        fields["root"] = str(recorded_root)
+    if store_id is not None:
+        fields["store_id"] = store_id
+    if fields:
+        assert update_identity(str(snap / ".quest-context"), **fields)
+    return snap
+
+
+def test_serial_names_take_word_prefixes_and_time_suffixes():
+    for name in ("hq-docs-2026-09-30-0230", "hq_backup_20260930", "hq.docs.2026.09.30", "snap-2.1.0-rc1"):
+        assert gate_mod.name_looks_serial(name), name
+    for name in ("hq-docs", "backup_2026", "release-2", "x" * 90 + "-2026-09-30"):
+        assert not gate_mod.name_looks_serial(name), name
+
+
+def test_risk_signals_report_a_copy_of_the_corpus():
+    out = gate_mod.risk_signals(["bk/one"], {}, {}, {"bk/one": "its recorded root is this corpus's root"})
+    assert out["bk/one"][0][0] == "copy" and out["bk/one"][0][0] in gate_mod.HARD_RISK_KINDS
+
+
+@pytest.mark.parametrize("how", ["recorded_root", "layout", "own_store_id"])
+def test_a_lone_backup_copy_of_the_corpus_is_neither_indexed_nor_imported(tmp_path, caplog, how):
+    _live_corpus(tmp_path)
+    own_cards = tmp_path / "cards_elsewhere"
+    if how == "own_store_id":
+        from quest_ai_runner.adapters.card_store_identity import write_meta
+        own_cards.mkdir()
+        write_meta(str(own_cards), {"store_id": "st_live"})
+    kwargs = {"recorded_root": tmp_path} if how == "recorded_root" else \
+        {"layout": ("docs", "src", "notes")} if how == "layout" else {"store_id": "st_live"}
+    _snapshot(tmp_path, "hq_backup_20260930", **kwargs)
+    store = _store(tmp_path)
+    with caplog.at_level(logging.WARNING):
+        store.bootstrap(root=str(tmp_path))         # no provider: the review cannot run
+    assert not any(i.startswith("snap") for i in store._load_all()), "nothing from the copy is imported"
+    assert len(_risk_warnings(caplog)) == 1
+    assert "hq_backup_20260930" in _risk_warnings(caplog)[0].getMessage()
+    gate = gate_mod.folder_gate(tmp_path, set(), None, None, own_cards)
+    assert gate.excludes_dir(tmp_path / "backups" / "hq_backup_20260930")
+    assert not gate.excludes_dir(tmp_path / "docs")
+
+
+def test_a_lone_backup_copy_is_open_when_a_person_says_index(tmp_path):
+    _live_corpus(tmp_path)
+    _snapshot(tmp_path, "hq_backup_20260930", recorded_root=tmp_path)
+    cards = tmp_path / "cards_elsewhere"
+    cards.mkdir()
+    (cards / "folder_review.json").write_text(json.dumps(
+        {"folders": {"backups/hq_backup_20260930": {"index": True}}}))
+    gate = gate_mod.folder_gate(tmp_path, set(), None, None, cards)
+    assert not gate.excludes_dir(tmp_path / "backups" / "hq_backup_20260930")
+
+
+def test_a_nested_store_that_is_not_a_copy_stays_imported(tmp_path, caplog):
+    """One shared folder name is a coincidence, and a store recording its own root is not a copy."""
+    _live_corpus(tmp_path)
+    (tmp_path / "product").mkdir()
+    make_owner(tmp_path / "product", [card("prod-card", ["pkg/m.py", "pkg/n.py"])])
+    (tmp_path / "product" / "docs").mkdir()             # one of the root's names, not most of them
+    (tmp_path / "product" / "docs" / "x.md").write_text("# x\n")
+    store = _store(tmp_path)
+    with caplog.at_level(logging.WARNING):
+        store.bootstrap(root=str(tmp_path))
+    assert "prod-card" in " ".join(store._load_all())
+    assert _risk_warnings(caplog) == []
+    gate = gate_mod.folder_gate(tmp_path, set(), None, None, tmp_path / "cards_elsewhere")
+    assert not gate.excludes_dir(tmp_path / "product")

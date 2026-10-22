@@ -244,6 +244,29 @@ def file_heat(card: Dict[str, Any]) -> int:
     return total
 
 
+def is_run_brief_record(card: Dict[str, Any]) -> bool:
+    """Whether ``card`` is a run's brief that was stored as if it were knowledge. Structure only.
+
+    A queued run's text is a composed brief (standing instructions, scope, history): input to the
+    run, not something learned. ``record`` used to store one card per run (or per thread) keyed on
+    that text, so such cards hold no file, no note, no convention and nothing an updater or a person
+    wrote (no ``name``/``description``), and their ``provenance`` is either the run's task id (a
+    thread record) or the first 100 characters of a multi-paragraph request. A card with any file,
+    content, convention, managed field or scope-free editor field is never one. Selection ignores
+    these; the words of the card are not read.
+    """
+    if card.get("files") or card.get("content") or card.get("conventions"):
+        return False
+    if card.get("name") or card.get("description") or card.get("managed_by") \
+            or card.get("managed_fields") or card.get("managed_items"):
+        return False
+    prov = provenance_of(card)
+    if prov.get("task_id"):
+        return True
+    made_by = str(prov.get("created_by_task") or "")
+    return "\n\n" in made_by
+
+
 def protection(card: Dict[str, Any], check_edits: bool = True) -> str:
     """Why this card may never be moved out of the index by a tidy, the card limit or a retirement, or "".
 

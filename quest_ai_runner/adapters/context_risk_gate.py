@@ -12,12 +12,20 @@ answer and no per-path copy of it:
 * Cheap structural signals, no model (``risk_signals``, a pure function): a folder whose subtree
   holds three or more card stores (one legitimate nested store is normal and is no signal); a
   series of sibling folders named like dates, timestamps or versions that share one child
-  structure; a very large folder (the folder review's own size floor).
+  structure; a very large folder (the folder review's own size floor); and a COPY OF THE CORPUS
+  ITSELF: a folder with a card store beneath it that is a near-complete copy of this corpus, even
+  when it is the only one (a lone backup snapshot is a series of one). The copy signal is any of:
+  the nested store carries this store's own ``store_id``; its recorded root is this corpus's root
+  while it sits elsewhere under a dated or numbered folder name, or beside a repeated layout (a
+  store copied along with the tree it indexes); or its folder repeats at least three of the corpus
+  root's own top-level folder names (80% of them, not counting the folders on the way down to it)
+  and holds a card store. One ordinary nested store
+  with none of these is normal and stays imported.
 * A folder with a signal is ALWAYS put to the folder review, whatever the corpus size, with the
   signal as context. The verdict is cached in ``folder_review.json`` with ``source: risk_signal``
   and stays human-editable: ``"index": true`` on the folder overrides a skip.
 * If the review cannot run (switched off, no provider, a failed call), a folder with a HARD signal
-  (stores or series) is not indexed, not descended into, and no store beneath it is imported or
+  (stores, series or copy) is not indexed, not descended into, and no store beneath it is imported or
   mounted. One warning per run names it and the override. Folders without a signal keep the
   fail-open behaviour: an unreviewable ordinary corpus is indexed in full.
 """
@@ -30,7 +38,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from ._walk import prune_dirnames, skip_subtrees
-from .card_store_identity import BOOTSTRAP_META_FILE, is_merged
+from .card_store_identity import BOOTSTRAP_META_FILE, is_merged, read_meta
 from .context_bootstrap_support import _log
 from .context_folder_review import (
     _FOLDER_REVIEW_FILE,
@@ -57,21 +65,29 @@ _SERIES_MAX_CANDIDATES = 500
 _SERIES_MAX_CHILD_NAMES = 60
 _MAX_ANCESTOR_LEVELS = 12
 
-# Folder NAMES that mark a copy in a series: 2026-09-10, 20260910_0230, snapshot-2026-09-10T02-30,
-# a unix timestamp, or a version number (v1.2, 3.0.1). Names only, never model output.
+# Folder NAMES that mark a copy in a series. Names only, never model output. After optional word
+# prefixes joined by - _ . (each up to 12 letters or digits, starting with a letter: ``hq-docs-``,
+# ``hq_backup_``, ``snapshot-``) the name ends in one of:
+#   a date, compact or ISO, with an optional time suffix: 2026-09-10, 20260910_0230,
+#     2026-09-30-0230, 2026-09-10T02-30, 2026.09.10 02:30:15
+#   a unix timestamp of 9 to 13 digits
+#   a version number with 2 to 4 parts: v1.2, 3.0.1, 2.1.0-rc1
+# So ``hq-docs-2026-09-30-0230`` and ``hq_backup_20260930`` read as serial; ``notes-2026``, ``v2``
+# and ``backup`` do not.
 _SERIAL_NAME = re.compile(
-    r"^(?:[A-Za-z]{1,12}[-_.]?)?(?:"
+    r"^(?:[A-Za-z][A-Za-z0-9]{0,11}[-_.])*(?:"
     r"\d{4}[-_.]?\d{2}[-_.]?\d{2}(?:[-_.T ]?\d{2}[-_.:]?\d{2}(?:[-_.:]?\d{2})?)?"
     r"|\d{9,13}"
     r"|[vV]?\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.]+)?"
     r")$")
+_SERIAL_NAME_MAX = 80
 
 Signals = Dict[str, List[Tuple[str, str]]]
 
 
 def name_looks_serial(name: str) -> bool:
     """Whether a folder name reads as a date, timestamp or version number."""
-    return bool(_SERIAL_NAME.match(name or ""))
+    return len(name or "") <= _SERIAL_NAME_MAX and bool(_SERIAL_NAME.match(name or ""))
 
 
 def _similar(a: frozenset, b: frozenset) -> bool:
@@ -102,16 +118,21 @@ def find_series(names: Sequence[str], child_names_of: Callable[[str], Sequence[s
 
 
 def risk_signals(stores: Sequence[str], series: Dict[str, Sequence[str]],
-                 counts: Dict[str, int]) -> Signals:
+                 counts: Dict[str, int], copies: Optional[Dict[str, str]] = None) -> Signals:
     """Risk signals per folder, from facts already gathered. Pure: no filesystem, no model.
 
     ``stores`` are the corpus-relative folders that hold a card store, ``series`` maps a folder to
     the names of its dated or numbered copies, ``counts`` is indexable files per directory. The
     corpus root is never a risk folder (it cannot be excluded). A folder is reported at the
     SHALLOWEST level that holds the pattern, because a verdict there covers everything below.
-    Each signal is ``(kind, text)``; ``stores`` and ``series`` are hard, ``large`` is context.
+    ``copies`` maps a folder to why it is a copy of the corpus itself (``scan_tree`` finds them).
+    Each signal is ``(kind, text)``; ``stores``, ``series`` and ``copy`` are hard, ``large`` is
+    context.
     """
     out: Signals = {}
+    for folder, why in (copies or {}).items():
+        if folder:
+            out.setdefault(folder, []).append(("copy", f"looks like a copy of this corpus ({why})"))
     for parent, members in series.items():
         if parent and len(members) >= RISK_MIN_SERIES:
             ordered = sorted(members)
@@ -143,6 +164,7 @@ class TreeFacts:
     stores: List[str] = field(default_factory=list)
     series: Dict[str, List[str]] = field(default_factory=dict)
     series_paths: List[Path] = field(default_factory=list)
+    copies: Dict[str, str] = field(default_factory=dict)      # folder -> why it copies the corpus
     ancestor_series: Dict[str, int] = field(default_factory=dict)
 
 
@@ -173,6 +195,52 @@ def _child_dir_names(directory: Path, skip_dirs: Set[str]) -> List[str]:
     return sorted(names)
 
 
+# A folder is a copy of the corpus's layout when it repeats at least this share of the root's own
+# top-level folder names, and at least two of them (one shared name is a coincidence).
+_COPY_MIN_SHARE = 0.6
+_COPY_MIN_NAMES = 2
+_COPY_STRONG_NAMES = 3
+_COPY_STRONG_SHARE = 0.8
+
+
+def copy_of_self_reason(store_dir: Path, rel: str, walk_root: Path, own_cards_dir: Optional[Path],
+                        root_layout: Sequence[str], skip_dirs: Set[str]) -> str:
+    """Why the store at ``store_dir`` (``rel`` under the corpus) is a copy of the corpus itself, or "".
+
+    Structure only, never names or model output: (1) the same ``store_id`` as this corpus's own
+    store; (2) a recorded root equal to this corpus's root while the store sits in a sub-folder, together
+    with a date/version-like folder name on its path or a repeated layout; (3) the folder repeats
+    at least three of the corpus root's top-level folder names and 80% of them, ignoring the
+    folders on the way down to it. A legitimate nested project matches none of these.
+    """
+    cards = store_dir / _CARDS_DIR
+    meta = read_meta(str(cards))
+    if own_cards_dir is not None:
+        own_id = read_meta(str(own_cards_dir)).get("store_id")
+        if own_id and meta.get("store_id") == own_id:
+            return "it carries this store's own identity"
+    on_the_way = set(rel.split("/"))
+    names = [n for n in root_layout if n not in on_the_way]
+    inside = set(_child_dir_names(store_dir, skip_dirs)) if len(names) >= _COPY_MIN_NAMES else set()
+    shared = [n for n in names if n in inside]
+    share = len(shared) / len(names) if names else 0.0
+    layout = len(shared) >= _COPY_MIN_NAMES and share >= _COPY_MIN_SHARE
+    recorded = meta.get("root")
+    if recorded:
+        try:
+            same_root = Path(os.path.realpath(recorded)) == Path(os.path.realpath(walk_root))
+        except OSError:
+            same_root = False
+        # A recorded root alone is weak (a store can be adopted or moved); it counts with a dated
+        # name on the path or a repeated layout.
+        if same_root and (layout or any(name_looks_serial(part) for part in rel.split("/"))):
+            return "its recorded root is this corpus's root"
+    # The layout alone must be strong: a nested project may share a folder name or two.
+    if len(shared) >= _COPY_STRONG_NAMES and share >= _COPY_STRONG_SHARE:
+        return f"it repeats the corpus's own layout ({', '.join(shared[:4])})"
+    return ""
+
+
 def scan_tree(walk_root: Path, skip_dirs: Set[str], own_cards_dir: Optional[Path] = None) -> TreeFacts:
     """Walk the corpus once, cheaply, collecting what ``risk_signals`` needs. Never raises.
 
@@ -182,6 +250,7 @@ def scan_tree(walk_root: Path, skip_dirs: Set[str], own_cards_dir: Optional[Path
     facts = TreeFacts()
     try:
         root = walk_root.resolve()
+        root_layout = _child_dir_names(root, skip_dirs)
         own = own_cards_dir.resolve() if own_cards_dir is not None else None
         for dirpath, dirnames, _files in os.walk(root):
             current = Path(dirpath)
@@ -194,6 +263,12 @@ def scan_tree(walk_root: Path, skip_dirs: Set[str], own_cards_dir: Optional[Path
             rel = "" if rel == "." else rel
             if rel and _has_store(current) and (own is None or (current / _CARDS_DIR).resolve() != own):
                 facts.stores.append(rel)
+                why = copy_of_self_reason(current, rel, root, own, root_layout, skip_dirs)
+                if why:
+                    facts.copies[rel] = why
+                    facts.series_paths.append(current)
+                    dirnames[:] = []
+                    continue
             if not rel:
                 continue
             members = find_series(dirnames, lambda n: _child_dir_names(current / n, skip_dirs))
@@ -288,7 +363,7 @@ def folder_gate(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[
         facts = scan_tree(walk_root, skip_dirs, cards_dir)
         with skip_subtrees(facts.series_paths):
             counts = _dir_file_counts(walk_root, skip_dirs)
-        risk = risk_signals(facts.stores, facts.series, counts)
+        risk = risk_signals(facts.stores, facts.series, counts, facts.copies)
         risk.update(scan_ancestors(walk_root, skip_dirs))
         verdicts: Dict[str, Dict] = load_verdicts(cards_dir)
         if _folder_review_enabled():
@@ -314,8 +389,8 @@ def folder_gate(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[
         if gate.blocked:
             shown = "; ".join(f'"{f}" ({why})' for f, why in gate.blocked_report()[:8])
             _log.warning(
-                "context index: %d folder(s) look risky (many card stores or a series of dated "
-                "copies) and could not be reviewed, so they are not indexed, not entered, and no "
+                "context index: %d folder(s) look risky (many card stores, a series of dated "
+                "copies, or a copy of the corpus itself) and could not be reviewed, so they are not indexed, not entered, and no "
                 "store beneath them is imported or mounted: %s. To include one anyway, set "
                 '"index": true for that folder in %s.',
                 len(gate.blocked), shown, Path(cards_dir) / _FOLDER_REVIEW_FILE)

@@ -121,6 +121,8 @@ class CardsMixin:
         so a run can accumulate notes / collection refs / conversation refs, not just files.
         """
         try:
+            if self._record_is_brief_only(outcome):
+                return
             card_id = self._record_card_id(task_text, outcome)
             victims = self.limit_guard.prepare(card_id)         # off the lock: which cold cards could make room
             with self.folder_lock():
@@ -477,6 +479,12 @@ class CardsMixin:
         return False
 
     @staticmethod
+    def _record_is_brief_only(outcome: Dict[str, Any]) -> bool:
+        """A queued run (it carries its own ``task_id``) that pinned no file and added no content learned
+        nothing to keep: its task text is a composed brief, input to the run, so no card is written for it."""
+        return bool(outcome.get("task_id")) and not outcome.get("files") and not outcome.get("content")
+
+    @staticmethod
     def _record_card_id(task_text: str, outcome: Dict[str, Any]) -> str:
         # A run on a THREAD (a recurring or autopilot task) records onto one card per thread, not
         # one per pass: each pass's composed brief differs, so keying by its text minted a new card
@@ -497,15 +505,19 @@ class CardsMixin:
 
         # Ensure required fields exist.
         card.setdefault("id", card_id)
-        card.setdefault("keywords", sorted(_tokenize(decision_excerpt(task_text))))
+        # A queued run's task text is a brief: its keywords, summary and provenance come from what the
+        # run did (response, files), never from the brief.
+        gist = str(outcome.get("response") or "") if own_task else task_text
+        card.setdefault("keywords", sorted(_tokenize(decision_excerpt(gist))))
         # NOT the raw task text: for a persona run its first 200 characters are scaffolding that
         # is identical across every run (see _record_summary).
-        card.setdefault("summary", _record_summary(task_text, outcome, card.get("name", "")))
+        card.setdefault("summary", _record_summary("" if own_task else task_text, outcome,
+                                                   card.get("name", "") or (card_id if own_task else "")))
         card.setdefault("conventions", [])
         card.setdefault("usage_count", 0)
         card.setdefault("last_outcome", "unknown")
         card.setdefault("provenance", {
-            "created_by_task": task_text[:100],
+            "created_by_task": f"run {own_task}" if own_task else task_text[:100],
             "model": "",
             "created_at": "",
             "last_verified_at": "",
