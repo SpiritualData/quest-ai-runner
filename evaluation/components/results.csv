@@ -1412,3 +1412,8 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-22,spec_selection,lexical_vector_llm,76,24,16/50,8/26,222,331193,62298,0.0973,328.9,7f651e8,0a2ef76a,unknown,,,0.4177
 2026-10-22,tag_solutions,tag_list_with_check,13,13,13/13,0/0,0,0,0,0.0,0.0,b8eaf22-dirty,1e44c26e,none,,,
 2026-10-22,qar_overall,recorded_rows,7,0,0/7,0/0,0,0,0,0.0,0.7,b8eaf22-dirty,83b337d3,none,,,
+2026-10-22,card_growth,repository_tidy,12,12,8/8,4/4,0,0,0,0.0,0.1,0d641cb,34fd9ffe,none,,,
+2026-10-22,card_growth,bootstrap_guards,12,12,8/8,4/4,0,0,0,0.0,0.2,0d641cb,34fd9ffe,none,,,
+2026-10-22,card_growth,quarantine_tool,12,10,7/8,3/4,0,0,0,0.0,0.1,0d641cb,34fd9ffe,none,,,
+2026-10-22,card_growth,no_cleanup,12,2,2/8,0/4,0,0,0,0.0,0.1,0d641cb,34fd9ffe,none,,,
+2026-10-22,card_store_growth,live_store,28,28,19/19,9/9,0,0,0,0.0,21.7,0d641cb,15f5a2eb,none,,,
