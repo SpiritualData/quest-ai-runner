@@ -212,7 +212,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         # Not Ctrl+Y: the prompt's own binding for it (redo) answers first, so a copy bound there never ran.
         Binding("alt+y", "copy_last", "Copy last reply"),
         Binding("alt+d", "toggle_deep_detail", "Details"),
-        Binding("alt+c", "toggle_future_context", "Sources used"),
+        Binding("alt+c", "toggle_future_context", "Sources"),
         # priority=True: Textual's Screen has its OWN built-in "tab" binding (app.focus_next,
         # screen.py) which, being closer to the focused PromptTextArea in the DOM chain, would
         # otherwise intercept every Tab press before it ever reaches this action (the textarea
@@ -372,6 +372,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         self._deep_detail = self.query_one("#deep-detail", DeepDetailPanel)
         self._future_ctx_panel = self.query_one("#future-context", FutureContextPanel)
         self._activity = self.query_one("#activity", ActivityBar)
+        self._activity.transcript = self._tlog
         self._deep_view.hide()
         self._activity.display = False
 

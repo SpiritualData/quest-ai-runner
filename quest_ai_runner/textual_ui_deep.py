@@ -8,7 +8,7 @@ from typing import Any, List, Mapping, Optional, Sequence
 from collections import Counter, OrderedDict
 from rich.text import Text
 
-from .textual_ui_helpers import METRIC_LINES_SHOWN, metric_key, metric_lines
+from .textual_ui_helpers import METRIC_LINES_SHOWN, indented_line, metric_key, metric_lines
 
 # The key standing for the "no metric was recorded" line in ``metrics_shown``.
 METRIC_MISSING_KEY = ("no metric recorded",)
@@ -62,12 +62,39 @@ class DeepMixin:
         self._deep_view.show(dashboard, n_runs=n, line_map=line_map)
 
     @staticmethod
+    def exec_line_kind(line: str) -> str:
+        """What a captured exec line is: ``read``, ``edit``, ``command``, ``search``, ``tool``, ``thinking`` or
+        ``narration`` (the worker's own words). The one place that decides, so a job's summary line and the
+        turn's action count can never disagree."""
+        if line.startswith("Read:"):
+            return "read"
+        if line.startswith(("Write:", "Edit:")):
+            return "edit"
+        if line.startswith("$ "):
+            return "command"
+        if line.startswith(("WebSearch:", "WebFetch:")):
+            return "search"
+        if line.startswith("Using "):
+            return "tool"
+        if line.startswith("[thinking]"):
+            return "thinking"
+        return "narration"
+
+    def turn_action_count(self) -> int:
+        """How many actions the jobs of this turn took, counted as their summary lines count them."""
+        total = 0
+        for run_id in self._deep_flushed:
+            lines = (self._deep_archive.get(run_id) or {}).get("exec_lines") or []
+            total += sum(1 for ln in lines if self.exec_line_kind(ln.strip()) not in ("thinking", "narration"))
+        return total
+
+    @staticmethod
     def _summarize_exec_lines(lines: List[str]) -> tuple:
         """Condense a deep run's captured exec lines into (activity_summary, narration).
 
         The scrollback record is a SUMMARY, not a replay: instead of one line per read/write/command
         (a wall the user doesn't want), we roll the mechanical tool actions up into a single counts
-        line ("12 reads · 3 edits · 2 commands") and return the worker's own narration separately so
+        line ("12 files read · 3 edits · 2 commands") and return the worker's own narration separately so
         a run with no structured result can still show what it was doing in its own words.
 
         CONSECUTIVE IDENTICAL narration lines collapse into one, tagged with how many times it
@@ -76,24 +103,17 @@ class DeepMixin:
         the same way six times) otherwise fills the record with the same sentence six times and
         crowds out everything else the run said. Show the real thing once, and say it repeated.
         """
-        reads = writes = cmds = searches = tools = 0
+        counts = {"read": 0, "edit": 0, "command": 0, "search": 0, "tool": 0}
         narration: List[str] = []
         repeats: List[int] = []
         for ln in lines:
             s = ln.strip()
             if not s:
                 continue
-            if s.startswith("Read:"):
-                reads += 1
-            elif s.startswith(("Write:", "Edit:")):
-                writes += 1
-            elif s.startswith("$ "):
-                cmds += 1
-            elif s.startswith(("WebSearch:", "WebFetch:")):
-                searches += 1
-            elif s.startswith("Using "):
-                tools += 1
-            elif s.startswith("[thinking]"):
+            kind = DeepMixin.exec_line_kind(s)
+            if kind in counts:
+                counts[kind] += 1
+            elif kind == "thinking":
                 continue  # internal reasoning — not part of the "what it did" summary
             elif narration and narration[-1] == s:
                 repeats[-1] += 1  # the same line again: count it, don't print it again
@@ -106,16 +126,16 @@ class DeepMixin:
 
         # "Files read", never "reads": "sources" is the word for what the AI looked at before it started.
         parts: List[str] = []
-        if reads:
-            parts.append(_plural(reads, "file read", "files read"))
-        if writes:
-            parts.append(_plural(writes, "edit", "edits"))
-        if cmds:
-            parts.append(_plural(cmds, "command", "commands"))
-        if searches:
-            parts.append(_plural(searches, "search", "searches"))
-        if tools:
-            parts.append(_plural(tools, "tool call", "tool calls"))
+        if counts["read"]:
+            parts.append(_plural(counts["read"], "file read", "files read"))
+        if counts["edit"]:
+            parts.append(_plural(counts["edit"], "edit", "edits"))
+        if counts["command"]:
+            parts.append(_plural(counts["command"], "command", "commands"))
+        if counts["search"]:
+            parts.append(_plural(counts["search"], "search", "searches"))
+        if counts["tool"]:
+            parts.append(_plural(counts["tool"], "tool call", "tool calls"))
         narrated = [n if c == 1 else f"{n} (repeated {c} times)"
                     for n, c in zip(narration, repeats)]
         return " · ".join(parts), narrated
@@ -162,13 +182,10 @@ class DeepMixin:
         # 1) The subgoal this task was assigned, but only when it tells runs apart: with one run
         # it is the person's own request again, already on screen above.
         if runs_this_turn > 1:
-            log.write(Text(goal or "Task", style="bold cyan"))
+            log.write(indented_line(goal or "Task", "bold cyan", hang=0))
         # 2) A one-line roll-up of activity, instead of every read/write/command.
         if summary:
-            log.write(Text(f"  {summary}", style="dim"))
-        # 3) What the metric was before and after, written from the run's own data (never by a model),
-        # ahead of the result so the numbers are not left below a long answer and its link.
-        self.write_metrics(snap.get("metrics"), snap.get("metric_missing"))
+            log.write(indented_line(f"  {summary}", "dim"))
         if final_output:
             # The result is the AI's reply, so it is introduced by its speaker like any answer.
             self.write_speaker_label()
@@ -178,9 +195,12 @@ class DeepMixin:
             # words so the record still says what it was doing, capped so it never becomes a wall.
             tail = narration[-6:]
             if len(narration) > len(tail):
-                log.write(Text(f"  … {len(narration) - len(tail)} earlier steps", style="dim"))
+                log.write(indented_line(f"  … {len(narration) - len(tail)} earlier steps", "dim"))
             for nl in tail:
-                log.write(Text(f"  {nl}"))
+                log.write(indented_line(f"  {nl}"))
+        # 3) What the metric was before and after, written from the run's own data (never by a model),
+        # after the result and its link and before the turn's closing line.
+        self.write_metrics(snap.get("metrics"), snap.get("metric_missing"))
         # No "complete" line here: a run's record does not know how the turn ended (met, stopped,
         # paused, waiting). The turn's one closing line says it, from the final result.
 
@@ -210,7 +230,10 @@ class DeepMixin:
             self.metrics_shown[METRIC_MISSING_KEY] += 1
         self.metrics_listing.extend(fresh)
         can_open = bool(self._available_deep_runs())
-        for line in metric_lines(fresh, absent, METRIC_LINES_SHOWN if can_open else None, "Alt+D shows them all."):
+        lines = metric_lines(fresh, absent, METRIC_LINES_SHOWN if can_open else None, "Alt+D shows them all.")
+        if lines:
+            self._tlog.write(Text(""))   # a block of its own, not a continuation of the answer's last line
+        for line in lines:
             self._tlog.write(line)
 
     def _flush_pending_deep_runs(self) -> None:

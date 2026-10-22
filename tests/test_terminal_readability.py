@@ -29,7 +29,7 @@ from quest_ai_runner.core.inbox import InMemoryInbox
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 from quest_ai_runner.interactive_session_tracker import _DeepRunTracker
 from quest_ai_runner.textual_ui import QuestAITerminal
-from quest_ai_runner.textual_ui_helpers import context_block_lines, waiting_note_line
+from quest_ai_runner.textual_ui_helpers import context_block_lines, person_line
 from quest_ai_runner.textual_ui_widgets import (
     _AWAITING_DECISION_PLACEHOLDER, _BUSY_PLACEHOLDER, _READY_PLACEHOLDER, KeyHints,
 )
@@ -70,6 +70,9 @@ class Log:
 
     def write(self, x) -> None:  # noqa: ANN001 - mirrors RichLog.write
         self.lines.append(getattr(x, "plain", None) or getattr(x, "markup", str(x)))
+
+    def follow_now(self) -> None:
+        pass
 
 
 class Console:
@@ -275,11 +278,11 @@ def test_the_context_is_counted_in_sources_everywhere_and_the_counts_agree():
         return "\n".join(log.lines), app._future_ctx_panel._bullets
 
     text, bullets = run_app(build, session=Session())
-    assert "Found 6 sources: Source number 5, Source number 4 and 4 more." in text
+    assert "Looked at 6 sources: Source number 5, Source number 4 and 4 more." in text
     assert "6 sources" in text.split("How I got this:")[1].splitlines()[0]
-    assert text.count("6 sources") == 3, "the context line, the closing line and the explanation say the same number"
+    assert text.count("6 sources") == 2, "the context line and the explanation say the same number"
     assert len([ln for ln in bullets.splitlines() if ln.strip()]) == 6, "Alt+C lists the same six"
-    assert "Alt+C sources used" in text
+    assert "Alt+C sources" in text and "sources used" not in text.lower() and "Found" not in text
     for stray in ("card", "reads", "2 sources"):
         assert stray not in text, stray
 
@@ -354,11 +357,11 @@ def test_a_plain_answers_closing_line_writes_its_time_the_way_every_other_time_i
         app._auto_pass = 1
         app._finish_turn("hi", final, 9.0, False, None)
         app._finish_turn("hi again", final, 212.4, False, None)
-        return [ln for ln in log.lines if "steps" in ln]
+        return [ln for ln in log.lines if "Answered in" in ln]
 
     first, second = run_app(build)
-    assert first.rstrip().endswith("9s") and "9.0s" not in first
-    assert second.rstrip().endswith("3m32s")
+    assert first.strip() == "Answered in 9s · sonnet" and "9.0s" not in first
+    assert second.strip() == "Answered in 3m32s · sonnet"
 
 
 def test_the_work_panels_clock_is_the_turns_clock_not_a_second_one():
@@ -452,7 +455,7 @@ def test_a_command_typed_before_the_session_is_ready_says_what_happens_next():
 
     text, _ = asyncio.run(go())
     assert "Still starting up. /quests will run as soon as I'm ready." in text
-    assert "❯ What is on my plate?  (waiting)" in text
+    assert "❯ What is on my plate?" in text and "(waiting)" not in text
 
 
 def test_the_header_says_resuming_with_the_ellipsis_character_the_rest_of_the_app_uses():
@@ -573,7 +576,7 @@ def test_every_text_colour_that_carries_information_reaches_4_5_to_1():
         app._handle_event(event(EVENT_CONTEXT, "", data={"card_metadata": cards(), "sources": []}))
         app._handle_event(event(EVENT_STATUS, "Checking the starting value before any change."))
         app._activity.set_queued(2)
-        app._tlog.write(waiting_note_line("Also check staging."))
+        app._tlog.write(person_line("Also check staging."))
         await measure("busy with a note waiting")
         app._handle_event(event(EVENT_EXEC, "Read: notes.md", data={"run_id": "r1", "goal": "Add the rows"}))
         app._handle_event(event(EVENT_EXEC, "$ python3 sheets.py --append", data={"run_id": "r1", "goal": "Add the rows"}))

@@ -36,6 +36,9 @@ class _RecordingLog:
     def write(self, x) -> None:  # noqa: ANN001 - mirrors RichLog.write
         self.lines.append(getattr(x, "plain", str(x)))
 
+    def follow_now(self) -> None:
+        pass
+
 
 class _FakePanel:
     """Stand-in for FutureContextPanel that tracks calls without Textual."""
@@ -46,8 +49,9 @@ class _FakePanel:
         self._bullets = ""
         self.display = False
 
-    def load(self, bullets: str) -> None:
+    def load(self, bullets: str, relied: bool = False) -> None:
         self._bullets = bullets.strip()
+        self.relied = relied
 
     def _rerender(self) -> None:
         pass
@@ -78,11 +82,20 @@ def test_build_text_includes_header_and_bullets():
     )
     assert t is not None
     plain = t.plain
-    assert plain.startswith("Sources used (2)\n"), "the heading counts the lines, in the transcript's own word"
+    assert plain.startswith("Sources looked at (2)\n"), "the heading counts the lines, in the transcript's own word"
     assert "Pricing tiers (id: col-123)" in plain
     assert "metric units" in plain
     assert "collection" not in plain, "the kind of store is internal and is not shown"
     assert plain.rstrip().endswith("Alt+C to close")
+
+
+def test_the_panel_says_relied_on_only_for_what_a_worker_flagged():
+    flagged = _build_future_context_text("- Pricing tiers\n- Refund policy", relied=True)
+    looked_at = _build_future_context_text("- Pricing tiers\n- Refund policy\n- Terms")
+    assert flagged.plain.startswith("Sources it relied on (2)\n")
+    assert looked_at.plain.startswith("Sources looked at (3)\n")
+    assert "used" not in flagged.plain.split("\n")[0] + looked_at.plain.split("\n")[0], \
+        "nothing claims a source was used: only a worker's own list says what it relied on"
 
 
 def test_the_panel_text_is_not_dimmed_twice():
@@ -344,7 +357,7 @@ class _FakeSessionForFinishTurn:
 
 @pytest.mark.asyncio
 async def test_shallow_turn_with_context_cards_shows_alt_c_hint():
-    """A shallow (non-deep) turn that gathered context sources gets the same "Alt+C sources used" hint,
+    """A shallow (non-deep) turn that gathered context sources gets the same "Alt+C sources" hint,
     on the turn's one closing line, that deep turns get, and the cards survive into the
     FutureContextPanel instead of being discarded when the turn ends."""
     app = QuestAITerminal(_FakeSessionForFinishTurn())
@@ -365,7 +378,8 @@ async def test_shallow_turn_with_context_cards_shows_alt_c_hint():
         assert "Pricing tiers" in app._future_ctx_panel._bullets
         # And the closing line says the keys are there: one line, no separate hint line.
         hinted = [ln for ln in log.lines if "Alt+C" in ln]
-        assert len(hinted) == 1 and hinted[0].strip().endswith("Alt+C sources used")
+        assert len(hinted) == 1 and hinted[0].strip().endswith("Alt+C sources")
+        assert app._future_ctx_panel.relied is False, "a short answer's context was only looked at"
 
 
 @pytest.mark.asyncio

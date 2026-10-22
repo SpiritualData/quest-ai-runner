@@ -7,7 +7,7 @@ from __future__ import annotations
 from rich.text import Text
 
 from .interactive_session import InteractiveSession, _BANNER, _BOLD, _CYAN, _DIM, _RESET
-from .textual_ui_helpers import _missing_model_provider_message, plural
+from .textual_ui_helpers import _missing_model_provider_message, message_count, person_line, plural
 from .textual_ui_outcome import speaker_label
 
 
@@ -25,14 +25,15 @@ class StartupMixin:
         history = conv.history
         c = self._console
         # One plain line. The conversation's id is for the person debugging (``-v``), not for the one chatting.
-        detail = plural(len(history), "turn") + (f", id {conv.short_id[:12]}" if self.verbosity >= 1 else "")
+        # Messages, not turns: each turn is the person's message and the AI's reply.
+        detail = plural(message_count(history), "message") + (f", id {conv.short_id[:12]}" if self.verbosity >= 1 else "")
         c.dim(f"  Picking up your last conversation ({detail}).")
         shown = history[-self.RESUME_REPLAY_TURNS:]
         if len(history) > len(shown):
-            c.dim(f"  {plural(len(history) - len(shown), 'earlier turn')} not shown.")
+            c.dim(f"  {plural(message_count(history[:len(history) - len(shown)]), 'earlier message')} not shown.")
         c.line("")
         for user_text, asst_text in shown:
-            self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
+            self._tlog.write(person_line(user_text))
             self._tlog.write(Text(""))
             if asst_text:
                 self._tlog.write(Text(speaker_label(rep_name), style="bold cyan"))

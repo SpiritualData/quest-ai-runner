@@ -58,6 +58,9 @@ class Log:
     def write(self, x) -> None:  # noqa: ANN001 - mirrors RichLog.write
         self.lines.append(x.plain if hasattr(x, "plain") else getattr(x, "markup", str(x)))
 
+    def follow_now(self) -> None:
+        pass
+
     def stripped(self) -> list[str]:
         return [ln.strip() for ln in self.lines]
 
@@ -173,23 +176,33 @@ def test_the_closing_text_per_outcome():
     assert outcome.closing_text(outcome.OUTCOME_NOT_STARTED)[0] == "✗ Nothing ran"
     assert outcome.closing_text(outcome.OUTCOME_NOT_RUN)[0] == "~ Nothing was run"
     assert outcome.closing_text(outcome.OUTCOME_WAITING)[0] == "Waiting for your answer"
-    assert outcome.closing_text(outcome.OUTCOME_LIMIT, "at 15:40 UTC")[0] == (
-        "Paused at Claude Code's usage limit. It resets at 15:40 UTC.")
-    assert outcome.closing_text(outcome.OUTCOME_LIMIT)[0] == (
-        "Paused at Claude Code's usage limit. It has not said when it resets.")
+    assert outcome.closing_text(outcome.OUTCOME_LIMIT)[0] == "~ Stopped at the limit", \
+        "an item of the closing line, never a sentence: nothing stacks a full stop and a dot, and it promises no resume"
+
+
+def test_the_usage_limit_block_says_why_and_the_way_forward_and_promises_nothing_automatic():
+    assert outcome.limit_lines("at 15:40 UTC") == [
+        "Claude Code's usage limit is reached, so the work stopped. It resets at 15:40 UTC.",
+        "Send your request again after that."]
+    assert outcome.limit_lines("") == [
+        "Claude Code's usage limit is reached, so the work stopped. It has not said when it resets.",
+        "Send your request again once it has."]
+    text = " ".join(outcome.limit_lines("at 15:40 UTC") + outcome.limit_lines(""))
+    assert "/resume" not in text and "automatically" not in text and "paused" not in text.lower(), \
+        "in this terminal a limit stop is not resumed by itself or by /resume"
 
 
 # --- the one closing line --------------------------------------------------------------------
 
 def closing_line(log: Log) -> str:
-    return next(ln for ln in log.stripped() if ln.startswith(("✓", "~", "✗", "Paused", "Waiting")))
+    return next(ln for ln in log.stripped() if ln.startswith(("✓", "~", "✗", "Waiting", "Answered")))
 
 
 def test_a_finished_goal_ends_with_one_quiet_line_and_no_other_done_marker():
     log, begun, _ = run_turn(deep_final(DeepResult(**MET)), elapsed=212.0, before=lambda app: (
         app._future_ctx_panel.load("- card: Pricing"), setattr(app, "_future_context", "- card: Pricing")))
-    assert closing_line(log) == "✓ Done in 3m32s · sonnet · Alt+C sources used"
-    assert [ln for ln in log.stripped() if ln.startswith("✓")] == ["✓ Done in 3m32s · sonnet · Alt+C sources used"]
+    assert closing_line(log) == "✓ Done in 3m32s · sonnet · Alt+C sources"
+    assert [ln for ln in log.stripped() if ln.startswith("✓")] == ["✓ Done in 3m32s · sonnet · Alt+C sources"]
     assert not begun
     body = "\n".join(log.lines)
     assert "complete" not in body.lower() and "Partial" not in body and "tokens" not in body
@@ -200,7 +213,8 @@ def test_the_model_is_the_short_alias_once_and_the_full_id_only_with_v():
     assert closing_line(quiet) == "✓ Done in 1m29s · sonnet"
     assert "claude-sonnet-5-5" not in "\n".join(quiet.lines)
     verbose, _, _ = run_turn(deep_final(DeepResult(**MET)), verbosity=1)
-    assert closing_line(verbose) == "✓ Done in 1m29s · 18.2k tokens · sonnet (claude-sonnet-5-5)"
+    assert closing_line(verbose) == "✓ Done in 1m29s · 2 steps · 18.2k tokens · sonnet (claude-sonnet-5-5)"
+    assert "steps" not in closing_line(quiet) and "tokens" not in closing_line(quiet), "steps and tokens are for -v"
 
 
 def test_a_run_that_stopped_before_finishing_says_so_and_never_claims_done():
@@ -213,8 +227,13 @@ def test_a_run_that_stopped_before_finishing_says_so_and_never_claims_done():
 def test_a_usage_limit_pause_says_when_it_resets_and_is_not_retried(monkeypatch):
     monkeypatch.setattr(textual_ui_turn, "limit_reset", lambda final: "at 20:00 UTC")
     log, begun, _ = run_turn(deep_final(DeepResult(met=False, usage_limited=True, error=LIMIT_REFUSAL, model="sonnet")))
-    assert closing_line(log) == "Paused at Claude Code's usage limit. It resets at 20:00 UTC. · 1m29s · sonnet"
-    assert not any(ln.startswith("✓") for ln in log.stripped())
+    body = log.stripped()
+    assert closing_line(log) == "~ Stopped at the limit · 1m29s · sonnet", "one closing shape, no stacked full stop"
+    assert body[body.index("Tester (AI):") + 1:body.index("Tester (AI):") + 3] == [
+        "Claude Code's usage limit is reached, so the work stopped. It resets at 20:00 UTC.",
+        "Send your request again after that."]
+    assert sum("limit" in ln for ln in body) == 2, "the limit is said once in the block and once in the closing line"
+    assert not any(ln.startswith("✓") for ln in body)
     assert not begun, "no automatic second pass at a usage limit"
     assert "Task identified" not in "\n".join(log.lines), "no plan is printed for work that was refused"
 
@@ -252,6 +271,25 @@ def test_a_worker_that_could_not_start_is_explained_in_the_transcript_and_not_re
     assert not begun, "a start failure would fail the same way again: no automatic pass"
     assert "deep worker" not in "\n".join(log.lines), "customer wording: the work, not the deep worker"
     assert "Task identified" not in "\n".join(log.lines)
+
+
+def test_a_request_that_could_not_start_goes_back_in_the_box_and_the_text_says_so():
+    log, begun, state = run_turn(deep_final(STARTFAIL), elapsed=7.0,
+                                 before=lambda app: setattr(app, "retry_text", "add the rows"))
+    body = log.stripped()
+    assert state.prompt_text == "add the rows"
+    assert "Your request is back in the box: fix that, then press Enter to send it again." in body
+    assert "Fix that, then send your request again." not in body
+    assert not begun
+
+
+def test_a_request_is_not_put_back_over_what_the_person_typed_since():
+    def before(app):
+        app.retry_text = "add the rows"
+        app.query_one("#prompt").text = "something else"
+    log, begun, state = run_turn(deep_final(STARTFAIL), before=before)
+    assert state.prompt_text == "something else"
+    assert "Fix that, then send your request again." in log.stripped()
 
 
 def test_the_cli_error_text_is_not_shown_as_the_answer_of_a_run_that_never_started():
@@ -342,7 +380,9 @@ def test_a_decision_event_mid_run_writes_nothing_until_the_turn_ends():
             return log.lines, app.pending_question, app._activity._text
 
     lines, pending, status = asyncio.run(go())
-    assert lines == [] and pending == QUESTION and status == "Waiting for your answer…"
+    assert lines == [] and pending == QUESTION
+    assert status == "Working… I'll have a question for you when this step ends.", \
+        "the question is not on screen yet, so the status must not say the AI waits for an answer"
 
 
 # --- a heartbeat is a sign of life, never part of the record --------------------------------------
@@ -502,7 +542,8 @@ def test_no_status_the_core_emits_contains_a_long_dash():
 def test_what_the_new_outcome_module_writes_has_no_long_dash_either(utc):
     for text in [*outcome.launch_failure_lines(deep_final(STARTFAIL)),
                  *outcome.provider_error_lines(RuntimeError("529 overloaded"), message_restored=True),
-                 *(outcome.closing_text(o, "at 15:40 UTC")[0] for o in (
+                 *outcome.limit_lines("at 15:40 UTC"), *outcome.limit_lines(""),
+                 *(outcome.closing_text(o)[0] for o in (
                      outcome.OUTCOME_FINISHED, outcome.OUTCOME_STOPPED, outcome.OUTCOME_NOT_STARTED,
                      outcome.OUTCOME_NOT_RUN, outcome.OUTCOME_LIMIT, outcome.OUTCOME_WAITING)),
                  usage_limit.pause_status(usage_limit.detect_usage_limit(LIMIT_REFUSAL, NOW), NOW),

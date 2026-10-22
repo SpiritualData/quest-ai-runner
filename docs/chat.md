@@ -65,8 +65,8 @@ What resuming does:
   that one" work as if the chat never closed.
 - **New turns append to the same conversation,** so one conversation stays one record.
 - **The last 10 turns are shown at once,** before the rest of the session finishes loading, under one
-  plain line (`Picking up your last conversation (2 turns).`; the conversation's id is added with `-v`).
-  A longer conversation notes how many earlier turns are not shown. The session line and one `Ready.`
+  plain line (`Picking up your last conversation (4 messages).`, your messages and the AI's replies counted; the
+  conversation's id is added with `-v`). A longer conversation notes how many earlier messages are not shown. The session line and one `Ready.`
   come when the session has finished loading, the same two lines as a fresh start.
 - **The quest selected in that conversation is selected again,** unless you pass `--goal-id`.
 
@@ -81,11 +81,14 @@ earlier conversations related to what you are asking now.
 Warnings and errors do not fill the transcript. The full record (time, level, logger, traceback)
 always goes to a log file, `logs/chat.log` beside the saved conversations (`QAR_CHAT_LOG_FILE`
 overrides it; it is rotated and capped at about 1 MB plus two older files). The transcript shows a
-short dim `⚠` line for each of the first three distinct problems raised by this package. Once they stop
-arriving, one closing line counts the rest and says where the details are
-(`4 more notices. Details: ~/.quest-ai-runner/logs/chat.log`), and no later warning is shown. A
-library's own warnings are never shown there. `chat -v` writes every record in full to the transcript
-instead.
+short dim `⚠` line for each of the first three distinct warnings a turn raises (this package's own; a library's
+warnings are never shown). Once the burst is over, one closing line after those lines counts the rest and says where the
+details are (`4 more notices. Details: ~/.quest-ai-runner/logs/chat.log`). Each turn starts its own count, so a later
+burst is shown too. An error (ERROR or worse, from any logger) is always shown and never counted away. A record whose
+caller marked it `extra={"in_transcript": False}` goes to the file only: the app already tells the person in words of its
+own (the usage limit, for one). Nothing here reads the words of a message to decide whether it matters; a warning a
+person must act on belongs at ERROR level at the call that raises it. `chat -v` writes every record in full to the
+transcript instead.
 
 While the AI works, the status line counts the time once a wait passes 3 seconds, ahead of the words
 (`45s  Getting ready to start the work…`), so a long silent step never looks frozen and a narrow
@@ -95,6 +98,9 @@ takes over (it carries the same clock) or the turn ends.
 
 The live panel for work in progress is as tall as its text, up to 12 rows. The transcript keeps its full
 width while it is open.
+
+Lines that wrap keep their structure: a wrapped message or note starts its next rows under its words, and a wrapped
+question carries its bar on every row.
 
 `/save` and `/load` are different: they save and restore a named snapshot of the session's
 settings and transcript. Resuming needs neither; every conversation is already saved.
@@ -192,36 +198,48 @@ one-shot runner a message typed mid-run is queued and acted on when the turn end
 
 ## What the screen says about context and results
 
-- **Context.** After a request the AI says what it found, in one sentence: `Found 6 sources: <title>,
-  <title> and 4 more.` ("Sources" is the one word for the notes and files it looked at; the same count
-  appears in the closing line and in `How I got this`, and Alt+C lists them under `Sources used`.) Files a
-  job opened are counted in its own summary line (`3 files read · 1 edit · 3 commands`), never as sources.
-  Nothing in the data says which sources the plan went on to use, so the two named are the retrieval's best
-  matches, not a claim about use.
-- **Metrics.** The metric before and after is written from data, before the result so a long answer does not
-  bury it: `<name>: 0.38 -> 0.91 (measured automatically)`, `(reported by the AI)` for the worker's own
-  record, `Nothing to measure: <reason>` for a declared not-applicable. Numbers have at most 3 decimals
-  and no unit is invented (the data has none). When the library flags the measured and reported numbers as
-  different, the AI's follow in the same line, neutrally (`The AI reported 0.4 -> 0.9.`). A long name wraps;
-  it is never cut. The first four are written; for the rest the line says `8 more metric results. Alt+D shows
-  them all.` and Alt+D lists every one above the job's actions (with no job to open, none are folded away).
-- **Notes typed while it works.** Each appears as your own line with a small tag (`Also check the staging
-  sheet.  (waiting)`); the count of notes waiting is in the status strip only. When the AI picks them up
-  one plain line says so (`Working your 2 notes in now.`).
+- **Context.** After a request the AI says what it looked at, in one sentence: `Looked at 6 sources: <title>,
+  <title> and 4 more.` ("Sources" is the one word for the notes and files it looked at; the same count appears in
+  `How I got this`, and Alt+C lists them under `Sources looked at (6)`. Titles lose the kind of record they came from, and a
+  long one is cut at a word.) Only a list the worker itself flagged as what it relied on is called `Sources it relied
+  on (4)`: nothing says a short answer used what it looked at. Files a job opened are counted in its own summary line
+  (`3 files read · 1 edit · 3 commands`), never as sources, and `How I got this` counts the same actions as that line and
+  counts metric lines (one metric measured and reported is one line), not entries. Nothing in the data says which
+  sources the plan went on to use, so the two named are the retrieval's best matches, not a claim about use.
+- **Metrics.** The metric before and after is written from data, after the job's result and its link and before the
+  closing line: `<name>: 0.38 → 0.91 (measured automatically)`, `(reported by the AI)` for the worker's own
+  record, `Nothing to measure. <reason>` for a declared not-applicable. The lines are ordered by metric, with one
+  metric's readings together. Numbers have at most 3 decimals and no unit is invented (the data has none). When the
+  library flags the measured and reported numbers as different (`docs/metric-results.md`: the measured one rounded to the
+  decimals the reported one is written with, else exactly), the AI's follow in the same line as a note in the warning
+  colour (`The AI reported 0.4 → 0.9.`). A long name wraps; it is never cut. The first four are written; for the rest
+  the line says `8 more metric results. Alt+D shows them all.` and Alt+D lists every one above the job's actions (with
+  no job to open, none are folded away).
+- **Notes typed while it works.** Each appears once, as your own `❯` line, with nothing on it that could go stale (the
+  count of notes waiting is in the status strip only). When the AI picks them up one plain line says so (`Working your
+  2 notes in now.`). If the turn ends on a question for you, the notes are not sent as its answer (you had not read it
+  when you typed them): they go back into the prompt box with `Your 2 notes are back in the box. Send them with your
+  answer or clear them.`
 - **Understood as.** The AI's reading of your request is italic and indented, never the bold cyan of your
   own lines.
+- **A question while it works.** The question is written when the step ends. Until then the status says `Working… I'll
+  have a question for you when this step ends.`, since the AI is still working; `Waiting for your answer` is for the
+  end of the turn only.
 
 ## How a turn ends
 
-Each turn ends with one quiet closing line that says how it ended, how long it took, the model it
+Each turn ends with one quiet closing line, of one shape, that says how it ended, how long it took, the model it
 ran on (the short name, such as `sonnet`; the full id with `-v`) and the keys that open more:
+`✓ Done in 3m32s · sonnet · Alt+D details · Alt+C sources` for a finished job, `Answered in 9s · sonnet · Alt+C sources`
+for a plain answer. The step count, replans and tokens are for `-v`.
 
 | Line | Meaning |
 |---|---|
 | `✓ Done in 3m32s` | Every goal was met. |
+| `Answered in 9s` | A plain answer. |
 | `~ Stopped before finishing · 1m29s` | The work ran and did not finish. |
-| `✗ Nothing ran` | The work could not start. A short note above says why, in plain words, and nothing is retried. |
-| `Paused at Claude Code's usage limit. It resets at 15:40 UTC.` | The subscription's limit was reached. The time is only ever one Claude Code reported; without one the line says it has not said when. |
+| `✗ Nothing ran` | The work could not start. A short note above says why, in plain words (`Claude Code (the claude program) isn't installed on this machine, or the terminal can't find it.`), your request is back in the prompt box, and nothing is retried. |
+| `~ Stopped at the limit` | Claude Code's usage limit was reached. A short note above says so and when it resets (only a time Claude Code reported; otherwise that it has not said), and to send the request again after that: in this terminal a limit stop is not resumed by itself or by `/resume`. The limit is said once, not also as a warning. |
 | `Waiting for your answer` | The AI asked a question. The question is the last thing on screen, from its speaker. |
 
 A plan that was written but never ran gets one automatic second try, with the reason on screen.
@@ -230,7 +248,8 @@ A failed model call is explained in a sentence, and your message is put back in 
 Enter sends it again.
 
 The transcript follows the newest output. Scrolling up (PageUp, the wheel, the scrollbar) stops it
-following, so you can read in peace; scrolling back to the bottom makes it follow again.
+following, so you can read in peace; the status strip then says `↓ new output below` while the AI writes more.
+Scrolling back to the bottom makes it follow again, and so does sending a message or the end of the turn.
 
 ## Keys
 
@@ -246,14 +265,14 @@ following, so you can read in peace; scrolling back to the bottom makes it follo
 | PageUp / PageDown | Scroll the transcript. Scrolling up stops it following new output; scrolling back to the bottom resumes. |
 | Tab | Show the next job's detail (or complete a command while the menu is open). |
 | Alt+D | Show the running job's detail: every action, and every metric result. |
-| Alt+C | Show the sources the last turn used. |
+| Alt+C | Show the sources the last turn looked at (or, for a list the worker flagged, relied on). |
 
 The line under the prompt lists only the keys that would do something now, most useful first: Esc while the
 AI works, then Alt+D, Alt+C, Tab (only when there is more than one job), PgUp/PgDn and, when nothing runs, Ctrl+C
 Quit (copying is a mouse selection or Alt+Y). It shows whole hints and drops the last ones that do not fit, so Esc
 is always the one that stays.
 
-Click and drag selects text without holding Shift; Ctrl+C copies it (over SSH too).
+Click and drag selects text without holding Shift; Ctrl+C copies the selection (over SSH too).
 
 ## Environment variables
 

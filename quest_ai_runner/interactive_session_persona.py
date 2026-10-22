@@ -144,7 +144,7 @@ def _resolve_persona_from_corpus(
 
     if notify is not None:
         try:
-            notify("Resolving AI persona…")
+            notify("Starting up…")
         except Exception:  # noqa: BLE001
             pass
 

@@ -5,6 +5,7 @@ Split out of ``textual_ui.py`` by definition; that module re-exports every name 
 from __future__ import annotations
 
 from typing import List, Optional
+from rich.text import Text
 from textual.message import Message
 from textual.geometry import Offset
 from textual.widgets import RichLog
@@ -12,6 +13,8 @@ from rich.style import Style as RichStyle
 from rich.segment import Segment
 from textual.selection import Selection
 from textual.strip import Strip
+
+from .textual_ui_helpers import HangingText
 
 
 # ── Transcript widget ─────────────────────────────────────────────────────────
@@ -66,13 +69,30 @@ class TranscriptLog(RichLog):
         self._selecting = False
         # True until the person scrolls away from the bottom; True again when they return to it.
         self.following = True
+        # True when something was written while the view was not following: output the person has not seen.
+        self.unseen_below = False
 
     def write(self, content, width=None, expand=False, shrink=True,
               scroll_end=None, animate=False):
         if scroll_end is None and self.auto_scroll:
             scroll_end = self.following
+        if not self.following and not (isinstance(content, Text) and not content.plain.strip()):
+            self.unseen_below = True
+        if isinstance(content, HangingText) and width is None and self._size_known:
+            # Wrapped here, with the indent, instead of by the log: the log wraps under the marker.
+            rows = content.rows(self.scrollable_content_region.width, self.app.console)
+            for row in rows:
+                super().write(row, width=width, expand=expand, shrink=shrink,
+                              scroll_end=scroll_end, animate=animate)
+            return self
         return super().write(content, width=width, expand=expand, shrink=shrink,
                              scroll_end=scroll_end, animate=animate)
+
+    def follow_now(self) -> None:
+        """Go to the newest output and follow it again (the person sent a message, or the turn ended)."""
+        self.following = True
+        self.unseen_below = False
+        self.scroll_end(animate=False, immediate=False, x_axis=False)
 
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:
         """The scroll position moved: following is whether it moved to (within a row of) the bottom.
@@ -84,6 +104,8 @@ class TranscriptLog(RichLog):
         """
         super().watch_scroll_y(old_value, new_value)
         self.following = new_value >= self.max_scroll_y - 1
+        if self.following:
+            self.unseen_below = False
 
     def on_resize(self, event) -> None:
         """Keep the bottom in view when the log changes size while it is following the tail."""

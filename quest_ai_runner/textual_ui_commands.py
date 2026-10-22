@@ -12,7 +12,7 @@ from rich.text import Text
 
 from .interactive_session import _HELP, _parse_skill_frontmatter
 from .textual_ui_prompt import PromptTextArea
-from .textual_ui_helpers import waiting_note_line
+from .textual_ui_helpers import person_line
 
 
 class CommandsMixin:
@@ -26,6 +26,8 @@ class CommandsMixin:
         event.textarea.styles.height = 3
         if not line:
             return
+        # Sending is going back to the conversation: show the newest output, and follow it again.
+        self._tlog.follow_now()
 
         # Any submitted message answers a pending decision question, if there was one.
         self._awaiting_decision = False
@@ -36,9 +38,9 @@ class CommandsMixin:
             if line.startswith("/"):
                 self._console.dim(f"  Still starting up. {line.split()[0]} will run as soon as I'm ready.")
             else:
-                # Echo it now as the person's own line, tagged waiting like any note typed while the AI
-                # works (it is replayed without a second echo), so it does not seem lost.
-                self._tlog.write(waiting_note_line(line))
+                # Echo it now as the person's own line, like any note typed while the AI works (it is
+                # replayed without a second echo), so it does not seem lost.
+                self._tlog.write(person_line(line))
                 self._tlog.write(Text(""))
             self._pre_session_queue.append(line)
             return
@@ -67,7 +69,7 @@ class CommandsMixin:
                                       style="yellow"))
                 return
             inbox.push(self._session_id, line)
-            self._tlog.write(waiting_note_line(line))
+            self._tlog.write(person_line(line))
             self._activity.set_queued(len(inbox.peek(self._session_id)))
             return
 

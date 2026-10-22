@@ -22,13 +22,18 @@ from .chat_conversations import chat_log_path
 from .interactive_session import _Console
 from .interactive_session_tracker import format_elapsed
 from .textual_ui_helpers import (
-    _build_future_context_text, ellipsize, metric_lines, notice_line, plural,
+    _build_future_context_text, ellipsize, indented_line, metric_lines, notice_line, plural,
 )
 
 
 # Prompt placeholder shown while a turn is waiting on the user's reply to a decision question
 # raised mid-turn (EVENT_DECISION) — makes it obvious the AI is paused for input, not just idle.
 _AWAITING_DECISION_PLACEHOLDER = "Type your answer to the question above…"
+
+
+# The status while the AI is still working and has raised a question: the question is written when the step ends,
+# so until then it must not say the AI waits.
+DECISION_COMING_STATUS = "Working… I'll have a question for you when this step ends."
 
 
 # Prompt placeholder shown while a turn is running: typing now is safe (a note for the AI is read at the
@@ -119,8 +124,9 @@ class _RichLogConsole(_Console):
 # under wrapped lines. The transcript now gets one short line per distinct problem; the full record
 # always goes to a log file.
 
-# The longest warning line the transcript shows, and how many distinct ones are shown before the rest
-# go to the log file only, counted in one closing line (a few are information, a dozen are noise).
+# The longest warning line the transcript shows, and how many distinct warnings a turn shows before the rest
+# go to the log file only, counted in one closing line (a few are information, a dozen are noise). An error
+# is never counted away: it is always shown.
 LOG_LINE_CHARS = 110
 LOG_LINES_SHOWN = 3
 # Seconds without a new warning after which the closing line is written (a burst is one group).
@@ -184,12 +190,19 @@ class _RichLogHandler(logging.Handler):
     """Routes Python logging for the chat: the full record to a file, a short line to the transcript.
 
     Every record reaching this handler is written in full to ``log_path`` (rotated, size capped).
-    The transcript gets a dim ``⚠`` line for each of the first ``LOG_LINES_SHOWN`` distinct problems from
-    this package's own loggers: the first sentence, no time, level or logger name. Then, once the burst
-    is over (``write_summary``: a quiet second, or the person's next message), ONE closing line counts
-    the rest and says where the details are (``2 more notices. Details: <path>``), and the transcript
-    shows no further warnings. A library's records (``huggingface_hub`` and the like) never appear
-    there. With ``-v`` (``verbosity`` 1 or more) every record is written in full to the transcript.
+    The transcript gets a dim ``⚠`` line for each of the first ``LOG_LINES_SHOWN`` distinct warnings of a
+    turn from this package's own loggers: the first sentence, no time, level or logger name. Then, once the
+    burst is over (``write_summary``: a quiet second, or the person's next message), ONE closing line counts
+    the rest and says where the details are (``2 more notices. Details: <path>``), after the lines it
+    closes and never between them. Each turn starts its own count (``begin_turn``), so a later burst is
+    shown too, instead of being silent for the rest of the session. An ERROR or worse is always shown, from
+    any logger, and is never counted among the notices. A record that says ``in_transcript=False`` (its
+    ``extra``: the app tells the person in words of its own) goes to the file only. A library's warnings never
+    appear there. With ``-v`` (``verbosity`` 1 or more) every record is written in full to the transcript.
+
+    Nothing here reads the words of a message to decide whether it matters: only the level, the logger and
+    that flag. Which warnings need the person is for the call that raises them to say, by raising them to
+    ERROR.
     """
 
     def __init__(self, app: "QuestAITerminal", log: RichLog, verbosity: int = 0,
@@ -200,9 +213,11 @@ class _RichLogHandler(logging.Handler):
         self.verbosity = verbosity
         self.log_path = Path(log_path) if log_path is not None else chat_log_path()
         self.file_handler = open_log_file(self.log_path)
-        self.seen: Dict[str, int] = {}   # short line -> times seen, for every distinct problem
-        self.lines_shown = 0
-        self.summarized = False
+        self.seen: Dict[str, int] = {}          # short line -> times seen this turn, every distinct warning
+        self.errors_seen: Dict[str, int] = {}   # the same for errors, which are shown every time they are new
+        self.lines_shown = 0                    # warnings shown this turn
+        self.more_unsummarized = 0              # distinct warnings counted but not yet named in a closing line
+        self.burst_open = False                 # something was written that the closing line has not closed
         self.timer = None
         self.setFormatter(logging.Formatter(LOG_FORMAT))
 
@@ -211,6 +226,14 @@ class _RichLogHandler(logging.Handler):
             self.file_handler.close()
         super().close()
 
+    def begin_turn(self) -> None:
+        """A turn starts: close the group of notices so far, and count afresh."""
+        self.write_summary()
+        self.seen = {}
+        self.errors_seen = {}
+        self.lines_shown = 0
+        self.more_unsummarized = 0
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
             if self.file_handler is not None:
@@ -218,7 +241,7 @@ class _RichLogHandler(logging.Handler):
             lines = self.transcript_lines(record)
             if lines:
                 self.show(lines)
-            if self.verbosity < 1 and self.seen and not self.summarized:
+            if self.verbosity < 1 and self.burst_open:
                 self.arm_summary()
         except Exception:  # noqa: BLE001
             # A logging problem must never reach the screen; the file already has the record.
@@ -230,19 +253,31 @@ class _RichLogHandler(logging.Handler):
             text = Text.from_ansi(self.format(record))
             text.no_wrap = False
             return [text]
-        if not is_own_logger(record.name):
+        if getattr(record, "in_transcript", True) is False:
+            return []
+        is_error = record.levelno >= logging.ERROR
+        if not is_error and not is_own_logger(record.name):
             return []
         short = short_log_text(record.getMessage(), self.line_limit())
         if not short:
             return []
+        if is_error:
+            if short in self.errors_seen:
+                self.errors_seen[short] += 1
+                return []
+            self.errors_seen[short] = 1
+            self.burst_open = True
+            return [indented_line(f"  ⚠ {short}", "yellow", hang=4)]
         if short in self.seen:
             self.seen[short] += 1
             return []
         self.seen[short] = 1
-        if self.summarized or self.lines_shown >= LOG_LINES_SHOWN:
+        self.burst_open = True
+        if self.lines_shown >= LOG_LINES_SHOWN:
+            self.more_unsummarized += 1
             return []
         self.lines_shown += 1
-        return [notice_line(f"⚠ {short}")]
+        return [notice_line(f"⚠ {short}", hang=4)]
 
     def arm_summary(self) -> None:
         """(Re)start the quiet second after which the closing line is written. Never raises."""
@@ -263,20 +298,22 @@ class _RichLogHandler(logging.Handler):
         else:
             arm()
 
-    def write_summary(self) -> None:
-        """Close the group of warnings with one line: how many more there were, and where the details are.
+    def write_summary(self) -> bool:
+        """Close the group of notices with one line: how many more there were, and where the details are.
 
-        Once, and only if a warning was seen. Called when the burst is over, and before the person's next
-        message is echoed, so the line is the end of the group and never sits between two warnings."""
-        if self.summarized or not self.seen or self.verbosity >= 1:
-            return
-        self.summarized = True
+        Once per burst, and only if the burst wrote or counted something. Called when the burst is over, and
+        before the person's next message is echoed, so the line is the end of the group and never sits between
+        two notices. Returns whether it wrote."""
+        if not self.burst_open or self.verbosity >= 1:
+            return False
+        self.burst_open = False
         if self.timer is not None:
             self.timer.stop()
             self.timer = None
-        more = max(len(self.seen) - self.lines_shown, 0)
+        more, self.more_unsummarized = self.more_unsummarized, 0
         head = f"{plural(more, 'more notice')}. " if more else ""
-        self.show([notice_line(head + self.hint())])
+        self.show([notice_line(head + self.hint()), Text("")])
+        return True
 
     def line_limit(self) -> int:
         """Longest warning text that still fits one line of this terminal (``LOG_LINE_CHARS`` at most)."""
@@ -315,6 +352,8 @@ class _RichLogHandler(logging.Handler):
 # Columns the status line assumes before the widget has a size, and the least it keeps of a status text.
 STATUS_WIDTH_FALLBACK = 76
 STATUS_MIN_CHARS = 12
+# What the status strip says while the person is reading higher up and the AI has written more below.
+NEW_OUTPUT_BELOW = "↓ new output below"
 
 
 class ActivityBar(Static):
@@ -347,6 +386,8 @@ class ActivityBar(Static):
         self._queued = 0
         self.wait_started: Optional[float] = None
         self.clock = time.monotonic
+        # The transcript, to say when it holds output the person has scrolled away from (set by the app).
+        self.transcript: Any = None
 
     def on_mount(self) -> None:
         self._timer = self.set_interval(self._INTERVAL, self._tick)
@@ -395,10 +436,13 @@ class ActivityBar(Static):
             t.append(format_elapsed(seconds))
             t.append("  ")
         waiting = f"  · {plural(self._queued, 'message')} waiting" if self._queued else ""
-        room = (self.size.width or STATUS_WIDTH_FALLBACK) - len(t.plain) - len(waiting)
+        below = f"  {NEW_OUTPUT_BELOW}" if getattr(self.transcript, "unseen_below", False) else ""
+        room = (self.size.width or STATUS_WIDTH_FALLBACK) - len(t.plain) - len(waiting) - len(below)
         t.append(ellipsize(self._text, max(room, STATUS_MIN_CHARS)), style="dim")
         if waiting:
             t.append(waiting, style="bold yellow")
+        if below:
+            t.append(below, style="bold yellow")
         return t
 
 
@@ -586,7 +630,7 @@ class DeepDetailPanel(VerticalScroll):
         else:
             nav_hint = "  PgUp/PgDn to scroll, Alt+D to close"
         t = Text(no_wrap=False)
-        t.append(f"{pos_str}{self._goal[:60]}\n", style="bold cyan")
+        t.append(f"{pos_str}{ellipsize(self._goal, 60)}\n", style="bold cyan")
         t.append("\n".join(f"  {ln}" for ln in self._lines) + "\n")
         if self._metrics:
             # After the actions, where the panel's follow-the-tail view ends up, so opening it on a finished
@@ -614,6 +658,7 @@ class FutureContextPanel(VerticalScroll):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._bullets: str = ""
+        self.relied = False
         self.display = False
         self._body = Static(id="future-context-body")
 
@@ -626,22 +671,25 @@ class FutureContextPanel(VerticalScroll):
         answer's context cards)."""
         return bool(self._bullets)
 
-    def load(self, bullets: str) -> None:
+    def load(self, bullets: str, relied: bool = False) -> None:
         """Store the bullet lines without changing visibility.
 
-        Call ``display = True`` (or ``action_toggle_future_context``) after
+        ``relied`` says the worker flagged them as what it relied on (the panel then says so); otherwise they
+        are the context the AI looked at. Call ``display = True`` (or ``action_toggle_future_context``) after
         loading to make the panel visible.
         """
         self._bullets = bullets.strip()
+        self.relied = relied
 
     def hide(self) -> None:
         """Clear content and hide the panel."""
         self._bullets = ""
+        self.relied = False
         self.display = False
         self._rerender()
 
     def _rerender(self) -> None:
-        t = _build_future_context_text(self._bullets)
+        t = _build_future_context_text(self._bullets, self.relied)
         self._body.update(t if t is not None else Text(""))
 
 

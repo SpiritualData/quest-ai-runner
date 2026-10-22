@@ -37,6 +37,9 @@ class _RecordingLog:
     def __init__(self) -> None:
         self.lines: list[str] = []
 
+    def follow_now(self) -> None:
+        pass
+
     def write(self, x) -> None:  # noqa: ANN001 - mirrors RichLog.write
         # Text objects expose .plain; Markdown (RichMarkdown) exposes .markup (the raw source).
         if hasattr(x, "plain"):
@@ -268,7 +271,7 @@ async def test_opening_the_details_after_the_turn_does_not_bring_the_live_panel_
         assert app._deep_detail.display is True
         assert app._deep_view.display is False, "the live panel belongs to the running turn"
         text = app._deep_detail._body.render().plain
-        assert text.index("Read: a.md") < text.index("Pass rate: 0.5 -> 0.75 (measured automatically)"), (
+        assert text.index("Read: a.md") < text.index("Pass rate: 0.5 → 0.75 (measured automatically)"), (
             "the results follow the actions, where the panel's follow-the-tail view ends")
 
 
@@ -570,8 +573,8 @@ RECORDED = {**MEASURED, "after": 0.9, "delta": 0.4, "source": "recorded", "reaso
 NOT_APPLICABLE = {"solution_id": "", "metric_id": "", "name": "", "milestone": "", "before": None, "after": None,
                   "delta": None, "source": "not_applicable", "reason": "Only a draft was edited.", "disagrees": False}
 # The measured entry and the AI's own record of it are one line, the AI's numbers said neutrally.
-PAIR_LINE = "Greeting pass rate: 0.5 -> 0.75 (measured automatically). The AI reported 0.5 -> 0.9."
-MEASURED_LINE = "Greeting pass rate: 0.5 -> 0.75 (measured automatically, and the AI reported different numbers)"
+PAIR_LINE = "Greeting pass rate: 0.5 → 0.75 (measured automatically). The AI reported 0.5 → 0.9."
+MEASURED_LINE = "Greeting pass rate: 0.5 → 0.75 (measured automatically). The AI reported different numbers."
 
 
 def milestone(run_id: str, **data) -> dict:
@@ -598,7 +601,7 @@ def test_a_runs_record_shows_the_metric_before_and_after_once_and_drops_the_plai
     assert not any("Metric:" in ln for ln in lines), "the plain text line is not printed a second time"
     body = "\n".join(log.lines)
     assert "Changed greet()." in body, "the rest of the result is untouched"
-    assert body.index(PAIR_LINE) < body.index("Changed greet()"), "the numbers come before the result and its link"
+    assert body.index("Changed greet()") < body.index(PAIR_LINE), "the numbers follow the result and its link"
 
 
 def test_a_change_with_no_metric_recorded_says_so_in_one_dim_line():
@@ -617,7 +620,7 @@ def test_a_declared_not_applicable_reads_as_such():
     app._deep.add_run("r1", "Draft the note")
     app._handle_event(milestone("r1", deep_output="Drafted.", metrics=[NOT_APPLICABLE]))
     app._flush_deep_run("r1")
-    assert "Nothing to measure: Only a draft was edited." in stripped(log)
+    assert "Nothing to measure. Only a draft was edited." in stripped(log)
 
 
 def test_a_milestone_that_arrives_after_the_record_adds_its_lines_after_it():
@@ -710,7 +713,8 @@ async def test_the_plain_text_line_is_not_printed_when_the_answer_falls_back_to_
         body = "\n".join(log.lines)
         assert "Changed greet()." in body and "Metric:" not in body
         assert stripped(log).count(PAIR_LINE) == 1
-        assert body.index(PAIR_LINE) < body.index("Changed greet()"), "ahead of the answer it would be buried under"
+        assert body.index("Changed greet()") < body.index(PAIR_LINE), "after the answer and its link, before the closing line"
+        assert body.index(PAIR_LINE) < body.index("✓ Done in 3s")
 
 
 @pytest.mark.asyncio
@@ -743,7 +747,11 @@ async def test_the_explanation_line_counts_the_metric_results_and_adds_only_the_
         lines = stripped(log)
         assert "How I got this: 1 source, 1 metric result" in lines
         explain = lines.index("How I got this: 1 source, 1 metric result")
-        assert lines[explain + 1] == MEASURED_LINE and lines[explain + 2] == NOT_RECORDED_LINE
+        closing = next(i for i, ln in enumerate(lines) if ln.startswith("Answered in"))
+        assert lines[closing - 2:closing] == [MEASURED_LINE, NOT_RECORDED_LINE] or (
+            MEASURED_LINE in lines[:closing] and NOT_RECORDED_LINE in lines[:closing]), \
+            "the metric block comes before the closing line, then the explanation line after it"
+        assert closing < explain
         assert lines.count(MEASURED_LINE) == 1
 
 

@@ -23,7 +23,7 @@ from typing import Callable, Dict, Iterable, List, Optional
 from rich.text import Text
 
 from .core.run_control import ControlMessage, RunControl
-from .textual_ui_helpers import plural, working_notes_in
+from .textual_ui_helpers import indented_line, person_line, plural, working_notes_in
 
 # How often a live worker looks for a typed message. Short, because a person is waiting at the
 # prompt for their words to reach the model.
@@ -176,7 +176,7 @@ class ControlMixin:
             style="dim"))
 
     def _note_sent_to_worker(self, texts: List[str], remaining: int) -> None:
-        self._tlog.write(Text(f"  {working_notes_in(len(texts))}", style="dim"))
+        self._tlog.write(indented_line(f"  {working_notes_in(len(texts))}", "dim"))
         self._activity.set_queued(remaining)
 
     def _note_worker_received(self, texts: List[str]) -> None:
@@ -222,7 +222,7 @@ class ControlMixin:
         if held:
             parts.append("Messages sent while it was not running:\n" + "\n".join(f"- {m}" for m in held))
         short = request if len(request) <= 80 else request[:79] + "…"
-        self._tlog.write(Text(f"❯ /resume  ({short})", style="bold cyan"))
+        self._tlog.write(person_line(f"/resume  ({short})"))
         if held:
             self._tlog.write(Text(f"  Sending {plural(len(held), 'held note')} with it.", style="dim"))
         self._tlog.write(Text(""))

@@ -119,20 +119,91 @@ def test_the_details_hint_is_the_last_line_of_the_group_never_between_two_warnin
     assert log.lines == ["  ⚠ First problem", "  ⚠ Second problem", "  ⚠ Third problem"], "no hint yet"
     handler.write_summary()
     handler.write_summary()   # once
-    assert log.lines[-1] == f"  Details: {path}"
-    assert [ln for ln in log.lines if "Details:" in ln] == [log.lines[-1]]
+    assert log.lines[-2:] == [f"  Details: {path}", ""], "a blank line after it, so the next line is not run into it"
+    assert [ln for ln in log.lines if "Details:" in ln] == [log.lines[-2]]
     handler.close()
 
 
-def test_a_warning_after_the_closing_line_goes_to_the_file_only(tmp_path):
+def test_a_second_burst_in_the_same_turn_is_shown_while_the_turn_has_room_and_each_burst_is_closed_once(tmp_path):
+    """The closing line used to switch every later warning off for the rest of the session."""
     handler, log, path = make_handler(tmp_path)
     handler.handle(make_record("quest_ai_runner.a", "First problem."))
     handler.write_summary()
     handler.handle(make_record("quest_ai_runner.b", "A later problem."))
     handler.write_summary()
     handler.close()
-    assert log.lines == ["  ⚠ First problem", f"  Details: {path}"]
-    assert "A later problem." in path.read_text(encoding="utf-8")
+    assert [ln for ln in log.lines if ln] == ["  ⚠ First problem", f"  Details: {path}",
+                                              "  ⚠ A later problem", f"  Details: {path}"]
+
+
+def test_a_new_turn_starts_its_own_three_lines_and_its_own_count(tmp_path):
+    handler, log, path = make_handler(tmp_path)
+    for n in range(5):
+        handler.handle(make_record("quest_ai_runner.noisy", f"First turn problem {n}."))
+    handler.begin_turn()                      # the person sends their next message
+    for n in range(5):
+        handler.handle(make_record("quest_ai_runner.noisy", f"Second turn problem {n}."))
+    handler.handle(make_record("quest_ai_runner.noisy", "First turn problem 0."))   # new again in a new turn
+    handler.write_summary()
+    handler.close()
+    text = [ln for ln in log.lines if ln]
+    assert [ln for ln in text if "First turn" in ln] == [
+        "  ⚠ First turn problem 0", "  ⚠ First turn problem 1", "  ⚠ First turn problem 2"]
+    assert [ln for ln in text if "Second turn" in ln] == [
+        "  ⚠ Second turn problem 0", "  ⚠ Second turn problem 1", "  ⚠ Second turn problem 2"]
+    assert [ln for ln in text if "more notices" in ln] == [
+        f"  2 more notices. Details: {path}", f"  3 more notices. Details: {path}"], \
+        "each burst says how many it did not show, once, after the lines it closes"
+    summaries = [i for i, ln in enumerate(text) if "Details:" in ln]
+    problems = [i for i, ln in enumerate(text) if "⚠" in ln]
+    assert all(not (problems[0] < s < problems[-1]) or s > problems[2] for s in summaries[:1])
+    assert text.index(f"  2 more notices. Details: {path}") == 3, "right after the third line, never between"
+
+
+def test_an_error_is_always_shown_and_never_counted_away(tmp_path):
+    handler, log, path = make_handler(tmp_path)
+    for n in range(LOG_LINES_SHOWN + 2):
+        handler.handle(make_record("quest_ai_runner.noisy", f"Warning {n}."))
+    handler.handle(make_record("quest_ai_runner.files", "Could not read the notes folder.", level=logging.ERROR))
+    handler.handle(make_record("quest_ai_runner.files", "Could not read the notes folder.", level=logging.ERROR))
+    handler.handle(make_record("quest_ai_runner.files", "Another error.", level=logging.CRITICAL))
+    handler.write_summary()
+    handler.close()
+    text = [ln for ln in log.lines if ln]
+    assert "  ⚠ Could not read the notes folder" in text and "  ⚠ Another error" in text
+    assert text.count("  ⚠ Could not read the notes folder") == 1, "the same error is shown once a turn"
+    assert text[-1] == f"  2 more notices. Details: {path}", "errors are not among the notices counted away"
+
+
+def test_a_record_that_says_it_is_not_for_the_transcript_goes_to_the_file_only(tmp_path):
+    handler, log, path = make_handler(tmp_path)
+    record = make_record("quest_ai_runner.core.usage_limit", "Claude Code usage limit reached (weekly limit); resets at 20:00")
+    record.in_transcript = False
+    handler.handle(record)
+    handler.write_summary()
+    handler.close()
+    assert log.lines == []
+    assert "usage limit reached" in path.read_text(encoding="utf-8")
+
+
+def test_the_usage_limit_record_is_marked_for_the_file_only_so_the_closing_line_is_the_only_telling(tmp_path):
+    from quest_ai_runner.core import usage_limit
+    usage_limit.reset_for_tests()
+    captured: list = []
+
+    class Catch(logging.Handler):
+        def emit(self, record):
+            captured.append(record)
+
+    logger = usage_limit.log
+    catch = Catch(level=logging.WARNING)
+    logger.addHandler(catch)
+    try:
+        usage_limit.record(usage_limit.detect_usage_limit("You've hit your weekly limit · resets 1pm (UTC)"))
+    finally:
+        logger.removeHandler(catch)
+        usage_limit.reset_for_tests()
+    assert [getattr(r, "in_transcript", True) for r in captured] == [False]
 
 
 def test_nothing_is_written_to_close_a_group_that_never_had_a_warning(tmp_path):
@@ -148,11 +219,18 @@ def test_a_librarys_records_reach_the_file_but_never_the_transcript(tmp_path):
         "huggingface_hub.utils._http",
         "Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN.",
     ))
-    handler.handle(make_record("httpx", "HTTP Request: GET https://example.org/", level=logging.ERROR))
+    handler.handle(make_record("httpx", "HTTP Request: GET https://example.org/"))
     handler.close()
     assert log.lines == []
     text = path.read_text(encoding="utf-8")
     assert "unauthenticated requests" in text and "HTTP Request" in text
+
+
+def test_a_librarys_error_is_shown_because_an_error_is_never_chatter(tmp_path):
+    handler, log, _path = make_handler(tmp_path)
+    handler.handle(make_record("httpx", "Request failed for good: connection refused.", level=logging.ERROR))
+    handler.close()
+    assert log.lines == ["  ⚠ Request failed for good: connection refused"]
 
 
 def test_verbose_mode_keeps_the_full_record_in_the_transcript_for_any_logger(tmp_path):
@@ -204,8 +282,8 @@ def test_after_three_distinct_warnings_the_rest_are_counted_in_one_closing_line(
     handler.close()
     problems = [ln for ln in log.lines if ln.startswith("  ⚠ Problem")]
     assert len(problems) == LOG_LINES_SHOWN
-    assert log.lines[-1] == f"  5 more notices. Details: {path}"
-    assert len(log.lines) == LOG_LINES_SHOWN + 1
+    assert log.lines[-2:] == [f"  5 more notices. Details: {path}", ""]
+    assert len(log.lines) == LOG_LINES_SHOWN + 2
     assert path.read_text(encoding="utf-8").count("happened.") == LOG_LINES_SHOWN + 6
 
 
@@ -216,7 +294,7 @@ def test_an_unwritable_log_location_never_raises_and_the_hint_falls_back_to_verb
     handler.handle(make_record("quest_ai_runner.a", "Something degraded."))
     handler.write_summary()
     handler.close()
-    assert log.lines == ["  ⚠ Something degraded", "  Details: run with -v"]
+    assert log.lines == ["  ⚠ Something degraded", "  Details: run with -v", ""]
 
 
 def test_the_log_file_is_rotated_and_capped(tmp_path, monkeypatch):
@@ -307,7 +385,7 @@ SOURCES = [{"label": "Corpus files", "adapter": "files", "items": ["/srv/corpus/
 def test_the_context_block_is_one_sentence_two_titles_and_how_many_more():
     lines = [ln.plain for ln in context_block_lines(many_cards(), SOURCES)]
     assert len(lines) == 1
-    assert lines[0].startswith("  Found 6 sources: Topic 5 "), "the highest score comes first"
+    assert lines[0].startswith("  Looked at 6 sources: Topic 5 "), "the highest score comes first"
     assert lines[0].count("Topic ") == 2 and lines[0].endswith(" and 4 more.")
     blob = "\n".join(lines)
     for hidden in ("card", "area-aaaaaa", "score", "/srv/", ".md", "Corpus files", "Sources:"):
@@ -316,8 +394,8 @@ def test_the_context_block_is_one_sentence_two_titles_and_how_many_more():
 
 def test_the_context_line_names_every_source_when_there_are_two_or_fewer():
     cards = [{"title": "Pricing tiers", "relevance_score": 0.9}, {"title": "Refund policy", "relevance_score": 0.5}]
-    assert [ln.plain for ln in context_block_lines(cards, [])] == ["  Found 2 sources: Pricing tiers and Refund policy."]
-    assert [ln.plain for ln in context_block_lines(cards[:1], [])] == ["  Found 1 source: Pricing tiers."]
+    assert [ln.plain for ln in context_block_lines(cards, [])] == ["  Looked at 2 sources: Pricing tiers and Refund policy."]
+    assert [ln.plain for ln in context_block_lines(cards[:1], [])] == ["  Looked at 1 source: Pricing tiers."]
     assert context_block_lines([], []) == [], "nothing found, nothing said"
 
 
@@ -329,12 +407,12 @@ def test_a_long_title_is_cut_and_the_sentence_wraps_instead_of_being_clipped():
 
 def test_a_source_without_a_title_never_falls_back_to_its_internal_id():
     lines = [ln.plain for ln in context_block_lines([{"id": "card:area-aaaaaa", "relevance_score": 0.9}], [])]
-    assert lines == ["  Found 1 source: Untitled source."]
+    assert lines == ["  Looked at 1 source: Untitled source."]
 
 
 def test_with_no_cards_the_items_of_the_source_groups_are_the_count():
     lines = [ln.plain for ln in context_block_lines([], SOURCES)]
-    assert lines == ["  Found 2 sources."]
+    assert lines == ["  Looked at 2 sources."]
 
 
 def test_ellipsize_cuts_to_the_limit_on_one_line():
@@ -355,7 +433,7 @@ def test_the_context_event_writes_the_sentence_and_still_feeds_the_turns_state()
         return rec.lines, app._ctx.cards, cards
 
     lines, kept_cards, cards = run_app(build)
-    assert len(lines) == 1 and lines[0].startswith("  Found 6 sources:")
+    assert len(lines) == 1 and lines[0].startswith("  Looked at 6 sources:")
     assert not any("card" in ln or "/srv/" in ln or "score" in ln for ln in lines)
     assert kept_cards == cards, "the turn keeps every card unchanged (behind Alt+C)"
 
@@ -370,7 +448,7 @@ def metric_entry(i: int = 0, **extra) -> dict:
 
 def test_a_metric_line_keeps_its_whole_name_and_wraps_instead_of_being_cut():
     (line,) = metric_lines([metric_entry(7)])
-    assert line.plain == ("  Share of sample names greeted in the standard form, variant 7: 0.5 -> 0.75 "
+    assert line.plain == ("  Share of sample names greeted in the standard form, variant 7: 0.5 → 0.75 "
                           "(measured automatically)")
     assert "…" not in line.plain and line.style == "", "normal weight, not dim"
 
@@ -392,33 +470,37 @@ def test_metric_numbers_have_at_most_three_decimals_and_no_trailing_zeros_and_no
 def test_a_measured_and_a_recorded_entry_that_agree_are_one_line():
     lines = [ln.plain for ln in metric_lines([
         metric_entry(0, name="Pass rate"), metric_entry(0, name="Pass rate", source="recorded")])]
-    assert lines == ["  Pass rate: 0.5 -> 0.75 (measured automatically)"]
+    assert lines == ["  Pass rate: 0.5 → 0.75 (measured automatically)"]
 
 
-def test_a_disagreement_is_stated_neutrally_in_one_line_in_normal_weight():
+def test_a_disagreement_is_stated_neutrally_in_one_line_in_normal_weight_and_only_the_note_has_the_warning_colour():
     lines = metric_lines([
         metric_entry(0, name="Pass rate", before=0.38, after=0.91, disagrees=True),
         metric_entry(0, name="Pass rate", source="recorded", before=0.4, after=0.9, disagrees=True)])
     assert [ln.plain for ln in lines] == [
-        "  Pass rate: 0.38 -> 0.91 (measured automatically). The AI reported 0.4 -> 0.9."]
+        "  Pass rate: 0.38 → 0.91 (measured automatically). The AI reported 0.4 → 0.9."]
     assert lines[0].style == "" and "disagree" not in lines[0].plain and "QAR" not in lines[0].plain
+    note = "The AI reported 0.4 → 0.9."
+    start = lines[0].plain.index(note)
+    assert [(span.start, span.end, str(span.style)) for span in lines[0].spans] == [(start, start + len(note), "yellow")], \
+        "the warning colour is on the note, not on the whole line"
 
 
 def test_a_disagreement_whose_partner_is_not_in_the_batch_still_says_the_numbers_differ():
     (line,) = metric_lines([metric_entry(0, name="Pass rate", disagrees=True)])
-    assert line.plain == "  Pass rate: 0.5 -> 0.75 (measured automatically, and the AI reported different numbers)"
+    assert line.plain == "  Pass rate: 0.5 → 0.75 (measured automatically). The AI reported different numbers."
     (line,) = metric_lines([metric_entry(0, name="Pass rate", source="recorded", disagrees=True)])
-    assert line.plain == "  Pass rate: 0.5 -> 0.75 (reported by the AI, and the measured numbers differ)"
+    assert line.plain == "  Pass rate: 0.5 → 0.75 (reported by the AI). The measured numbers differ."
 
 
 def test_the_source_is_said_in_plain_words_never_by_an_internal_name():
     lines = [ln.plain for ln in metric_lines([
         metric_entry(0, name="Pass rate"), metric_entry(1, name="Latency", source="recorded"),
         {"source": "not_applicable", "reason": "Only a draft.", "name": "", "metric_id": ""}], True)]
-    assert lines == ["  Pass rate: 0.5 -> 0.75 (measured automatically)",
-                     "  Latency: 0.5 -> 0.75 (reported by the AI)",
-                     "  Nothing to measure: Only a draft.",
-                     f"  {NOT_RECORDED_LINE}"]
+    assert lines == ["  Latency: 0.5 → 0.75 (reported by the AI)",
+                     "  Pass rate: 0.5 → 0.75 (measured automatically)",
+                     "  Nothing to measure. Only a draft.",
+                     f"  {NOT_RECORDED_LINE}"], "by metric name, the declared not-applicable last"
     assert not any("QAR" in ln or "—" in ln for ln in lines)
 
 
@@ -426,7 +508,7 @@ def test_a_metric_block_is_a_few_lines_and_a_count_that_says_where_the_rest_are(
     entries = [metric_entry(i, name=f"Metric {i}") for i in range(7)]
     lines = [ln.plain for ln in metric_lines(entries, True, more_hint="Alt+D shows them all.")]
     assert len(lines) == METRIC_LINES_SHOWN + 2
-    assert lines[0] == "  Metric 0: 0.5 -> 0.75 (measured automatically)"
+    assert lines[0] == "  Metric 0: 0.5 → 0.75 (measured automatically)"
     assert lines[METRIC_LINES_SHOWN] == f"  {7 - METRIC_LINES_SHOWN} more metric results. Alt+D shows them all."
     assert lines[-1] == f"  {NOT_RECORDED_LINE}"
     assert metric_lines([], False) == [], "nothing to say, nothing written"
@@ -446,10 +528,10 @@ def test_in_the_running_app_a_finished_goals_metric_is_one_transcript_line():
         return rec.lines
 
     lines = run_app(build)
-    assert lines.count("  Pass rate: 0.5 -> 0.75 (measured automatically)") == 1
+    assert lines.count("  Pass rate: 0.5 → 0.75 (measured automatically)") == 1
 
 
-def test_the_metric_block_comes_before_the_result_so_a_long_answer_and_its_link_do_not_bury_it():
+def test_the_metric_block_comes_after_the_result_and_its_link_and_before_the_closing_line():
     async def build(app, pilot):
         rec = RecordingLog()
         app._tlog = rec
@@ -463,9 +545,9 @@ def test_the_metric_block_comes_before_the_result_so_a_long_answer_and_its_link_
         return rec.lines
 
     lines = run_app(build)
-    metric_at = lines.index("  Pass rate: 0.5 -> 0.75 (measured automatically)")
+    metric_at = lines.index("  Pass rate: 0.5 → 0.75 (measured automatically)")
     answer_at = next(i for i, ln in enumerate(lines) if ln.startswith("ANSWER"))
-    assert metric_at < answer_at
+    assert answer_at < metric_at, "the AI's answer and its link first, then the numbers"
 
 
 def test_alt_d_lists_every_metric_result_the_transcript_folded_away():
@@ -484,7 +566,7 @@ def test_alt_d_lists_every_metric_result_the_transcript_folded_away():
     lines, panel = run_app(build)
     assert "  3 more metric results. Alt+D shows them all." in lines
     for i in range(7):
-        assert f"Metric {i}: 0.5 -> 0.75 (measured automatically)" in panel
+        assert f"Metric {i}: 0.5 → 0.75 (measured automatically)" in panel
 
 
 def test_with_no_job_to_open_nothing_is_folded_away_so_the_count_is_never_a_dead_end():
@@ -603,3 +685,36 @@ def test_the_clock_resets_per_turn_and_stops_when_the_turn_finishes():
 
     first, second = run_app(build)
     assert (first, second) == (50.0, 80.0)
+
+
+# --- the order, the arrow, the wrapped structure, and a note that does not capitalise after a colon -------
+
+def test_metric_lines_are_ordered_by_metric_not_by_who_vouches_for_them():
+    """The payload lists every measured entry before every reported one; a person reads one metric at a time."""
+    entries = [metric_entry(i, name=f"Quality check {i}", source="measured" if i % 3 else "recorded")
+               for i in (1, 2, 4, 5, 7, 8, 10, 11, 3, 6, 9)]
+    names = [ln.plain.split(":")[0].strip() for ln in metric_lines(entries, limit=None)]
+    assert names == [f"Quality check {i}" for i in range(1, 12)], "numbers inside a name compare as numbers"
+
+
+def test_one_metrics_measured_and_reported_readings_stay_together_in_the_sorted_order():
+    entries = [metric_entry(1, name="B metric"), metric_entry(2, name="A metric"),
+               metric_entry(1, name="B metric", source="recorded"), metric_entry(2, name="A metric", source="recorded")]
+    lines = [ln.plain for ln in metric_lines(entries, limit=None)]
+    assert [ln.split(":")[0].strip() for ln in lines] == ["A metric", "B metric"]
+
+
+def test_the_terminal_writes_the_arrow_the_rest_of_the_app_uses():
+    (line,) = metric_lines([metric_entry(0, name="Pass rate")])
+    assert "→" in line.plain and "->" not in line.plain
+
+
+def test_a_not_applicable_reason_opens_its_own_sentence_instead_of_a_capital_after_a_colon():
+    (line,) = metric_lines([{"source": "not_applicable", "name": "", "metric_id": "",
+                             "reason": "This change only edits a draft note, which no recorded metric covers."}])
+    assert line.plain == "  Nothing to measure. This change only edits a draft note, which no recorded metric covers."
+    (lower,) = metric_lines([{"source": "not_applicable", "name": "", "metric_id": "",
+                              "reason": "no recorded metric covers a draft note"}])
+    assert lower.plain == "  Nothing to measure. No recorded metric covers a draft note."
+    (acronym,) = metric_lines([{"source": "not_applicable", "name": "", "metric_id": "", "reason": "iOS builds have no meter."}])
+    assert acronym.plain == "  Nothing to measure. iOS builds have no meter."

@@ -80,9 +80,9 @@ def allows_second_pass(final: Any) -> bool:
                    for flag in ("launch_failed", "usage_limited", "paused", "cancelled"))
 
 
-def closing_text(outcome: str, reset: str = "") -> Tuple[str, str]:
-    """The (text, style) that opens the closing line for ``outcome``. ``reset`` is the reset clause
-    (``usage_limit.reset_clause``), empty when the limit did not say when."""
+def closing_text(outcome: str) -> Tuple[str, str]:
+    """The (text, style) that opens the closing line for ``outcome``. Never a sentence of its own: the closing
+    line is items separated by dots, and the explanation of a stop is written above it (``limit_lines``)."""
     if outcome == OUTCOME_FINISHED:
         return "✓ Done", "green"
     if outcome == OUTCOME_STOPPED:
@@ -92,7 +92,7 @@ def closing_text(outcome: str, reset: str = "") -> Tuple[str, str]:
     if outcome == OUTCOME_NOT_RUN:
         return "~ Nothing was run", "yellow"
     if outcome == OUTCOME_LIMIT:
-        return usage_limit.pause_sentence(reset), "yellow"
+        return "~ Stopped at the limit", "yellow"
     return "Waiting for your answer", "yellow"
 
 
@@ -109,14 +109,31 @@ def limit_reset(final: Any, now: Optional[datetime] = None) -> str:
     return usage_limit.reset_clause(usage_limit.active_limit(now), now)
 
 
-def launch_failure_lines(final: Any) -> List[str]:
-    """What the person reads when the worker never started, or [] when it did (or it was not asked to)."""
+def launch_failure_lines(final: Any, request_restored: bool = False) -> List[str]:
+    """What the person reads when the worker never started, or [] when it did (or it was not asked to).
+
+    ``request_restored`` says the request is back in the prompt box, so Enter sends it again."""
     failed = [d for d in deep_results(final) if getattr(d, "launch_failed", False)]
     if not failed:
         return []
+    again = ("Your request is back in the box: fix that, then press Enter to send it again."
+             if request_restored else "Fix that, then send your request again.")
     return ["I couldn't start the work, so nothing was changed.",
             f"The reason: {launch_failure.cause(getattr(failed[0], 'error', None), getattr(failed[0], 'launch_problem', ''))}",
-            "Fix that, then send your request again."]
+            again]
+
+
+def limit_lines(reset: str) -> List[str]:
+    """Why the work stopped at Claude Code's usage limit, and the way forward, as two plain sentences.
+
+    ``reset`` is the reset clause (``usage_limit.reset_clause``), empty when the limit did not say when. Nothing
+    here promises the work will carry on by itself: in this terminal it does not, so the way forward is to send
+    the request again once the limit has reset. (The task executor does resume a limited task on its own.)"""
+    if reset:
+        return [f"Claude Code's usage limit is reached, so the work stopped. It resets {reset}.",
+                "Send your request again after that."]
+    return ["Claude Code's usage limit is reached, so the work stopped. It has not said when it resets.",
+            "Send your request again once it has."]
 
 
 def provider_error_lines(error: BaseException, *, message_restored: bool,

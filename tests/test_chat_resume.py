@@ -279,7 +279,7 @@ def test_resumed_history_shows_before_session_is_ready(tmp_path):
 
     before, after = asyncio.run(run())
     assert "second question" in before and "Tester (AI):" in before
-    assert "Picking up your last conversation (2 turns)." in before
+    assert "Picking up your last conversation (4 messages)." in before
     assert "abc123" not in before, "the id is for -v"
     for chatter in ("Loading the rest of the session", "End of resumed history", "Resumed conversation"):
         assert chatter not in after
@@ -307,7 +307,7 @@ def test_resume_with_v_names_the_conversation_and_every_rep_label_follows_the_ru
     conv.meta["rep_name"] = "Zee"
     assert "\nZee (AI):\n" in asyncio.run(run("Zee", 0))
     verbose = asyncio.run(run("Zee", 1))
-    assert "Picking up your last conversation (1 turn, id " in verbose and "abc123" in verbose
+    assert "Picking up your last conversation (2 messages, id " in verbose and "abc123" in verbose
 
 
 # -- exit hint: print how to resume, like Claude Code ---------------------------------------

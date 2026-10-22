@@ -84,7 +84,7 @@ Keys:
   Shift+Enter    New line (also Ctrl+J, Alt+Enter, or a backslash before Enter)
   PageUp/Down    Scroll the transcript
   Tab            Next job's detail (completes a command while the menu is open)
-  Alt+D / Alt+C  Show the job's detail and metric results / show the sources used
+  Alt+D / Alt+C  Show the job's detail and metric results / show the sources it looked at
 
 Resume a conversation later (run outside this session):
 

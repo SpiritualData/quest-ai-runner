@@ -405,7 +405,8 @@ def test_an_unconfirmed_message_is_sent_again_by_the_end_of_turn_flush_ahead_of_
         return started, app._resumable
 
     started, resumable = run_app(build)
-    assert started == [("taken, never confirmed\n\ntyped later", {"echo": True, "auto": False})]
+    joined = "taken, never confirmed\n\ntyped later"
+    assert started == [(joined, {"echo": False, "auto": False, "retry_text": joined})]
     assert resumable is not None and resumable["session_id"] == "sess-3"   # a stop is resumable too
 
 
@@ -436,5 +437,5 @@ def test_a_cancel_with_no_live_worker_is_exactly_what_it_was():
         return started, app._resumable
 
     started, resumable = run_app(build)
-    assert started == [("m1", {"echo": True, "auto": False})]
+    assert started == [("m1", {"echo": False, "auto": False, "retry_text": "m1"})]
     assert resumable is None
