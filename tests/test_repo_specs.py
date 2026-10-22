@@ -1,6 +1,10 @@
 """Spec selection for the working repository: the cached index, the offline entry point and the four tools."""
 import json
+import os
+import shlex
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -69,3 +73,36 @@ def test_the_four_tools_are_offered_only_in_a_repository_and_read_without_writin
     monkeypatch.delenv("QAR_SPEC_ROOT")
     monkeypatch.chdir(repo.parent)
     assert all(build({}) is None for build in builders.values())
+
+
+def worker_shell(repo, tmp_path, tmp_path_factory, *args):
+    """What a deep worker's shell does: a NEW process, started in another folder, with nothing that names the repository."""
+    elsewhere = tmp_path_factory.mktemp("elsewhere")   # a sibling of the repository's folder, so no esoi.toml above it
+    env = {**os.environ, "QAR_STANDARD_TOOLS": "1", "QAR_SPEC_CACHE": str(tmp_path / "cache")}
+    env.pop("QAR_SPEC_ROOT", None)
+    env["PYTHONPATH"] = os.pathsep.join([str(REPO), env.get("PYTHONPATH", "")])
+    return subprocess.run([sys.executable, "-m", "quest_ai_runner.tools", *args], cwd=elsewhere, env=env,
+                          capture_output=True, text=True, timeout=120)
+
+
+def test_the_brief_hands_the_worker_the_root_so_the_spec_tools_it_names_exist_in_its_own_shell(repo, tmp_path, tmp_path_factory):
+    """A worker told about find_specs called it from its shell, which started elsewhere: "unknown tool 'find_specs'"."""
+    request = "request=a queued task was lost or run twice"
+    block = build_tool_registry({"QAR_STANDARD_TOOLS": "1"}).render_deep_block("a queued task was lost", pins=("find_specs",))
+    assert "- find_specs " in block
+    assert f"-m quest_ai_runner.tools --spec-root {shlex.quote(str(repo))} call <name>" in block, "the command carries the root"
+    before = worker_shell(repo, tmp_path, tmp_path_factory, "call", "find_specs", "--kw", request)   # the command as it was taught before
+    assert before.returncode == 1 and "unknown tool 'find_specs'" in before.stderr + before.stdout
+    after = worker_shell(repo, tmp_path, tmp_path_factory, "--spec-root", str(repo), "call", "find_specs", "--kw", request)
+    assert after.returncode == 0 and "prob-queued-task-falls-through" in after.stdout
+
+
+def test_a_brief_names_no_spec_tool_where_there_is_no_repository_to_read_and_adds_no_root_for_other_tools(repo, monkeypatch):
+    registry = build_tool_registry({"QAR_STANDARD_TOOLS": "1"})
+    assert registry.get("find_specs") is not None and registry.get("find_specs").needs_spec_root
+    monkeypatch.delenv("QAR_SPEC_ROOT")
+    monkeypatch.chdir(repo.parent)   # the registry was built where records were; the process no longer finds them
+    block = registry.render_deep_block("a queued task was lost", pins=("find_specs", "show_spec"))
+    assert "find_specs" not in block and "show_spec" not in block and "--spec-root" not in block
+    other = build_tool_registry({"QAR_STANDARD_TOOLS": "1"}).get("record_metric_result")
+    assert other is not None and not other.needs_spec_root

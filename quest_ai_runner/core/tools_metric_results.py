@@ -53,7 +53,7 @@ def record_metric_result_spec(env: Mapping[str, str]) -> ToolSpec:
         description=("Put the metric result of your change on this run's record: the metric's value before and after, or "
                      "that no metric applies. The runner shows it beside the values it measured itself."),
         when_to_use=("Before you finish work that changes something: pass the metric's before and after numbers (one end "
-                     "is fine; ids come from the brief or find_specs), or not_applicable with a one-sentence reason if "
+                     "is fine; the ids come from the brief), or not_applicable with a one-sentence reason if "
                      "no metric applies."),
         when_not_to_use="Anything that is not a metric value: findings and summaries go in your final message.",
         parameters={"type": "object", "properties": {

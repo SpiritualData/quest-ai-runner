@@ -179,7 +179,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `adapters/_walk.py`, `adapters/files_search_worker.py`, `adapters/files_server.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `adapters/context_folder_review.py` | - |
 | `QAR_SPEC_CACHE` | Folder for the cached specification index, rebuilt when a record file changes (default ~/.cache/quest-ai-runner/spec_index). | `core/repo_specs.py` | - |
-| `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `core/repo_specs.py`, `core/spec_slice.py` | `docs/spec-selection.md` |
+| `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `core/repo_specs.py`, `core/spec_slice.py`, `tools/__main__.py` | `docs/spec-selection.md` |
 | `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STANDARD_TOOLS` |  | `core/tools.py` | `docs/tools.md` |

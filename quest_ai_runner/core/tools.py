@@ -151,6 +151,10 @@ class ToolSpec:
     # never one that must merge into a value only the planner's context shows, and never one that
     # needs an id from a read. False (the default) always goes through the planner.
     direct: bool = False
+    # A tool that reads the specification records of the repository the run works in. It exists only in a process
+    # that can find that repository (an ``esoi.toml`` above its working folder, or ``QAR_SPEC_ROOT``), and a worker's
+    # shell is a new process that may start somewhere else, so ``render_deep_block`` hands such a tool's command the root.
+    needs_spec_root: bool = False
 
     def required(self) -> List[str]:
         return list((self.parameters or {}).get("required") or [])
@@ -406,13 +410,26 @@ class ToolRegistry:
 
     def render_deep_block(self, query: str, k: int = DEFAULT_SELECT_K,
                           python: Optional[str] = None, pins: Sequence[str] = ()) -> str:
-        """The tool section of a deep brief: relevant tools plus the exact command for each."""
+        """The tool section of a deep brief: relevant tools plus the exact command for each.
+
+        The worker runs the command in its own shell, a new process whose folder is not this one's. A tool that needs
+        the repository's specification records (``needs_spec_root``) is only found there when told where they are, so
+        the command carries the root this process found them at, and such a tool is not named at all when there is
+        none: a brief never names a tool its worker could not call."""
         shown = self.select(query, k, pins)
         standing = [s for s in self.all() if s.standing_deep and s not in shown]
+        spec_root = None
+        if any(s.needs_spec_root for s in shown + standing):
+            from . import repo_specs
+            spec_root = repo_specs.find_root()
+            shown = [s for s in shown if spec_root is not None or not s.needs_spec_root]
+            standing = [s for s in standing if spec_root is not None or not s.needs_spec_root]
         if not (shown or standing):
             return ""
         py = python or sys.executable
         cmd = f"{shlex.quote(py)} -m quest_ai_runner.tools"
+        if spec_root is not None and any(s.needs_spec_root for s in shown + standing):
+            cmd += f" --spec-root {shlex.quote(str(spec_root))}"
         parts = ["TOOLS YOU CAN CALL (use these instead of writing your own script for the same "
                  "job; each prints its result and exits 0 on success, 1 on failure):",
                  self.render_catalog(shown + standing),

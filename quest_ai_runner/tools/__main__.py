@@ -11,6 +11,8 @@ nested values; ``--kw`` entries win over it. ``show NAME`` prints one tool's how
 
 The catalog is rebuilt from the same env the lane uses (``QUEST_*`` credentials for the standard
 tools, ``QAR_TOOLS_FILE`` for custom ones), so a deep run sees exactly what the brain saw.
+``--spec-root FOLDER`` (before the subcommand, or ``QAR_SPEC_ROOT``) is the repository whose specification records the
+``find_specs`` family reads; those tools exist only where a root is found, and a worker's shell may start in another folder.
 ``--quest``/``--task``/``--run`` (or ``QAR_TOOL_QUEST_ID``/``QAR_TOOL_TASK_ID``/``QAR_TOOL_RUN_ID``) fill a
 tool's context args the way the in-process loop does. Exit codes: 0 success, 1 failure (reason printed), 2 usage.
 """
@@ -29,6 +31,8 @@ from ..core.tools import ToolContext, build_tool_registry
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m quest_ai_runner.tools", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--spec-root", default=None, metavar="FOLDER",
+                        help="the repository (a folder with an esoi.toml) whose specification records the spec tools read")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p_list = sub.add_parser("list", help="show the catalog, or the tools matching --query")
     p_list.add_argument("--query", help="show only tools relevant to this")
@@ -47,6 +51,8 @@ def main(argv: Optional[list] = None) -> int:
     p_call.add_argument("--run", default=os.getenv("QAR_TOOL_RUN_ID"),
                         help="this run's id, for tools that record against the run (record_metric_result)")
     args = parser.parse_args(argv)
+    if args.spec_root:
+        os.environ["QAR_SPEC_ROOT"] = args.spec_root   # before the catalog is built: the spec tools register from it
 
     registry = build_tool_registry()
 

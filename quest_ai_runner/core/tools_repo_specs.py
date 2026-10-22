@@ -5,6 +5,9 @@ Four read-only tools over ``repo_specs`` (offered only when an ``esoi.toml`` is 
 record, ``depth`` steps out), ``intent_specs`` (every record of an intent) and ``show_spec`` (one record, tier 0 to 2). They load
 only what the run asks for, so a run starts from the few records that apply and reaches the rest on demand. No model is called:
 the run itself is the judge of the short list.
+
+A worker calls them from its own shell, a new process that may start in another folder, so the deep brief's command passes the
+root it found (``python -m quest_ai_runner.tools --spec-root <root> call ...``, see ``ToolRegistry.render_deep_block``).
 """
 from __future__ import annotations
 
@@ -48,7 +51,7 @@ def find_specs_spec(env: Mapping[str, str]) -> ToolSpec:
         when_not_to_use="Questions that are not about this repository's work; reading every record (use intent_specs).",
         parameters={"type": "object", "properties": {"request": {"type": "string", "description": "The task or question, in its own words."}},
                     "required": ["request"]},
-        mutates=False, origin="standard", workflow_step=False, keywords=KEYWORDS, timeout_seconds=60.0)
+        mutates=False, origin="standard", workflow_step=False, needs_spec_root=True, keywords=KEYWORDS, timeout_seconds=60.0)
 
 
 def related_specs_spec(env: Mapping[str, str]) -> ToolSpec:
@@ -71,7 +74,7 @@ def related_specs_spec(env: Mapping[str, str]) -> ToolSpec:
             "id": {"type": "string", "description": "A record id."},
             "depth": {"type": "integer", "description": "Link steps to follow (default 1)."},
             "limit": {"type": "integer", "description": "Most records to return (default 30)."}}, "required": ["id"]},
-        mutates=False, origin="standard", workflow_step=False, keywords=KEYWORDS, timeout_seconds=30.0)
+        mutates=False, origin="standard", workflow_step=False, needs_spec_root=True, keywords=KEYWORDS, timeout_seconds=30.0)
 
 
 def intent_specs_spec(env: Mapping[str, str]) -> ToolSpec:
@@ -85,7 +88,7 @@ def intent_specs_spec(env: Mapping[str, str]) -> ToolSpec:
         when_to_use="When the work belongs to an intent but no single record is clear yet, or to see the whole picture once.",
         when_not_to_use="Finding the records for a request (find_specs is shorter).",
         parameters={"type": "object", "properties": {"intent_id": {"type": "string", "description": "The intent's id; blank for all."}}},
-        mutates=False, origin="standard", workflow_step=False, keywords=KEYWORDS, timeout_seconds=30.0)
+        mutates=False, origin="standard", workflow_step=False, needs_spec_root=True, keywords=KEYWORDS, timeout_seconds=30.0)
 
 
 def show_spec_spec(env: Mapping[str, str]) -> ToolSpec:
@@ -102,7 +105,7 @@ def show_spec_spec(env: Mapping[str, str]) -> ToolSpec:
         when_to_use="For the records find_specs or related_specs showed that you will act on; read only those in full.",
         when_not_to_use="Reading records in bulk.",
         parameters={"type": "object", "properties": {"id": {"type": "string"}, "tier": {"type": "integer", "enum": [0, 1, 2]}}, "required": ["id"]},
-        mutates=False, origin="standard", workflow_step=False, keywords=KEYWORDS, timeout_seconds=30.0)
+        mutates=False, origin="standard", workflow_step=False, needs_spec_root=True, keywords=KEYWORDS, timeout_seconds=30.0)
 
 
 REPO_SPEC_BUILDERS = {"find_specs": with_repo(find_specs_spec), "related_specs": with_repo(related_specs_spec),

@@ -48,7 +48,8 @@ quest and its surroundings (`core/tools_quest_ops.py`). Each is defined once, na
 
 The quest comes from the run (`context_args`), so no id has to be pasted. A deep run sees
 `python -m quest_ai_runner.tools call NAME --kw arg=value` (`--kw` values that parse as JSON stay
-typed; `--args` takes one JSON object for nested values); `python -m quest_ai_runner.tools show NAME`
+typed; `--args` takes one JSON object for nested values; `--spec-root FOLDER` before the subcommand names the repository the
+specification tools read, which the brief fills in for a run that works in one); `python -m quest_ai_runner.tools show NAME`
 and `quest-ai-runner quest --describe NAME` print one operation's how-to on demand. The same entry
 is the planner's `tool` action, and Quest AI chat in quest-backend has a helper of the same name for
 the asks operations.

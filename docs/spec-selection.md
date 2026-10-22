@@ -51,5 +51,10 @@ The metric ranks by a balanced score of accuracy (70%), cost (15%) and time (15%
 
 A run working in a repository with an `esoi.toml` (or `QAR_SPEC_ROOT`) gets four read-only tools, `find_specs`, `related_specs`, `intent_specs` and `show_spec` (`core/tools_repo_specs.py`). The index is cached and rebuilt only when a record file changes, a local vector search is added when `fastembed` is installed, and the run walks links on demand instead of reading every record. The same functions run free from a shell: `python -m quest_ai_runner.core.repo_specs find|related|intent|show`.
 
+A deep worker calls them from its own shell, a new process that may start in another folder and so would not find the repository
+(`unknown tool 'find_specs'`). The brief's command therefore carries the root the run's process found, `python -m
+quest_ai_runner.tools --spec-root <folder> call ...` (the flag sets `QAR_SPEC_ROOT` for that one call), and the four tools are
+not named in a brief at all when no root is found (`ToolSpec.needs_spec_root`): a brief never names a tool its worker could not call.
+
 It is the slice source that `iterate-by-spec` and `ground-in-intent` were waiting for; neither calls it yet. Wiring it into a
 run's context is a decision for those solutions' own metrics, not assumed here.
