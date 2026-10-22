@@ -10,6 +10,6 @@ metric costs nothing and is computed from recorded rows only.
 
 The scorer applies the stated rule independently: a reading that counts a stale, missing or planned arm as measured fails
 its case, and so does a sub-metric whose quick tier is not fully measured or falls below the bar in ``esoi.toml``. The
-cases passed are the sub-metrics measured on current evidence and at or above the bar; the headline, floor, ceiling and
-measured weight are the report ``aggregate`` prints. An implementation module in ``impls/`` exposes ``build(meter) -> read``.
+cases passed are the sub-metrics measured on current evidence and at or above the bar; the floor, measured weight, headline and
+ceiling are the report ``aggregate`` prints. An implementation module in ``impls/`` exposes ``build(meter) -> read``.
 """

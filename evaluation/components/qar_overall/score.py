@@ -6,7 +6,8 @@ built (it papered over a gap), when the quick tier is not fully measured on curr
 bar (``bar`` in ``[balance.metric-qar-overall]``). So the cases passed are the sub-metrics measured on current evidence and
 at or above the bar, and an implementation can never pass a case by assuming.
 
-``aggregate`` prints the human report: the QUICK and FULL headline with floor, ceiling and measured weight, one block per
+``aggregate`` prints the human report: the QUICK and FULL floor and measured weight first, then the headline
+and ceiling, with a sentence naming what the headline leaves out; one block per
 sub-metric (tier, value, date, commit, cost of the last run), and what is not measured with the command and estimated
 cost that would measure it."""
 from qar_overall import combine

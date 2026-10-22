@@ -11,8 +11,8 @@ measure it in two tiers:
 Each arm is normalised to 0..1 by its sub-metric's ``rule`` (``RULES``) from its latest recorded row in that tier, and
 counts only when that row is current (``current``): a row with no commit, recorded on uncommitted code, on other cases, or
 older than a committed change to the measured code is stale, and a stale or missing arm is unmeasured. Humility: an
-unmeasured arm is never a pass. Every score is reported three ways: the headline (measured weight only, renormalised), the
-floor (unmeasured counted 0) and the ceiling (unmeasured counted 1), beside the measured share of the weight.
+unmeasured arm is never a pass. Every score is reported three ways, the floor first (unmeasured counted 0) beside the
+measured share of the weight, then the headline (measured weight only, renormalised) and the ceiling (unmeasured counted 1).
 
 Weights: each of QS1's ideals carries a weight in ``esoi.toml`` ``[balance.metric-qar-overall]`` (with a written reason),
 split equally over the sub-metrics that serve it (their ``ideal_ids`` in ``esoi/metrics.csv``). An ideal no sub-metric
@@ -286,8 +286,27 @@ def money(value):
     return f"${float(value):.2f}"
 
 
+def left_out(readings, tier, weights, names, unserved=0.0):
+    """One plain sentence naming what the headline of ``tier`` leaves out: each sub-metric with unmeasured weight in that
+    tier, by id and name, with how much of its weight is unmeasured."""
+    parts = []
+    for sid, reading in readings.items():
+        gap = weights[sid] * (1.0 - reading["tiers"][tier]["measured"])
+        if gap > 5e-4:
+            whole = gap >= weights[sid] - 5e-4
+            parts.append(f"{sid} {names.get(sid, '')} ("
+                         + (f"all of its weight {weights[sid]:.3f}" if whole else f"{gap:.3f} of its weight {weights[sid]:.3f}")
+                         + ")")
+    if unserved > 5e-4:
+        parts.append(f"ideals no sub-metric serves (weight {unserved:.3f})")
+    if not parts:
+        return "The headline leaves nothing out: every sub-metric is measured on current rows in this tier."
+    return "The headline leaves out " + ", ".join(parts[:-1]) + (" and " if len(parts) > 1 else "") + parts[-1] + "."
+
+
 def report(rows):
-    """The human report: headline, floor, ceiling and measured weight for the QUICK and FULL tiers, a table per sub-metric,
+    """The human report: floor and measured weight first, then headline and ceiling, for the QUICK and FULL
+    tiers, with a sentence naming what the headline leaves out, a table per sub-metric,
     and what is not measured with the command and estimated cost that would measure it."""
     readings = {r["id"]: r["reading"] for r in rows if r.get("reading")}
     if not readings:
@@ -297,11 +316,14 @@ def report(rows):
     lines = ["", "QAR overall (metric-qar-overall, the authoritative metric of QS1), from recorded rows only; nothing was re-run.",
              f"Read at commit {head()} on {datetime.date.today().isoformat()}. A row counts only when it is current against "
              "that commit; a stale or missing arm is unmeasured, never a pass."]
+    names = {r["id"]: r.get("area", "") for r in rows}
     for tier, label in (("cheap", "QUICK (cheap tiers)"), ("full", "FULL (whole input sets, live models where paid)")):
         c = combine(readings, tier)
         head_text = "none (nothing measured)" if c["headline"] is None else f"{c['headline']:.3f}"
-        lines.append(f"{label}: headline {head_text} on the measured {c['measured_weight']:.0%} of the weight; "
-                     f"floor {c['floor']:.3f} (unmeasured counted 0), ceiling {c['ceiling']:.3f} (unmeasured counted 1).")
+        lines.append(f"{label}: FLOOR {c['floor']:.3f} (unmeasured counted 0), {c['measured_weight']:.0%} of the weight "
+                     f"measured; headline {head_text} on the measured weight only; ceiling {c['ceiling']:.3f} "
+                     "(unmeasured counted 1).")
+        lines.append("    " + left_out(readings, tier, weights, names, unserved))
     if unserved:
         lines.append(f"Weight of ideals no sub-metric serves (always unmeasured): {unserved:.0%}.")
     lines += ["", "Per sub-metric (weight from QS1's ideals; value 0..1 by the stated rule; arms: tier, value, date, sha, cost of last run):"]

@@ -1,0 +1,475 @@
+[
+ {
+  "id": "TAG-001",
+  "area": "check",
+  "kind": "check",
+  "description": "a good tag file: every tag means something, links existing problems, and is on some solutions but not all",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",prob-r2;prob-spend\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": []
+  }
+ },
+ {
+  "id": "TAG-002",
+  "area": "check",
+  "kind": "check",
+  "description": "a tag that links no problem names no risk it mitigates",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [
+    "spending: links no problem"
+   ]
+  }
+ },
+ {
+  "id": "TAG-003",
+  "area": "check",
+  "kind": "check",
+  "description": "a tag on every solution classifies nothing",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",prob-r2;prob-spend\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "spending",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [
+    "spending: on every solution"
+   ]
+  }
+ },
+ {
+  "id": "TAG-004",
+  "area": "check",
+  "kind": "check",
+  "description": "a listed tag no solution uses is retired",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",prob-r2;prob-spend\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [
+    "prompt: used by no solution"
+   ]
+  }
+ },
+ {
+  "id": "TAG-005",
+  "area": "check",
+  "kind": "check",
+  "description": "a linked problem id that is not a problem record",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",prob-r2;prob-gone\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [
+    "linked problem `prob-gone` is not a problem record"
+   ]
+  }
+ },
+ {
+  "id": "TAG-006",
+  "area": "check",
+  "kind": "check",
+  "description": "a solution uses a tag outside the list",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",prob-r2;prob-spend\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending;cards",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [
+    "s2: tag `cards` is not in esoi/tags.csv"
+   ]
+  }
+ },
+ {
+  "id": "TAG-007",
+  "area": "check",
+  "kind": "check",
+  "description": "a listed tag with no meaning",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,,prob-r2\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [
+    "spending: no meaning stated"
+   ]
+  }
+ },
+ {
+  "id": "TAG-008",
+  "area": "check",
+  "kind": "check",
+  "description": "several faults in one file are each reported",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",\nprompt,\"The solution decides prompt text.\",prob-r1;prob-gone\nunused,\"Never used.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [
+    "spending: links no problem",
+    "linked problem `prob-gone`",
+    "unused: used by no solution"
+   ]
+  }
+ },
+ {
+  "id": "TAG-009",
+  "area": "check",
+  "kind": "check",
+  "description": "a tag on one solution passes with a note asking for the back-fill check",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",prob-r2;prob-spend\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [],
+   "notes": [
+    "prompt: used by one solution only (s1)"
+   ]
+  }
+ },
+ {
+  "id": "TAG-010",
+  "area": "check",
+  "kind": "check",
+  "description": "the solution's own problem ids are not tags of the list: putting one in the tags column fails",
+  "args": {
+   "tags_csv": "tag,meaning,problem_ids\nspending,\"The solution bounds or causes spend.\",prob-r2;prob-spend\nprompt,\"The solution decides prompt text.\",prob-r1\n",
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending;prompt",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s2",
+     "tags": "spending;prob-spend",
+     "problem_ids": ""
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": ""
+    }
+   ],
+   "problems": [
+    "prob-r1",
+    "prob-r2",
+    "prob-spend",
+    "prob-prompt"
+   ]
+  },
+  "expect": {
+   "fails": [
+    "s2: tag `prob-spend` is not in esoi/tags.csv"
+   ]
+  }
+ },
+ {
+  "id": "TAG-011",
+  "area": "lookup",
+  "kind": "lookup",
+  "description": "a tag finds the solutions that carry it",
+  "args": {
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending",
+     "problem_ids": "prob-spend"
+    },
+    {
+     "solution_id": "s2",
+     "tags": "prompt",
+     "problem_ids": "prob-prompt"
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": "prob-spend;prob-r1"
+    }
+   ],
+   "ids": [
+    "prompt"
+   ]
+  },
+  "expect": {
+   "found": [
+    "s2"
+   ]
+  }
+ },
+ {
+  "id": "TAG-012",
+  "area": "lookup",
+  "kind": "lookup",
+  "description": "a problem id finds the solutions connected to it, tag column or not",
+  "args": {
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending",
+     "problem_ids": "prob-spend"
+    },
+    {
+     "solution_id": "s2",
+     "tags": "prompt",
+     "problem_ids": "prob-prompt"
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": "prob-spend;prob-r1"
+    }
+   ],
+   "ids": [
+    "prob-spend"
+   ]
+  },
+  "expect": {
+   "found": [
+    "s1",
+    "s3"
+   ]
+  }
+ },
+ {
+  "id": "TAG-013",
+  "area": "lookup",
+  "kind": "lookup",
+  "description": "a tag and a problem together find every solution carrying either, in record order",
+  "args": {
+   "solutions": [
+    {
+     "solution_id": "s1",
+     "tags": "spending",
+     "problem_ids": "prob-spend"
+    },
+    {
+     "solution_id": "s2",
+     "tags": "prompt",
+     "problem_ids": "prob-prompt"
+    },
+    {
+     "solution_id": "s3",
+     "tags": "",
+     "problem_ids": "prob-spend;prob-r1"
+    }
+   ],
+   "ids": [
+    "prompt",
+    "prob-r1"
+   ]
+  },
+  "expect": {
+   "found": [
+    "s2",
+    "s3"
+   ]
+  }
+ }
+]

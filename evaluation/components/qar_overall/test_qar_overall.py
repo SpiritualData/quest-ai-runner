@@ -105,3 +105,16 @@ def test_definitions_are_valid():
                 assert sum(s["share"] for s in specs) == pytest.approx(1.0), (case["id"], tier)
             for s in specs:
                 assert s.get("planned") or "/" in s["arm"]
+
+
+def test_report_leads_with_the_floor_and_names_what_the_headline_leaves_out(fixture_log, monkeypatch):
+    monkeypatch.setattr(combine, "submetric_weights", lambda subs: ({s: 1.0 / len(subs) for s in subs},
+                                                                    {"QI1": list(subs)}, 0.0))
+    monkeypatch.setattr(combine, "settings", lambda config=None: {"ideals": {"QI1": 1.0}, "reasons": {}, "bar": 0.8,
+                                                                  "cost_per_passing_turn_usd": 0.05})
+    rows = [{"id": "S1", "area": "Half measured", "reading": combine.read(args())},
+            {"id": "S2", "area": "Fully measured", "reading": combine.read(args(cheap=[{"arm": "a/x", "share": 1.0}]))}]
+    text = combine.report(rows)
+    quick = next(line for line in text.splitlines() if line.startswith("QUICK"))
+    assert quick.index("FLOOR") < quick.index("measured") < quick.index("headline") < quick.index("ceiling")
+    assert "The headline leaves out S1 Half measured (0.250 of its weight 0.500)." in text

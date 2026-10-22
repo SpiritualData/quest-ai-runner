@@ -151,7 +151,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 | `bound-card-growth` | Card store growth control | bootstrap_guards | Cards per source-file group and duplicate share after repeated nested bootstrap |
 | `search-cards-and-specs` | Unified card and specification search | two_pipelines | Mixed card and specification selection, with both existing selection metrics held |
-| `tag-solutions` | Problem-linked tags that identify solutions |  | Right solution missed without the tag |
+| `tag-solutions` | Problem-linked tags that identify solutions | tag_list_with_check | Right solution missed without the tag |
 | `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
 
 ## Implementations
@@ -351,7 +351,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
 | `iterate-by-spec:writeback-on-the-record` | Slice before and write-back onto each record (planned) |  |  |
 | `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links | quest_ai_runner/core/unified_search.py |  |
-| `tag-solutions:tag_list_with_check` | Problem-linked tag list with a check rule and a lookup | scripts/esoi_rules.py |  |
+| `tag-solutions:tag_list_with_check` | Problem-linked tag list with a check rule and a lookup | scripts/esoi_tags.py |  |
 | `choose-what-to-index:risk_gate` | Risk-gated folder review | evaluation/components/choose_what_to_index/impls/risk_gate.py |  |
 | `choose-what-to-index:review_only` | Model-judged folder review before the gate | evaluation/components/choose_what_to_index/impls/review_only.py |  |
 | `choose-what-to-index:index_everything` | Index everything (broken baseline) | evaluation/components/choose_what_to_index/broken/index_everything.py |  |
@@ -418,5 +418,5 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl bootstrap_guards; esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup; esoi run card_store_growth --impl live_store`
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs --impl two_pipelines; esoi run context_and_specs --impl solutions_and_problems_with_links`
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed record of what they changed: `esoi run record_tracking`
-- `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_lookup`
+- `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_solutions --impl tag_list_with_check`
 - `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`
