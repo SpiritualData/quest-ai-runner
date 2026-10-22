@@ -26,6 +26,19 @@ def chat_history_dir() -> Path:
     return Path(os.getenv("QAR_CHAT_HISTORY_DIR") or (Path.home() / ".quest-ai-runner" / "conversations"))
 
 
+def chat_log_path() -> Path:
+    """The file the chat writes its full diagnostic log to (``QAR_CHAT_LOG_FILE`` wins).
+
+    The transcript shows a problem as one short line; the whole record (time, level, logger,
+    traceback) lives here. By default it sits beside the saved conversations, in the same per-user
+    state folder, so it is found wherever the conversations are.
+    """
+    override = os.getenv("QAR_CHAT_LOG_FILE")
+    if override:
+        return Path(override).expanduser()
+    return chat_history_dir().parent / "logs" / "chat.log"
+
+
 @dataclass
 class SavedConversation:
     """One saved chat conversation file, with just enough read to list and resume it."""

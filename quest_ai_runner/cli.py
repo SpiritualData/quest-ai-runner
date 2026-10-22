@@ -329,6 +329,10 @@ Env it reads:
                                                    and reopened by `chat --resume` (picker),
                                                    `chat --resume last|ID` or `chat --continue`.
                                                    See docs/chat.md.
+  QAR_CHAT_LOG_FILE (optional)                 : `chat`: the file the full diagnostic log is written to
+                                                   (default: logs/chat.log beside the conversations dir;
+                                                   rotated and size capped). The transcript shows only
+                                                   one short line per distinct warning. See docs/chat.md.
   QAR_QUEST_AUTO_MATCH (optional)             — `chat`: 0 makes "no quest" the default instead of
                                                    matching each message to a synced quest (a
                                                    person's own /quest choice still wins).
@@ -401,6 +405,12 @@ from datetime import date
 from pathlib import Path
 
 import shutil
+
+# fastembed (optional qdrant extra) pulls in huggingface_hub, which resets its own logger's level
+# when it is first imported, so a setLevel call made before that import is undone by it. Its
+# unauthenticated-request warning only stays quiet if the library reads this at import, so it is set
+# before anything below can import it. A user's own value wins.
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
@@ -483,7 +493,8 @@ def main(argv=None) -> int:
     logging.getLogger("google_genai.models").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     # fastembed (optional qdrant extra) pulls in huggingface_hub, which warns about
-    # unauthenticated requests even when nothing here uses a Hugging Face model directly.
+    # unauthenticated requests even when nothing here uses a Hugging Face model directly. Its own
+    # import resets this level, so HF_HUB_VERBOSITY (set at the top of this module) is what holds.
     logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
     log = logging.getLogger("quest-ai-runner")
     handlers = {

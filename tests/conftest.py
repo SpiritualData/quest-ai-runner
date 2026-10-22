@@ -35,6 +35,12 @@ def hermetic_qar_environment(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def chat_log_stays_in_a_temp_file(monkeypatch, tmp_path, hermetic_qar_environment):
+    """A test that mounts the terminal app never writes the real per-user chat log."""
+    monkeypatch.setenv("QAR_CHAT_LOG_FILE", str(tmp_path / "chat.log"))
+
+
+@pytest.fixture(autouse=True)
 def deep_runner_default_is_inert_in_tests(monkeypatch, hermetic_qar_environment):
     """The auto-built default deep runner must never resolve to a REAL worker during the suite.
 

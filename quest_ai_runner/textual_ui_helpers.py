@@ -63,6 +63,75 @@ def _build_shallow_context_bullets(cards: List[dict]) -> str:
     return "\n".join(lines)
 
 
+# The transcript's context block: a count line, this many cards, then "and K more".
+CONTEXT_CARDS_SHOWN = 3
+CONTEXT_TITLE_CHARS = 70
+
+
+def ellipsize(text: str, limit: int) -> str:
+    """``text`` on one line, cut to ``limit`` characters with a trailing ellipsis when it is longer.
+
+    The cut falls on a word boundary when one is near the end, so a title is not chopped mid-word.
+    """
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    cut = text[: max(limit - 1, 1)]
+    space = cut.rfind(" ")
+    if space >= limit * 0.6:
+        cut = cut[:space]
+    return cut.rstrip() + "…"
+
+
+def notice_line(text: str, width: Optional[int] = None, indent: str = "  ") -> Text:
+    """One dim transcript line: ``indent`` then ``text``, ellipsized to fit ``width`` when given.
+
+    The one way the terminal writes a short quiet note (a warning, a hint, the context summary), so
+    each of them is a single line that never wraps.
+    """
+    body = ellipsize(text, max(width - len(indent), 1)) if width else text
+    return Text(indent + body, style="dim")
+
+
+def plural(n: int, noun: str) -> str:
+    return f"{n} {noun}{'' if n == 1 else 's'}"
+
+
+def card_score(card: dict) -> float:
+    try:
+        return float(card.get("relevance_score") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def context_block_lines(card_meta: List[dict], sources: List[dict], width: int = 80) -> List[Text]:
+    """The calm transcript block for the context gathered this turn, no line wider than ``width``.
+
+    A count line, the three best cards by title (never the internal card id, the score or file
+    paths; those are in the live context panel), "and K more", and one line of source labels with
+    their item counts. At most six lines, so a turn that gathered hundreds of items still reads as
+    one quiet block instead of a wall.
+    """
+    lines: List[Text] = [notice_line(
+        f"Context: {plural(len(card_meta), 'card')}, {plural(len(sources), 'source')}", width, indent="",
+    )]
+    ranked = sorted(card_meta, key=card_score, reverse=True)
+    for card in ranked[:CONTEXT_CARDS_SHOWN]:
+        title = ellipsize(card.get("title") or "Untitled card", min(CONTEXT_TITLE_CHARS, max(width - 4, 10)))
+        line = Text("  ")
+        line.append("●", style="cyan")
+        line.append(f" {title}")
+        lines.append(line)
+    if len(ranked) > CONTEXT_CARDS_SHOWN:
+        lines.append(notice_line(f"… and {len(ranked) - CONTEXT_CARDS_SHOWN} more", width))
+    # A source with no file-level items (a recent or card match) has no count worth a label.
+    counted = [f"{src.get('label') or src.get('adapter') or '?'} ({len(src['items'])})"
+               for src in sources if src.get("items")]
+    if counted:
+        lines.append(notice_line("Sources: " + ", ".join(counted), width))
+    return lines
+
+
 def _missing_model_provider_message(env=None, which=shutil.which) -> Optional[str]:
     """Return a clear error message when no model provider can be reached, else ``None``.
 

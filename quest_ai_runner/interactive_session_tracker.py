@@ -9,6 +9,12 @@ import time
 from typing import Dict, List, Optional
 
 
+def format_elapsed(seconds: float) -> str:
+    """``45s`` under a minute, ``2m5s`` after: the one way a run's elapsed time is written."""
+    mins, secs = divmod(int(seconds), 60)
+    return f"{mins}m{secs}s" if mins else f"{secs}s"
+
+
 class _DeepRunTracker:
     """Track multiple concurrent deep runs and their latest output.
 
@@ -109,9 +115,7 @@ class _DeepRunTracker:
             for run_id, info in sorted(self._runs.items()):
                 block_start = len(lines)
                 status_icon = "●" if info['status'] == 'running' else ("✓" if info['status'] == 'done' else "✗")
-                elapsed = time.time() - info['started']
-                mins, secs = divmod(int(elapsed), 60)
-                time_str = f"{mins}m{secs}s" if mins > 0 else f"{secs}s"
+                time_str = format_elapsed(time.time() - info['started'])
 
                 # The SUBGOAL this run is working on: its own prominent (bold cyan) header line so
                 # the user always sees WHAT the live actions below are for. Shown fully (generous cap

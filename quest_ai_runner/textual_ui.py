@@ -348,10 +348,12 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         self._deep_view.hide()
         self._activity.display = False
 
-        # Capture Python logging output into the RichLog (not stderr) for proper wrapping.
+        # Capture Python logging output (not stderr): the full record goes to the chat log file
+        # and the transcript gets one short line per distinct problem (see _RichLogHandler).
         root_logger = logging.getLogger()
         root_logger.handlers.clear()  # Remove stderr handler from basicConfig
-        log_handler = _RichLogHandler(self, self._tlog)
+        log_handler = _RichLogHandler(self, self._tlog, verbosity=self.verbosity)
+        self.log_handler = log_handler
         # Verbosity: 0=WARNING, 1=INFO, 2+=DEBUG
         if self.verbosity >= 2:
             log_level = logging.DEBUG
@@ -385,6 +387,13 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
                 self.sub_title = "Resuming conversation..."
             self.query_one("#prompt", PromptTextArea).focus()
             self.run_worker(self._build_session_worker, exclusive=True, thread=True)
+
+    def on_unmount(self) -> None:
+        """Hand logging back: the handler writes into this app's transcript, which is gone."""
+        handler = getattr(self, "log_handler", None)
+        if handler is not None:
+            logging.getLogger().removeHandler(handler)
+            handler.close()
 
 
 if __name__ == "__main__":

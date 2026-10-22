@@ -76,6 +76,17 @@ Where conversations live: one JSON file per conversation in `QAR_CHAT_HISTORY_DI
 selected quest, representative name and last-update time. The chat also searches these files for
 earlier conversations related to what you are asking now.
 
+Warnings and errors do not fill the transcript. The full record (time, level, logger, traceback)
+always goes to a log file, `logs/chat.log` beside the saved conversations (`QAR_CHAT_LOG_FILE`
+overrides it; it is rotated and capped at about 1 MB plus two older files). The transcript shows at
+most one short dim `⚠` line per distinct problem raised by this package, and says where the details
+are the first time. A library's own warnings are never shown there. `chat -v` writes every record in
+full to the transcript instead.
+
+While the AI works, the status line counts the seconds once a wait passes 3 (for example
+`Preparing the deep run… 45s`), so a long silent step never looks frozen. The count stops when the
+deep dashboard takes over or the turn ends.
+
 `/save` and `/load` are different: they save and restore a named snapshot of the session's
 settings and transcript. Resuming needs neither; every conversation is already saved.
 
@@ -194,6 +205,7 @@ Click and drag selects text without holding Shift; Ctrl+C copies it (over SSH to
 |---|---|---|
 | `QAR_CORPUS_ROOT` | none | The folder the chat grounds answers in, and where it looks for synced quest folders. |
 | `QAR_CHAT_HISTORY_DIR` | `~/.quest-ai-runner/conversations` | Where conversations are saved, and read back by `--resume`. |
+| `QAR_CHAT_LOG_FILE` | `~/.quest-ai-runner/logs/chat.log` | Where the chat writes its full diagnostic log (the transcript shows only short warning lines). |
 | `QAR_STATE_PATH` | `./qar_state.json` | Where the chat remembers your model, representative and `/quest none` choice. |
 | `QAR_QUEST_AUTO_MATCH` | `1` | `0` makes "no quest" the default (a person's `/quest auto` still wins). |
 | `QAR_REP_NAME`, `QAR_REP_PERSONA_FILE` | none | Default representative name and persona file. |

@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-210 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+212 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -24,6 +24,7 @@ the docs and `.env.example` that describe what it does.
 | `FASTEMBED_CACHE_PATH` | Folder for the local embedding model the spec search uses when fastembed is installed (default /tmp/fastembed_cache). | `core/repo_specs.py` | - |
 | `GOOGLE_API_KEY` |  | `adapters/gemini_provider.py`, `cli_chat.py`, `cli_config.py` +2 | `docs/web-search.md` |
 | `HF_HUB_OFFLINE` | Set to 1 by the spec search (unless already set) so a cached embedding model loads without network calls. | `core/repo_specs.py` | - |
+| `HF_HUB_VERBOSITY` | Hugging Face hub log level; the CLI sets it to error (unless already set) so its unauthenticated-request warning never reaches the chat. | `cli.py` | - |
 | `MAX_THINKING_TOKENS` | Claude Code variable the CLI provider sets to cap extended thinking on plan() calls (0 turns thinking off). | `adapters/claude_cli_provider.py` | - |
 | `OPENAI_API_KEY` | OpenAI key: registers the OpenAI provider and the OpenAI embedder. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `cli_config.py` +2 | - |
 | `QAR_ACP_AGENT_COMMAND` |  | `adapters/acp_deep_runner_protocol.py` | `docs/acp-deep-runner.md` |
@@ -53,6 +54,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CHANNEL_STATE_PATH` |  | `cli_config.py` | `docs/live-channels.md` |
 | `QAR_CHANNEL_TURN_TIMEOUT_SECONDS` |  | `cli_config.py` | `docs/live-channels.md` |
 | `QAR_CHAT_HISTORY_DIR` |  | `chat_conversations.py`, `cli_config.py`, `interactive_session.py` | `docs/chat.md` |
+| `QAR_CHAT_LOG_FILE` | File the terminal chat writes its full diagnostic log to (default: logs/chat.log beside the saved conversations). | `chat_conversations.py` | `docs/chat.md` |
 | `QAR_CLAUDE_LIVE_MODELS` | 0 turns off the lookup of live Claude model ids (tests, air-gapped hosts). | `adapters/claude_live_models.py` | - |
 | `QAR_CLAUDE_PATH` |  | `cli_config.py`, `config_resolvers.py` | `.env.example`, `docs/adapters.md`, `docs/deployment.md` +1 |
 | `QAR_CLAUDE_SESSIONS_DIR` | Directory of Claude Code session files indexed as conversation context. | `cli_config.py`, `config_assembler.py` | - |
@@ -174,7 +176,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `adapters/_walk.py`, `adapters/files_search_worker.py`, `adapters/files_server.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `adapters/context_folder_review.py` | - |
 | `QAR_SPEC_CACHE` | Folder for the cached specification index, rebuilt when a record file changes (default ~/.cache/quest-ai-runner/spec_index). | `core/repo_specs.py` | - |
-| `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `core/repo_specs.py` | - |
+| `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `core/repo_specs.py` | `docs/spec-selection.md` |
 | `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STANDARD_TOOLS` |  | `core/tools.py` | `docs/tools.md` |

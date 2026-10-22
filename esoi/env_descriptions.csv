@@ -64,3 +64,5 @@ QAR_SPEC_ROOT,Repository whose ESOI specifications a run searches (a folder hold
 QAR_SPEC_CACHE,"Folder for the cached specification index, rebuilt when a record file changes (default ~/.cache/quest-ai-runner/spec_index)."
 FASTEMBED_CACHE_PATH,Folder for the local embedding model the spec search uses when fastembed is installed (default /tmp/fastembed_cache).
 HF_HUB_OFFLINE,Set to 1 by the spec search (unless already set) so a cached embedding model loads without network calls.
+HF_HUB_VERBOSITY,"Hugging Face hub log level; the CLI sets it to error (unless already set) so its unauthenticated-request warning never reaches the chat."
+QAR_CHAT_LOG_FILE,"File the terminal chat writes its full diagnostic log to (default: logs/chat.log beside the saved conversations)."

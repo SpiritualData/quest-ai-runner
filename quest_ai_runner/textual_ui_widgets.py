@@ -6,7 +6,11 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
+import time
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from textual.app import ComposeResult
 from typing import Dict, List, Optional
 from textual.widgets import RichLog, Static
@@ -14,8 +18,10 @@ from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
 from textual.containers import VerticalScroll
 
+from .chat_conversations import chat_log_path
 from .interactive_session import _Console
-from .textual_ui_helpers import _build_future_context_text
+from .interactive_session_tracker import format_elapsed
+from .textual_ui_helpers import _build_future_context_text, ellipsize, notice_line
 
 
 # Prompt placeholder shown while a turn is waiting on the user's reply to a decision question
@@ -112,46 +118,192 @@ class _RichLogConsole(_Console):
 
 # ── Logging handler for RichLog ────────────────────────────────────────────────
 #
-# Captures Python logging output and writes it to the RichLog with proper wrapping,
-# so log messages don't get truncated at the terminal edge.
+# Python logging used to be copied into the transcript record by record (time, level, logger name,
+# the whole message), so a library's chatty warning or a long internal one buried the conversation
+# under wrapped lines. The transcript now gets one short line per distinct problem; the full record
+# always goes to a log file.
+
+# The longest warning line the transcript shows, and how many distinct ones before the rest go to
+# the log file only (a handful is information, a dozen is noise).
+LOG_LINE_CHARS = 110
+LOG_LINES_SHOWN = 8
+LOG_FILE_BYTES = 1_000_000
+LOG_FILE_BACKUPS = 2
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+# Records from these loggers are this package's own; every other logger is a third-party library.
+OWN_LOGGER_PREFIXES = ("quest_ai_runner", "quest-ai-runner")
+
+
+def is_own_logger(name: str) -> bool:
+    """True for a logger of this package, False for a library's."""
+    return name.startswith(OWN_LOGGER_PREFIXES)
+
+
+def short_log_text(message: str, limit: int = LOG_LINE_CHARS) -> str:
+    """The first sentence of a log message on one line, at most ``limit`` characters.
+
+    A sentence that is still too long loses a trailing parenthesis first, then is cut at its last
+    ``;`` or ``:`` when that keeps most of it (a whole clause reads better than a chopped word),
+    else on a word boundary, with an ellipsis.
+    """
+    lines = [ln for ln in str(message).splitlines() if ln.strip()]
+    first = " ".join(lines[0].split()) if lines else ""
+    end = re.search(r"[.!?](?=\s|$)", first)
+    if end:
+        first = first[:end.start()]
+    first = first.strip()
+    if len(first) > limit:
+        first = re.sub(r"\s*\([^()]*\)$", "", first)
+    if len(first) <= limit:
+        return first
+    clause = max(first.rfind(sep, 0, limit) for sep in (";", ":"))
+    if clause >= limit * 0.6:
+        return first[:clause].rstrip() + "…"
+    return ellipsize(first, limit)
+
+
+class QuietRotatingFileHandler(RotatingFileHandler):
+    """A rotating log file whose own failures (full disk, unwritable folder) never reach the screen."""
+
+    def handleError(self, record: logging.LogRecord) -> None:
+        pass
+
+
+def open_log_file(path: Path) -> Optional[logging.Handler]:
+    """The capped log file handler for ``path``, or None when its folder cannot be made. Never raises."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handler = QuietRotatingFileHandler(
+            path, maxBytes=LOG_FILE_BYTES, backupCount=LOG_FILE_BACKUPS, encoding="utf-8", delay=True,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    return handler
+
 
 class _RichLogHandler(logging.Handler):
-    """A logging handler that writes to a Textual RichLog (thread-safe)."""
+    """Routes Python logging for the chat: the full record to a file, a short line to the transcript.
 
-    def __init__(self, app: "QuestAITerminal", log: RichLog) -> None:
+    Every record reaching this handler is written in full to ``log_path`` (rotated, size capped).
+    The transcript gets at most one dim ``⚠`` line per distinct problem from this package's own
+    loggers: the first sentence, no time, level or logger name, with one hint to the file the first
+    time. A library's records (``huggingface_hub`` and the like) never appear there. With ``-v``
+    (``verbosity`` 1 or more) every record is written in full to the transcript, as before.
+    """
+
+    def __init__(self, app: "QuestAITerminal", log: RichLog, verbosity: int = 0,
+                 log_path: Optional[Path] = None) -> None:
         super().__init__()
         self._app = app
         self._tlog = log
-        self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+        self.verbosity = verbosity
+        self.log_path = Path(log_path) if log_path is not None else chat_log_path()
+        self.file_handler = open_log_file(self.log_path)
+        self.shown: Dict[str, int] = {}  # short line -> times seen, for the lines already shown
+        self.hinted = False
+        self.quieted = False
+        self.setFormatter(logging.Formatter(LOG_FORMAT))
+
+    def close(self) -> None:
+        if self.file_handler is not None:
+            self.file_handler.close()
+        super().close()
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            msg = self.format(record)
-            text = Text.from_ansi(msg)
-            text.no_wrap = False
-
-            def _write_impl():
-                self._tlog.write(text)
-
-            thread_id = getattr(self._app, "_ui_thread_id", None)
-            if thread_id is not None and threading.get_ident() != thread_id:
-                self._app.call_from_thread(_write_impl)
-            else:
-                _write_impl()
+            if self.file_handler is not None:
+                self.file_handler.handle(record)
+            lines = self.transcript_lines(record)
+            if lines:
+                self.show(lines)
         except Exception:  # noqa: BLE001
-            self.handleError(record)
+            # A logging problem must never reach the screen; the file already has the record.
+            pass
+
+    def transcript_lines(self, record: logging.LogRecord) -> List[Text]:
+        """What this record adds to the transcript: nothing, one short line, or the verbose line."""
+        if self.verbosity >= 1:
+            text = Text.from_ansi(self.format(record))
+            text.no_wrap = False
+            return [text]
+        if not is_own_logger(record.name):
+            return []
+        short = short_log_text(record.getMessage(), self.line_limit())
+        if not short:
+            return []
+        if short in self.shown:
+            self.shown[short] += 1
+            return []
+        if self.quieted:
+            return []
+        if len(self.shown) >= LOG_LINES_SHOWN:
+            self.quieted = True
+            return [notice_line("⚠ More warnings are in the log file only")]
+        self.shown[short] = 1
+        lines = [notice_line(f"⚠ {short}")]
+        if not self.hinted:
+            self.hinted = True
+            lines.append(notice_line(self.hint()))
+        return lines
+
+    def line_limit(self) -> int:
+        """Longest warning text that still fits one line of this terminal (``LOG_LINE_CHARS`` at most)."""
+        try:
+            width = self._app.size.width
+        except Exception:  # noqa: BLE001
+            return LOG_LINE_CHARS
+        # The transcript's padding and scrollbar, then the "  ⚠ " that starts the line.
+        return min(LOG_LINE_CHARS, width - 8) if width >= 40 else LOG_LINE_CHARS
+
+    def hint(self) -> str:
+        """Where the details are, once."""
+        if self.file_handler is None:
+            return "Details: run with -v"
+        home = str(Path.home())
+        shown = str(self.log_path)
+        if shown.startswith(home + os.sep):
+            shown = "~" + shown[len(home):]
+        return f"Details: {shown}, or run with -v"
+
+    def show(self, lines: List[Text]) -> None:
+        """Write ``lines`` to the transcript on the UI thread (thread-safe)."""
+        def write_all():
+            for line in lines:
+                self._tlog.write(line)
+
+        thread_id = getattr(self._app, "_ui_thread_id", None)
+        if thread_id is not None and threading.get_ident() != thread_id:
+            self._app.call_from_thread(write_all)
+        else:
+            write_all()
 
 
 # ── Live widgets ────────────────────────────────────────────────────────────
+
+def with_elapsed(text: str, seconds: Optional[int]) -> str:
+    """A status line followed by how long the wait has lasted (unchanged when ``seconds`` is None)."""
+    if seconds is None:
+        return text
+    clock = format_elapsed(seconds)
+    return f"{text} {clock}" if text.endswith("…") else f"{text}  · {clock}"
+
 
 class ActivityBar(Static):
     """Three animated dots + status text in one line.
 
     Replaces the separate LoadingIndicator + StatusLine pair so we fully
     control dot count, inter-dot spacing, and the gap before the text.
+
+    A turn's clock (``start_clock`` / ``stop_clock``) adds the elapsed seconds to the line once a
+    wait passes ``SHOW_ELAPSED_AFTER``, so a long silent step (a deep run preparing) never looks
+    frozen. It runs from the start of the turn, not from the last status change, and the existing
+    interval timer repaints it, so it ticks once a second with no extra timer or flicker.
     """
 
     _INTERVAL = 0.45
+    # A wait shorter than this shows no clock: a counter on every instant step would be noise.
+    SHOW_ELAPSED_AFTER = 3
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -163,6 +315,8 @@ class ActivityBar(Static):
         # ``_text`` (which every status update below overwrites) so the count survives the
         # whole turn instead of vanishing the next time the AI's own status line changes.
         self._queued = 0
+        self.wait_started: Optional[float] = None
+        self.clock = time.monotonic
 
     def on_mount(self) -> None:
         self._timer = self.set_interval(self._INTERVAL, self._tick)
@@ -172,8 +326,27 @@ class ActivityBar(Static):
         self.refresh()
 
     def set_status(self, text: str) -> None:
-        self._text = text
+        # Status lines start with an uppercase letter, whoever wrote them.
+        self._text = text[:1].upper() + text[1:]
         self.refresh()
+
+    def start_clock(self) -> None:
+        """Start counting the wait from now (call once per turn; a status change does not reset it)."""
+        self.wait_started = self.clock()
+        self.refresh()
+
+    def stop_clock(self) -> None:
+        """Stop showing elapsed time (the deep dashboard took over, or the turn ended)."""
+        if self.wait_started is not None:
+            self.wait_started = None
+            self.refresh()
+
+    def elapsed_seconds(self) -> Optional[int]:
+        """Whole seconds waited, or None while the clock is off or the wait is still short."""
+        if self.wait_started is None:
+            return None
+        seconds = int(self.clock() - self.wait_started)
+        return seconds if seconds >= self.SHOW_ELAPSED_AFTER else None
 
     def set_queued(self, n: int) -> None:
         self._queued = n
@@ -187,7 +360,7 @@ class ActivityBar(Static):
             style = "cyan bold" if i == self._frame else "cyan dim"
             t.append("●", style=style)
         t.append("  ")
-        t.append(self._text, style="dim")
+        t.append(with_elapsed(self._text, self.elapsed_seconds()), style="dim")
         if self._queued:
             t.append("  ")
             t.append(

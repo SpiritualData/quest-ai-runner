@@ -17,7 +17,7 @@ from .textual_ui_widgets import (
     _busy_placeholder,
 )
 from .textual_ui_prompt import PromptTextArea
-from .textual_ui_helpers import _build_shallow_context_bullets
+from .textual_ui_helpers import _build_shallow_context_bullets, card_score, context_block_lines
 
 
 class TurnMixin:
@@ -89,6 +89,7 @@ class TurnMixin:
         # queued-count indicator: any messages left over from a previous turn were already
         # folded into THIS turn's starting text (see _finish_turn), so none are outstanding.
         self._activity.set_status("Thinking…")
+        self._activity.start_clock()
         self._activity.set_queued(0)
         self._activity.display = True
         self.query_one("#prompt", PromptTextArea).placeholder = _busy_placeholder(0)
@@ -220,10 +221,15 @@ class TurnMixin:
             if action == "deep":
                 # Don't echo the internal routing rationale — just signal the mode.
                 log.write(Text("  ▸ Deep execution", style="dim"))
-            elif text:
-                label = f"▸ {action}" if action else "▸ plan"
-                log.write(Text(f"  {label}  {text}", style="dim"))
-            self._activity.set_status("Planning…")
+                # The run is being prepared, not started: the status line says so (with the
+                # turn's clock, since this can take minutes) until the core reports a real phase
+                # as a status event, and the first exec event hands over to the deep dashboard.
+                self._activity.set_status("Preparing the deep run…")
+            else:
+                if text:
+                    label = f"▸ {action}" if action else "▸ plan"
+                    log.write(Text(f"  {label}  {text}", style="dim"))
+                self._activity.set_status("Planning…")
 
         elif t == ev["replan"]:
             self._ctx.inc_replans()
@@ -242,46 +248,14 @@ class TurnMixin:
         elif t == ev["context"]:
             card_meta = data.get("card_metadata") or []
             sources = data.get("sources") or []
-            log.write(f"[dim]Context: {len(card_meta)} card{'s' if len(card_meta) != 1 else ''}, {len(sources)} source{'s' if len(sources) != 1 else ''}[/dim]")
             if card_meta:
                 self._ctx.set_cards(card_meta)
-                top = max(card_meta, key=lambda c: c.get("relevance_score", 0) or 0)
-                top_title = top.get("title") or top.get("id") or ""
-                if top_title:
-                    self._set_terminal_title(top_title)
-                log.write("[dim]Context cards selected:[/dim]")
-                for card in card_meta:
-                    cid = card.get("id", "?")
-                    title = card.get("title") or "(no title)"
-                    adapter = card.get("adapter", "unknown")
-                    score = card.get("relevance_score", 0)
-                    fcount = card.get("file_count", 0)
-                    sstr = f"score: {score:.2f}" if score else "score: unknown"
-                    log.write(f"  [cyan]●[/cyan] \\[{adapter}] [dim]{cid}[/dim]: {title}")
-                    log.write(f"    [dim]{sstr}, {fcount} file{'s' if fcount != 1 else ''}[/dim]")
-                    for f in (card.get("files") or [])[:5]:
-                        log.write(f"      [dim]→ {f}[/dim]")
-                    extra = len(card.get("files") or []) - 5
-                    if extra > 0:
-                        log.write(f"      [dim]… and {extra} more files[/dim]")
-            if sources:
-                # Build the per-source lines first and only write the "Sources:" header if at
-                # least one line actually has content. The header used to be gated on the OUTER
-                # `sources` list being non-empty while each line was separately gated on that
-                # source's own `items` -- a source with no file-level items (e.g. a recent/card
-                # match) left a dangling "Sources:" header with nothing under it.
-                source_lines = []
-                for src in sources:
-                    label = src.get("label", src.get("adapter", "?"))
-                    items = src.get("items") or []
-                    if items:
-                        istr = ", ".join(str(x).split("/")[-1] for x in items[:3])
-                        more = f" (+{len(items) - 3} more)" if len(items) > 3 else ""
-                        source_lines.append(f"  [dim]• {label}: {istr}{more}[/dim]")
-                if source_lines:
-                    log.write("[dim]Sources:[/dim]")
-                    for line in source_lines:
-                        log.write(line)
+                top = max(card_meta, key=card_score)
+                if top.get("title"):
+                    self._set_terminal_title(top["title"])
+            # One calm block; the per-card detail (files, scores) is in the live context panel.
+            for line in context_block_lines(card_meta, sources, self.transcript_width()):
+                log.write(line)
 
         elif t == ev["understanding"]:
             # Stage 1's resolved goal condition, surfaced the instant it's ready (well before
@@ -313,6 +287,7 @@ class TurnMixin:
             if first_event_of_run or self._deep_event_count % 10 == 0:
                 self._refresh_deep_dashboard()
             self._activity.set_status("Executing…")
+            self._activity.stop_clock()   # the deep dashboard shows the run's progress from here
             # A terminal phase means this deep task is finished: persist its full
             # output to the scrollback transcript now, so it stays readable after
             # the live deep widgets are gone. Each task leaves a permanent record.
@@ -372,6 +347,20 @@ class TurnMixin:
 
         # done: terminal signal only.
 
+    def transcript_width(self) -> int:
+        """Columns a transcript line can use before it would wrap (80 when the size is unknown)."""
+        width = 0
+        try:
+            width = self._tlog.scrollable_content_region.width
+        except Exception:  # noqa: BLE001
+            pass
+        if not width:
+            try:
+                width = self.size.width - 4
+            except Exception:  # noqa: BLE001
+                pass
+        return width - 1 if width >= 21 else 80
+
     def _make_pending_drain(self, inbox: "InputInbox", sid: str) -> Callable[[], List[str]]:
         """Wrap the orchestrator's own ``pending_inputs`` drain so a mid-run pickup is VISIBLE.
 
@@ -422,6 +411,7 @@ class TurnMixin:
         s = self.sess
         log = self._tlog
         self._activity.display = False
+        self._activity.stop_clock()
         self._ctx.display = False
         # Persist any deep task output that didn't already emit a terminal phase
         # (incl. cancelled/errored turns) before the live widgets disappear.

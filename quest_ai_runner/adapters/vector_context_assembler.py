@@ -416,10 +416,11 @@ class VectorContextAssembler(ContextAssemblerBase):
         cap = self._max_seed_items
         if not cap or len(seed_items) <= cap:
             return seed_items
+        # One short sentence: a terminal chat shows its first line as-is, and the remedy is to
+        # prune the store (scripts/quarantine_cards.py), not to raise the ceiling.
         logger.warning(
-            "vector seed: %d card(s) offered but only %d will be embedded (max_seed_items). The "
-            "card store is larger than its own budget; prune it rather than raise this, or the "
-            "seed embeds cards the store should not hold.",
+            "Card store has %d cards; only the first %d are searched by meaning "
+            "(prune it with quarantine_cards.py).",
             len(seed_items), cap,
         )
         return seed_items[:cap]

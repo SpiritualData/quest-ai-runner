@@ -9,6 +9,8 @@ from typing import List
 from collections import OrderedDict
 from rich.text import Text
 
+from .interactive_session_tracker import format_elapsed
+
 
 class DeepMixin:
     """Deep-run dashboard: detail panel, run cycling, output flushing and the future-context toggle."""
@@ -147,9 +149,7 @@ class DeepMixin:
         log = self._tlog
         goal = (snap.get("goal") or "").strip()
         status = snap.get("status") or "running"
-        elapsed = time.time() - snap.get("started", time.time())
-        mins, secs = divmod(int(elapsed), 60)
-        time_str = f"{mins}m{secs}s" if mins else f"{secs}s"
+        time_str = format_elapsed(time.time() - snap.get("started", time.time()))
         summary, narration = self._summarize_exec_lines(lines)
 
         pass_num = self._auto_pass

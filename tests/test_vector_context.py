@@ -2828,9 +2828,12 @@ class TestSeedBudget:
         assert synced_ids == {"card:0", "card:1", "card:2"}, (
             f"expected only the first 3 offered items to reach sync, got {synced_ids!r}"
         )
-        assert "max_seed_items" in caplog.text and "vector seed" in caplog.text, (
-            f"expected a WARNING naming the seed budget, got: {caplog.text!r}"
+        assert "has 10 cards; only the first 3 are searched by meaning" in caplog.text, (
+            f"expected a WARNING naming the card count and the seed budget, got: {caplog.text!r}"
         )
+        assert "quarantine_cards.py" in caplog.text, "the warning should name the pruning tool"
+        warning = next(r for r in caplog.records if "Card store has" in r.getMessage())
+        assert len(warning.getMessage()) < 160 and "\n" not in warning.getMessage()
 
     def test_budget_of_zero_means_no_cap(self):
         store = _ScopeRecordingStore()
