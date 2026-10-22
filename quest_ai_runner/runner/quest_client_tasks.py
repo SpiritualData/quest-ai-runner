@@ -218,71 +218,77 @@ class TasksMixin:
             body["session_id"] = sid
         return body
 
-    def report_done(self, task_id: str, result: str,
-                    session_id: Optional[str] = None,
-                    result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """PATCH done. ``result_data`` carries ``{"outcome": "done" | "nothing_done"}``: whether the
-        run made at least one successful mutating call ("done") or only talked ("nothing_done"), so
-        a consumer that needs the work done (a workflow step) can tell the two apart."""
-        body: Dict[str, Any] = {"status": "done", "result": result}
-        if result_data:
-            body["result_data"] = result_data
+    def patch_terminal_report(self, name: str, task_id: str, body: Dict[str, Any],
+                              session_id: Optional[str]) -> Dict[str, Any]:
+        """PATCH one terminal report (``name`` is the report method, for the log). Never raises.
+
+        A backend that predates ``result_data`` refuses the whole PATCH (422, extra field), which
+        left a finished task "in progress" forever. The structured payload (the outcome stamp, the
+        metric facts) is an extra: report the task without it rather than not at all.
+        """
         try:
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
                                  body=self._with_session(body, session_id))
         except QuestApiError as e:
-            # A backend that predates ``result_data`` refuses the whole PATCH (422, extra field),
-            # which left a finished task "in progress" forever. The outcome stamp is an extra: report
-            # the task done without it rather than not at all.
             if getattr(e, "status", None) == 422 and "result_data" in body and "result_data" in str(e):
                 log.warning("backend does not accept result_data on a task report; reporting task "
-                            "%s done without it", task_id)
+                            "%s without it (%s)", task_id, name)
                 body.pop("result_data", None)
                 try:
                     return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
                                          body=self._with_session(body, session_id))
                 except (QuestApiError, QuestNotConfigured) as e2:
-                    log.warning("report_done failed for task %s: %s", task_id, e2)
+                    log.warning("%s failed for task %s: %s", name, task_id, e2)
                     return {}
-            log.warning("report_done failed for task %s: %s", task_id, e)
+            log.warning("%s failed for task %s: %s", name, task_id, e)
             return {}
         except QuestNotConfigured as e:
-            log.warning("report_done failed for task %s: %s", task_id, e)
+            log.warning("%s failed for task %s: %s", name, task_id, e)
             return {}
+
+    def report_done(self, task_id: str, result: str,
+                    session_id: Optional[str] = None,
+                    result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """PATCH done. ``result_data`` carries ``{"outcome": "done" | "nothing_done"}``: whether the
+        run made at least one successful mutating call ("done") or only talked ("nothing_done"), so
+        a consumer that needs the work done (a workflow step) can tell the two apart. It also
+        carries the run's metric facts when it has any (see ``report_incomplete``)."""
+        body: Dict[str, Any] = {"status": "done", "result": result}
+        if result_data:
+            body["result_data"] = result_data
+        return self.patch_terminal_report("report_done", task_id, body, session_id)
 
     def report_needs_you(self, task_id: str, result: str, decision_id: str,
-                         session_id: Optional[str] = None) -> Dict[str, Any]:
-        try:
-            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body=self._with_session(
-                                     {"status": "needs_you", "result": result,
-                                      "decision_id": decision_id}, session_id))
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("report_needs_you failed for task %s: %s", task_id, e)
-            return {}
+                         session_id: Optional[str] = None,
+                         result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"status": "needs_you", "result": result, "decision_id": decision_id}
+        if result_data:
+            body["result_data"] = result_data
+        return self.patch_terminal_report("report_needs_you", task_id, body, session_id)
 
     def report_incomplete(self, task_id: str, result: str,
-                          session_id: Optional[str] = None) -> Dict[str, Any]:
+                          session_id: Optional[str] = None,
+                          result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """PATCH ``incomplete``: the run WORKED but did not fully reach its goal (or could not be
         verified as having reached it). Distinct from ``failed``, which means a technical error.
+
+        ``result_data`` on this and the other terminal reports is the structured payload next to
+        ``result``: ``{"metrics": [...], "metric_missing": true}``, what the relevant metric was
+        before and after the run's change (``docs/metric-results.md``). Omitted when the run has
+        none, and then the body is exactly what it always was.
         """
-        try:
-            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body=self._with_session(
-                                     {"status": "incomplete", "result": result}, session_id))
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("report_incomplete for task %s: %s", task_id, e)
-            return {}
+        body: Dict[str, Any] = {"status": "incomplete", "result": result}
+        if result_data:
+            body["result_data"] = result_data
+        return self.patch_terminal_report("report_incomplete", task_id, body, session_id)
 
     def report_failed(self, task_id: str, result: str,
-                      session_id: Optional[str] = None) -> Dict[str, Any]:
-        try:
-            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body=self._with_session(
-                                     {"status": "failed", "result": result}, session_id))
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("report_failed for task %s: %s", task_id, e)
-            return {}
+                      session_id: Optional[str] = None,
+                      result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"status": "failed", "result": result}
+        if result_data:
+            body["result_data"] = result_data
+        return self.patch_terminal_report("report_failed", task_id, body, session_id)
 
     def report_done_with_data(self, task_id: str, result: str,
                               result_data: Optional[Dict[str, Any]] = None,

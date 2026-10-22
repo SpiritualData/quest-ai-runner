@@ -15,6 +15,8 @@ from .executor_support import (
     _model_used_note,
     client_accepts_named_param,
     client_accepts_session_id,
+    metric_facts,
+    metric_report_data,
     terminal_session_id,
 )
 from .executor_contracts import log
@@ -124,6 +126,15 @@ class ReportingMixin:
         # no session at all, in which case nothing about a session is sent (see
         # ``terminal_session_id`` and ``QuestClient._with_session``).
         session_id = terminal_session_id(result)
+        # THE METRIC FACTS, reported with whatever terminal status this run lands on. The record
+        # is the goal loop's own (``OrchestratorResult.metric_results``, built by code from the
+        # run's metric ledger), so what a person reads on the task and in the chat is not
+        # something a model wrote; they ride in ``result_data`` next to the outcome stamp. Empty
+        # for a run with neither a metric nor a gap, and then nothing below changes: the report
+        # is sent exactly as it was before this existed.
+        metric_data = metric_report_data(result)
+        with_metrics = {"result_data": metric_data} if metric_data else {}
+        done_metrics = {"metric_data": metric_data} if metric_data else {}
         if result.kind == "answer":
             text = result.text or "(no answer produced)"
             # BROKEN-PROMISE GUARD: if the orchestrator rewrote this answer to be honest about a
@@ -136,7 +147,7 @@ class ReportingMixin:
                 # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
                 self._post_conv(conv_id, text, kind="needs_you", task_id=task_id, card_id=card_id)
                 self.dispatch_report("report_needs_you", task_id, text, "",
-                                     session_id=session_id)
+                                     session_id=session_id, **with_metrics)
                 return ExecutionOutcome(task_id, "needs_you", text)
             # Append goal-verdict reasoning so the reader knows whether the goal was confirmed
             # met, hit max iterations unverified, or was a best-effort partial answer.
@@ -163,14 +174,15 @@ class ReportingMixin:
                                       output=done_text)
                 self._post_conv(conv_id, done_text, kind="incomplete", task_id=task_id,
                                 card_id=card_id)
-                self.dispatch_incomplete(task_id, done_text, session_id=session_id)
+                self.dispatch_incomplete(task_id, done_text, session_id=session_id, **with_metrics)
                 return ExecutionOutcome(task_id, "incomplete", done_text)
             self._report_progress(task_id, "done", text="Done.", output=done_text)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
             record = getattr(result, "execution_record", None)
             worked = bool(record is not None and record.any_success)
-            self.dispatch_done(task_id, done_text, "done" if worked else "nothing_done", session_id=session_id)
+            self.dispatch_done(task_id, done_text, "done" if worked else "nothing_done",
+                               session_id=session_id, **done_metrics)
             return ExecutionOutcome(task_id, "done", done_text)
 
         if result.kind == "confirm":
@@ -181,11 +193,11 @@ class ReportingMixin:
             self._post_conv(conv_id, summary, kind="decision", task_id=task_id, card_id=card_id)
             if result.decision_id:
                 self.dispatch_report("report_needs_you", task_id, summary, result.decision_id,
-                                     session_id=session_id)
+                                     session_id=session_id, **with_metrics)
                 return ExecutionOutcome(task_id, "needs_you", summary, result.decision_id)
             # No decision id (no escalation sink wired) — surface as needs_you without an id.
             self.dispatch_report("report_needs_you", task_id, summary, "",
-                                 session_id=session_id)
+                                 session_id=session_id, **with_metrics)
             return ExecutionOutcome(task_id, "needs_you", summary)
 
         # deep
@@ -210,7 +222,7 @@ class ReportingMixin:
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_report, kind="done", task_id=task_id,
                             card_id=card_id)
-            self.dispatch_done(task_id, done_report, "done", session_id=session_id)
+            self.dispatch_done(task_id, done_report, "done", session_id=session_id, **done_metrics)
             return ExecutionOutcome(task_id, "done", done_report)
         # A deep run that raised a human decision instead of finishing.
         decision_id = next((d.decision_id for d in deep if d.decision_id), None)
@@ -223,7 +235,7 @@ class ReportingMixin:
             self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id,
                             card_id=card_id)
             self.dispatch_report("report_needs_you", task_id, summary, decision_id,
-                                 session_id=session_id)
+                                 session_id=session_id, **with_metrics)
             return ExecutionOutcome(task_id, "needs_you", summary, decision_id)
         # The verifier found the goal unmet for a reason another attempt cannot fix: only a person
         # can supply the missing input. Ask that one question (task paused at needs_you; the reply
@@ -237,7 +249,8 @@ class ReportingMixin:
             chat_text = (f"{work}\n\n{summary}" if work else summary)
             self._report_progress(task_id, "done", text=f"Paused, needs you: {question}")
             self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id, card_id=card_id)
-            self.dispatch_report("report_needs_you", task_id, summary, "", session_id=session_id)
+            self.dispatch_report("report_needs_you", task_id, summary, "", session_id=session_id,
+                                 **with_metrics)
             return ExecutionOutcome(task_id, "needs_you", summary)
         # A tool or service the work needs kept failing and the goal loop stopped retrying it (see
         # ``deep_tool_failure_attempts``). Say which one and what it answered, plainly, so a person
@@ -254,7 +267,7 @@ class ReportingMixin:
             self._report_progress(task_id, "done", text="Stopped: a tool this task needs is failing.",
                                   output=msg)
             self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
-            self.dispatch_incomplete(task_id, msg, session_id=session_id)
+            self.dispatch_incomplete(task_id, msg, session_id=session_id, **with_metrics)
             return ExecutionOutcome(task_id, "incomplete", msg)
         # The goal loop saw two attempts in a row end at the same point with nothing new done and
         # stopped (``DeepResult.stalled``): say so, plainly, rather than a bare failure.
@@ -270,7 +283,7 @@ class ReportingMixin:
             self._report_progress(task_id, "done", text="Stopped: no further progress was possible.",
                                   output=msg)
             self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
-            self.dispatch_incomplete(task_id, msg, session_id=session_id)
+            self.dispatch_incomplete(task_id, msg, session_id=session_id, **with_metrics)
             return ExecutionOutcome(task_id, "incomplete", msg)
         # UNVERIFIED is never reported as done, and never as a bare failure either: the work RAN
         # but its verification could not (LLM outage, no verify tier, parse failure), so the
@@ -289,7 +302,7 @@ class ReportingMixin:
                                   output=msg)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
-            self.dispatch_incomplete(task_id, msg, session_id=session_id)
+            self.dispatch_incomplete(task_id, msg, session_id=session_id, **with_metrics)
             return ExecutionOutcome(task_id, "incomplete", msg)
         # Otherwise the run hit a limit / errored.
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
@@ -329,13 +342,14 @@ class ReportingMixin:
                             f"I got part of the way but did not fully reach the goal: {failed_text}",
                             kind="incomplete", task_id=task_id,
                             card_id=card_id)
-            self.dispatch_incomplete(task_id, failed_text, session_id=session_id)
+            self.dispatch_incomplete(task_id, failed_text, session_id=session_id, **with_metrics)
             return ExecutionOutcome(task_id, "incomplete", failed_text)
         self._report_progress(task_id, "error", text=errs, output=failed_text)
         # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
         self._post_conv(conv_id, f"I couldn't complete this: {failed_text}", kind="failed",
                         task_id=task_id, card_id=card_id)
-        self.dispatch_report("report_failed", task_id, failed_text, session_id=session_id)
+        self.dispatch_report("report_failed", task_id, failed_text, session_id=session_id,
+                             **with_metrics)
         return ExecutionOutcome(task_id, "failed", failed_text)
 
     def _with_context_receipt(self, reported: str, request_text: Optional[str],
@@ -474,13 +488,16 @@ class ReportingMixin:
     # --- safety wrappers (reporting must not crash the poller) ---------------
 
     def dispatch_report(self, method_name: str, task_id: str, *args,
-                        session_id: Optional[str] = None) -> None:
+                        session_id: Optional[str] = None,
+                        result_data: Optional[Dict[str, Any]] = None) -> None:
         """Call one of the client's TERMINAL report methods, carrying this run's session id.
 
         One place decides how the session id travels, so every terminal status reports it the same
         way. The id is added only when there IS one and only when the client's method accepts it
         (see ``client_accepts_session_id``), so a consumer's older client, or a test double written
         before session continuity existed, is called with exactly the arguments it always was.
+        ``result_data`` (the run's metric facts) travels the same way, and only when the method
+        declares that parameter itself: a client that has never heard of it is called as before.
         Wrapped in ``_safe`` exactly like the direct calls it replaces: a reporting failure is
         logged, never raised at the poller.
         """
@@ -490,12 +507,17 @@ class ReportingMixin:
         kwargs: Dict[str, Any] = {}
         if session_id and client_accepts_session_id(fn):
             kwargs["session_id"] = session_id
+        if result_data and client_accepts_named_param(fn, "result_data"):
+            kwargs["result_data"] = result_data
         self._safe(lambda: fn(task_id, *args, **kwargs))
 
     def dispatch_done(self, task_id: str, text: str, outcome: str, *,
-                      session_id: Optional[str] = None) -> None:
+                      session_id: Optional[str] = None,
+                      metric_data: Optional[Dict[str, Any]] = None) -> None:
         """Report done, stamping ``result_data.outcome`` (``done`` or ``nothing_done``) when the
-        client's ``report_done`` declares a ``result_data`` parameter; otherwise the plain call."""
+        client's ``report_done`` declares a ``result_data`` parameter; otherwise the plain call.
+        The run's metric facts (``metric_data``, see ``metric_report_data``) go in the same
+        ``result_data`` beside the outcome."""
         fn = getattr(self._client, "report_done", None)
         if not callable(fn):
             return
@@ -503,18 +525,19 @@ class ReportingMixin:
         if session_id and client_accepts_session_id(fn):
             kwargs["session_id"] = session_id
         if client_accepts_named_param(fn, "result_data"):
-            kwargs["result_data"] = {"outcome": outcome}
+            kwargs["result_data"] = {"outcome": outcome, **(metric_data or {})}
         self._safe(lambda: fn(task_id, text, **kwargs))
 
     def dispatch_incomplete(self, task_id: str, result: str, *,
-                            session_id: Optional[str] = None) -> None:
+                            session_id: Optional[str] = None,
+                            result_data: Optional[Dict[str, Any]] = None) -> None:
         """Report "ran, goal not fully met". A client with no ``report_incomplete`` (an older
         consumer client or a test double) gets ``report_failed`` instead, so the outcome is never
         silently dropped; it just keeps the coarser old status.
         """
         name = ("report_incomplete" if callable(getattr(self._client, "report_incomplete", None))
                 else "report_failed")
-        self.dispatch_report(name, task_id, result, session_id=session_id)
+        self.dispatch_report(name, task_id, result, session_id=session_id, result_data=result_data)
 
     def _safe(self, fn):
         try:
@@ -538,9 +561,19 @@ class ReportingMixin:
         one they could trust. The chat now hears a task twice: when it starts and when it ends
         (``_report``'s closing post, written only after verification). ``conv_id``/``card_id``
         stay in the signature so a caller need not change. Best-effort: a dropped progress event
-        must never affect the task outcome."""
+        must never affect the task outcome.
+
+        A milestone that carries the run's metric result (the finished goal's "Completed: ..."
+        line: ``data["metrics"]`` / ``data["metric_missing"]``) passes exactly those facts on as the
+        post's ``data``, so the task page can show what the metric was before and after next to
+        the line itself. Any other milestone is posted as before."""
         if event.text:
-            self._report_progress(task_id, "exec", text=event.text)
+            facts = metric_facts((event.data or {}).get("metrics"),
+                                 (event.data or {}).get("metric_missing"))
+            if facts:
+                self._report_progress(task_id, "exec", text=event.text, data=facts)
+            else:
+                self._report_progress(task_id, "exec", text=event.text)
 
     @staticmethod
     def _leftover_arrival(claimed: List[Dict[str, Any]],

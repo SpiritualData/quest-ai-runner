@@ -86,6 +86,15 @@ PATCH /api/assistant-tasks/{id}    { "status": "done" | "needs_you" | "failed",
 - `done`: answered, or a deep run that met its goal.
 - `failed`: a deep run hit its limit or errored.
 - `needs_you`: a human-only step; carries the `decision_id` of the raised request.
+- `incomplete`: the run worked but did not reach its goal (or could not be verified as having reached it).
+
+Every terminal report may carry an OPTIONAL `result_data` object next to `result`. `done` stamps
+`{"outcome": "done" | "nothing_done"}`. When the run has a metric result (what the relevant metric was before and after
+its change, kept by the goal loop from its ledger, never written by a model), every terminal status adds
+`"metrics": [...]` and, when a change ended with none recorded, `"metric_missing": true`; the entry shape is in
+[metric-results.md](metric-results.md). A run with neither sends no `result_data` key beyond the outcome stamp, and a
+backend that refuses the key (422) gets the same report without it. The live feed carries the same facts on the finished
+goal's milestone post: `POST /api/assistant-tasks/{id}/progress` with `data: {"metrics": [...], "metric_missing": true}`.
 
 The runner never PATCHes `"cancelled"` itself (see Cancellation below): once a task is cancelled
 the backend already owns that terminal status, and a PATCH against it returns `409`.

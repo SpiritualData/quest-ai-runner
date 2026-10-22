@@ -111,3 +111,17 @@ A meter that has no reading writes no row. A row with no number would otherwise 
 One JSON-lines file per run under `QAR_METRIC_LEDGER_DIR` (default: a folder in the system temp directory, like the
 tool-call ledger), shared by the runner and the worker's shell commands. Files untouched for two days are removed. An
 append is one locked write of a whole line, so two processes never tear one.
+
+## Reported to a backend (the task executor)
+
+A lane that runs a queued task (`runner/executor_reporting.py`) hands the record to the backend as data too, from the
+turn's `OrchestratorResult` and without working anything out again:
+
+- **The terminal report.** `result_data` on the PATCH of every terminal status (`done`, `incomplete`, `needs_you`,
+  `failed`) holds `{"metrics": [...], "metric_missing": true}`, with only the keys that have something to say, capped at 12
+  entries. On `done` it sits beside the outcome stamp: `{"outcome": "done", "metrics": [...]}`. A run with neither adds
+  no key, a client whose report methods do not declare `result_data` is called as it always was, and a backend that
+  refuses the key (422) gets the same report without it.
+- **The live feed.** The finished goal's "Completed: ..." milestone, which carries `data["metrics"]` /
+  `data["metric_missing"]`, is posted on the task's progress feed with those two keys (and no others) as the post's `data`.
+  Which events a mode shows at all stays the sink's rule; the executor adds data to the milestone it already posts.

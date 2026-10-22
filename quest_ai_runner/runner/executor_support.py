@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 from ..core.orchestrator import OrchestratorResult
 from ..core.adapters import ProgressEvent
+from ..core.goal_metrics import deep_metric_data
+from ..core.metric_results import MAX_METRICS
 from .executor_contracts import log
 
 
@@ -156,6 +158,36 @@ def utc_stamp(moment) -> str:
     """An aware datetime as "YYYY-MM-DDTHH:MM:SSZ" (the backend's start_at form)."""
     from datetime import timezone as _tz
     return moment.astimezone(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def metric_facts(metrics: Any, missing: Any) -> Dict[str, Any]:
+    """The metric facts a report or a progress post carries: ``{"metrics": [...], "metric_missing": True}``.
+
+    Only the keys that have something to say are present, so a run with neither adds nothing to what is sent. The
+    entries are the runner's own (``MetricResult.to_dict()``, shape in ``docs/metric-results.md``), copied and capped
+    at the payload's size, never edited; anything that is not a list of dicts, and any ``missing`` other than the
+    boolean ``True``, says nothing."""
+    listed = metrics if isinstance(metrics, (list, tuple)) else []
+    entries = [dict(entry) for entry in listed if isinstance(entry, dict)][:MAX_METRICS]
+    facts: Dict[str, Any] = {}
+    if entries:
+        facts["metrics"] = entries
+    if missing is True:
+        facts["metric_missing"] = True
+    return facts
+
+
+def metric_report_data(result: Any) -> Dict[str, Any]:
+    """The metric facts of a finished turn, for its terminal report (``result_data``); ``{}`` when it has none.
+
+    Taken from what the run produced (``OrchestratorResult.metric_results`` / ``.metric_missing``, which the goal loop
+    fills from its metric ledger), never worked out again here. A result that carries them on its deep results only,
+    such as one an integrator builds for ``report()``, is read the way the loop reads it (``deep_metric_data``)."""
+    facts = metric_facts(getattr(result, "metric_results", None), getattr(result, "metric_missing", False))
+    if facts:
+        return facts
+    fallback = deep_metric_data(result)
+    return metric_facts(fallback.get("metrics"), fallback.get("metric_missing"))
 
 
 def client_accepts_named_param(fn: Any, name: str) -> bool:
