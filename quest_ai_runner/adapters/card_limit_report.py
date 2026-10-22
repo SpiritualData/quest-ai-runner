@@ -290,10 +290,12 @@ def announce_full(guard: Any, *, at_open: bool = False, notify: Optional[Callabl
     limit_mod.hold_task_note(str(guard.cards_dir), lane_note(lines))
 
 
-def report_for(cards_dir: str, limit: int) -> str:
-    """The report for a store on disk, computed now (what ``quest-ai-runner cards report`` prints)."""
+def report_for(cards_dir: str, limit: int, cards: Optional[Dict[str, Dict[str, Any]]] = None) -> str:
+    """The report for a store, computed now (what ``quest-ai-runner cards report`` prints). ``cards`` are the
+    store's own cards when they live elsewhere than the folder (a backend store); else the folder is read."""
     base = Path(cards_dir)
-    cards = FilesystemCardRepository(str(base)).load_all()
+    if cards is None:
+        cards = FilesystemCardRepository(str(base)).load_all()
     b = breakdown(cards, base, limit)
     guard_state = limit_mod.LimitState()
     try:

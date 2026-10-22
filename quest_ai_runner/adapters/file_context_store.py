@@ -168,14 +168,20 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
                           ``card_limit``). ``None`` (the default) and ``0`` mean NO limit: the library
                           never applies a number its caller did not choose. The runner's own builders
                           (``config_assembler``, ``cli_context``) pass ``card_limit.max_cards_from_env()``,
-                          which is ``QAR_MAX_CARDS`` and 1,000 when unset. Applies to the default
-                          filesystem repository only: an injected repository (the Quest backend) keeps
-                          its own cards.
+                          which is ``QAR_MAX_CARDS`` and 1,000 when unset. It counts the cards this store
+                          owns, on every repository (a local folder, the Quest backend, Qdrant): a full
+                          store says so and adds no derived card; only a local folder can move a cold
+                          card out for a learned one, and nothing ever trims a store by itself.
       self_heal         -- when True, ``prewarm()`` and the end of an indexing pass move cards that are
                           provably copies of other cards out of the index (``card_store_hygiene``;
                           moved to ``_quarantine/``, never deleted), and a store holding more topic cards
                           than its corpus has folders is not embedded. Default False; the runner's own
-                          builder (``config_assembler``) turns it on.
+                          builder (``config_assembler``) turns it on. With it, ``prewarm()`` also runs the
+                          repository tidy (``card_store_tidy``) when the store is over its limit or, on a
+                          repository other than a local folder, holds copies its ids prove.
+      tidy_mode         -- what that repository tidy does: ``apply``, ``plan`` (write the plan and say how
+                          to apply it) or ``off``; ``None`` is ``apply`` for a local folder and ``plan``
+                          for any other repository (``RunnerConfig.card_tidy``).
       reuse_nested_cards -- when True (default; env ``QAR_REUSE_NESTED_CARDS=0`` to disable),
                           ``bootstrap()``/``refresh_stale()`` reuse any sub-corpus that already has
                           its own completed bootstrap (a ``.quest-context/bootstrap_meta.json``
@@ -234,6 +240,7 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         mount_mode: Optional[str] = None,
         max_cards: Optional[int] = None,
         self_heal: bool = False,
+        tidy_mode: Optional[str] = None,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         # Card PERSISTENCE is pluggable behind a CardRepository. Default: per-card JSON files under
@@ -273,15 +280,16 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         # SELF-HEALING (see context_store_heal): off unless the builder asks. ``moving_ids`` holds the ids
         # of cards being moved out right now; the loader leaves them out.
         self.heal_enabled = bool(self_heal)
+        self.tidy_mode = tidy_mode
         self.moving_ids: frozenset = frozenset()
         self.tidy_lock = threading.Lock()
         self.inflation_verdict: Optional[bool] = None
         self.in_second_pass = False        # an indexing pass re-running itself once (see _bootstrap_walk)
         # THE CARD LIMIT (see card_limit): one admission function every writer goes through, in
-        # ``_store_write``. A shared backend keeps its own cards, so only the local store is limited.
+        # ``_store_write``. It counts this store's own cards on every repository (a backend's too).
         self.limit_guard = card_limit_policy.CardLimit(
             str(cards_dir),
-            0 if card_repository is not None else (max_cards or 0),
+            max_cards or 0,
             repo=self._own_repo, cards=self._own_cards, revision=self._repo.revision,
         )
         # Precompute {quest_id: repo-root-relative POSIX prefix} once, so per-assemble() lookup is

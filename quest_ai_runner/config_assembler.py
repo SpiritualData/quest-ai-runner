@@ -25,6 +25,93 @@ if TYPE_CHECKING:  # typing only: config imports this module, not the other way 
     from .config import RunnerConfig
 
 
+def build_card_repository(cfg: "RunnerConfig", cards_dir: str, *,
+                          notify: Optional[Callable[[str], None]] = None):
+    """``(repository, query-only vector store, on the Quest backend)`` for a lane's cards, from its environment.
+
+    ``(None, None, False)`` is the default local folder store. The runner's context assembler and the ``cards``
+    commands both ask this, so a command run by hand reaches the same store the lane does. A bad card scope
+    raises ``CardScopeError`` (a startup failure, never a quiet fallback); any other failure to reach the
+    Quest backend logs an ERROR and falls back to the local store.
+    """
+    # CARD-PERSISTENCE backend. The QUEST BACKEND is the DEFAULT whenever Quest credentials are in
+    # the environment (QAR_QUEST_API_URL|QUEST_BASE_URL + QAR_QUEST_API_KEY|QUEST_API_KEY): cards
+    # and their vectors live there, are embedded once server-side and searched server-side, and a
+    # lane embeds and indexes no card locally. The acting user is whatever the key authenticates
+    # (whoami). Cards a lane writes carry its team (QAR_TEAM_ID|QUEST_TEAM_ID).
+    #   QAR_CARDS_BACKEND=local (alias "file"): the OPT-OUT. Per-card JSON files under cards_dir,
+    #       with every local card_store_* behaviour (mounts, merge-into, move-root, read-only
+    #       remote vectors) and the local auto-built vector arm exactly as before.
+    #   QAR_CARDS_BACKEND=qdrant: one Qdrant collection (no cards_dir dependency).
+    #   QAR_CARDS_BACKEND=quest: require the Quest backend. Without credentials this logs an ERROR,
+    #       notifies, and runs LOCAL; the ERROR is the flag that it is not on the backend.
+    _cards_backend = (os.getenv("QAR_CARDS_BACKEND") or "").strip().lower()
+    if _cards_backend == "file":
+        _cards_backend = "local"
+    _card_repository = None
+    _cards_vector_store = None  # query-only arm over the cards (qdrant backend, or the Quest backend)
+    _quest_cards_active = False
+
+    from .adapters.quest_api_card_repository import quest_card_settings_from_env
+    _qs = quest_card_settings_from_env()
+    _has_quest_creds = bool(_qs["base_url"] and _qs["api_key"])
+    if _cards_backend == "quest" and not _has_quest_creds:
+        _msg = ("context index: QAR_CARDS_BACKEND=quest but no Quest credentials are set "
+                "(QAR_QUEST_API_URL|QUEST_BASE_URL and QAR_QUEST_API_KEY|QUEST_API_KEY); "
+                "falling back to LOCAL cards, which are NOT shared with the Quest backend")
+        _log.error(_msg)
+        if notify:
+            notify(_msg)
+    elif _cards_backend in ("", "auto", "quest") and _has_quest_creds:
+        # The lane's card scope (QAR_CARDS_SCOPE). A bad or unresolvable setting is a startup
+        # failure: it is raised here, outside the build guard below, never a quiet fallback.
+        from .adapters.quest_api_card_repository import (
+            QuestApiCardRepository as ScopeProbe, select_card_scope)
+        card_scope = select_card_scope(_qs, org_of_team=lambda lane_team: ScopeProbe(
+            base_url=_qs["base_url"], api_key=_qs["api_key"],
+            user_id=_qs["user_hint"]).org_of_team(lane_team))
+        try:
+            from .adapters.quest_api_card_repository import (
+                QuestApiCardRepository, QuestApiCardVectorStore)
+            # The offline listing cache is the "cache-cards" selection (durable file cache by
+            # default), kept apart per backend and scope so lanes never share a listing.
+            lane_key = hashlib.sha256("|".join((
+                _qs["base_url"], card_scope["team_id"], card_scope["org_id"],
+                _qs["user_hint"])).encode()).hexdigest()[:16]
+            _card_cache = resolve("cache-cards", overrides=cfg.selections)(
+                os.path.join(cards_dir, ".api-card-cache", lane_key))
+            _card_repository = QuestApiCardRepository(
+                base_url=_qs["base_url"],
+                api_key=_qs["api_key"],
+                user_id=_qs["user_hint"],
+                team_id=card_scope["team_id"],
+                org_id=card_scope["org_id"],
+                on_error=notify,
+                cache=_card_cache,
+            )
+            _user = _card_repository.resolve_user_id()
+            _quest_cards_active = True
+            _cards_vector_store = QuestApiCardVectorStore(_card_repository)
+            _log.info(
+                "context index: using the Quest backend for cards and vectors (%s, user %s, %s)",
+                _qs["base_url"], (_user[:4] + "..." if _user else "UNRESOLVED"),
+                (f"org {card_scope['org_id']}" if card_scope["org_id"]
+                 else (f"team {card_scope['team_id']}" if card_scope["team_id"] else "private cards")),
+            )
+        except Exception:  # noqa: BLE001
+            _log.error(
+                "context index: QuestApiCardRepository build failed; falling back to the LOCAL "
+                "card backend (cards are NOT on the Quest backend)", exc_info=True,
+            )
+            _card_repository = None
+            _cards_vector_store = None
+            _quest_cards_active = False
+    elif _cards_backend == "qdrant":
+        _card_repository, _cards_vector_store = _build_qdrant_card_repo_from_env(cards_dir)
+
+    return _card_repository, _cards_vector_store, _quest_cards_active
+
+
 def resolve_context_assembler(
     cfg: RunnerConfig,
     *,
@@ -74,80 +161,8 @@ def _resolve_context_assembler_base(
         from .core.model_registry import ModelRegistry as _MR
         _registry = _MR(cfg.model_provider, fallback=cfg.model_fallback or None)
 
-        # CARD-PERSISTENCE backend. The QUEST BACKEND is the DEFAULT whenever Quest credentials are in
-        # the environment (QAR_QUEST_API_URL|QUEST_BASE_URL + QAR_QUEST_API_KEY|QUEST_API_KEY): cards
-        # and their vectors live there, are embedded once server-side and searched server-side, and a
-        # lane embeds and indexes no card locally. The acting user is whatever the key authenticates
-        # (whoami). Cards a lane writes carry its team (QAR_TEAM_ID|QUEST_TEAM_ID).
-        #   QAR_CARDS_BACKEND=local (alias "file"): the OPT-OUT. Per-card JSON files under cards_dir,
-        #       with every local card_store_* behaviour (mounts, merge-into, move-root, read-only
-        #       remote vectors) and the local auto-built vector arm exactly as before.
-        #   QAR_CARDS_BACKEND=qdrant: one Qdrant collection (no cards_dir dependency).
-        #   QAR_CARDS_BACKEND=quest: require the Quest backend. Without credentials this logs an ERROR,
-        #       notifies, and runs LOCAL; the ERROR is the flag that it is not on the backend.
-        _cards_backend = (os.getenv("QAR_CARDS_BACKEND") or "").strip().lower()
-        if _cards_backend == "file":
-            _cards_backend = "local"
-        _card_repository = None
-        _cards_vector_store = None  # query-only arm over the cards (qdrant backend, or the Quest backend)
-        _quest_cards_active = False
-
-        from .adapters.quest_api_card_repository import quest_card_settings_from_env
-        _qs = quest_card_settings_from_env()
-        _has_quest_creds = bool(_qs["base_url"] and _qs["api_key"])
-        if _cards_backend == "quest" and not _has_quest_creds:
-            _msg = ("context index: QAR_CARDS_BACKEND=quest but no Quest credentials are set "
-                    "(QAR_QUEST_API_URL|QUEST_BASE_URL and QAR_QUEST_API_KEY|QUEST_API_KEY); "
-                    "falling back to LOCAL cards, which are NOT shared with the Quest backend")
-            _log.error(_msg)
-            if notify:
-                notify(_msg)
-        elif _cards_backend in ("", "auto", "quest") and _has_quest_creds:
-            # The lane's card scope (QAR_CARDS_SCOPE). A bad or unresolvable setting is a startup
-            # failure: it is raised here, outside the build guard below, never a quiet fallback.
-            from .adapters.quest_api_card_repository import (
-                QuestApiCardRepository as ScopeProbe, select_card_scope)
-            card_scope = select_card_scope(_qs, org_of_team=lambda lane_team: ScopeProbe(
-                base_url=_qs["base_url"], api_key=_qs["api_key"],
-                user_id=_qs["user_hint"]).org_of_team(lane_team))
-            try:
-                from .adapters.quest_api_card_repository import (
-                    QuestApiCardRepository, QuestApiCardVectorStore)
-                # The offline listing cache is the "cache-cards" selection (durable file cache by
-                # default), kept apart per backend and scope so lanes never share a listing.
-                lane_key = hashlib.sha256("|".join((
-                    _qs["base_url"], card_scope["team_id"], card_scope["org_id"],
-                    _qs["user_hint"])).encode()).hexdigest()[:16]
-                _card_cache = resolve("cache-cards", overrides=cfg.selections)(
-                    os.path.join(cards_dir, ".api-card-cache", lane_key))
-                _card_repository = QuestApiCardRepository(
-                    base_url=_qs["base_url"],
-                    api_key=_qs["api_key"],
-                    user_id=_qs["user_hint"],
-                    team_id=card_scope["team_id"],
-                    org_id=card_scope["org_id"],
-                    on_error=notify,
-                    cache=_card_cache,
-                )
-                _user = _card_repository.resolve_user_id()
-                _quest_cards_active = True
-                _cards_vector_store = QuestApiCardVectorStore(_card_repository)
-                _log.info(
-                    "context index: using the Quest backend for cards and vectors (%s, user %s, %s)",
-                    _qs["base_url"], (_user[:4] + "..." if _user else "UNRESOLVED"),
-                    (f"org {card_scope['org_id']}" if card_scope["org_id"]
-                     else (f"team {card_scope['team_id']}" if card_scope["team_id"] else "private cards")),
-                )
-            except Exception:  # noqa: BLE001
-                _log.error(
-                    "context index: QuestApiCardRepository build failed; falling back to the LOCAL "
-                    "card backend (cards are NOT on the Quest backend)", exc_info=True,
-                )
-                _card_repository = None
-                _cards_vector_store = None
-                _quest_cards_active = False
-        elif _cards_backend == "qdrant":
-            _card_repository, _cards_vector_store = _build_qdrant_card_repo_from_env(cards_dir)
+        _card_repository, _cards_vector_store, _quest_cards_active = build_card_repository(
+            cfg, cards_dir, notify=notify)
 
         # Auto-discover reference resolvers from any RESOLVABLE retrieval adapter the consumer wired
         # (structural: the adapter advertises a non-None ``reference_type`` + ``resolve_reference`` on
@@ -180,6 +195,9 @@ def _resolve_context_assembler_base(
             # now moves only a card an index pass wrote and nobody touched, and joins what a copy holds onto
             # the card it copies first (card_origin.protection, card_store_hygiene.fold_card).
             self_heal=True,
+            # What the automatic tidy through the repository port does (a store over its card limit, or holding
+            # copies its ids prove): RunnerConfig.card_tidy, unset = apply on a local folder, plan elsewhere.
+            tidy_mode=cfg.card_tidy,
             # The card limit is the runner's policy (QAR_MAX_CARDS, 1,000 when unset, 0 for none); the
             # library itself applies no limit unless its caller passes one.
             max_cards=card_limit.max_cards_from_env(),

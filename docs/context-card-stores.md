@@ -398,7 +398,8 @@ All environment variables (in a lane's `qar.toml` `[env]` table or its unit envi
 | `QAR_VECTOR_SPACE` | name of the vector server/collection this lane uses (must match the owners' `vector_space` to query their points) | unset |
 | `QAR_VECTOR_UNATTRIBUTED` | `1` serves pre-fence task associations that carry no `store_id` | off |
 | `QAR_REUSE_NESTED_CARDS` | `0` turns off copy-import in `copy` mode (unchanged) | on |
-| `QAR_MAX_CARDS` | the most cards one local store holds; `0` or `unlimited` for none (see [the card limit](#the-card-limit)) | `1000` |
+| `QAR_MAX_CARDS` | the most cards one store owns, on any repository; `0` or `unlimited` for none (see [the card limit](#the-card-limit)) | `1000` |
+| `card_tidy` (`qar.toml`, `RunnerConfig.card_tidy`) | what the automatic tidy does: `apply`, `plan` or `off` (see [tidying a store on any backend](#tidying-a-store-on-any-backend)) | `apply` on a local folder, `plan` on the Quest backend or Qdrant |
 
 ## The card limit
 
@@ -407,8 +408,11 @@ for no limit). The number belongs to the runner: `FileContextStore(max_cards=...
 no limit unless its caller passes one, and the runner's builders (`config_assembler.py`, the `bootstrap`
 command) pass `card_limit.max_cards_from_env()`. The quarantine folder, the sidecars and the turn files do not count. A limit like this was tried and
 removed on 2026-10-05 because it refused to index without saying so and left a person to guess the number,
-so this one never acts silently. It applies to the default local folder store; a store on the Quest backend
-keeps its cards there.
+so this one never acts silently. It counts the cards the store OWNS on every repository: a local folder, the
+Quest backend (where a lane counts the cards it wrote, not every card its key can read) and Qdrant all get the
+notice and the breakdown below, and a full store adds no derived card on any of them. Only a local folder can
+move a cold card aside for a learned one (the next paragraphs); on the backend a learned card is admitted over
+the limit and counted. The limit never trims a store by itself: the [tidy](#tidying-a-store-on-any-backend) does.
 
 **At the limit**, one function (`CardLimit.admit`) answers every writer:
 
@@ -516,6 +520,70 @@ written; older cards have no date and are reported as such).
 A corpus folder that is renamed together with the store inside it (`<root>/.quest-context`) records its new
 root at the next pass instead of being refused; a store kept elsewhere for a root that still exists is still
 refused (use `context move-root`).
+
+## Tidying a store on any backend
+
+The tidy above works on a folder of card files. Most lanes do not have one: anyone with Quest credentials keeps
+their cards on the Quest backend by default, and an adopter who cannot reach the machine that runs the backend
+still needs an inflated store cleaned up. One lane's backend store held 5,488 cards: about 864 under copy-import
+ids, 2,116 about nested repositories the folder review excludes, 1,062 duplicates of one file set. So the runner
+tidies through the `CardRepository` port itself (`adapters/card_store_tidy.py`), the same way on a local folder,
+the Quest backend and Qdrant.
+
+**What it removes.** The plan is `plan_cards` (`adapters/card_store_tidy_plan.py`), the rules that were
+`scripts/quarantine_cards.py` and that the script now imports: a card stored under a vector point id (its notes
+join the card it names), a compounded copy that has a surviving card with the same or more files, a card with
+more than half of its files under folders the folder review excludes for good, a surplus card pinning the same
+files as another under the same name (the best keeper stays; the same files under another name are two topics
+and both stay), and a card about one generated data file. It looks only at the cards the lane OWNS (on a shared
+backend, the cards its writer origin wrote). It never removes a card another system manages, a used card, one
+with notes, quest tags or conventions, one learned from a run or written by a person, except a provable copy
+whose holdings join its keeper first.
+
+**What it changes.** For each card that stands for others, the tidy reads it again and skips it when its revision
+changed since the plan (other writers exist); it joins the keywords of every card it removes onto the keeper (a
+union, the keeper's own order first; never its name, summary, files or usage, apart from what a provable copy
+holds), writes the keeper once, then reads each removed card again and removes it: moved into
+`_quarantine/<reason>/` on a local folder, deleted on the backend. It works in paced batches, stops at the
+first write or removal that fails, and ends by listing the store again to check every removal and keeper. A
+second run finds nothing.
+
+**The export.** A backend has no quarantine folder, so BEFORE the first write the tidy writes every card it will
+remove and every keeper it will update, as they are, to `<cards dir>/tidy-state/<run>-tidy-export.json`, with the
+store's identity (repository kind, backend address, team or org, user; never a key), and a manifest beside it,
+`<run>-store-tidy-manifest.jsonl`, that gains one line per change as it happens. The folder is mode 700 and the
+files 600; `<cards dir>` is the lane's local card folder (`context_cards_dir`, or `<corpus>/.quest-context`, which
+a consumer keeps out of git), the same place the backend listing cache lives.
+
+**When it runs.** In the background thread that warms the store at startup (no turn waits on it), when the
+store's own cards are over its card limit (every reason above) or, on a repository other than a local folder,
+when ids prove some cards copies (the vector point id and compounded rules only; a local folder's provable copies
+are the tidy at open above). What it then does is the lane's `card_tidy` setting, in `qar.toml` like any other
+`RunnerConfig` field:
+
+```toml
+card_tidy = "apply"   # or "plan", or "off"
+```
+
+Unset, a local folder applies (a move into `_quarantine`, undone by moving it back) and the Quest backend and
+Qdrant PLAN: their cards are shared team data, and deleting them is the owner's call. A plan is written to
+`<cards dir>/tidy-state/last-plan.json` and said once, as one calm line ("N context cards could be tidied (...);
+nothing was changed. To apply: quest-ai-runner cards tidy --apply ..."); the same plan is not said again at the
+next start. Applied, it says "Tidied N context cards ...; undo with: quest-ai-runner cards tidy --undo <manifest>".
+
+**For an adopter with only Quest credentials.** Nothing to install or reach: run the lane as usual. On its first
+start over the limit it writes the plan and prints the line above. Read the plan, then either run
+`quest-ai-runner cards tidy --config <your qar.toml>` (a dry run that lists what would go and what stays and why)
+and `quest-ai-runner cards tidy --apply --config <your qar.toml>`, or set `card_tidy = "apply"` and restart the
+lane. `--config` (or `QAR_CONFIG_FILE`) puts the lane's environment in place, so the command reaches the store the
+lane uses.
+
+**Undo.** `quest-ai-runner cards tidy --undo <cards dir>/tidy-state/<run>-store-tidy-manifest.jsonl --config <your
+qar.toml>` re-creates every card the run removed and restores every keeper it updated, through the same port,
+newest change first. It refuses a manifest written for another store. A keeper changed since the tidy is left as
+it is and counted. A card stored under a vector point id cannot be re-created on any repository (every writer
+refuses that id); it stays in the export. On the backend a re-created card gets the backend's own fields
+(revision, update time) again.
 
 ## A person who belongs to an org and also runs a personal lane
 
@@ -643,6 +711,13 @@ table (`RunnerConfig.selections`, `null` for none): two atomic JSON files per la
 serves the stored listing (the error stays loud and counted) and does a full refresh on the next
 successful call. Failed writes are queued, oldest first; nothing replays them yet.
 
+### The card limit and the tidy
+
+The [card limit](#the-card-limit) applies here too: it counts the cards this lane wrote, gives the same notice
+and breakdown (`quest-ai-runner cards report --config <qar.toml>` prints it from the backend), and a full store
+adds no derived card; it never trims the store. The [tidy through the repository](#tidying-a-store-on-any-backend)
+does, after a local export, and on this backend it only PLANS until the lane sets `card_tidy = "apply"`.
+
 ### Opting out
 
 `QAR_CARDS_BACKEND=local`. Cards are per-card JSON under `cards_dir`; mounts, `merge-into`, `move-root`,
@@ -756,7 +831,7 @@ records in `bootstrap_meta.json` are ignored in `copy` mode.
   and ranks by keywords only.
 - `quest-ai-runner cards report [--cards-dir DIR]` prints what fills a store, what its card limit has refused
   or moved, and how to change the limit (read only; `--write` also rewrites `card_limit_report.md` in the store).
-- `quest-ai-runner cards tidy [--cards-dir DIR] [--apply | --undo MANIFEST]` lists, or with `--apply` moves, the
+- `quest-ai-runner cards tidy [--config FILE] [--cards-dir DIR] [--apply | --undo MANIFEST]` lists, or with `--apply` moves, the
   cards that are provably copies; a card with notes, usage, quest tags or a hand-written origin is never moved.
   `--undo` takes a tidy back, including what it joined onto the cards that stood for the ones it moved.
 - `quest-ai-runner reconcile-plan <quest_id>` compares a quest's plan with what happened and prints the

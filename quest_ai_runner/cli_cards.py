@@ -8,19 +8,51 @@ import os
 from pathlib import Path
 
 
+def lane_store(args):
+    """``(cards_dir, corpus, repository or None)`` of the lane the command is about. The lane's config file (``--config``
+    or ``QAR_CONFIG_FILE``) puts its environment in place first, so a command run by hand reaches the store the lane
+    uses: ``None`` for the default local folder, else the Quest backend or Qdrant repository."""
+    from .config import RunnerConfig
+    from .config_assembler import build_card_repository
+    from .config_environment import apply_config_environment
+
+    config_path = getattr(args, "config", None) or os.getenv("QAR_CONFIG_FILE") or None
+    file_cfg = RunnerConfig.from_file(config_path) if config_path else None
+    apply_config_environment(file_cfg)
+    corpus = (args.corpus or os.getenv("QAR_CORPUS_ROOT") or (file_cfg.corpus_root if file_cfg else None)
+              or os.getcwd())
+    cards_dir = (args.cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR")
+                 or (file_cfg.context_cards_dir if file_cfg else None) or os.path.join(corpus, ".quest-context"))
+    repo, _, _ = build_card_repository(file_cfg or RunnerConfig(), cards_dir)
+    return os.path.expanduser(cards_dir), os.path.expanduser(corpus), repo
+
+
 def run_cards_command(args, log) -> int:
     """Run the `cards` subcommand; returns the process exit code."""
     from .adapters import card_limit
     from .adapters.card_limit_report import report_for, write_report
 
-    corpus = args.corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
-    cards_dir = args.cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR") or os.path.join(corpus, ".quest-context")
+    cards_dir, corpus, repo = lane_store(args)
+    op = getattr(args, "cards_op", "report")
+    undo = getattr(args, "undo", None)
+    if repo is not None:
+        store = repository_store(cards_dir, corpus, repo)
+        if op == "tidy" and undo:
+            return undo_repository(repo, Path(cards_dir), Path(undo))
+        if op == "tidy":
+            return tidy_repository(store, repo, Path(cards_dir), apply=bool(getattr(args, "apply", False)))
+        text = report_for(cards_dir, card_limit.max_cards_from_env(), cards=store._own_cards())
+        print(text)
+        return 0
     if not os.path.isdir(cards_dir):
         print(f"error: {cards_dir} is not a card store (a folder of card files). Pass --cards-dir.")
         return 2
-    if getattr(args, "cards_op", "report") == "tidy":
-        undo = getattr(args, "undo", None)
+    if op == "tidy":
         if undo:
+            from .adapters.card_repository import FilesystemCardRepository
+            from .adapters.card_store_tidy import MANIFEST_SUFFIX
+            if str(undo).endswith(MANIFEST_SUFFIX):
+                return undo_repository(FilesystemCardRepository(cards_dir), Path(cards_dir), Path(undo))
             return undo_cards(Path(cards_dir), Path(undo))
         return tidy_cards(Path(cards_dir), apply=bool(getattr(args, "apply", False)))
     text = report_for(cards_dir, card_limit.max_cards_from_env())
@@ -29,6 +61,69 @@ def run_cards_command(args, log) -> int:
         from .adapters.card_limit_report import REPORT_NAME
         if write_report(Path(cards_dir), text):
             print(f"Written to {Path(cards_dir) / REPORT_NAME}")
+    return 0
+
+
+def repository_store(cards_dir: str, corpus: str, repo):
+    """A card store over ``repo`` that never indexes anything: it is asked which cards this lane owns."""
+    from .adapters import card_limit
+    from .adapters.file_context_store import FileContextStore
+    return FileContextStore(cards_dir, repo_root=corpus, auto_bootstrap=False, card_repository=repo,
+                            mount_mode="copy", max_cards=card_limit.max_cards_from_env())
+
+
+def tidy_repository(store, repo, cards_dir: Path, *, apply: bool) -> int:
+    """The full tidy of a store on the Quest backend or Qdrant: a dry run, or with ``apply`` an export, then the
+    changes through the repository, then a check. Only the cards this lane owns are looked at."""
+    from .adapters import card_store_tidy as tidy
+
+    cards = store._own_cards()
+    plan = tidy.plan_store(cards, cards_dir=cards_dir, reasons=tidy.DEFAULT_REASONS,
+                           own_store_id=store.own_store_id(), repo=repo)
+    print(f"store           : {type(repo).__name__} (the cards this lane owns)")
+    print(f"cards looked at : {plan.scanned:,}")
+    print(f"would remove    : {len(plan.entries):,}" + (f"  ({plan.summary()})" if plan.entries else ""))
+    if plan.skipped:
+        print("left in place on purpose:")
+        for why, count in sorted(plan.skipped.items()):
+            print(f"  {count:>8,}  {why}")
+    if not apply:
+        print("This was a dry run, nothing changed. Add --apply to tidy: every card it touches is exported to "
+              f"{tidy.state_dir_for(cards_dir)} first, and --undo with the manifest it prints puts them back.")
+        return 0
+    if not plan.entries:
+        return 0
+    run = tidy.RepositoryTidy(repo, cards_dir, batch_pause=0.2).apply(plan, cards)
+    print(f"removed         : {run.removed:,}   keepers updated: {run.updated:,}")
+    for why, count in sorted(run.skipped.items()):
+        print(f"  {count:>8,}  skipped: {why}")
+    if run.export:
+        print(f"export          : {run.export}")
+        print(f"undo            : quest-ai-runner cards tidy --undo {run.manifest}")
+    for problem in run.problems[:10]:
+        print(f"  check failed: {problem}")
+    if run.failed:
+        print(f"stopped         : {run.failed}")
+        return 1
+    return 0
+
+
+def undo_repository(repo, cards_dir: Path, manifest: Path) -> int:
+    """Take back a tidy made through the repository: re-create each removed card, restore each updated keeper."""
+    from .adapters.card_store_tidy import RepositoryTidy
+
+    if not manifest.is_file():
+        print(f"error: {manifest} is not a file. The manifests are the *-store-tidy-manifest.jsonl files in "
+              f"{cards_dir / 'tidy-state'}.")
+        return 2
+    result = RepositoryTidy(repo, cards_dir).undo(manifest)
+    print(f"put back        : {result.restored:,}")
+    print(f"keepers restored: {result.reverted:,}")
+    for why, count in sorted(result.skipped.items()):
+        print(f"  {count:>8,}  skipped: {why}")
+    if result.failed:
+        print(f"error: {result.failed}")
+        return 1
     return 0
 
 

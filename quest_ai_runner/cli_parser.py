@@ -202,10 +202,18 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="corpus root (default: QAR_CORPUS_ROOT env var or cwd)")
     report_p.add_argument("--write", action="store_true",
                           help="also rewrite card_limit_report.md inside the store with this report")
+    report_p.add_argument("--config", default=None, metavar="PATH",
+                          help="the lane's TOML config file (QAR_CONFIG_FILE also works): its environment says "
+                               "where the lane's cards live (a local folder, the Quest backend or Qdrant)")
     tidy_p = cards_sub.add_parser(
-        "tidy", help="move out of the index the cards that are provably copies of other cards (to "
-                     "_quarantine/, never deleted); a card with notes, usage, quest tags or a hand-written "
-                     "origin is never moved. A dry run unless --apply")
+        "tidy", help="tidy the lane's card store. A local folder: move out the cards that are provably copies of "
+                     "other cards (to _quarantine/, never deleted). The Quest backend or Qdrant: the full tidy "
+                     "(copies, cards about excluded folders, duplicates, thin cards), after a complete local "
+                     "export that --undo restores from. A card with notes, usage, quest tags or a hand-written "
+                     "origin is never removed. A dry run unless --apply")
+    tidy_p.add_argument("--config", default=None, metavar="PATH",
+                        help="the lane's TOML config file (QAR_CONFIG_FILE also works): its environment says "
+                             "where the lane's cards live")
     tidy_p.add_argument("--cards-dir", default=None, metavar="PATH",
                         help="cards directory (default: <corpus>/.quest-context or QAR_CONTEXT_CARDS_DIR)")
     tidy_p.add_argument("--corpus", default=None, metavar="PATH",
@@ -215,7 +223,8 @@ def _build_parser() -> argparse.ArgumentParser:
     tidy_p.add_argument("--undo", default=None, metavar="MANIFEST",
                         help="take back the moves a tidy manifest records (cards go back into the index and what "
                              "was joined onto the cards that stood for them is taken off again); the manifests are "
-                             "the *-tidy-manifest.jsonl files in <cards dir>/_quarantine"),
+                             "the *-tidy-manifest.jsonl files in <cards dir>/_quarantine, and for a tidy through "
+                             "the repository the *-store-tidy-manifest.jsonl files in <cards dir>/tidy-state"),
 
     # --- sync-quest-folder subcommand: pull/push a quest <-> a local folder --
     sync_p = sub.add_parser("sync-quest-folder",

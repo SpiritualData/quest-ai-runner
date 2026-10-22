@@ -627,11 +627,13 @@ def keeper_of_moved(cards_dir: Path, card_id: str) -> str:
     manifest (``_quarantine/*manifest*.jsonl``): "" when none did. The newest manifest is read first. This is only
     asked when a writer comes with an edit for a card that is no longer in the index, so the manifests are
     read then, never on the way to a move."""
-    base = cards_dir / QUARANTINE_DIR_NAME
-    try:
-        manifests = sorted((p for p in base.rglob("*manifest*.jsonl") if p.is_file()), key=lambda p: p.name, reverse=True)
-    except OSError:
-        return ""
+    manifests: List[Path] = []
+    for base in (cards_dir / QUARANTINE_DIR_NAME, cards_dir / "tidy-state"):   # the repository tidy's state folder
+        try:
+            manifests += [p for p in base.rglob("*manifest*.jsonl") if p.is_file()]
+        except OSError:
+            continue
+    manifests.sort(key=lambda p: p.name, reverse=True)
     for manifest in manifests:
         try:
             with open(manifest, "r", encoding="utf-8") as fh:

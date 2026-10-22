@@ -21,8 +21,12 @@ AT THE LIMIT, one function (``CardLimit.admit``) is asked by every writer:
     can move, the card is admitted anyway and the notice says so;
   * a store already ABOVE the limit moves nothing for a learned or quest card (swapping them one for one
     would exchange the regenerable cards for learned ones for good): the card is admitted and counted as kept
-    over the limit. The limit never trims such a store: only the checks for provable duplicates
-    (``card_store_hygiene``) remove anything from it.
+    over the limit. The limit never trims such a store: only the tidy (``card_store_hygiene`` for provable
+    duplicates, ``card_store_tidy`` through the repository port) removes anything from it.
+
+The limit counts the cards a store OWNS on every repository: a local folder, the Quest backend and Qdrant alike
+get the notice and the breakdown. Only a repository that can move a card aside (``quarantine``: a local folder)
+ever moves a cold card out for a learned one; on any other, a learned card is admitted over the limit and counted.
 """
 from __future__ import annotations
 
@@ -220,7 +224,18 @@ class CardLimit:
             mtime = self.cards_dir.stat().st_mtime_ns
         except OSError:
             mtime = 0
+        if not self.counts_by_name():
+            # A repository that is not a folder of card files (the Quest backend, Qdrant) changes without touching
+            # the folder: its own change stamp (cheap, cached by the repository) joins the key.
+            try:
+                return (self.folder.generation(), mtime, self.revision_of())
+            except Exception:  # noqa: BLE001
+                return (self.folder.generation(), mtime, None)
         return (self.folder.generation(), mtime)
+
+    def counts_by_name(self) -> bool:
+        """Whether the repository can count its cards from file names (a local folder store)."""
+        return callable(getattr(self.repo, "count", None))
 
     def count_cards(self) -> int:
         counter = getattr(self.repo, "count", None)
@@ -252,7 +267,7 @@ class CardLimit:
 
     def exists(self, card_id: str) -> bool:
         check = getattr(self.repo, "exists", None)
-        if callable(check):
+        if callable(check) and self.counts_by_name():
             return bool(check(card_id))
         return card_id in self.snapshot()
 

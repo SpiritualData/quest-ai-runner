@@ -136,11 +136,12 @@ class TestTheKnob:
         assert found is not None and found.limit_guard.limit == expected
         assert found.heal_enabled is True, "the runner's store tidies provable copies at open"
 
-    def test_a_shared_backend_is_not_limited_by_a_local_number(self, tmp_path):
+    def test_a_shared_backend_is_limited_too(self, tmp_path):
+        # The limit counts the store's own cards on every repository (a backend held 5,488 with no notice).
         backend = FilesystemCardRepository(str(tmp_path / "elsewhere"))
         store = FileContextStore(str(tmp_path / "cards"), repo_root=str(tmp_path), auto_bootstrap=False,
                                  card_repository=backend, max_cards=3)
-        assert store.limit_guard.enabled is False
+        assert store.limit_guard.enabled is True and store.limit_guard.limit == 3
 
 
 # --- at the limit ---------------------------------------------------------------------------------

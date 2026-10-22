@@ -105,7 +105,7 @@ _FILE_SCALAR_FIELDS = {
     "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "team_ids", "claim_teams", "org_id",
     "runner_label", "env_id", "lane_user_id",
     "model_fallback", "model_provider_overrides",
-    "context_cards_dir",
+    "context_cards_dir", "card_tidy",
     "channel_allowed_senders", "channel_ack_after_seconds", "channel_progress_min_seconds",
     "channel_turn_timeout_seconds", "channel_state_path",
     "corpus_root", "context_preamble",
@@ -280,6 +280,15 @@ class RunnerConfig:
     # None → ``<corpus_root or cwd>/.quest-context``. Cards are machine-written local state; the
     # consumer should gitignore this path (the runner repo gitignores ``.quest-context/``).
     context_cards_dir: Optional[str] = None
+    # What the automatic card tidy does when a store is over its card limit or holds copies its ids prove
+    # (adapters/card_store_tidy, docs/context-card-stores.md "Tidying a store on any backend"):
+    #   "apply" -> carry the plan out (a local folder moves cards into _quarantine; any other repository deletes
+    #              them, after a full local export that `cards tidy --undo` restores from);
+    #   "plan"  -> write the plan beside the cards and say once what it would do and how to apply it;
+    #   "off"   -> neither.
+    # None (the default) is "apply" for a local folder store and "plan" for the Quest backend or Qdrant, because
+    # their cards are shared team data and deleting them is the owner's call. Set it in qar.toml: card_tidy = "apply".
+    card_tidy: Optional[str] = None
     # OPTIONAL REFERENCE RESOLVERS for source-agnostic context-card CONTENT. A context card holds
     # typed content items, each either a REFERENCE (resolved fresh to current content on use) or an
     # LLM note. The library ships built-in resolvers for ``file`` and ``note``; the data-backed

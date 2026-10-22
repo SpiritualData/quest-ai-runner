@@ -962,6 +962,7 @@ class BootstrapMixin:
         """
         try:
             self.tidy(notify, quick=True)   # first: so the index built below never holds a card on its way out
+            self.tidy_store(notify)         # any repository: over its limit, or copies proven by their ids
             cards = self._load_all()
             self.limit_guard.check_at_open(notify)
             self.inflated()
