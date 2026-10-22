@@ -17,7 +17,8 @@ from .textual_ui_widgets import (
     _busy_placeholder,
 )
 from .textual_ui_prompt import PromptTextArea
-from .textual_ui_helpers import _build_shallow_context_bullets, card_score, context_block_lines
+from .core.metric_results import without_line
+from .textual_ui_helpers import _build_shallow_context_bullets, card_score, context_block_lines, plural
 
 
 class TurnMixin:
@@ -64,6 +65,7 @@ class TurnMixin:
         self._deep_seen = set()
         self._deep_event_count = 0
         self._deep_flushed = set()
+        self.metrics_shown.clear()
         self._future_context = ""
         self._last_narration = ""
         self._ctx.reset()
@@ -304,8 +306,18 @@ class TurnMixin:
             if isinstance(data, dict):
                 rid = data.get("run_id")
                 deep_out = data.get("deep_output")
+                metrics = data.get("metrics") if isinstance(data.get("metrics"), list) else []
+                metric_missing = data.get("metric_missing") is True
                 if rid and deep_out:
-                    self._deep.set_final_output(rid, deep_out)
+                    # The library ends a result's text with one plain "Metric: ..." line for consumers
+                    # that show text only. This terminal writes the entries as lines of its own, so that
+                    # line is left out of the result and the numbers appear once.
+                    self._deep.set_final_output(rid, without_line(deep_out, metrics, metric_missing))
+                if rid and (metrics or metric_missing):
+                    self._deep.set_metrics(rid, metrics, metric_missing)
+                    if rid in self._deep_flushed:
+                        # The run's record was written before its milestone arrived: the lines follow it.
+                        self.write_metrics(metrics, metric_missing)
                 model = _model_display(data.get("model"), data.get("resolved_model"))
                 if rid and model:
                     self._deep.set_model(rid, model)
@@ -465,6 +477,12 @@ class TurnMixin:
                 answer = None
             else:
                 answer = final.text or ("\n".join(self._answer_parts).strip() or None)
+            # The plain "Metric: ..." line a deep result's text ends with is replaced by the metric
+            # lines written below (and in each run's record), so it is not printed a second time.
+            if answer:
+                for deep_result in getattr(final, "deep_results", None) or []:
+                    answer = without_line(answer, getattr(deep_result, "metric_results", None) or [],
+                                          getattr(deep_result, "metric_missing", False) is True)
             if answer:
                 if not self._ai_label_shown:
                     log.write(Text(""))
@@ -500,6 +518,9 @@ class TurnMixin:
             # standing next-steps artifact. The session owns the decision and the write (shared by
             # every UI); this is only the call site for "a turn just completed".
             s._maybe_refresh_next_steps(final)
+            # What the metric was before and after, for any goal whose record did not already show it
+            # (a goal that was not met leaves no milestone), written from the result's own data.
+            self.write_metrics(getattr(final, "metric_results", None), getattr(final, "metric_missing", False))
             log.write(Text(""))
             self._write_footer(final, elapsed)
             # If the deep run flagged the context it used, load the panel and show a
@@ -528,6 +549,7 @@ class TurnMixin:
                 n_sources = len(used.get("cards") or []) + len(used.get("sources") or [])
                 n_reads = len(used.get("reads") or [])
                 n_actions = len(used.get("actions") or [])
+                n_metrics = len(explanation.get("metrics") or [])
                 if n_sources:
                     bits.append(f"{n_sources} source{'s' if n_sources != 1 else ''}")
                 if n_reads:
@@ -536,8 +558,13 @@ class TurnMixin:
                     bits.append(f"{n_actions} action{'s' if n_actions != 1 else ''}")
                 if used.get("web"):
                     bits.append("web search")
+                if n_metrics:
+                    bits.append(plural(n_metrics, "metric result"))
                 if bits:
                     log.write(Text(f"  Explain how I got this: {', '.join(bits)}", style="dim"))
+                # The metric lines of the payload (version 3), when this turn's transcript does not hold
+                # them already.
+                self.write_metrics(explanation.get("metrics"), explanation.get("metric_missing"))
 
         log.write(Text(""))
         self._console.rule()

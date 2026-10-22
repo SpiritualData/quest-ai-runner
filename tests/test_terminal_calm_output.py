@@ -30,7 +30,9 @@ from quest_ai_runner.chat_conversations import chat_log_path
 from quest_ai_runner.core.adapters import EVENT_CONTEXT, EVENT_EXEC, EVENT_PLAN, EVENT_STATUS
 from quest_ai_runner.textual_ui import ActivityBar, QuestAITerminal, _RichLogHandler
 from quest_ai_runner import textual_ui_widgets
-from quest_ai_runner.textual_ui_helpers import context_block_lines, ellipsize
+from quest_ai_runner.core.adapters import EVENT_MILESTONE
+from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE
+from quest_ai_runner.textual_ui_helpers import METRIC_LINES_SHOWN, context_block_lines, ellipsize, metric_lines
 from quest_ai_runner.interactive_session_tracker import format_elapsed
 from quest_ai_runner.textual_ui_widgets import (
     LOG_LINE_CHARS,
@@ -322,6 +324,66 @@ def test_the_context_event_writes_the_calm_block_and_still_feeds_the_live_panel(
     assert lines[0] == "Context: 6 cards, 2 sources"
     assert not any("card:" in ln or "/srv/" in ln or "score" in ln for ln in lines)
     assert panel_cards == cards, "the in-place panel still receives every card unchanged"
+
+
+# --- the metric before and after: dim, short, one line each -------------------------------------
+
+def metric_entry(i: int = 0, **extra) -> dict:
+    return {"solution_id": "greet-a-person", "metric_id": f"metric-{i}", "source": "measured", "reason": "",
+            "name": f"Share of sample names greeted in the standard form, variant {i}", "milestone": "",
+            "before": 0.5, "after": 0.75, "delta": 0.25, "disagrees": False, **extra}
+
+
+@pytest.mark.parametrize("width", [20, 30, 60, 100])
+def test_no_metric_line_is_wider_than_the_terminal(width):
+    entries = [metric_entry(0), metric_entry(1, source="recorded", disagrees=True),
+               {"source": "not_applicable", "reason": "It only edits a draft, which no metric covers at all.",
+                "name": "", "metric_id": "", "before": None, "after": None}]
+    for line in metric_lines(entries, True, width=width):
+        assert len(line.plain) <= max(width, 14), (width, line.plain)
+        assert line.style == "dim"
+
+
+def test_a_long_metric_name_gives_way_before_the_numbers_and_the_source_do():
+    (line,) = metric_lines([metric_entry(7)], width=60)
+    assert line.plain.endswith(": 0.5 -> 0.75 (measured by QAR)") and "…" in line.plain
+    assert len(line.plain) <= 60
+
+
+def test_a_metric_block_is_a_few_lines_and_how_many_more():
+    lines = [ln.plain for ln in metric_lines([metric_entry(i, name=f"Metric {i}") for i in range(7)], True, width=80)]
+    assert len(lines) == METRIC_LINES_SHOWN + 2
+    assert lines[0] == "  Metric 0: 0.5 -> 0.75 (measured by QAR)"
+    assert lines[METRIC_LINES_SHOWN] == f"  … and {7 - METRIC_LINES_SHOWN} more"
+    assert lines[-1] == f"  {NOT_RECORDED_LINE}"
+    assert metric_lines([], False) == [], "nothing to say, nothing written"
+
+
+def test_the_metric_wording_uses_plain_words_an_arrow_made_of_ascii_and_no_em_dash():
+    lines = [ln.plain for ln in metric_lines([
+        metric_entry(0, name="Pass rate"), metric_entry(1, name="Latency", source="recorded", disagrees=True),
+        {"source": "not_applicable", "reason": "Only a draft.", "name": "", "metric_id": ""}], True)]
+    assert lines == ["  Pass rate: 0.5 -> 0.75 (measured by QAR)",
+                     "  Latency: 0.5 -> 0.75 (recorded by the AI, disagrees with QAR)",
+                     "  Metric not applicable: Only a draft.",
+                     f"  {NOT_RECORDED_LINE}"]
+    assert not any("—" in ln for ln in lines)
+
+
+def test_in_the_running_app_a_finished_goals_metric_is_one_transcript_line():
+    async def build(app, pilot):
+        rec = RecordingLog()
+        app._tlog = rec
+        app._deep.add_run("r1", "Improve the greeting")
+        app._deep.set_final_output("r1", "Changed greet().")
+        app._handle_event({"type": EVENT_MILESTONE, "text": "Completed: Improve the greeting",
+                           "data": {"run_id": "r1", "metrics": [metric_entry(0, name="Pass rate")]}})
+        app._flush_deep_run("r1")
+        await pilot.pause()
+        return rec.lines
+
+    lines = run_app(build)
+    assert lines.count("  Pass rate: 0.5 -> 0.75 (measured by QAR)") == 1
 
 
 # --- a long wait counts its seconds ------------------------------------------------------------

@@ -7,9 +7,10 @@ about the run, plus a genuine RECORD of what the run actually touched.
 
 The split matters, so it is encoded in the payload shape rather than left to a convention:
 
-  * ``used`` and ``signals`` are FACTS. They are assembled here from the turn's real trace (the
-    observations the gather steps produced, the execution record, the assembled cards and sources,
-    the goal verdict, the exit reason). No model writes them. They can be checked.
+  * ``used``, ``signals`` and (version 3) ``metrics`` are FACTS. They are assembled here from the
+    turn's real trace (the observations the gather steps produced, the execution record, the
+    assembled cards and sources, the goal verdict, the exit reason, and the metric results the
+    runner's own ledger kept for the turn's deep goals). No model writes them. They can be checked.
   * ``understood``, ``approach``, ``assumptions``, ``confidence``, ``limitations``,
     ``what_would_change`` and ``evolvable_structure`` are a model-written summary, constrained to
     that same trace. They are a reconstruction, not a transcript of anything, which is why the
@@ -22,30 +23,45 @@ by, and the ``structure`` it built on or left open to change. ``what_would_chang
 half of the same section (what would change or improve the answer next time); it keeps its version
 1 key so a version 1 consumer still renders it.
 
-Two invariants this module exists to hold:
+``metrics`` (version 3) is what the relevant metric was before and after the turn's change, one entry
+per metric, copied from ``OrchestratorResult.metric_results`` (shape and meaning: ``docs/metric-results.md``),
+with ``metric_missing`` when a change ended with no metric result recorded. The values come from the
+runner's ledger and meters, so the model-written half never touches them: it is told the values are
+shown separately and must not state them, and the record it is constrained to carries them so it cannot
+contradict them.
+
+Three invariants this module exists to hold:
 
 1. **Eligibility is model-free.** ``is_eligible`` is a boolean over the trace: reads happened, or
    actions executed, or a deep run happened, or context reached the answer, or the planner took
-   more than one step, or the web was searched. It costs nothing, needs no threshold tuning, and
-   cannot itself be wrong in an expensive way. A plain "Hi" takes the small-talk short circuit,
-   gathers nothing, answers at step 0, and so is ineligible for free: no event, no toggle.
+   more than one step, or the web was searched, or the turn has metric results. It costs nothing,
+   needs no threshold tuning, and cannot itself be wrong in an expensive way. A plain "Hi" takes the
+   small-talk short circuit, gathers nothing, answers at step 0, and so is ineligible for free: no
+   event, no toggle.
 2. **The explanation may never assert a step the record does not show.** The generation prompt is
    given the execution record and told to describe only what is in it. This is the same failure the
    goal verifier already guards with ``claims_unexecuted``: a confident account of tool calls that
    never happened is worse than no account at all.
+3. **The facts survive the model.** When the generation call fails, cannot run or returns nothing
+   usable, the payload is still built from the trace alone, ``metrics`` included. No model call is
+   added for them and none can change them.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+from .metric_results import SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, SOURCES, format_value
 
 log = logging.getLogger(__name__)
 
 # The payload version a consumer can branch on if the shape ever grows. Version 2 added the optional
-# ``evolvable_structure`` object; every version 1 key is unchanged, so a version 1 consumer is safe.
-EXPLANATION_VERSION = 2
+# ``evolvable_structure`` object; version 3 added the optional ``metrics`` list and ``metric_missing``
+# flag (facts, written by code). Every earlier key is unchanged, so an older consumer is safe.
+EXPLANATION_VERSION = 3
 
 # The ``evolvable_structure`` keys, each one optional sentence.
 EVOLVABLE_KEYS = ("ideal", "metric", "structure")
@@ -53,6 +69,12 @@ EVOLVABLE_KEYS = ("ideal", "metric", "structure")
 # How many items of any one kind survive into the payload. The panel is a summary, not a log, and
 # the payload is persisted on the message, so it stays small on purpose.
 MAX_ITEMS_PER_KIND = 12
+
+# The keys of one ``metrics`` entry: exactly ``MetricResult.to_dict()`` (``docs/metric-results.md``).
+METRIC_KEYS = ("solution_id", "metric_id", "name", "milestone", "before", "after", "delta", "source", "reason",
+                "disagrees")
+METRIC_NUMBER_KEYS = ("before", "after", "delta")
+METRIC_TEXT_CHARS = 300
 
 # The marker both web-search retrieval adapters stamp on an observation's ``rel_path``
 # (``WebSearchAdapter`` and ``ProviderWebSearchAdapter`` both use ``web_search:<query>``).
@@ -172,8 +194,17 @@ HARD RULES:
   serves and a practical way to check it; name a structure only if the answer or the record shows
   one (if the answer says how it applied evolvable structure, draw on that). Leave it out for a
   simple factual reply.
-- Never use an em dash. Split the sentence, or use a comma, colon, or parentheses.
+- Never use an em dash. Split the sentence, or use a comma, colon, or parentheses.{metric_rule}
 {language}"""
+
+# Added to the hard rules only for a turn that has metric results (``metric_rule``); a turn without any
+# gets the prompt it always got. The values are facts the reader sees from the record, so the prose must
+# not carry numbers that could differ from them.
+METRIC_RULE = (
+    "\n- Metric results: where the record lists metric results (or says none was recorded), the runner's code "
+    "kept them, and they are shown to the reader separately, straight from the record. Do NOT state, round, "
+    "compare or paraphrase any figure for them, and do not say a metric improved or got worse. In "
+    "evolvable_structure.metric, say what to watch or check next time, without numbers for these results.")
 
 
 @dataclass
@@ -200,6 +231,11 @@ class TurnTrace:
     # (labels, counts and path-like items only, never the material itself).
     cards: List[Dict[str, Any]] = field(default_factory=list)
     sources: List[Dict[str, Any]] = field(default_factory=list)
+    # The turn's metric results as ``MetricResult.to_dict()`` entries, and the flag set when a change
+    # ended with none recorded (``OrchestratorResult.metric_results`` / ``.metric_missing``). Kept by
+    # the runner's code, never by a model.
+    metrics: List[Dict[str, Any]] = field(default_factory=list)
+    metric_missing: bool = False
 
     def read_observations(self) -> List[Dict[str, Any]]:
         """The gather results that represent something actually read or searched (errors dropped)."""
@@ -250,6 +286,7 @@ def trace_from_result(result: Any, *, user_message: str, goal_condition: str,
             answer = getattr(result, "text", "") or ""
     except Exception:  # noqa: BLE001
         answer = getattr(result, "text", "") or ""
+    metrics = getattr(result, "metric_results", None)
     return TurnTrace(
         kind=getattr(result, "kind", "answer") or "answer",
         user_message=user_message or "",
@@ -262,6 +299,8 @@ def trace_from_result(result: Any, *, user_message: str, goal_condition: str,
         actions=actions,
         cards=list(cards or []),
         sources=list(sources or []),
+        metrics=list(metrics) if isinstance(metrics, list) else [],
+        metric_missing=getattr(result, "metric_missing", False) is True,
     )
 
 
@@ -270,8 +309,9 @@ def is_eligible(trace: TurnTrace) -> bool:
 
     True when the run did something a person could reasonably want accounted for: it read or
     searched, it executed an action, it ran deep, it answered on assembled context, it took more
-    than one planning step, or it went to the web. False otherwise, which is exactly the plain
-    small-talk case (no retrieval, no actions, answered at the first step).
+    than one planning step, it went to the web, or the runner kept a metric result for it (or noted
+    that a change ended with none). False otherwise, which is exactly the plain small-talk case (no
+    retrieval, no actions, answered at the first step).
 
     Only answer and deep turns are ever eligible. A confirm, a clarification and a cancelled run
     are not answers, so there is nothing to explain.
@@ -281,6 +321,8 @@ def is_eligible(trace: TurnTrace) -> bool:
     if not (trace.answer or "").strip():
         return False
     if trace.kind == "deep":
+        return True
+    if render_metrics(trace):
         return True
     if trace.read_observations():
         return True
@@ -299,9 +341,10 @@ def render_record_for_prompt(trace: TurnTrace) -> str:
     """The turn's facts as a compact block the generation call is CONSTRAINED to.
 
     Deliberately blunt about emptiness: when nothing was retrieved and nothing executed, this says
-    so in words, because that is the case where a model is most tempted to invent a process.
+    so in words, because that is the case where a model is most tempted to invent a process. A turn's
+    metric facts come first, so a long record that is cut to fit the prompt loses its tail, not them.
     """
-    lines: List[str] = []
+    lines: List[str] = metric_record_lines(trace)
     reads = trace.read_observations()
     if reads:
         lines.append(f"Looked at {len(reads)} thing(s):")
@@ -345,6 +388,80 @@ def render_record_for_prompt(trace: TurnTrace) -> str:
             lines.append("WARNING: the answer claimed a change the record does not back. Say so.")
     lines.append(f"Planning steps taken: {trace.steps}.")
     return "\n".join(lines)
+
+
+# How the record tells the generation call who vouches for a metric entry, in plain words.
+METRIC_SOURCE_WORDS = {SOURCE_MEASURED: "measured by the runner's own meter",
+                       SOURCE_RECORDED: "recorded by the AI, not checked"}
+
+
+def metric_record_lines(trace: TurnTrace) -> List[str]:
+    """The metric facts as record lines, so the written half cannot contradict them. ``[]`` for a turn without any.
+
+    The values are here on purpose: the model is told not to state them (``METRIC_RULE``), and a model that
+    knows them is less likely to write a figure of its own that differs."""
+    facts = render_metrics(trace)
+    entries = facts.get("metrics") or []
+    lines: List[str] = []
+    if entries:
+        lines.append("Metric results the runner's code kept for this change (shown to the reader separately):")
+    for entry in entries:
+        if entry["source"] == SOURCE_NOT_APPLICABLE:
+            lines.append(f"  - no metric applies: {entry['reason']}")
+            continue
+        label = entry["name"] or entry["metric_id"] or "a metric"
+        note = "; the AI's record and the runner's reading differ" if entry["disagrees"] else ""
+        lines.append(f"  - {label}: before {format_value(entry['before'])}, after {format_value(entry['after'])} "
+                     f"({METRIC_SOURCE_WORDS[entry['source']]}{note})")
+    if facts.get("metric_missing"):
+        lines.append("No metric result was recorded for this change.")
+    return lines
+
+
+def metric_rule(trace: TurnTrace) -> str:
+    """The prompt's metric rule for a turn that has metric facts, ``""`` (changing nothing) for one that has none."""
+    return METRIC_RULE if render_metrics(trace) else ""
+
+
+def finite_number(value: Any) -> Optional[Any]:
+    """``value`` when it is an int or float that is finite (a bool and a string are not numbers), else ``None``."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def clean_metric(entry: Any) -> Optional[Dict[str, Any]]:
+    """One metric entry as the payload carries it: the ten keys of ``MetricResult.to_dict()``. Never raises.
+
+    Numbers stay numbers and anything else becomes ``None``; text is capped; an entry that is not a dict or whose
+    ``source`` is not one the ledger writes is dropped, because nobody could vouch for it."""
+    if not isinstance(entry, dict) or entry.get("source") not in SOURCES:
+        return None
+    out: Dict[str, Any] = {}
+    for key in METRIC_KEYS:
+        value = entry.get(key)
+        if key in METRIC_NUMBER_KEYS:
+            out[key] = finite_number(value)
+        elif key == "disagrees":
+            out[key] = value is True
+        else:
+            out[key] = str(value or "").strip()[:METRIC_TEXT_CHARS]
+    return out
+
+
+def render_metrics(trace: TurnTrace) -> Dict[str, Any]:
+    """The ``metrics`` section: what the metric was before and after the change, from the trace's ledger rows only.
+
+    ``{"metrics": [...]}`` (at most ``MAX_ITEMS_PER_KIND`` entries) when the turn has any, plus
+    ``"metric_missing": True`` when a change ended with no metric result recorded. ``{}`` for a turn with neither,
+    so such a turn's payload gets no new key. No model writes or edits any of it."""
+    entries = [e for e in (clean_metric(raw) for raw in (trace.metrics or [])) if e][:MAX_ITEMS_PER_KIND]
+    out: Dict[str, Any] = {}
+    if entries:
+        out["metrics"] = entries
+    if trace.metric_missing:
+        out["metric_missing"] = True
+    return out
 
 
 def render_used(trace: TurnTrace) -> Dict[str, Any]:
@@ -427,12 +544,15 @@ def build_payload(trace: TurnTrace, written: Optional[Dict[str, Any]]) -> Dict[s
 
     ``written`` is None when the generation call failed or returned nothing usable. That is NOT a
     reason to drop the panel: the ``used`` and ``signals`` sections are the verifiable half and
-    stand on their own. The consumer simply has fewer prose sections to render.
+    stand on their own. The consumer simply has fewer prose sections to render. The same holds for
+    ``metrics``: it comes from the trace alone, and a ``metrics`` key a model put in ``written`` is
+    never read.
     """
     payload: Dict[str, Any] = {
         "version": EXPLANATION_VERSION,
         "used": render_used(trace),
         "signals": render_signals(trace),
+        **render_metrics(trace),
     }
     if isinstance(written, dict):
         understood = str(written.get("understood") or "").strip()
@@ -477,6 +597,8 @@ def has_renderable_content(payload: Dict[str, Any]) -> bool:
         return False
     if any(payload.get(k) for k in ("understood", "approach", "confidence", "assumptions",
                                     "limitations", "what_would_change", "evolvable_structure")):
+        return True
+    if payload.get("metrics") or payload.get("metric_missing"):
         return True
     used = payload.get("used") or {}
     return bool(used.get("cards") or used.get("sources") or used.get("reads")

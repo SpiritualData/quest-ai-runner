@@ -30,7 +30,7 @@ import os
 import shutil
 import threading
 import time
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 
 from textual import work
@@ -263,6 +263,10 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         # Deep runs whose full output has already been written to the scrollback
         # transcript, so we persist each task's output exactly once.
         self._deep_flushed: set = set()
+        # Metric entries already written to the transcript this turn (a key per entry, counted), so the
+        # same result is never written twice: once in a run's record, again under the answer or the
+        # explanation line.
+        self.metrics_shown: Counter = Counter()
         # Counts how many auto-execute passes have fired for the current user turn
         # (0 = the user's turn itself; 1+ = chained auto passes). Reset on each real user message.
         self._auto_pass: int = 0

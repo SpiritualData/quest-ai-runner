@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import os
 import shutil
-from typing import List, Optional
+from typing import Any, List, Mapping, Optional, Sequence
 from rich.text import Text
+
+from .core.metric_results import NOT_RECORDED_LINE, SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, format_value
 
 
 _CLIPBOARD_COMMANDS = (
@@ -129,6 +131,48 @@ def context_block_lines(card_meta: List[dict], sources: List[dict], width: int =
                for src in sources if src.get("items")]
     if counted:
         lines.append(notice_line("Sources: " + ", ".join(counted), width))
+    return lines
+
+
+# The transcript's metric block for one goal: this many lines, then "and K more".
+METRIC_LINES_SHOWN = 4
+# Who vouches for a metric entry, in plain words, and the short note when the two records disagree.
+METRIC_SOURCE_LABELS = {SOURCE_MEASURED: "measured by QAR", SOURCE_RECORDED: "recorded by the AI"}
+METRIC_DISAGREES_NOTES = {SOURCE_MEASURED: "disagrees with the AI", SOURCE_RECORDED: "disagrees with QAR"}
+
+
+def metric_entry_text(entry: Mapping[str, Any], width: int = 80, indent: str = "  ") -> str:
+    """One metric entry as one line: ``<name>: <before> -> <after> (measured by QAR)``, never wider than ``width``.
+
+    The numbers and the source are the point of the line, so a long name is the part that gives way. A declared
+    not-applicable reads ``Metric not applicable: <reason>``."""
+    source = entry.get("source")
+    if source == SOURCE_NOT_APPLICABLE:
+        return f"Metric not applicable: {entry.get('reason') or 'no reason given'}"
+    how = METRIC_SOURCE_LABELS.get(source, str(source))
+    if entry.get("disagrees"):
+        how += f", {METRIC_DISAGREES_NOTES.get(source, 'the records differ')}"
+    tail = f": {format_value(entry.get('before'))} -> {format_value(entry.get('after'))} ({how})"
+    name = entry.get("name") or entry.get("metric_id") or "Metric"
+    return ellipsize(name, max(width - len(indent) - len(tail), 12)) + tail
+
+
+def metric_key(entry: Mapping[str, Any]) -> tuple:
+    """What makes two metric entries the same result, so one is never written to the transcript twice."""
+    return tuple(entry.get(key) for key in ("solution_id", "metric_id", "source", "reason", "before", "after"))
+
+
+def metric_lines(entries: Sequence[Mapping[str, Any]], missing: bool = False, width: int = 80) -> List[Text]:
+    """The calm transcript lines for a goal's metric results: dim, one per metric, none wider than ``width``.
+
+    Written from the payload entries and never by a model. At most ``METRIC_LINES_SHOWN`` of them, then
+    "and K more". A change that ended with no metric result recorded gets the one line saying so. ``[]`` when
+    there is nothing to say."""
+    lines = [notice_line(metric_entry_text(entry, width), width) for entry in list(entries)[:METRIC_LINES_SHOWN]]
+    if len(entries) > METRIC_LINES_SHOWN:
+        lines.append(notice_line(f"… and {len(entries) - METRIC_LINES_SHOWN} more", width))
+    if missing:
+        lines.append(notice_line(NOT_RECORDED_LINE, width))
     return lines
 
 

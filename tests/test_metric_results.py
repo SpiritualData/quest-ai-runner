@@ -15,7 +15,7 @@ import pytest
 from quest_ai_runner.core import answer_explanation
 from quest_ai_runner.core.metric_results import (
     MAX_METRICS, NOT_RECORDED_LINE, SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger,
-    MetricResult, metric_ledger_from_env, payload_of, reconcile, render_line)
+    MetricResult, metric_ledger_from_env, payload_of, reconcile, render_line, without_line)
 from quest_ai_runner.core.tools import ToolContext, build_tool_registry
 
 PAYLOAD_KEYS = {"solution_id", "metric_id", "name", "milestone", "before", "after", "delta", "source", "reason",
@@ -184,6 +184,19 @@ def test_the_text_line_is_written_from_the_payload():
     assert "differs" in render_line(flagged)
     for text in (render_line(payload), render_line(na), NOT_RECORDED_LINE):
         assert "—" not in text
+
+
+def test_a_consumer_that_shows_the_entries_itself_can_drop_the_plain_line_and_nothing_else():
+    payload = payload_of(reconcile([measured(before=0.5, after=0.75)]))
+    line = render_line(payload)
+    assert without_line(f"Changed it.\n\n{line}", payload) == "Changed it."
+    assert without_line(f"First.\n\n{line}\n\nSecond.", payload) == "First.\n\nSecond."
+    assert without_line(f"Changed it.\n\n{NOT_RECORDED_LINE}", [], missing=True) == "Changed it."
+    # Only the whole line written for exactly these entries goes: other text, other entries, a quoted line stay.
+    other = payload_of(reconcile([measured(before=0.1, after=0.2)]))
+    assert without_line(f"Changed it.\n\n{line}", other) == f"Changed it.\n\n{line}"
+    assert without_line(f"I wrote: {line} myself.", payload) == f"I wrote: {line} myself."
+    assert without_line("", payload) == "" and without_line("Same.", []) == "Same."
 
 
 # -- the tool a worker calls -------------------------------------------------------------------

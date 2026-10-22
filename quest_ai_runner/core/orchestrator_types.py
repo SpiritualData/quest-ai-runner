@@ -436,8 +436,9 @@ class OrchestratorConfig:
     # "EXPLAIN HOW I GOT THIS" (see core/answer_explanation.py), opt-in (default OFF -- with the
     # flag off the run is byte-for-byte what it was: zero extra calls, no extra event).
     # When ON, a turn that PASSES the model-free eligibility predicate (it read, executed, ran
-    # deep, answered on assembled context, took more than one step, or searched the web) emits ONE
-    # extra EVENT_EXPLANATION carrying a user-facing account of how the answer was reached.
+    # deep, answered on assembled context, took more than one step, searched the web, or the runner
+    # kept a metric result for it) emits ONE extra EVENT_EXPLANATION carrying a user-facing account
+    # of how the answer was reached, with the metric before and after in its ``metrics`` list.
     # Placement is deliberate: the call runs AFTER EVENT_RESULT and BEFORE EVENT_DONE, so the
     # answer is already on the reader's screen while it is being written. The answer is never
     # delayed by it. Ineligible turns (plain small talk) emit nothing, so a consumer's toggle

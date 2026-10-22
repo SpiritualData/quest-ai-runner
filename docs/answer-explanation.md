@@ -7,6 +7,8 @@ A user-facing, expandable account of how a turn reached its answer: what the que
 be, what information was used, the shape of the reasoning, the assumptions, the confidence and
 limits, and (version 2) an evolvable structure section: the ideal the answer serves, a practical way
 to check it, the structure it built on or left open to change, and what would change or improve it.
+Version 3 adds the metric before and after for the turn's deep work, copied from the runner's own
+record by code (see [The metrics section](#the-metrics-section-version-3)).
 
 ## What this is NOT
 
@@ -52,6 +54,7 @@ with actual output AND any of:
 - context cards or sources reached the answer
 - the planner took more than one step
 - the web was searched
+- the runner kept a metric result for the turn, or noted that a change ended with none (version 3)
 
 A plain "Hi" takes the small-talk short circuit: no retrieval, no actions, answered at the first
 step, so every clause is false and nothing is emitted. A confirm, a clarification and a cancelled
@@ -66,28 +69,37 @@ run are never eligible, because they are not answers.
 | `used.actions` | `ExecutionRecord` facts with succeeded/failed state | yes |
 | `used.web` | a web-search observation was present | yes |
 | `signals.*` | exit reason, goal verdict (a deep turn's from its `deep_met`/`deep_not_met` exit), claim-honesty flag, step count | yes |
+| `metrics`, `metric_missing` | the metric before and after, from the runner's ledger and meters (`OrchestratorResult.metric_results`); no model writes or edits them | yes |
 | `understood`, `approach`, `assumptions`, `confidence`, `limitations`, `what_would_change`, `evolvable_structure` | one cheap-tier model call | no |
 
-Two consequences worth keeping:
+Three consequences worth keeping:
 
 1. **A failed generation call does not drop the panel.** `build_payload(trace, None)` still returns
-   the recorded half, which stands on its own.
+   the recorded half, which stands on its own, `metrics` included. The same holds when the call
+   cannot run at all (no tier resolves): the payload is built from the trace with no model call.
 2. **The written half is constrained to the record.** `render_record_for_prompt` hands the call the
    real observations, the execution record with per-action outcomes, and the goal verdict, and the
    prompt forbids asserting a step the record does not show or naming a source the record does not
    name. This is the same failure the goal verifier guards with `claims_unexecuted`: a confident
    account of tool calls that never happened is worse than no account at all.
+3. **The facts are not the model's to restate.** The record handed to the call lists the metric
+   results first, and the prompt adds one rule only for a turn that has some: their values are shown
+   to the reader separately, so the note must not state, round or compare any figure for them (the
+   `evolvable_structure.metric` sentence says what to watch, without numbers for these results). A turn
+   with no metric results gets exactly the prompt it always got. The prose half stays a prompt-level
+   constraint on purpose: code does not scan the model's sentences for numbers (hard rule 3), so the
+   facts are shown as their own block, never mixed into the prose.
 
 Because the written half is a reconstruction, a consumer should show a short disclaimer at the foot
 of the expanded panel. Word it as a claim about the product, not about the model's cognition:
 "Written by Quest AI to describe how it reached this answer. It is a summary, not a recording of
 every step."
 
-## Payload shape (version 2)
+## Payload shape (version 3)
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "understood": "string",
   "approach": "string",
   "assumptions": ["string"],
@@ -105,12 +117,44 @@ every step."
   "signals": {
     "exit_reason": "str", "goal_met": true, "verdict_reason": "str",
     "claims_unexecuted": false, "steps": 0, "deep": false
-  }
+  },
+  "metrics": [
+    {"solution_id": "str", "metric_id": "str", "name": "str", "milestone": "str",
+     "before": 0.5, "after": 0.75, "delta": 0.25,
+     "source": "measured|recorded|not_applicable", "reason": "str", "disagrees": false}
+  ],
+  "metric_missing": true
 }
 ```
 
-Version 2 only added `evolvable_structure`; every version 1 key means what it did, so a version 1
-consumer is unaffected.
+Version 2 only added `evolvable_structure` and version 3 only adds `metrics` and `metric_missing`;
+every earlier key means what it did, so an older consumer is unaffected. `metrics` is present only
+when the turn has at least one entry, and `metric_missing` only when it is true, so a turn with no
+metric results has the keys it had at version 2 (and `version` 3).
+
+### The metrics section (version 3)
+
+What the relevant metric was before and after the turn's change, one entry per metric (at most 12),
+exactly the entries of `OrchestratorResult.metric_results`; their meaning is in
+[metric-results.md](metric-results.md). They are written by code from the run's ledger, so they sit in
+the facts half of the payload next to `used` and `signals`, never in the model-written half:
+
+| Key | Meaning |
+|---|---|
+| `name`, `metric_id`, `solution_id`, `milestone` | What was measured. Any may be empty. |
+| `before`, `after`, `delta` | Finite numbers or `null`. A value that is not a finite number is `null`, never converted. |
+| `source` | `measured` (the runner's own meter), `recorded` (the AI called the tool; nobody checked), `not_applicable` (`reason` says why no metric applies). |
+| `reason` | How it was measured, or why no metric applies. |
+| `disagrees` | `true` on both entries when a measured and a recorded entry for the same metric give different numbers. |
+| `metric_missing` (top level) | `true` when a change ended with no metric result recorded, not even a `not_applicable`. |
+
+A consumer shows these as their own block (for each entry: the name, `before` to `after`, and who
+vouches for it in plain words) and treats a missing key as "none". The same entries are also on
+`OrchestratorResult.metric_results` and on the `data["metrics"]` of the finished goal's milestone and the
+deep turn's result event, whether or not this panel is on, so a consumer that does not turn the
+explanation on still has them. The one plain `Metric: ...` line the library appends to a deep result's
+text is for consumers that show text only: a consumer that renders the entries drops it with
+`metric_results.without_line`.
 
 ### The evolvable structure section
 
@@ -145,10 +189,15 @@ persist it from the returned result without observing the event stream.
 | `explain_tier` | `QAR_EXPLAIN_TIER` | `fast` | Tier for the one extra call. It summarizes a turn that already happened, so it does not need the strong tier (that is `verify_tier`, which gates the turn's outcome). |
 
 With the flag off the run is byte for byte what it was: no extra call, no extra event, nothing
-attached to the result.
+attached to the result (a turn's metric results are still on the result and its events, which do not
+depend on this flag).
 
 ## Tests
 
-`tests/test_answer_explanation.py` covers the four properties the design depends on: eligibility is
+`tests/test_answer_explanation.py` covers the properties the design depends on: eligibility is
 model-free and excludes small talk, the event lands after the result and before done, the recorded
-half survives a failed generation call, and the feature is inert when off.
+half survives a failed generation call, and the feature is inert when off. For version 3 it also pins
+that `metrics` carries the ledger's values whatever a model writes (a stub that is wrong in every field
+changes nothing), that the facts survive a failed or impossible generation call, that a turn with no
+metric results keeps its version 2 payload and prompt, and that older payloads render as before. The
+terminal's metric lines are pinned in `tests/test_deep_output_ui.py` and `tests/test_terminal_calm_output.py`.

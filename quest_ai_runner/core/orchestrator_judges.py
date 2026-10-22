@@ -14,6 +14,7 @@ from .answer_explanation import (
     TurnTrace,
     build_payload,
     has_renderable_content,
+    metric_rule,
     render_record_for_prompt,
 )
 from .guard import ExecutionRecord
@@ -414,9 +415,10 @@ class JudgesMixin:
 
         Faithfulness is bounded on purpose. The model half of this payload is a reconstruction, not
         a transcript, so it is (a) constrained to the execution record by the prompt, and (b) only
-        half the panel: ``used`` and ``signals`` are assembled from the trace and are true whatever
-        the model writes. A failed or unusable call therefore does NOT drop the panel; it returns
-        the trace-only payload. Never raises.
+        half the panel: ``used``, ``signals`` and ``metrics`` are assembled from the trace and are
+        true whatever the model writes. A failed, unusable or impossible call (no tier resolves)
+        therefore does NOT drop the panel; it returns the trace-only payload, with no further call.
+        Never raises.
         """
         record = render_record_for_prompt(trace)
         prompt = EXPLAIN_PROMPT.format(
@@ -424,6 +426,7 @@ class JudgesMixin:
             goal_condition=(trace.goal_condition or trace.user_message or "")[:1000],
             answer=(trace.answer or "")[:4000],
             record=record[:4000],
+            metric_rule=metric_rule(trace),
             language=("\n\n" + language_instruction()),
         )
         written: Optional[Dict[str, Any]] = None

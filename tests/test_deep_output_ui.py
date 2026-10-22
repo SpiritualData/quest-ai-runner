@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import pytest
 
+from quest_ai_runner.core.adapters import EVENT_MILESTONE
+from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE, render_line
 from quest_ai_runner.interactive_session import _DeepRunTracker
 from quest_ai_runner.textual_ui import QuestAITerminal, DeepDetailPanel
 
@@ -562,6 +564,189 @@ async def test_deep_turn_answer_not_duplicated_after_flush():
         assert "⎅ [Pass 1] Build the thing" in body
         assert "✓ Deep task complete" in body
         assert f"{app.rep_name} (AI):" not in body  # no second generic answer bubble
+
+
+# --- the metric before and after, written by code, shown once --------------
+
+MEASURED = {"solution_id": "greet-a-person", "metric_id": "greeting-pass-rate", "name": "Greeting pass rate",
+            "milestone": "Share of names greeted", "before": 0.5, "after": 0.75, "delta": 0.25, "source": "measured",
+            "reason": "measured by offline_arm", "disagrees": True}
+RECORDED = {**MEASURED, "after": 0.9, "delta": 0.4, "source": "recorded", "reason": ""}
+NOT_APPLICABLE = {"solution_id": "", "metric_id": "", "name": "", "milestone": "", "before": None, "after": None,
+                  "delta": None, "source": "not_applicable", "reason": "Only a draft was edited.", "disagrees": False}
+MEASURED_LINE = "Greeting pass rate: 0.5 -> 0.75 (measured by QAR, disagrees with the AI)"
+RECORDED_LINE = "Greeting pass rate: 0.5 -> 0.9 (recorded by the AI, disagrees with QAR)"
+
+
+def milestone(run_id: str, **data) -> dict:
+    return {"type": EVENT_MILESTONE, "text": "Completed: Improve the greeting",
+            "data": {"run_id": run_id, "goal": "Improve the greeting", **data}}
+
+
+def stripped(log: _RecordingLog) -> list[str]:
+    return [ln.strip() for ln in log.lines]
+
+
+def test_a_runs_record_shows_the_metric_before_and_after_once_and_drops_the_plain_text_line():
+    app, log = _make_app()
+    app._deep.add_run("r1", "Improve the greeting")
+    app._deep.update_run_output("r1", "Edit: greet.py")
+    entries = [MEASURED, RECORDED]
+    # The library ends the result's text with its one plain line for consumers that show text only.
+    app._handle_event(milestone("r1", deep_output=f"Changed greet().\n\n{render_line(entries)}", metrics=entries))
+    app._deep.set_run_status("r1", "done")
+    app._flush_deep_run("r1")
+
+    lines = stripped(log)
+    assert lines.count(MEASURED_LINE) == 1 and lines.count(RECORDED_LINE) == 1
+    assert not any("Metric:" in ln for ln in lines), "the plain text line is not printed a second time"
+    body = "\n".join(log.lines)
+    assert "Changed greet()." in body, "the rest of the result is untouched"
+    assert body.index("Changed greet()") < body.index(MEASURED_LINE) < body.index("✓ Deep task complete")
+
+
+def test_a_change_with_no_metric_recorded_says_so_in_one_dim_line():
+    app, log = _make_app()
+    app._deep.add_run("r1", "Improve the greeting")
+    app._handle_event(milestone("r1", deep_output=f"Changed greet().\n\n{NOT_RECORDED_LINE}", metrics=[],
+                                metric_missing=True))
+    app._deep.set_run_status("r1", "done")
+    app._flush_deep_run("r1")
+    assert stripped(log).count(NOT_RECORDED_LINE) == 1
+    assert "".join(log.lines).count("No metric") == 1
+
+
+def test_a_declared_not_applicable_reads_as_such():
+    app, log = _make_app()
+    app._deep.add_run("r1", "Draft the note")
+    app._handle_event(milestone("r1", deep_output="Drafted.", metrics=[NOT_APPLICABLE]))
+    app._flush_deep_run("r1")
+    assert "Metric not applicable: Only a draft was edited." in stripped(log)
+
+
+def test_a_milestone_that_arrives_after_the_record_adds_its_lines_after_it():
+    app, log = _make_app()
+    app._deep.add_run("r1", "Improve the greeting")
+    app._deep.set_final_output("r1", "Changed greet().")
+    app._flush_deep_run("r1")
+    assert MEASURED_LINE not in stripped(log)
+    app._handle_event(milestone("r1", metrics=[MEASURED]))
+    assert stripped(log).count(MEASURED_LINE) == 1
+    app._flush_deep_run("r1")   # a second flush adds nothing
+    assert stripped(log).count(MEASURED_LINE) == 1
+
+
+class _FakeMetricFinal(_FakeDeepFinal):
+    """A finished deep turn whose one goal carries its metric record, as ``OrchestratorResult`` does."""
+    deep_results = [type("R", (), {"met": True, "output": "Changed greet().", "tokens": 100,
+                                   "metric_results": [MEASURED, RECORDED], "metric_missing": False})()]
+    metric_results = [MEASURED, RECORDED]
+    metric_missing = False
+    explanation = None
+
+
+@pytest.mark.asyncio
+async def test_the_turn_shows_each_metric_line_once_from_milestone_to_finish():
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
+        app._console = _FakeConsole(log)
+        app._deep = _DeepRunTracker()
+        app._deep_flushed = set()
+        entries = [MEASURED, RECORDED]
+        app._deep.add_run("r1", "Improve the greeting")
+        app._handle_event(milestone("r1", deep_output=f"Changed greet().\n\n{render_line(entries)}", metrics=entries))
+        app._deep.set_run_status("r1", "done")
+        # What the terminal result event carries: the same text, the same entries.
+        app._answer_parts = [f"Changed greet().\n\n{render_line(entries)}"]
+        app._auto_pass = 1
+
+        app._finish_turn("improve the greeting", _FakeMetricFinal(), 3.0, cancelled=False, error=None)
+
+        lines = stripped(log)
+        assert lines.count(MEASURED_LINE) == 1 and lines.count(RECORDED_LINE) == 1
+        assert not any("Metric:" in ln for ln in lines)
+        assert "".join(log.lines).count("Changed greet().") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_goal_that_left_no_milestone_still_shows_its_metrics_at_the_end_of_the_turn():
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
+        app._console = _FakeConsole(log)
+        app._deep = _DeepRunTracker()
+        app._deep_flushed = set()
+        app._answer_parts = []
+        app._auto_pass = 1
+
+        class Unmet(_FakeMetricFinal):
+            deep_results = [type("R", (), {"met": False, "output": "Tried it.", "tokens": 5,
+                                           "metric_results": [MEASURED], "metric_missing": False})()]
+            metric_results = [MEASURED]
+
+        app._finish_turn("improve the greeting", Unmet(), 3.0, cancelled=False, error=None)
+        lines = stripped(log)
+        assert lines.count(MEASURED_LINE) == 1
+        assert lines.index(MEASURED_LINE) < next(i for i, ln in enumerate(lines) if "Partial" in ln), "above the footer"
+
+
+@pytest.mark.asyncio
+async def test_the_plain_text_line_is_not_printed_when_the_answer_falls_back_to_the_generic_bubble():
+    """A deep turn that flushed nothing prints its text as the answer; the library's plain line is not in it."""
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
+        app._console = _FakeConsole(log)
+        app._deep = _DeepRunTracker()
+        app._deep_flushed = set()
+        app._answer_parts = []
+        app._auto_pass = 1
+
+        class WithText(_FakeMetricFinal):
+            text = f"Changed greet().\n\n{render_line([MEASURED, RECORDED])}"
+
+        app._finish_turn("improve the greeting", WithText(), 3.0, cancelled=False, error=None)
+        body = "\n".join(log.lines)
+        assert "Changed greet()." in body and "Metric:" not in body
+        assert stripped(log).count(MEASURED_LINE) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_explanation_line_counts_the_metric_results_and_adds_only_the_lines_not_yet_shown():
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
+        app._console = _FakeConsole(log)
+        app._deep = _DeepRunTracker()
+        app._deep_flushed = set()
+        app._answer_parts = ["Yes."]
+        app._auto_pass = 1
+
+        class Answer:
+            kind = "answer"
+            text = "Yes."
+            deep_results = []
+            goals = []
+            tokens_in = 10
+            tokens_out = 20
+            model = "claude-sonnet-4-6"
+            steps = 2
+            metric_results = []
+            metric_missing = False
+            explanation = {"version": 3, "used": {"sources": [{"label": "Corpus files"}]},
+                           "metrics": [MEASURED], "metric_missing": True}
+
+        app._finish_turn("what changed", Answer(), 1.0, cancelled=False, error=None)
+        lines = stripped(log)
+        assert "Explain how I got this: 1 source, 1 metric result" in lines
+        explain = lines.index("Explain how I got this: 1 source, 1 metric result")
+        assert lines[explain + 1] == MEASURED_LINE and lines[explain + 2] == NOT_RECORDED_LINE
+        assert lines.count(MEASURED_LINE) == 1
 
 
 def test_goal_updated_when_real_subgoal_arrives_later():

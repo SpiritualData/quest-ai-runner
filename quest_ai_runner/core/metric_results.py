@@ -237,3 +237,24 @@ def render_line(results: Sequence[Mapping[str, Any]], missing: bool = False) -> 
     if parts:
         return "Metric: " + "; ".join(parts)
     return NOT_RECORDED_LINE if missing else ""
+
+
+def without_line(text: str, results: Sequence[Mapping[str, Any]], missing: bool = False) -> str:
+    """``text`` with the plain line ``render_line`` wrote for exactly these entries taken out.
+
+    For a consumer that shows the entries itself and must not show them twice. Only a whole line equal to what
+    ``render_line`` writes for these arguments is removed (with the blank lines just before it); nothing else in the
+    text is touched, and a text that does not hold the line comes back unchanged."""
+    line = render_line(results, missing)
+    if not line or not text:
+        return text
+    kept: List[str] = []
+    removed = False
+    for each in text.split("\n"):
+        if each.strip() == line:
+            removed = True
+            while kept and not kept[-1].strip():
+                kept.pop()
+            continue
+        kept.append(each)
+    return "\n".join(kept) if removed else text

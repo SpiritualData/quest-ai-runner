@@ -5,11 +5,15 @@ A mixin of ``QuestAITerminal`` (see ``textual_ui.py``): methods only, state live
 from __future__ import annotations
 
 import time
-from typing import List
-from collections import OrderedDict
+from typing import Any, List, Mapping, Optional, Sequence
+from collections import Counter, OrderedDict
 from rich.text import Text
 
 from .interactive_session_tracker import format_elapsed
+from .textual_ui_helpers import metric_key, metric_lines
+
+# The key standing for the "no metric was recorded" line in ``metrics_shown``.
+METRIC_MISSING_KEY = ("no metric recorded",)
 
 
 class DeepMixin:
@@ -173,6 +177,9 @@ class DeepMixin:
                 log.write(Text(f"  … {len(narration) - len(tail)} earlier steps", style="dim"))
             for nl in tail:
                 log.write(Text(f"  {nl}"))
+        # What the metric was before and after, written from the run's own data (never by a model), as
+        # its closing detail, even when no explanation is on.
+        self.write_metrics(snap.get("metrics"), snap.get("metric_missing"))
         model = (snap.get("model") or "").strip()
         model_suffix = f" · {model}" if model else ""
         if status == "error":
@@ -184,6 +191,29 @@ class DeepMixin:
         if lines:
             log.write(Text("  Alt+D: see every action", style="dim"))
         log.write(Text(""))
+
+    def write_metrics(self, entries: Optional[Sequence[Mapping[str, Any]]], missing: Any = False) -> None:
+        """Write the metric lines for ``entries`` that this turn's transcript does not hold yet.
+
+        The same entry reaches the terminal more than once (a run's milestone, the turn's result, the
+        explanation), and each is written once: an entry already written is skipped, however it arrived.
+        ``missing`` adds the one line saying a change ended with no metric result recorded."""
+        remaining = Counter(self.metrics_shown)
+        fresh: List[Mapping[str, Any]] = []
+        for entry in entries if isinstance(entries, (list, tuple)) else []:
+            if not isinstance(entry, dict):
+                continue
+            key = metric_key(entry)
+            if remaining[key] > 0:
+                remaining[key] -= 1
+                continue
+            fresh.append(entry)
+            self.metrics_shown[key] += 1
+        absent = missing is True and remaining[METRIC_MISSING_KEY] == 0
+        if absent:
+            self.metrics_shown[METRIC_MISSING_KEY] += 1
+        for line in metric_lines(fresh, absent, self.transcript_width()):
+            self._tlog.write(line)
 
     def _flush_pending_deep_runs(self) -> None:
         """Flush any deep runs that didn't already emit a terminal phase.

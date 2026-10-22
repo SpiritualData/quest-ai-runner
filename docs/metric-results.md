@@ -40,7 +40,16 @@ Where a consumer reads it:
   and on the `EVENT_RESULT` of a deep turn (also on an answer turn that ran deep work);
 - one plain line at the end of the deep result text, for a consumer that shows text only, written by code from the
   entries: `Metric: <name> <before> -> <after> (measured)`, `Metric: not applicable (<reason>)`, or `No metric was recorded
-  for this change.`
+  for this change.` A consumer that shows the entries itself drops that line with `metric_results.without_line(text,
+  entries, missing)`, which removes only a line equal to what `render_line` wrote for those entries;
+- the answer explanation (`docs/answer-explanation.md`, payload version 3): `explanation["metrics"]` and
+  `explanation["metric_missing"]`, the same entries, kept in the facts half of the panel so no model writes or edits them.
+  They are there only when the explanation is on and the turn is eligible; the result and the events above do not depend on it.
+
+The QAR terminal shows the entries without a model and with the explanation off: under a goal's result, one dim line per
+metric (`<name>: <before> -> <after> (measured by QAR)`, `(recorded by the AI)`, `Metric not applicable: <reason>`, a short
+`disagrees with ...` note when they differ, at most four lines then `... and K more`) or `No metric was recorded for this
+change.`, written once per turn however many events carry the same entry.
 
 ## How a goal gets its record
 

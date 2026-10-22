@@ -38,6 +38,8 @@ class _DeepRunTracker:
                 'exec_lines': [],  # accumulate exec events for this run
                 'final_output': '',  # the worker's final result, set on completion
                 'model': None,  # the LLM model this run actually executed with, set on completion
+                'metrics': [],  # the run's metric results (payload entries), set on completion
+                'metric_missing': False,  # a change that ended with no metric result recorded
             }
             if self._active_run_id is None:
                 self._active_run_id = run_id
@@ -47,6 +49,13 @@ class _DeepRunTracker:
         with self._lock:
             if run_id in self._runs and text:
                 self._runs[run_id]['final_output'] = text
+
+    def set_metrics(self, run_id: str, metrics: List[dict], missing: bool = False) -> None:
+        """Record a deep run's metric results (before and after, by code) and whether a change had none."""
+        with self._lock:
+            if run_id in self._runs:
+                self._runs[run_id]['metrics'] = list(metrics or [])
+                self._runs[run_id]['metric_missing'] = bool(missing)
 
     def set_model(self, run_id: str, model: str) -> None:
         """Record which LLM model a deep run actually executed with."""
