@@ -167,6 +167,21 @@ def test_the_one_request_is_not_repeated_after_a_worker_ignores_it(world):
     assert done.output.rstrip().endswith(NOT_RECORDED_LINE)
 
 
+def test_the_request_to_record_yields_to_a_person_who_said_not_to_and_the_empty_ledger_is_the_outcome(world):
+    """The nudge is one fixed text whatever the request says: the worker, who has the request, decides, and one that
+    records nothing leaves the ledger empty, which ends as ``metric_missing`` without a third attempt."""
+    assert "told you not to record a metric" in NUDGE_BRIEF and "say so in one sentence and stop" in NUDGE_BRIEF
+    briefs = []
+    for goal in ("g", "Change the note. I handle metrics myself, so do not call record_metric_result."):
+        worker = Worker(world.registry, [["change"], []])
+        orch = orchestrate(world, worker)
+        done = orch._run_deep(PlanDecision(action="deep", goal=goal, deep_brief=goal), goal, "sonnet",
+                              ctx_meta={"task_id": TASK}).deep_results[0]
+        briefs.append(worker.calls[1]["brief"])
+        assert len(worker.calls) == 2 and done.metric_missing and done.metric_results == []
+    assert briefs == [NUDGE_BRIEF, NUDGE_BRIEF]
+
+
 def test_a_declared_not_applicable_in_the_first_attempt_satisfies_the_rule(world):
     worker = Worker(world.registry, [["change", ("na", "Edited a draft; no metric measures it.")]])
     done = run_deep(orchestrate(world, worker))

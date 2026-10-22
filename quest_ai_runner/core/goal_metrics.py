@@ -36,11 +36,15 @@ from .spec_slice import SpecSlice, next_priority_block
 from .tools_failure_ledger import ToolOutcome, changed_something
 from .tools_metric_results import TOOL_NAME
 
-# The one request made of a worker whose change has no metric result on record. Written here, not by a model.
+# The one request made of a worker whose change has no metric result on record. Written here, not by a model. It yields to
+# the person's own request: code never reads the request for that (hard rule #3), the worker, who has it, decides, and a
+# worker that records nothing leaves the ledger empty, which ends as ``metric_missing``, the honest outcome.
 NUDGE_BRIEF = (
-    "Your change has no metric result on record. Record it now with record_metric_result: the value of the metric this "
-    "work serves before and after your change, or not_applicable with a one-sentence reason if no metric applies. Do not "
-    "redo or extend the work, and do not repeat your earlier summary: reply with one sentence saying what you recorded.")
+    "Your change has no metric result on record. If the request you were given told you not to record a metric, record "
+    "nothing: say so in one sentence and stop. Otherwise record it now with record_metric_result: the value of the "
+    "metric this work serves before and after your change, or not_applicable with a one-sentence reason if no metric "
+    "applies. Do not redo or extend the work, and do not repeat your earlier summary: reply with one sentence saying "
+    "what you recorded.")
 NUDGE_STATUS = "This change has no metric result on record; asking the worker to record it."
 # A run that did none of the work leaves nothing to measure or to find missing.
 UNFINISHED_FLAGS = ("launch_failed", "cancelled", "usage_limited", "paused", "deferred")

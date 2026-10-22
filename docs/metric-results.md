@@ -78,7 +78,10 @@ For each goal the loop creates one `GoalMetrics` and calls it at four points.
 3. **Before the attempt is verified**, the gate. A run that changed something and has no row at all is asked once, in its
    own session, to record one. That request is an attempt of the goal's existing budget. After it the flow accepts what
    there is and sets `metric_missing`; it never loops. The gate is judged on the ledger and the runner's records, never
-   on the worker's or the verifier's wording.
+   on the worker's or the verifier's wording. The request itself yields to the person: it says that when the request the
+   worker was given told it not to record a metric, it records nothing, says so in one sentence and stops. Code never reads
+   the request for that; the worker has the request, and a run that records nothing ends as `metric_missing`, which is
+   the honest outcome.
 4. **After the last attempt**: the arm reads the metric again with the meters that read the tree as it is now (a recorded
    row is not asked), the ledger's rows are reconciled, and the result carries them.
 
