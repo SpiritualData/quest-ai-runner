@@ -4,20 +4,29 @@
 A card store is meant to hold hundreds of cards for a corpus of tens of thousands of files. Two
 real stores reached 8,557 and 32,070. The bootstrap gates in
 ``quest_ai_runner/adapters/file_context_store.py`` stop that happening again; this tool cleans up
-what already happened, for the three ways it happened:
+what already happened, for the ways it happened:
 
   compounded      a card imported from another store through a chain of import hops, so the same
                   card exists several times over under ids like
                   ``a--root-xxxx--root-yyyy--topic`` or with a namespace segment repeated. Two
-                  stores sitting inside one another re-imported each other's imports.
-  excluded        a card describing files in a folder the folder review now excludes for good (a
-                  nested dependency repository, a duplicate tree, a generated-data subtree). The
-                  cards are summaries of content that is not this corpus's knowledge.
+                  stores sitting inside one another re-imported each other's imports. An id with
+                  two or more import-namespace prefixes (``<words>-<6 hex>`` segments before the
+                  topic) is compounded; one such prefix is a normal single-hop import.
+  excluded        a card with MORE THAN HALF of its files in folders the folder review now
+                  excludes for good (a nested dependency repository, a duplicate tree, a
+                  generated-data subtree). The cards are summaries of content that is not this
+                  corpus's knowledge.
   surplus         a card covering the same FILES as another card. Identical path sets, or an
-                  overlap at or above the dedup threshold. One card is kept: the most used, else
-                  the earliest created.
+                  overlap at or above the dedup threshold. One card is kept, ranked by most used,
+                  then best match between its name/keywords and its file and folder names, then
+                  earliest created, then id. The manifest detail names the keeper.
   thin            a card whose single file is generated data (``.json``/``.yaml``/``*state.json``,
                   a lock file, ``package.json``, a local cache). One data file is not a topic.
+  covered         a card whose file set is identical to, or inside, a card held by ANOTHER store
+                  named with ``--covered-by DIR`` (e.g. a shared store the lane reads in place).
+                  Not run by default: name it in ``--reasons`` and give at least one
+                  ``--covered-by``. ``--covered-prefix-strip PATH`` drops a leading folder from
+                  paths before comparing, when one store is rooted a level above the other.
 
 NOTHING IS DELETED. Every card moves to ``<cards_dir>/_quarantine/<reason>/`` and the card store
 ignores that directory, so the index shrinks and a wrong call is undone by moving files back. The
@@ -35,6 +44,8 @@ Examples (paths are arguments; this script hardcodes none):
     python3 scripts/quarantine_cards.py --cards-dir /path/to/.quest-context
     python3 scripts/quarantine_cards.py --cards-dir /path/to/.quest-context --reasons compounded
     python3 scripts/quarantine_cards.py --cards-dir /path/to/.quest-context --apply
+    python3 scripts/quarantine_cards.py --cards-dir /path/to/.quest-context \\
+        --reasons covered --covered-by /path/to/shared/.quest-context
 """
 
 from __future__ import annotations
@@ -42,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -57,12 +69,13 @@ from quest_ai_runner.adapters.file_context_store import (  # noqa: E402
     _FILE_SET_DEDUP_JACCARD,
     _has_kept_child,
     card_is_too_thin,
-    card_preference_key,
     path_is_data_file,
     verdict_is_final,
 )
 
-ALL_REASONS = ("compounded", "excluded", "surplus", "thin")
+ALL_REASONS = ("compounded", "excluded", "surplus", "thin", "covered")
+DEFAULT_REASONS = ("compounded", "excluded", "surplus", "thin")
+NAMESPACE_PREFIX = re.compile(r"^(?:[a-z0-9]+-)+[0-9a-f]{6}$")
 SKIP_FILES = {"bootstrap_meta.json", "folder_review.json"}
 
 
@@ -147,8 +160,9 @@ def compounding_evidence(card_id: str) -> str:
     Two shapes, both provable from the id alone. An import namespaces the imported card's id with
     the source root's path, so a chain of imports leaves a chain of namespace segments: a repeated
     segment means the same root appears twice in one id, and an interior ``root-`` hop means a
-    store imported another store's own imports. A single leading namespace is a legitimate
-    one-level import and is NOT evidence.
+    store imported another store's own imports. Two or more namespace prefixes (``<words>-<6 hex>``
+    segments before the topic) mean the card was imported more than once. A single leading
+    namespace is a legitimate one-level import and is NOT evidence.
     """
     segments = [s for s in str(card_id or "").split("--") if s]
     if len(segments) < 2:
@@ -161,7 +175,56 @@ def compounding_evidence(card_id: str) -> str:
         if segment in seen:
             return f"namespace segment repeated ({segment})"
         seen.add(segment)
+    prefixes = [s for s in segments[:-1] if NAMESPACE_PREFIX.match(s)]
+    if len(prefixes) >= 2:
+        return f"{len(prefixes)} import namespace prefixes ({', '.join(prefixes)})"
     return ""
+
+
+def name_tokens(text: str) -> Set[str]:
+    """Lowercase alphanumeric words of ``text`` (two letters or more)."""
+    return {t for t in re.split(r"[^a-z0-9]+", str(text or "").lower()) if len(t) >= 2}
+
+
+def name_match_score(card: Dict[str, Any]) -> float:
+    """How well a card's name and keywords match the words in its file and folder names.
+
+    The share of the card's name/keyword words found among the words of its files' basenames and
+    parent folders, from 0.0 to 1.0. Pure: reads only the card.
+    """
+    keywords = card.get("keywords") or []
+    if isinstance(keywords, str):
+        keywords = [keywords]
+    own = name_tokens(card.get("name", ""))
+    for keyword in keywords:
+        own |= name_tokens(keyword)
+    if not own:
+        return 0.0
+    seen: Set[str] = set()
+    for rel in card_paths(card):
+        seen |= name_tokens(rel)
+    return len(own & seen) / len(own)
+
+
+def keeper_rank(card: Dict[str, Any], fallback_id: str) -> Tuple[Any, ...]:
+    """Sort key for surplus candidates; the first one sorted is kept."""
+    try:
+        usage = int(card.get("usage_count") or 0)
+    except (TypeError, ValueError):
+        usage = 0
+    provenance = card.get("provenance")
+    created = str(provenance.get("created_at") or "") if isinstance(provenance, dict) else ""
+    return (-usage, -name_match_score(card), created or "\uffff",
+            str(card.get("id") or fallback_id))
+
+
+def strip_prefix(rel: str, prefixes: List[str]) -> str:
+    """``rel`` without the first leading prefix folder it sits under."""
+    for prefix in prefixes:
+        head = prefix.strip("/")
+        if head and rel.startswith(head + "/"):
+            return rel[len(head) + 1:]
+    return rel
 
 
 def is_protected(card: Dict[str, Any]) -> str:
@@ -199,10 +262,14 @@ def plan(
     reasons: Set[str],
     excluded: List[str],
     threshold: float,
+    covered_by: Optional[List[List[Tuple[Path, Dict[str, Any]]]]] = None,
+    strip_prefixes: Optional[List[str]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """Decide what moves. Returns ``(entries, skipped_counts)``; mutates nothing on disk."""
     entries: List[Dict[str, Any]] = []
     decided: Set[Path] = set()
+    moved_reason: Dict[Path, str] = {}
+    keeper_of: Dict[Path, Path] = {}
     skipped: Dict[str, int] = {}
 
     def record(path: Path, card: Dict[str, Any], reason: str, detail: str) -> None:
@@ -215,6 +282,7 @@ def plan(
             "usage_count": card.get("usage_count", 0),
         })
         decided.add(path)
+        moved_reason[path] = reason
 
     def note_skip(why: str) -> None:
         skipped[why] = skipped.get(why, 0) + 1
@@ -231,7 +299,7 @@ def plan(
                 continue
             record(path, card, "compounded", evidence)
 
-    # 2. Cards entirely inside a folder the review excludes for good.
+    # 2. Cards mostly inside a folder the review excludes for good.
     if "excluded" in reasons and excluded:
         for path, card in cards:
             if path in decided:
@@ -240,13 +308,15 @@ def plan(
             if not paths:
                 continue
             hits = [under_any_prefix(p, excluded) for p in paths]
-            if not all(hits):
+            inside = [h for h in hits if h]
+            if len(inside) * 2 <= len(paths):
                 continue
             protection = is_protected(card)
             if protection:
                 note_skip(f"excluded-folder card kept: {protection}")
                 continue
-            record(path, card, "excluded", f"all {len(paths)} file(s) under {hits[0]}")
+            record(path, card, "excluded",
+                   f"{len(inside)} of {len(paths)} file(s) under excluded folders, e.g. {inside[0]}")
 
     # 3. Surplus cards covering the same file set as a card we keep.
     if "surplus" in reasons:
@@ -279,14 +349,16 @@ def plan(
             members = group["members"]
             if len(members) < 2:
                 continue
-            ordered = sorted(members, key=lambda m: card_preference_key(m[2], m[0]))
+            ordered = sorted(members, key=lambda m: keeper_rank(m[2], m[1].stem))
             keeper_id = str(ordered[0][2].get("id") or ordered[0][1].stem)
+            keeper_path = ordered[0][1]
             for _, path, card in ordered[1:]:
                 protection = is_protected(card)
                 if protection:
                     note_skip(f"duplicate card kept: {protection}")
                     continue
                 record(path, card, "surplus", f"same files as {keeper_id}")
+                keeper_of[path] = keeper_path
 
     # 4. Single generated-data-file cards.
     if "thin" in reasons:
@@ -309,6 +381,53 @@ def plan(
                 continue
             record(path, card, "thin", card_is_too_thin(card, covered_by_kept)
                    or "single generated/data file")
+
+    # 5. Cards whose files another store already holds (identical or a superset).
+    if "covered" in reasons and covered_by:
+        strips = list(strip_prefixes or [])
+
+        def normalized(card: Dict[str, Any]) -> Set[str]:
+            return {strip_prefix(p, strips) for p in card_paths(card)}
+
+        for number, other_cards in enumerate(covered_by, start=1):
+            holders: Dict[str, Set[int]] = {}
+            other_sets: List[Set[str]] = []
+            other_ids: List[str] = []
+            for other_path, other_card in other_cards:
+                files = normalized(other_card)
+                other_sets.append(files)
+                other_ids.append(str(other_card.get("id") or other_path.stem))
+                for rel in files:
+                    holders.setdefault(rel, set()).add(len(other_sets) - 1)
+            for path, card in cards:
+                if path in decided:
+                    continue
+                files = normalized(card)
+                if not files:
+                    continue
+                matches: Optional[Set[int]] = None
+                for rel in files:
+                    matches = set(holders.get(rel, set())) if matches is None \
+                        else matches & holders.get(rel, set())
+                    if not matches:
+                        break
+                if not matches:
+                    continue
+                protection = is_protected(card)
+                if protection:
+                    note_skip(f"covered card kept: {protection}")
+                    continue
+                index = min(matches)
+                kind = "same files as" if other_sets[index] == files else "files inside those of"
+                record(path, card, "covered",
+                       f"{kind} {other_ids[index]} in covered-by store {number}")
+
+    # A surplus keeper can itself be moved by a later reason: say so on the surplus entries.
+    for entry_path, keeper_path in keeper_of.items():
+        if keeper_path in moved_reason:
+            for entry in entries:
+                if entry["file"] == entry_path.name and entry["reason"] == "surplus":
+                    entry["detail"] += f" ({keeper_path.stem} is also moved: {moved_reason[keeper_path]})"
 
     return entries, skipped
 
@@ -397,8 +516,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="the card store directory (e.g. <corpus>/.quest-context)")
     parser.add_argument("--apply", action="store_true",
                         help="actually move the cards; without this nothing is touched")
-    parser.add_argument("--reasons", default=",".join(ALL_REASONS),
-                        help=f"comma-separated subset of: {', '.join(ALL_REASONS)}")
+    parser.add_argument("--reasons", default=",".join(DEFAULT_REASONS),
+                        help=f"comma-separated subset of: {', '.join(ALL_REASONS)} "
+                             f"(default: {', '.join(DEFAULT_REASONS)}; covered needs --covered-by)")
+    parser.add_argument("--covered-by", action="append", default=[], metavar="DIR",
+                        help="another card store directory whose cards may cover this store's "
+                             "cards, for the covered reason (repeatable)")
+    parser.add_argument("--covered-prefix-strip", action="append", default=[], metavar="PATH",
+                        help="leading folder to strip from card paths before comparing for the "
+                             "covered reason (repeatable)")
     parser.add_argument("--excluded-prefix", action="append", default=[], metavar="PATH",
                         help="extra corpus-relative folder to treat as excluded (repeatable)")
     parser.add_argument("--keep-prefix", action="append", default=[], metavar="PATH",
@@ -421,12 +547,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"error: unknown reason(s): {', '.join(sorted(unknown))}", file=sys.stderr)
         return 2
 
+    covered_stores: List[List[Tuple[Path, Dict[str, Any]]]] = []
+    if "covered" in reasons:
+        if not args.covered_by:
+            print("error: the covered reason needs at least one --covered-by DIR", file=sys.stderr)
+            return 2
+        for raw in args.covered_by:
+            other = Path(os.path.expanduser(raw)).resolve()
+            if not other.is_dir() or other == cards_dir:
+                print(f"error: --covered-by {other} must be another existing directory",
+                      file=sys.stderr)
+                return 2
+            covered_stores.append(load_cards(other))
+
     cards = load_cards(cards_dir)
     keep = [k.rstrip("/") for k in args.keep_prefix]
     reviewed = [e for e in excluded_prefixes_from_review(cards_dir)
                 if not under_any_prefix(e, keep)]
     excluded = reviewed + list(args.excluded_prefix)
-    entries, skipped = plan(cards, reasons=reasons, excluded=excluded, threshold=args.jaccard)
+    entries, skipped = plan(cards, reasons=reasons, excluded=excluded, threshold=args.jaccard,
+                           covered_by=covered_stores, strip_prefixes=args.covered_prefix_strip)
 
     print_report(cards_dir, len(cards), entries, skipped, excluded, args.apply)
 

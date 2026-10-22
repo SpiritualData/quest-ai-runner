@@ -67,6 +67,18 @@ def test_a_single_import_namespace_is_not_compounded():
     assert tool.compounding_evidence("plain-topic-card") == ""
 
 
+def test_two_import_namespace_prefixes_are_compounded_but_one_is_not():
+    assert tool.compounding_evidence("hq-dfbfcd--assistant-task-followup") == ""
+    evidence = tool.compounding_evidence("root-5ec1f7--hq-dfbfcd--assistant-task-followup")
+    assert evidence and "2 import namespace prefixes" in evidence
+    assert "3 import namespace prefixes" in tool.compounding_evidence(
+        "root-5ec1f7--hq-dfbfcd--app-abc123--topic")
+
+
+def test_a_hex_looking_topic_word_is_not_a_prefix():
+    assert tool.compounding_evidence("hq-dfbfcd--topic-abc123") == ""
+
+
 # --- what must never be moved ---------------------------------------------------------------
 def test_a_card_owned_by_another_system_is_never_moved(store: Path):
     write_card(store, "quest-folder-abc", files=["data/one.json"], managed_by="quest_folder_sync")
@@ -113,6 +125,17 @@ def test_a_card_entirely_inside_an_excluded_folder_is_moved(store: Path):
     assert [e["card_id"] for e in entries] == ["vendored-topic"]
 
 
+def test_a_card_with_most_files_excluded_is_moved_unless_used_or_managed(store: Path):
+    write_card(store, "mostly-vendored", files=["vendor/a.py", "vendor/b.py", "app/c.py"])
+    write_card(store, "half-vendored", files=["vendor/a.py", "app/c.py"])
+    write_card(store, "used-vendored", files=["vendor/a.py", "vendor/b.py"], usage_count=2)
+    write_card(store, "managed-vendored", files=["vendor/a.py", "vendor/b.py"], managed_by="sync")
+    entries, _ = tool.plan(tool.load_cards(store), reasons={"excluded"},
+                           excluded=["vendor"], threshold=0.8)
+    assert [e["card_id"] for e in entries] == ["mostly-vendored"]
+    assert "2 of 3" in entries[0]["detail"]
+
+
 def test_the_root_prefix_never_excludes_everything(store: Path):
     # "." is a prefix of every path written as "./x"; one such entry in the review once excluded
     # a whole corpus. The tool must ignore it like the store does.
@@ -133,6 +156,51 @@ def test_surplus_duplicates_collapse_to_the_earliest_card(store: Path):
                            excluded=[], threshold=0.8)
     assert sorted(e["card_id"] for e in entries) == ["second", "third"]
     assert all("same files as first" in e["detail"] for e in entries)
+
+
+def test_surplus_keeper_prefers_usage_then_name_match_then_age_then_id(store: Path):
+    files = ["billing/invoice_export.md", "billing/notes.md"]
+    write_card(store, "a-vague", name="misc", files=files)
+    write_card(store, "b-matching", name="billing invoice export", files=files)
+    entries, _ = tool.plan(tool.load_cards(store), reasons={"surplus"},
+                           excluded=[], threshold=0.8)
+    assert [(e["card_id"], e["detail"]) for e in entries] == [("a-vague", "same files as b-matching")]
+
+
+def test_surplus_ties_fall_to_earliest_created_then_id(store: Path):
+    files = ["docs/a.md", "docs/b.md"]
+    write_card(store, "a-late", files=files, provenance={"created_by_task": "bootstrap",
+                                                          "created_at": "2026-09-01"})
+    write_card(store, "z-early", files=files, provenance={"created_by_task": "bootstrap",
+                                                           "created_at": "2026-01-01"})
+    entries, _ = tool.plan(tool.load_cards(store), reasons={"surplus"},
+                           excluded=[], threshold=0.8)
+    assert [e["card_id"] for e in entries] == ["a-late"]
+    write_card(store, "z-early", files=files)
+    write_card(store, "a-late", files=files)
+    entries, _ = tool.plan(tool.load_cards(store), reasons={"surplus"},
+                           excluded=[], threshold=0.8)
+    assert [e["card_id"] for e in entries] == ["z-early"]
+
+
+def test_name_match_score_is_a_share_of_card_words_found_in_paths():
+    card = {"name": "billing report", "keywords": ["invoice"],
+            "files": [{"path": "billing/report_final.md"}]}
+    assert tool.name_match_score(card) == pytest.approx(2 / 3)
+    assert tool.name_match_score({"files": []}) == 0.0
+
+
+def test_surplus_detail_says_when_the_keeper_is_also_moved(store: Path):
+    # The keeper is a single data file duplicated by another card, so it is also thin.
+    write_card(store, "keeper-state", files=["app/run_state.json"], usage_count=0,
+               provenance={"created_by_task": "bootstrap", "created_at": "2026-01-01"})
+    write_card(store, "copy-state", files=["app/run_state.json"],
+               provenance={"created_by_task": "bootstrap", "created_at": "2026-02-01"})
+    entries, _ = tool.plan(tool.load_cards(store), reasons={"surplus", "thin"},
+                           excluded=[], threshold=0.8)
+    by_id = {e["card_id"]: e for e in entries}
+    assert "keeper-state is also moved: thin" in by_id["copy-state"]["detail"]
+    assert (store / "keeper-state.json").read_text(encoding="utf-8")
 
 
 def test_a_distinct_file_set_is_not_surplus(store: Path):
@@ -232,3 +300,63 @@ def test_a_kept_prefix_rescues_a_reviewed_folder_but_not_an_explicit_exclusion_b
                       "--excluded-prefix", "org/project/archive"]) == 0
     left = {p.stem for p in store.glob("*.json") if p.stem != "folder_review"}
     assert left == {"owner-notes"}
+
+
+# --- covered by another store ---------------------------------------------------------------
+@pytest.fixture()
+def shared(tmp_path: Path) -> Path:
+    cards = tmp_path / "shared-store"
+    cards.mkdir()
+    return cards
+
+
+def test_covered_moves_identical_and_subset_cards_only(store: Path, shared: Path):
+    write_card(shared, "big", files=["docs/a.md", "docs/b.md", "docs/c.md"])
+    write_card(store, "same", files=["docs/a.md", "docs/b.md", "docs/c.md"])
+    write_card(store, "inside", files=["docs/a.md", "docs/b.md"])
+    write_card(store, "sticks-out", files=["docs/a.md", "docs/z.md"])
+    entries, _ = tool.plan(tool.load_cards(store), reasons={"covered"}, excluded=[],
+                           threshold=0.8, covered_by=[tool.load_cards(shared)])
+    assert sorted(e["card_id"] for e in entries) == ["inside", "same"]
+    assert all("big" in e["detail"] for e in entries)
+
+
+def test_covered_compares_paths_after_stripping_a_prefix(store: Path, shared: Path):
+    write_card(shared, "rooted-above", files=["corpus/docs/a.md", "corpus/docs/b.md"])
+    write_card(store, "plain", files=["docs/a.md", "docs/b.md"])
+    args = dict(reasons={"covered"}, excluded=[], threshold=0.8,
+                covered_by=[tool.load_cards(shared)])
+    assert tool.plan(tool.load_cards(store), **args)[0] == []
+    entries, _ = tool.plan(tool.load_cards(store), strip_prefixes=["corpus"], **args)
+    assert [e["card_id"] for e in entries] == ["plain"]
+
+
+def test_covered_never_moves_protected_cards(store: Path, shared: Path):
+    write_card(shared, "big", files=["docs/a.md", "docs/b.md"])
+    write_card(store, "used", files=["docs/a.md"], usage_count=1)
+    write_card(store, "learned", files=["docs/a.md"], provenance={"created_by_task": "a-run"})
+    write_card(store, "owned", files=["docs/b.md"], managed_by="sync")
+    entries, skipped = tool.plan(tool.load_cards(store), reasons={"covered"}, excluded=[],
+                                 threshold=0.8, covered_by=[tool.load_cards(shared)])
+    assert entries == []
+    assert sum(skipped.values()) == 3
+
+
+def test_covered_is_not_a_default_reason_and_needs_covered_by(store: Path, shared: Path):
+    write_card(shared, "big", files=["docs/a.md", "docs/b.md"])
+    write_card(store, "inside", files=["docs/a.md"])
+    assert "covered" not in tool.DEFAULT_REASONS
+    assert tool.main(["--cards-dir", str(store), "--covered-by", str(shared)]) == 0
+    assert (store / "inside.json").exists()
+    assert tool.main(["--cards-dir", str(store), "--reasons", "covered"]) == 2
+    assert tool.main(["--cards-dir", str(store), "--reasons", "covered",
+                      "--covered-by", str(store)]) == 2
+
+
+def test_covered_applies_through_main_and_moves_instead_of_deleting(store: Path, shared: Path):
+    write_card(shared, "big", files=["docs/a.md", "docs/b.md"])
+    write_card(store, "inside", files=["docs/a.md"])
+    assert tool.main(["--cards-dir", str(store), "--reasons", "covered",
+                      "--covered-by", str(shared), "--apply"]) == 0
+    assert (store / tool.QUARANTINE_DIR_NAME / "covered" / "inside.json").exists()
+    assert (shared / "big.json").exists()
