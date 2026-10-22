@@ -213,15 +213,38 @@ def test_a_store_is_not_indexed_under_a_root_it_was_not_built_for(tmp_path, capl
 
 # --- route: a vector point id used as a card id ------------------------------------------------------------
 
-@pytest.mark.parametrize("name", ["card:auth-topic", "card:st_0123456789abcdef:auth-topic"])
-def test_a_vector_point_id_names_the_card_it_stands_for(tmp_path, name):
+@pytest.mark.parametrize("qualified", [False, True])
+def test_a_vector_point_id_names_the_card_it_stands_for(tmp_path, qualified):
     """The vector arm lists hits as ``card:<id>``; the post-deep updater wrote its notes to a NEW card under
-    that name (17 of them in one real store, 3 in another)."""
+    that name (17 of them in one real store, 3 in another). A hit keyed with THIS store's own id is the same card."""
     root = notes(tmp_path / "top", ["auth"])
     index(root)
+    name = f"card:{store_id_of(root)}:auth-topic" if qualified else "card:auth-topic"
     assert open_store(root).add_content(name, {"type": "note", "locator": {"text": "learned"}, "why": "w"})
     assert sorted(load(root)) == ["auth-topic"]
     assert [i["locator"]["text"] for i in load(root)["auth-topic"]["content"]] == ["learned"]
+
+
+def test_an_edit_meant_for_a_mounted_card_never_lands_on_an_own_card(tmp_path):
+    """Review finding 1: the other store's qualifier was stripped with the ``card:``, so a note meant for a
+    card read in place from a neighbour was written onto the card of the same name here."""
+    top = notes(tmp_path / "top", ["api"])
+    prod = notes(top / "prod", ["api"])
+    index(prod)
+    mounting = FileContextStore(str(top / ".quest-context"), repo_root=str(top), auto_bootstrap=False,
+                                mount_mode="mount", max_cards=0)
+    mounting.bootstrap(root=str(top), provider=world.DiskProvider(top.resolve()))
+    mounted = f"{store_id_of(prod)}:api-topic"
+    assert mounting.is_mounted_card(mounted)
+    assert mounting.update_card(f"card:{mounted}", add=[{"id": "z", "type": "note", "text": "for the neighbour"}]) is False
+    assert "content" not in load(top)["api-topic"] and "content" not in load(prod)["api-topic"]
+
+
+def test_an_edit_naming_a_store_that_is_not_mounted_here_is_refused_not_created(tmp_path):
+    root = notes(tmp_path / "top", ["api"])
+    index(root)
+    assert open_store(root).update_card("card:st_0123456789abcdef:api-topic", add=[{"id": "z", "text": "x"}]) is False
+    assert sorted(load(root)) == ["api-topic"]
 
 
 # --- the write-time invariant -----------------------------------------------------------------------------

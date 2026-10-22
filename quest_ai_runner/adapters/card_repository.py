@@ -298,12 +298,13 @@ class FilesystemCardRepository:
 
         The index ignores that folder, so the card leaves the store, and moving the file back puts it
         back. A name already taken there gets a numeric suffix, so nothing is overwritten. Returns
-        ``True`` when no card remains at the old place; never raises.
+        ``True`` only when THIS call moved the card: a card that is already gone was moved (or deleted)
+        by somebody else, and two callers must never both count it. Never raises.
         """
         try:
             source = self._card_path(card_id)
             if not source.exists():
-                return True
+                return False
             target_dir = self._cards_dir / QUARANTINE_DIR_NAME / reason
             target_dir.mkdir(parents=True, exist_ok=True)
             target = target_dir / source.name
@@ -315,6 +316,18 @@ class FilesystemCardRepository:
             return True
         except Exception:  # noqa: BLE001
             return False
+
+    def quarantined(self, card_id: str) -> Optional[Path]:
+        """Where a card of this id sits in quarantine (any reason), or ``None``. Never raises."""
+        try:
+            base = self._cards_dir / QUARANTINE_DIR_NAME
+            for reason in os.listdir(base):
+                found = base / reason / f"{card_id}.json"
+                if found.is_file():
+                    return found
+        except OSError:
+            pass
+        return None
 
     def exists(self, card_id: str) -> bool:
         """Return ``True`` when a card file exists for ``card_id``."""

@@ -114,7 +114,8 @@ class CardsMixin:
         so a run can accumulate notes / collection refs / conversation refs, not just files.
         """
         try:
-            self._record_inner(task_text, outcome)
+            with self.folder_lock():
+                self._record_inner(task_text, outcome)
         except Exception:  # noqa: BLE001
             pass
 
@@ -210,7 +211,8 @@ class CardsMixin:
             if self._cache is not None:
                 # The listing in hand says whether this id is new here; without one the date is not guessed.
                 card_origin.stamp_created_at(card, self._cache.get(card_id))
-            self._write_card_atomic(card_id, card)
+            with self.folder_lock():
+                self._write_card_atomic(card_id, card)
             return True
         except Exception:  # noqa: BLE001
             _log.debug("write_card failed for %s", card_id, exc_info=True)
@@ -317,14 +319,42 @@ class CardsMixin:
         removed): a card touched from a turn scoped to a new quest becomes visible to that quest too.
         """
         # A vector point id (``card:<id>``) names the card it stands for. Written under its own name
-        # it would be a second card, next to the one the edit was meant for.
-        card_id = card_origin.card_id_of_item(card_id)
+        # it would be a second card, next to the one the edit was meant for. Only this store's own
+        # qualifier is dropped: another store's stays, so the read-only guard below sees the card
+        # of a mounted store the edit was really meant for (it must not land on a card of ours).
+        card_id = card_origin.card_id_of_item(card_id, self.own_store_id())
         if self.is_mounted_card(card_id):
             # A mounted store is read-only here: its owner keeps its cards. Never an error for the
             # caller (the post-deep updater may have been shown a mounted card), just not written.
             _log.info("card update skipped: %s belongs to a mounted store (read-only)", card_id)
             return False
+        if card_origin.is_store_qualified(card_id):
+            _log.info("card update skipped: %s names a card of another store that is not mounted here", card_id)
+            return False
+        with self.folder_lock():
+            return self._update_card_locked(card_id, add=add, replace=replace, remove=remove,
+                                            fields=fields, scope_tags=scope_tags)
+
+    def _update_card_locked(
+        self,
+        card_id: str,
+        *,
+        add: Optional[List[Dict[str, Any]]] = None,
+        replace: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
+        remove: Optional[List[str]] = None,
+        fields: Optional[Dict[str, Any]] = None,
+        scope_tags: Optional[List[str]] = None,
+    ) -> bool:
+        """The read-modify-write of ``_update_card_inner``, run while the card folder's lock is held."""
         loaded = self._repo.read(card_id)
+        if not isinstance(loaded, dict):
+            # A card that was moved out of the index (a tidy, the card limit) is not recreated as an
+            # empty stub carrying one note: that is how a stale writer used to push the store over its limit.
+            finder = getattr(self._own_repo, "quarantined", None)
+            where = finder(card_id) if callable(finder) else None
+            if where is not None:
+                _log.info("card update skipped: %s was moved out of the index (it is in %s)", card_id, where.parent)
+                return False
         card: Dict[str, Any] = loaded if isinstance(loaded, dict) else {}
         card.setdefault("id", card_id)
         if scope_tags:

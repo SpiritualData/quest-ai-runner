@@ -208,6 +208,103 @@ class TestLearnedAndManagedCards:
         assert not (tmp_path / "cards" / "_quarantine").exists()
 
 
+NOTE = {"id": "n1", "type": "note", "locator": {"text": "learned by a run"}, "ts": 1.0}
+
+
+class TestTheLimitNeverMovesWhatSomebodyAdded:
+    """Review finding 4: a topic card with notes is not 'cold' because nobody counted a use."""
+
+    @pytest.mark.parametrize("extra", [
+        {"content": [NOTE]}, {"scope_tags": ["quest:q1"]}, {"usage_count": 2}, {"conventions": ["use tabs"]},
+        {"managed_by": "quest-sync"}, {"provenance": {"created_by_task": "a run"}}, {"provenance": {}},
+    ], ids=["notes", "quest tags", "used", "conventions", "owned", "learned provenance", "written by hand"])
+    def test_such_a_card_is_never_the_one_that_moves(self, tmp_path, extra):
+        cards = [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(3)]
+        cards[0].update(extra)
+        seed(tmp_path / "cards", cards)
+        store = store_for(tmp_path, tmp_path, max_cards=3)
+        assert store.write_card("quest-1", card("quest-1", kind="managed"))
+        assert "topic-0" in card_ids(tmp_path / "cards")
+        moved = sorted(p.stem for p in (tmp_path / "cards" / "_quarantine" / "limit").glob("*.json"))
+        assert len(moved) == 1 and moved[0] != "topic-0"
+
+    def test_when_every_derived_card_holds_something_the_new_card_is_admitted_and_it_is_said(self, tmp_path, caplog):
+        seed(tmp_path / "cards", [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"], content=[NOTE])
+                                  for i in range(3)])
+        store = store_for(tmp_path, tmp_path, max_cards=3)
+        with caplog.at_level(logging.WARNING, logger=LOGGER):
+            assert store.write_card("quest-1", card("quest-1", kind="managed"))
+        assert len(card_ids(tmp_path / "cards")) == 4
+        assert not (tmp_path / "cards" / "_quarantine").exists()
+        assert store.limit_guard.state.admitted_over == 1
+
+    def test_a_card_that_gained_a_note_since_the_snapshot_is_not_moved(self, tmp_path):
+        seed(tmp_path / "cards", [card(f"topic-{i}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(3)])
+        store = store_for(tmp_path, tmp_path, max_cards=3)
+        store.limit_guard.snapshot()                                   # the store has looked at all three
+        other = store_for(tmp_path, tmp_path, max_cards=0)             # another process teaches the coldest one
+        coldest = min(store.limit_guard.snapshot(), key=lambda cid: card_limit.coldness(cid, store.limit_guard.snapshot()[cid]))
+        assert other.add_content(coldest, {"type": "note", "locator": {"text": "just learned"}, "why": "w"})
+        assert store.write_card("quest-1", card("quest-1", kind="managed"))
+        assert coldest in card_ids(tmp_path / "cards")
+
+
+class TestAStaleWriterDoesNotUndoTheLimit:
+    """Review finding 6: an updater that was shown a card another process has since moved wrote an empty stub
+    under its id, and each stub evicted one more card."""
+
+    def test_an_edit_to_a_card_that_was_moved_out_is_refused_and_creates_nothing(self, tmp_path, caplog):
+        seed(tmp_path / "cards", [card(f"{n}-topic", files=[f"{n}/a.md", f"{n}/b.md"]) for n in "abc"])
+        stale = store_for(tmp_path, tmp_path, max_cards=3)
+        stale._load_all()
+        busy = store_for(tmp_path, tmp_path, max_cards=3)
+        assert busy.update_card("lesson-1", add=[{"id": "l1", "text": "lesson"}])
+        moved = [p.stem for p in (tmp_path / "cards" / "_quarantine" / "limit").glob("*.json")]
+        assert len(moved) == 1
+        before = card_ids(tmp_path / "cards")
+        with caplog.at_level(logging.INFO, logger="quest-ai-runner.context"):
+            assert stale.update_card(moved[0], add=[{"id": "n1", "text": "late note"}]) is False
+        assert card_ids(tmp_path / "cards") == before, "no stub was created and nobody else was moved"
+        assert "was moved out of the index" in caplog.text
+
+
+def writer_process(cards_dir: str, root: str, number: int, barrier, results) -> None:
+    logging.disable(logging.CRITICAL)
+    store = FileContextStore(cards_dir, repo_root=root, auto_bootstrap=False, mount_mode="copy", max_cards=100)
+    store._load_all()
+    store.limit_guard.snapshot()
+    barrier.wait()
+    written = 0
+    for i in range(10):
+        written += bool(store.write_card(f"p{number}-learned-{i}", {"name": "l", "content": [NOTE]}))
+    results.put(written)
+
+
+class TestSeveralWritersAtTheLimit:
+    """Review finding 9: four processes at 95 of 100 overshot the limit and double-counted the moves."""
+
+    def test_the_limit_holds_and_every_move_is_counted_once(self, tmp_path):
+        import multiprocessing as mp
+        cards_dir = tmp_path / "cards"
+        seed(cards_dir, [card(f"t{i:03d}", files=[f"f{i}/a.md", f"f{i}/b.md"]) for i in range(95)])
+        context = mp.get_context("fork")
+        barrier, results = context.Barrier(4), context.Queue()
+        procs = [context.Process(target=writer_process, args=(str(cards_dir), str(tmp_path), n, barrier, results))
+                 for n in range(4)]
+        for proc in procs:
+            proc.start()
+        for proc in procs:
+            proc.join(timeout=120)
+        written = sum(results.get() for _ in procs)
+        live = [p for p in cards_dir.glob("*.json") if not p.name.startswith("bootstrap")]
+        moved = list((cards_dir / "_quarantine" / "limit").glob("*.json"))
+        lines = [json.loads(line)["moved"] for line in (cards_dir / "_quarantine" / "limit" / "manifest.jsonl")
+                 .read_text().splitlines()]
+        assert written == 40
+        assert len(live) == 100, "learned cards fill the room the moved topic cards left, and no more"
+        assert len(moved) == len(lines) == len(set(lines)) == 35
+
+
 # --- saying so --------------------------------------------------------------------------------------
 
 def mixed_store(tmp_path: Path):

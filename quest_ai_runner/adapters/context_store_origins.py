@@ -4,9 +4,11 @@ A mixin of ``FileContextStore`` (see ``file_context_store.py``): methods only, s
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+import contextlib
+from typing import Any, ContextManager, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
+from .card_store_lock import StoreLock
 from .card_store_mounts import MODE_MOUNT, Mount
 from .card_store_identity import ORIGIN_FIELD, read_meta as read_store_meta, writer_origins
 from .context_bootstrap_support import _card_file_paths, _log
@@ -23,6 +25,17 @@ class OriginsMixin:
     def mounts_enabled(self) -> bool:
         """True when this store reads allowed neighbouring stores in place instead of copying."""
         return self._mount_mode == MODE_MOUNT
+
+    def folder_lock(self) -> ContextManager[Any]:
+        """The lock every process takes to change this store's card folder (a no-op where cards are not files here).
+
+        Edits, the card limit and the tidy all work through it, so two processes never move or rewrite the
+        same card at once (see ``card_store_lock``).
+        """
+        from .card_repository import FilesystemCardRepository
+        if isinstance(self._own_repo, FilesystemCardRepository) and not self._dry_run:
+            return StoreLock.for_dir(str(self._cards_dir))
+        return contextlib.nullcontext()
 
     def own_store_id(self) -> str:
         """This store's recorded ``store_id``, or "" when it has none yet (never creates one)."""
@@ -170,11 +183,12 @@ class OriginsMixin:
         never be stored (``card_origin.card_id_problem``) on its own.
         """
         self._stamp_origin(card_id, card)
-        if not self.limit_guard.admit(card_id, card):
-            return False
-        ok = self._repo.write(card_id, card)
-        self.limit_guard.wrote(ok)
-        return ok
+        with self.folder_lock():
+            if not self.limit_guard.admit(card_id, card):
+                return False
+            ok = self._repo.write(card_id, card)
+            self.limit_guard.wrote(ok)
+            return ok
 
     def _own_cards(self) -> Dict[str, Dict[str, Any]]:
         """The cards THIS store owns: ``_load_all()`` minus any mounted views and, with an injected

@@ -105,14 +105,40 @@ def test_a_hand_learned_card_is_kept(store: Path):
     assert entries == []
 
 
-def test_a_compounded_copy_is_moved_even_when_used(store: Path):
-    # The one override: a compounded card is a COPY, so whatever it carries also exists on the
-    # card it was copied from. Nothing is lost by moving it.
-    write_card(store, "a-aaaa--root-bbbb--root-cccc--topic", files=["docs/a.md"], usage_count=9)
-    write_card(store, "hq-dfbfcd--topic", files=["docs/a.md"])
+def test_a_used_compounded_copy_moves_only_after_what_it_holds_joins_its_survivor(store: Path):
+    # A compounded card is a COPY, but a used one carries something its survivor does not (the usage).
+    # It is moved only once that joins the survivor, so nothing is lost.
+    write_card(store, "a-aaaa--root-bbbb--root-cccc--topic", name="topic", files=["docs/a.md"], usage_count=9)
+    write_card(store, "hq-dfbfcd--topic", name="topic", files=["docs/a.md"])
     entries, _ = tool.plan(tool.load_cards(store), reasons={"compounded"},
                            excluded=[], threshold=0.8)
-    assert [e["reason"] for e in entries] == ["compounded"]
+    assert [e["reason"] for e in entries] == ["compounded"] and entries[0]["joins"] == "hq-dfbfcd--topic.json"
+    moved, failed = tool.move_entries(store, entries)
+    assert (moved, failed) == (1, 0)
+    assert json.loads((store / "hq-dfbfcd--topic.json").read_text())["usage_count"] == 9
+    assert (store / "_quarantine" / "compounded" / "a-aaaa--root-bbbb--root-cccc--topic.json").exists()
+
+
+def test_a_used_compounded_copy_that_cannot_join_without_loss_is_kept(store: Path):
+    write_card(store, "a-aaaa--root-bbbb--root-cccc--topic", name="edited by hand", files=["docs/a.md"],
+               usage_count=9)
+    write_card(store, "hq-dfbfcd--topic", name="topic", files=["docs/a.md"])
+    entries, skipped = tool.plan(tool.load_cards(store), reasons={"compounded"},
+                                 excluded=[], threshold=0.8)
+    assert entries == [] and any("cannot join" in why for why in skipped)
+
+
+def test_a_card_that_gained_a_note_after_the_plan_stays_where_it_is(store: Path):
+    write_card(store, "plain", files=["docs/a.md", "docs/b.md"])
+    write_card(store, "plain-too", files=["docs/a.md", "docs/b.md"])
+    entries, _ = tool.plan(tool.load_cards(store), reasons={"surplus"}, excluded=[], threshold=0.8)
+    assert len(entries) == 1
+    target = store / entries[0]["file"]
+    card = json.loads(target.read_text())
+    card["content"] = [{"id": "n1", "type": "note", "locator": {"text": "taught"}}]
+    target.write_text(json.dumps(card), encoding="utf-8")
+    assert tool.move_entries(store, entries) == (0, 1)
+    assert target.exists() and "gained something" in entries[0]["error"]
 
 
 def test_a_compounded_card_with_a_surviving_equivalent_is_moved(store: Path):
@@ -418,7 +444,7 @@ def test_covered_applies_through_main_and_moves_instead_of_deleting(store: Path,
 def test_a_card_stored_under_a_vector_point_id_is_moved_and_its_notes_join_the_card_it_names(store: Path):
     note = {"id": "n1", "type": "note", "locator": {"text": "kept"}}
     write_card(store, "topic", files=["a/one.py", "a/two.py"])
-    write_card(store, "card:topic", content=[note])
+    write_card(store, "card:topic", name="topic", content=[note])
     assert tool.main(["--cards-dir", str(store), "--apply"]) == 0
     assert not (store / "card:topic.json").exists()
     assert (store / "_quarantine" / "item-id" / "card:topic.json").exists()

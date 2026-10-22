@@ -96,13 +96,26 @@ class TestCompoundedCopies:
         plan_and_apply(cards)
         assert ids(cards) == [f"{SD}--{PRODUCT}--t"]
 
-    def test_notes_a_copy_gained_are_not_lost_when_the_card_it_copies_lacks_them(self, tmp_path):
+    def test_notes_a_copy_gained_join_the_card_it_copies_before_the_copy_moves(self, tmp_path):
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
         note = {"id": "note-1", "type": "note", "locator": {"text": "learned here"}}
-        seed(cards, [card("t", files), card(f"{SD}--{PRODUCT}--t", files, content=[note])])
+        seed(cards, [card("t", files), card(f"{SD}--{PRODUCT}--t", files, name="t", summary="about t",
+                                            content=[note], scope_tags=["quest:q1"], usage_count=3)])
         plan, result = plan_and_apply(cards)
-        assert result.moved == 0 and plan.kept == {"carries notes the card it duplicates does not have": 1}
+        assert result.moved == 1 and moved(cards, "compounded") == [f"{SD}--{PRODUCT}--t"]
+        kept = FilesystemCardRepository(str(cards)).read("t")
+        assert [i["id"] for i in kept["content"]] == ["note-1"]
+        assert kept["scope_tags"] == ["quest:q1"] and kept["usage_count"] == 3
+
+    def test_a_copy_that_cannot_join_without_loss_stays_and_is_counted(self, tmp_path):
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        note = {"id": "note-1", "type": "note", "locator": {"text": "learned here"}}
+        seed(cards, [card("t", files), card(f"{SD}--{PRODUCT}--t", files, content=[note])])   # its summary was edited
+        plan, result = plan_and_apply(cards)
+        assert result.moved == 0 and ids(cards) == sorted(["t", f"{SD}--{PRODUCT}--t"])
+        assert len(plan.kept) == 1 and "its name differs" in next(iter(plan.kept))
 
     def test_a_copy_owned_by_another_system_stays(self, tmp_path):
         cards = tmp_path / "cards"
@@ -152,15 +165,18 @@ class TestExactDuplicates:
         plan_and_apply(cards)
         after = ids(cards) + moved(cards, "compounded") + moved(cards, "duplicate-files")
         assert sorted(after) == sorted(before)
-        manifest = next((cards / "_quarantine").glob("*-tidy-manifest.json"))
-        assert json.loads(manifest.read_text())["moved"] == len(before) - len(ids(cards))
+        manifest = next((cards / "_quarantine").glob("*-tidy-manifest.jsonl"))
+        lines = [json.loads(line) for line in manifest.read_text().splitlines()]
+        assert sum(1 for line in lines if "moved_to" in line) == len(before) - len(ids(cards))
+        assert lines[-1]["summary"]["moved"] == len(before) - len(ids(cards))
 
 
 class TestStoredUnderAVectorPointId:
     def test_its_notes_are_folded_into_the_card_it_stands_for_and_the_stray_is_moved(self, tmp_path):
         cards = tmp_path / "cards"
         note = {"id": "n1", "type": "note", "locator": {"text": "kept"}}
-        seed(cards, [card("topic", ["a/one.md", "a/two.md"]), card("card:topic", content=[note])])
+        seed(cards, [card("topic", ["a/one.md", "a/two.md"]),
+                     card("card:topic", name="topic", summary="about topic", content=[note])])
         plan_and_apply(cards)
         assert ids(cards) == ["topic"]
         assert [i["id"] for i in FilesystemCardRepository(str(cards)).read("topic")["content"]] == ["n1"]
@@ -171,6 +187,151 @@ class TestStoredUnderAVectorPointId:
         seed(cards, [card("card:orphan", content=[{"id": "n1", "type": "note", "locator": {"text": "x"}}])])
         plan_and_apply(cards)
         assert ids(cards) == ["orphan"]
+
+
+NOTE = {"id": "n1", "type": "note", "locator": {"text": "taught by a run"}, "ts": 100.0}
+
+
+class TestWhatAPersonAddedIsNeverMoved:
+    """Review findings 2 and 3: a card somebody wrote or added to is not 'redundant' because it pins the same files."""
+
+    def test_a_card_written_by_hand_stays_though_it_pins_the_files_of_a_topic_card(self, tmp_path):
+        cards = tmp_path / "cards"
+        files = ["docs/release.md", "docs/checklist.md"]
+        seed(cards, [card("release-topic", files), card("release--checklist", files, provenance={})])
+        plan, result = plan_and_apply(cards)
+        assert ids(cards) == ["release--checklist"], "the card a person wrote is the one that stays"
+        assert moved(cards, "duplicate-files") == ["release-topic"], "only what an index pass wrote moves"
+
+    def test_two_cards_written_by_hand_are_both_kept(self, tmp_path):
+        cards = tmp_path / "cards"
+        files = ["docs/release.md", "docs/checklist.md"]
+        seed(cards, [card("one", files, provenance={}), card("two", files, provenance={})])
+        plan, result = plan_and_apply(cards)
+        assert result.moved == 0 and plan.kept == {"written by a person (no provenance)": 1}
+
+    def test_the_card_somebody_added_to_is_the_one_kept_and_the_plain_one_moves(self, tmp_path):
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        seed(cards, [card("plain", files), card("taught", files, content=[NOTE]),
+                     card("tagged", files, scope_tags=["quest:q1"])])
+        plan, result = plan_and_apply(cards)
+        assert ids(cards) == ["tagged", "taught"] and moved(cards, "duplicate-files") == ["plain"]
+
+    def test_a_stray_folds_by_item_id_the_newer_item_wins_and_tags_are_the_union(self, tmp_path):
+        cards = tmp_path / "cards"
+        older = dict(NOTE, locator={"text": "old"}, ts=10.0)
+        newer = dict(NOTE, locator={"text": "new"}, ts=20.0)
+        extra = {"id": "n2", "type": "note", "locator": {"text": "only on the stray"}, "ts": 5.0}
+        seed(cards, [card("topic", ["a/one.md", "a/two.md"], content=[older], scope_tags=["quest:a"]),
+                     card("card:topic", name="topic", summary="about topic", content=[newer, extra],
+                          scope_tags=["quest:b"])])
+        plan, result = plan_and_apply(cards)
+        merged = FilesystemCardRepository(str(cards)).read("topic")
+        assert result.moved == 1 and moved(cards, "item-id") == ["card:topic"]
+        assert {i["id"]: i["locator"]["text"] for i in merged["content"]} == {"n1": "new", "n2": "only on the stray"}
+        assert merged["scope_tags"] == ["quest:a", "quest:b"]
+
+    def test_a_stray_whose_summary_was_edited_is_left_in_place_and_reported(self, tmp_path):
+        cards = tmp_path / "cards"
+        seed(cards, [card("topic", ["a/one.md", "a/two.md"]),
+                     card("card:topic", name="topic", summary="a better summary", content=[NOTE])])
+        plan, result = plan_and_apply(cards)
+        assert result.moved == 0 and ids(cards) == ["card:topic", "topic"]
+        assert any("summary differs" in why for why in plan.kept)
+
+    def test_a_stray_owned_by_another_system_is_left(self, tmp_path):
+        cards = tmp_path / "cards"
+        seed(cards, [card("quest-123"), card("card:quest-123", managed_by="quest-sync")])
+        assert plan_and_apply(cards)[1].moved == 0
+
+    def test_a_stray_that_names_a_card_of_another_store_is_left(self, tmp_path):
+        cards = tmp_path / "cards"
+        seed(cards, [card("topic", ["a/one.md", "a/two.md"]), card("card:st_0123456789abcdef:topic", name="topic",
+                                                                  summary="about topic", content=[NOTE])])
+        plan, result = plan_and_apply(cards)
+        assert result.moved == 0 and any("another store" in why for why in plan.kept)
+
+    def test_a_stray_naming_this_stores_own_qualified_id_folds_into_the_bare_card(self, tmp_path):
+        cards = tmp_path / "cards"
+        seed(cards, [card("topic", ["a/one.md", "a/two.md"]), card("card:st_0123456789abcdef:topic", name="topic",
+                                                                  summary="about topic", content=[NOTE])])
+        plan = hygiene.plan_tidy(hygiene.card_files_in(cards), own_store_id="st_0123456789abcdef")
+        result = hygiene.apply_tidy(cards, plan, own_store_id="st_0123456789abcdef")
+        assert result.moved == 1
+        assert [i["id"] for i in FilesystemCardRepository(str(cards)).read("topic")["content"]] == ["n1"]
+
+
+class TestTheMoveLooksAgain:
+    """Review finding 5: a plan is a proposal; the card is read again, under the lock, just before it moves."""
+
+    def test_a_note_added_between_the_scan_and_the_move_keeps_the_card_where_it_is(self, tmp_path):
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        seed(cards, [card("a-topic", files, provenance={"created_by_task": "bootstrap",
+                                                        "created_at": "2026-01-01T00:00:00+00:00"}),
+                     card("a-topic-2", files, provenance={"created_by_task": "bootstrap",
+                                                          "created_at": "2026-02-01T00:00:00+00:00"})])
+        plan = hygiene.plan_tidy(hygiene.card_files_in(cards))
+        assert [m.card_id for m in plan.moves] == ["a-topic-2"]
+        other = store(tmp_path)
+        assert other.update_card("a-topic-2", add=[{"id": "n1", "type": "note", "text": "learned just now"}])
+        result = hygiene.apply_tidy(cards, plan)
+        assert result.moved == 0 and ids(cards) == ["a-topic", "a-topic-2"]
+        assert result.left == {"has notes or edits added by a run": 1}
+
+    def test_a_card_somebody_else_already_moved_is_not_counted_twice(self, tmp_path):
+        cards = tmp_path / "cards"
+        files = ["a/one.md", "a/two.md"]
+        seed(cards, [card("t", files), card("dup", files)])
+        plan = hygiene.plan_tidy(hygiene.card_files_in(cards))
+        first, second = hygiene.apply_tidy(cards, plan), hygiene.apply_tidy(cards, plan)
+        assert (first.moved, second.moved) == (1, 0)
+
+
+def tidy_in_a_process(cards: str, root: str, barrier, results) -> None:
+    logging.disable(logging.CRITICAL)
+    s = FileContextStore(cards, repo_root=root, auto_bootstrap=False, mount_mode="copy", max_cards=0, self_heal=True)
+    barrier.wait()
+    results.put(s.tidy())
+
+
+class TestSeveralProcessesTidyOneStore:
+    """Review finding 8: four processes tidying one folder move every card once and leave a manifest each."""
+
+    def test_every_file_is_kept_and_every_move_is_counted_once(self, tmp_path):
+        import multiprocessing as mp
+        root = tmp_path / "corpus"
+        cards = root / ".quest-context"
+        count = 40
+        for i in range(count):
+            files = [f"f{i}/a.md", f"f{i}/b.md"]
+            seed(cards, [card(f"f{i}-topic", files, provenance={"created_by_task": "bootstrap",
+                                                                "created_at": "2026-01-01T00:00:00+00:00"}),
+                         card(f"f{i}-dup", files, provenance={"created_by_task": "bootstrap",
+                                                              "created_at": "2026-02-01T00:00:00+00:00"}),
+                         card(f"card:f{i}-topic", name=f"f{i}-topic", summary=f"about f{i}-topic",
+                              content=[dict(NOTE, id=f"c{i}")])])
+        before = len(list(cards.glob("*.json")))
+        context = mp.get_context("fork")
+        barrier, results = context.Barrier(4), context.Queue()
+        procs = [context.Process(target=tidy_in_a_process, args=(str(cards), str(root), barrier, results))
+                 for _ in range(4)]
+        for proc in procs:
+            proc.start()
+        for proc in procs:
+            proc.join(timeout=120)
+        counted = sorted(results.get() for _ in procs)
+        live = [p for p in cards.glob("*.json") if not p.name.startswith("bootstrap")]
+        quarantined = list((cards / "_quarantine").glob("*/*.json"))
+        assert len(live) + len(quarantined) == before, "no file was lost or made up"
+        assert sum(counted) == len(quarantined) == 2 * count, "each move was counted by exactly one process"
+        manifest_lines = [json.loads(line) for m in (cards / "_quarantine").glob("*-tidy-manifest.jsonl")
+                          for line in m.read_text().splitlines() if "moved_to" in json.loads(line)]
+        assert len(manifest_lines) == len(quarantined), "the manifests together name every move"
+        for i in range(count):
+            notes = [n["id"] for n in json.loads((cards / f"f{i}-topic.json").read_text())["content"]]
+            assert notes == [f"c{i}"], "the note was folded once"
 
 
 # --- at open -------------------------------------------------------------------------------------
@@ -222,9 +383,9 @@ class TestAtOpen:
         seen: List[List[str]] = []
         real = hygiene.apply_tidy
 
-        def apply_while_loading(cards_dir, plan, pace, should_stop):
+        def apply_while_loading(cards_dir, plan, pace, should_stop, own_store_id=""):
             seen.append(sorted(s._load_all()))         # what a turn would see in the middle of the move
-            return real(cards_dir, plan, pace, should_stop)
+            return real(cards_dir, plan, pace, should_stop, own_store_id)
         monkeypatch.setattr(hygiene, "apply_tidy", apply_while_loading)
         s.tidy()
         assert seen == [["t"]], "the cards on their way out were already left out of the loader"

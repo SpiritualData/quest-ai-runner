@@ -7,7 +7,8 @@ real stores reached 8,557 and 32,070. The bootstrap gates in
 what already happened, for the ways it happened:
 
   item-id         a card stored under a vector point id (``card:<id>``), a second card next to the one the
-                  edit was meant for. Its notes are folded into the card it names before it is moved.
+                  edit was meant for. Its notes are folded into the card it names before it is moved; when
+                  its name, description or summary differs from that card's it is left and counted.
   compounded      a card imported from another store through a chain of import hops, so the same
                   card exists several times over under ids like
                   ``a--root-xxxx--root-yyyy--topic`` or with a namespace segment repeated. Two
@@ -50,12 +51,16 @@ ignores that directory, so the index shrinks and a wrong call is undone by movin
 run is a DRY RUN unless ``--apply`` is passed, and it always writes a manifest naming every card
 it moved or would move.
 
-Cards it refuses to touch, because they are not inflation:
+Cards it refuses to touch, because they are not inflation (one definition, ``card_origin.protection``,
+shared with the store's own tidy and its card limit):
   * a card carrying ``managed_by`` (written and owned by another system, e.g. quest folder sync),
-  * a card with ``usage_count`` above zero, or provenance other than the bootstrap,
-    i.e. a hand-learned card. Those are only ever moved under the ``compounded`` reason, which is
-    provable from the id alone: a compounded card is a COPY, so the original stays,
-    provided a surviving equivalent exists in the same store.
+  * a card with ``usage_count`` above zero, notes or edits in ``content``, quest ``scope_tags``,
+    conventions, or provenance other than the bootstrap (a card learned from a run, or written by a
+    person with no provenance at all).
+The one exception is a compounded copy (provable from the id alone) whose survivor stays in the store:
+it moves only after everything it holds joins that survivor without loss, and if that is not possible it
+stays and is counted under "left in place on purpose". A card stored under a vector point id is handled the
+same way (its notes join the card it names, or it stays when they cannot).
 
 Examples (paths are arguments; this script hardcodes none):
 
@@ -72,7 +77,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -86,14 +90,22 @@ from quest_ai_runner.adapters.card_origin import card_id_of_item, compounding_ev
 from quest_ai_runner.adapters.card_repository import QUARANTINE_DIR_NAME  # noqa: E402
 from quest_ai_runner.adapters.card_store_hygiene import (  # noqa: E402,F401  (re-exported)
     card_paths,
-    fold_item_card,
+    fold_card,
     jaccard,
+    join_onto,
     keeper_rank,
+    Move,
+    move_to,
     name_match_score,
     name_tokens,
+    plan_stray,
     protection_reason as is_protected,
+    read_card,
     render_health_report,
+    settle_move,
+    store_id_of,
 )
+from quest_ai_runner.adapters.card_store_lock import StoreLock  # noqa: E402
 from quest_ai_runner.adapters.file_context_store import (  # noqa: E402
     _FILE_SET_DEDUP_JACCARD,
     _has_kept_child,
@@ -189,6 +201,7 @@ def plan(
     threshold: float,
     covered_by: Optional[List[List[Tuple[Path, Dict[str, Any]]]]] = None,
     strip_prefixes: Optional[List[str]] = None,
+    own_store_id: str = "",
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """Decide what moves. Returns ``(entries, skipped_counts)``; mutates nothing on disk."""
     entries: List[Dict[str, Any]] = []
@@ -215,20 +228,24 @@ def plan(
         skipped[why] = skipped.get(why, 0) + 1
 
     # 0. Cards stored under a vector point id. Provable from the id; their notes are folded into the card
-    #    they name when the move is applied, so nothing a run taught is lost.
+    #    they name when the move is applied, so nothing a run taught is lost. A stray whose fields differ
+    #    from that card's in a way that cannot be joined (a name or summary somebody edited), or that
+    #    names a card mounted from another store, stays where it is and is counted below.
     if "item-id" in reasons:
         for path, card in cards:
             card_id = str(card.get("id") or path.stem)
             if card_id.startswith("card:"):
-                if card.get("managed_by"):
-                    note_skip("vector-point-id card kept: managed by another system")
+                move, why = plan_stray(path.parent, path, own_store_id)
+                if move is None:
+                    note_skip(f"vector-point-id card kept: {why}")
                     continue
-                record(path, card, "item-id", f"stored under a vector point id; the card is {card_id_of_item(card_id)}")
+                record(path, card, "item-id", move.detail)
 
-    # 1. Compounded candidates. Provable from the id alone and overriding protection, but only
-    #    MOVED in step 6, once the other reasons are planned and the survivors are known. Until
-    #    then a candidate stays out of surplus and covered, and may still be taken by excluded
-    #    or thin (without the protection check, as compounded always overrode it).
+    # 1. Compounded candidates. Provable from the id alone, but only MOVED in step 6, once the other
+    #    reasons are planned and the survivors are known. A candidate somebody added to (a note, a quest
+    #    tag, usage, a hand-written card) moves only if everything it holds joins its survivor without
+    #    loss; otherwise it stays. Until step 6 a candidate stays out of surplus and covered, and may
+    #    still be taken by excluded or thin.
     pending: Dict[Path, str] = {}
     if "compounded" in reasons:
         for path, card in cards:
@@ -252,7 +269,7 @@ def plan(
             inside = [h for h in hits if h]
             if len(inside) * 2 <= len(paths):
                 continue
-            protection = "" if path in pending else is_protected(card)
+            protection = is_protected(card)
             if protection:
                 note_skip(f"excluded-folder card kept: {protection}")
                 continue
@@ -316,7 +333,7 @@ def plan(
             paths = card_paths(card)
             if len(paths) != 1 or not path_is_data_file(paths[0]):
                 continue
-            protection = "" if path in pending else is_protected(card)
+            protection = is_protected(card)
             if protection:
                 note_skip(f"single data-file card kept: {protection}")
                 continue
@@ -368,11 +385,13 @@ def plan(
     if pending:
         holders_by_path: Dict[str, Set[int]] = {}
         survivors: List[Tuple[str, Set[str]]] = []
+        survivor_paths: List[Path] = []
         for path, card in cards:
             files = set(card_paths(card))
             if path in decided or path in pending or not files:
                 continue
             survivors.append((str(card.get("id") or path.stem), files))
+            survivor_paths.append(path)
             for rel in files:
                 holders_by_path.setdefault(rel, set()).add(len(survivors) - 1)
         for path, card in cards:
@@ -389,9 +408,25 @@ def plan(
                 note_skip("compounded card kept: its only copy in this store")
                 continue
             detail = pending[path]
+            joins = ""
             if matches:
                 detail += f"; equivalent kept: {survivors[min(matches)][0]}"
+                protection = is_protected(card)
+                if protection:
+                    survivor = read_card(survivor_paths[min(matches)])
+                    merged, why = fold_card(card, survivor) if survivor is not None else (None, "it is gone")
+                    if merged is None:
+                        note_skip(f"compounded card kept: {protection}, and it cannot join "
+                                  f"{survivors[min(matches)][0]}: {why}")
+                        continue
+                    detail += f"; what it holds ({protection}) joins that card first"
+                    joins = survivor_paths[min(matches)].name
+            elif is_protected(card):
+                note_skip(f"compounded card kept: {is_protected(card)}")
+                continue
             record(path, card, "compounded", detail)
+            if joins:
+                entries[-1]["joins"] = joins
 
     # A surplus keeper can itself be moved by a later reason: say so on the surplus entries.
     for entry_path, keeper_path in keeper_of.items():
@@ -456,28 +491,45 @@ def write_manifest(target: Path, cards_dir: Path, total: int, entries: List[Dict
     return target
 
 
-def move_entries(cards_dir: Path, entries: List[Dict[str, Any]]) -> Tuple[int, int]:
-    """Move each planned card into ``_quarantine/<reason>/``. Returns ``(moved, failed)``."""
+def move_entries(cards_dir: Path, entries: List[Dict[str, Any]], own_store_id: str = "") -> Tuple[int, int]:
+    """Move each planned card into ``_quarantine/<reason>/``. Returns ``(moved, failed)``.
+
+    One card at a time under the folder's lock, and each card is read again first: a card that gained a
+    note, usage or quest tags since the plan was made stays where it is (and says so in its entry), and a
+    card another process already moved is not counted. What a protected compounded copy holds is joined
+    onto its survivor before it moves.
+    """
     moved = 0
     failed = 0
+    lock = StoreLock.for_dir(str(cards_dir))
     for entry in entries:
         source = cards_dir / entry["file"]
-        destination_dir = cards_dir / QUARANTINE_DIR_NAME / entry["reason"]
-        if entry["reason"] == "item-id":
-            fold_item_card(cards_dir, source)
-        try:
-            destination_dir.mkdir(parents=True, exist_ok=True)
-            destination = destination_dir / source.name
-            suffix = 1
-            while destination.exists():
-                destination = destination_dir / f"{source.stem}.{suffix}.json"
-                suffix += 1
-            shutil.move(str(source), str(destination))
+        reason = entry["reason"]
+        with lock:
+            card = read_card(source)
+            if card is None:
+                entry["error"] = "gone: already moved or removed by somebody else"
+                continue
+            why = ""
+            if reason == "item-id":
+                destination, why = settle_move(
+                    cards_dir, Move(source, source.stem, reason, entry["detail"]), own_store_id)
+            else:
+                protection = is_protected(card)
+                if protection and not (reason == "compounded" and entry.get("joins")):
+                    why = f"left in place, it gained something since the plan: {protection}"
+                elif protection:
+                    why = join_onto(cards_dir, card, cards_dir / entry["joins"])
+                destination = None if why else move_to(cards_dir, source, reason)
+                if destination is None and not why:
+                    why = "could not be moved"
+            if destination is None:
+                entry["error"] = why
+                failed += 1
+                continue
+            lock.bump()
             entry["moved_to"] = str(destination.relative_to(cards_dir))
             moved += 1
-        except Exception as exc:  # noqa: BLE001 -- one stuck file never stops the rest
-            entry["error"] = str(exc)
-            failed += 1
     return moved, failed
 
 
@@ -541,8 +593,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     reviewed = [e for e in excluded_prefixes_from_review(cards_dir)
                 if not under_any_prefix(e, keep)]
     excluded = reviewed + list(args.excluded_prefix)
+    own_store_id = store_id_of(cards_dir)
     entries, skipped = plan(cards, reasons=reasons, excluded=excluded, threshold=args.jaccard,
-                           covered_by=covered_stores, strip_prefixes=args.covered_prefix_strip)
+                           covered_by=covered_stores, strip_prefixes=args.covered_prefix_strip,
+                           own_store_id=own_store_id)
 
     print_report(cards_dir, len(cards), entries, skipped, excluded, args.apply)
     print("")
@@ -550,13 +604,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                                if args.root else None))
 
     if args.apply and entries:
-        moved, failed = move_entries(cards_dir, entries)
+        moved, failed = move_entries(cards_dir, entries, own_store_id)
         print("")
         print(f"moved {moved} card(s) into {cards_dir / QUARANTINE_DIR_NAME}"
               + (f"; {failed} could not be moved" if failed else ""))
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    default_name = f"{stamp}-{'apply' if args.apply else 'dryrun'}-manifest.json"
+    default_name = f"{stamp}-{os.getpid()}-{'apply' if args.apply else 'dryrun'}-manifest.json"
     manifest_path = (Path(os.path.expanduser(args.manifest)) if args.manifest
                      else cards_dir / QUARANTINE_DIR_NAME / default_name)
     try:

@@ -94,16 +94,26 @@ def refuse(card_id: str) -> bool:
     return bool(problem)
 
 
-def card_id_of_item(item_id: str) -> str:
+def is_store_qualified(card_id: str) -> bool:
+    """Whether the id names a card of a MOUNTED store (``st_<16 hex>:<id>``), a read-only view here."""
+    return bool(STORE_QUALIFIER.match(str(card_id or "")))
+
+
+def card_id_of_item(item_id: str, own_store_id: str = "") -> str:
     """The card id a vector item id (``card:<id>`` or ``card:<store_id>:<id>``) stands for.
 
-    An id that is not an item id comes back unchanged.
+    Only the ``card:`` of a point id is removed. A store qualifier is removed too when it is THIS
+    store's own id (its own points are keyed ``card:<own id>:<id>``); the qualifier of any other
+    store stays, because ``<other id>:<id>`` is how a card mounted from that store is named here and
+    the read-only guard must see it. An id that is not an item id comes back unchanged.
     """
     text = str(item_id or "")
     if not text.startswith(ITEM_PREFIX):
         return text
     bare = text[len(ITEM_PREFIX):]
-    return STORE_QUALIFIER.sub("", bare, count=1)
+    if own_store_id and bare.startswith(f"{own_store_id}:"):
+        return bare[len(own_store_id) + 1:]
+    return bare
 
 
 def compounding_evidence(card_id: str) -> str:
@@ -185,6 +195,35 @@ def is_copy(card: Dict[str, Any]) -> bool:
     """Whether the card is a copy of another store's card (either generation of the record)."""
     prov = provenance_of(card)
     return bool(prov.get("imported_from") or prov.get(ORIGIN_STORE))
+
+
+def protection(card: Dict[str, Any]) -> str:
+    """Why this card may never be moved out of the index by a tidy, the card limit or a retirement, or "".
+
+    A card is movable only while it is exactly what an index pass wrote and nothing else touched:
+    written by the bootstrap (``created_by_task`` is ``bootstrap``; a card with no provenance was written
+    by a person), not used, not owned by another system, with no notes added by a run (a ``content`` key:
+    a pass never writes one, the card-update API always does), no quest tags and no conventions.
+    Anything else holds something that no file can regenerate. This is the one definition; the tidy,
+    the limit, the retirement of copies and ``scripts/quarantine_cards.py`` all ask it.
+    """
+    if card.get("managed_by") or card.get("managed_fields") or card.get("managed_items"):
+        return "managed by another system"
+    try:
+        if int(card.get("usage_count") or 0) > 0:
+            return "has been used"
+    except (TypeError, ValueError):
+        pass
+    created_by = str(provenance_of(card).get("created_by_task") or "")
+    if created_by != "bootstrap":
+        return f"provenance {created_by}" if created_by else "written by a person (no provenance)"
+    if "content" in card:
+        return "has notes or edits added by a run"
+    if card.get("scope_tags"):
+        return "carries quest tags"
+    if card.get("conventions"):
+        return "carries conventions"
+    return ""
 
 
 def exported_origin(card: Dict[str, Any], source_ref: str, source_root: Path) -> Optional[Origin]:

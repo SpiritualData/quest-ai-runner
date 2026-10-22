@@ -13,6 +13,7 @@ from typing import Callable, Optional
 from ..core.background_pacing import Pacer
 from . import card_store_hygiene as hygiene
 from .card_repository import FilesystemCardRepository
+from .card_store_lock import TIDY_LOCK_FILE, StoreLock
 from .context_bootstrap_support import _log
 
 
@@ -34,29 +35,45 @@ class HealMixin:
             return 0
         if not self.tidy_lock.acquire(blocking=False):
             return 0
+        process_lock = StoreLock.for_dir(str(self._cards_dir), TIDY_LOCK_FILE)
+        if not process_lock.acquire(blocking=False):
+            return 0                      # another process is tidying this folder right now
         try:
             pace = Pacer()
-            plan = hygiene.plan_tidy(hygiene.card_files_in(self._cards_dir), pace, self._closed.is_set)
+            own_store_id = self.own_store_id()
+            plan = hygiene.plan_tidy(hygiene.card_files_in(self._cards_dir), pace, self._closed.is_set,
+                                     own_store_id)
+            if plan.kept:
+                _log.info("context index: tidy left %s", "; ".join(
+                    f"{count:,} ({why})" for why, count in sorted(plan.kept.items())))
             if not plan.moves:
                 return 0
             self.moving_ids = frozenset(move.card_id for move in plan.moves)
             self._cache_dirty = True
             try:
-                result = hygiene.apply_tidy(self._cards_dir, plan, pace, self._closed.is_set)
+                result = hygiene.apply_tidy(self._cards_dir, plan, pace, self._closed.is_set, own_store_id)
             finally:
                 self.moving_ids = frozenset()
                 self._cache_dirty = True
             if result.moved:
+                self.inflation_verdict = None     # the store is smaller now: look again, never trust the old verdict
                 reasons = ", ".join(f"{name} {n:,}" for name, n in sorted(result.by_reason.items()))
                 _log.warning("%s Moved, by reason: %s.%s", hygiene.tidy_message(result), reasons,
                              f" Manifest: {result.manifest}." if result.manifest else "")
                 if notify is not None:
                     notify(hygiene.tidy_message(result))
+            if result.failed:
+                _log.warning("context index: %d cards could not be moved and stay where they are", result.failed)
+            if result.left:
+                _log.info("context index: tidy left %s", "; ".join(
+                    f"{count:,} ({why})" for why, count in sorted(result.left.items())))
             return result.moved
         except Exception:  # noqa: BLE001
-            _log.debug("context index: tidy failed", exc_info=True)
+            _log.warning("context index: the tidy stopped on an error; cards already moved are listed in the "
+                         "manifest beside them and nothing was deleted", exc_info=True)
             return 0
         finally:
+            process_lock.release()
             self.tidy_lock.release()
 
     def inflated(self) -> bool:
@@ -82,7 +99,7 @@ class HealMixin:
                     "This context store holds %d topic cards but its corpus has only %d folders "
                     "(%d allowed per folder), so something wrote cards the corpus did not call for. "
                     "It will not be embedded or synced this session. Nothing was removed: run "
-                    "scripts/quarantine_cards.py --cards-dir %s to see what is redundant.",
+                    "'quest-ai-runner cards report --cards-dir %s' to see what is redundant.",
                     health.topic, health.folders or 0, health.per_folder, self._cards_dir)
         except Exception:  # noqa: BLE001
             _log.debug("context index: inflation check failed", exc_info=True)
