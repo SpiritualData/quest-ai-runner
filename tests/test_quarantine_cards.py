@@ -215,3 +215,20 @@ def test_excluded_prefixes_are_read_from_the_review_with_the_current_rules(store
 
 def test_an_unknown_reason_is_refused(store: Path):
     assert tool.main(["--cards-dir", str(store), "--reasons", "nonsense"]) == 2
+
+
+def test_a_kept_prefix_rescues_a_reviewed_folder_but_not_an_explicit_exclusion_beneath_it(store: Path):
+    # A nested repository the review excludes can still hold prose the owner wrote; --keep-prefix
+    # keeps those cards, and --excluded-prefix beneath it still moves the vendored part.
+    (store / "folder_review.json").write_text(json.dumps({"version": 2, "folders": {
+        "org/project": {"index": False, "final": True, "source": "nested_repo", "mixed": False},
+        "vendor": {"index": False, "final": True, "source": "nested_repo", "mixed": False},
+    }}), encoding="utf-8")
+    write_card(store, "owner-notes", files=["org/project/notes.md"])
+    write_card(store, "vendored-model", files=["org/project/archive/model.py"])
+    write_card(store, "vendor-lib", files=["vendor/lib.py"])
+    assert tool.main(["--cards-dir", str(store), "--reasons", "excluded", "--apply",
+                      "--keep-prefix", "org/project",
+                      "--excluded-prefix", "org/project/archive"]) == 0
+    left = {p.stem for p in store.glob("*.json") if p.stem != "folder_review"}
+    assert left == {"owner-notes"}

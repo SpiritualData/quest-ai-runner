@@ -401,6 +401,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help=f"comma-separated subset of: {', '.join(ALL_REASONS)}")
     parser.add_argument("--excluded-prefix", action="append", default=[], metavar="PATH",
                         help="extra corpus-relative folder to treat as excluded (repeatable)")
+    parser.add_argument("--keep-prefix", action="append", default=[], metavar="PATH",
+                        help="corpus-relative folder whose cards the folder review excludes but "
+                             "that you want kept (repeatable); an --excluded-prefix beneath it still applies")
     parser.add_argument("--jaccard", type=float, default=_FILE_SET_DEDUP_JACCARD,
                         help="file-set overlap at which two cards count as the same card")
     parser.add_argument("--manifest", default=None,
@@ -419,7 +422,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     cards = load_cards(cards_dir)
-    excluded = excluded_prefixes_from_review(cards_dir) + list(args.excluded_prefix)
+    keep = [k.rstrip("/") for k in args.keep_prefix]
+    reviewed = [e for e in excluded_prefixes_from_review(cards_dir)
+                if not under_any_prefix(e, keep)]
+    excluded = reviewed + list(args.excluded_prefix)
     entries, skipped = plan(cards, reasons=reasons, excluded=excluded, threshold=args.jaccard)
 
     print_report(cards_dir, len(cards), entries, skipped, excluded, args.apply)
