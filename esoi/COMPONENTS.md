@@ -25,7 +25,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `runner-learning` | runner | What a person asked for and has said: ledger, insights, reflections | store-feedback |
 | `adapters-model-providers` | adapters | Swappable ModelProvider implementations routed by model name | call-a-model |
 | `adapters-retrieval` | adapters | RetrievalAdapter and writer implementations over files, DBs, MCP, Notion, Google, Quest | gather-evidence, write-files, write-through-mcp, talk-over-a-channel |
-| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository),  card views for the unified search (card_views) | persist-cards, resolve-references, cache-cards, detect-stale-cards, search-cards-and-specs |
+| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository),  card views for the unified search (card_views) | persist-cards, resolve-references, cache-cards, detect-stale-cards, search-cards-and-specs, bound-card-growth, repair-a-card-store |
 | `adapters-vector-context` | adapters | Semantic and keyword context assemblers and their scoring helpers | index-by-meaning, select-context |
 | `adapters-web` | adapters | Live web search and page fetch behind pluggable backends | search-the-web |
 | `adapters-deep-runners` | adapters | Alternative DeepRunner implementations | run-deep-work |
@@ -38,7 +38,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `prompts` | prompts | Prompt text shipped as data and the scripts that keep each copy equal to its source: standing deep-run instructions (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) and the vendored quest field guidance | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
 | `vendor` | vendor | Vendored third-party code, unmodified | expose-the-public-api |
 | `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset,  the combined QAR metric (qar_overall) reads their recorded rows | verify-offline, spec-selection, QS1 |
-| `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (bound-card-growth), restart-if-idle (run-queued-tasks) | search-the-web, bound-card-growth, run-queued-tasks |
+| `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (repair-a-card-store), restart-if-idle (run-queued-tasks) | search-the-web, repair-a-card-store, run-queued-tasks |
 | `examples` | examples | Runnable reference consumers (env-driven, no real data) | learn-by-example |
 | `tests` | tests | Offline test suite and shared fakes | verify-offline |
 | `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | verify-offline, keep-secrets-out |

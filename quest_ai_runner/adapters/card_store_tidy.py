@@ -257,7 +257,7 @@ def private_dir(path: Path) -> Path:
     return path
 
 
-@implementation("bound-card-growth", "repository_tidy")
+@implementation("repair-a-card-store", "repository_tidy")
 class RepositoryTidy:
     """Carry out a ``StorePlan`` on any ``CardRepository``, reversibly (see the module docstring).
 

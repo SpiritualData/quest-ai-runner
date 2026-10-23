@@ -149,7 +149,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit;Runs that leave a durable, attributed record of what they changed |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
-| `bound-card-growth` | Card store growth control | bootstrap_guards | Cards per source-file group and duplicate share after repeated nested bootstrap |
+| `bound-card-growth` | Card store growth prevention | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| `repair-a-card-store` | Card store repair | repository_tidy | Cards per source-file group and duplicate share after a repair of an inflated store |
 | `search-cards-and-specs` | Unified card and specification search | two_pipelines | Mixed card and specification selection, with both existing selection metrics held |
 | `tag-solutions` | Problem-linked tags that identify solutions | tag_list_with_check | Right solution missed without the tag |
 | `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
@@ -344,8 +345,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `spec-selection:lexical-vector-llm` | Lexical TF-IDF, optional vector search, parallel batched model judging | quest_ai_runner/core/spec_selection.py |  |
 | `spec-selection:lexical-only` | Lexical top few only | quest_ai_runner/core/spec_selection.py |  |
 | `spec-selection:lexical-vector-gated` | Lexical vector gated | quest_ai_runner/core/spec_selection.py |  |
-| `bound-card-growth:quarantine_tool` | Card quarantine tool | evaluation/components/card_growth/impls/quarantine_tool.py |  |
-| `bound-card-growth:no_cleanup` | Store as copy mode leaves it | evaluation/components/card_growth/impls/no_cleanup.py |  |
+| `repair-a-card-store:quarantine_tool` | Card quarantine tool | evaluation/components/card_growth/impls/quarantine_tool.py |  |
+| `bound-card-growth:no_cleanup` | Copy mode with no guard | evaluation/components/card_growth/impls/no_cleanup.py |  |
 | `bound-card-growth:bootstrap_guards` | Bootstrap guards against re-import | evaluation/components/card_growth/impls/bootstrap_guards.py |  |
 | `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | quest_ai_runner/core/spec_selection.py |  |
 | `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
@@ -355,7 +356,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `choose-what-to-index:risk_gate` | Risk-gated folder review | evaluation/components/choose_what_to_index/impls/risk_gate.py |  |
 | `choose-what-to-index:review_only` | Model-judged folder review before the gate | evaluation/components/choose_what_to_index/impls/review_only.py |  |
 | `choose-what-to-index:index_everything` | Index everything (broken baseline) | evaluation/components/choose_what_to_index/broken/index_everything.py |  |
-| `bound-card-growth:repository_tidy` | Repository tidy | quest_ai_runner/adapters/card_store_tidy.py |  |
+| `repair-a-card-store:repository_tidy` | Repository tidy | quest_ai_runner/adapters/card_store_tidy.py |  |
+| `repair-a-card-store:local_folder_tidy` | Tidy at open of a local folder | quest_ai_runner/adapters/card_store_hygiene.py |  |
+| `repair-a-card-store:no_cleanup` | Store as copy mode leaves it | evaluation/components/card_growth/impls/no_cleanup.py |  |
 
 ## Metrics
 
@@ -416,7 +419,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
 - `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
-- `metric-bound-card-growth`, Cards per source-file group and duplicate share after repeated nested bootstrap: `esoi run card_growth --impl bootstrap_guards; esoi run card_growth --impl repository_tidy; esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup; esoi run card_store_growth --impl live_store`
+- `metric-bound-card-growth`, Cards per source-file group after repeated passes, for the guards that prevent growth: `esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store; esoi run card_growth --impl no_cleanup`
+- `metric-repair-a-card-store`, Cards per source-file group and duplicate share after a repair of an inflated store: `esoi run card_growth --impl repository_tidy; esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup`
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs --impl two_pipelines; esoi run context_and_specs --impl solutions_and_problems_with_links`
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed record of what they changed: `esoi run record_tracking`
 - `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_solutions --impl tag_list_with_check`

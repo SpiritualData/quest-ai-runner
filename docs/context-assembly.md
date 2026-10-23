@@ -222,14 +222,17 @@ nothing but speed.
 | **Own card** | written by this store (`origin` is this store) | this store's refresh and runs |
 | **Mounted view** | another store's card read in place, read-only, never copied | its owner; the reader sees the owner's next write |
 | **Copy** | a copy-import of another store's card under an id made of its origin | the importing store re-imports it when the source changes and moves it out when the source stops offering it; `context migrate-imports` converts copies to mounts |
-| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`item-id`, `compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open (`compounded`, `duplicate-files`, `item-id`; also `quest-ai-runner cards tidy`), by a refresh (`superseded-import`) or by the card limit (`limit`) | restored by moving the file back |
+| **Quarantined** | moved under `_quarantine/<reason>/`, out of the index, never deleted: by `scripts/quarantine_cards.py` (`item-id`, `compounded`, `excluded`, `surplus`, `thin`, `covered`), by the tidy at open (`compounded`, `duplicate-files`, `item-id`; also `quest-ai-runner cards tidy`), by a refresh (`superseded-import`) or by the card limit (`limit`); on the Quest backend and Qdrant, which have no such folder, the repository tidy (`cards tidy`, or `card_tidy = "apply"`) deletes the card instead, after a full local export | moved back by hand on a local folder; on a backend, `cards tidy --undo` with the run's manifest re-creates it from the export |
 
 ### Growth
 
 A store's size should follow the distinct content of its corpus, not the number of times it was
-re-imported. The solution `bound-card-growth` and its metric `metric-bound-card-growth` hold it to that,
-with two offline arms: `evaluation/components/card_growth/` (cards per source-file group and duplicate
-share on a store that already inflated, for the cleanup tool and for the store opened as the runner ships it) and
+re-imported. Two solutions hold it to that: `bound-card-growth` prevents the growth (the guards and the
+card limit below, steps 1 to 4 and 6; metric `metric-bound-card-growth`) and `repair-a-card-store` repairs a
+store that already grew (the tidy at open, step 5, the repository tidy and `scripts/quarantine_cards.py`; metric
+`metric-repair-a-card-store`). Both run in the runner side by side. Their offline arms are
+`evaluation/components/card_growth/` (cards per source-file group and duplicate share on a store that already
+inflated, for each repair and for the store opened as the runner ships it) and
 `evaluation/components/card_store_growth/` (a random world of nested stores, a legacy store opened as a
 runner opens it, and the card limit). What holds it, in the order a card meets them:
 
@@ -259,7 +262,8 @@ runner opens it, and the card limit). What holds it, in the order a card meets t
    store and how to change the limit. See [the card limit](context-card-stores.md#the-card-limit).
 
 Growth paths still open (two reviews, 2026-10-22) are listed in the `bootstrap_guards` implementation of
-`bound-card-growth` in `esoi/implementations.csv`, where the next fix is chosen from.
+`bound-card-growth`, and the repair's open weaknesses in the `repository_tidy` implementation of
+`repair-a-card-store`, both in `esoi/implementations.csv`, where the next fix is chosen from.
 
 ### ESOI records as cards (planned)
 
