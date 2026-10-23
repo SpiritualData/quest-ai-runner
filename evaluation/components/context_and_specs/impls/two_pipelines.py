@@ -1,19 +1,20 @@
-"""CURRENT: the two pipelines side by side, as a run has them today, offline.
+"""CURRENT: the two pipelines side by side, as a run has them today, offline, through the declared implementation
+``core/unified_search.two_pipelines``.
 
-Cards: the live card selector, ``HybridContextAssembler`` over a real ``FileContextStore`` (keyword arm, shipped
-confidence gate) and a real ``VectorContextAssembler`` seeded from the store (the local embedder over an in-memory vector
-store, as in context_selection's hybrid_union arm), at most three cards, no consolidating model pass. Records: what the
-``find_specs`` tool returns, the selected spec-selection implementation ``lexical_vector_gated`` with the local vector
-search over the records and one link per record (``repo_specs.find``'s ``expand``), no provider. The two lists are put
-side by side, cards first; neither knows "no solution yet" and neither reads tags. Zero model calls."""
+Cards: the live card selector it is handed, ``HybridContextAssembler`` over a real ``FileContextStore`` (keyword arm,
+shipped confidence gate) and a real ``VectorContextAssembler`` seeded from the store (the local embedder over an in-memory
+vector store, as in context_selection's hybrid_union arm), at most three cards, no consolidating model pass. Records: what
+the ``find_specs`` tool returns, the selected spec-selection implementation ``lexical_vector_gated`` with the local vector
+search over the records and one link per record, no provider. The two lists are put side by side, cards first; neither
+knows "no solution yet" and neither reads tags. Zero model calls."""
 import tempfile
 
-from context_and_specs.world import CARD_PREFIX, embedder, world
+from context_and_specs.world import CARD_PREFIX, world
 from context_selection.impls.hybrid_union import _MemoryVectorStore
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
 from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
-from quest_ai_runner.core.spec_selection import lexical_vector_gated
+from quest_ai_runner.core.unified_search import two_pipelines
 
 ARM_CARDS = 3
 
@@ -32,14 +33,16 @@ def build(meter):  # noqa: ARG001
     w = world()
     assembler = card_selector(w.cards, w.embed)
 
+    def select_cards(task):
+        ids = []
+        for cid in assembler.assemble(task).card_ids:
+            cid = cid[len(CARD_PREFIX):] if cid.startswith(CARD_PREFIX) else cid
+            if cid in w.cards and cid not in ids:
+                ids.append(cid)
+        return ids[:ARM_CARDS]
+
     def search(task, tags):  # noqa: ARG001  find_specs reads no tags
-        ctx = assembler.assemble(task)
-        card_keys = []
-        for cid in ctx.card_ids:
-            key = cid if cid.startswith(CARD_PREFIX) else CARD_PREFIX + cid
-            if key[len(CARD_PREFIX):] in w.cards and key not in card_keys:
-                card_keys.append(key)
-        got = lexical_vector_gated(task, w.index, vector_search=w.records_search, expand=1)
-        return {"items": card_keys[:ARM_CARDS] + list(got.ids), "linked": dict(got.linked), "no_solution_yet": False,
-                "calls": got.calls, "route": f"cards {len(card_keys)}, records {got.route}"}
+        got = two_pipelines(task, w.views, vector_search=w.records_search, select_cards=select_cards)
+        return {"items": [i.key for i in got.items], "linked": {i.key: i.linked_from for i in got.items if i.linked_from},
+                "no_solution_yet": bool(got.no_solution_yet), "calls": got.calls, "route": got.route}
     return search

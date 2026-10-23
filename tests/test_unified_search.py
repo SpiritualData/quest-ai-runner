@@ -1,4 +1,4 @@
-"""One ranking over context cards and ESOI records (the planned search-cards-and-specs implementation), offline."""
+"""One ranking over context cards and ESOI records (search-cards-and-specs) and its rival, the two pipelines side by side, offline."""
 import copy
 import json
 import shutil
@@ -212,3 +212,16 @@ def test_the_repository_tag_table_is_read_from_the_record_files(spec_repo):
     from quest_ai_runner.core import repo_specs
     table = repo_specs.repo_tag_table(spec_repo)
     assert "specifications" in table.tag_problems and "specifications" in table.solution_tags["spec-selection"]
+
+
+def test_two_pipelines_puts_the_injected_cards_then_the_find_specs_records_side_by_side():
+    from quest_ai_runner.core.spec_selection import lexical_vector_gated
+    task = "nightly invoice batch queue finishes late"
+    got = us.two_pipelines(task, views(), select_cards=lambda t: ["card:invoice-runbook", "invoice-runbook", "unknown-card"])
+    assert kinds(got)[:2] == [("card", "card:invoice-runbook"), ("card", "card:unknown-card")]
+    assert got.items[0].title == "Invoice batch runbook" and got.items[1].title == "unknown-card"
+    alone = lexical_vector_gated(task, INDEX, expand=us.FIND_SPECS_EXPAND)
+    assert [i.key for i in got.items[2:]] == alone.ids
+    assert {i.key: i.linked_from for i in got.items if i.linked_from} == alone.linked
+    assert not got.no_solution_yet and got.calls == 0
+    assert all(i.kind != "card" for i in us.two_pipelines(task, views()).items)

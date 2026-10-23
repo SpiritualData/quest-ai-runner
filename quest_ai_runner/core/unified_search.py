@@ -1,4 +1,4 @@
-"""One ranking over context cards and ESOI records: the planned implementation of ``search-cards-and-specs``.
+"""One ranking over context cards and ESOI records (``search-cards-and-specs``), beside today's two pipelines as its rival.
 
 Today a run's cards come from the context assembler and its records from ``spec_selection``, two pipelines with their own
 stages, budgets and output shapes. This module ranks both in one list. It is a composition, not a third pipeline: every stage
@@ -17,27 +17,30 @@ is the one ``spec_selection`` already has, applied to a list of views instead of
     run's cue to define one.
   * TAGS (optional, off by default). ``esoi/tags.csv`` plus each solution's connected problems, as a filter or a boost.
 
-No stage here is tuned for the mixed list: the gate thresholds are ``spec_selection``'s, tuned on records alone, and nothing is
-selected or measured yet (``metric-search-cards-and-specs`` decides). Standard library only apart from the model call.
+No stage here is tuned for the mixed list: the gate thresholds are ``spec_selection``'s, tuned on records alone, and
+the selection is ``metric-search-cards-and-specs``'s: ``two_pipelines`` (the two pipelines side by side, unchanged) stays
+selected because the merged ranking leads the mixed cases but does not hold the spec_selection and context_selection halves.
+Standard library only apart from the model call.
 """
 from __future__ import annotations
 
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from esoi import implementation, solution
 
 from . import prompt_budget
 from .adapters import STEP_SELECT, answer_with_reasoning
-from .spec_selection import (GATE_POOL, SpecSelection, VectorSearch, attach_links, fuse, gate_decision, narrow_lexical_scored,
-                             parse_ids, semantic_scored, tokens)
+from .spec_selection import (GATE_POOL, SpecSelection, VectorSearch, attach_links, fuse, gate_decision, lexical_vector_gated,
+                             narrow_lexical_scored, parse_ids, semantic_scored, tokens)
 
 log = logging.getLogger("quest-ai-runner.unified-search")
 
 CARD_SOURCE = "cards"
 RECORD_SOURCE = "esoi"
+CARD_KEY_PREFIX = "card:"   # a card view's key (``RecordView.key``)
 RANKED_KINDS = ("card", "solution", "problem")
 LINKED_KINDS = ("ideal", "metric", "intent", "implementation")   # also the order a ranked record brings them in
 NO_SOLUTION_KINDS = ("problem", "intent")
@@ -276,6 +279,49 @@ def solutions_and_problems_with_links(task: str, views: Sequence[RecordView], *,
         chosen = [k for k in pool if k in set(verdict)]
     result.route = route
     return finish(result, views, by_key, chosen[:max_ranked], expand)
+
+
+FIND_SPECS_EXPAND = 1   # the links each record brings in the find_specs tool (``repo_specs.find``)
+
+
+@implementation("search-cards-and-specs", "two_pipelines")
+def two_pipelines(task: str, views: Sequence[RecordView], *, provider: Any = None, model: Optional[str] = None,
+                  vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15, max_ranked: int = 5,
+                  expand: int = 3, ranked_kinds: Sequence[str] = RANKED_KINDS, tags: Optional[Sequence[str]] = None,
+                  tag_table: Optional[TagTable] = None, tag_mode: str = "boost",
+                  select_cards: Optional[Callable[[str], Sequence[str]]] = None) -> UnifiedSelection:
+    """Today's two pipelines side by side, neither changed. Cards: the ids ``select_cards(task)`` returns, in its order (the
+    run's own select-context assembler, injected because core imports no adapter, for example
+    ``lambda t: assembler.assemble(t).card_ids``; none when it is not given). Records: what the find_specs tool returns,
+    spec-selection's ``lexical_vector_gated`` over the record views with one link each; ``vector_search`` is over the record
+    keys. Cards first, then records. Neither pipeline knows "no solution yet", reads tags or shares a budget, so
+    ``max_ranked``, ``expand``, ``ranked_kinds`` and the tag arguments are not used."""
+    card_ids = []
+    for raw in (select_cards(task) if select_cards else ()):
+        cid = raw[len(CARD_KEY_PREFIX):] if raw.startswith(CARD_KEY_PREFIX) else raw
+        if cid not in card_ids:
+            card_ids.append(cid)
+    records = [v for v in views if v.source == RECORD_SOURCE]
+    by_key = {v.key: v for v in views}
+    df: Counter = Counter()
+    for v in records:
+        df.update(v.terms.keys())
+    index = {"n": len(records), "df": df,
+             "entries": [{"id": v.key, "kind": v.kind, "title": v.title, "summary": v.text, "terms": v.terms,
+                          "refs": list(v.links)} for v in records]}
+    specs = lexical_vector_gated(task, index, provider=provider, model=model, vector_search=vector_search,
+                                 k_lexical=k_lexical, k_vector=k_vector, expand=FIND_SPECS_EXPAND)
+    result = UnifiedSelection(candidates=list(specs.candidates), sources=dict(specs.sources), calls=specs.calls,
+                              failed_batches=specs.failed_batches, route=f"cards {len(card_ids)}, records {specs.route}")
+    for cid in card_ids:
+        view = by_key.get(CARD_KEY_PREFIX + cid)
+        result.items.append(SearchItem(kind="card", id=cid, source=view.source if view else CARD_SOURCE,
+                                       title=view.title if view else cid, key=CARD_KEY_PREFIX + cid))
+    for key in specs.ids:
+        v = by_key[key]
+        result.items.append(SearchItem(kind=v.kind, id=v.id, source=v.source, title=v.title, key=key,
+                                       linked_from=specs.linked.get(key, "")))
+    return result
 
 
 def finish(result: UnifiedSelection, views: Sequence[RecordView], by_key: Mapping[str, RecordView], chosen: List[str],

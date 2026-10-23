@@ -348,7 +348,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `repair-a-card-store:quarantine_tool` | Card quarantine tool | evaluation/components/card_growth/impls/quarantine_tool.py |  |
 | `bound-card-growth:no_cleanup` | Copy mode with no guard | evaluation/components/card_growth/impls/no_cleanup.py |  |
 | `bound-card-growth:bootstrap_guards` | Bootstrap guards against re-import | evaluation/components/card_growth/impls/bootstrap_guards.py |  |
-| `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | quest_ai_runner/core/spec_selection.py |  |
+| `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | quest_ai_runner/core/unified_search.py |  |
 | `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
 | `iterate-by-spec:writeback-on-the-record` | Slice before and write-back onto each record (planned) |  |  |
 | `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links | quest_ai_runner/core/unified_search.py |  |

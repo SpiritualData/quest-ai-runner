@@ -168,6 +168,13 @@
    "session_file": "quest_ai_runner.adapters.session_file_conversation_store"
   }
  },
+ "repair-a-card-store": {
+  "default": "repository_tidy",
+  "modules": {
+   "local_folder_tidy": "quest_ai_runner.adapters.card_store_hygiene",
+   "repository_tidy": "quest_ai_runner.adapters.card_store_tidy"
+  }
+ },
  "resolve-references": {
   "default": "note",
   "modules": {
@@ -192,6 +199,13 @@
    "personas": "quest_ai_runner.runner.personas",
    "poller": "quest_ai_runner.runner.poller",
    "quest_folder_sync": "quest_ai_runner.runner.quest_folder_sync"
+  }
+ },
+ "search-cards-and-specs": {
+  "default": "two_pipelines",
+  "modules": {
+   "solutions_and_problems_with_links": "quest_ai_runner.core.unified_search",
+   "two_pipelines": "quest_ai_runner.core.unified_search"
   }
  },
  "search-the-web": {
@@ -244,6 +258,12 @@
   "default": "ledger",
   "modules": {
    "ledger": "quest_ai_runner.runner.feedback_ledger"
+  }
+ },
+ "tag-solutions": {
+  "default": "tag_list_with_check",
+  "modules": {
+   "tag_list_with_check": "scripts.esoi_tags"
   }
  },
  "talk-over-a-channel": {
