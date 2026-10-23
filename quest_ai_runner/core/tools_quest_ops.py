@@ -42,7 +42,9 @@ RUN_ASK_STATES = ("in_progress", "done", "blocked", "declined", "noted", "awaiti
 RUN_ASK_KINDS = ("request", "standing", "context", "question")
 
 QUEST_ID_PARAM = {"type": "string", "description": "The quest (defaults to the quest this run is on)."}
-NO_QUEST = ToolResult(ok=False, text="No quest is open in this run, so pass quest_id.")
+NO_QUEST = ToolResult(ok=False, text=("No quest is open in this run, so pass quest_id. If you do not know the id, "
+                                      "call find_quest with words from the quest's name: do not retry this call "
+                                      "without one."))
 
 
 def quest_id_of(args: Mapping[str, Any], ctx: ToolContext) -> Optional[str]:
@@ -757,6 +759,45 @@ def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> To
         context_args={"quest_id": "quest_id"})
 
 
+def find_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        client = factory()
+        wanted = words_of(args.get("name"))
+        rows: List[Dict[str, Any]] = []
+        for team in client.list_teams():
+            team_id = team.get("team_id") or team.get("id")
+            if team_id:
+                rows.extend(client.list_quests(team_id=team_id))
+        matches = [r for r in rows if not wanted or wanted <= words_of(r.get("outcome"))]
+        if not matches:
+            return ToolResult(ok=False, data=[], text=(
+                f"No quest you can reach matches {str(args.get('name') or '')!r} ({len(rows)} quests checked). "
+                f"Try fewer words, or tell the person you cannot see that quest."))
+        shown = matches[:15]
+        lines = [f"- {r.get('quest_id') or r.get('id')}{' (completed)' if r.get('completed') else ''}: "
+                 f"{trim(r.get('outcome'), 100)}" for r in shown]
+        more = f"\n{len(matches) - len(shown)} more: add words to narrow it." if len(matches) > len(shown) else ""
+        return ToolResult(ok=True, data=shown, text="Quests you can reach (pass the id as quest_id):\n"
+                                                      + "\n".join(lines) + more)
+
+    return ToolSpec(
+        name="find_quest",
+        handler=handler,
+        description=("Find a quest's id from words in its name or outcome, across every team you can reach. "
+                     "Returns quest ids to pass as quest_id to the other quest tools."),
+        when_to_use=("A quest tool said no quest is open in this run, or the person named a quest and you "
+                     "do not have its id. Call this once, then use the id."),
+        when_not_to_use="The run already is on the quest (its tools default to it).",
+        parameters={"type": "object", "properties": {
+            "name": {"type": "string",
+                     "description": "Words from the quest's name or outcome, for example '1,000 Subscribers'. "
+                                    "Empty lists the first quests."}}},
+        mutates=False, workflow_step=False, origin="standard",
+        keywords=("quest", "find", "which", "open", "id", "name", "locate", "subscribers"))
+
+
 def create_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -878,6 +919,7 @@ QUEST_OPERATION_BUILDERS = {
     "list_quest_notes": with_credentials(list_quest_notes_spec),
     "list_quest_goals": with_credentials(list_quest_goals_spec),
     "list_quest_workflows": with_credentials(list_quest_workflows_spec),
+    "find_quest": with_credentials(find_quest_spec),
     "create_goal": with_credentials(create_goal_spec),
     "update_goal": with_credentials(update_goal_spec),
 }

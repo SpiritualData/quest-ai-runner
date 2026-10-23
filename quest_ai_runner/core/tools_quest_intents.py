@@ -17,7 +17,7 @@ from typing import Any, Dict, Mapping, Optional
 
 from .tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env
 from .tools import quest_credentials_present
-from .tools_quest_ops import QUEST_OPERATION_BUILDERS, read_failure_reason, trim
+from .tools_quest_ops import NO_QUEST, QUEST_OPERATION_BUILDERS, read_failure_reason, trim
 
 SUBJECT_TYPES = ("intent", "quest")
 REFRESH_REASONS = ("first_open", "autopilot", "onboarding", "chat", "task", "manual")
@@ -269,7 +269,7 @@ def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         quest_id = str(args.get("quest_id") or ctx.quest_id or "").strip()
         if not quest_id:
-            return ToolResult(ok=False, text="No quest is open in this run, so pass quest_id.")
+            return ToolResult(ok=False, text=NO_QUEST.text)
         intent_id: Optional[str] = str(args.get("intent_id") or "").strip() or None
         client = factory()
         result = client.place_quest(quest_id, intent_id,
