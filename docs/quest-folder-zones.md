@@ -28,6 +28,7 @@ single rule or a "read when" clause:
 | Item | Rule in the map |
 | --- | --- |
 | `QUEST_SYNC.md` | the quest's live state; `QAR:MANAGED` blocks are overwritten on every pull; add bullets under "Notes to push to Quest" to send findings up; the `quest-ai-runner sync-quest-folder <quest_id> . --direction both` command |
+| `ESOI_SPEC.md` | the quest's ESOI specification (problems, ideals, solutions, implementations, metrics), one section per record headed `### S: <name> (<recordId>)`; written by the pull inside a `QAR:MANAGED:spec` block, your text outside it survives; `sync-quest-folder --no-spec` skips it; a pull that renders it byte-identical does not touch the file, and a poll with no un-synced bullet and no edited goal block sends nothing to Quest |
 | `human_context/` | the person's own words, verbatim only; their Quest notes arrive under `human_context/from_quest/` |
 | `ai_driven/` | the AI's workspace; everything is a proposal until the ledger says otherwise |
 | `ai_driven/source_of_truth/` | the current answer per topic, updated in place; read its README before researching |

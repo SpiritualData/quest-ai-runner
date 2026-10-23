@@ -334,13 +334,16 @@ def _cmd_sync_quest_folder(args, log) -> int:
         return 1
     client = QuestClient(base_url, api_key, team_id=team_id)
     try:
-        result = sync_quest_folder(client, args.quest_id, args.folder, direction=args.direction)
+        result = sync_quest_folder(client, args.quest_id, args.folder, direction=args.direction,
+                                   spec=not getattr(args, "no_spec", False))
     except QuestFolderSyncError as e:
         log.error("sync failed: %s", e)
         return 1
     parts = []
     if result.pulled:
         parts.append(f"pulled {result.notes_pulled} note(s)")
+        if result.spec_records is not None:
+            parts.append(f"{result.spec_records} spec record(s)")
     if result.pushed:
         parts.append(f"pushed {result.notes_pushed} note(s)")
     print(f"Synced quest {args.quest_id} -> {result.sync_path} ({', '.join(parts)})")

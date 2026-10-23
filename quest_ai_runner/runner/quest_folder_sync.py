@@ -58,18 +58,27 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import hashlib
+
 from ._managed_sections import extract_between, replace_between
 from .quest_experiments import (
     EXPERIMENTS_END, EXPERIMENTS_START, fetch_experiments, render_experiments_block,
 )
 from .quest_folder_zones import capture_human_input, ensure_folder_zones
+from .quest_spec_sync import pull_spec_to_folder
 
 log = logging.getLogger("quest-ai-runner.quest_folder_sync")
 
 SYNC_FILE_NAME = "QUEST_SYNC.md"
+#: The quest's ESOI specification, one section per record (see ``quest_spec_sync``). Written by the
+#: pull next to the sync file; a persona prompt can point at "ESOI_SPEC.md, section <recordId>".
+SPEC_FILE_NAME = "ESOI_SPEC.md"
 
 _GOAL_START = "<!-- QAR:MANAGED:goal START -->"
 _GOAL_END = "<!-- QAR:MANAGED:goal END -->"
+#: First line inside the goal block: the hash of the body the pull rendered. A push that finds the
+#: body still hashing to it knows nothing was edited and sends no request (see ``push_quest_state``).
+GOAL_SHA_PREFIX = "<!-- goal-sha: "
 _NOTES_START = "<!-- QAR:MANAGED:notes START -->"
 _NOTES_END = "<!-- QAR:MANAGED:notes END -->"
 _NEXT_STEPS_START = "<!-- QAR:MANAGED:next_steps START -->"
@@ -129,6 +138,9 @@ class QuestFolderSyncResult:
     experiments_pulled: Optional[int] = None
     #: Human-authored notes captured verbatim into ``human_context/from_quest/`` this call.
     human_notes_captured: List[str] = field(default_factory=list)
+    #: How many records ``ESOI_SPEC.md`` holds after the pull, or None when the spec was skipped or
+    #: could not be read (the file was then left exactly as it was).
+    spec_records: Optional[int] = None
 
 
 # --- rendering (quest state + notes -> managed block text) ---------------------
@@ -154,7 +166,13 @@ def _render_goal_block(quest_state: Dict[str, Any]) -> str:
             title = str(s.get("title") or s.get("id") or "").strip()
             if title:
                 lines.append(f"- {title}")
-    return "\n".join(lines)
+    body = "\n".join(lines)
+    return f"{GOAL_SHA_PREFIX}{goal_body_sha(body)} -->\n{body}"
+
+
+def goal_body_sha(body: str) -> str:
+    """Short hash of a goal block body (without its sha line): what the pull last wrote."""
+    return hashlib.sha256(body.strip().encode("utf-8")).hexdigest()[:16]
 
 
 #: Most notes the Notes block renders, newest. A pull must never render an unbounded list (a prod
@@ -511,6 +529,9 @@ def _publish_to_quest(client: Any, quest_id: str, body: str) -> Tuple[str, str, 
         None,
     )
     if existing_id:
+        held = next((e.get("content") for e in entries if str(e.get("id")) == existing_id), None)
+        if isinstance(held, str) and held.strip() == body.strip():
+            return "context_entry", existing_id, False, ""  # unchanged: send nothing
         updated = updater(quest_id, existing_id, content=body) or {}
         if not updated.get("id"):
             return "none", existing_id, False, "the context-entry update did not come back"
@@ -554,7 +575,7 @@ def publish_next_steps(client: Any, quest_id: str, folder: str, next_steps: Next
 
 def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
                         *, filename: str = SYNC_FILE_NAME,
-                        zones: bool = True) -> QuestFolderSyncResult:
+                        zones: bool = True, spec: bool = True) -> QuestFolderSyncResult:
     """Quest -> local: GET the quest's state + notes and (re)render the folder's sync file.
 
     Human-authored content outside the managed markers (including the "Notes to push" section)
@@ -581,6 +602,10 @@ def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
                                 notes_total=notes_total)
     if rendered != existing:
         _write(path, rendered)
+    spec_records: Optional[int] = None
+    if spec:
+        # Best-effort and after the sync file: a spec that cannot be read never stops the pull.
+        spec_records = pull_spec_to_folder(client, quest_id, folder, filename=SPEC_FILE_NAME)
     # After the sync file, never before: the scaffold is best-effort and must not be able to stop
     # the pull that is this function's actual contract.
     zones_created: List[str] = []
@@ -596,6 +621,7 @@ def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
         pulled=True, notes_pulled=len(notes),
         experiments_pulled=None if experiments is None else len(experiments),
         zones_created=zones_created, human_notes_captured=captured,
+        spec_records=spec_records,
     )
 
 
@@ -710,6 +736,22 @@ def parse_goal_block(text: str) -> Dict[str, Any]:
     return out
 
 
+def goal_block_unedited(text: str) -> bool:
+    """True when the goal block still hashes to the sha the pull stamped in it.
+
+    A file from before the stamp existed has none, so it reports False and takes the old path
+    (compare against the live quest), never a silent skip.
+    """
+    block = extract_between(text, _GOAL_START, _GOAL_END)
+    if not block:
+        return False
+    first, _, body = block.strip().partition("\n")
+    if not first.startswith(GOAL_SHA_PREFIX):
+        return False
+    stamped = first[len(GOAL_SHA_PREFIX):].replace("-->", "").strip()
+    return stamped == goal_body_sha(body)
+
+
 def push_quest_state(client: Any, quest_id: str, folder: str,
                      *, filename: str = SYNC_FILE_NAME) -> Dict[str, Any]:
     """Local -> Quest: send edits made to the goal block's writable fields.
@@ -727,6 +769,8 @@ def push_quest_state(client: Any, quest_id: str, folder: str,
     path = _sync_path(folder, filename)
     if not path.exists():
         raise QuestFolderSyncError(f"no sync file to push at {path} — pull first")
+    if goal_block_unedited(_read_existing(path)):
+        return {"pushed": {}, "blocked": [], "held": "", "unwritable": []}  # no request at all
     quest_resp = client.get_my_quest(quest_id) or {}
     live = quest_resp.get("state") or {}
     if not live:
@@ -766,7 +810,7 @@ def push_quest_state(client: Any, quest_id: str, folder: str,
 
 def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = "pull",
                      *, filename: str = SYNC_FILE_NAME,
-                     zones: bool = True) -> QuestFolderSyncResult:
+                     zones: bool = True, spec: bool = True) -> QuestFolderSyncResult:
     """The one entry point: keep a quest's Quest state and a local folder in sync.
 
     ``direction``:
@@ -777,7 +821,8 @@ def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = 
     """
     direction = (direction or "pull").lower()
     if direction == "pull":
-        return pull_quest_to_folder(client, quest_id, folder, filename=filename, zones=zones)
+        return pull_quest_to_folder(client, quest_id, folder, filename=filename, zones=zones,
+                                    spec=spec)
     if direction == "push":
         return push_folder_to_quest(client, quest_id, folder, filename=filename)
     if direction == "both":
@@ -787,7 +832,8 @@ def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = 
             push_quest_state(client, quest_id, folder, filename=filename)
         except (QuestFolderSyncError, Exception) as e:  # noqa: BLE001 -- never fail the sync
             log.info("quest-state push for %s skipped (%s)", quest_id, e)
-        pulled = pull_quest_to_folder(client, quest_id, folder, filename=filename, zones=zones)
+        pulled = pull_quest_to_folder(client, quest_id, folder, filename=filename, zones=zones,
+                                      spec=spec)
         pushed = push_folder_to_quest(client, quest_id, folder, filename=filename)
         return QuestFolderSyncResult(
             direction="both", quest_id=quest_id, sync_path=pushed.sync_path,
@@ -796,5 +842,6 @@ def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = 
             experiments_pulled=pulled.experiments_pulled,
             zones_created=pulled.zones_created,
             human_notes_captured=pulled.human_notes_captured,
+            spec_records=pulled.spec_records,
         )
     raise ValueError(f"unknown sync direction {direction!r}; use 'pull', 'push', or 'both'")

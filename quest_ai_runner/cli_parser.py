@@ -232,12 +232,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # --- sync-quest-folder subcommand: pull/push a quest <-> a local folder --
     sync_p = sub.add_parser("sync-quest-folder",
-                            help="sync a Quest quest's state/notes with a local folder's QUEST_SYNC.md")
+                            help="sync a Quest quest's state/notes with a local folder's QUEST_SYNC.md (and ESOI_SPEC.md)")
     sync_p.add_argument("quest_id", help="the quest id to sync (e.g. quest_1625d9f47a06)")
     sync_p.add_argument("folder", help="local folder holding (or to hold) QUEST_SYNC.md")
     sync_p.add_argument("--direction", choices=["pull", "push", "both"], default="pull",
                         help="pull: Quest -> folder (default); push: folder -> Quest; "
                              "both: pull then push")
+    sync_p.add_argument("--no-spec", action="store_true",
+                        help="do not write the quest's specification to ESOI_SPEC.md on a pull")
 
     # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
