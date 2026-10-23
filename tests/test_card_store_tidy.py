@@ -343,3 +343,58 @@ def test_the_command_tidies_a_backend_store_and_undoes_it(tmp_path, monkeypatch,
     assert manifest is not None and str(manifest) in capsys.readouterr().out
     assert run(undo=str(manifest)) == 0
     assert plain(repo.load_all()) == before
+
+
+# --- --merge-topics: the same files under another name ----------------------------------------------------
+def run_tidy(cli_cards, **kw):
+    import argparse
+    values = {"cards_op": "tidy", "apply": False, "undo": None, "config": None, "write": False,
+              "merge_topics": False, "cards_dir": None, "corpus": None, **kw}
+    return cli_cards.run_cards_command(argparse.Namespace(**values), None)
+
+
+def test_the_flag_shows_in_help_with_the_trade(capsys):
+    from quest_ai_runner import cli_parser
+    with pytest.raises(SystemExit):
+        cli_parser._build_parser().parse_args(["cards", "tidy", "--help"])
+    text = " ".join(capsys.readouterr().out.split())
+    assert "--merge-topics" in text and "less precise topics" in text and "--undo" in text
+
+
+def test_merge_topics_joins_a_distinct_topic_onto_its_keeper_and_undo_restores_it(tmp_path, monkeypatch):
+    from quest_ai_runner import cli_cards
+    review(tmp_path)
+    repo = backend_with(inflated_cards())
+    backend_store(tmp_path, repo)
+    cards_dir = tmp_path / "cards"
+    monkeypatch.setattr(cli_cards, "lane_store", lambda args: (str(cards_dir), str(tmp_path), repo))
+    before = plain(repo.load_all())
+    keeper_before = repo.read("billing")
+    assert run_tidy(cli_cards, apply=True) == 0
+    assert "billing-for-sign-in" in repo.cards, "without the flag a distinct topic stays"
+    assert run_tidy(cli_cards, undo=str(tidy.latest_manifest(cards_dir))) == 0
+    assert plain(repo.load_all()) == before
+    assert run_tidy(cli_cards, apply=True, merge_topics=True) == 0
+    assert "billing-for-sign-in" not in repo.cards
+    kept = repo.read("billing")
+    assert "sign-in" in kept["keywords"] and "invoices" in kept["keywords"]
+    for name in ("name", "summary", "files", "usage_count"):
+        assert kept[name] == keeper_before[name]
+    assert run_tidy(cli_cards, undo=str(tidy.latest_manifest(cards_dir))) == 0
+    assert plain(repo.load_all()) == before
+
+
+def test_merge_topics_on_a_local_folder_and_undo_restores_the_files_byte_for_byte(tmp_path, monkeypatch):
+    from quest_ai_runner import cli_cards
+    cards_dir = tmp_path / "cards"
+    review(cards_dir)
+    for c in inflated_cards():
+        FilesystemCardRepository(str(cards_dir)).write(c["id"], c)      # the folder's own file format
+    monkeypatch.setattr(cli_cards, "lane_store", lambda args: (str(cards_dir), str(tmp_path), None))
+    snapshot = {p.name: p.read_bytes() for p in cards_dir.glob("*.json")}
+    assert run_tidy(cli_cards, apply=True, merge_topics=True, cards_dir=str(cards_dir)) == 0
+    assert not (cards_dir / "billing-for-sign-in.json").exists()
+    assert "sign-in" in json.loads((cards_dir / "billing.json").read_text())["keywords"]
+    assert (cards_dir / "vendored-lib.json").exists(), "only the topic merge runs on a local folder"
+    assert run_tidy(cli_cards, undo=str(tidy.latest_manifest(cards_dir)), cards_dir=str(cards_dir)) == 0
+    assert {p.name: p.read_bytes() for p in cards_dir.glob("*.json")} == snapshot

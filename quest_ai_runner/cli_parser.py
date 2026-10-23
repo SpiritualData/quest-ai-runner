@@ -220,6 +220,10 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="corpus root (default: QAR_CORPUS_ROOT env var or cwd)")
     tidy_p.add_argument("--apply", action="store_true",
                         help="move the cards; without this nothing is touched")
+    tidy_p.add_argument("--merge-topics", action="store_true",
+                        help="also join a card that pins the same files as another card under a different name "
+                             "onto that card (its keywords are added, nothing else of the kept card changes): "
+                             "a smaller store but less precise topics, and --undo from the export puts both back")
     tidy_p.add_argument("--undo", default=None, metavar="MANIFEST",
                         help="take back the moves a tidy manifest records (cards go back into the index and what "
                              "was joined onto the cards that stood for them is taken off again); the manifests are "

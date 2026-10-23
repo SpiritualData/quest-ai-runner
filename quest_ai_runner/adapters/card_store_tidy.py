@@ -155,9 +155,11 @@ class StorePlan:
 
 
 def plan_store(cards: Dict[str, Dict[str, Any]], *, cards_dir: Any, reasons=DEFAULT_REASONS,
-               own_store_id: str = "", repo: Any = None, threshold: Optional[float] = None) -> StorePlan:
+               own_store_id: str = "", repo: Any = None, threshold: Optional[float] = None,
+               distinct_topics: bool = True) -> StorePlan:
     """The tidy plan for the cards a repository holds (``{key: card}``), with the folder review's exclusions read
-    from the lane's local card folder. Pure apart from reading that review cache."""
+    from the lane's local card folder. Pure apart from reading that review cache. ``distinct_topics=False`` (the
+    operator's ``--merge-topics``) joins a card that pins a keeper's files under another name onto that keeper."""
     from .context_card_ceilings import _FILE_SET_DEDUP_JACCARD
     finder = getattr(repo, "quarantined", None)
     ordered = {key: cards[key] for key in sorted(cards)}
@@ -165,7 +167,7 @@ def plan_store(cards: Dict[str, Dict[str, Any]], *, cards_dir: Any, reasons=DEFA
         ordered, reasons=set(reasons), excluded=excluded_prefixes_from_review(Path(cards_dir)),
         threshold=_FILE_SET_DEDUP_JACCARD if threshold is None else threshold, own_store_id=own_store_id,
         quarantined=(lambda key: finder(key) is not None) if callable(finder) else (lambda key: False),
-        distinct_topics=True)
+        distinct_topics=distinct_topics)
     return StorePlan(entries=entries, skipped=skipped, scanned=len(cards), reasons=tuple(reasons))
 
 

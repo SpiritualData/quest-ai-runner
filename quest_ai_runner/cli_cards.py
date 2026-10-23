@@ -40,7 +40,8 @@ def run_cards_command(args, log) -> int:
         if op == "tidy" and undo:
             return undo_repository(repo, Path(cards_dir), Path(undo))
         if op == "tidy":
-            return tidy_repository(store, repo, Path(cards_dir), apply=bool(getattr(args, "apply", False)))
+            return tidy_repository(store, repo, Path(cards_dir), apply=bool(getattr(args, "apply", False)),
+                                   merge_topics=bool(getattr(args, "merge_topics", False)))
         text = report_for(cards_dir, card_limit.max_cards_from_env(), cards=store._own_cards())
         print(text)
         return 0
@@ -54,6 +55,12 @@ def run_cards_command(args, log) -> int:
             if str(undo).endswith(MANIFEST_SUFFIX):
                 return undo_repository(FilesystemCardRepository(cards_dir), Path(cards_dir), Path(undo))
             return undo_cards(Path(cards_dir), Path(undo))
+        if getattr(args, "merge_topics", False):
+            from .adapters.card_repository import FilesystemCardRepository
+            local = FilesystemCardRepository(cards_dir)
+            return tidy_repository(repository_store(cards_dir, corpus, None), local, Path(cards_dir),
+                                   apply=bool(getattr(args, "apply", False)), merge_topics=True,
+                                   reasons=("surplus",))
         return tidy_cards(Path(cards_dir), apply=bool(getattr(args, "apply", False)))
     text = report_for(cards_dir, card_limit.max_cards_from_env())
     print(text)
@@ -65,21 +72,25 @@ def run_cards_command(args, log) -> int:
 
 
 def repository_store(cards_dir: str, corpus: str, repo):
-    """A card store over ``repo`` that never indexes anything: it is asked which cards this lane owns."""
+    """A card store over ``repo`` that never indexes anything: it is asked which cards this lane owns. ``None`` is
+    the plain local folder, whose every card is this lane's."""
     from .adapters import card_limit
     from .adapters.file_context_store import FileContextStore
     return FileContextStore(cards_dir, repo_root=corpus, auto_bootstrap=False, card_repository=repo,
                             mount_mode="copy", max_cards=card_limit.max_cards_from_env())
 
 
-def tidy_repository(store, repo, cards_dir: Path, *, apply: bool) -> int:
+def tidy_repository(store, repo, cards_dir: Path, *, apply: bool, merge_topics: bool = False,
+                    reasons=None) -> int:
     """The full tidy of a store on the Quest backend or Qdrant: a dry run, or with ``apply`` an export, then the
-    changes through the repository, then a check. Only the cards this lane owns are looked at."""
+    changes through the repository, then a check. Only the cards this lane owns are looked at. ``merge_topics`` joins
+    cards that pin a keeper's files under another name onto it (the default keeps them as distinct topics);
+    ``reasons`` narrows what is looked for (a local folder with ``--merge-topics`` looks for that alone)."""
     from .adapters import card_store_tidy as tidy
 
     cards = store._own_cards()
-    plan = tidy.plan_store(cards, cards_dir=cards_dir, reasons=tidy.DEFAULT_REASONS,
-                           own_store_id=store.own_store_id(), repo=repo)
+    plan = tidy.plan_store(cards, cards_dir=cards_dir, reasons=reasons or tidy.DEFAULT_REASONS,
+                           own_store_id=store.own_store_id(), repo=repo, distinct_topics=not merge_topics)
     print(f"store           : {type(repo).__name__} (the cards this lane owns)")
     print(f"cards looked at : {plan.scanned:,}")
     print(f"would remove    : {len(plan.entries):,}" + (f"  ({plan.summary()})" if plan.entries else ""))

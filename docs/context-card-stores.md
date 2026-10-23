@@ -510,6 +510,12 @@ comes back with the note, and one that can land nowhere is logged in full at WAR
 `quest-ai-runner cards tidy [--cards-dir DIR]` does the same by hand with what the package ships: a dry run
 that lists what would move and what stays and why, and `--apply` to move it. `--undo MANIFEST` takes a tidy
 back: each card returns to the index and what was joined onto the card that stood for it is taken off again.
+`cards tidy --merge-topics` also joins a card that pins the same files as another card under a different name onto
+that card, instead of keeping both as distinct topics (the default): the kept card gains the other's keywords and
+nothing else of it changes (name, summary, files and usage stay), the other card is removed, and the store is smaller
+at the cost of less precise topics. It works on a folder (where it looks for that alone) and on the Quest backend or
+Qdrant, writes the same export, and `--undo` with the manifest it prints restores both cards.
+
 `scripts/quarantine_cards.py
 --cards-dir DIR` (in the source tree) is the same classification plus the judgement calls (excluded folders,
 overlap, thin cards), a dry run until `--apply`; its output starts with the store's health: cards by kind, ids
