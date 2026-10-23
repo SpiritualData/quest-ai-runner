@@ -185,6 +185,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STANDARD_TOOLS` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_STATE_PATH` |  | `cli_poll.py`, `interactive_session_persist.py`, `runner/lane.py` | `.env.example`, `docs/chat.md`, `docs/deployment.md` |
+| `QAR_TASK_DIRECT_DEEP` | Send a queued task's first run straight to a deep run: no planner call, no turn-start context search. Off by default. | `cli_config.py` | `docs/cheap-model-routing.md` |
 | `QAR_TEAM_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
 | `QAR_TEAM_QUEST_ID` | Quest the bootstrap report is posted to. | `adapters/bootstrap_reporter.py` | - |
 | `QAR_TOOLS_FILE` |  | `core/tools.py` | `docs/tools.md` |

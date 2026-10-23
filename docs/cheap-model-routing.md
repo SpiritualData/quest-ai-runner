@@ -299,6 +299,19 @@ reflection stored" instead of reading it.
 - **A CLI lane on compact + judge** needs its own reach summary and a measurement on its own tasks.
 - Prices come from secondary sources, so read every cost figure as a ratio.
 
+## Queued tasks can skip the planner (`QAR_TASK_DIRECT_DEEP`)
+
+A queued task runs through `Orchestrator.run` in background mode, so before its deep worker starts
+it pays for a planner call (the largest prompt of the run) and a turn-start context search. With
+`QAR_TASK_DIRECT_DEEP=1` the task executor passes the task's own text as `deep_goal`, the run goes
+straight to a deep worker, and the goal check still judges the result. An offline count of one task
+(`tests/test_task_direct_deep.py` shows the shape) goes from planner + verifier to verifier only.
+
+It is off by default because a task that is only a question then costs a deep run instead of a cheap
+answer. Turn it on where tasks are work orders and deep runs are free (a Claude subscription lane).
+Unmeasured: how often a real task would have been answered without a deep run, and whether the
+deep worker routes as well as the planner did.
+
 ## Measure before you believe a difference
 
 The noise floor is large and easy to mistake for a result. Running one configuration three times

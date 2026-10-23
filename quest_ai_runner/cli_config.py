@@ -363,6 +363,9 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     # OrchestratorConfig, like QAR_MAX_PARALLEL above. The reach judge is left inert unless the
     # consumer also supplies ``read_reach_summary``: the library cannot write that statement for a
     # deployment it knows nothing about, and a judge given a generic guess is worse than none.
+    if os.getenv("QAR_TASK_DIRECT_DEEP"):
+        cfg.orchestrator.task_direct_deep = (
+            os.environ["QAR_TASK_DIRECT_DEEP"].strip().lower() in ("1", "true", "on", "yes"))
     if os.getenv("QAR_PLANNER_PROMPT_PROFILE"):
         cfg.orchestrator.planner_prompt_profile = (
             os.environ["QAR_PLANNER_PROMPT_PROFILE"].strip().lower())

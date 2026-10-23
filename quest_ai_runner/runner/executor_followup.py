@@ -33,6 +33,17 @@ class FollowUpMixin:
             budget = AUTO_FOLLOWUP_TOKEN_BUDGET
         return max(0, runs), budget
 
+    def _direct_deep_extra(self, ask: str, supports_deep_goal: bool) -> Optional[Dict[str, Any]]:
+        """``{"deep_goal": ...}`` for a task's FIRST run when the brain is set to send queued tasks
+        straight to a deep run (``task_direct_deep``), else None. The orchestrator builds the plan
+        from the goal, so the run makes no planner call. Needs a brain whose ``run`` accepts
+        ``deep_goal``; an older brain keeps the planner path."""
+        cfg = getattr(self._orch, "cfg", None)
+        if getattr(cfg, "task_direct_deep", False) is not True or not supports_deep_goal:
+            return None
+        goal = " ".join((ask or "").split())[:_GOAL_ASK_CHARS]
+        return {"deep_goal": "Complete this task: " + goal} if goal else None
+
     def _open_decision_ids(self, quest_id: Optional[str]) -> FrozenSet[str]:
         """The quest's open decision ids, empty when they cannot be read (never raises)."""
         probe = getattr(self._orch, "quest_open_decision_ids", None)

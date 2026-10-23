@@ -148,6 +148,13 @@ Env it reads:
                                                    deployment running routing on a cheap model wants
                                                    it. An unknown value degrades to "full". See
                                                    docs/cheap-model-routing.md.
+  QAR_TASK_DIRECT_DEEP (optional)               : "1"/"true"/"on" sends a queued task's first run
+                                                   straight to a deep run: no planner call and no
+                                                   turn-start context search (default: off). The
+                                                   deep worker reads what it needs and the goal
+                                                   check still judges the result. Turn it on where
+                                                   tasks are work orders, since a task that is only
+                                                   a question then costs a deep run.
   QAR_PLANNER_REACH_JUDGE (optional)            : "1"/"true"/"on" enables the reach judge (default:
                                                    off): one small question answered by a stronger
                                                    tier before planning, settling whether what the

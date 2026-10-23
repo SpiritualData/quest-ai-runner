@@ -66,6 +66,14 @@ class OrchestratorConfig:
     # run ends with the original ask clearly unfinished and nothing is waiting on a person, the task
     # executor starts up to this many further deep runs for the remaining items. 0 turns it off.
     auto_followup_max_runs: int = AUTO_FOLLOWUP_MAX_RUNS
+    # A QUEUED TASK'S FIRST RUN GOES STRAIGHT TO A DEEP RUN: the task executor passes the task's own
+    # text as ``deep_goal``, so the run makes no planner call (the largest prompt of a background
+    # run, thousands of tokens) and no turn-start context search. The deep worker reads what it
+    # needs itself and the goal check still judges the result. Off by default: a task that is only
+    # a question then costs a deep run instead of a cheap answer, and a library cannot know which
+    # it is running. A deployment whose tasks are work orders (and whose deep runs are free, as on
+    # a Claude subscription) turns it on with QAR_TASK_DIRECT_DEEP.
+    task_direct_deep: bool = False
     # Token budget over the whole chain of runs (the first run plus its follow-ups); None disables
     # the guard (then only the run cap applies).
     auto_followup_token_budget: Optional[int] = AUTO_FOLLOWUP_TOKEN_BUDGET

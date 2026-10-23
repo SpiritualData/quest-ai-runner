@@ -542,7 +542,10 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
 
         decisions_before = self._open_decision_ids(quest_id)
         try:
-            result: OrchestratorResult = run_once(text, resume_session_id)
+            result: OrchestratorResult = run_once(
+                text, resume_session_id,
+                self._direct_deep_extra(self._task_text(task) or text,
+                                        _run_accepts(self._orch.run, "deep_goal")))
             # AUTOMATIC FOLLOW-UP RUNS: while the ask is clearly unfinished and nothing waits on a
             # person, run again for the remaining items (see ``runner/auto_followup.py``).
             result = self._follow_up_while_incomplete(
