@@ -192,3 +192,16 @@ def test_explicit_instructions_still_replace_the_defaults_and_the_brief_fits_its
                                    default_persona_instructions=dp)
     assert dq in defaulted and dp in defaulted
     assert prompt_budget.estimate_tokens(defaulted) < AUTOPILOT_BRIEF_TOKEN_BUDGET // 2
+
+
+def test_custom_quest_instructions_still_get_the_before_after_metric_requirement():
+    from quest_ai_runner.runner.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
+    from quest_ai_runner.core import prompt_budget
+    written = compose_batch_text("Ship it", "bailey", instructions="Quest rule X.",
+                                 persona_instructions="Persona rule Y.")
+    assert "Quest rule X." in written and "Persona rule Y." in written
+    assert "before <value> (source, date), after <value> (source, date), change <delta>" in written
+    assert "measure the alternatives" in written and "keep whichever measures best" in written
+    assert "edit_spec_record" in written and "create_goal" in written
+    assert "—" not in written
+    assert prompt_budget.estimate_tokens(written) < AUTOPILOT_BRIEF_TOKEN_BUDGET

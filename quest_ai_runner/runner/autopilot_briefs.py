@@ -254,13 +254,15 @@ _CONFIRMATION_RULE = (
 # structure ... And gaps in specification are filled by AI as needed to fulfill this requirement."
 _SOLUTION_IMPROVEMENT_RULE = (
     "IMPROVE ONE SOLUTION. Unless this run's input was only a question, improve at least one "
-    "solution in this run. Find the solution your work serves in the quest's or the top intent's "
-    "specification (get_spec), pick one of its implementations or add an alternative, measure it "
-    "with the solution's metric, and keep whichever measures best. If the specification has a gap "
-    "that stops you (no solution, ideal, metric or implementation), fill it yourself with a "
-    "proposal, never over a field the person edited. Name the solution, what you changed and the "
-    "measured result in your result. Run to the metric run policy: paid runs stay inside the "
-    "approved budget."
+    "solution of the quest's ESOI specification (get_spec) in this run: pick one of its "
+    "implementations or add an alternative, measure the alternatives with the solution's metric, "
+    "and keep whichever measures best. Report it in your result and as a goal update or quest "
+    "note: \"Solution <name>: metric <name> before <value> (source, date), after <value> (source, "
+    "date), change <delta>\". If the specification is too thin to do the job or reach the quest's "
+    "priorities, create the missing Solution and Metric (edit_spec_record), never over a field the "
+    "person edited, and create the next milestone goals (create_goal) only where your brief says "
+    "you may plan, otherwise propose them in a quest note. Paid runs stay inside the approved "
+    "budget."
 )
 
 
