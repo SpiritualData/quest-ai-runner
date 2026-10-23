@@ -151,3 +151,44 @@ def test_instructions_set_with_plan_and_work_produces_no_goal_proposal():
     created_text = client.created_tasks[0]["text"]
     assert not created_text.startswith(PROPOSAL_TEXT_PREFIX)
     assert not any(c.get("kind") == "goal_proposal" for c in result.created)
+
+
+# --- the default briefs require one Solution, a before/after metric report, and filling thin specs --
+
+def test_default_quest_instructions_require_solution_metric_before_and_after():
+    from quest_ai_runner.runner.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as text
+    assert "ONE Solution" in text
+    assert "before <value> (source, date), after <value> (source, date), change <delta>" in text
+    assert "ESOI_SPEC.md in the quest's synced folder, when present" in text
+    assert "measuring it is this run's work" in text
+    assert "—" not in text
+
+
+def test_default_quest_instructions_create_missing_spec_and_milestones_without_blocking():
+    from quest_ai_runner.runner.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as text
+    for needle in ("no next milestone", "edit_spec_record", "create_goal", "otherwise propose it in a quest note",
+                   "locked", "never stop for a decision"):
+        assert needle in text
+    assert "create_decision" in text  # the existing escalation rules stay
+
+
+def test_default_persona_instructions_pick_the_solution_furthest_from_target():
+    from quest_ai_runner.runner.autopilot_defaults import BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS as text
+    assert "furthest from its target" in text
+    assert "—" not in text
+
+
+def test_explicit_instructions_still_replace_the_defaults_and_the_brief_fits_its_budget():
+    from quest_ai_runner.runner.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
+    from quest_ai_runner.runner.autopilot_defaults import (
+        BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS as dp, BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as dq)
+    from quest_ai_runner.core import prompt_budget
+    written = compose_batch_text("Ship it", "bailey", instructions="Quest rule X.",
+                                 persona_instructions="Persona rule Y.",
+                                 default_quest_instructions=dq, default_persona_instructions=dp)
+    assert "Quest rule X." in written and "Persona rule Y." in written
+    assert "ONE Solution" not in written.replace("IMPROVE ONE SOLUTION", "") and "furthest from its target" not in written
+    defaulted = compose_batch_text("Ship it", "bailey", default_quest_instructions=dq,
+                                   default_persona_instructions=dp)
+    assert dq in defaulted and dp in defaulted
+    assert prompt_budget.estimate_tokens(defaulted) < AUTOPILOT_BRIEF_TOKEN_BUDGET // 2
