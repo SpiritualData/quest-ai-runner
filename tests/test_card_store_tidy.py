@@ -263,7 +263,7 @@ def test_a_backend_store_over_its_limit_plans_and_says_so_once_by_default(tmp_pa
     said: List[str] = []
     assert store.tidy_store(said.append) == 0
     assert len(repo.cards) == len(inflated_cards()), "a shared backend is never changed without the owner's yes"
-    assert len(said) == 1 and "could be tidied" in said[0] and "cards tidy --apply" in said[0]
+    assert len(said) == 1 and "needs a tidy" in said[0] and "cards tidy --config" in said[0] and "--apply" in said[0]
     assert (tidy.state_dir_for(tmp_path / "cards") / tidy.PLAN_FILE).is_file()
     store.tidy_store(said.append)
     assert len(said) == 1, "the same plan is not announced again"
@@ -398,3 +398,140 @@ def test_merge_topics_on_a_local_folder_and_undo_restores_the_files_byte_for_byt
     assert (cards_dir / "vendored-lib.json").exists(), "only the topic merge runs on a local folder"
     assert run_tidy(cli_cards, undo=str(tidy.latest_manifest(cards_dir)), cards_dir=str(cards_dir)) == 0
     assert {p.name: p.read_bytes() for p in cards_dir.glob("*.json")} == snapshot
+
+
+# --- a lane with only Quest credentials sees what the tidy does or would do -------------------------------------
+
+def test_the_plan_notice_reaches_the_next_task_feed_with_the_command_and_the_opt_in(tmp_path):
+    from quest_ai_runner.adapters import card_limit
+    card_limit.reset_announcements()
+    repo = backend_with(inflated_cards())
+    store = backend_store(tmp_path, repo, max_cards=5)
+    assert store.tidy_store() == 0 and len(repo.cards) == len(inflated_cards())
+    notes = card_limit.take_task_notes()
+    assert len(notes) == 1
+    note = notes[0]
+    assert note.startswith("About the context store, not this task: The context store needs a tidy because it holds "
+                           "10 cards, over its limit of 5: removing 4 copies and cards about excluded folders")
+    assert "quest-ai-runner cards tidy --config" in note and "--apply" in note
+    assert 'card_tidy = "apply"' in note and "exported first" in note and "--undo" in note
+    assert "second step" in note and "would bring the store to 5 cards" in note, "the merge step keeps it under 5"
+    assert "--merge-topics" in note
+    saved = json.loads((tidy.state_dir_for(tmp_path / "cards") / tidy.PLAN_FILE).read_text())
+    assert saved["second_step"]["cards_after"] == 5
+    assert [e["key"] for e in saved["second_step"]["entries"]] == ["billing-for-sign-in"]
+
+
+def test_a_store_under_its_limit_after_the_first_step_gets_no_second_step(tmp_path):
+    repo = backend_with(inflated_cards())
+    store = backend_store(tmp_path, repo, max_cards=9)
+    said: List[str] = []
+    store.tidy_store(said.append)
+    assert len(said) == 1 and "second step" not in said[0] and "--merge-topics" not in said[0]
+
+
+def test_apply_takes_the_second_step_while_the_store_is_over_its_limit_and_undo_restores_both(tmp_path):
+    repo = backend_with(inflated_cards())
+    store = backend_store(tmp_path, repo, max_cards=5, tidy_mode="apply")
+    before = plain(repo.load_all())
+    said: List[str] = []
+    assert store.tidy_store(said.append) == 5
+    assert len(repo.cards) == 5 and "billing-for-sign-in" not in repo.cards
+    assert "sign-in" in repo.read("billing")["keywords"]
+    assert len(said) == 1 and "second step" in said[0] and "joined 1 card that pinned" in said[0]
+    manifest = tidy.latest_manifest(tmp_path / "cards")
+    assert said[0].count("cards tidy --undo") == 1 and str(manifest) in said[0], "one run, one manifest, one undo"
+    removes = [json.loads(line) for line in manifest.read_text().splitlines() if '"op": "remove"' in line]
+    assert [r["key"] for r in removes if r.get("step") == "merge-topics"] == ["billing-for-sign-in"]
+    assert not tidy.RepositoryTidy(repo, tmp_path / "cards").undo(manifest).failed
+    assert plain(repo.load_all()) == before
+
+
+def test_the_limit_notice_of_a_backend_store_leads_with_the_tidy_and_says_why_learned_cards_come_in(tmp_path):
+    from quest_ai_runner.adapters import card_limit
+    card_limit.reset_announcements()
+    repo = backend_with(inflated_cards())
+    store = backend_store(tmp_path, repo, max_cards=3)
+    assert store.limit_guard.check_at_open() is True
+    note = card_limit.take_task_notes()[0]
+    assert "To bring it under the limit run: quest-ai-runner cards tidy --config" in note
+    assert note.index("cards tidy") < note.index("QAR_MAX_CARDS higher")
+    assert "cannot be rebuilt from the files" in note
+
+
+# --- the final check ------------------------------------------------------------------------------------------
+
+class LateListing(BackendShapedRepository):
+    """A backend whose listing shows a deleted card for a while (``stale`` listings), or never lets one go."""
+
+    def __init__(self, stale: int = 0, keep: tuple = ()) -> None:
+        super().__init__()
+        self.stale, self.keep, self.ghosts = stale, set(keep), {}
+
+    def delete(self, key: str) -> bool:
+        if key in self.keep:
+            self.calls.append(("delete", key))
+            return True                                         # says yes, and the card stays
+        self.ghosts[key] = self.cards.get(key)
+        return super().delete(key)
+
+    def load_all(self):
+        out = super().load_all()
+        if self.stale > 0:
+            self.stale -= 1
+            out.update({k: v for k, v in self.ghosts.items() if v is not None})
+        return out
+
+
+def test_a_delete_the_listing_shows_late_is_read_again_and_passes(tmp_path):
+    review(tmp_path)
+    repo = LateListing(stale=1)
+    for c in inflated_cards():
+        repo.seed(c["id"], c)
+    plan = plan_for(repo, tmp_path)
+    run = tidy.RepositoryTidy(repo, tmp_path, verify_wait=0.01).apply(plan, repo.load_all())
+    assert run.removed == len(plan.entries) and run.verified and run.failed_checks == []
+
+
+def test_a_failed_check_names_each_card_and_why_and_the_manifest_keeps_them(tmp_path, monkeypatch, capsys):
+    review(tmp_path)
+    repo = LateListing(keep=("vendored-lib",))
+    for c in inflated_cards():
+        repo.seed(c["id"], c)
+    plan = plan_for(repo, tmp_path)
+    run = tidy.RepositoryTidy(repo, tmp_path, verify_wait=0.01).apply(plan, repo.load_all())
+    assert run.verified is False
+    assert [(c["card"], c["check"]) for c in run.failed_checks] == [("vendored-lib", "removed")]
+    assert "still holds it" in run.failed_checks[0]["why"] and "stays" in run.failed_checks[0]["why"]
+    summary = json.loads(run.manifest.read_text().splitlines()[-1])["summary"]
+    assert summary["verified"] is False and summary["failed_checks"] == 1
+    assert summary["checks"] == run.failed_checks
+
+
+def test_the_command_prints_how_many_checks_failed(tmp_path, monkeypatch, capsys):
+    from quest_ai_runner import cli_cards
+    repo = LateListing(keep=("vendored-lib",))
+    for c in inflated_cards():
+        repo.seed(c["id"], c)
+    backend_store(tmp_path, repo)
+    monkeypatch.setattr(tidy, "VERIFY_WAIT", 0.0)
+    monkeypatch.setattr(cli_cards, "lane_store", lambda args: (str(tmp_path / "cards"), str(tmp_path), repo))
+    run_tidy(cli_cards, apply=True)
+    assert "checks failed   : 1" in capsys.readouterr().out
+
+
+# --- manifests sort in the order the runs started -------------------------------------------------------------
+
+def test_run_names_sort_in_start_order_within_one_second():
+    stamps = [tidy.run_stamp() for _ in range(300)]
+    assert sorted(stamps) == stamps and len(set(stamps)) == 300
+
+
+def test_latest_manifest_is_the_last_run_even_in_the_same_second(tmp_path):
+    review(tmp_path)
+    repo = backend_with(inflated_cards())
+    first = tidy.RepositoryTidy(repo, tmp_path).apply(plan_for(repo, tmp_path), repo.load_all())
+    assert tidy.latest_manifest(tmp_path) == first.manifest
+    tidy.RepositoryTidy(repo, tmp_path).undo(first.manifest)
+    second = tidy.RepositoryTidy(repo, tmp_path).apply(plan_for(repo, tmp_path), repo.load_all())
+    assert tidy.latest_manifest(tmp_path) == second.manifest != first.manifest

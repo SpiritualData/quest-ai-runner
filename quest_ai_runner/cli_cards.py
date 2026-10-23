@@ -111,6 +111,8 @@ def tidy_repository(store, repo, cards_dir: Path, *, apply: bool, merge_topics: 
     if run.export:
         print(f"export          : {run.export}")
         print(f"undo            : quest-ai-runner cards tidy --undo {run.manifest}")
+    if run.failed_checks:
+        print(f"checks failed   : {len(run.failed_checks):,} (each card and why it stays are in the manifest)")
     for problem in run.problems[:10]:
         print(f"  check failed: {problem}")
     if run.failed:

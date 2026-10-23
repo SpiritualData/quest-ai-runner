@@ -159,14 +159,34 @@ def count_line(b: Breakdown) -> str:
 
 
 def how_to_change_line() -> str:
-    """The second line: how to allow more. Short enough for the same window, and no full stop inside it."""
-    return f"Set {limit_mod.ENV_MAX_CARDS} higher (0 = no limit), or ask the AI to raise it"
+    """The second line: the tidy first, a higher limit second. Short enough for the same window, no full stop inside."""
+    return f"Run quest-ai-runner cards tidy --apply, or set {limit_mod.ENV_MAX_CARDS} higher"
 
 
-def lane_note(lines: List[str]) -> str:
-    """The two lines as one sentence pair for a lane's task feed, which has a task's text around it: it says
-    what it is about, so a reader does not take it for a report on their task."""
-    return f"About the context store, not this task: {lines[0]}. {lines[1]}."
+# Why a learned or quest card is kept above the limit where the store cannot set a card aside (the Quest backend,
+# Qdrant), while a new topic or imported card is refused: said in the notice, never left for a person to guess.
+KEPT_OVER_WHY = ("Cards learned from runs are still added above the limit: they cannot be rebuilt from the files, "
+                 "and this store cannot set a topic card aside to make room without deleting shared data, so the "
+                 "tidy is what brings it back under.")
+
+
+def can_set_aside(guard: Any) -> bool:
+    return callable(getattr(getattr(guard, "repo", None), "quarantine", None))
+
+
+def lane_note(lines: List[str], guard: Any = None) -> str:
+    """The notice for a lane's task feed, which has a task's text around it: it says what it is about, so a reader
+    does not take it for a report on their task. The exact tidy command for this store comes first, a higher limit
+    second, and (where the store cannot set a card aside) why learned cards still come in above the limit."""
+    from . import card_store_tidy as tidy
+    repo = getattr(guard, "repo", None)
+    cards_dir = getattr(guard, "cards_dir", "")
+    text = (f"About the context store, not this task: {lines[0]}. To bring it under the limit run: "
+            f"{tidy.apply_command(repo, cards_dir)} (add --merge-topics to also join cards that pin the same files "
+            f"under another name). {tidy.REVERSIBLE} Or set {limit_mod.ENV_MAX_CARDS} higher (0 = no limit).")
+    if guard is not None and not can_set_aside(guard):
+        text += " " + KEPT_OVER_WHY
+    return text
 
 
 def notice_lines(b: Breakdown, *, admitted_over: int = 0) -> List[str]:
@@ -178,9 +198,16 @@ def notice_lines(b: Breakdown, *, admitted_over: int = 0) -> List[str]:
     return [count_line(b), how_to_change_line()]
 
 
-def change_instructions(cards_dir: Path) -> List[str]:
+def change_instructions(cards_dir: Path, repo: Any = None) -> List[str]:
+    from . import card_store_tidy as tidy
+    where = tidy.lane_args(repo if repo is not None else FilesystemCardRepository(str(cards_dir)), cards_dir)
     return [
-        f"Set {limit_mod.ENV_MAX_CARDS} to the number of cards to allow. 0 (or the word unlimited) means no limit. "
+        f"First, tidy it: quest-ai-runner cards tidy {where} lists what would be removed (copies, cards about "
+        f"excluded folders, duplicates); add --apply to do it, and --merge-topics to also join cards that pin the same "
+        f"files under another name onto their keeper. {tidy.REVERSIBLE} A card with notes, usage, quest tags or a "
+        "hand-written origin is never removed. A lane tidies on its own at start with card_tidy = \"apply\" in its "
+        "config (the default for a local folder; the Quest backend and Qdrant only plan until the owner sets it).",
+        f"Or allow more: set {limit_mod.ENV_MAX_CARDS} to the number of cards to allow. 0 (or the word unlimited) means no limit. "
         f"The default is {limit_mod.DEFAULT_MAX_CARDS}.",
         "A lane reads its environment from three places, strongest first: the process environment (the "
         "service unit's Environment= or EnvironmentFile= lines), the .env files named in env_files in "
@@ -192,13 +219,10 @@ def change_instructions(cards_dir: Path) -> List[str]:
         "change where this lane reads its environment and restart it.",
         f"Cards the limit moved out are in {cards_dir / QUARANTINE_DIR_NAME / limit_mod.QUARANTINE_REASON} "
         f"(one line per card in {limit_mod.MANIFEST_NAME}). Move a file back into {cards_dir} to put it back.",
-        f"A full store can also be tidied: quest-ai-runner cards tidy --cards-dir {cards_dir} lists what is "
-        "provably a copy of another card (a dry run; nothing moves without --apply, and a card with notes, "
-        "usage, quest tags or a hand-written origin never moves).",
     ]
 
 
-def full_text(b: Breakdown, state: limit_mod.LimitState, cards_dir: Path) -> str:
+def full_text(b: Breakdown, state: limit_mod.LimitState, cards_dir: Path, repo: Any = None) -> str:
     """The notice in full, for the log and for an AI asked to change the limit. Not shown on screen."""
     biggest = ", ".join(f"{short(name)} {n:,}" for name, n in b.topic_by_folder[:SCREEN_FOLDERS])
     holds = (f"It holds {b.topic:,} topic cards" + (f" (the biggest folders: {biggest})" if biggest else "")
@@ -206,14 +230,16 @@ def full_text(b: Breakdown, state: limit_mod.LimitState, cards_dir: Path) -> str
                f"{b.managed:,} from quests. New topic and imported cards are not being added.")
     if state.admitted_over:
         holds += f" {state.admitted_over:,} learned or quest cards were kept above the limit."
+    if repo is not None and not callable(getattr(repo, "quarantine", None)):
+        holds += " " + KEPT_OVER_WHY
     lines = [count_line(b), holds, how_to_change_line(),
              f"Card store: {cards_dir}. Full list: {cards_dir / REPORT_NAME}, or run: "
              f"quest-ai-runner cards report --cards-dir {cards_dir}"]
-    lines.extend(change_instructions(cards_dir))
+    lines.extend(change_instructions(cards_dir, repo))
     return "\n".join(lines)
 
 
-def render_report(b: Breakdown, state: limit_mod.LimitState, cards_dir: Path) -> str:
+def render_report(b: Breakdown, state: limit_mod.LimitState, cards_dir: Path, repo: Any = None) -> str:
     out: List[str] = [
         "# Card limit report", "",
         f"Store: {cards_dir}",
@@ -254,7 +280,8 @@ def render_report(b: Breakdown, state: limit_mod.LimitState, cards_dir: Path) ->
     out += (["| Card | Kind | Times used | Last touched | Created |", "| --- | --- | ---: | --- | --- |"]
             + [f"| {c['id']} | {c['kind']} | {c['used']} | {c['touched']} | {c['created']} |" for c in b.coldest]
             if b.coldest else ["none"])
-    out += ["", "## Change the limit", ""] + [f"{i}. {text}" for i, text in enumerate(change_instructions(cards_dir), 1)]
+    out += ["", "## Tidy it, or change the limit", ""] + [
+        f"{i}. {text}" for i, text in enumerate(change_instructions(cards_dir, repo), 1)]
     return "\n".join(out) + "\n"
 
 
@@ -276,7 +303,7 @@ def announce_full(guard: Any, *, at_open: bool = False, notify: Optional[Callabl
     progress feed (``take_task_notes``), which is where a person watching that lane will read them.
     """
     b = breakdown(guard.snapshot(), guard.cards_dir, guard.limit)
-    write_report(guard.cards_dir, render_report(b, guard.state, guard.cards_dir))
+    write_report(guard.cards_dir, render_report(b, guard.state, guard.cards_dir, getattr(guard, "repo", None)))
     lines = notice_lines(b, admitted_over=guard.state.admitted_over)
     for line in lines:
         log.warning("%s", line)
@@ -286,8 +313,9 @@ def announce_full(guard: Any, *, at_open: bool = False, notify: Optional[Callabl
             except Exception:  # noqa: BLE001 -- a broken callback must not stop the notice
                 log.debug("card limit notice callback failed", exc_info=True)
     # The whole text, for the log file and for an AI asked to change the limit; not repeated on screen.
-    log.warning("%s", full_text(b, guard.state, guard.cards_dir), extra={"in_transcript": False})
-    limit_mod.hold_task_note(str(guard.cards_dir), lane_note(lines))
+    log.warning("%s", full_text(b, guard.state, guard.cards_dir, getattr(guard, "repo", None)),
+                extra={"in_transcript": False})
+    limit_mod.hold_task_note(str(guard.cards_dir), lane_note(lines, guard))
 
 
 def report_for(cards_dir: str, limit: int, cards: Optional[Dict[str, Dict[str, Any]]] = None) -> str:

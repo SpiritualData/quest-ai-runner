@@ -598,7 +598,7 @@ class TestTheNotice:
         shown = [r.getMessage() for r in caplog.records if getattr(r, "in_transcript", True)]
         assert shown == [
             "Context store full at 10: 4 topic, 2 imported, 3 learned, 1 quest",
-            "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it",
+            "Run quest-ai-runner cards tidy --apply, or set QAR_MAX_CARDS higher",
         ]
         assert all("—" not in line for line in shown)
 
@@ -636,8 +636,14 @@ class TestTheNotice:
         store = mixed_store(tmp_path)
         self.refuse_one(store)
         notes = card_limit.take_task_notes()
-        assert notes == ["About the context store, not this task: Context store full at 10: 4 topic, 2 imported, "
-                         "3 learned, 1 quest. Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it."]
+        assert len(notes) == 1
+        note = notes[0]
+        assert note.startswith("About the context store, not this task: Context store full at 10: 4 topic, 2 imported, "
+                               "3 learned, 1 quest. To bring it under the limit run: quest-ai-runner cards tidy "
+                               f"--cards-dir {tmp_path / 'cards'} --apply")
+        assert note.index("cards tidy") < note.index("QAR_MAX_CARDS higher"), "the tidy first, a higher limit second"
+        assert "exported first" in note and "--undo" in note
+        assert "cannot be rebuilt" not in note, "a local folder sets a cold card aside, so nothing to explain"
         assert card_limit.take_task_notes() == []
 
     def test_a_startup_callback_is_told_both_lines_when_the_store_is_opened_full(self, tmp_path):
@@ -645,7 +651,7 @@ class TestTheNotice:
         store = mixed_store(tmp_path)
         store.prewarm(notify=said.append)
         assert said == ["Context store full at 10: 4 topic, 2 imported, 3 learned, 1 quest",
-                        "Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it"]
+                        "Run quest-ai-runner cards tidy --apply, or set QAR_MAX_CARDS higher"]
 
     def test_the_log_carries_the_instructions_an_ai_needs_to_change_it(self, tmp_path, caplog):
         store = mixed_store(tmp_path)

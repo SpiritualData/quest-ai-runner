@@ -27,9 +27,11 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import itertools
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -56,6 +58,25 @@ BATCH_SIZE = 25
 MODES = ("apply", "plan", "off")
 # Fields only a backend sets; two reads of an unchanged card may differ in them, an undo never writes them.
 SERVER_FIELDS = ("updated_at", "revision", "owner_user_id", "user_id", "card_id")
+# The final check re-reads a card the store still lists after its removal: a backend may list a delete late. This
+# many seconds at most, in steps of ``VERIFY_STEP``, before the check counts as failed.
+VERIFY_WAIT = 2.0
+VERIFY_STEP = 0.5
+# The label of the second step, taken only while a store would still be over its card limit after the first: a card
+# that pins the same files as its keeper under another name is joined onto that keeper (``cards tidy --merge-topics``).
+SECOND_STEP = "merge-topics"
+# Run names sort in the order the runs started: wall time to the nanosecond, then a per-process counter.
+run_counter = itertools.count(1)
+run_counter_lock = threading.Lock()
+
+
+def run_stamp() -> str:
+    """A name for one tidy run that sorts after every earlier run's, even within one second and one process."""
+    with run_counter_lock:
+        seq = next(run_counter)
+    now = time.time_ns()
+    return (f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(now // 1_000_000_000))}-{now % 1_000_000_000:09d}"
+            f"-{seq:06d}-{os.getpid()}-{os.urandom(3).hex()}")
 
 
 def is_local_folder(repo: Any) -> bool:
@@ -199,6 +220,8 @@ class TidyRun:
     removed_keys: List[str] = field(default_factory=list)
     verified: bool = False
     problems: List[str] = field(default_factory=list)
+    # The checks that failed, one per card: {"card", "check", "why"}; saved in the manifest's summary line.
+    failed_checks: List[Dict[str, str]] = field(default_factory=list)
 
     def skip(self, why: str) -> None:
         self.skipped[why] = self.skipped.get(why, 0) + 1
@@ -246,7 +269,7 @@ class RepositoryTidy:
 
     def __init__(self, repo: Any, cards_dir: Any, *, state_dir: Optional[Path] = None,
                  pace: Callable[[], None] = no_pace, should_stop: Callable[[], bool] = lambda: False,
-                 batch_size: int = BATCH_SIZE, batch_pause: float = 0.0) -> None:
+                 batch_size: int = BATCH_SIZE, batch_pause: float = 0.0, verify_wait: Optional[float] = None) -> None:
         self.repo = repo
         self.cards_dir = Path(cards_dir)
         self.state_dir = Path(state_dir) if state_dir is not None else state_dir_for(cards_dir)
@@ -254,6 +277,7 @@ class RepositoryTidy:
         self.should_stop = should_stop
         self.batch_size = max(1, int(batch_size))
         self.batch_pause = max(0.0, float(batch_pause))
+        self.verify_wait = max(0.0, float(VERIFY_WAIT if verify_wait is None else verify_wait))
         self.changes = 0
 
     # -- locks ----------------------------------------------------------------------------------
@@ -283,7 +307,7 @@ class RepositoryTidy:
 
     def export(self, plan: StorePlan, cards: Dict[str, Dict[str, Any]], run: TidyRun) -> None:
         """Write the export and open the manifest BEFORE anything is changed. Raises OSError when it cannot."""
-        stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{os.urandom(3).hex()}"
+        stamp = run_stamp()
         folder = private_dir(self.state_dir)
         removed = {e["key"] for e in plan.entries}
         keepers = {e[k] for e in plan.entries for k in ("keeper", "joins") if e.get(k) and e[k] not in removed}
@@ -349,7 +373,9 @@ class RepositoryTidy:
                 try:
                     self.journal(run, {"summary": {"removed": run.removed, "updated": run.updated,
                                                    "created": run.created, "skipped": run.skipped,
-                                                   "failed": run.failed, "verified": run.verified}})
+                                                   "failed": run.failed, "verified": run.verified,
+                                                   "failed_checks": len(run.failed_checks),
+                                                   "checks": run.failed_checks}})
                 except OSError:
                     pass
             lock.release()
@@ -423,27 +449,47 @@ class RepositoryTidy:
                 run.failed = f"the card {entry['key']} could not be removed"
                 return
             self.journal(run, {"op": "remove", "key": entry["key"], "card_id": entry.get("card_id", entry["key"]),
-                               "reason": entry["reason"], "keeper": keeper_key or becomes or ""})
+                               "reason": entry["reason"], "keeper": keeper_key or becomes or "",
+                               **({"step": entry["step"]} if entry.get("step") else {})})
             run.removed += 1
             run.removed_keys.append(entry["key"])
             self.changed(lock)
 
     def verify(self, run: TidyRun, plan: StorePlan, cards: Dict[str, Dict[str, Any]]) -> None:
-        """List the store again: every card this run removed is gone, every keeper it updated holds what it joined."""
+        """List the store again: every card this run removed is gone, every keeper it updated holds what it joined.
+
+        A card the listing still shows is read again on its own, after a short bounded wait (``verify_wait``), before
+        the check counts as failed: a backend may list a delete late. Every failed check names the card and why it
+        stays (``TidyRun.failed_checks``; the manifest's summary line keeps them)."""
         after = self.repo.load_all()
         planned = {e["key"] for e in plan.entries}
-        for key in run.removed_keys:
-            if key in after:
-                run.problems.append(f"{key} is still in the store")
+        lingering = [key for key in run.removed_keys if key in after]
+        waited = 0.0
+        while lingering and waited < self.verify_wait:
+            step = min(VERIFY_STEP, self.verify_wait - waited)
+            time.sleep(step)
+            waited += step
+            lingering = [key for key in lingering if self.repo.read(key) is not None]
+        for key in lingering:
+            self.check_failed(run, key, "removed", f"the store still holds it after {waited:g}s of re-reads, so it "
+                                                   "stays; the export holds it as it was")
         for entry in plan.entries:
             keeper = entry.get("joins") or entry.get("keeper")
             if entry["key"] in run.removed_keys and keeper and keeper in after and keeper not in planned:
-                words = {str(k).lower() for k in (after[keeper].get("keywords") or [])}
+                held = self.repo.read(keeper) or after[keeper]
+                words = {str(k).lower() for k in (held.get("keywords") or [])}
                 missing = [k for k in (cards.get(entry["key"], {}).get("keywords") or [])
                            if str(k).lower() not in words]
                 if missing:
-                    run.problems.append(f"{keeper} lacks the keywords of {entry['key']}")
-        run.verified = not run.problems
+                    self.check_failed(run, keeper, "joined",
+                                      f"it lacks the keywords of {entry['key']} ({', '.join(map(str, missing[:5]))}); "
+                                      "the export holds the removed card")
+        run.verified = not run.failed_checks
+
+    @staticmethod
+    def check_failed(run: TidyRun, card: str, check: str, why: str) -> None:
+        run.failed_checks.append({"card": card, "check": check, "why": why})
+        run.problems.append(f"{card}: {why}")
 
     # -- undo -----------------------------------------------------------------------------------
 
@@ -515,6 +561,8 @@ class RepositoryTidy:
 
 
 def latest_manifest(cards_dir: Any) -> Optional[Path]:
+    """The manifest of the run that started last. Names sort in start order (``run_stamp``: nanoseconds and a
+    counter after the second), so two runs in one second are told apart."""
     folder = state_dir_for(cards_dir)
     try:
         found = sorted(folder.glob(f"*{MANIFEST_SUFFIX}"), key=lambda p: p.name)
@@ -523,11 +571,78 @@ def latest_manifest(cards_dir: Any) -> Optional[Path]:
     return found[-1] if found else None
 
 
-def tidied_message(run: TidyRun, undo_hint: str) -> str:
-    return (f"Tidied {run.removed:,} context cards (copies and cards about excluded folders); "
-            f"undo with: {undo_hint}")
+# --------------------------------------------------------------------------------------------
+# The second step, and what a person is told
+# --------------------------------------------------------------------------------------------
+
+def with_second_step(cards: Dict[str, Dict[str, Any]], first: StorePlan, *, cards_dir: Any, own_store_id: str = "",
+                     repo: Any = None) -> StorePlan:
+    """``first`` plus the second step, as ONE plan (one export, one manifest, one undo): the same reasons with cards
+    that pin a keeper's files under another name joined onto that keeper (what ``cards tidy --merge-topics`` adds).
+    Every entry the first plan does not hold is labelled ``"step": "merge-topics"``. For a store that would still
+    be over its card limit after ``first``."""
+    combined = plan_store(cards, cards_dir=cards_dir, reasons=first.reasons or DEFAULT_REASONS,
+                          own_store_id=own_store_id, repo=repo, distinct_topics=False)
+    firsts = {e["key"] for e in first.entries}
+    for entry in combined.entries:
+        if entry["key"] not in firsts:
+            entry["step"] = SECOND_STEP
+    combined.why = first.why
+    return combined
 
 
-def planned_message(plan: StorePlan, apply_hint: str) -> str:
-    return (f"{len(plan.entries):,} context cards could be tidied ({plan.summary()}); nothing was changed. "
-            f"To apply: {apply_hint}")
+def split_steps(plan: StorePlan) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """``(first step entries, second step entries)`` of a plan."""
+    return ([e for e in plan.entries if e.get("step") != SECOND_STEP],
+            [e for e in plan.entries if e.get("step") == SECOND_STEP])
+
+
+def lane_args(repo: Any, cards_dir: Any) -> str:
+    """The arguments that point ``quest-ai-runner cards ...`` at this store: its card folder for a local folder,
+    else the lane's config file (the Quest backend and Qdrant are reached through it)."""
+    if is_local_folder(repo):
+        return f"--cards-dir {cards_dir}"
+    return f"--config {os.environ.get('QAR_CONFIG_FILE') or '<the lane config file>'}"
+
+
+def apply_command(repo: Any, cards_dir: Any, *, merge_topics: bool = False) -> str:
+    return (f"quest-ai-runner cards tidy {lane_args(repo, cards_dir)} --apply"
+            + (" --merge-topics" if merge_topics else ""))
+
+
+REVERSIBLE = "Every card it touches is exported first, and --undo with the manifest it prints restores it."
+
+
+def tidied_message(run: TidyRun, undo_hint: str, joined: int = 0) -> str:
+    """What a tidy did; ``joined`` of the removed cards were the second step's (``SECOND_STEP``)."""
+    text = f"Tidied {run.removed - joined:,} context cards (copies and cards about excluded folders)"
+    if joined:
+        text += (f", then, as a second step to stay under the card limit, joined {joined:,} "
+                 f"{'card that pinned' if joined == 1 else 'cards that pinned'} the same files under another name "
+                 "onto their keeper")
+    return text + f"; undo with: {undo_hint}"
+
+
+def planned_message(plan: StorePlan, apply_hint: str, *, total: int = 0, merge_hint: str = "") -> str:
+    """One plain sentence of what the tidy would remove (and, for a store still over its limit after it, what the
+    second step would join), then how to apply it, how to make it automatic, and that it can be undone."""
+    firsts, seconds = split_steps(plan)
+    removed = len(firsts)
+    why = f" because {plan.why}" if plan.why else ""
+    text = (f"The context store needs a tidy{why}: removing {removed:,} copies and cards about excluded folders"
+            + (f" ({StorePlan(entries=firsts).summary()})" if removed else ""))
+    if total:
+        text += f" would leave {total - removed:,} cards"
+    else:
+        text += " would make it smaller"
+    if seconds:
+        joined = len(seconds)
+        text += (f", and a second step, joining {joined:,} {'card that pins' if joined == 1 else 'cards that pin'} "
+                 f"the same files under another name onto their keeper, would bring the store to "
+                 f"{total - removed - joined:,} cards")
+    text += "; nothing was changed."
+    if seconds and merge_hint:
+        text += f" To apply both steps: {merge_hint} (the first step alone: {apply_hint})."
+    else:
+        text += f" To apply: {apply_hint}."
+    return (text + ' To tidy automatically, set card_tidy = "apply" in the lane config. ' + REVERSIBLE)

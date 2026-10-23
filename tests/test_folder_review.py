@@ -474,3 +474,69 @@ def test_a_nested_store_that_is_not_a_copy_stays_imported(tmp_path, caplog):
     assert _risk_warnings(caplog) == []
     gate = gate_mod.folder_gate(tmp_path, set(), None, None, tmp_path / "cards_elsewhere")
     assert not gate.excludes_dir(tmp_path / "product")
+
+
+# --- a copy of the corpus with NO card store of its own --------------------------------------------------
+
+def _storeless_snapshot(root: Path, name: str = "backup_2026-10-16") -> Path:
+    """A backup of the live tree taken without its card store: the live layout and its files, nothing else."""
+    snap = root / name
+    for sub in ("docs", "src", "notes"):
+        (snap / sub).mkdir(parents=True, exist_ok=True)
+        (snap / sub / "a.md").write_text(f"# {sub}\nnotes\n")
+        (snap / sub / "copy_only.md").write_text("# copied\nonly in the backup\n")
+    return snap
+
+
+def _indexed_paths(store: FileContextStore):
+    return {f.get("path") for c in store._load_all().values() for f in c.get("files", [])}
+
+
+def test_a_storeless_copy_is_flagged_by_its_layout_on_a_small_corpus():
+    out = gate_mod.layout_copy_reason("backup_2026-10-16", ["docs", "notes", "src"], ["docs", "notes", "src"])
+    assert "repeats the corpus's own layout" in out and "dated or numbered" in out
+    assert gate_mod.layout_copy_reason("backup_2026-10-16", ["docs", "src"], ["docs", "notes", "src"]) == ""
+    assert gate_mod.layout_copy_reason("docs", ["src", "notes"], ["docs", "notes", "src"]) == "", \
+        "the names on the way down are not counted, so two of two is not three"
+
+
+def test_a_storeless_backup_copy_is_not_indexed_when_the_review_cannot_run(tmp_path, caplog):
+    _live_corpus(tmp_path)
+    _storeless_snapshot(tmp_path)
+    gate = gate_mod.folder_gate(tmp_path, set(), None, None, tmp_path / "cards_elsewhere")
+    assert "backup_2026-10-16" in gate.blocked and "copy of this corpus" in gate.blocked["backup_2026-10-16"]
+    assert not gate.excludes_dir(tmp_path / "docs") and not gate.excludes_dir(tmp_path / "src")
+    caplog.clear()
+    store = _store(tmp_path)
+    with caplog.at_level(logging.WARNING):
+        store.bootstrap(root=str(tmp_path))           # no provider; the corpus is far under 2,000 files
+    assert len(_risk_warnings(caplog)) == 1 and "backup_2026-10-16" in _risk_warnings(caplog)[0].getMessage()
+    assert not any("backup_2026-10-16" in (p or "") for p in _indexed_paths(store))
+
+
+def test_a_storeless_backup_copy_goes_to_the_review_below_the_file_floor(tmp_path, caplog):
+    _live_corpus(tmp_path)
+    _storeless_snapshot(tmp_path)
+    provider = ReviewProvider()
+    store = _store(tmp_path)
+    with caplog.at_level(logging.WARNING):
+        store.bootstrap(root=str(tmp_path), provider=provider)
+    assert any("[RISK:" in c and "backup_2026-10-16" in c and "copy of this corpus" in c
+               for c in provider.review_calls), "the copy is asked about, with the signal, under the floor"
+    verdict = json.loads((tmp_path / "cards_elsewhere" / "folder_review.json").read_text())["folders"]
+    assert verdict["backup_2026-10-16"]["index"] is False
+    assert verdict["backup_2026-10-16"]["source"] == "risk_signal"
+    assert _risk_warnings(caplog) == [], "a reviewed folder needs no warning"
+
+
+def test_an_ordinary_docs_folder_that_shares_two_root_names_is_not_a_copy(tmp_path, caplog):
+    _live_corpus(tmp_path)
+    for sub in ("src", "notes", "guides"):                 # docs/src and docs/notes: two names, not three
+        (tmp_path / "docs" / sub).mkdir()
+        (tmp_path / "docs" / sub / "x.md").write_text("# x\n")
+    gate = gate_mod.folder_gate(tmp_path, set(), None, None, tmp_path / "cards_elsewhere")
+    assert gate.blocked == {}
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        _store(tmp_path).bootstrap(root=str(tmp_path))
+    assert _risk_warnings(caplog) == []

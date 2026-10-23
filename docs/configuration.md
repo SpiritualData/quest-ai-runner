@@ -61,7 +61,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CLI_EFFORT` | Reasoning effort passed to the Claude CLI provider (low, medium, high; empty = CLI default). | `adapters/claude_cli_provider.py` | - |
 | `QAR_CLI_HAIKU_THINKING_TOKENS` | Thinking-token cap for Haiku completions through the CLI provider (unset = CLI default). | `adapters/claude_cli_provider.py` | - |
 | `QAR_CLI_PLAN_THINKING_TOKENS` |  | `cli_config.py` | `docs/cheap-model-routing.md` |
-| `QAR_CONFIG_FILE` |  | `cli_cards.py`, `cli_config.py`, `config_environment.py` | `README.md`, `docs/chat.md`, `docs/writing-a-consumer.md` |
+| `QAR_CONFIG_FILE` |  | `adapters/card_store_tidy.py`, `cli_cards.py`, `cli_config.py` +1 | `README.md`, `docs/chat.md`, `docs/context-card-stores.md` +1 |
 | `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `config_core_settings.py`, `runner/lane.py` | `.env.example`, `docs/context-assembly.md` |
 | `QAR_CONTEXT_CARDS_DIR` |  | `cli_cards.py`, `cli_chat.py`, `cli_context.py` | `.env.example`, `docs/context-assembly.md` |
 | `QAR_CONTEXT_POLL_SECONDS` |  | `cli_config.py` | `docs/quest-api-contract.md` |

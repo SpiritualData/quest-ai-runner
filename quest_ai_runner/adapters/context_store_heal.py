@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from ..core.background_pacing import Pacer
+from . import card_limit as limit_mod
 from . import card_store_hygiene as hygiene
 from . import card_store_tidy as tidy
 from .card_repository import FilesystemCardRepository
@@ -91,10 +92,15 @@ class HealMixin:
 
         Due when the store's own cards are over its card limit (every default reason: the limit itself never removes
         a card) or, on a repository other than a local folder, when an id proves a card a copy (a local folder's
-        provable copies are the ``tidy`` above). What it then does is the lane's ``card_tidy`` setting: ``apply``,
-        ``plan`` (write the plan, say once what it would do and how to apply it) or ``off``; unset, a local folder
-        applies and any other repository plans, because its cards are shared team data and deleting them is the
-        owner's call. Meant for the background thread that warms the store. Returns how many cards it removed.
+        provable copies are the ``tidy`` above). When the store would still be over its limit after that plan, a
+        SECOND step joins cards that pin a keeper's files under another name onto that keeper (``cards tidy
+        --merge-topics``), because the owner's limit is the number to stay under. What it then does is the lane's
+        ``card_tidy`` setting: ``apply`` (both steps), ``plan`` (write the plan, say once what both steps would do and
+        how to apply them) or ``off``; unset, a local folder applies and any other repository plans, because its cards
+        are shared team data and deleting them is the owner's call. Whatever it did or would do is said where the
+        card limit's notice is: the log, ``notify`` and the next task's progress feed (``card_limit.hold_task_note``),
+        so a lane run with only Quest credentials sees it. Meant for the background thread that warms the store.
+        Returns how many cards it removed.
         """
         if not getattr(self, "heal_enabled", False) or self._dry_run:
             return 0
@@ -104,43 +110,64 @@ class HealMixin:
             return 0
         try:
             cards = self._own_cards()
-            reasons, why = tidy.due(cards, self.limit_guard.limit)
+            limit = self.limit_guard.limit
+            reasons, why = tidy.due(cards, limit)
             if not reasons or (tidy.is_local_folder(repo) and reasons == tidy.PROVABLE_REASONS):
                 return 0
-            plan = tidy.plan_store(cards, cards_dir=self._cards_dir, reasons=reasons,
-                                   own_store_id=self.own_store_id(), repo=repo)
+            own_store_id = self.own_store_id()
+            plan = tidy.plan_store(cards, cards_dir=self._cards_dir, reasons=reasons, own_store_id=own_store_id,
+                                   repo=repo)
             plan.why = why
+            if limit > 0 and len(cards) - len(plan.entries) > limit:
+                # Still over the owner's limit after the plan: the second step joins same-file topics too.
+                plan = tidy.with_second_step(cards, plan, cards_dir=self._cards_dir, own_store_id=own_store_id,
+                                             repo=repo)
             if not plan.entries:
                 return 0
-            where = f"--cards-dir {self._cards_dir}"
             if mode == "plan":
-                self.announce_plan(plan, where, notify)
+                self.announce_plan(plan, len(cards), notify)
                 return 0
-            self.moving_ids = frozenset(e["key"] for e in plan.entries)
-            self._cache_dirty = True
-            try:
-                runner = tidy.RepositoryTidy(repo, self._cards_dir, pace=Pacer(), should_stop=self._closed.is_set,
-                                             batch_pause=0.0 if tidy.is_local_folder(repo) else 0.2)
-                run = runner.apply(plan, cards)
-            finally:
-                self.moving_ids = frozenset()
-                self._cache_dirty = True
+            run = self.apply_tidy(repo, plan, cards)
             if run.removed:
                 self.inflation_verdict = None
-                message = tidy.tidied_message(run, f"quest-ai-runner cards tidy --undo {run.manifest} {where}")
+                seconds = {e["key"] for e in tidy.split_steps(plan)[1]}
+                message = tidy.tidied_message(
+                    run, f"quest-ai-runner cards tidy --undo {run.manifest} {tidy.lane_args(repo, self._cards_dir)}",
+                    joined=len(seconds & set(run.removed_keys)))
                 _log.warning("%s Because %s. By reason: %s.", message, why, plan.summary())
-                if notify is not None:
-                    notify(message)
-            if run.failed or run.problems:
-                _log.warning("context index: the card tidy %s%s; the export %s undoes what was done",
-                             run.failed or "finished", f" ({'; '.join(run.problems[:5])})" if run.problems else "",
-                             run.export)
+                self.say(message, notify)
             return run.removed
         except Exception:  # noqa: BLE001
             _log.warning("context index: the card tidy stopped on an error", exc_info=True)
             return 0
 
-    def announce_plan(self, plan: "tidy.StorePlan", where: str, notify: Optional[Callable[[str], None]]) -> None:
+    def apply_tidy(self, repo, plan: "tidy.StorePlan", cards) -> "tidy.TidyRun":
+        """Carry one plan out with the cards it removes hidden from the loader meanwhile; log what did not go well."""
+        self.moving_ids = frozenset(e["key"] for e in plan.entries)
+        self._cache_dirty = True
+        try:
+            runner = tidy.RepositoryTidy(repo, self._cards_dir, pace=Pacer(), should_stop=self._closed.is_set,
+                                         batch_pause=0.0 if tidy.is_local_folder(repo) else 0.2)
+            run = runner.apply(plan, cards)
+        finally:
+            self.moving_ids = frozenset()
+            self._cache_dirty = True
+        if run.failed or run.problems:
+            _log.warning("context index: the card tidy %s; %d check(s) failed%s; the manifest %s lists them and the "
+                         "export %s undoes what was done", run.failed or "finished", len(run.failed_checks),
+                         f" ({'; '.join(run.problems[:5])})" if run.problems else "", run.manifest, run.export)
+        return run
+
+    def say(self, message: str, notify: Optional[Callable[[str], None]]) -> None:
+        """Give a tidy notice where the card limit gives its own: ``notify`` and the next task's progress feed."""
+        if notify is not None:
+            try:
+                notify(message)
+            except Exception:  # noqa: BLE001 -- a broken callback must not stop the notice
+                _log.debug("card tidy notice callback failed", exc_info=True)
+        limit_mod.hold_task_note(f"{self._cards_dir}#tidy", f"About the context store, not this task: {message}")
+
+    def announce_plan(self, plan: "tidy.StorePlan", total: int, notify: Optional[Callable[[str], None]]) -> None:
         """Write the plan beside the cards and say once (per distinct plan) what it would do and how to apply it."""
         folder = tidy.private_dir(tidy.state_dir_for(self._cards_dir))
         target = folder / tidy.PLAN_FILE
@@ -149,15 +176,22 @@ class HealMixin:
         except (OSError, ValueError, AttributeError):
             previous = None
         fingerprint = plan.fingerprint()
-        tidy.write_private(target, json.dumps({"fingerprint": fingerprint, "why": plan.why, "entries": plan.entries,
-                                               "skipped": plan.skipped}, indent=1, default=str) + "\n")
-        message = tidy.planned_message(plan, f"quest-ai-runner cards tidy --apply {where} (the plan is in {target})")
+        firsts, seconds = tidy.split_steps(plan)
+        record = {"fingerprint": fingerprint, "why": plan.why, "entries": firsts, "skipped": plan.skipped,
+                  "cards_after": total - len(firsts)}
+        if seconds:
+            record["second_step"] = {"what": "join cards that pin the same files under another name onto their keeper "
+                                             "(cards tidy --merge-topics), to stay under the card limit",
+                                     "entries": seconds, "cards_after": total - len(plan.entries)}
+        tidy.write_private(target, json.dumps(record, indent=1, default=str) + "\n")
+        repo = self._own_repo
+        message = tidy.planned_message(plan, tidy.apply_command(repo, self._cards_dir), total=total,
+                                       merge_hint=tidy.apply_command(repo, self._cards_dir, merge_topics=True))
         if previous == fingerprint:
             _log.info("%s", message)
             return
-        _log.warning("%s Because %s.", message, plan.why)
-        if notify is not None:
-            notify(message)
+        _log.warning("%s The plan is in %s.", message, target)
+        self.say(message, notify)
 
     def inflated(self) -> bool:
         """Whether the store holds more topic cards than its corpus has folders (checked once).

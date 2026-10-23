@@ -18,8 +18,9 @@ answer and no per-path copy of it:
   the nested store carries this store's own ``store_id``; its recorded root is this corpus's root
   while it sits elsewhere under a dated or numbered folder name, or beside a repeated layout (a
   store copied along with the tree it indexes); or its folder repeats at least three of the corpus
-  root's own top-level folder names (80% of them, not counting the folders on the way down to it)
-  and holds a card store. One ordinary nested store
+  root's own top-level folder names (80% of them, not counting the folders on the way down to it).
+  That last test is asked of EVERY folder the walk meets, with or without a card store, because a
+  backup snapshot taken without its store is still a copy. One ordinary nested store
   with none of these is normal and stays imported.
 * A folder with a signal is ALWAYS put to the folder review, whatever the corpus size, with the
   signal as context. The verdict is cached in ``folder_review.json`` with ``source: risk_signal``
@@ -203,6 +204,29 @@ _COPY_STRONG_NAMES = 3
 _COPY_STRONG_SHARE = 0.8
 
 
+def shared_layout(rel: str, inside: Sequence[str], root_layout: Sequence[str]) -> Tuple[List[str], float, int]:
+    """``(shared names, share, names compared)``: which of the corpus root's top-level folder names the folder
+    ``rel`` repeats among its own child folders ``inside``, ignoring the names on the way down to it."""
+    on_the_way = set(rel.split("/"))
+    names = [n for n in root_layout if n not in on_the_way]
+    held = set(inside)
+    shared = [n for n in names if n in held]
+    return shared, (len(shared) / len(names) if names else 0.0), len(names)
+
+
+def layout_copy_reason(rel: str, inside: Sequence[str], root_layout: Sequence[str]) -> str:
+    """Why the folder ``rel`` is a copy of the corpus by its layout alone, or "": it repeats at least three of the
+    corpus root's top-level folder names and 80% of them. Structure only; asked of EVERY folder the walk meets,
+    whether or not it holds a card store (a backup snapshot copied without one is still a copy). A dated or
+    numbered name on its path is said too, as context for the review."""
+    shared, share, _ = shared_layout(rel, inside, root_layout)
+    if len(shared) < _COPY_STRONG_NAMES or share < _COPY_STRONG_SHARE:
+        return ""
+    dated = any(name_looks_serial(part) for part in rel.split("/"))
+    return (f"it repeats the corpus's own layout ({', '.join(shared[:4])})"
+            + (" under a dated or numbered name" if dated else ""))
+
+
 def copy_of_self_reason(store_dir: Path, rel: str, walk_root: Path, own_cards_dir: Optional[Path],
                         root_layout: Sequence[str], skip_dirs: Set[str]) -> str:
     """Why the store at ``store_dir`` (``rel`` under the corpus) is a copy of the corpus itself, or "".
@@ -219,11 +243,8 @@ def copy_of_self_reason(store_dir: Path, rel: str, walk_root: Path, own_cards_di
         own_id = read_meta(str(own_cards_dir)).get("store_id")
         if own_id and meta.get("store_id") == own_id:
             return "it carries this store's own identity"
-    on_the_way = set(rel.split("/"))
-    names = [n for n in root_layout if n not in on_the_way]
-    inside = set(_child_dir_names(store_dir, skip_dirs)) if len(names) >= _COPY_MIN_NAMES else set()
-    shared = [n for n in names if n in inside]
-    share = len(shared) / len(names) if names else 0.0
+    inside = _child_dir_names(store_dir, skip_dirs)
+    shared, share, _ = shared_layout(rel, inside, root_layout)
     layout = len(shared) >= _COPY_MIN_NAMES and share >= _COPY_MIN_SHARE
     recorded = meta.get("root")
     if recorded:
@@ -236,9 +257,7 @@ def copy_of_self_reason(store_dir: Path, rel: str, walk_root: Path, own_cards_di
         if same_root and (layout or any(name_looks_serial(part) for part in rel.split("/"))):
             return "its recorded root is this corpus's root"
     # The layout alone must be strong: a nested project may share a folder name or two.
-    if len(shared) >= _COPY_STRONG_NAMES and share >= _COPY_STRONG_SHARE:
-        return f"it repeats the corpus's own layout ({', '.join(shared[:4])})"
-    return ""
+    return layout_copy_reason(rel, inside, root_layout)
 
 
 def scan_tree(walk_root: Path, skip_dirs: Set[str], own_cards_dir: Optional[Path] = None) -> TreeFacts:
@@ -250,8 +269,9 @@ def scan_tree(walk_root: Path, skip_dirs: Set[str], own_cards_dir: Optional[Path
     facts = TreeFacts()
     try:
         root = walk_root.resolve()
-        root_layout = _child_dir_names(root, skip_dirs)
         own = own_cards_dir.resolve() if own_cards_dir is not None else None
+        # The corpus's own card folder is the lane's state, not its layout: a copy need not repeat it.
+        root_layout = [n for n in _child_dir_names(root, skip_dirs) if own is None or root / n != own]
         for dirpath, dirnames, _files in os.walk(root):
             current = Path(dirpath)
             if own is not None and current.resolve() == own:
@@ -270,6 +290,14 @@ def scan_tree(walk_root: Path, skip_dirs: Set[str], own_cards_dir: Optional[Path
                     dirnames[:] = []
                     continue
             if not rel:
+                continue
+            # A copy of the corpus WITHOUT a card store of its own (a snapshot taken without one, or with it
+            # skipped) is found by its layout alone, for every folder the walk meets.
+            why = layout_copy_reason(rel, dirnames, root_layout)
+            if why:
+                facts.copies[rel] = why
+                facts.series_paths.append(current)
+                dirnames[:] = []
                 continue
             members = find_series(dirnames, lambda n: _child_dir_names(current / n, skip_dirs))
             if members:

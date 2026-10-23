@@ -370,15 +370,21 @@ nested store discovery, ancestor imports, mounts discovery and the `migrate-impo
 - **Signals, no model, computed in one cheap walk** (`risk_signals` is a pure function): a folder whose
   subtree holds three or more card stores (one nested store is normal and is no signal); a series of
   sibling folders named like dates, timestamps or version numbers that share one child structure;
-  a very large folder (the folder review's own `_FOLDER_REVIEW_MIN_FILES`). A folder is reported at the
-  shallowest level that holds the pattern, and a confirmed series is not walked into.
+  a very large folder (the folder review's own `_FOLDER_REVIEW_MIN_FILES`); and a copy of the corpus
+  itself. That last one is asked of EVERY folder the walk meets, whether or not it holds a card store: a
+  folder whose own child folders repeat at least three of the corpus root's top-level folder names and 80% of
+  them (the names on the way down to it are not counted) is a copy, and a dated or versioned name on its
+  path is said too (`backup_2026-10-16`, taken without its card store, is caught by its layout alone). A
+  folder with a card store is also a copy when it carries this store's own identity, or records this
+  corpus's root while it sits under a dated name or beside a repeated layout. A folder is reported at the
+  shallowest level that holds the pattern, and a confirmed series or copy is not walked into.
 - **Always reviewed.** A folder with a signal is put to the folder review whatever the corpus size (the
   2,000-file floor does not apply), with the signal in the prompt (`[RISK: contains N card stores]`,
   `looks like a series of N dated or numbered copies`). The verdict is cached in `folder_review.json`
   with a reason and `source: risk_signal`, and stays human-editable: set `"index": true` on the folder
   to override a skip.
 - **If the review cannot run** (`QAR_FOLDER_REVIEW=0`, no provider, a failed call), a folder with a
-  stores or series signal is not indexed, not descended into, and no store beneath it is imported or
+  stores, series or copy signal is not indexed, not descended into, and no store beneath it is imported or
   mounted. One warning per run names the folder, why, and the override. A very large folder alone is
   context for the model, never a block. Folders with no signal keep the fail-open behaviour: an
   unreviewable ordinary corpus is indexed in full.
@@ -445,19 +451,25 @@ the limit and counted. The limit never trims a store by itself: the [tidy](#tidy
 **The notice**, once per process, when a pass that hit the limit ends (so it describes the store as it is),
 when a write is refused, or at open when the store is at or above the limit. On screen it is two warning
 lines that fit an 80 column terminal (the transcript shows the first sentence of a warning, cut to the
-window): the four counts on one line, then how to change the limit.
+window): the four counts on one line, then the tidy first and a higher limit second.
 
     Store full at 1,000: 812 topic, 150 imported, 30 learned, 8 quest
-    Set QAR_MAX_CARDS higher (0 = no limit), or ask the AI to raise it
+    Run quest-ai-runner cards tidy --apply, or set QAR_MAX_CARDS higher
 
 A larger store shortens the first line step by step (`Over limit 1,000 (1,430): ...`, then without thousands
 separators, then `12k` and `1.4M`, then shorter words): all four counts are always on it, within 72
 characters, at any size. The log carries the whole text: the biggest folders, where the report is, the
 variable, where a lane reads its environment from, and the way to put a moved card back. A startup callback
 gets the same two lines. A lane has no screen, so the first task that starts afterwards carries them as a
-status line on its live progress feed, once, as two sentences that say they are about the context store and
-not about the task ("About the context store, not this task: Store full at 1,000: ... . Set QAR_MAX_CARDS
-higher ..."). The breakdown is also written to
+status line on its live progress feed, once, saying it is about the context store and not about the task,
+with the exact tidy command for this store first ("About the context store, not this task: Store full at
+1,000: ... . To bring it under the limit run: quest-ai-runner cards tidy --config <the lane config file>
+--apply ... Every card it touches is exported first, and --undo ... restores it. Or set QAR_MAX_CARDS higher
+(0 = no limit)."). `--config` names `QAR_CONFIG_FILE` when it is set; a local folder store gets `--cards-dir`.
+On the Quest backend and Qdrant a new card learned from a run is still added above the limit (a new topic or
+imported card is refused there as everywhere): it cannot be rebuilt from the files, and those stores cannot set
+a topic card aside to make room without deleting shared data, so the notice says so and the tidy is what brings
+the store back under. The breakdown is also written to
 `card_limit_report.md` in the store and printed by `quest-ai-runner cards report [--cards-dir DIR]`: counts
 by kind (topic cards by top-level folder, imports by source store, learned, managed, moved out), what the
 limit has refused or moved since it was reached, the coldest derived cards, and the ways to change the limit.
@@ -572,10 +584,33 @@ card_tidy = "apply"   # or "plan", or "off"
 ```
 
 Unset, a local folder applies (a move into `_quarantine`, undone by moving it back) and the Quest backend and
-Qdrant PLAN: their cards are shared team data, and deleting them is the owner's call. A plan is written to
-`<cards dir>/tidy-state/last-plan.json` and said once, as one calm line ("N context cards could be tidied (...);
-nothing was changed. To apply: quest-ai-runner cards tidy --apply ..."); the same plan is not said again at the
-next start. Applied, it says "Tidied N context cards ...; undo with: quest-ai-runner cards tidy --undo <manifest>".
+Qdrant PLAN: their cards are shared team data, and deleting them is the owner's call.
+
+**A second step to stay under the limit.** When the store would still be over its card limit after the plan, the
+plan gains a clearly labelled second step: the `--merge-topics` join (a card that pins the same files as its
+keeper under another name is joined onto that keeper; its keywords join, nothing else of the keeper changes).
+Both steps are one plan, one export and one manifest (the second step's lines carry `"step": "merge-topics"`), so
+one `--undo` takes both back. With `card_tidy = "plan"` (the backend default) it only says that the second step
+would bring the store to N cards; with `"apply"` it carries both out.
+
+**Where it is said.** A plan is written to `<cards dir>/tidy-state/last-plan.json` (the second step under
+`second_step`, with the count it would leave) and said once, in the log, to a startup callback and, because a
+lane has no screen, as a status line on the next task's live progress feed (the same channel as the card limit's
+notice): "The context store needs a tidy because it holds 5,488 cards, over its limit of 1,000: removing N copies
+and cards about excluded folders (...) would leave M cards, and a second step, joining K cards that pin the same
+files under another name onto their keeper, would bring the store to J cards; nothing was changed. To apply both
+steps: quest-ai-runner cards tidy --config <the lane config file> --apply --merge-topics (the first step alone:
+... --apply). To tidy automatically, set card_tidy = "apply" in the lane config. Every card it touches is exported
+first, and --undo with the manifest it prints restores it." The same plan is not said again at the next start.
+Applied, the same places get "Tidied N context cards ...; undo with: quest-ai-runner cards tidy --undo
+<manifest> ...".
+
+**The final check.** After the changes the tidy lists the store again: every removed card must be gone and
+every keeper must hold the keywords it joined. A card the listing still shows is read again on its own for up to
+two seconds before the check counts as failed (a backend may list a delete late). Each failed check is saved in
+the manifest's last line (`summary.checks`: the card, the check and why it stays, with `failed_checks` the count),
+`cards tidy --apply` prints the count, and the lane's log names them. Manifest names sort in the order the runs
+started (to the nanosecond, then a counter), so `latest_manifest` is the last run even within one second.
 
 **For an adopter with only Quest credentials.** Nothing to install or reach: run the lane as usual. On its first
 start over the limit it writes the plan and prints the line above. Read the plan, then either run
