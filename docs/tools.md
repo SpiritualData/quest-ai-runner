@@ -44,6 +44,7 @@ quest and its surroundings (`core/tools_quest_ops.py`). Each is defined once, na
 | `add_quest_note`, `list_quest_notes` | writes, reads | The quest's note thread |
 | `list_quest_goals` | read | A quest's goals with text, assignee, status and due day; filters by assignee, due window, words; paged |
 | `list_quest_workflows` | read | The steps of a quest's workflows: id, title, who (a name), window, status (pending, open, done, late, missed), due; filters by person, status, words; paged |
+| `create_quest_workflow` | write | Create a workflow on a quest (the Workflows page entry): a title and ordered steps, each a person's window (assignee by name, email or id) or an AI rep's run time, optionally repeating; Quest refuses anyone who may not edit the quest |
 | `create_goal`, `update_goal` | writes | Fill a plan gap, link a goal to its outcome (`on_request_only`: shown only to a run that pins them) |
 
 The quest comes from the run (`context_args`), so no id has to be pasted. A deep run sees

@@ -759,6 +759,124 @@ def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> To
         context_args={"quest_id": "quest_id"})
 
 
+def resolve_member(who: Any, members: List[Mapping[str, Any]]) -> "tuple[Optional[str], Optional[str]]":
+    """A quest member from a user id, a name or part of one, or an email: ``(user_id, None)``, or
+    ``(None, why)`` naming the people it could have been so the call can be fixed."""
+    want = str(who or "").strip().lower()
+    if not want:
+        return None, "a human step needs an assignee"
+    known = [m for m in members if m.get("user_id")]
+    exact = [m for m in known if want in (str(m["user_id"]).lower(), str(m.get("email") or "").lower())]
+    hits = exact or [m for m in known if want in str(m.get("name") or "").lower()
+                     or want == str(m.get("email") or "").split("@")[0].lower()]
+    if len(hits) == 1:
+        return str(hits[0]["user_id"]), None
+    roster = ", ".join(str(m.get("name") or m["user_id"]) for m in known) or "nobody"
+    return None, (f"{who!r} matches {len(hits)} people on this quest. Members: {roster}.")
+
+
+def workflow_step_body(index: int, raw: Mapping[str, Any], members: List[Mapping[str, Any]]) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
+    """One step in the wire shape. A human step (``assignee``) has a window (``starts_at`` to
+    ``ends_at``); an AI step (``rep_id``) runs at ``run_at``. Either may repeat."""
+    title = str(raw.get("title") or "").strip()
+    label = f"step {index + 1}"
+    if not title:
+        return None, f"{label} needs a title"
+    repeat = None
+    if raw.get("repeat"):
+        repeat = {"freq": str(raw["repeat"]), "interval": 1}
+        if raw.get("by_weekday") is not None:
+            repeat["byWeekday"] = list(raw["by_weekday"])
+        if raw.get("tz"):
+            repeat["tz"] = str(raw["tz"])
+    if raw.get("rep_id"):
+        if not raw.get("run_at"):
+            return None, f"{label} ({title!r}) is an AI step and needs run_at"
+        actor = {"kind": "ai", "repId": str(raw["rep_id"])}
+        timing: Dict[str, Any] = {"kind": "at", "runAt": str(raw["run_at"]), "repeat": repeat}
+    else:
+        user_id, why = resolve_member(raw.get("assignee"), members)
+        if why:
+            return None, f"{label} ({title!r}): {why}"
+        if not (raw.get("starts_at") and raw.get("ends_at")):
+            return None, f"{label} ({title!r}) is a person's step and needs starts_at and ends_at"
+        actor = {"kind": "human", "userId": user_id}
+        timing = {"kind": "window", "startsAt": str(raw["starts_at"]), "endsAt": str(raw["ends_at"]),
+                  "repeat": repeat}
+    return {"stepId": f"s{index + 1}", "title": title, "actor": actor,
+            "instructions": str(raw.get("instructions") or ""), "timing": timing}, None
+
+
+def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = quest_id_of(args, ctx)
+        if not quest_id:
+            return NO_QUEST
+        title = str(args.get("title") or "").strip()
+        raw_steps = args.get("steps")
+        if not title or not isinstance(raw_steps, list) or not raw_steps:
+            return ToolResult(ok=False, text="A workflow needs a title and at least one step.")
+        client = factory()
+        members = client.list_assignable_members(quest_id) or []
+        steps: List[Dict[str, Any]] = []
+        for i, raw in enumerate(raw_steps):
+            body, why = workflow_step_body(i, raw if isinstance(raw, dict) else {}, members)
+            if why:
+                return ToolResult(ok=False, text=f"Nothing was created: {why}.")
+            steps.append(body)
+        edges = ([{"fromStepId": a["stepId"], "toStepId": b["stepId"]} for a, b in zip(steps, steps[1:])]
+                 if args.get("chain") else [])
+        try:
+            made = client.create_quest_workflow(quest_id, title, steps, edges=edges,
+                                                status=str(args.get("status") or "") or None)
+        except Exception as e:  # noqa: BLE001
+            return ToolResult(ok=False, text=f"Nothing was created: {e}")
+        ident = (made or {}).get("workflowId")
+        if not ident:
+            return ToolResult(ok=False, text="Nothing was created: Quest returned no workflow.")
+        return ToolResult(ok=True, data=made, text=(
+            f"Created the workflow {title!r} ({ident}) on quest {quest_id} with {len(steps)} steps. "
+            f"It is on the Workflows page for the quest's members."))
+
+    return ToolSpec(
+        name="create_quest_workflow",
+        handler=handler,
+        description=("Create a workflow on a quest, the entry that appears on the Workflows page: a "
+                     "title and ordered steps, each for a named person (a human step with a window) or "
+                     "an AI rep (an AI step that runs at a time), optionally repeating daily or weekly."),
+        when_to_use=("A person asks for a workflow, routine or repeating process on a quest. Name people "
+                     "as they are named on the quest (a first name is enough); read it back afterwards with "
+                     "list_quest_workflows."),
+        when_not_to_use=("A goal, habit or one-off task (create_quest_goal, create_task). Changing or "
+                         "deleting a workflow that exists."),
+        parameters={"type": "object", "required": ["title", "steps"], "properties": {
+            "quest_id": QUEST_ID_PARAM,
+            "title": {"type": "string", "description": "The workflow's name."},
+            "status": {"type": "string", "enum": ["draft"],
+                       "description": "draft keeps it from notifying anyone until someone sets it live; "
+                                      "leave out to create it live."},
+            "chain": {"type": "boolean",
+                      "description": "Draw an arrow from each step to the next, in the order given."},
+            "steps": {"type": "array", "description": (
+                "Ordered steps. A person's step: title, assignee (a name, email or user id of a quest "
+                "member), starts_at and ends_at (ISO date-times with a zone). An AI step: title, rep_id "
+                "and run_at. Both may carry instructions, repeat (daily, weekly or monthly), by_weekday "
+                "(0 Monday to 6 Sunday, weekly only) and tz (IANA zone)."), "items": {
+                    "type": "object", "required": ["title"], "properties": {
+                        "title": {"type": "string"}, "instructions": {"type": "string"},
+                        "assignee": {"type": "string"}, "rep_id": {"type": "string"},
+                        "starts_at": {"type": "string"}, "ends_at": {"type": "string"},
+                        "run_at": {"type": "string"}, "repeat": {"type": "string"},
+                        "by_weekday": {"type": "array", "items": {"type": "integer"}},
+                        "tz": {"type": "string"}}}}}},
+        mutates=True, workflow_step=False, origin="standard",
+        keywords=("workflow", "workflows", "create", "routine", "process", "steps", "repeat", "daily",
+                  "weekly", "assistant", "schedule", "cadence"),
+        context_args={"quest_id": "quest_id"}, timeout_seconds=60.0)
+
+
 def find_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -919,6 +1037,7 @@ QUEST_OPERATION_BUILDERS = {
     "list_quest_notes": with_credentials(list_quest_notes_spec),
     "list_quest_goals": with_credentials(list_quest_goals_spec),
     "list_quest_workflows": with_credentials(list_quest_workflows_spec),
+    "create_quest_workflow": with_credentials(create_quest_workflow_spec),
     "find_quest": with_credentials(find_quest_spec),
     "create_goal": with_credentials(create_goal_spec),
     "update_goal": with_credentials(update_goal_spec),

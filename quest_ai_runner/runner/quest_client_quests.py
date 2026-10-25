@@ -284,6 +284,22 @@ class QuestsMixin:
             self.last_error = str(e)   # a tool reports why, so a repeat of it can be recognised
             return None
 
+    def create_quest_workflow(self, quest_id: str, title: str, steps: List[Dict[str, Any]], *,
+                              edges: Optional[List[Dict[str, str]]] = None,
+                              status: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/quests/{quest_id}/workflows: create a workflow on a quest.
+
+        ``steps`` and ``edges`` are already in the wire shape (camelCase; see the backend's
+        ``docs/QUEST_WORKFLOWS.md``). Quest derives the owner from the quest (the owning team's
+        workflow, else the quest's own) and refuses anyone who may not edit it, so this raises
+        ``QuestApiError`` with the server's reason instead of returning ``{}``: a caller must be able
+        to tell "refused" from "created".
+        """
+        body: Dict[str, Any] = {"title": title, "steps": steps, "edges": edges or []}
+        if status:
+            body["status"] = status
+        return self._request("POST", f"/api/quests/{quest_id}/workflows", body=body) or {}
+
     def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
         """GET /api/teams/{team_id}/quests/{quest_id} — fetch a single quest by ID.
 
