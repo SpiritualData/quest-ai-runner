@@ -434,6 +434,11 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         _earlier = earlier_run_block(task, resume_session_id)
         if _earlier:
             text = f"{text}\n\n{_earlier}"
+        # The rep's written role on this task's quest, rendered by the backend when the task was
+        # created (rep_role_context); the rep reads it as context, it is not a task.
+        _role = (task.get("rep_role_context") or "").strip()
+        if _role:
+            text = f"{text}\n\n{_role}"
         composed_by_autopilot = _autopilot_composed_text(task)
         if (goal_id or quest_id) and self._mailing_quest_id(goal_id, quest_id):
             text = f"{text}\n\n{AUTOMATIC_DELIVERY_NOTE}"
