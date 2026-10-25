@@ -221,7 +221,7 @@ fields:
       Candidate Solutions toward the intent: distinct ways one or more of its problems could be
       addressed. Each says what it is for and how it would help; it does not specify the built
       implementation.
-    summary: "Distinct candidate approaches, each tied to a problem it addresses."
+    summary: "Distinct candidate strategies, each tied to a problem it addresses."
     rules:
       - "Each strategy is a different way to address a stated problem, with a short title and a description of why it would work."
       - "Ground each in the current state and preferences. Respect the person's constraints."

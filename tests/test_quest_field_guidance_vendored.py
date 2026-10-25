@@ -102,3 +102,9 @@ def test_no_em_dash_anywhere_in_rendered_output():
     texts = [render_compact_block(), render_markdown(), what_a_quest_is("full"),
              *(field_instructions_text(k) for k in [*QUEST_FIELD_INSTRUCTIONS, *ITEM_INSTRUCTIONS])]
     assert not any("—" in t for t in texts)
+
+
+def test_strategy_tool_offers_problem_links_and_a_description():
+    props = add_quest_strategy_spec({}).parameters["properties"]
+    assert props["problem_ids"]["type"] == "array"
+    assert "description" in props

@@ -158,14 +158,15 @@ def _render_goal_block(quest_state: Dict[str, Any]) -> str:
         lines.append("")
         lines.append("**Current state:**")
         lines.append(current_state)
-    strategies = [s for s in (quest_state.get("strategies") or []) if s.get("accepted")]
+    strategies = [s for s in (quest_state.get("strategies") or []) if s.get("accepted") is True]
     if strategies:
         lines.append("")
         lines.append("**Accepted strategies:**")
         for s in strategies:
             title = str(s.get("title") or s.get("id") or "").strip()
             if title:
-                lines.append(f"- {title}")
+                description = " ".join(str(s.get("description") or "").split())
+                lines.append(f"- {title}: {description}" if description else f"- {title}")
     body = "\n".join(lines)
     return f"{GOAL_SHA_PREFIX}{goal_body_sha(body)} -->\n{body}"
 

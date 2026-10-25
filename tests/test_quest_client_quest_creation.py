@@ -189,3 +189,21 @@ def test_field_guidance_reads_the_backend_endpoint():
     client, calls = client_capturing_calls()
     client.field_guidance()
     assert calls[0]["method"] == "GET" and calls[0]["path"] == "/api/quests/field-guidance"
+
+
+# --- add_quest_strategy ------------------------------------------------------
+
+def test_add_quest_strategy_sends_description_and_problem_ids():
+    client, calls = client_capturing_calls()
+    client.add_quest_strategy("quest_1", "Weekly long run", "Build distance.",
+                              problem_ids=["p1", "p2"])
+    assert calls[0]["path"] == "/api/quests/quest_1/strategies/add"
+    body = calls[0]["body"]
+    assert body["description"] == "Build distance."
+    assert body["problem_ids"] == ["p1", "p2"]
+
+
+def test_add_quest_strategy_omits_problem_ids_when_none_given():
+    client, calls = client_capturing_calls()
+    client.add_quest_strategy("quest_1", "Weekly long run")
+    assert "problem_ids" not in calls[0]["body"]

@@ -53,8 +53,9 @@ class FakeQuestClient:
         return {"id": "g1", "title": title}
 
     def add_quest_strategy(self, quest_id, title, description="", *, actor="ai",
-                           user_requested=False):
-        self.calls.append(("strategy", quest_id, title, description, actor, user_requested))
+                           user_requested=False, problem_ids=None):
+        self.calls.append(("strategy", quest_id, title, description, actor, user_requested,
+                           problem_ids))
         return self.response
 
     experiments = [
@@ -231,7 +232,19 @@ def test_strategy_tool_passes_actor_and_verdict_and_reports_a_held_change():
     spec = add_quest_strategy_spec({}, client_factory=factory(client))
     result = spec.handler({"quest_id": "q1", "title": "Progressive long run"}, ToolContext())
     assert result.ok and "NOT applied" in result.text
-    assert client.calls[0][4:] == ("ai", False)
+    assert client.calls[0][4:] == ("ai", False, None)
+
+
+def test_strategy_tool_passes_description_and_problem_ids_through():
+    client = FakeQuestClient({"id": "s9"})
+    spec = add_quest_strategy_spec({}, client_factory=factory(client))
+    assert "problem_ids" in spec.parameters["properties"]
+    result = spec.handler({"quest_id": "q1", "title": "Progressive long run",
+                           "description": "Build distance weekly.",
+                           "problem_ids": ["p1", " ", "p2"],
+                           "user_asked_for_this_field": True}, ToolContext())
+    assert result.ok
+    assert client.calls[0][3:] == ("Build distance weekly.", "ai", True, ["p1", "p2"])
 
 
 def test_habit_tool_defaults_to_the_first_accepted_strategy_and_needs_the_users_ask():

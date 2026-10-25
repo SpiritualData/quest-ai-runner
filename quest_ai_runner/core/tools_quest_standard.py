@@ -419,9 +419,13 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
         if not quest_id or not title:
             return ToolResult(ok=False, text="A strategy needs a quest and a title; nothing was "
                                              "added.")
+        raw_ids = args.get("problem_ids")
+        problem_ids = [str(i).strip() for i in raw_ids if str(i).strip()] \
+            if isinstance(raw_ids, (list, tuple)) else []
         result = factory().add_quest_strategy(
             quest_id, title, str(args.get("description") or "").strip(),
-            actor="ai", user_requested=bool(args.get("user_asked_for_this_field")))
+            actor="ai", user_requested=bool(args.get("user_asked_for_this_field")),
+            problem_ids=problem_ids or None)
         if not result:
             return ToolResult(ok=False, text=f"Nothing was added: the strategy {title!r} on quest "
                                              f"{quest_id} failed.")
@@ -448,6 +452,10 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
                 "description": {"type": "string",
                                 "description": "What it is, why it fits this person, what it "
                                                "implies each week."},
+                "problem_ids": {"type": "array", "items": {"type": "string"},
+                                "description": "Ids of the quest's Problems this strategy "
+                                               "addresses. A strategy with none addresses nothing, "
+                                               "so pass them when the Problems are known."},
                 "user_asked_for_this_field": _ASKED_PARAM,
             },
         },
@@ -479,7 +487,7 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
             state = client.get_my_quest(quest_id)
             quest = (state.get("state") if isinstance(state, dict) else None) or state or {}
             strategies = [s for s in (quest.get("strategies") or []) if isinstance(s, dict)]
-            accepted = [s for s in strategies if s.get("accepted")] or strategies
+            accepted = [s for s in strategies if s.get("accepted") is True] or strategies
             strategy_id = str((accepted[0] if accepted else {}).get("id") or "")
         if not strategy_id:
             return ToolResult(ok=False, text=(f"Nothing was created: quest {quest_id} has no "

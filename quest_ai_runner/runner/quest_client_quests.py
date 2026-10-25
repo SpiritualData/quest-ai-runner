@@ -348,8 +348,12 @@ class QuestsMixin:
             return []
 
     def add_quest_strategy(self, quest_id: str, title: str, description: str = "", *,
-                           actor: str = "ai", user_requested: bool = False) -> Dict[str, Any]:
+                           actor: str = "ai", user_requested: bool = False,
+                           problem_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """POST /api/quests/{quest_id}/strategies/add -- add one strategy to a quest.
+
+        A strategy is a stored Solution record. ``problem_ids`` links it to the Problems it
+        addresses (a strategy with none addresses nothing); ``description`` is stored with it.
 
         ``actor``/``user_requested`` mean exactly what they mean on ``edit_quest_field``: a backend
         that gates AI strategy writes answers 202 ``{"applied": False, "reason": ...}`` instead of
@@ -357,10 +361,12 @@ class QuestsMixin:
         failure rather than raising.
         """
         try:
+            body: Dict[str, Any] = {"title": title, "description": description or "",
+                                    "actor": actor, "userRequested": bool(user_requested)}
+            if problem_ids:
+                body["problem_ids"] = [str(i) for i in problem_ids]
             return self._request(
-                "POST", f"/api/quests/{quest_id}/strategies/add",
-                body={"title": title, "description": description or "",
-                      "actor": actor, "userRequested": bool(user_requested)}) or {}
+                "POST", f"/api/quests/{quest_id}/strategies/add", body=body) or {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("add_quest_strategy failed for quest %s: %s", quest_id, e)
             return {}

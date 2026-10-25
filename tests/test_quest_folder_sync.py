@@ -34,8 +34,10 @@ class MockQuestFolderClient:
             "category": "Career",
             "current_state": "Website is live. A few friends trialed it for free.",
             "strategies": [
-                {"id": "strat_ads", "title": "Run paid ads on Reddit and Meta", "accepted": True},
+                {"id": "strat_ads", "title": "Run paid ads on Reddit and Meta", "accepted": True,
+                 "description": "Test two audiences each week.", "problemIds": ["p1"]},
                 {"id": "strat_seo", "title": "Unaccepted idea", "accepted": False},
+                {"id": "strat_old", "title": "Retired idea", "accepted": None},
             ],
         }
         self._notes = list(notes or [])
@@ -124,6 +126,8 @@ def test_pull_writes_sync_file_with_quest_data():
     assert "first note" in content
     assert "Run paid ads on Reddit and Meta" in content
     assert "Unaccepted idea" not in content  # only accepted strategies render
+    assert "Retired idea" not in content  # a retired strategy (accepted null) does not render
+    assert "Run paid ads on Reddit and Meta: Test two audiences each week." in content
 
 
 def test_pull_puts_the_quest_id_and_name_in_the_folder_map():
