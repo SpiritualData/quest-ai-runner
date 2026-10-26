@@ -289,8 +289,10 @@ class Poller(PassesMixin, SyncMixin):
                          len(deferred), held)
 
         fresh = [t for t in due if not self.state.seen(_task_signature(t))]
-        # Priority, not a separate lane: a task a person is waiting on goes first, then oldest first.
-        fresh.sort(key=lambda t: (not t.get("real_time"), str(t.get("created_at") or "")))
+        # Priority, not a separate lane: a task a person pressed "Start now" on goes first, then a
+        # task a person is waiting on, then oldest first.
+        fresh.sort(key=lambda t: (not t.get("start_requested_at"), not t.get("real_time"),
+                                  str(t.get("created_at") or "")))
         if pool is not None:
             return self._submit_to_pool(pool, fresh)
         if not fresh:
