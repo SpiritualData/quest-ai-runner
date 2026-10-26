@@ -17,6 +17,10 @@ _PERIOD_RE = re.compile(
     r"^(?:\d{4}-\d{2}-\d{2}|\d{4}_W\d{2}|\d{4}_\d{2}|\d{4}_Q[1-4]|\d{4})$"
 )
 
+# A calendar day and a 24-hour clock time: the two halves of a goal's scheduled start.
+SCHEDULE_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+SCHEDULE_TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
 
 def _as_task_list(resp: Any) -> List[Dict[str, Any]]:
     """Normalize a tasks response to a plain list.

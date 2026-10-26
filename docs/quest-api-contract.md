@@ -273,6 +273,12 @@ server-side): `YYYY-MM-DD` (day), `YYYY_W##` (week, zero-padded), `YYYY_MM` (mon
 before making the request, so a malformed period fails fast with a clear message instead of a
 round trip to get a 400.
 
+A goal's time of day is not a `scheduled_time` field: `PUT /api/planning/goals/{id}` accepts but ignores
+it. The time is the goal's `scheduled_start`, a local ISO datetime without a zone (`2026-10-26T18:35:00`),
+sent with `scheduled_date`; the daily plan renders it as `scheduled_time` ("6:35 PM"), and a day-scoped
+goal's period and deadline follow the date. `QuestClient.schedule_goal(goal_id, date=, time=)` sends both
+(`YYYY-MM-DD` and 24-hour `HH:MM`, validated client-side) and raises on failure.
+
 Optional fields: `description`, `criteria` (completion criteria), `goal_type`, `parent_goal_id`
 (for a sub-goal), `target_value` / `target_unit` (a measurable target), `assigned_to_user_id`
 (assign the goal, at creation, to a HUMAN member of `quest_id` -- a Quest user_id, distinct from

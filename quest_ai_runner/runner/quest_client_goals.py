@@ -11,6 +11,8 @@ from .quest_client_support import (
     QuestApiError,
     QuestNotConfigured,
     _PERIOD_RE,
+    SCHEDULE_DAY_RE,
+    SCHEDULE_TIME_RE,
     log,
 )
 
@@ -145,6 +147,29 @@ class GoalsMixin:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("update_goal failed for %s: %s", goal_id, e)
             return {}
+
+    def schedule_goal(self, goal_id: str, *, date: str, time: str) -> Dict[str, Any]:
+        """Set a goal's day AND time of day: PUT /api/planning/goals/{goal_id} with ``scheduledStart``.
+
+        ``update_goal(goal_id, {"scheduled_time": ...})`` is accepted and changes nothing: the
+        time lives in the goal's ``scheduled_start``, an ISO datetime in the person's own local
+        time (no zone suffix). The daily plan shows it as ``scheduled_time`` ("6:35 PM").
+
+        ``date`` is "YYYY-MM-DD" and ``time`` is 24-hour "HH:MM" (for example "18:35"); both are
+        required and validated client-side, so a typo fails fast with a clear message. Sent as
+        ``scheduled_start="<date>T<time>:00"`` plus ``scheduled_date``; the backend also moves a
+        day-scoped goal's period and deadline to that date, so this one call both moves the goal
+        to the day and times it.
+
+        Returns the updated Goal dict. Raises ``QuestApiError``/``QuestNotConfigured`` on failure
+        (unlike ``update_goal``): a caller that reports the goal as scheduled must know it was.
+        """
+        if not SCHEDULE_DAY_RE.match(date or ""):
+            raise QuestApiError(f"Invalid date {date!r}: must be YYYY-MM-DD, e.g. '2026-10-26'.")
+        if not SCHEDULE_TIME_RE.match(time or ""):
+            raise QuestApiError(f"Invalid time {time!r}: must be 24-hour HH:MM, e.g. '18:35'.")
+        body = {"scheduled_start": f"{date}T{time}:00", "scheduled_date": date}
+        return self._request("PUT", f"/api/planning/goals/{goal_id}", body=body) or {}
 
     def assign_goal(self, goal_id: str, assigned_to_user_id: Optional[str], *,
                     reason: Optional[str] = None, next_step: Optional[str] = None) -> Dict[str, Any]:
