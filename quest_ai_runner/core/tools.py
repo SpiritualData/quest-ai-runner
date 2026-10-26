@@ -763,6 +763,7 @@ from . import tools_quest_work  # noqa: E402,F401
 from . import tools_quest_intents  # noqa: E402,F401
 from . import tools_repo_specs  # noqa: E402,F401
 from . import tools_metric_results  # noqa: E402,F401
+from . import tools_metric_values  # noqa: E402,F401
 from .tools_quest_experiments import (  # noqa: E402,F401  (kept importable from here)
     EXPERIMENT_STATUSES, create_quest_experiment_spec, delete_quest_experiment_spec,
     find_quest_experiments_spec,

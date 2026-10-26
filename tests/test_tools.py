@@ -39,7 +39,7 @@ CREDENTIAL_FREE = ["record_metric_result"]
 # The standard catalog with Quest credentials: the two mail tools, one quest-data tool per field,
 # goal, strategy and habit (core/tools.py QUEST_DATA_TOOLS), the Quest operations
 # (core/tools_quest_ops.py) and the credential-free tools.
-STANDARD_WITH_QUEST = sorted(["file_email_draft", "send_quest_email", "find_quest_experiments",
+STANDARD_WITH_QUEST = sorted(["file_email_draft", "send_quest_email", "find_quest_experiments", "get_metric_card", "propose_metric_value",
                               *QUEST_DATA_TOOLS, *QUEST_OPERATION_BUILDERS, *CREDENTIAL_FREE])
 
 

@@ -65,6 +65,7 @@ from .executor_context import ContextViewMixin
 from .executor_followup import FollowUpMixin
 from .executor_pauses import PausesMixin
 from .executor_reporting import ReportingMixin
+from .metric_draft import MetricDraft, is_metric_draft
 from .run_operations import pinned_operations
 
 
@@ -327,6 +328,9 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         # effect), so it is routed BEFORE any of the context/orchestrator machinery below runs.
         if _is_autopilot_pass(task):
             return self._execute_autopilot(task, task_id)
+        # A metric draft is ONE light turn over assembled data, never a deep run (see ``runner/metric_draft.py``).
+        if is_metric_draft(task):
+            return self._execute_metric_draft(task, task_id)
         text = self._task_text(task)
         goal_id = task.get("goal_id")
         quest_id = task.get("quest_id")
@@ -659,6 +663,41 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         if not qid:
             return None
         return self._quest_folder_map.get(str(qid)) or None
+
+    # --- metric draft routing (source == "metric_values") ----------------------
+
+    def _execute_metric_draft(self, task: Dict[str, Any], task_id: str) -> ExecutionOutcome:
+        """Draft a metric value in one bounded model call over the card and the quest's context view. No deep runner, no subprocess, no shell
+        or file access; a proposal is an Ask for the person, and thin evidence proposes nothing (the task is still done)."""
+        self._report_progress(task_id, "started", text="Started drafting a metric value.")
+        quest_id = task.get("quest_id") or task.get("goal_id")
+        try:
+            registry = self._orch.registry
+            hint = str(task.get("model") or "")
+            model = registry.resolve_tier(hint if registry.is_tier_name(hint) else "balanced")
+            context_view = self._build_context_view(task.get("goal_id"), task.get("quest_id"), None, rep_id=task.get("assignee_rep_id"),
+                                                    related_goal_id=task.get("related_goal_id"), with_updates=True)
+            drafted = MetricDraft(self._client, self._orch.provider, model).run(task, task_id, quest_id, context_view)
+        except Exception as e:  # noqa: BLE001 -- a draft must never crash the poller
+            limit = usage_limit.from_exception(e)
+            if limit is not None:
+                return self._pause_for_usage_limit(task, task_id, limit, conv_id=None, card_id=None, session_id=None)
+            outage = provider_outage.from_exception(e)
+            if outage is not None:
+                return self._pause_for_provider_outage(task, task_id, outage, conv_id=None, card_id=None, session_id=None)
+            msg = f"metric draft error: {type(e).__name__}: {e}"
+            self._report_progress(task_id, "error", text=msg)
+            self._safe_report_failed(task_id, msg)
+            return ExecutionOutcome(task_id, "failed", msg)
+        if drafted["status"] == "failed":
+            self._report_progress(task_id, "error", text=drafted["text"])
+            self._safe_report_failed(task_id, drafted["text"])
+            return ExecutionOutcome(task_id, "failed", drafted["text"])
+        if self._context_bundle is not None:
+            self._safe(self._context_bundle.mark_seen)
+        self._report_progress(task_id, "done", text="Done.", output=drafted["text"])
+        self._safe(lambda: self._client.report_done(task_id, drafted["text"]))
+        return ExecutionOutcome(task_id, "done", drafted["text"], decision_id=drafted.get("decision_id"))
 
     # --- autopilot pass routing (handler == "autopilot") ----------------------
 

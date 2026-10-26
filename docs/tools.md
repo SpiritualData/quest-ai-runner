@@ -41,6 +41,7 @@ quest and its surroundings (`core/tools_quest_ops.py`). Each is defined once, na
 | `record_ask` | writes | Record a request a person made, in their exact words |
 | `update_ask` | writes | Claim where an ask stands (done waits for the person to accept it); the ask is a key or a phrase of its words |
 | `update_outcome_progress` | writes | A measurable outcome's progress with one line of evidence; the outcome is an id, a phrase of its words, or its position |
+| `get_metric_card`, `propose_metric_value` | read, write | Draft a value for a metric (a `metric_values` task runs these in one light turn, never a deep run): read its card (questions, scales, recent values, the quest's notes and entries since the last update), then propose a value with specific evidence. The person confirms it; nothing is recorded by the proposal |
 | `add_quest_note`, `list_quest_notes` | writes, reads | The quest's note thread |
 | `list_quest_goals` | read | A quest's goals with text, assignee, status and due day; filters by assignee, due window, words; paged |
 | `list_quest_workflows` | read | The steps of a quest's workflows: id, title, who (a name), window, status (pending, open, done, late, missed), due; filters by person, status, words; paged |

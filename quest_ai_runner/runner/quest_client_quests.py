@@ -574,6 +574,36 @@ class QuestsMixin:
             raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
         return self.progress_result(result)
 
+    def get_metric_card(self, collection_id: str) -> Dict[str, Any]:
+        """GET /api/metric-values/{collection_id}/card
+
+        The metric card: what one metric is, its questions with their scales, its recent values, the period's entries of the quest's other
+        habits and collections, the quest's notes since the last update, the linked outcome, and whether the quest gained new context. Built by
+        Quest from stored data, with no model call. Read only.
+        """
+        try:
+            return self._request("GET", f"/api/metric-values/{collection_id}/card") or {}
+        except QuestApiError as e:
+            raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
+
+    def propose_metric_value(self, collection_id: str, values: Dict[str, Any], evidence: List[Dict[str, Any]], confidence: str = "medium",
+                             confidence_reason: str = "", could_not_see: str = "", period_start: Optional[str] = None, note: str = "") -> Dict[str, Any]:
+        """POST /api/metric-values/proposals
+
+        Draft a value for a metric's period. It becomes an Ask for the person, who confirms or corrects it; nothing is written into their
+        collection. The backend checks the values against the questions' scales and refuses thin evidence (``Not done: <reason>``), and refuses
+        a metric whose owner has not allowed the Quest AI Runner to propose. A proposal for a period the same caller already proposed for replaces
+        it, and the old one is kept as history.
+        """
+        body: Dict[str, Any] = {"collectionId": collection_id, "values": values, "evidence": evidence, "confidence": confidence,
+                                "confidenceReason": confidence_reason, "couldNotSee": could_not_see, "note": note}
+        if period_start:
+            body["periodStart"] = period_start
+        try:
+            return self._request("POST", "/api/metric-values/proposals", body=body) or {}
+        except QuestApiError as e:
+            raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
+
     def post_outcome_progress(self, quest_id: str, outcome_id: str, body: Dict[str, Any]) -> Any:
         return self._request(
             "POST", f"/api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress",
