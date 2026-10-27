@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-217 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+218 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -185,7 +185,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STANDARD_TOOLS` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_STATE_PATH` |  | `cli_poll.py`, `interactive_session_persist.py`, `runner/lane.py` | `.env.example`, `docs/chat.md`, `docs/deployment.md` |
-| `QAR_TASK_DIRECT_DEEP` | Send a queued task's first run straight to a deep run: no planner call, no turn-start context search. Off by default. | `cli_config.py` | `docs/cheap-model-routing.md` |
+| `QAR_TASK_DIRECT_DEEP` |  | `cli_config.py` | `docs/cheap-model-routing.md` |
 | `QAR_TEAM_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
 | `QAR_TEAM_QUEST_ID` | Quest the bootstrap report is posted to. | `adapters/bootstrap_reporter.py` | - |
 | `QAR_TOOLS_FILE` |  | `core/tools.py` | `docs/tools.md` |
