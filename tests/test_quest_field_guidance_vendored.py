@@ -104,7 +104,7 @@ def test_no_em_dash_anywhere_in_rendered_output():
     assert not any("—" in t for t in texts)
 
 
-def test_strategy_tool_offers_problem_links_and_a_description():
+def test_strategy_tool_offers_problem_links_and_an_approach():
     props = add_quest_strategy_spec({}).parameters["properties"]
     assert props["problem_ids"]["type"] == "array"
-    assert "description" in props
+    assert "approach" in props

@@ -52,9 +52,9 @@ class FakeQuestClient:
         self.calls.append(("goal", quest_id, title, period, kw))
         return {"id": "g1", "title": title}
 
-    def add_quest_strategy(self, quest_id, title, description="", *, actor="ai",
-                           user_requested=False, problem_ids=None):
-        self.calls.append(("strategy", quest_id, title, description, actor, user_requested,
+    def add_quest_strategy(self, quest_id, title, approach="", *, actor="ai",
+                           user_requested=False, problem_ids=None, purpose="", description=""):
+        self.calls.append(("strategy", quest_id, title, approach, actor, user_requested,
                            problem_ids))
         return self.response
 
@@ -235,12 +235,12 @@ def test_strategy_tool_passes_actor_and_verdict_and_reports_a_held_change():
     assert client.calls[0][4:] == ("ai", False, None)
 
 
-def test_strategy_tool_passes_description_and_problem_ids_through():
+def test_strategy_tool_passes_approach_and_problem_ids_through():
     client = FakeQuestClient({"id": "s9"})
     spec = add_quest_strategy_spec({}, client_factory=factory(client))
     assert "problem_ids" in spec.parameters["properties"]
     result = spec.handler({"quest_id": "q1", "title": "Progressive long run",
-                           "description": "Build distance weekly.",
+                           "approach": "Build distance weekly.",
                            "problem_ids": ["p1", " ", "p2"],
                            "user_asked_for_this_field": True}, ToolContext())
     assert result.ok

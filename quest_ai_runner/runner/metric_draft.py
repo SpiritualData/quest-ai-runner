@@ -64,9 +64,8 @@ def collection_id_of(task: Mapping[str, Any]) -> Optional[str]:
 def card_block(card: Mapping[str, Any]) -> str:
     """The card as the prompt reads it: compact JSON of exactly what the draft may rely on.
 
-    ``purpose`` is what the metric ensures and ``disadvantages`` what it cannot see or could reward wrongly; ``scopedPurpose`` is the
-    pre-2026-10-26 name a card from an older server may still carry (it held both), kept readable until every server sends the new fields."""
-    keep = ("name", "purpose", "disadvantages", "scopedPurpose", "questions", "period", "recentValues", "outcome", "notesSinceBaseline", "otherEntriesInPeriod",
+    ``purpose`` is what the metric ensures and ``disadvantages`` what it cannot see or could reward wrongly."""
+    keep = ("name", "purpose", "disadvantages", "questions", "period", "recentValues", "outcome", "notesSinceBaseline", "otherEntriesInPeriod",
             "goalsSinceBaseline", "answeredAsksSinceBaseline", "baseline")
     return json.dumps({k: card.get(k) for k in keep if card.get(k) not in (None, [], {})}, ensure_ascii=False, default=str)[:CONTEXT_CHARS]
 

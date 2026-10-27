@@ -219,11 +219,13 @@ fields:
     label: Strategies (candidate solutions)
     esoi: >-
       Candidate Solutions toward the intent: distinct ways one or more of its problems could be
-      addressed. Each says what it is for and how it would help; it does not specify the built
-      implementation.
+      addressed. Each is stored as an ESOI solution with a description (its unique value proposition),
+      a purpose (the niche of utility it serves), an approach (how it solves problems, true of every
+      implementation), what is out of scope, and tags; it does not specify the built implementation.
+      The approach is the strategy statement: wherever a strategy is shown, show its name and approach.
     summary: "Distinct candidate strategies, each tied to a problem it addresses."
     rules:
-      - "Each strategy is a different way to address a stated problem, with a short title and a description of why it would work."
+      - "Each strategy is a different way to address a stated problem, with a short title and an approach: an inspiring sentence which clarifies how the solution solves problems, which applies to every implementation. This is also the solution's human-readable strategy statement. Start with a verb and name no actor (worded like a responsibility)."
       - "Ground each in the current state and preferences. Respect the person's constraints."
       - "Offer genuinely different alternatives, not one idea reworded."
       - "Do not mark a strategy accepted for the person."

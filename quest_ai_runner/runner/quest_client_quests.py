@@ -363,13 +363,18 @@ class QuestsMixin:
             log.warning("list_my_quests failed: %s", e)
             return []
 
-    def add_quest_strategy(self, quest_id: str, title: str, description: str = "", *,
+    def add_quest_strategy(self, quest_id: str, title: str, approach: str = "", *,
                            actor: str = "ai", user_requested: bool = False,
-                           problem_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+                           problem_ids: Optional[List[str]] = None, purpose: str = "",
+                           description: str = "") -> Dict[str, Any]:
         """POST /api/quests/{quest_id}/strategies/add -- add one strategy to a quest.
 
-        A strategy is a stored Solution record. ``problem_ids`` links it to the Problems it
-        addresses (a strategy with none addresses nothing); ``description`` is the strategy statement: the server stores it as the solution's ``approach`` (what the app shows beside the name).
+        A strategy is a stored Solution record. ``approach`` is the strategy statement (how it solves
+        problems, true of every implementation; starts with a verb, names no actor) and is what the
+        app shows beside the title. ``purpose`` (the niche of utility it serves) and ``description``
+        (its unique value proposition, written apart from the approach) are optional. ``problem_ids``
+        links it to the Problems it addresses (a strategy with none addresses nothing). To change a
+        strategy's statement later use ``PATCH /api/quests/{quest_id}/strategies/{id}/approach``.
 
         ``actor``/``user_requested`` mean exactly what they mean on ``edit_quest_field``: a backend
         that gates AI strategy writes answers 202 ``{"applied": False, "reason": ...}`` instead of
@@ -377,8 +382,12 @@ class QuestsMixin:
         failure rather than raising.
         """
         try:
-            body: Dict[str, Any] = {"title": title, "description": description or "",
+            body: Dict[str, Any] = {"title": title, "approach": approach or "",
                                     "actor": actor, "userRequested": bool(user_requested)}
+            if purpose:
+                body["purpose"] = purpose
+            if description:
+                body["description"] = description
             if problem_ids:
                 body["problem_ids"] = [str(i) for i in problem_ids]
             return self._request(

@@ -193,13 +193,14 @@ def test_field_guidance_reads_the_backend_endpoint():
 
 # --- add_quest_strategy ------------------------------------------------------
 
-def test_add_quest_strategy_sends_description_and_problem_ids():
+def test_add_quest_strategy_sends_approach_and_problem_ids():
     client, calls = client_capturing_calls()
     client.add_quest_strategy("quest_1", "Weekly long run", "Build distance.",
-                              problem_ids=["p1", "p2"])
+                              problem_ids=["p1", "p2"], purpose="Raise endurance.")
     assert calls[0]["path"] == "/api/quests/quest_1/strategies/add"
     body = calls[0]["body"]
-    assert body["description"] == "Build distance."
+    assert body["approach"] == "Build distance." and body["purpose"] == "Raise endurance."
+    assert "description" not in body
     assert body["problem_ids"] == ["p1", "p2"]
 
 

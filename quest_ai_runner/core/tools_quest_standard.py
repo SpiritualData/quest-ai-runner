@@ -423,9 +423,10 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
         problem_ids = [str(i).strip() for i in raw_ids if str(i).strip()] \
             if isinstance(raw_ids, (list, tuple)) else []
         result = factory().add_quest_strategy(
-            quest_id, title, str(args.get("description") or "").strip(),
+            quest_id, title, str(args.get("approach") or "").strip(),
             actor="ai", user_requested=bool(args.get("user_asked_for_this_field")),
-            problem_ids=problem_ids or None)
+            problem_ids=problem_ids or None, purpose=str(args.get("purpose") or "").strip(),
+            description=str(args.get("description") or "").strip())
         if not result:
             return ToolResult(ok=False, text=f"Nothing was added: the strategy {title!r} on quest "
                                              f"{quest_id} failed.")
@@ -449,9 +450,16 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
             "properties": {
                 "quest_id": _QUEST_ID_PARAM,
                 "title": {"type": "string", "description": "3 to 8 words naming the approach."},
+                "approach": {"type": "string",
+                             "description": "The strategy statement: one sentence on how it solves "
+                                            "problems, true of every implementation. Starts with a "
+                                            "verb and names no actor."},
+                "purpose": {"type": "string",
+                            "description": "Optional. The niche of utility it serves, one sentence "
+                                           "starting with a verb."},
                 "description": {"type": "string",
-                                "description": "What it is, why it fits this person, what it "
-                                               "implies each week."},
+                                "description": "Optional. Its unique value proposition, apart from "
+                                               "the approach."},
                 "problem_ids": {"type": "array", "items": {"type": "string"},
                                 "description": "Ids of the quest's Problems this strategy "
                                                "addresses. A strategy with none addresses nothing, "
