@@ -17,7 +17,7 @@ from quest_ai_runner.runner.executor import TaskExecutor
 from quest_ai_runner.runner.quest_client import QuestApiError
 from tests.conftest import StubDeepRunner
 
-CARD = {"name": "Weekly distance", "scopedPurpose": "Kilometres run in the week",
+CARD = {"name": "Weekly distance", "purpose": "Ensure the weekly running distance is known", "disadvantages": "Cannot see pace or effort",
         "questions": [{"name": "Kilometres", "type": "number", "min": None, "max": None}],
         "period": {"start": "2026-10-19", "end": "2026-10-25"}, "recentValues": [{"value": 18.0, "at": "2026-10-18T09:00:00"}],
         "notesSinceBaseline": [{"at": "2026-10-20", "text": "Ran 12 km on Tuesday"}], "otherEntriesInPeriod": [],
@@ -101,7 +101,7 @@ def test_the_prompt_carries_what_the_draft_needs_so_no_deep_run_is_needed():
     ex, _ = executor(client, provider)
     ex.execute(dict(TASK))
     prompt = provider.prompts[0]
-    for needed in ("Ran 12 km on Tuesday", "Run 6 km Friday", "Did you run Friday?", "Yes, 6 km", "Weekly distance", "Kilometres", "Run 40 km in a week"):
+    for needed in ("Ran 12 km on Tuesday", "Run 6 km Friday", "Did you run Friday?", "Yes, 6 km", "Weekly distance", "Kilometres", "Run 40 km in a week", "Cannot see pace or effort"):
         assert needed in prompt
     assert provider.schemas[0]["name"] == "metric_value_draft"
 

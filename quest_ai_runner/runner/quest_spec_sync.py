@@ -60,6 +60,32 @@ def text_of(value: Any) -> str:
     return str(value).strip()
 
 
+#: Solution columns shown first, in this order: the strategy statement is ``name`` + ``approach`` (``purpose`` when there is no approach yet),
+#: ``description`` (the unique value proposition) is secondary. A record stored before 2026-10-26 may still carry ``scoped_purpose``.
+SOLUTION_FIRST = ("approach", "purpose", "description", "out_of_scope")
+METRIC_FIRST = ("purpose", "record", "disadvantages")
+
+
+def tags_text(value: Any) -> str:
+    """A solution's ``tags`` (``[{"tag": ..., "risk_ids": [...]}]``) as one line each: the label and the risks it mitigates."""
+    lines = []
+    for item in value if isinstance(value, (list, tuple)) else []:
+        if isinstance(item, dict) and str(item.get("tag") or "").strip():
+            risks = ", ".join(str(r) for r in item.get("risk_ids") or [])
+            lines.append(f"- {str(item['tag']).strip()}" + (f" (risk: {risks})" if risks else ""))
+        elif isinstance(item, str) and item.strip():
+            lines.append(f"- {item.strip()}")
+    return "\n".join(lines)
+
+
+def ordered_fields(record: Dict[str, Any]) -> List[tuple]:
+    """The record's fields, a solution's or metric's primary text first, the rest in stored order."""
+    fields = record.get("fields") or {}
+    first = SOLUTION_FIRST if record.get("type") == "solution" else METRIC_FIRST if record.get("type") == "metric" else ()
+    head = [(k, fields[k]) for k in first if k in fields]
+    return head + [(k, v) for k, v in fields.items() if k not in first]
+
+
 def record_name(record: Dict[str, Any]) -> str:
     fields = record.get("fields") or {}
     for key in NAME_KEYS:
@@ -73,10 +99,10 @@ def render_record(record: Dict[str, Any], letter: str) -> str:
     fields = record.get("fields") or {}
     record_id = str(record.get("recordId") or "")
     lines = [f"### {letter}: {record_name(record)} ({record_id})"]
-    for key, value in fields.items():
+    for key, value in ordered_fields(record):
         if key in NAME_KEYS:
             continue
-        body = text_of(value)
+        body = tags_text(value) if key == "tags" else text_of(value)
         if not body:
             continue
         if "\n" in body:

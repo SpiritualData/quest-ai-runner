@@ -62,8 +62,11 @@ def collection_id_of(task: Mapping[str, Any]) -> Optional[str]:
 
 
 def card_block(card: Mapping[str, Any]) -> str:
-    """The card as the prompt reads it: compact JSON of exactly what the draft may rely on."""
-    keep = ("name", "scopedPurpose", "questions", "period", "recentValues", "outcome", "notesSinceBaseline", "otherEntriesInPeriod",
+    """The card as the prompt reads it: compact JSON of exactly what the draft may rely on.
+
+    ``purpose`` is what the metric ensures and ``disadvantages`` what it cannot see or could reward wrongly; ``scopedPurpose`` is the
+    pre-2026-10-26 name a card from an older server may still carry (it held both), kept readable until every server sends the new fields."""
+    keep = ("name", "purpose", "disadvantages", "scopedPurpose", "questions", "period", "recentValues", "outcome", "notesSinceBaseline", "otherEntriesInPeriod",
             "goalsSinceBaseline", "answeredAsksSinceBaseline", "baseline")
     return json.dumps({k: card.get(k) for k in keep if card.get(k) not in (None, [], {})}, ensure_ascii=False, default=str)[:CONTEXT_CHARS]
 
@@ -75,7 +78,8 @@ def draft_prompt(task_text: str, card: Mapping[str, Any], context_view: str) -> 
         f"The metric card (what the metric is, and what changed since the last update):\n{card_block(card)}\n\n"
         f"The quest context:\n{(context_view or '')[:CONTEXT_CHARS]}\n\n"
         "Rules: use only evidence that is in the card or the quest context above. Give a value for every question, within its scale, keyed by the "
-        "question's name. Cite the specific things each value rests on. If the data does not support a value, set propose to false and say why "
+        "question's name. The card's purpose says what the metric ensures and its disadvantages say what it cannot see: do not claim more than it "
+        "can show, and name in could_not_see anything its disadvantages warn about that the data leaves open. Cite the specific things each value rests on. If the data does not support a value, set propose to false and say why "
         "in one sentence: a missing value is better than an invented one. Never write a value as if it were recorded: the person confirms it.")
 
 

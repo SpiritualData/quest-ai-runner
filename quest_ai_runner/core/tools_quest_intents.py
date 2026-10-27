@@ -71,6 +71,9 @@ def pending_text(result: Mapping[str, Any], what: str) -> str:
 def spec_line(record: Mapping[str, Any]) -> str:
     fields = record.get("fields") or {}
     label = fields.get("name") or fields.get("problem") or fields.get("description") or ""
+    if record.get("type") == "solution":   # a solution reads as a strategy: name + approach (purpose until it has one)
+        statement = str(fields.get("approach") or fields.get("purpose") or fields.get("scoped_purpose") or "").strip()
+        label = f"{label}: {statement}" if label and statement else label or statement
     locked = sorted(k for k, m in (record.get("fieldMeta") or {}).items() if (m or {}).get("editedByUser"))
     lock = f" [person edited: {', '.join(locked)}]" if locked else ""
     derived = " (from the quest)" if record.get("derived") else ""
@@ -247,7 +250,10 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         name="edit_spec_record",
         handler=handler,
         description=("Change fields of one specification record you wrote. Columns are the record "
-                     "type's own names (for example name, description). A field the person edited is "
+                     "type's own names (a solution: name, description, purpose, approach, out_of_scope, tags; "
+                     "a metric: name, purpose, record, disadvantages). A solution's strategy statement is name "
+                     "+ approach (purpose until it has an approach). A metric's disadvantages hold what it "
+                     "cannot see or could reward wrongly. A field the person edited is "
                      "refused; derived columns cannot be written."),
         when_to_use="A record you wrote is wrong or out of date and refresh_spec did not fix it.",
         when_not_to_use=("A field the person wrote or edited. Rewriting a record that is already "
@@ -255,7 +261,8 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         parameters={"type": "object", "required": ["record_id", "fields"], "properties": {
             **SUBJECT_PARAMS,
             "record_id": {"type": "string", "description": "The record (esr_...) from get_spec."},
-            "fields": {"type": "object", "description": "Column name to new text (a list of ids for id columns)."},
+            "fields": {"type": "object", "description": "Column name to new text (a list of ids for id columns; a solution's tags "
+                                                                      "are a list of {tag, risk_ids} objects, each naming the problem ids it mitigates)."},
             "expected_revision": {"type": "integer",
                                   "description": "The revision you read; looked up from the subject when omitted."}}},
         mutates=True, workflow_step=False, origin="standard", on_request_only=True,

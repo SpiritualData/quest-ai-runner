@@ -369,7 +369,7 @@ class QuestsMixin:
         """POST /api/quests/{quest_id}/strategies/add -- add one strategy to a quest.
 
         A strategy is a stored Solution record. ``problem_ids`` links it to the Problems it
-        addresses (a strategy with none addresses nothing); ``description`` is stored with it.
+        addresses (a strategy with none addresses nothing); ``description`` is the strategy statement: the server stores it as the solution's ``approach`` (what the app shows beside the name).
 
         ``actor``/``user_requested`` mean exactly what they mean on ``edit_quest_field``: a backend
         that gates AI strategy writes answers 202 ``{"applied": False, "reason": ...}`` instead of

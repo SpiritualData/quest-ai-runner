@@ -125,3 +125,27 @@ def test_unchanged_next_steps_entry_is_not_put_again(tmp_path):
     assert client.updates == 0
     publish_next_steps(client, QUEST_ID, str(tmp_path), NextSteps(steps=["Other"], updated="2026-10-23"))
     assert client.updates == 1
+
+
+def test_solution_shows_approach_first_and_tags_with_their_risks(tmp_path):
+    spec = {"subjectType": "quest", "subjectId": QUEST_ID, "digest": "d2", "records": [
+        {"recordId": "rec_s2", "type": "solution", "fields": {
+            "name": "Weekly call", "description": "A human first step.", "out_of_scope": "Bulk outreach.",
+            "purpose": "Welcome new users.", "approach": "Walk each new user through setup live.",
+            "tags": [{"tag": "outreach", "risk_ids": ["esoi-r1-duplication"]}]}},
+        {"recordId": "rec_m1", "type": "metric", "fields": {
+            "name": "Week one completion", "record": "Share completing goals", "disadvantages": "Cannot see quality.",
+            "purpose": "Ensure onboarding works."}}]}
+    pull_quest_to_folder(SpecClient(spec=spec), QUEST_ID, str(tmp_path))
+    text = (tmp_path / SPEC_FILE_NAME).read_text()
+    assert text.index("**approach:**") < text.index("**purpose:**") < text.index("**description:**") < text.index("**out_of_scope:**")
+    assert "- outreach (risk: esoi-r1-duplication)" in text
+    assert text.index("**purpose:** Ensure onboarding works.") < text.index("**record:**") < text.index("**disadvantages:** Cannot see quality.")
+
+
+def test_spec_line_reads_a_solution_as_name_plus_approach_then_purpose():
+    from quest_ai_runner.core.tools_quest_intents import spec_line
+    row = {"recordId": "r1", "type": "solution", "revision": 1, "fields": {"name": "Weekly call", "purpose": "Welcome new users."}}
+    assert spec_line(row).endswith("Weekly call: Welcome new users.")
+    row["fields"]["approach"] = "Walk users through setup."
+    assert spec_line(row).endswith("Weekly call: Walk users through setup.")
