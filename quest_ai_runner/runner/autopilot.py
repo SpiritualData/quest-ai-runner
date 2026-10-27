@@ -133,6 +133,7 @@ from .autopilot_briefs import (
     render_last_run_output,
     select_last_run_output,
 )
+from .autopilot_esoi import esoi_readiness
 from .autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
 from .autopilot_gates import GatesMixin
 from .autopilot_work import WorkMixin
@@ -425,6 +426,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # unsorted quest or a person with no intents, so those cost nothing). A client that cannot ask
         # or a failed read gives no section, never a guess.
         intent_frame_text = self.read_intent_frame(quest_id)
+        # Computed once per quest per pass, and only for a real run: a dry run must not refresh a specification.
+        esoi_text = None if dry_run else esoi_readiness(self._client, quest_id)
         # One batch per pass may be the one that proposes; a second character's batch is told a
         # proposal is already being handled instead of raising a duplicate.
         experiment_proposal_offered = False
@@ -549,7 +552,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                   goal_ladder=goal_ladder,
                                                   experiments=experiments_text,
                                                   asked=asked_text,
-                                                  intent_frame=intent_frame_text)
+                                                  intent_frame=intent_frame_text,
+                                                  esoi_readiness=esoi_text)
                 if task_id:
                     experiment_proposal_offered = True
                     result.created.append({

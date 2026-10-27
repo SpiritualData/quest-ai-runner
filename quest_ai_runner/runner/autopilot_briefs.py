@@ -381,7 +381,8 @@ def compose_batch_text(quest_outcome: str,
                        goal_ladder: Optional[List[Dict[str, Any]]] = None,
                        experiments: Optional[str] = None,
                        asked: Optional[str] = None,
-                       intent_frame: Optional[str] = None) -> str:
+                       intent_frame: Optional[str] = None,
+                       esoi_readiness: Optional[str] = None) -> str:
     """The batch task's text: what this run is asked to produce, the period and goals it serves,
     what the person themselves last said about the work, and what the previous period produced.
 
@@ -598,6 +599,9 @@ def compose_batch_text(quest_outcome: str,
         add("last run", last_run, prompt_budget.PRIORITY_HISTORY)
     if previous:
         add("previous period", _summarize_previous(previous), prompt_budget.PRIORITY_HISTORY)
+    if esoi_readiness:
+        # Required, not optional: it is the choice the rule below asks for, already made by code.
+        require(esoi_readiness.strip())
     require(_SOLUTION_IMPROVEMENT_RULE)
     require(_CONFIRMATION_RULE)
     fit = prompt_budget.fit_sections(sections, AUTOPILOT_BRIEF_TOKEN_BUDGET)
