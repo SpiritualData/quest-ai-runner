@@ -18,11 +18,26 @@ def split(cell) -> list:
     return [part.strip() for part in (cell or "").split(";") if part.strip()]
 
 
+def tag_labels(cell) -> list:
+    """The labels of a solution's ``tags`` cell: read by the esoi library's ``parse_tags`` (the cell is a JSON list of
+    ``{"tag", "risk_ids"}``; the older ``;``-separated labels also read). A library that predates ``esoi.fields`` falls back to
+    the same two forms."""
+    try:
+        from esoi.fields import parse_tags
+        return [t["tag"] for t in parse_tags(cell) if t["tag"]]
+    except ImportError:
+        import json
+        text = (cell or "").strip()
+        if text.startswith("["):
+            return [(i if isinstance(i, str) else str(i.get("tag") or "")).strip() for i in json.loads(text)]
+        return split(text)
+
+
 def tags_of(solution: dict) -> list:
     """A solution's tags as the lookup reads them: its ``tags`` column plus its connected problems (``problem_ids``),
     which count as tags too (the evolvable-structure skill, Solution, Tags) but are not sufficient on their own, so
     they are never copied into the column."""
-    return list(dict.fromkeys(split(solution.get("tags")) + split(solution.get("problem_ids"))))
+    return list(dict.fromkeys(tag_labels(solution.get("tags")) + split(solution.get("problem_ids"))))
 
 
 def solutions_sharing(wanted, solutions: list) -> list:
@@ -43,7 +58,7 @@ def tag_problems(listed: list, solutions: list, problem_ids=None) -> list:
     bad = []
     for solution in solutions:
         sid = solution.get("solution_id", "")
-        for tag in split(solution.get("tags")):
+        for tag in tag_labels(solution.get("tags")):
             if tag in users:
                 users[tag].append(sid)
             else:
@@ -71,7 +86,7 @@ def tag_notes(listed: list, solutions: list) -> list:
     out = []
     for row in listed:
         tag = (row.get("tag") or "").strip()
-        users = [s.get("solution_id", "") for s in solutions if tag in split(s.get("tags"))]
+        users = [s.get("solution_id", "") for s in solutions if tag in tag_labels(s.get("tags"))]
         if tag and len(users) == 1:
             out.append(f"note: Q1 esoi/tags.csv {tag}: used by one solution only ({users[0]}); check the back-fill "
                        f"({TAG_PROCEDURE})")

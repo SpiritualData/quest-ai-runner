@@ -21,7 +21,7 @@ approved.
 
 ## The solution: when QAR's metrics are run (`when-qar-metrics-are-run`)
 
-- **Scoped purpose:** governs every Metric of `evaluation/components/`. Does not govern the product's own tests.
+- **Purpose:** governs every Metric of `evaluation/components/`. Does not govern the product's own tests.
 - **Goals:** offline arms current on every change; live arms run only for a decision; every recorded row current under
   `esoi check --strict`.
 - **Parameters (triggers and stages):**

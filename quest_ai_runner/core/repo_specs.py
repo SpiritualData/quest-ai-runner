@@ -111,8 +111,16 @@ def repo_tag_table(root: Path) -> TagTable:
 
     def split(value: Optional[str]) -> Tuple[str, ...]:
         return tuple(p.strip() for p in (value or "").split(";") if p.strip())
+
+    def labels(cell: Optional[str]) -> Tuple[str, ...]:
+        """A solution's ``tags`` cell is a JSON list of {tag, risk_ids}; the esoi library reads it (older ``;`` labels also read)."""
+        try:
+            from esoi.fields import parse_tags
+            return tuple(t["tag"] for t in parse_tags(cell) if t["tag"])
+        except ImportError:   # a library that predates esoi.fields
+            return split(cell)
     return TagTable(tag_problems={r["tag"].strip(): split(r.get("problem_ids")) for r in rows("tags.csv") if (r.get("tag") or "").strip()},
-                    solution_tags={r["solution_id"]: split(r.get("tags")) for r in rows("solutions.csv") if r.get("solution_id")})
+                    solution_tags={r["solution_id"]: labels(r.get("tags")) for r in rows("solutions.csv") if r.get("solution_id")})
 
 
 def search(task: str, root: Optional[Path] = None, *, cards: List[RecordView] = (), provider: Any = None,

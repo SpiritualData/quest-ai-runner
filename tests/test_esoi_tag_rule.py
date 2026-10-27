@@ -71,3 +71,9 @@ def test_the_repository_list_and_tags_pass():
     with (ROOT / "esoi" / "problems.csv").open(newline="") as handle:
         problems = {row["problem_id"] for row in csv.DictReader(handle)}
     assert rules.tag_problems(listed, rows, problems) == []
+
+
+def test_a_json_tags_cell_is_read_by_label():
+    cell = '[{"tag": "spending", "risk_ids": ["prob-spend"]}, {"tag": "prompt", "risk_ids": []}]'
+    assert rules.tag_problems(LISTED, solutions(cell, "spending", ""), PROBLEMS) == []
+    assert rules.tags_of(dict(tags=cell)) == ["spending", "prompt"]
