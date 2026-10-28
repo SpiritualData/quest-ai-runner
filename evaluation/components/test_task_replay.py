@@ -22,7 +22,7 @@ def folder(case):
 
 
 def test_every_case_names_its_source_and_a_goal_text():
-    assert len(BY_ID) == len(CASES) >= 4
+    assert len(BY_ID) == len(CASES) >= 9
     assert all(c["source"].startswith("tests/") and c["goal"] for c in CASES)
 
 
@@ -45,6 +45,36 @@ def test_the_work_checks_read_the_folder_as_the_source_tests_asserted():
     assert replay.work_check(stay["work_check"], kept, kept) is True
     assert replay.work_check(stay["work_check"], kept, {**kept, "docs/notes.md": "x"}) is False
     assert replay.work_check(None, kept, kept) is None
+
+
+def test_the_harder_shapes_fail_when_untouched_and_pass_when_every_condition_is_met():
+    """Each harder case's check fails on the workspace as given (no free pass) and holds on a hand-made correct result."""
+    for cid in ("RT-05", "RT-06", "RT-07", "RT-08"):
+        root = folder(BY_ID[cid])
+        before = replay.snapshot(root)
+        assert replay.work_check(BY_ID[cid]["work_check"], before, before) is False, cid
+    decline = BY_ID["RT-09"]
+    kept = replay.snapshot(folder(decline))
+    assert replay.work_check(decline["work_check"], kept, kept) is True
+    assert replay.work_check(decline["work_check"], kept, {**kept, "docs/genealogy.md": "x"}) is False
+    root = folder(BY_ID["RT-05"])
+    text = (root / "docs" / "notes.md").read_text().replace("paused pending review", "active").replace("is paused until the review finishes", "is active")
+    (root / "docs" / "notes.md").write_text(text)
+    assert replay.work_check(BY_ID["RT-05"]["work_check"], {}, replay.snapshot(root)) is True
+    root = folder(BY_ID["RT-06"])
+    code = (root / "app.py").read_text().replace("wait = 1", "wait = min(2 ** i, 30)")
+    (root / "app.py").write_text(code)
+    assert replay.work_check(BY_ID["RT-06"]["work_check"], {}, replay.snapshot(root)) is True
+    (root / "app.py").write_text(code.replace("min(2 ** i, 30)", "2 ** i"))
+    assert replay.work_check(BY_ID["RT-06"]["work_check"], {}, replay.snapshot(root)) is False   # one of the two conditions
+    root = folder(BY_ID["RT-07"])
+    (root / "app.py").write_text((root / "app.py").read_text().replace("wait = 1", "wait = 2 ** i"))
+    assert replay.work_check(BY_ID["RT-07"]["work_check"], {}, replay.snapshot(root)) is False   # the runbook still says fixed
+    (root / "docs" / "runbook.md").write_text((root / "docs" / "runbook.md").read_text().replace("a fixed 1 second", "an exponential"))
+    assert replay.work_check(BY_ID["RT-07"]["work_check"], {}, replay.snapshot(root)) is True
+    root = folder(BY_ID["RT-08"])
+    (root / "demo_pkg" / "greet.py").write_text((root / "demo_pkg" / "greet.py").read_text().replace("hi {name}", "Hello, {name}!"))
+    assert replay.work_check(BY_ID["RT-08"]["work_check"], {}, replay.snapshot(root)) is True
 
 
 def fake(verdicts, work_ok=None, spawns=1):

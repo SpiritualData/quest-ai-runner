@@ -66,6 +66,10 @@ def work_check(check: Optional[Dict[str, Any]], before: Dict[str, str], after: D
     if not check:
         return None
     kind, path = check["kind"], check.get("path", "")
+    if kind == "all":
+        return all(bool(work_check(sub, before, after)) for sub in check["checks"])
+    if kind == "no_change":
+        return after == before
     text = after.get(path)
     if kind == "unchanged":
         return text is not None and text == before.get(path)

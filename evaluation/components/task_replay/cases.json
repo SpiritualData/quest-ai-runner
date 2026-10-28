@@ -68,5 +68,137 @@
    "kind": "unchanged",
    "path": "docs/notes.md"
   }
+ },
+ {
+  "id": "RT-05",
+  "area": "edit-read-first",
+  "goal": "Update docs/notes.md so the status reads active",
+  "brief": "the status line is stale",
+  "source": "tests/test_fast_edit_runner.py test_whole_file_rewrite_applies: the same goal and brief as RT-01, on a fixture where the stale status is stated three times (a table row, the status line, the summary), the production shape where a fix is applied to the first place found and the file still contradicts the goal",
+  "workspace": {
+   "files": {
+    "docs/notes.md": "# Project notes\n\n| Field | Value |\n|---|---|\n| Status | paused pending review |\n| Owner | the platform team |\n\nStatus: paused pending review.\n\nOwner: the platform team.\n\n## Summary\n\nThe project is paused until the review finishes.\n"
+   }
+  },
+  "work_check": {
+   "kind": "all",
+   "checks": [
+    {
+     "kind": "regex",
+     "path": "docs/notes.md",
+     "pattern": "^Status: active\\b",
+     "absent": [
+      "paused"
+     ]
+    },
+    {
+     "kind": "regex",
+     "path": "docs/notes.md",
+     "pattern": "\\|\\s*Status\\s*\\|\\s*active"
+    }
+   ]
+  }
+ },
+ {
+  "id": "RT-06",
+  "area": "edit-two-conditions",
+  "goal": "make the retry backoff in app.py exponential",
+  "brief": "the wait must double on every attempt and must never exceed 30 seconds",
+  "source": "tests/test_fast_edit_runner.py test_search_replace_applies: the same goal and LONG_CODE fixture as RT-02, with the brief stating a second acceptance condition (a 30 second ceiling) beside the exponential wait",
+  "workspace": {
+   "files": {
+    "app.py": {
+     "numbered_lines": {
+      "template": "# filler line {i}",
+      "count": 499
+     },
+     "text": "def retry(attempts):\n    for i in range(attempts):\n        wait = 1\n        sleep(wait)\n"
+    }
+   }
+  },
+  "work_check": {
+   "kind": "all",
+   "checks": [
+    {
+     "kind": "regex",
+     "path": "app.py",
+     "pattern": "2\\s*\\*\\*\\s*i"
+    },
+    {
+     "kind": "regex",
+     "path": "app.py",
+     "pattern": "min\\(\\s*30\\b|30\\s*if\\b|\\bmin\\([^)]*\\b30\\b"
+    }
+   ]
+  }
+ },
+ {
+  "id": "RT-07",
+  "area": "edit-two-files",
+  "goal": "make the retry backoff in app.py exponential and keep docs/runbook.md accurate",
+  "brief": "",
+  "source": "tests/test_fast_edit_runner.py test_search_replace_applies: the goal of RT-02 with a second condition in another file, the production shape where the change lands and the document that describes it is left stating the old behaviour",
+  "workspace": {
+   "files": {
+    "app.py": "def retry(attempts):\n    for i in range(attempts):\n        wait = 1\n        sleep(wait)\n",
+    "docs/runbook.md": "# Runbook\n\n## Retries\n\nRetries wait a fixed 1 second between attempts.\n\n## Alerts\n\nPage the on-call when retries run out.\n"
+   }
+  },
+  "work_check": {
+   "kind": "all",
+   "checks": [
+    {
+     "kind": "regex",
+     "path": "app.py",
+     "pattern": "wait\\s*=\\s*2\\s*\\*\\*\\s*i"
+    },
+    {
+     "kind": "regex",
+     "path": "docs/runbook.md",
+     "pattern": "exponential|doubl",
+     "absent": [
+      "fixed 1 second"
+     ]
+    },
+    {
+     "kind": "regex",
+     "path": "docs/runbook.md",
+     "pattern": "Page the on-call"
+    }
+   ]
+  }
+ },
+ {
+  "id": "RT-08",
+  "area": "spec-measured",
+  "goal": "make the greeting function greet a person by name in the standard form",
+  "brief": "the greeting-pass-rate metric must be measured before the change and again after it, and both results reported",
+  "source": "tests/test_goal_metrics_flow.py GREETING and its repo fixture (the scaffold's greet-a-person solution, whose standard form tests/test_greet.py pins as Hello, Name!), with the greeting function starting in a wrong form so the metric has a before and an after that differ",
+  "workspace": {
+   "scaffold": "demo_pkg",
+   "files": {
+    "demo_pkg/greet.py": "\"\"\"The example solution, declared where it lives: the interface, and the alternative the project ships.\"\"\"\nfrom esoi import implementation, solution\n\n\n@solution(\"greet-a-person\")\ndef greet(name: str) -> str:\n    \"\"\"Greet one person by name in plain text.\"\"\"\n\n\n@implementation(\"greet-a-person\", \"greet\")\ndef standard_greeting(name: str) -> str:\n    \"\"\"The standard greeting.\"\"\"\n    return f\"hi {name}\"\n"
+   }
+  },
+  "work_check": {
+   "kind": "regex",
+   "path": "demo_pkg/greet.py",
+   "pattern": "Hello, \\{name\\}!"
+  }
+ },
+ {
+  "id": "RT-09",
+  "area": "decline-missing-subject",
+  "goal": "update the genealogy section of docs/notes.md",
+  "brief": "",
+  "source": "tests/test_fast_edit_runner.py test_no_edit_sentinel_declines: the decline shape of RT-04, on a document that has no genealogy section at all, the production shape where a subject that does not exist is analysed and written up anyway",
+  "workspace": {
+   "files": {
+    "docs/notes.md": "# Project notes\n\nStatus: paused pending review.\n\nOwner: the platform team.\n"
+   }
+  },
+  "work_check": {
+   "kind": "no_change"
+  }
  }
 ]
