@@ -36,15 +36,20 @@ def used_lines(used):
     return lines
 
 
-def text_of(payload):
-    """The payload as a reader gets it: prose sections first, then the recorded facts and signals."""
+LABELS = {"understood": "What I took you to mean", "approach": "How I worked it out", "confidence": "How sure I am"}
+LIST_LABELS = {"assumptions": "Assumption", "limitations": "Limit", "what_would_change": "What would change this"}
+
+
+def text_of(payload, labelled=True):
+    """The payload as a reader gets it: labelled prose sections first, then the recorded facts and signals. The labels let a grader
+    tell what the note says was done (how I worked it out, how sure I am) from interpretation, hypotheses and limits."""
     out = []
-    for key in ("understood", "approach", "confidence"):
+    for key, label in LABELS.items():
         if payload.get(key):
-            out.append(str(payload[key]))
-    for key in ("assumptions", "limitations", "what_would_change"):
-        out += [str(x) for x in payload.get(key) or []]
-    out += [str(v) for v in (payload.get("evolvable_structure") or {}).values()]
+            out.append(f"{label}: {payload[key]}" if labelled else str(payload[key]))
+    for key, label in LIST_LABELS.items():
+        out += [f"{label}: {x}" if labelled else str(x) for x in payload.get(key) or []]
+    out += [f"{k}: {v}" if labelled else str(v) for k, v in (payload.get("evolvable_structure") or {}).items()]
     out += used_lines(payload.get("used") or {})
     signals = payload.get("signals") or {}
     if signals.get("goal_met") is not None:
@@ -61,7 +66,7 @@ def text_of(payload):
 
 def prose_of(payload):
     """Only the written half of the payload (what a model composed), for the plain-language checks."""
-    return "\n".join(text_of({k: v for k, v in payload.items() if k not in ("used", "signals", "metrics", "metric_missing")}).splitlines())
+    return text_of({k: v for k, v in payload.items() if k not in ("used", "signals", "metrics", "metric_missing")}, labelled=False)
 
 
 def grader_record(trace):

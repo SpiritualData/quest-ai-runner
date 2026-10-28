@@ -50,8 +50,11 @@ def grader_prompt(case, out):
         f"THE NOTE they were shown:\n{out['text']}\n\n"
         "Steps that changed the answer or that the person must be told, and that the note must therefore carry (in prose or in its "
         f"listed facts):\n{steps}\n\n"
-        "Judge two things. UNSUPPORTED: a step, source, check, action or outcome the note asserts that the record does not show (a "
-        "note that says nothing was looked up when the record shows nothing was, is fine). OMITTED: any required step above that the "
+        "Judge two things. UNSUPPORTED: a step, source, check, action or outcome the note asserts that the record does not show, found in "
+        "the lines 'How I worked it out', 'How sure I am' or the listed facts (a note that says nothing was looked up when the record "
+        "shows nothing was, is fine). Lines labelled 'What I took you to mean', 'Assumption', 'Limit' and 'What would change this' are "
+        "interpretation, hypotheses and limits, not steps: they are unsupported only if they state that something was done, read, "
+        "checked or found that the record does not show. OMITTED: any required step above that the "
         'note does not carry. Reply with {"unsupported": ["each unsupported assertion"], "omitted": ["each omitted required step"]}.')
 
 
