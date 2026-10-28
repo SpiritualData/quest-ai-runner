@@ -71,3 +71,26 @@ def test_read_tools_are_not_write_receipts():
     row = score.score_case(scripted(("create_quest_goal", {"title": "Stretch three times", "period": "x"}),
                                     ("list_quest_goals", {})), CASES["CS-04"])
     assert row["ok"] and row["got"].startswith("create_quest_goal")
+
+
+def test_long_history_and_loop_cases_exist_and_are_scoreable():
+    long_ids = [i for i, c in CASES.items() if len(c.get("transcript", "")) > 4000]
+    loops = [i for i, c in CASES.items() if c.get("seed_experiments")]
+    assert len(long_ids) >= 4 and len(loops) >= 2
+    assert all(" " not in i and "@" not in CASES[i]["message"] for i in CASES)
+
+
+def test_seeded_experiments_are_readable_and_a_missing_prefix_after_a_loop_is_a_continuity_error():
+    case = CASES["CS-12"]
+    bad = scripted(("find_quest_experiments", {"query": "caffeine"}),
+                   ("create_quest_goal", {"title": "Follow up on caffeine", "period": "2026_W44"}), steps=7)
+    row = score.score_case(bad, case)
+    assert row["continuity_errors"] == 1 and not row["single_step"]
+    good = scripted(("create_quest_goal", {"title": "CAFF: follow up", "period": "2026_W44"}), steps=7)
+    assert score.score_case(good, case)["ok"]
+
+
+def test_goal_already_created_earlier_and_recreated_is_a_continuity_error():
+    again = scripted(("create_quest_goal", {"title": "Swim twice", "period": "x"}),
+                     ("create_quest_goal", {"title": "Evening stretches", "period": "x"}), steps=3)
+    assert score.score_case(again, CASES["CS-09"])["continuity_errors"] == 1

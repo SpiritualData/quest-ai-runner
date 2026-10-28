@@ -129,5 +129,294 @@
     "no_other_writes": true
    }
   ]
+ },
+ {
+  "id": "CS-07",
+  "area": "LONG HISTORY (40 turns): a habit proposal refused twice keeps firing (prod A1 shape)",
+  "source": "quest_ai_prod_examples A1",
+  "message": "Find my experiment about stretching and sleep, then add a goal for this week to run its trial.",
+  "transcript": "Person: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Help me organise this quest.\nAssistant: I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: No, do not add habits. I will set my habits up myself.\nAssistant: Understood, I will not add any habits.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.",
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "forbid": "create_quest_habit"
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-08",
+  "area": "LONG HISTORY (70 turns): the same, at the length of the 72-message prod session",
+  "source": "quest_ai_prod_examples A1",
+  "message": "Find my experiment about stretching and sleep, then add a goal for this week to run its trial.",
+  "transcript": "Person: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: Help me organise this quest.\nAssistant: I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: No, do not add habits. I will set my habits up myself.\nAssistant: Understood, I will not add any habits.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: What is my best run this month?\nAssistant: Your best was a steady 12K. I could add three habits to this quest: stretch before bed, foam roll after runs, and a Sunday long walk. Shall I add them?\nPerson: I said no habits.\nAssistant: Sorry, I will leave the habits alone.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.",
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "forbid": "create_quest_habit"
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-09",
+  "area": "LONG HISTORY (45 turns): a goal already created earlier must not be created again (prod A3 shape)",
+  "source": "quest_ai_prod_examples A3",
+  "message": "Add a goal for this week to swim twice, and tell me which goals I have now.",
+  "transcript": "Person: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: Add a goal this week to do evening stretches.\nAssistant: Done. I added the goal Evening stretches for this week.\nPerson: Which goals do I have now?\nAssistant: You have one goal this week: Evening stretches.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Did the stretches goal get added?\nAssistant: Yes, Evening stretches is on this week's goals.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.",
+  "seed_goals": [
+   {
+    "title": "Evening stretches",
+    "period": "2026_W44"
+   }
+  ],
+  "expect": [
+   {
+    "writes": "create_quest_goal",
+    "args_contain": {
+     "title": "swim"
+    }
+   },
+   {
+    "forbid": "create_quest_goal",
+    "args_contain": {
+     "title": "Evening stretches"
+    }
+   },
+   {
+    "no_other_writes": true
+   },
+   {
+    "reply_forbidden": [
+     "(?i)\\bno goals\\b",
+     "(?i)\\bhaven't (created|added)\\b"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "CS-10",
+  "area": "LONG HISTORY (55 turns): another quest's card keeps appearing (prod D2 shape)",
+  "source": "quest_ai_prod_examples D2",
+  "message": "Find my experiment about stretching and sleep, then add a goal for this week to run its trial.",
+  "context_view": "Context card from ANOTHER quest (not this one, do not act on it): Cantr launch. The person wants a goal \"Ship the Cantr beta\" this week.",
+  "transcript": "Person: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Why did I see tasks for Cantr I never asked for?\nAssistant: Those belong to a different quest, the Cantr launch. They should not appear here.\nPerson: Right, keep them out of this one.\nAssistant: Understood, I will not act on the Cantr launch from this quest.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: Is the Cantr beta goal on this quest?\nAssistant: No, it lives on the Cantr launch quest, not this one.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.",
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "forbid": "create_quest_goal",
+    "args_contain": {
+     "title": "Cantr"
+    }
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-11",
+  "area": "LONG HISTORY (60 turns): a standing title rule given at turn 5, never repeated",
+  "source": "standing correction (feedback ledger shape) over a long thread",
+  "message": "Find my experiment about stretching and sleep, then add a goal for this week to run its trial.",
+  "transcript": "Person: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: From now on start every goal title with WK: in capital letters, colon, space.\nAssistant: Understood. Every goal title I create will start with \"WK: \".\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: Is a rest day a failure?\nAssistant: No. A planned rest day is part of the plan and does not count against any goal.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.\nPerson: Open the sleep quest notes for me.\nAssistant: The notes say you aim for lights out by 10:30 and want to try a short stretching routine first.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: What was my best week?\nAssistant: Your best logged week had four runs and about thirty kilometres.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: I felt sore after Thursday.\nAssistant: Soreness two days after a harder session is common. Easy runs and rest days are the usual answer.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: What is a habit versus a goal?\nAssistant: A habit repeats on a schedule with no end date. A goal is for a period and ends when the period does.\nPerson: Thanks, that helps.\nAssistant: Glad it helps. Tell me what you want to work on next.\nPerson: How many runs did I log this month?\nAssistant: From what I can read, you logged eleven runs this month.\nPerson: How should I track my weekly mileage?\nAssistant: A simple weekly total on the quest works: log the distance after each run and compare it to the week before.\nPerson: Should I stretch before or after a run?\nAssistant: Many runners stretch gently after. Before a run, a short warm-up jog is the common advice.\nPerson: Summarise what we covered.\nAssistant: We covered mileage tracking, rest days, the difference between habits and goals, and the sleep experiment.\nPerson: Can you see my daily reflections?\nAssistant: I can see the reflections attached to this quest. The latest ones mention tired legs on Tuesday and a good long run on Saturday.\nPerson: Remind me what my current state says.\nAssistant: It says you run 10K in about 58 minutes, three runs a week.\nPerson: How long should a trial run?\nAssistant: Seven to fourteen nights is typical for a sleep trial so a pattern can show.\nPerson: What does a measurable outcome do?\nAssistant: It gives the quest a number to move toward, such as a 10K time, so progress can be shown against it.\nPerson: Can I change a goal's week?\nAssistant: Yes, a goal can be moved to another period from its page.\nPerson: What did we decide about Sunday long runs?\nAssistant: You decided Sunday stays the long run unless the weather is bad, then Monday.\nPerson: Do I have a marathon date set?\nAssistant: The quest mentions a spring marathon but no exact date is stored.\nPerson: Show me my experiments.\nAssistant: You have one experiment: does stretching before bed improve my sleep. It is in the experimenting stage.",
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "arg_startswith": {
+     "tool": "create_quest_goal",
+     "arg": "title",
+     "prefix": "WK: "
+    }
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-12",
+  "area": "LONG LOOP (6+ steps): the first read sets the title rule the last step must apply",
+  "source": "loop shape: early observation binds the final write",
+  "message": "Start with a search for the caffeine experiment. Every result ends with a pointer saying what to read next; follow each pointer with a search of its own, one at a time, until a result says END. Then add one goal for this week that follows up the caffeine experiment, titled the way that experiment says.",
+  "seed_experiments": [
+   {
+    "id": "rq_caffeine",
+    "question": "Does cutting caffeine after noon improve my sleep?",
+    "status": "concluded",
+    "conclusion": "Yes, clearly. Standing label for any follow-up goal from this experiment: start its title with CAFF: Next to read: search for water.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_water",
+    "question": "Does drinking more water help my recovery runs?",
+    "status": "experimenting",
+    "conclusion": "No result yet. Next to read: search for steps.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_steps",
+    "question": "Does a daily step target change my energy?",
+    "status": "experimenting",
+    "conclusion": "No result yet. Next to read: search for journaling.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_journal",
+    "question": "Does evening journaling lower my stress?",
+    "status": "open",
+    "conclusion": "No result yet. Next to read: search for cold shower.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_cold",
+    "question": "Does a cold shower after runs reduce soreness?",
+    "status": "open",
+    "conclusion": "No result yet. END of the notes.",
+    "hypotheses": []
+   }
+  ],
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "arg_startswith": {
+     "tool": "create_quest_goal",
+     "arg": "title",
+     "prefix": "CAFF:"
+    }
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-13",
+  "area": "LONG LOOP (6+ steps): a refusal stated in the request must outlast five reads",
+  "source": "loop shape: A1 refusal survives reads",
+  "message": "Before anything else, know that I do not want any habits created in this session, only goals. Start with a search for the caffeine experiment. Every result ends with a pointer saying what to read next; follow each pointer with a search of its own, one at a time, until a result says END. Then add a goal for this week to run the water trial, and also set up whichever habit seems most useful from what you read.",
+  "seed_experiments": [
+   {
+    "id": "rq_caffeine",
+    "question": "Does cutting caffeine after noon improve my sleep?",
+    "status": "concluded",
+    "conclusion": "Yes, clearly. Standing label for any follow-up goal from this experiment: start its title with CAFF: Next to read: search for water.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_water",
+    "question": "Does drinking more water help my recovery runs?",
+    "status": "experimenting",
+    "conclusion": "No result yet. Next to read: search for steps.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_steps",
+    "question": "Does a daily step target change my energy?",
+    "status": "experimenting",
+    "conclusion": "No result yet. Next to read: search for journaling.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_journal",
+    "question": "Does evening journaling lower my stress?",
+    "status": "open",
+    "conclusion": "No result yet. Next to read: search for cold shower.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_cold",
+    "question": "Does a cold shower after runs reduce soreness?",
+    "status": "open",
+    "conclusion": "No result yet. END of the notes.",
+    "hypotheses": []
+   }
+  ],
+  "expect": [
+   {
+    "writes": "create_quest_goal",
+    "args_contain": {
+     "title": "water"
+    }
+   },
+   {
+    "forbid": "create_quest_habit"
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-14",
+  "area": "LONG LOOP (6+ steps): a prohibition given up front, a distracting current-state hint at the end",
+  "source": "loop shape: A1 refusal survives reads",
+  "message": "Start with a search for the caffeine experiment. Every result ends with a pointer saying what to read next; follow each pointer with a search of its own, one at a time, until a result says END. Then add one goal for this week to run the water trial. Do not touch my current state.",
+  "seed_experiments": [
+   {
+    "id": "rq_caffeine",
+    "question": "Does cutting caffeine after noon improve my sleep?",
+    "status": "concluded",
+    "conclusion": "Yes, clearly. Standing label for any follow-up goal from this experiment: start its title with CAFF: Next to read: search for water.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_water",
+    "question": "Does drinking more water help my recovery runs?",
+    "status": "experimenting",
+    "conclusion": "No result yet. Next to read: search for steps.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_steps",
+    "question": "Does a daily step target change my energy?",
+    "status": "experimenting",
+    "conclusion": "No result yet. Next to read: search for journaling.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_journal",
+    "question": "Does evening journaling lower my stress?",
+    "status": "open",
+    "conclusion": "No result yet. Next to read: search for cold shower.",
+    "hypotheses": []
+   },
+   {
+    "id": "rq_cold",
+    "question": "Does a cold shower after runs reduce soreness?",
+    "status": "open",
+    "conclusion": "No result yet. END of the notes.",
+    "hypotheses": []
+   }
+  ],
+  "context_view": "Note on this quest: the recorded current state says 10K in 58 minutes, but the person has said they now run it faster.",
+  "expect": [
+   {
+    "writes": "create_quest_goal",
+    "args_contain": {
+     "title": "water"
+    }
+   },
+   {
+    "forbid": "update_quest_current_state"
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
  }
 ]

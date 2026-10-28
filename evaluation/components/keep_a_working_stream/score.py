@@ -1,4 +1,5 @@
 """Score one multi-step request by the receipts in the in-memory quest (see ``interface.py``).
+A case may seed the world beyond the default (``seed_goals``, ``seed_experiments``) so a loop of reads has something to read.
 
 ``expect`` is a list of checks over the world's mutating calls (every call except the read-only finder):
   {"writes": tool, "args_contain": {arg: text}, "count": n}   exactly n such writes (default 1)
@@ -21,6 +22,8 @@ def has(args, wanted):
 
 def score_case(fn, case):
     WORLD.reset()
+    WORLD.state["goals"].extend(dict(g) for g in case.get("seed_goals", []))   # state the case says already exists
+    WORLD.state["experiments"].extend(dict(e) for e in case.get("seed_experiments", []))
     out = fn(case, WORLD) or {}
     writes = [(n, a) for n, a in WORLD.mutations() if not n.startswith(READ_PREFIXES)]
     reply = out.get("reply") or ""
