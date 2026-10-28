@@ -498,10 +498,10 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_solutions --impl tag_list_with_check`
 - `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`
 - `metric-keep-a-working-stream`, Step continuity at cost over multi-step requests: `esoi run keep_a_working_stream --impl rebuilt_per_step --sample 3 --max-calls 40`
-- `metric-admit-to-the-mind`, Goal-relevant admission at a precision floor with nothing out of scope: `none`
+- `metric-admit-to-the-mind`, Goal-relevant admission at a precision floor with nothing out of scope: `esoi run admit_to_the_mind --impl recency_window`
 - `metric-know-the-world`, Supported and calibrated answers to world questions: `none`
 - `metric-act-in-the-world`, Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety: `none`
-- `metric-act-as-the-body`, Account-state consistency across scripted sessions: `none`
-- `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `none`
+- `metric-act-as-the-body`, Account-state consistency across scripted sessions: `esoi run act_as_the_body --impl card_and_reads`
+- `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `esoi run hold_the_long_view --impl separate_stores`
 - `metric-think-critically`, Requests held to their ESOI metric by code: `none`
-- `metric-select-a-rep`, Representative choice accuracy and thread consistency: `none`
+- `metric-select-a-rep`, Representative choice accuracy and thread consistency: `esoi run select_a_rep --impl persona_resolver_precedence`

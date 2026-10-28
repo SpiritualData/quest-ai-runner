@@ -1,0 +1,205 @@
+[
+ {
+  "id": "ATB-01",
+  "area": "read_back_after_write",
+  "message": "set the status to shipped and check it",
+  "script": [
+   {
+    "write": "shipped"
+   },
+   {
+    "read": true
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [
+   "shipped"
+  ],
+  "expect_reads": 1,
+  "final_shows": [
+   "ACCOUNT status is shipped"
+  ]
+ },
+ {
+  "id": "ATB-02",
+  "area": "read_again_after_write",
+  "message": "check, change, check",
+  "script": [
+   {
+    "read": true
+   },
+   {
+    "write": "shipped"
+   },
+   {
+    "read": true
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [
+   "shipped"
+  ],
+  "expect_reads": 2,
+  "final_shows": [
+   "ACCOUNT status is shipped"
+  ]
+ },
+ {
+  "id": "ATB-03",
+  "area": "read_repeated_without_change",
+  "message": "check the status",
+  "script": [
+   {
+    "read": true
+   },
+   {
+    "read": true
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [],
+  "expect_reads": 1
+ },
+ {
+  "id": "ATB-04",
+  "area": "change_that_ran_is_not_repeated",
+  "message": "set the status to shipped",
+  "script": [
+   {
+    "write": "shipped"
+   },
+   {
+    "write": "shipped"
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [
+   "shipped"
+  ],
+  "expect_reads": 0
+ },
+ {
+  "id": "ATB-05",
+  "area": "two_different_changes_both_run",
+  "message": "set it to review then shipped",
+  "script": [
+   {
+    "write": "review"
+   },
+   {
+    "write": "shipped"
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [
+   "review",
+   "shipped"
+  ],
+  "expect_reads": 0
+ },
+ {
+  "id": "ATB-06",
+  "area": "failed_change_may_be_retried",
+  "message": "set the status to shipped",
+  "script": [
+   {
+    "write": "shipped",
+    "fails": true
+   },
+   {
+    "write": "shipped",
+    "fails": true
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [
+   "shipped",
+   "shipped"
+  ],
+  "expect_reads": 0
+ },
+ {
+  "id": "ATB-07",
+  "area": "state_after_a_failed_change_is_unchanged",
+  "message": "set shipped then check",
+  "script": [
+   {
+    "write": "shipped",
+    "fails": true
+   },
+   {
+    "read": true
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [
+   "shipped"
+  ],
+  "expect_reads": 1,
+  "final_shows": [
+   "ACCOUNT status is draft"
+  ]
+ },
+ {
+  "id": "ATB-08",
+  "area": "change_back_after_change",
+  "message": "ship then revert and check",
+  "script": [
+   {
+    "write": "shipped"
+   },
+   {
+    "write": "draft"
+   },
+   {
+    "read": true
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [
+   "shipped",
+   "draft"
+  ],
+  "expect_reads": 1,
+  "final_shows": [
+   "ACCOUNT status is draft"
+  ]
+ },
+ {
+  "id": "ATB-09",
+  "area": "near_miss_lookup_never_becomes_a_write",
+  "message": "set the status of the archive page",
+  "script": [
+   {
+    "read": true,
+    "path": "archive.md"
+   },
+   {
+    "write": "shipped"
+   },
+   {
+    "answer": true
+   }
+  ],
+  "expect_writes": [],
+  "expect_reads": 0,
+  "known_gap": true,
+  "note": "the lookup finds nothing; no operation should follow from it"
+ }
+]

@@ -1,0 +1,235 @@
+[
+ {
+  "id": "HLV-01",
+  "area": "decline_holds",
+  "message": "what next?",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "create four new quests"
+   }
+  ],
+  "want": [
+   "create four new quests"
+  ]
+ },
+ {
+  "id": "HLV-02",
+  "area": "decline_wording_variants",
+  "message": "ok",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "Declined",
+    "summary": "send the donor email"
+   },
+   {
+    "kind": "human",
+    "outcome": "rejected",
+    "summary": "archive the old goals"
+   }
+  ],
+  "want": [
+   "send the donor email",
+   "archive the old goals"
+  ]
+ },
+ {
+  "id": "HLV-03",
+  "area": "accepted_is_not_a_decline",
+  "message": "ok",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "approved",
+    "summary": "rename the weekly goal"
+   }
+  ],
+  "avoid": [
+   "rename the weekly goal"
+  ]
+ },
+ {
+  "id": "HLV-04",
+  "area": "open_is_not_a_decline",
+  "message": "ok",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "pending",
+    "summary": "merge the two plans"
+   }
+  ],
+  "avoid": [
+   "merge the two plans"
+  ]
+ },
+ {
+  "id": "HLV-05",
+  "area": "decline_and_accept_together",
+  "message": "ok",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "delete the draft"
+   },
+   {
+    "kind": "human",
+    "outcome": "approved",
+    "summary": "publish the notes"
+   }
+  ],
+  "want": [
+   "delete the draft"
+  ],
+  "avoid": [
+   "publish the notes"
+  ]
+ },
+ {
+  "id": "HLV-06",
+  "area": "many_declines_newest_kept",
+  "message": "ok",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 01"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 02"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 03"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 04"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 05"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 06"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 07"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 08"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 09"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 10"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 11"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "proposal number 12"
+   }
+  ],
+  "want": [
+   "proposal number 12"
+  ],
+  "note": "the cap keeps the first ten declines, so the newest are dropped (a real failure today)"
+ },
+ {
+  "id": "HLV-07",
+  "area": "proposal_key",
+  "message": "ok",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "proposal": "split the goal in two"
+   }
+  ],
+  "want": [
+   "split the goal in two"
+  ]
+ },
+ {
+  "id": "HLV-08",
+  "area": "decline_without_text",
+  "message": "ok",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused"
+   }
+  ],
+  "avoid": [
+   "ALREADY DECLINED"
+  ]
+ },
+ {
+  "id": "HLV-09",
+  "area": "nothing_earlier",
+  "message": "ok",
+  "escalations": [],
+  "avoid": [
+   "ALREADY DECLINED"
+  ]
+ },
+ {
+  "id": "HLV-10",
+  "area": "host_supplied_decline_from_sibling_quest_holds",
+  "message": "draft the donor email",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "send the donor email",
+    "quest_id": "quest_sibling"
+   }
+  ],
+  "want": [
+   "send the donor email"
+  ],
+  "note": "the library carries what the host hands it; keeping a view across quests is the host's store today"
+ },
+ {
+  "id": "HLV-11",
+  "area": "other_branch_stays_out",
+  "message": "what next?",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "cancel the retreat",
+    "quest_id": "quest_unrelated_branch"
+   }
+  ],
+  "avoid": [
+   "cancel the retreat"
+  ],
+  "known_gap": true,
+  "note": "the library does not filter by quest or intent branch; the host must"
+ }
+]

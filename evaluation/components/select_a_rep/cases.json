@@ -1,0 +1,400 @@
+[
+ {
+  "id": "SAR-01",
+  "area": "structured_field",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "task": {
+   "text": "plan the week",
+   "assignee_rep_id": "rep_kai"
+  },
+  "expect": "rep_kai"
+ },
+ {
+  "id": "SAR-02",
+  "area": "structured_field_by_name",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "task": {
+   "text": "plan the week",
+   "persona": "River"
+  },
+  "expect": "rep_river"
+ },
+ {
+  "id": "SAR-03",
+  "area": "most_specific_field_first",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "task": {
+   "text": "x",
+   "user_id": "rep_river",
+   "assignee_user_id": "rep_kai"
+  },
+  "expect": "rep_kai"
+ },
+ {
+  "id": "SAR-04",
+  "area": "flat_registry",
+  "registry": {
+   "u_one": "one-rep",
+   "u_two": "two-rep"
+  },
+  "task": {
+   "title": "t",
+   "assignee_user_id": "u_two"
+  },
+  "expect": "u_two"
+ },
+ {
+  "id": "SAR-05",
+  "area": "bare_mention",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "task": {
+   "text": "please tell kai that the report is late"
+  },
+  "expect": null,
+  "bare_mention": true
+ },
+ {
+  "id": "SAR-06",
+  "area": "bare_mention_with_cards",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "card_activation": true,
+  "cards": {
+   "river_domain": {
+    "persona": "rep_river",
+    "keywords": [
+     "budget",
+     "forecast"
+    ]
+   }
+  },
+  "task": {
+   "text": "river said the numbers are off"
+  },
+  "expect": null,
+  "bare_mention": true
+ },
+ {
+  "id": "SAR-07",
+  "area": "substring_is_not_a_match",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "task": {
+   "persona": "kaizen"
+  },
+  "expect": null
+ },
+ {
+  "id": "SAR-08",
+  "area": "no_assignment",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "task": {
+   "text": "summarise the notes"
+  },
+  "expect": null
+ },
+ {
+  "id": "SAR-09",
+  "area": "empty_registry",
+  "registry": {},
+  "task": {
+   "text": "x",
+   "assignee_rep_id": "rep_kai"
+  },
+  "expect": null
+ },
+ {
+  "id": "SAR-10",
+  "area": "card_dominance",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "card_activation": true,
+  "cards": {
+   "river_a": {
+    "persona": "rep_river",
+    "keywords": [
+     "budget",
+     "forecast",
+     "runway"
+    ]
+   },
+   "kai_a": {
+    "persona": "rep_kai",
+    "keywords": [
+     "telemetry"
+    ]
+   }
+  },
+  "task": {
+   "text": "check the budget forecast and runway"
+  },
+  "expect": "rep_river"
+ },
+ {
+  "id": "SAR-11",
+  "area": "card_weak_overlap",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "card_activation": true,
+  "cards": {
+   "river_a": {
+    "persona": "rep_river",
+    "keywords": [
+     "budget",
+     "forecast",
+     "runway"
+    ]
+   }
+  },
+  "task": {
+   "text": "look at the budget"
+  },
+  "expect": null
+ },
+ {
+  "id": "SAR-12",
+  "area": "card_tie_is_ambiguous",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "card_activation": true,
+  "cards": {
+   "river_a": {
+    "persona": "rep_river",
+    "keywords": [
+     "budget",
+     "forecast"
+    ]
+   },
+   "kai_a": {
+    "persona": "rep_kai",
+    "keywords": [
+     "budget",
+     "forecast"
+    ]
+   }
+  },
+  "task": {
+   "text": "the budget and forecast"
+  },
+  "expect": null
+ },
+ {
+  "id": "SAR-13",
+  "area": "card_step_off",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "card_activation": false,
+  "cards": {
+   "river_a": {
+    "persona": "rep_river",
+    "keywords": [
+     "budget",
+     "forecast",
+     "runway"
+    ]
+   }
+  },
+  "task": {
+   "text": "check the budget forecast and runway"
+  },
+  "expect": null
+ },
+ {
+  "id": "SAR-14",
+  "area": "structured_beats_cards",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "card_activation": true,
+  "cards": {
+   "river_a": {
+    "persona": "rep_river",
+    "keywords": [
+     "budget",
+     "forecast",
+     "runway"
+    ]
+   }
+  },
+  "task": {
+   "text": "check the budget forecast and runway",
+   "assignee_rep_id": "rep_kai"
+  },
+  "expect": "rep_kai"
+ },
+ {
+  "id": "SAR-15",
+  "area": "thread_keeps_its_rep",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   }
+  },
+  "task": {
+   "text": "follow up on this",
+   "thread_rep_id": "rep_river",
+   "origin": "chat"
+  },
+  "expect": "rep_river",
+  "known_gap": true
+ },
+ {
+  "id": "SAR-16",
+  "area": "rep_the_person_cannot_see",
+  "registry": {
+   "river": {
+    "rep_id": "rep_river",
+    "skill": "river",
+    "display_name": "River the Planner"
+   },
+   "kai": {
+    "rep_id": "rep_kai",
+    "skill": "kai",
+    "display_name": "Kai"
+   },
+   "scout": {
+    "rep_id": "rep_scout",
+    "skill": "scout",
+    "hidden_from_person": true
+   }
+  },
+  "task": {
+   "text": "x",
+   "assignee_rep_id": "rep_scout"
+  },
+  "expect": null,
+  "hidden_rep": "rep_scout",
+  "known_gap": true
+ }
+]

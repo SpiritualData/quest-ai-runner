@@ -1,0 +1,271 @@
+[
+ {
+  "id": "ADM-01",
+  "area": "all_needed_few",
+  "goal": "what is the launch date?",
+  "items": [
+   {
+    "rel_path": "plan.md",
+    "label": "needed",
+    "marker": "LAUNCH-DATE-MARCH",
+    "text": "LAUNCH-DATE-MARCH. "
+   },
+   {
+    "rel_path": "notes.md",
+    "label": "needed",
+    "marker": "OWNER-IS-RIVER",
+    "text": "OWNER-IS-RIVER. "
+   }
+  ]
+ },
+ {
+  "id": "ADM-02",
+  "area": "one_near_miss",
+  "goal": "what is the launch date?",
+  "items": [
+   {
+    "rel_path": "plan.md",
+    "label": "needed",
+    "marker": "LAUNCH-DATE-MARCH",
+    "text": "LAUNCH-DATE-MARCH. "
+   },
+   {
+    "rel_path": "old.md",
+    "label": "near_miss",
+    "marker": "LAST-YEARS-LAUNCH",
+    "text": "LAST-YEARS-LAUNCH. "
+   }
+  ]
+ },
+ {
+  "id": "ADM-03",
+  "area": "out_of_scope_item",
+  "goal": "what is the launch date?",
+  "items": [
+   {
+    "rel_path": "plan.md",
+    "label": "needed",
+    "marker": "LAUNCH-DATE-MARCH",
+    "text": "LAUNCH-DATE-MARCH. "
+   },
+   {
+    "rel_path": "other.md",
+    "label": "out_of_scope",
+    "marker": "ANOTHER-PERSONS-PLAN",
+    "text": "ANOTHER-PERSONS-PLAN. "
+   }
+  ]
+ },
+ {
+  "id": "ADM-04",
+  "area": "only_out_of_scope",
+  "goal": "what is the launch date?",
+  "items": [
+   {
+    "rel_path": "other.md",
+    "label": "out_of_scope",
+    "marker": "ANOTHER-PERSONS-PLAN",
+    "text": "ANOTHER-PERSONS-PLAN. "
+   }
+  ]
+ },
+ {
+  "id": "ADM-05",
+  "area": "needed_early_long_history_short_marker",
+  "goal": "what is the launch date?",
+  "items": [
+   {
+    "rel_path": "plan.md",
+    "label": "needed",
+    "marker": "LAUNCH-DATE-MARCH",
+    "text": "LAUNCH-DATE-MARCH. "
+   },
+   {
+    "rel_path": "f0.md",
+    "label": "near_miss",
+    "marker": "FILLER-0",
+    "text": "FILLER-0. "
+   },
+   {
+    "rel_path": "f1.md",
+    "label": "near_miss",
+    "marker": "FILLER-1",
+    "text": "FILLER-1. "
+   },
+   {
+    "rel_path": "f2.md",
+    "label": "near_miss",
+    "marker": "FILLER-2",
+    "text": "FILLER-2. "
+   },
+   {
+    "rel_path": "f3.md",
+    "label": "near_miss",
+    "marker": "FILLER-3",
+    "text": "FILLER-3. "
+   },
+   {
+    "rel_path": "f4.md",
+    "label": "near_miss",
+    "marker": "FILLER-4",
+    "text": "FILLER-4. "
+   },
+   {
+    "rel_path": "f5.md",
+    "label": "near_miss",
+    "marker": "FILLER-5",
+    "text": "FILLER-5. "
+   },
+   {
+    "rel_path": "f6.md",
+    "label": "near_miss",
+    "marker": "FILLER-6",
+    "text": "FILLER-6. "
+   }
+  ],
+  "near_miss_allowed": 7
+ },
+ {
+  "id": "ADM-06",
+  "area": "needed_early_long_history_detail_deep",
+  "goal": "what is the launch date?",
+  "items": [
+   {
+    "rel_path": "plan.md",
+    "label": "needed",
+    "marker": "LAUNCH-DATE-MARCH",
+    "text": "detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail  LAUNCH-DATE-MARCH"
+   },
+   {
+    "rel_path": "f0.md",
+    "label": "near_miss",
+    "marker": "FILLER-0",
+    "text": "FILLER-0. "
+   },
+   {
+    "rel_path": "f1.md",
+    "label": "near_miss",
+    "marker": "FILLER-1",
+    "text": "FILLER-1. "
+   },
+   {
+    "rel_path": "f2.md",
+    "label": "near_miss",
+    "marker": "FILLER-2",
+    "text": "FILLER-2. "
+   },
+   {
+    "rel_path": "f3.md",
+    "label": "near_miss",
+    "marker": "FILLER-3",
+    "text": "FILLER-3. "
+   },
+   {
+    "rel_path": "f4.md",
+    "label": "near_miss",
+    "marker": "FILLER-4",
+    "text": "FILLER-4. "
+   },
+   {
+    "rel_path": "f5.md",
+    "label": "near_miss",
+    "marker": "FILLER-5",
+    "text": "FILLER-5. "
+   },
+   {
+    "rel_path": "f6.md",
+    "label": "near_miss",
+    "marker": "FILLER-6",
+    "text": "FILLER-6. "
+   }
+  ],
+  "near_miss_allowed": 7
+ },
+ {
+  "id": "ADM-07",
+  "area": "two_needed_among_many",
+  "goal": "who owns the budget and when is it due?",
+  "items": [
+   {
+    "rel_path": "a.md",
+    "label": "needed",
+    "marker": "BUDGET-OWNER-KAI",
+    "text": "BUDGET-OWNER-KAI. "
+   },
+   {
+    "rel_path": "g0.md",
+    "label": "near_miss",
+    "marker": "NOISE-0",
+    "text": "NOISE-0. "
+   },
+   {
+    "rel_path": "g1.md",
+    "label": "near_miss",
+    "marker": "NOISE-1",
+    "text": "NOISE-1. "
+   },
+   {
+    "rel_path": "g2.md",
+    "label": "near_miss",
+    "marker": "NOISE-2",
+    "text": "NOISE-2. "
+   },
+   {
+    "rel_path": "g3.md",
+    "label": "near_miss",
+    "marker": "NOISE-3",
+    "text": "NOISE-3. "
+   },
+   {
+    "rel_path": "g4.md",
+    "label": "near_miss",
+    "marker": "NOISE-4",
+    "text": "NOISE-4. "
+   },
+   {
+    "rel_path": "b.md",
+    "label": "needed",
+    "marker": "BUDGET-DUE-FRIDAY",
+    "text": "BUDGET-DUE-FRIDAY. "
+   }
+  ],
+  "near_miss_allowed": 5
+ },
+ {
+  "id": "ADM-08",
+  "area": "near_misses_should_stay_out",
+  "goal": "what is the launch date?",
+  "items": [
+   {
+    "rel_path": "plan.md",
+    "label": "needed",
+    "marker": "LAUNCH-DATE-MARCH",
+    "text": "LAUNCH-DATE-MARCH. "
+   },
+   {
+    "rel_path": "n0.md",
+    "label": "near_miss",
+    "marker": "SAME-SUBJECT-0",
+    "text": "SAME-SUBJECT-0. "
+   },
+   {
+    "rel_path": "n1.md",
+    "label": "near_miss",
+    "marker": "SAME-SUBJECT-1",
+    "text": "SAME-SUBJECT-1. "
+   },
+   {
+    "rel_path": "n2.md",
+    "label": "near_miss",
+    "marker": "SAME-SUBJECT-2",
+    "text": "SAME-SUBJECT-2. "
+   }
+  ]
+ },
+ {
+  "id": "ADM-09",
+  "area": "nothing_gathered",
+  "goal": "what is the launch date?",
+  "items": []
+ }
+]
