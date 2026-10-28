@@ -2676,3 +2676,7 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,context_and_specs,two_pipelines,17,10,10/17,0/0,0,0,0,0.0,0.6,cded75e,70798068,none,,,
 2026-10-28,draft_a_metric,ask_owner,4,2,2/4,0/0,0,0,0,0.0,0.0,cded75e,f1c1dec2,none,,,
 2026-10-28,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.3,984514b,ae7e2b22,none,,,
+2026-10-28,esoi_behavior,plain,60,21,18/44,3/16,117,131835,78089,0.0652,619.8,ec840dc,3b9c9d97,unknown,,,
+2026-10-28,context_and_specs,solutions_and_problems_with_links,17,14,14/17,0/0,0,0,0,0.0,0.2,ec840dc,70798068,none,,,
+2026-10-28,esoi_behavior,insitu_plain,60,27,21/44,6/16,120,352919,96402,0.0845,695.7,ec840dc,3b9c9d97,unknown,,,
+2026-10-28,esoi_behavior,insitu_standing_instructions,60,29,25/44,4/16,114,720208,130635,0.1746,853.2,ec840dc,3b9c9d97,unknown,,,

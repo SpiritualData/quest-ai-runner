@@ -288,7 +288,7 @@
   }
  },
  "search-cards-and-specs": {
-  "default": "two_pipelines",
+  "default": "solutions_and_problems_with_links",
   "modules": {
    "solutions_and_problems_with_links": "quest_ai_runner.core.unified_search",
    "two_pipelines": "quest_ai_runner.core.unified_search"
