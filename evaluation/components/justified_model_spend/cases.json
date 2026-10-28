@@ -95,5 +95,29 @@
   },
   "budget_source": "esoi.toml [balance.spec_selection]: a request is worth at most half a cent and ten seconds; no token budget is declared, so none is enforced",
   "source": "owner metric metric-spec-selection; owner cases evaluation/components/spec_selection/cases.json (the same stratified 30-case sample for both arms)"
+ },
+ {
+  "id": "JMS-OVS",
+  "spec_id": "watch-a-run.overseer",
+  "owner_metric": "metric-watch-a-run",
+  "keep": {
+   "component": "overseer_signals",
+   "impl": "live_model"
+  },
+  "ablation": {
+   "component": "overseer_signals",
+   "impl": "no_overseer",
+   "what": "the call is dropped: the overseer is switched off and every scenario proceeds"
+  },
+  "case_kinds": [
+   "*"
+  ],
+  "budget": {
+   "cost_usd_per_turn": null,
+   "seconds_per_call": 2.5,
+   "tokens": null
+  },
+  "budget_source": "docs/overseer.md: the answer checkpoint waits at most overseer_answer_checkpoint_timeout_seconds (default 2.5s) for the verdict and then ships the draft, so a verdict slower than that cannot change the answer. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
+  "source": "owner metric metric-watch-a-run; owner cases evaluation/components/overseer_signals/cases.json (all 16 hand-labelled scenarios, the same for both arms)"
  }
 ]

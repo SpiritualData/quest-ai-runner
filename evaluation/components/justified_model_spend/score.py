@@ -107,9 +107,9 @@ def judge(case, ablate=True, check_budget=True, check_owner=True):
             reasons.append(f"call does not beat its ablation: {s['right']}/{s['turns']} right with it, {cut}/{s['turns']} without")
     if check_budget:
         b = case["budget"]
-        if s["max_spend_per_turn"] > b["cost_usd_per_turn"]:
+        if b.get("cost_usd_per_turn") is not None and s["max_spend_per_turn"] > b["cost_usd_per_turn"]:
             reasons.append(f"max ${s['max_spend_per_turn']:.5f} per turn over budget ${b['cost_usd_per_turn']}")
-        if s["seconds_per_call"]["max"] > b["seconds_per_call"]:
+        if b.get("seconds_per_call") is not None and s["seconds_per_call"]["max"] > b["seconds_per_call"]:
             reasons.append(f"max {s['seconds_per_call']['max']:.1f}s per call over budget {b['seconds_per_call']}s")
         if b.get("tokens") and s["tokens_in"]["max"] + s["tokens_out"]["max"] > b["tokens"]:
             reasons.append("max tokens over budget")

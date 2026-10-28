@@ -101,5 +101,5 @@ if __name__ == "__main__":
     known, rest = ap.parse_known_args()
     kinds = {"assist_a_terminal_session": {"ack": "assist-a-terminal-session.ack", "classify": "assist-a-terminal-session.ask-classify",
                                            "gate": "assist-a-terminal-session.ask-classify", "judge": "assist-a-terminal-session.goal-judge"},
-             "spec_selection": {"*": "spec-selection.batch-judge"}}
+             "spec_selection": {"*": "spec-selection.batch-judge"}, "overseer_signals": {"*": "watch-a-run.overseer"}}
     measure(known.component, known.impl, rest, kinds.get(known.component, {}))
