@@ -12,7 +12,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `QP4`: Grounding, routing, deep work, escalation, a task executor, cost control: each product or team that wants AI help writes these again, privately, and the copies drift apart.
 - `QP5`: Models, prices, tools and techniques change every few months, so a router, a retrieval method or a model choice that was right becomes wrong, and nobody notices until quality drops or cost rises.
 - `QP6`: Operators learn what AI work cost, and whether it was any good, only after the fact: a runaway run, a large model on an easy question, or a quiet drop in answer quality.
-- `prob-misrouted-message`: A short chat message is sometimes handled the wrong way: a plain question starts expensive autonomous work, a request to change something only gets talked about, or a destructive request runs without anyone confirming it.
+- `prob-misrouted-message`: A short chat message is sometimes handled the wrong way: a plain question starts expensive autonomous work, a request to change something only gets talked about, or a destructive request runs without anyone confirming it. A clear instruction can also get a clarifying question back instead of being done.
 - `prob-reply-misses-the-account`: Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no source supports.
 - `prob-unrequested-or-partial-changes`: A request to change a quest leads to changes nobody asked for, to only part of what was asked, or to the same change made twice.
 - `prob-corrections-repeat`: People give the same correction again and again because the AI does not keep what they said, or keeps it but does not apply it where it bears.
@@ -54,9 +54,15 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-step-loses-the-request`: Within one request, each planning step is a separate model call rebuilt from parts, not a continuation of the step before. From the second step on, the transcript and the whole context block (the resolved request, declined proposals, standing corrections, recent context and cards) are replaced by a note saying they were provided at step one, which a separate call never saw, and older observations are collapsed to one line, so a later step decides from the raw message and the newest reads alone.
 - `prob-admission-by-recency-not-relevance`: What of the person's own material enters a step's view is decided by position and size, not by what the request needs: cards are chosen once from the request text at the start, the newest few observations are shown in full and older ones collapsed, and a lookup's result is admitted whether or not it is what was asked for. A finding the goal turns on can be collapsed out while an irrelevant read stays in full, and a near miss can be treated as the thing requested.
 - `prob-world-claims-unweighed`: A question about the world rather than the person's own material (health, training, research, experiences others have reported) is answered from the model's general knowledge or one web passage, with no sign of how strong the evidence is, and research sources a host already has are not consulted.
-- `prob-reach-claims-unfounded`: The AI states what it can and cannot do outside the host's own data without a source of truth for it: it describes a capability that does not exist, reports a setting as blocking when the setting was never read, or says outside work has started when nothing ran.
+- `prob-reach-claims-unfounded`: The AI states what it can and cannot do outside the host's own data without a source of truth for it: it describes a capability that does not exist, reports a setting as blocking when the setting was never read, or says outside work has started when nothing ran. It also says it cannot do something it can.
 - `prob-account-state-contradicts`: What the AI says about the person's own account (which quests exist, what changed, whether a change ran) is re-derived each turn from whatever slice it read, and a change it made is not read back, so within one session it reports the same state two ways, repeats a change it already made, or proposes again what it said was done.
 - `prob-long-view-scattered`: What is known across requests (what a quest has decided, declined and learned, what the person corrected, where the work is heading) is kept in several stores with their own keys, budgets and retrieval: past conversations, recent context, the feedback ledger and its guidance, the prediction store, the host's reflections and the quest cards. None of them holds the quest's standing view, so each request rebuilds it from fragments, background work can lack what the chat already knew, and each store needs its own scope fence.
+- `prob-work-handed-back`: A run ends by handing the person steps the AI could have done itself, or is marked done with part of the original ask left undone, instead of continuing until the original ask is met.
+- `prob-asks-what-is-not-theirs`: The AI asks the person about implementation details they neither care about nor understand, and when told it should not have asked, does not learn which kinds of question to stop asking.
+- `prob-harness-weaker-than-a-coding-agent`: The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the coding agent completes the work, while sending every request to the coding agent pays its slow, token-heavy context search each time.
+- `prob-app-help-unreliable`: Questions about how to use the app itself (how to do something, what a feature is for) should be answered from the product's own documentation, but that path is untested, the AI sometimes says it cannot do what it can, and many team members do not know what the AI can do for them.
+- `prob-no-environment-tasks-untested`: Most people have no external environment connected, so their delegated tasks can use only the app's own operations, its documentation, a review of their own data and web search, and that path has not been tested end to end.
+- `prob-experiments-not-proposed`: Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose or find an experiment that would settle it, though the app has an Experiments feature built for that.
 
 ## Ideals
 
@@ -105,6 +111,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-known-reach`, Known Reach: The AI says it can do only what it can, says it cannot only after checking, and claims an outside act only with the receipt of the act.
 - `ideal-consistent-account-state`, Consistent Account State: What the AI says about the person's own account is true of the account when it says it, every time in a session.
 - `ideal-standing-perspective`, Standing Perspective: Each quest carries one view across requests of what was decided, declined, learned and where it is heading, and every request on it starts from that view.
+- `ideal-asks-only-what-is-theirs`, Questions Only Where Theirs: The person is asked only what is theirs to decide, and a question they waved off is not asked again.
+- `ideal-self-explaining-app`, Self-Explaining App: Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.
+- `ideal-most-likely-path`, Most-Likely Path: Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
 
 ## Solutions
 
@@ -172,6 +181,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `act-in-the-world` | World: declared reach and receipts for acts outside the host | prompt_described_reach | Reach-claim accuracy and act receipts over labelled requests |
 | `act-as-the-body` | Body: the host's data model as the agent's own consistent state | card_and_reads | Account-state consistency across scripted sessions |
 | `hold-the-long-view` | Higher mind: one standing perspective per quest across requests | separate_stores | Long-view carry-through across sessions with nothing out of scope |
+| `think-critically` | Critical thinking: the option most likely to work, checked by metrics and experiments | intent_frame_and_slice | Recommendations held to a metric, and uncertainty turned into experiments |
 
 ## Implementations
 
@@ -400,8 +410,10 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `hold-the-long-view:outcome_precedents` | Outcome precedents, the Intuition proposal (proposed) |  |  |
 | `watch-a-run:no_overseer` | No overseer (configuration off) | quest_ai_runner/core/orchestrator_types.py |  |
 | `watch-a-run:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
-| `iterate-by-spec:every_change_names_its_metric` | Every request that changes something names its metric (proposed) |  |  |
-| `iterate-by-spec:experiment_when_uncertain` | An experiment when the better choice is unknown (proposed) |  |  |
+| `think-critically:every_change_names_its_metric` | Every request that changes something names its metric (proposed) |  |  |
+| `think-critically:experiment_when_uncertain` | An experiment when the better choice is unknown (proposed) |  |  |
+| `think-critically:intent_frame_and_slice` | Intent frame and specification slice (today) | quest_ai_runner/core/goal_iteration.py |  |
+| `keep-a-working-stream:open_source_harness` | An open-source agent harness as the loop (proposed) |  |  |
 
 ## Metrics
 
@@ -474,3 +486,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-act-in-the-world`, Reach-claim accuracy and act receipts over labelled requests: `none`
 - `metric-act-as-the-body`, Account-state consistency across scripted sessions: `none`
 - `metric-hold-the-long-view`, Long-view carry-through across sessions with nothing out of scope: `none`
+- `metric-think-critically`, Recommendations held to a metric, and uncertainty turned into experiments: `none`
