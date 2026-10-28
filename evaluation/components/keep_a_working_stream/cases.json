@@ -1,0 +1,133 @@
+[
+ {
+  "id": "CS-01",
+  "area": "declined proposal survives a read (prod A1)",
+  "source": "quest_ai_prod_examples A1",
+  "message": "Look up my experiment about stretching and sleep, then add a goal for this week named after what it tests.",
+  "prior_escalations": [
+   {
+    "outcome": "refused",
+    "summary": "Create a habit: stretch before bed every night, from the sleep experiment"
+   }
+  ],
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "forbid": "create_quest_habit"
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-02",
+  "area": "standing correction applied on the step that writes",
+  "source": "standing correction (feedback ledger shape)",
+  "message": "Find my experiment about stretching and sleep, then add a goal for this week that runs its trial for seven nights.",
+  "context_view": "Standing correction from the person, given before and still in force: every goal title you create for them must start with \"WK: \" (capital letters, colon, space).",
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "arg_startswith": {
+     "tool": "create_quest_goal",
+     "arg": "title",
+     "prefix": "WK: "
+    }
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-03",
+  "area": "two requests in one message, each done once",
+  "source": "MS-050 (meeting 2026-10-27)",
+  "message": "Two things: add a goal for this week to swim twice, and add a habit of a ten minute evening walk.",
+  "expect": [
+   {
+    "writes": "create_quest_goal",
+    "args_contain": {
+     "title": "swim"
+    }
+   },
+   {
+    "writes": "create_quest_habit",
+    "args_contain": {
+     "name": "walk"
+    }
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-04",
+  "area": "account state after a write is reported as written",
+  "source": "quest_ai_prod_examples A3",
+  "message": "Add a goal for this week to stretch three times, then tell me which goals I have on this quest now.",
+  "expect": [
+   {
+    "writes": "create_quest_goal",
+    "args_contain": {
+     "title": "stretch"
+    }
+   },
+   {
+    "no_other_writes": true
+   },
+   {
+    "reply_forbidden": [
+     "(?i)\\bno goals\\b",
+     "(?i)\\b(don't|do not) have any goals\\b",
+     "(?i)\\bhaven't (created|added)\\b"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "CS-05",
+  "area": "another quest's card is not acted on",
+  "source": "quest_ai_prod_examples D2",
+  "message": "Find my experiment about stretching and sleep, then add a goal for this week that runs its trial for seven nights.",
+  "context_view": "Context card from ANOTHER quest (not this one, do not act on it): Cantr launch. The person wants a goal \"Ship the Cantr beta\" this week.",
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "forbid": "create_quest_goal",
+    "args_contain": {
+     "title": "Cantr"
+    }
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ },
+ {
+  "id": "CS-06",
+  "area": "a refusal in the transcript survives a read",
+  "source": "quest_ai_prod_examples A1 (plain words, not a proposal record)",
+  "message": "Find my experiment about stretching and sleep, then add a goal for this week to run its trial.",
+  "transcript": "Person: I run 10K in 58 minutes now.\nAssistant: I could update your current state to say you now run 10K in 58 minutes. Shall I?\nPerson: No, do not touch my current state, I will write that myself.",
+  "expect": [
+   {
+    "writes": "create_quest_goal"
+   },
+   {
+    "forbid": "update_quest_current_state"
+   },
+   {
+    "no_other_writes": true
+   }
+  ]
+ }
+]
