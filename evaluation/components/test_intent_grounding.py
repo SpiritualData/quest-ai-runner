@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import common  # noqa: E402,F401
@@ -15,6 +17,12 @@ CASES = json.loads((HERE / "intent_grounding" / "cases.json").read_text())
 BY_ID = {c["id"]: c for c in CASES}
 INTENT = [c for c in CASES if c["kind"] == "intent"]
 CONTROLS = [c for c in CASES if c["kind"] == "control"]
+
+
+@pytest.fixture(autouse=True)
+def no_judge_cache(monkeypatch):
+    """The judge keeps verdicts by prompt on disk; a stub verdict must never be read back or left behind for a real run."""
+    monkeypatch.setenv("QUAL_JUDGE_CACHE", "0")
 
 
 class StubJudge:
@@ -58,7 +66,7 @@ def test_a_control_composes_the_same_bytes_for_both_arms():
 
 def test_no_prompt_or_case_text_carries_a_dash_or_a_real_identifier():
     blob = json.dumps(CASES, ensure_ascii=False) + arms.SYSTEM + "".join(arms.user_prompt(c, True) for c in CASES)
-    assert "—" not in blob and "–" not in blob and "/home/" not in blob and "@" not in blob
+    assert "\u2014" not in blob and "\u2013" not in blob and "/home/" not in blob and "@" not in blob
 
 
 def test_a_reply_that_names_the_gaps_is_passed_through_the_chat_quality_verdict():
@@ -73,7 +81,7 @@ def test_a_reply_that_names_the_gaps_is_passed_through_the_chat_quality_verdict(
 
 def test_a_hard_check_failure_spends_no_judge_call():
     judge = StubJudge()
-    record = arms.grade(BY_ID["IG-INT-03"], "Keep going — you are doing well.", judge)
+    record = arms.grade(BY_ID["IG-INT-03"], "Keep going \u2014 you are doing well.", judge)
     assert judge.asked == 0 and not record["passed"]
 
 

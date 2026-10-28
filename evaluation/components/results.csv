@@ -2187,3 +2187,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,task_replay,slice_and_writeback,4,4,4/4,0/0,12,18163,613,0.0,87.5,7b349e1,7573a8f5,claude-code-subscription,,,0.9818
 2026-10-28,intent_grounding,frame_line,10,8,8/10,0/0,20,57462,14342,0.2276,126.7,7b349e1,f38af8bc,claude-haiku,,,
 2026-10-28,task_replay,single_attempt,4,4,4/4,0/0,12,17186,589,0.0,76.2,7b349e1,7573a8f5,claude-code-subscription,,,0.9841
+2026-10-28,intent_grounding,none,10,3,3/10,0/0,15,35252,9426,0.1212,93.0,54ee21e,f38af8bc,claude-haiku,,,
