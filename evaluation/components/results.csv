@@ -2307,3 +2307,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,intent_grounding,none,10,3,3/10,0/0,15,35196,9384,0.1196,81.6,9d5683d,f38af8bc,claude-haiku,,,
 2026-10-28,qar_overall,recorded_rows,8,4,4/8,0/0,0,0,0,0.0,1.4,9d5683d,06c7c199,none,,,
 2026-10-28,chat_quality,dev_quest_chat,3,1,1/3,0/0,49,247707,8215,0.231,132.0,27ae096,8c27caa9,"claude-haiku-5-5,claude-sonnet-5-5",,sample:3,
+2026-10-28,task_replay,slice_and_writeback,9,8,8/9,0/0,27,41002,1479,0.0,194.3,61d22ec-dirty,b3ca71f7,claude-code-subscription,,,0.9042
+2026-10-28,task_replay,single_attempt,9,8,8/9,0/0,27,39192,1420,0.0,159.1,61d22ec-dirty,b3ca71f7,claude-code-subscription,,,0.9075
