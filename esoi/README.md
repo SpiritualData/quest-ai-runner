@@ -66,6 +66,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-metric-enforced-on-deep-runs-only`: The before-and-after reading of the relevant ESOI metric is enforced by code only on deep runs. Chat turns and other in-process work find no slice and take no reading; a request whose records hold no slice or no metric ends with nothing measured and nothing proposed; a reading that got worse is recorded and shown, but nothing acts on it; and a run that ends with no metric on record is marked and then forgotten.
 - `prob-risk-handled-uniformly`: Risky moments in a run (re-proposing a declined act, claiming work that did not run, handing back a step the AI could do, a wrong route, an irreversible act, a cross-scope read) are watched by one overseer that reviews a digest with one prompt on one tier, whatever the risk, and nothing shows which response works for which kind of risk.
 - `prob-long-view-scope-not-hierarchical`: A representative's high-level view legitimately spans its assigned quests and the intents above them, but the library's fence compares flat tag sets: an item is visible to a turn only when their tags intersect, or everywhere when it has none. Nothing can say visible to this representative's assigned quests and their ancestor intents, never to another representative's quests, a sibling intent or another person; and a representative's learned notes and context preferences carry no scope at all, so what it learned on one quest reaches every other.
+- `prob-wrong-or-inconsistent-rep`: Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative. A quest can have several representatives, each with its own higher mind, so a wrong choice also grounds the request in the wrong view.
 
 ## Ideals
 
@@ -119,6 +120,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-most-likely-path`, Most-Likely Path: Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
 - `ideal-risk-handled-where-it-is`, Risk Handled Where It Is: Each high-risk case gets the response proven best for its kind of risk, and a low-risk case pays nothing for review.
 - `ideal-hierarchy-contained-scope`, Hierarchy-Contained Scope: What a representative learns reaches its own assigned quests and the intents above them, and never another representative's quests, a sibling intent or another person.
+- `ideal-right-rep`, Right Representative: Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
 
 ## Solutions
 
@@ -187,6 +189,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `act-as-the-body` | Body: the host's data model as the agent's own consistent state | card_and_reads | Account-state consistency across scripted sessions |
 | `hold-the-long-view` | Higher mind: an AI representative's standing view across its assigned quests, placed in the intent hierarchy | separate_stores | Representative long-view carry-through across assigned quests, with nothing outside its branch |
 | `think-critically` | Critical thinking: the enforcer of ESOI metrics on every request | deep_runs_only | Requests held to their ESOI metric by code |
+| `select-a-rep` | Representative selection: which AI representative handles a request, and whose higher mind grounds it | persona_resolver_precedence | Representative choice accuracy and thread consistency |
 
 ## Implementations
 
@@ -423,6 +426,11 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `watch-a-run:per_risk_response` | Per-risk response chosen by metric (proposed) |  |  |
 | `hold-the-long-view:per_intent_cascade` | One view per intent, cascading down (proposed) |  |  |
 | `hold-the-long-view:per_rep_assigned_view` | One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) |  |  |
+| `select-a-rep:persona_resolver_precedence` | Persona resolver precedence for queued tasks (today) | quest_ai_runner/runner/personas.py |  |
+| `select-a-rep:host_assigned_classifier` | Host chat classifier among assigned representatives (today, in the host) |  |  |
+| `select-a-rep:thread_holds_its_rep` | A thread keeps its representative (proposed) |  |  |
+| `select-a-rep:fit_by_role_and_quests` | Fit by role, assigned quests and intent branch (proposed) |  |  |
+| `select-a-rep:ask_the_person` | Ask the person on an equal fit (proposed) |  |  |
 
 ## Metrics
 
@@ -496,3 +504,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-act-as-the-body`, Account-state consistency across scripted sessions: `none`
 - `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `none`
 - `metric-think-critically`, Requests held to their ESOI metric by code: `none`
+- `metric-select-a-rep`, Representative choice accuracy and thread consistency: `none`
