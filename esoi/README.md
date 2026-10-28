@@ -65,6 +65,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-experiments-not-proposed`: Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose or find an experiment that would settle it, though the app has an Experiments feature built for that.
 - `prob-metric-enforced-on-deep-runs-only`: The before-and-after reading of the relevant ESOI metric is enforced by code only on deep runs. Chat turns and other in-process work find no slice and take no reading; a request whose records hold no slice or no metric ends with nothing measured and nothing proposed; a reading that got worse is recorded and shown, but nothing acts on it; and a run that ends with no metric on record is marked and then forgotten.
 - `prob-risk-handled-uniformly`: Risky moments in a run (re-proposing a declined act, claiming work that did not run, handing back a step the AI could do, a wrong route, an irreversible act, a cross-scope read) are watched by one overseer that reviews a digest with one prompt on one tier, whatever the risk, and nothing shows which response works for which kind of risk.
+- `prob-long-view-scope-not-hierarchical`: A representative's high-level view legitimately spans its assigned quests and the intents above them, but the library's fence compares flat tag sets: an item is visible to a turn only when their tags intersect, or everywhere when it has none. Nothing can say visible to this representative's assigned quests and their ancestor intents, never to another representative's quests, a sibling intent or another person; and a representative's learned notes and context preferences carry no scope at all, so what it learned on one quest reaches every other.
 
 ## Ideals
 
@@ -117,6 +118,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-self-explaining-app`, Self-Explaining App: Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.
 - `ideal-most-likely-path`, Most-Likely Path: Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
 - `ideal-risk-handled-where-it-is`, Risk Handled Where It Is: Each high-risk case gets the response proven best for its kind of risk, and a low-risk case pays nothing for review.
+- `ideal-hierarchy-contained-scope`, Hierarchy-Contained Scope: What a representative learns reaches its own assigned quests and the intents above them, and never another representative's quests, a sibling intent or another person.
 
 ## Solutions
 
@@ -183,7 +185,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `know-the-world` | Science: evidence-weighted knowledge about the world | web_with_support_check | Supported and calibrated answers to world questions |
 | `act-in-the-world` | World: doing things outside the host through the best harness, with declared reach and receipts | coding_agent_prompt_reach | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
 | `act-as-the-body` | Body: the host's data model as the agent's own consistent state | card_and_reads | Account-state consistency across scripted sessions |
-| `hold-the-long-view` | Higher mind: one standing perspective per quest across requests | separate_stores | Long-view carry-through across sessions with nothing out of scope |
+| `hold-the-long-view` | Higher mind: an AI representative's standing view across its assigned quests, placed in the intent hierarchy | separate_stores | Representative long-view carry-through across assigned quests, with nothing outside its branch |
 | `think-critically` | Critical thinking: the enforcer of ESOI metrics on every request | deep_runs_only | Requests held to their ESOI metric by code |
 
 ## Implementations
@@ -408,7 +410,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `act-as-the-body:read_after_write` | Read back what a change touched (proposed) |  |  |
 | `act-as-the-body:live_read_only` | A live read behind every state claim (proposed) |  |  |
 | `hold-the-long-view:separate_stores` | Separate stores read at the start of a request (today) | quest_ai_runner/core/orchestrator_run_begin.py |  |
-| `hold-the-long-view:perspective_note` | Maintained perspective note per quest (proposed) |  |  |
+| `hold-the-long-view:per_quest_note` | Maintained view per quest only (proposed) |  |  |
 | `hold-the-long-view:periodic_reflection` | Periodic reflection on the best tier (proposed) |  |  |
 | `admit-to-the-mind:outcome_precedents` | Intuition: outcome precedents surfaced at admission (proposed) |  |  |
 | `watch-a-run:no_overseer` | No overseer (configuration off) | quest_ai_runner/core/orchestrator_types.py |  |
@@ -419,6 +421,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `think-critically:measured_proposed_and_answered` | Measured, proposed and answered (proposed) |  |  |
 | `act-in-the-world:best_open_source_harness` | Best open-source agent harness by the combined metric, with declared inventory (proposed) |  |  |
 | `watch-a-run:per_risk_response` | Per-risk response chosen by metric (proposed) |  |  |
+| `hold-the-long-view:per_intent_cascade` | One view per intent, cascading down (proposed) |  |  |
+| `hold-the-long-view:per_rep_assigned_view` | One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) |  |  |
 
 ## Metrics
 
@@ -490,5 +494,5 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-know-the-world`, Supported and calibrated answers to world questions: `none`
 - `metric-act-in-the-world`, Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety: `none`
 - `metric-act-as-the-body`, Account-state consistency across scripted sessions: `none`
-- `metric-hold-the-long-view`, Long-view carry-through across sessions with nothing out of scope: `none`
+- `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `none`
 - `metric-think-critically`, Requests held to their ESOI metric by code: `none`
