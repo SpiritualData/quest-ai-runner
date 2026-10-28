@@ -1,0 +1,332 @@
+[
+ {
+  "id": "LCC-RET-01",
+  "kind": "retrieve",
+  "stratum": "retrieve",
+  "card_id": "learned-0",
+  "sources": [
+   {
+    "type": "conversation",
+    "id": "dream_stress_analysis",
+    "turn_count": 2,
+    "why": "Analyze my recent dreams and any stress link. Summarized the user's dream journal: water/falling motifs in high-stress weeks. - Dream journal is the collection 'Dream Journal' (id col_dreams_8821). - Daily stress is tracked in collection 'Daily Mood' (id col_mood_4410)."
+   }
+  ],
+  "collections": [
+   {
+    "name": "Dream Journal",
+    "id": "col_dreams_8821"
+   },
+   {
+    "name": "Daily Mood",
+    "id": "col_mood_4410"
+   }
+  ],
+  "queries": [
+   {
+    "text": "what keeps showing up in my dreams lately?",
+    "expect": "col_dreams_8821"
+   },
+   {
+    "text": "how has my mood been trending day to day?",
+    "expect": "col_mood_4410"
+   },
+   {
+    "text": "what's a good recipe for banana bread?",
+    "expect": null
+   }
+  ],
+  "source": "evaluation/components/card_quality/world.json learn[0] (the finished task the card is learned from) and evaluation/components/card_quality/cases.json CRD-001, CRD-002 and the unrelated CRD-005 (the labelled query and the collection it must resolve); the other cards of the world are fixed distractors written by card_quality's own seeded extractor (keywords of request, summary and future context), the same for every arm, so selection is by relative term weight as in a store of several cards",
+  "distractors": [
+   {
+    "card_id": "learned-1",
+    "summary": "Listed open PRs and flagged two with failing tests.",
+    "keywords": [
+     "backend",
+     "code",
+     "col_rev_5512",
+     "collection",
+     "failing",
+     "flagged",
+     "listed",
+     "live",
+     "notes",
+     "open",
+     "prs",
+     "pull",
+     "repo",
+     "requests",
+     "review",
+     "reviews",
+     "tests",
+     "two",
+     "user"
+    ],
+    "collections": [
+     {
+      "name": "Code Reviews",
+      "id": "col_rev_5512"
+     }
+    ]
+   },
+   {
+    "card_id": "learned-2",
+    "summary": "Drafted a 5-day itinerary and flagged booking gaps.",
+    "keywords": [
+     "booking",
+     "col_trip_3300",
+     "collection",
+     "day",
+     "drafted",
+     "flagged",
+     "gaps",
+     "itinerary",
+     "plan",
+     "plans",
+     "trip",
+     "upcoming",
+     "user"
+    ],
+    "collections": [
+     {
+      "name": "Trip Plans",
+      "id": "col_trip_3300"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "LCC-RET-02",
+  "kind": "retrieve",
+  "stratum": "retrieve",
+  "card_id": "learned-1",
+  "sources": [
+   {
+    "type": "conversation",
+    "id": "backend_pr_review",
+    "turn_count": 2,
+    "why": "Review the open pull requests on my backend repo. Listed open PRs and flagged two with failing tests. - The user's code review notes live in the collection 'Code Reviews' (id col_rev_5512)."
+   }
+  ],
+  "collections": [
+   {
+    "name": "Code Reviews",
+    "id": "col_rev_5512"
+   }
+  ],
+  "queries": [
+   {
+    "text": "any pull requests i should look at?",
+    "expect": "col_rev_5512"
+   },
+   {
+    "text": "what's a good recipe for banana bread?",
+    "expect": null
+   }
+  ],
+  "source": "evaluation/components/card_quality/world.json learn[1] (the finished task the card is learned from) and evaluation/components/card_quality/cases.json CRD-003 and the unrelated CRD-005 (the labelled query and the collection it must resolve); the other cards of the world are fixed distractors written by card_quality's own seeded extractor (keywords of request, summary and future context), the same for every arm, so selection is by relative term weight as in a store of several cards",
+  "distractors": [
+   {
+    "card_id": "learned-0",
+    "summary": "Summarized the user's dream journal: water/falling motifs in high-stress weeks.",
+    "keywords": [
+     "analyze",
+     "any",
+     "col_dreams_8821",
+     "col_mood_4410",
+     "collection",
+     "daily",
+     "dream",
+     "dreams",
+     "falling",
+     "high",
+     "journal",
+     "link",
+     "mood",
+     "motifs",
+     "recent",
+     "stress",
+     "summarized",
+     "tracked",
+     "user",
+     "water",
+     "weeks"
+    ],
+    "collections": [
+     {
+      "name": "Dream Journal",
+      "id": "col_dreams_8821"
+     },
+     {
+      "name": "Daily Mood",
+      "id": "col_mood_4410"
+     }
+    ]
+   },
+   {
+    "card_id": "learned-2",
+    "summary": "Drafted a 5-day itinerary and flagged booking gaps.",
+    "keywords": [
+     "booking",
+     "col_trip_3300",
+     "collection",
+     "day",
+     "drafted",
+     "flagged",
+     "gaps",
+     "itinerary",
+     "plan",
+     "plans",
+     "trip",
+     "upcoming",
+     "user"
+    ],
+    "collections": [
+     {
+      "name": "Trip Plans",
+      "id": "col_trip_3300"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "LCC-RET-03",
+  "kind": "retrieve",
+  "stratum": "retrieve",
+  "card_id": "learned-2",
+  "sources": [
+   {
+    "type": "conversation",
+    "id": "trip_itinerary_plan",
+    "turn_count": 2,
+    "why": "Plan my upcoming trip itinerary. Drafted a 5-day itinerary and flagged booking gaps. - The user's trip plans are in the collection 'Trip Plans' (id col_trip_3300)."
+   }
+  ],
+  "collections": [
+   {
+    "name": "Trip Plans",
+    "id": "col_trip_3300"
+   }
+  ],
+  "queries": [
+   {
+    "text": "remind me about my travel itinerary",
+    "expect": "col_trip_3300"
+   },
+   {
+    "text": "what's a good recipe for banana bread?",
+    "expect": null
+   }
+  ],
+  "source": "evaluation/components/card_quality/world.json learn[2] (the finished task the card is learned from) and evaluation/components/card_quality/cases.json CRD-004 and the unrelated CRD-005 (the labelled query and the collection it must resolve); the other cards of the world are fixed distractors written by card_quality's own seeded extractor (keywords of request, summary and future context), the same for every arm, so selection is by relative term weight as in a store of several cards",
+  "distractors": [
+   {
+    "card_id": "learned-0",
+    "summary": "Summarized the user's dream journal: water/falling motifs in high-stress weeks.",
+    "keywords": [
+     "analyze",
+     "any",
+     "col_dreams_8821",
+     "col_mood_4410",
+     "collection",
+     "daily",
+     "dream",
+     "dreams",
+     "falling",
+     "high",
+     "journal",
+     "link",
+     "mood",
+     "motifs",
+     "recent",
+     "stress",
+     "summarized",
+     "tracked",
+     "user",
+     "water",
+     "weeks"
+    ],
+    "collections": [
+     {
+      "name": "Dream Journal",
+      "id": "col_dreams_8821"
+     },
+     {
+      "name": "Daily Mood",
+      "id": "col_mood_4410"
+     }
+    ]
+   },
+   {
+    "card_id": "learned-1",
+    "summary": "Listed open PRs and flagged two with failing tests.",
+    "keywords": [
+     "backend",
+     "code",
+     "col_rev_5512",
+     "collection",
+     "failing",
+     "flagged",
+     "listed",
+     "live",
+     "notes",
+     "open",
+     "prs",
+     "pull",
+     "repo",
+     "requests",
+     "review",
+     "reviews",
+     "tests",
+     "two",
+     "user"
+    ],
+    "collections": [
+     {
+      "name": "Code Reviews",
+      "id": "col_rev_5512"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "LCC-PLC-01",
+  "kind": "place",
+  "stratum": "place",
+  "cards": [
+   {
+    "id": "habits-tracking",
+    "title": "Habit logging and filtering",
+    "summary": "Code for backdated habits, daily filtering",
+    "files": [
+     "src/habits/handler.py",
+     "tests/test_habits.py"
+    ]
+   },
+   {
+    "id": "daily-actions",
+    "title": "Actions for today",
+    "summary": "Time-based filtering for daily actions",
+    "files": [
+     "src/api/planning.py"
+    ]
+   }
+  ],
+  "files": [
+   "src/habits/handler.py",
+   "src/api/planning.py",
+   "tests/test_habits.py",
+   "docs/habits.md"
+  ],
+  "label": {
+   "src/habits/handler.py": "habits-tracking",
+   "src/api/planning.py": "daily-actions",
+   "tests/test_habits.py": "habits-tracking",
+   "docs/habits.md": "habits-tracking"
+  },
+  "source": "tests/test_context_card_update.py test_context_card_categorization: the two cards, the four edited files and the placement the test asserts (handler and tests and docs to habits-tracking, planning to daily-actions); the cards' existing files are listed as the test lists them"
+ }
+]

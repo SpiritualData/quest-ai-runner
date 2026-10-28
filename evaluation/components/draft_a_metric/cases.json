@@ -1,0 +1,197 @@
+[
+ {
+  "id": "DAM-01",
+  "kind": "propose",
+  "stratum": "propose",
+  "task_text": "Draft a value for the metric \"Weekly distance\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Weekly distance",
+   "purpose": "Ensure the weekly running distance is known",
+   "disadvantages": "Cannot see pace or effort",
+   "questions": [
+    {
+     "name": "Kilometres",
+     "type": "number",
+     "min": null,
+     "max": null
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 18.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [
+    {
+     "at": "2026-10-20",
+     "text": "Ran 12 km on Tuesday"
+    }
+   ],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [
+    {
+     "at": "2026-10-22",
+     "name": "Run 6 km Friday",
+     "status": "completed",
+     "target": ""
+    }
+   ],
+   "answeredAsksSinceBaseline": [
+    {
+     "at": "2026-10-23",
+     "question": "Did you run Friday?",
+     "answer": "Yes, 6 km"
+    }
+   ],
+   "outcome": {
+    "text": "Run 40 km in a week"
+   },
+   "hasNewContext": true
+  },
+  "label": {
+   "propose": true,
+   "values": {
+    "Kilometres": 18
+   }
+  },
+  "source": "tests/test_metric_draft_light_turn.py PROPOSE: the draft the test labels for this card is Kilometres 18, which is the 12 km note plus the 6 km goal and answered ask (both in the card)"
+ },
+ {
+  "id": "DAM-02",
+  "kind": "propose",
+  "stratum": "propose",
+  "task_text": "Draft a value for the metric \"Weekly distance\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Weekly distance",
+   "purpose": "Ensure the weekly running distance is known",
+   "disadvantages": "Cannot see pace or effort",
+   "questions": [
+    {
+     "name": "Kilometres",
+     "type": "number",
+     "min": null,
+     "max": null
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 18.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [
+    {
+     "at": "2026-10-22",
+     "text": "Ran 24 km across three runs this week"
+    }
+   ],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [],
+   "answeredAsksSinceBaseline": [],
+   "outcome": {
+    "text": "Run 40 km in a week"
+   },
+   "hasNewContext": true
+  },
+  "label": {
+   "propose": true,
+   "values": {
+    "Kilometres": 24
+   }
+  },
+  "source": "quest-backend/tests/api/endpoints/intents/test_metric_values_api.py test_the_quest_ai_runner_proposes_and_the_person_confirms_or_corrects: the proposal with the evidence 'Ran 24 km across three runs this week' carries the value 24; the card is the weekly distance card of the QAR test with that one note as its only new context"
+ },
+ {
+  "id": "DAM-03",
+  "kind": "thin",
+  "stratum": "thin",
+  "task_text": "Draft a value for the metric \"Weekly distance\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Weekly distance",
+   "purpose": "Ensure the weekly running distance is known",
+   "disadvantages": "Cannot see pace or effort",
+   "questions": [
+    {
+     "name": "Kilometres",
+     "type": "number",
+     "min": null,
+     "max": null
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 18.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [],
+   "answeredAsksSinceBaseline": [],
+   "outcome": {
+    "text": "Run 40 km in a week"
+   },
+   "hasNewContext": false
+  },
+  "label": {
+   "propose": false,
+   "values": null
+  },
+  "source": "tests/test_metric_draft_light_turn.py test_thin_evidence_proposes_nothing_and_the_task_is_still_done (reason: no notes or entries since the last update) and the draft prompt rule 'a missing value is better than an invented one'; the card of DAM-01 with its notes, goals and answered asks removed"
+ },
+ {
+  "id": "DAM-04",
+  "kind": "thin",
+  "stratum": "thin",
+  "task_text": "Draft a value for the metric \"Weekly distance\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Weekly distance",
+   "purpose": "Ensure the weekly running distance is known",
+   "disadvantages": "Cannot see pace or effort",
+   "questions": [
+    {
+     "name": "Kilometres",
+     "type": "number",
+     "min": null,
+     "max": null
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 18.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [],
+   "answeredAsksSinceBaseline": [],
+   "outcome": {
+    "text": "Run 40 km in a week"
+   },
+   "hasNewContext": false
+  },
+  "label": {
+   "propose": false,
+   "values": null
+  },
+  "source": "quest-backend/tests/api/endpoints/intents/test_metric_values_api.py test_the_row_says_why_no_draft_is_waiting_only_when_the_quest_has_nothing_new (a quest with nothing new gets no draft) and the draft prompt rule 'a missing value is better than an invented one'; the card of DAM-02 with its one note removed"
+ }
+]

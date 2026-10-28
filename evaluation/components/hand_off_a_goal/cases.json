@@ -1,0 +1,461 @@
+[
+ {
+  "id": "HOG-DO-01",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g1",
+   "name": "Draft the FAQ",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": true
+  },
+  "source": "tests/test_autopilot_goal_assignment.py test_handoff_prompt_asks_for_full_sufficiency_and_bans_em_dashes: the goal named Draft the FAQ is the one the test's judge answers ai_can_do true for, and the doability prompt names drafting a document as AI work"
+ },
+ {
+  "id": "HOG-DO-02",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g2",
+   "name": "Call the bank",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "Close the loan",
+   "current_state": "Docs signed",
+   "preferences": "Mornings only"
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": false
+  },
+  "source": "tests/test_autopilot_goal_assignment.py test_handoff_stamps_me_when_not_doable_and_survives_judge_failure: Call the bank is the goal stamped me (the person keeps it); the doability prompt answers false for a call; quest outcome, state and preferences are the ones test_handoff_prompt_carries_state_and_preferences passes"
+ },
+ {
+  "id": "HOG-DO-03",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g3",
+   "name": "Research competitor pricing",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": true
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_research_goal_goes_to_ai_rep_of_owner_when_unassigned: the audit classifies this goal hand_to_ai (research is AI work in its AI_VERBS and in the doability prompt)"
+ },
+ {
+  "id": "HOG-DO-04",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g4",
+   "name": "Compare three vendors",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": true
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_ai_work_goes_to_current_assignee_rep: classified hand_to_ai for the assignee's rep (comparing options is named in the doability prompt)"
+ },
+ {
+  "id": "HOG-DO-05",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g5",
+   "name": "Complete an audit of the pages",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": true
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_human_verb_beats_ai_verb: looks_ai_doable is asserted true for this goal (auditing a page is named in the doability prompt)"
+ },
+ {
+  "id": "HOG-DO-06",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g6",
+   "name": "Call and research the donor",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": false
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_human_verb_beats_ai_verb: looks_ai_doable is asserted false because the call needs the person; the doability prompt says a goal only partly doable by an AI is answered false"
+ },
+ {
+  "id": "HOG-DO-07",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g7",
+   "name": "Pay the invoice",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": false
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_explicit_assignment_keeps: the goal stays with its person; pay is in the audit's HUMAN_VERBS and the doability prompt answers false for spending or receiving money"
+ },
+ {
+  "id": "HOG-DO-08",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g8",
+   "name": "Identify and document the top 3 'False Balance' misapplications on Wikipedia pages",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": true
+  },
+  "source": "quest_ai_runner/runner/goal_handoff.py ASSIGNEE_PROMPT: the prompt's own worked example of a goal an AI can do itself (research, audits, documentation) and so ai_can_do true"
+ },
+ {
+  "id": "HOG-DO-09",
+  "kind": "doability",
+  "stratum": "doability",
+  "goal": {
+   "id": "g9",
+   "name": "Ask Bob Baker for the contract",
+   "description": "",
+   "assigned_to": "u_bob"
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "label": {
+   "ai_can_do": false
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_goal_naming_other_member_is_reassigned: the goal asks a person for something and its lead verb ask is in the audit's HUMAN_VERBS (work that needs a person's relationships); the doability prompt answers false for work that needs a person or information the AI cannot get"
+ },
+ {
+  "id": "HOG-AS-01",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g11",
+   "name": "Ask Bob Baker for the contract",
+   "description": ""
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "creator": "u_olive",
+  "label": {
+   "assignee": "u_bob",
+   "ai_can_do": false
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_goal_naming_other_member_is_reassigned: a goal that names another member goes to that member (the test's member named in the goal is renamed to this roster's); created by the owner"
+ },
+ {
+  "id": "HOG-AS-02",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g12",
+   "name": "Launch the newsletter",
+   "description": ""
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "creator": "",
+  "label": {
+   "assignee": "u_olive",
+   "ai_can_do": false
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_ai_generated_unassigned_goal_goes_to_quest_owner: an AI-generated goal with no person signal goes to the quest owner"
+ },
+ {
+  "id": "HOG-AS-03",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g13",
+   "name": "Research competitor pricing",
+   "description": ""
+  },
+  "quest": {
+   "outcome": "",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   }
+  ],
+  "creator": "",
+  "label": {
+   "assignee": "u_olive",
+   "ai_can_do": true
+  },
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_research_goal_goes_to_ai_rep_of_owner_when_unassigned: an AI-created research goal goes to the quest owner and to that person's AI rep"
+ }
+]
