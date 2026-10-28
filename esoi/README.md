@@ -63,6 +63,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-app-help-unreliable`: Questions about how to use the app itself (how to do something, what a feature is for) should be answered from the product's own documentation, but that path is untested, the AI sometimes says it cannot do what it can, and many team members do not know what the AI can do for them.
 - `prob-no-environment-tasks-untested`: Most people have no external environment connected, so their delegated tasks can use only the app's own operations, its documentation, a review of their own data and web search, and that path has not been tested end to end.
 - `prob-experiments-not-proposed`: Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose or find an experiment that would settle it, though the app has an Experiments feature built for that.
+- `prob-metric-enforced-on-deep-runs-only`: The before-and-after reading of the relevant ESOI metric is enforced by code only on deep runs. Chat turns and other in-process work find no slice and take no reading; a request whose records hold no slice or no metric ends with nothing measured and nothing proposed; a reading that got worse is recorded and shown, but nothing acts on it; and a run that ends with no metric on record is marked and then forgotten.
 
 ## Ideals
 
@@ -181,7 +182,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `act-in-the-world` | World: declared reach and receipts for acts outside the host | prompt_described_reach | Reach-claim accuracy and act receipts over labelled requests |
 | `act-as-the-body` | Body: the host's data model as the agent's own consistent state | card_and_reads | Account-state consistency across scripted sessions |
 | `hold-the-long-view` | Higher mind: one standing perspective per quest across requests | separate_stores | Long-view carry-through across sessions with nothing out of scope |
-| `think-critically` | Critical thinking: the option most likely to work, checked by metrics and experiments | intent_frame_and_slice | Recommendations held to a metric, and uncertainty turned into experiments |
+| `think-critically` | Critical thinking: the enforcer of ESOI metrics on every request | deep_runs_only | Requests held to their ESOI metric by code |
 
 ## Implementations
 
@@ -410,10 +411,11 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `hold-the-long-view:outcome_precedents` | Outcome precedents, the Intuition proposal (proposed) |  |  |
 | `watch-a-run:no_overseer` | No overseer (configuration off) | quest_ai_runner/core/orchestrator_types.py |  |
 | `watch-a-run:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
-| `think-critically:every_change_names_its_metric` | Every request that changes something names its metric (proposed) |  |  |
-| `think-critically:experiment_when_uncertain` | An experiment when the better choice is unknown (proposed) |  |  |
-| `think-critically:intent_frame_and_slice` | Intent frame and specification slice (today) | quest_ai_runner/core/goal_iteration.py |  |
 | `keep-a-working-stream:open_source_harness` | An open-source agent harness as the loop (proposed) |  |  |
+| `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | quest_ai_runner/core/goal_metrics.py |  |
+| `think-critically:instruction_only` | Standing instruction alone (floor) | quest_ai_runner/core/standing_instructions.py |  |
+| `think-critically:every_request_measured` | Every request measured by code (proposed) |  |  |
+| `think-critically:measured_proposed_and_answered` | Measured, proposed and answered (proposed) |  |  |
 
 ## Metrics
 
@@ -486,4 +488,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-act-in-the-world`, Reach-claim accuracy and act receipts over labelled requests: `none`
 - `metric-act-as-the-body`, Account-state consistency across scripted sessions: `none`
 - `metric-hold-the-long-view`, Long-view carry-through across sessions with nothing out of scope: `none`
-- `metric-think-critically`, Recommendations held to a metric, and uncertainty turned into experiments: `none`
+- `metric-think-critically`, Requests held to their ESOI metric by code: `none`
