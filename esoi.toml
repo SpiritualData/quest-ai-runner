@@ -11,6 +11,9 @@ live_calls = ["common.build_offline_orchestrator", "scripted_brain.build_brain",
 plugins = ["scripts/esoi_rules.py"]
 # measured code for staleness: the package and the evaluation drivers, not their prose
 code_paths = ["quest_ai_runner", "evaluation/components", ":(exclude,glob)**/*.md"]
+# Estimated list price in dollars per million tokens of the cheapest tier a live arm pins,, so a run that reports tokens and no
+# dollars is still priced.
+prices = { "gemini-3.1-flash-lite" = { input = 0.10, output = 0.40 } }
 
 
 [rules.S13]
@@ -31,6 +34,13 @@ set = { QAR_STANDARD_TOOLS = "0", QAR_CLAUDE_PATH = "qar-eval-no-such-claude", Q
 weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
 cost_per_case_usd = 0.005
 seconds_per_case = 10
+
+# The terminal helper calls (metric-assist-a-terminal-session): a command is worth at most a tenth of a cent and two seconds, the wait a
+# person at a prompt does not notice; an arm that spends the whole of either gets zero for it, so a model call has to buy its price in accuracy.
+[balance.assist_a_terminal_session]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.001
+seconds_per_case = 2
 
 # The combined QAR metric (metric-qar-overall, the authoritative metric of QS1; evaluation/components/qar_overall). Keyed by
 # the metric id, not a component name, because the harness reads [balance.<component>] as an accuracy/cost/time balance.

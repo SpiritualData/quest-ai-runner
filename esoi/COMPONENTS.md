@@ -31,7 +31,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `adapters-deep-runners` | adapters | Alternative DeepRunner implementations | run-deep-work |
 | `adapters-conversations` | adapters | Claude session transcripts as context and ConversationStore | remember-conversations |
 | `config` | config | RunnerConfig and build_orchestrator(): the one seam for consumer specifics | configure-a-lane |
-| `cli-and-ui` | cli | Console entry point, attended chat session and Textual UI, card-store maintenance CLI | operate-from-a-terminal |
+| `cli-and-ui` | cli | Console entry point, attended chat session and Textual UI, card-store maintenance CLI | operate-from-a-terminal, assist-a-terminal-session |
 | `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | track-usage-and-cost |
 | `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | expose-the-public-api |
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |

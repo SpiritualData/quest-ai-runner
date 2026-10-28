@@ -532,4 +532,4 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-hand-off-a-goal`, Hand-offs a person keeps per unit of cost and time: `none`
 - `metric-draft-a-metric`, Drafted metrics accepted per unit of cost: `none`
 - `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: `none`
-- `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `none`
+- `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `esoi run assist_a_terminal_session --impl fast_model_helpers`
