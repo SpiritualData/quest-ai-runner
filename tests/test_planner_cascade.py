@@ -139,9 +139,16 @@ def test_truncate_keep_both_ends_respects_the_limit():
 
 def test_build_review_digest_stays_under_max_chars_when_there_is_room_to_trim():
     decision = PlanDecision(action="read", reads=[{"grep": "x"}], rationale="because")
+    # The rubric is the planner prompt's tunable and is never trimmed, so it can outgrow any fixed
+    # cap. The cap is therefore set relative to the fixed text (rubric, request, decision) plus
+    # room for a grounding slice, which is the situation this test is about.
+    fixed = len(build_review_digest("do the thing", decision, PLANNER_DECISION_RUBRIC,
+                                    context_view="", max_chars=0))
+    cap = fixed + 1500
     digest = build_review_digest("do the thing", decision, PLANNER_DECISION_RUBRIC,
-                                 context_view="z" * 50000, max_chars=6000)
-    assert len(digest) <= 6000
+                                 context_view="z" * 50000, max_chars=cap)
+    assert len(digest) <= cap
+    assert digest.count("z") > 500, "the grounding slice should use the room that was left"
 
 
 def test_build_review_digest_always_contains_the_rubric_and_the_decision_at_a_tiny_budget():

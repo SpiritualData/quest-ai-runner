@@ -150,8 +150,18 @@ def test_notify_callback_fires_before_the_llm_call(tmp_path):
     (tmp_path / "CLAUDE.md").write_text("# Corpus\nRiver is the rep.")
     provider = _FakeProvider(response='{"name": "River", "persona_file": null}')
     notices = []
-    _resolve_persona_from_corpus(_cfg(str(tmp_path), provider), notify=notices.append)
-    assert any("persona" in n.lower() for n in notices)
+    calls_when_noticed = []
+
+    def notify(message):
+        notices.append(message)
+        calls_when_noticed.append(len(provider.calls))
+
+    _resolve_persona_from_corpus(_cfg(str(tmp_path), provider), notify=notify)
+    # The notice is plain words for a person ("Starting up…"), not the word persona; what the
+    # contract fixes is that one arrives, and that it arrives before the model call is made.
+    assert notices and all(n.strip() for n in notices)
+    assert calls_when_noticed[0] == 0
+    assert len(provider.calls) == 1
 
 
 def test_exactly_one_llm_call_made(tmp_path):

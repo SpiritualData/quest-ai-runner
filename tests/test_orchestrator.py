@@ -727,9 +727,11 @@ def test_deep_loop_escalates_model_on_not_met():
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work",
          "deep_difficulty": "simple"},
-        {"met": False, "reason": "no", "next_action": "x"},
-        {"met": False, "reason": "no", "next_action": "x"},
-        {"met": False, "reason": "no", "next_action": "x"},
+        # Each attempt falls short for a DIFFERENT reason: the same gap twice with nothing changed
+        # is a stall and ends the loop instead of escalating (covered by the stall tests).
+        {"met": False, "reason": "the migration file is missing", "next_action": "x"},
+        {"met": False, "reason": "tests were never run against the endpoint", "next_action": "x"},
+        {"met": False, "reason": "documentation still describes the old flow", "next_action": "x"},
     ])
     runner = _TokenDeepRunner(tokens=10)
     _orch(provider, StubRetrieval(), deep_runner=runner,
