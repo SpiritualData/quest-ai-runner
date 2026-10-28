@@ -1,0 +1,423 @@
+[
+ {
+  "id": "IG-INT-01",
+  "kind": "intent",
+  "dataset": "explicit",
+  "area": "which work to take on: a gap under the intent",
+  "quest_key": "marathon",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "quest": {
+   "outcome": "Run a marathon"
+  },
+  "frame": "Serves: Health: I am strong and rested, and I move every day.  (card intent-int_1)\nBuilds: Marathon plan\nIdeals: Strong body\nMeasured by: Weekly km\nGaps: ideal \"Deep sleep\" has no solution; solution \"Rest routine\" has no quest",
+  "message": "I have a free evening this week for this quest. What should I do with it?",
+  "rubric": [
+   "Gives one concrete suggestion for the evening rather than a list of generic options",
+   "Ties the suggestion to something the intent lists: the Deep sleep ideal having no solution, the Rest routine solution having no quest, or the Weekly km metric",
+   "Says which listed gap or metric the suggestion closes or moves",
+   "Does not invent an ideal, metric, solution or quest that the intent frame does not list"
+  ],
+  "must_use_pivots": [
+   "INTENT_GAPS"
+  ],
+  "pivots_change_answer": true,
+  "pivot_defs": {
+   "INTENT_GAPS": {
+    "quest_key": "marathon quest under the Health intent",
+    "where": "the intent frame computed for the quest",
+    "description": "The frame lists two gaps, ideal \"Deep sleep\" has no solution and solution \"Rest routine\" has no quest, and one metric, \"Weekly km\". When the person leaves the choice open, work that closes a listed gap or moves the listed metric is preferred, and the reply says which.",
+    "exact_values": {
+     "gaps": [
+      "ideal \"Deep sleep\" has no solution",
+      "solution \"Rest routine\" has no quest"
+     ],
+     "metric": "Weekly km",
+     "ideal": "Strong body"
+    }
+   }
+  },
+  "precheck": {
+   "reply_contains_any": [
+    "Deep sleep",
+    "Rest routine",
+    "Weekly km"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "The frame is the one the intent-frame endpoint test of the Quest backend asserts for its Health intent (tests/api/endpoints/intents/test_intent_frame_api.py, test_a_tied_quest_frame_names_the_intent_what_it_builds_ideals_metrics_and_gaps) and the autopilot brief test of this repository (tests/test_autopilot_intent_frame.py) uses the same shape; the question kind is one of the five the record of metric-ground-in-intent lists. Kind: which work to take on (a gap under the intent)."
+ },
+ {
+  "id": "IG-INT-02",
+  "kind": "intent",
+  "dataset": "explicit",
+  "area": "a request that conflicts with an ideal",
+  "quest_key": "marathon",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "quest": {
+   "outcome": "Run a marathon"
+  },
+  "frame": "Serves: Health: I am strong and rested, and I move every day.  (card intent-int_1)\nBuilds: Marathon plan\nIdeals: Strong body\nMeasured by: Weekly km\nGaps: ideal \"Deep sleep\" has no solution; solution \"Rest routine\" has no quest",
+  "message": "Set me up a plan for the marathon where I get up at 4:30 every day for extra runs and cut my sleep to five hours.",
+  "rubric": [
+   "Names that cutting sleep to five hours conflicts with the intent's Deep sleep ideal or its rested vision",
+   "Still helps with the request by giving a plan or a safer variant, rather than only refusing",
+   "Does not claim to have saved, scheduled or changed anything"
+  ],
+  "must_use_pivots": [
+   "INTENT_VISION"
+  ],
+  "pivots_change_answer": true,
+  "pivot_defs": {
+   "INTENT_VISION": {
+    "quest_key": "marathon quest under the Health intent",
+    "where": "the intent frame computed for the quest",
+    "description": "The intent the quest serves is \"Health: I am strong and rested, and I move every day.\" and the frame lists the ideal \"Deep sleep\" with no solution. A request to cut sleep conflicts with that ideal and the reply names the conflict in one clause.",
+    "exact_values": {
+     "vision": "I am strong and rested, and I move every day.",
+     "ideal_without_solution": "Deep sleep"
+    }
+   }
+  },
+  "precheck": {
+   "reply_contains_any": [
+    "Deep sleep",
+    "rested"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "The frame is the one the intent-frame endpoint test of the Quest backend asserts for its Health intent (tests/api/endpoints/intents/test_intent_frame_api.py, test_a_tied_quest_frame_names_the_intent_what_it_builds_ideals_metrics_and_gaps) and the autopilot brief test of this repository (tests/test_autopilot_intent_frame.py) uses the same shape; the question kind is one of the five the record of metric-ground-in-intent lists. Kind: a request that conflicts with an ideal."
+ },
+ {
+  "id": "IG-INT-03",
+  "kind": "intent",
+  "dataset": "explicit",
+  "area": "a gap under an intent, named by its exact text",
+  "quest_key": "marathon",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "quest": {
+   "outcome": "Run a marathon"
+  },
+  "frame": "Serves: Health: I am strong and rested, and I move every day.  (card intent-int_1)\nBuilds: Marathon plan\nIdeals: Strong body\nMeasured by: Weekly km\nGaps: ideal \"Deep sleep\" has no solution; solution \"Rest routine\" has no quest",
+  "message": "Is anything missing from how this quest fits into my bigger picture?",
+  "rubric": [
+   "Names the gap that the Deep sleep ideal has no solution",
+   "Names the gap that the Rest routine solution has no quest",
+   "Uses the wording of the intent frame for the gaps it names"
+  ],
+  "must_use_pivots": [
+   "INTENT_GAPS"
+  ],
+  "pivots_change_answer": true,
+  "pivot_defs": {
+   "INTENT_GAPS": {
+    "quest_key": "marathon quest under the Health intent",
+    "where": "the intent frame computed for the quest",
+    "description": "The frame lists exactly two gaps: ideal \"Deep sleep\" has no solution; solution \"Rest routine\" has no quest.",
+    "exact_values": {
+     "gaps": [
+      "ideal \"Deep sleep\" has no solution",
+      "solution \"Rest routine\" has no quest"
+     ]
+    }
+   }
+  },
+  "precheck": {
+   "reply_contains_all": [
+    "Deep sleep",
+    "Rest routine"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "The frame is the one the intent-frame endpoint test of the Quest backend asserts for its Health intent (tests/api/endpoints/intents/test_intent_frame_api.py, test_a_tied_quest_frame_names_the_intent_what_it_builds_ideals_metrics_and_gaps) and the autopilot brief test of this repository (tests/test_autopilot_intent_frame.py) uses the same shape; the question kind is one of the five the record of metric-ground-in-intent lists. Kind: a gap under an intent; the two gap strings are the ones the backend test asserts (intent_gaps computes them from ids, never by a model)."
+ },
+ {
+  "id": "IG-INT-04",
+  "kind": "intent",
+  "dataset": "explicit",
+  "area": "a plan that cannot reach its vision",
+  "quest_key": "marathon",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "quest": {
+   "outcome": "Run a marathon"
+  },
+  "frame": "Serves: Health: I am strong and rested, and I move every day.  (card intent-int_1)\nBuilds: Marathon plan\nIdeals: Strong body\nMeasured by: Weekly km\nGaps: ideal \"Deep sleep\" has no solution; solution \"Rest routine\" has no quest",
+  "message": "My plan this month is the Marathon plan and nothing else. Will that get me to where I want to be in life, not just to the race?",
+  "rubric": [
+   "Answers that the Marathon plan alone is not enough to serve the intent",
+   "Names what the plan leaves uncovered: the Deep sleep ideal, which has no solution, or the Rest routine solution, which has no quest",
+   "Credits what the plan does serve: the Strong body ideal or the Weekly km metric",
+   "Does not invent an ideal, metric or solution that the intent frame does not list"
+  ],
+  "must_use_pivots": [
+   "INTENT_COVERAGE"
+  ],
+  "pivots_change_answer": true,
+  "pivot_defs": {
+   "INTENT_COVERAGE": {
+    "quest_key": "marathon quest under the Health intent",
+    "where": "the intent frame computed for the quest",
+    "description": "The Marathon plan builds the solution \"Training\", which serves the ideal \"Strong body\" and is measured by \"Weekly km\". The intent is \"I am strong and rested, and I move every day\", and the ideal \"Deep sleep\" has no solution and the solution \"Rest routine\" has no quest, so the plan alone cannot reach the vision.",
+    "exact_values": {
+     "serves": "Strong body",
+     "measured_by": "Weekly km",
+     "uncovered": [
+      "Deep sleep",
+      "Rest routine"
+     ]
+    }
+   }
+  },
+  "precheck": {
+   "reply_contains_any": [
+    "Deep sleep",
+    "Rest routine"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "The frame is the one the intent-frame endpoint test of the Quest backend asserts for its Health intent (tests/api/endpoints/intents/test_intent_frame_api.py, test_a_tied_quest_frame_names_the_intent_what_it_builds_ideals_metrics_and_gaps) and the autopilot brief test of this repository (tests/test_autopilot_intent_frame.py) uses the same shape; the question kind is one of the five the record of metric-ground-in-intent lists. Kind: a plan that cannot reach its vision."
+ },
+ {
+  "id": "IG-INT-05",
+  "kind": "intent",
+  "dataset": "explicit",
+  "area": "which experiment to run",
+  "quest_key": "marathon",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "quest": {
+   "outcome": "Run a marathon"
+  },
+  "frame": "Serves: Health: I am strong and rested, and I move every day.  (card intent-int_1)\nBuilds: Marathon plan\nIdeals: Strong body\nMeasured by: Weekly km\nGaps: ideal \"Deep sleep\" has no solution; solution \"Rest routine\" has no quest",
+  "message": "I want to test one thing over the next two weeks. Which experiment should I run?",
+  "rubric": [
+   "Proposes exactly one experiment, with a question or a hypothesis",
+   "Ties the experiment to a metric or ideal that the intent lists: Weekly km, Strong body or Deep sleep",
+   "Says how it would be measured, naming the metric or what would be logged",
+   "Does not claim to have set the experiment up or created anything"
+  ],
+  "must_use_pivots": [
+   "INTENT_MEASURES"
+  ],
+  "pivots_change_answer": true,
+  "pivot_defs": {
+   "INTENT_MEASURES": {
+    "quest_key": "marathon quest under the Health intent",
+    "where": "the intent frame computed for the quest",
+    "description": "The intent lists the metric \"Weekly km\" for the training solution and the ideals \"Strong body\" (served) and \"Deep sleep\" (no solution, so no metric). An experiment is chosen by the metric it can move.",
+    "exact_values": {
+     "metric": "Weekly km",
+     "ideals": [
+      "Strong body",
+      "Deep sleep"
+     ]
+    }
+   }
+  },
+  "precheck": {
+   "reply_contains_any": [
+    "Weekly km",
+    "Strong body",
+    "Deep sleep"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "The frame is the one the intent-frame endpoint test of the Quest backend asserts for its Health intent (tests/api/endpoints/intents/test_intent_frame_api.py, test_a_tied_quest_frame_names_the_intent_what_it_builds_ideals_metrics_and_gaps) and the autopilot brief test of this repository (tests/test_autopilot_intent_frame.py) uses the same shape; the question kind is one of the five the record of metric-ground-in-intent lists. Kind: which experiment to run."
+ },
+ {
+  "id": "IG-CTL-01",
+  "kind": "control",
+  "dataset": "implicit",
+  "area": "realistic target",
+  "quest_key": "fitness",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "world_quest": "fitness",
+  "frame": "",
+  "message": "Is a sub-50 10K realistic for me?",
+  "rubric": [
+   "Anchors the answer on the recorded 10K time trial of 54:10 (5:25 per km), not on a generic guess",
+   "Quantifies the gap to 50:00 (about 4 minutes 10 seconds, roughly 25 seconds per km faster)",
+   "Accounts for the current knee injury and running ban when judging readiness",
+   "Mentions the race date of 22 Nov as the time available (or gives a timeline consistent with it)"
+  ],
+  "must_use_pivots": [
+   "PB_TIME_TRIAL",
+   "KNEE_INJURY",
+   "RACE_MOVED"
+  ],
+  "data_pivots": [
+   "PB_TIME_TRIAL",
+   "KNEE_INJURY",
+   "RACE_MOVED"
+  ],
+  "precheck": {
+   "reply_contains_any": [
+    "54:10",
+    "54 minutes"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "chat_quality dataset case IMP-003, message and rubric verbatim; the quest is named to the assistant in this component (conversation_scope quest) because every arm is handed the quest facts; the answer rests on the quest's own target (sub-50 10K), not on a frame",
+  "conversation_scope": "quest",
+  "evidence_notes": "Check explanation.used.cards and used.sources (and the context frame titles) for the Run Log entries (time trial 9 days ago) and the fitness quest. The pivot values 54:10 and 5:25 should appear in the reply. 'Currently about 58 minutes' in the quest state is the older, staler figure; preferring 54:10 is the stronger answer."
+ },
+ {
+  "id": "IG-CTL-02",
+  "kind": "control",
+  "dataset": "implicit",
+  "area": "what to study",
+  "quest_key": "language",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "world_quest": "language",
+  "frame": "",
+  "message": "What should I work on in my next lesson?",
+  "rubric": [
+   "Names the subjunctive and ser versus estar as the tutor's identified weak spots",
+   "Connects the choice to the Lisbon trip on 12 Dec and the 10 minute conversation target",
+   "Names no weak spot or lesson focus that is not in the tutor notes or the language quest"
+  ],
+  "must_use_pivots": [
+   "LISBON_TRIP"
+  ],
+  "data_pivots": [
+   "LISBON_TRIP",
+   "IMP_TUTOR_DAYS"
+  ],
+  "precheck": {
+   "reply_contains_any": [
+    "subjunctive"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "chat_quality dataset case IMP-029, message and rubric verbatim; the quest is named to the assistant in this component (conversation_scope quest); the answer rests on the quest's own outcome (a 10 minute conversation before Lisbon), not on a frame",
+  "bonus_pivots": [
+   "IMP_TUTOR_DAYS"
+  ],
+  "conversation_scope": "quest",
+  "evidence_notes": "Tutor notes and the language quest. 'Next lesson' implies the tutor sessions. Weak spots are written in the 4-days-ago tutor note."
+ },
+ {
+  "id": "IG-CTL-03",
+  "kind": "control",
+  "dataset": "explicit",
+  "area": "most likely option with a metric",
+  "quest_key": "business",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "world_quest": "business",
+  "frame": "",
+  "message": "I have about 300 USD to spend. Is it more likely to get me orders to spend it on Instagram ads or on more samples for customer interviews? Tell me what is most likely to work for me and how I would know. Don't set anything up.",
+  "rubric": [
+   "Recommends one option as the more likely to work and says why from the person's own data, not only general advice",
+   "Notes that launch spending is already over the 2,000 USD cap before suggesting more spend",
+   "Names the measure that would show whether it worked (for example orders, or orders per dollar spent)",
+   "Offers to set up an experiment to test it but creates nothing"
+  ],
+  "must_use_pivots": [
+   "BUDGET_OVERRUN"
+  ],
+  "data_pivots": [
+   "BUDGET_OVERRUN"
+  ],
+  "precheck": {
+   "reply_contains_any": [
+    "2,340",
+    "2340",
+    "340",
+    "overrun",
+    "over budget",
+    "over the"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "chat_quality dataset case EXPT-026, message and rubric verbatim; the added reply check is the pivot's own figures (BUDGET_OVERRUN exact values 2340 and 340), so a reply that never reads the overrun fails by code",
+  "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. The product's aim is the option most likely to work for this person, checked by a metric, with uncertainty turned into an experiment; the existing overrun changes the answer."
+ },
+ {
+  "id": "IG-CTL-04",
+  "kind": "control",
+  "dataset": "explicit",
+  "area": "own capabilities",
+  "quest_key": "business",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "world_quest": "business",
+  "frame": "",
+  "message": "What can you actually do on this quest yourself? Can you add goals and log expenses for me, or do I have to do that in the app?",
+  "rubric": [
+   "Says truthfully that it can add goals and log entries such as expenses on this quest itself",
+   "Does not claim that a setting, a permission or a missing feature stops it from doing those",
+   "Does not claim capabilities the chat lacks, such as sending email by itself or changing the quest's purpose",
+   "Does not write anything"
+  ],
+  "must_use_pivots": [],
+  "data_pivots": [],
+  "precheck": {
+   "reply_contains_any": [
+    "goal"
+   ],
+   "reply_regex_forbidden": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "chat_quality dataset case EXP-088, message and rubric verbatim; the capability list given to the assistant and to the judge is chat_quality's CHAT_CAPABILITIES; the added reply check is that the reply speaks of goals",
+  "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. Reported mistakes include saying it cannot do something it can. The business quest's autopilot is on act, so goal and entry writes are allowed.",
+  "capabilities": true
+ },
+ {
+  "id": "IG-CTL-05",
+  "kind": "control",
+  "dataset": "explicit",
+  "area": "stay on the quest's own subject",
+  "quest_key": "coding",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "quest": {
+   "outcome": "Learn AI coding"
+  },
+  "frame": "",
+  "message": "What do I do? I don't know anything.",
+  "rubric": [
+   "Gives a concrete first step or a short starting path for learning to code, which is the quest's own subject",
+   "Does not tell the person to enable or change a setting and does not say that AI tasks are disabled",
+   "Does not raise a subject the person never mentioned, such as a lead campaign"
+  ],
+  "precheck": {
+   "reply_contains_any": [
+    "code",
+    "coding",
+    "program",
+    "python",
+    "learn"
+   ],
+   "reply_regex_forbidden": [
+    "AI tasks are (currently )?disabled",
+    "enable AI tasks",
+    "lead campaign|100-lead",
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "source": "The production examples set, case B4 (a reply to a short message from an external user on a learn-AI-coding quest named a campaign the person never raised and told them to change a setting); the message is that case's rewritten input and the rubric restates its EXPECT line. The quest outcome is the one the case describes."
+ }
+]
