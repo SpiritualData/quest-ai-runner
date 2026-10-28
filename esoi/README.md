@@ -190,6 +190,13 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `hold-the-long-view` | Higher mind: an AI representative's standing view across its assigned quests, placed in the intent hierarchy | separate_stores | Representative long-view carry-through across assigned quests, with nothing outside its branch |
 | `think-critically` | Critical thinking: the enforcer of ESOI metrics on every request | deep_runs_only | Requests held to their ESOI metric by code |
 | `select-a-rep` | Representative selection: which AI representative handles a request, and whose higher mind grounds it | persona_resolver_precedence | Representative choice accuracy and thread consistency |
+| `narrate-a-turn` | First-beat narration | model_beat | Supported first beats within the time and cost the turn allows |
+| `explain-an-answer` | How-I-got-this explanation | model_explanation | Faithful explanations per unit of cost and time |
+| `describe-an-attachment` | Image description for grounding | vision_description | Answer pass rate gained per image described |
+| `hand-off-a-goal` | Goal assignee and doability judge | model_judge | Hand-offs a person keeps per unit of cost and time |
+| `draft-a-metric` | Metric drafting for a task | capped_model_draft | Drafted metrics accepted per unit of cost |
+| `label-context-cards` | Card categories and metadata | fast_model_labels | Retrieval hits and category precision per unit of cost |
+| `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
 
 ## Implementations
 
@@ -431,6 +438,20 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `select-a-rep:thread_holds_its_rep` | A thread keeps its representative (proposed) |  |  |
 | `select-a-rep:fit_by_role_and_quests` | Fit by role, assigned quests and intent branch (proposed) |  |  |
 | `select-a-rep:ask_the_person` | Ask the person on an equal fit (proposed) |  |  |
+| `narrate-a-turn:model_beat` | One cheap model call per turn writes the beat (today) | quest_ai_runner/core/orchestrator_turn.py |  |
+| `narrate-a-turn:no_beat` | Fixed status line, no model call (floor, proposed) |  |  |
+| `explain-an-answer:model_explanation` | One model call writes the explanation from the trace (today) | quest_ai_runner/core/orchestrator_judges.py |  |
+| `explain-an-answer:trace_template` | Template over the trace, no model call (floor, proposed) |  |  |
+| `describe-an-attachment:vision_description` | One vision-model call per image (today) | quest_ai_runner/core/attachments.py |  |
+| `describe-an-attachment:skip_images` | No description, the image is named only (floor, proposed) |  |  |
+| `hand-off-a-goal:model_judge` | Two small model verdicts when a goal is created (today) | quest_ai_runner/runner/goal_handoff.py |  |
+| `hand-off-a-goal:creator_keeps_it` | Creator keeps the goal, no model call (floor, proposed) |  |  |
+| `draft-a-metric:capped_model_draft` | Capped model draft per task (today) | quest_ai_runner/runner/metric_draft.py |  |
+| `draft-a-metric:ask_owner` | Ask the owner to write it (floor, proposed) |  |  |
+| `label-context-cards:fast_model_labels` | Fast-tier model writes metadata and categories (today) | quest_ai_runner/adapters/card_metadata_generator.py |  |
+| `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) |  |  |
+| `assist-a-terminal-session:fast_model_helpers` | Fast-tier model calls in the terminal (today) | quest_ai_runner/cli_config.py |  |
+| `assist-a-terminal-session:rules_only` | Rules only, no model call (floor, proposed) |  |  |
 
 ## Metrics
 
@@ -505,3 +526,10 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `esoi run hold_the_long_view --impl separate_stores`
 - `metric-think-critically`, Requests held to their ESOI metric by code: `none`
 - `metric-select-a-rep`, Representative choice accuracy and thread consistency: `esoi run select_a_rep --impl persona_resolver_precedence`
+- `metric-narrate-a-turn`, Supported first beats within the time and cost the turn allows: `none`
+- `metric-explain-an-answer`, Faithful explanations per unit of cost and time: `none`
+- `metric-describe-an-attachment`, Answer pass rate gained per image described: `none`
+- `metric-hand-off-a-goal`, Hand-offs a person keeps per unit of cost and time: `none`
+- `metric-draft-a-metric`, Drafted metrics accepted per unit of cost: `none`
+- `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: `none`
+- `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `none`
