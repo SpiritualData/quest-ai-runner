@@ -6,18 +6,18 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | Component | Layer | Role | Serves |
 |---|---|---|---|
 | `core-ports` | core | The generic boundary: adapter interfaces, value objects, streaming sinks, event constants | show-progress |
-| `core-orchestrator-loop` | core | The bounded plan, gather, re-plan, answer/deep/confirm loop, split into role mixins | route-a-message, answer-a-turn, act-as-the-body |
+| `core-orchestrator-loop` | core | The bounded plan, gather, re-plan, answer/deep/confirm loop, split into role mixins | route-a-message, answer-a-turn, act-as-the-body, narrate-a-turn |
 | `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message, keep-a-working-stream, admit-to-the-mind, hold-the-long-view, justify-model-calls |
-| `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | watch-a-run, judge-a-decision |
+| `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | watch-a-run, judge-a-decision, explain-an-answer |
 | `core-model-selection` | core | Tier to live model id, family resolution, deep-run starting model, outage and usage-limit memory | choose-a-model-tier |
-| `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-run control channel (steer, stop, pause), per-turn execution record | run-deep-work, receive-input-mid-run, detect-a-stalled-run |
+| `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-run control channel (steer, stop, pause), per-turn execution record | run-deep-work, receive-input-mid-run, detect-a-stalled-run, describe-an-attachment |
 | `core-context-selection` | core | Choosing and learning which context cards enter a prompt | select-context, guide-by-feedback, recall-recent-context |
 | `core-tools` | core | The one catalog of operations an AI run can perform (tools, asks, progress, goals, notes, experiments), their relevance selection and per-run pins, plus operator-registered custom tools | operate-a-quest |
 | `core-reply-guards` | core | Link honesty, replayable recipes and the anticipation learner | replay-known-operations, guard-a-reply, persist-predictions |
 | `runner-quest-client` | runner | The Quest HTTP client in API-area mixins plus decision sink | escalate-to-a-human |
 | `runner-poller` | runner | Event-driven, signature-deduped poll loop with bounded concurrency | run-queued-tasks |
-| `runner-executor` | runner | Run one claimed task through the brain and report | run-queued-tasks |
-| `runner-autopilot` | runner | The recurring autopilot pass: defaults, periods, personas, briefs, gates | gate-an-autopilot-pass, assemble-a-prompt, ground-in-intent |
+| `runner-executor` | runner | Run one claimed task through the brain and report | run-queued-tasks, draft-a-metric |
+| `runner-autopilot` | runner | The recurring autopilot pass: defaults, periods, personas, briefs, gates | gate-an-autopilot-pass, assemble-a-prompt, ground-in-intent, hand-off-a-goal |
 | `runner-context-updates` | runner | Keeping a quest context up to date: bundle, receipts, state, judges, sources | assemble-a-prompt, feed-context-sources |
 | `runner-personas` | runner | Which persona runs a task (data, not code), rep skill sync, workflow actions | run-queued-tasks, select-a-rep |
 | `runner-quest-folder` | runner | A quest as a working folder: index, two-way sync, zones, goals, experiments | run-queued-tasks |
@@ -25,7 +25,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `runner-learning` | runner | What a person asked for and has said: ledger, insights, reflections | store-feedback |
 | `adapters-model-providers` | adapters | Swappable ModelProvider implementations routed by model name | call-a-model |
 | `adapters-retrieval` | adapters | RetrievalAdapter and writer implementations over files, DBs, MCP, Notion, Google, Quest | gather-evidence, write-files, write-through-mcp, talk-over-a-channel |
-| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository),  card views for the unified search (card_views) | persist-cards, resolve-references, cache-cards, detect-stale-cards, search-cards-and-specs, bound-card-growth, repair-a-card-store |
+| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository),  card views for the unified search (card_views) | persist-cards, resolve-references, cache-cards, detect-stale-cards, search-cards-and-specs, bound-card-growth, repair-a-card-store, label-context-cards |
 | `adapters-vector-context` | adapters | Semantic and keyword context assemblers and their scoring helpers | index-by-meaning, select-context |
 | `adapters-web` | adapters | Live web search and page fetch behind pluggable backends | search-the-web |
 | `adapters-deep-runners` | adapters | Alternative DeepRunner implementations | run-deep-work |

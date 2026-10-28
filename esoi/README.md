@@ -179,7 +179,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 | `bound-card-growth` | Card store growth prevention | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
 | `repair-a-card-store` | Card store repair | repository_tidy | Cards per source-file group and duplicate share after a repair of an inflated store |
-| `search-cards-and-specs` | Unified card and specification search | two_pipelines | Mixed card and specification selection, with both existing selection metrics held |
+| `search-cards-and-specs` | Unified card and specification search | solutions_and_problems_with_links | Mixed card and specification selection, with both existing selection metrics held |
 | `tag-solutions` | Problem-linked tags that identify solutions | tag_list_with_check | Right solution missed without the tag |
 | `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
 | `keep-a-working-stream` | Mind: one goal-focused working stream per request | rebuilt_per_step | Step continuity at cost over multi-step requests |
@@ -446,11 +446,11 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `describe-an-attachment:vision_description` | One vision-model call per image (today) | quest_ai_runner/core/attachments.py |  |
 | `describe-an-attachment:skip_images` | No description, the image is named only (floor, proposed) |  |  |
 | `hand-off-a-goal:model_judge` | Two small model verdicts when a goal is created (today) | quest_ai_runner/runner/goal_handoff.py |  |
-| `hand-off-a-goal:creator_keeps_it` | Creator keeps the goal, no model call (floor, proposed) |  |  |
+| `hand-off-a-goal:creator_keeps_it` | Creator keeps the goal, no model call (floor, proposed) | evaluation/components/hand_off_a_goal/impls/creator_keeps_it.py |  |
 | `draft-a-metric:capped_model_draft` | Capped model draft per task (today) | quest_ai_runner/runner/metric_draft.py |  |
-| `draft-a-metric:ask_owner` | Ask the owner to write it (floor, proposed) |  |  |
+| `draft-a-metric:ask_owner` | Ask the owner to write it (floor, proposed) | evaluation/components/draft_a_metric/impls/ask_owner.py |  |
 | `label-context-cards:fast_model_labels` | Fast-tier model writes metadata and categories (today) | quest_ai_runner/adapters/card_metadata_generator.py |  |
-| `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) |  |  |
+| `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) | evaluation/components/label_context_cards/impls/path_rules.py |  |
 | `assist-a-terminal-session:fast_model_helpers` | Fast-tier model calls in the terminal (today) | quest_ai_runner/cli_config.py |  |
 | `assist-a-terminal-session:rules_only` | Rules only, no model call (floor, proposed) |  |  |
 | `justify-model-calls:spec_registry` | Registered prompt specs with an enforcement test (today) | quest_ai_runner/core/prompt_specs.py |  |
@@ -517,7 +517,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
 - `metric-bound-card-growth`, Cards per source-file group after repeated passes, for the guards that prevent growth: `esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store; esoi run card_growth --impl no_cleanup`
 - `metric-repair-a-card-store`, Cards per source-file group and duplicate share after a repair of an inflated store: `esoi run card_growth --impl repository_tidy; esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup`
-- `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs --impl two_pipelines; esoi run context_and_specs --impl solutions_and_problems_with_links; esoi run spec_selection --impl solutions_and_problems_with_links; esoi run context_selection --impl solutions_and_problems_with_links`
+- `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs --impl solutions_and_problems_with_links; esoi run spec_selection --impl solutions_and_problems_with_links; esoi run context_selection --impl solutions_and_problems_with_links`
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed record of what they changed: `esoi run record_tracking`
 - `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_solutions --impl tag_list_with_check`
 - `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`
@@ -529,12 +529,12 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `esoi run hold_the_long_view --impl separate_stores`
 - `metric-think-critically`, Requests held to their ESOI metric by code: `none`
 - `metric-select-a-rep`, Representative choice accuracy and thread consistency: `esoi run select_a_rep --impl persona_resolver_precedence`
-- `metric-narrate-a-turn`, Supported first beats within the time and cost the turn allows: `none`
-- `metric-explain-an-answer`, Faithful explanations per unit of cost and time: `none`
-- `metric-describe-an-attachment`, Answer pass rate gained per image described: `none`
-- `metric-hand-off-a-goal`, Hand-offs a person keeps per unit of cost and time: `none`
-- `metric-draft-a-metric`, Drafted metrics accepted per unit of cost: `none`
-- `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: `none`
+- `metric-narrate-a-turn`, Supported first beats within the time and cost the turn allows: `esoi run narrate_a_turn --impl model_beat`
+- `metric-explain-an-answer`, Faithful explanations per unit of cost and time: `esoi run explain_an_answer --impl model_explanation`
+- `metric-describe-an-attachment`, Answer pass rate gained per image described: `esoi run describe_an_attachment --impl vision_description`
+- `metric-hand-off-a-goal`, Hand-offs a person keeps per unit of cost and time: `esoi run hand_off_a_goal --impl model_judge`
+- `metric-draft-a-metric`, Drafted metrics accepted per unit of cost: `esoi run draft_a_metric --impl capped_model_draft`
+- `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: `esoi run label_context_cards --impl fast_model_labels`
 - `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `esoi run assist_a_terminal_session --impl fast_model_helpers`
 - `metric-justified-model-spend`, Justified share of model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
 - `QME8`, Justified model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
