@@ -2188,3 +2188,9 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,intent_grounding,frame_line,10,8,8/10,0/0,20,57462,14342,0.2276,126.7,7b349e1,f38af8bc,claude-haiku,,,
 2026-10-28,task_replay,single_attempt,4,4,4/4,0/0,12,17186,589,0.0,76.2,7b349e1,7573a8f5,claude-code-subscription,,,0.9841
 2026-10-28,intent_grounding,none,10,3,3/10,0/0,15,35252,9426,0.1212,93.0,54ee21e,f38af8bc,claude-haiku,,,
+2026-10-28,spec_selection,lexical_vector_gated,30,30,18/18,12/12,18,47219,4483,0.0077,53.9,c333b03,0a2ef76a,unknown,,sample:30,0.9653
+2026-10-28,spec_selection,lexical_vector,30,28,17/18,11/12,0,0,0,0.0,0.2,c333b03,0a2ef76a,none,,sample:30,0.9532
+2026-10-28,intent_grounding,frame_line,10,9,9/10,0/0,20,57447,14465,0.2239,125.8,08aa3a0,f38af8bc,claude-haiku,,,
+2026-10-28,justified_model_spend,spec_registry_ablation,4,0,0/4,0/0,0,0,0,0.0,0.6,08aa3a0,68c8011b,none,,,
+2026-10-28,intent_grounding,none,10,4,4/10,0/0,15,35193,9844,0.1199,90.4,6a0f48e,f38af8bc,claude-haiku,,,
+2026-10-28,justified_model_spend,spec_registry,4,4,4/4,0/0,0,0,0,0.0,0.5,6a0f48e,68c8011b,none,,,
