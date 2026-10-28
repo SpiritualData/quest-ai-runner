@@ -179,7 +179,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `keep-a-working-stream` | Mind: one goal-focused working stream per request | rebuilt_per_step | Step continuity at cost over multi-step requests |
 | `admit-to-the-mind` | Subconscious: the person's own knowledge, admitted to the working stream by the goal | recency_window | Goal-relevant admission at a precision floor with nothing out of scope |
 | `know-the-world` | Science: evidence-weighted knowledge about the world | web_with_support_check | Supported and calibrated answers to world questions |
-| `act-in-the-world` | World: declared reach and receipts for acts outside the host | prompt_described_reach | Reach-claim accuracy and act receipts over labelled requests |
+| `act-in-the-world` | World: doing things outside the host through the best harness, with declared reach and receipts | coding_agent_prompt_reach | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
 | `act-as-the-body` | Body: the host's data model as the agent's own consistent state | card_and_reads | Account-state consistency across scripted sessions |
 | `hold-the-long-view` | Higher mind: one standing perspective per quest across requests | separate_stores | Long-view carry-through across sessions with nothing out of scope |
 | `think-critically` | Critical thinking: the enforcer of ESOI metrics on every request | deep_runs_only | Requests held to their ESOI metric by code |
@@ -399,9 +399,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | quest_ai_runner/adapters/web_research.py |  |
 | `know-the-world:research_sources_first` | Host research sources first, then the web (proposed) |  |  |
 | `know-the-world:evidence_weighted` | Findings weighed by a host's evidence-estimation service (proposed) |  |  |
-| `act-in-the-world:prompt_described_reach` | Effectors describe themselves in the prompt (today) | quest_ai_runner/core/tools.py |  |
-| `act-in-the-world:reach_summary_and_judge` | Host reach summary and a reach judge (built, off by default) | quest_ai_runner/core/reach_judge.py |  |
-| `act-in-the-world:declared_inventory` | One declared inventory with receipts (proposed) |  |  |
+| `act-in-the-world:coding_agent_prompt_reach` | Coding agent, reach described in the prompt (today) | quest_ai_runner/core/tools.py |  |
+| `act-in-the-world:coding_agent_reach_judge` | Coding agent with the host reach summary and reach judge (built, off by default) | quest_ai_runner/core/reach_judge.py |  |
+| `act-in-the-world:coding_agent_declared_inventory` | Coding agent with one declared inventory and receipts (proposed) |  |  |
 | `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | quest_ai_runner/runner/quest_folder_index.py |  |
 | `act-as-the-body:read_after_write` | Read back what a change touched (proposed) |  |  |
 | `act-as-the-body:live_read_only` | A live read behind every state claim (proposed) |  |  |
@@ -411,11 +411,11 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `admit-to-the-mind:outcome_precedents` | Intuition: outcome precedents surfaced at admission (proposed) |  |  |
 | `watch-a-run:no_overseer` | No overseer (configuration off) | quest_ai_runner/core/orchestrator_types.py |  |
 | `watch-a-run:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
-| `keep-a-working-stream:open_source_harness` | An open-source agent harness as the loop (proposed) |  |  |
 | `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | quest_ai_runner/core/goal_metrics.py |  |
 | `think-critically:instruction_only` | Standing instruction alone (floor) | quest_ai_runner/core/standing_instructions.py |  |
 | `think-critically:every_request_measured` | Every request measured by code (proposed) |  |  |
 | `think-critically:measured_proposed_and_answered` | Measured, proposed and answered (proposed) |  |  |
+| `act-in-the-world:best_open_source_harness` | Best open-source agent harness by the combined metric, with declared inventory (proposed) |  |  |
 
 ## Metrics
 
@@ -485,7 +485,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-keep-a-working-stream`, Step continuity at cost over multi-step requests: `none`
 - `metric-admit-to-the-mind`, Goal-relevant admission at a precision floor with nothing out of scope: `none`
 - `metric-know-the-world`, Supported and calibrated answers to world questions: `none`
-- `metric-act-in-the-world`, Reach-claim accuracy and act receipts over labelled requests: `none`
+- `metric-act-in-the-world`, Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety: `none`
 - `metric-act-as-the-body`, Account-state consistency across scripted sessions: `none`
 - `metric-hold-the-long-view`, Long-view carry-through across sessions with nothing out of scope: `none`
 - `metric-think-critically`, Requests held to their ESOI metric by code: `none`
