@@ -64,7 +64,7 @@
   "label": {"ai_doable": true},
   "source": "tests/test_plan_reconcile.py test_write_routes_a_handoff_to_the_rep: the goal named draft is handed to the rep"},
 
- {"id": "AST-GATE-01", "kind": "gate", "stratum": "gate",
+ {"id": "AST-GATE-01", "kind": "gate", "stratum": "gate", "live": true,
   "asks": [
    {"key": "a1", "kind": "unknown", "state": "open", "text": "x"},
    {"key": "a2", "kind": "request", "state": "open", "assignee_id": "u1", "text": "x"},
