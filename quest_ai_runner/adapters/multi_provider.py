@@ -24,6 +24,7 @@ from ..core.adapters import (
     answer_with_reasoning,
     plan_with_step,
 )
+from ..usage import active_spec
 
 _log = logging.getLogger("quest-ai-runner.multi-provider")
 
@@ -202,7 +203,8 @@ class MultiProvider(ModelProvider):
         _log.debug(f"Model '{model}' routing to primary provider ({type(self.primary).__name__})")
         return self.primary
 
-    def _record_token_delta(self, provider: ModelProvider, before_in: int, before_out: int) -> None:
+    def _record_token_delta(self, provider: ModelProvider, before_in: int, before_out: int,
+                            started: Optional[float] = None) -> None:
         """Record the token delta from one LLM call; update own totals and the usage tracker."""
         after_in = getattr(provider, "tokens_in", 0)
         after_out = getattr(provider, "tokens_out", 0)
@@ -214,7 +216,9 @@ class MultiProvider(ModelProvider):
         self.tokens_out += delta_out
         if self._usage_tracker is not None:
             try:
-                self._usage_tracker.record(delta_in, delta_out)
+                self._usage_tracker.record(
+                    delta_in, delta_out, spec_id=active_spec(),
+                    seconds=0.0 if started is None else time.monotonic() - started)
             except Exception:  # noqa: BLE001 — token tracking must never break a call
                 pass
 
@@ -257,9 +261,10 @@ class MultiProvider(ModelProvider):
             provider = self._get_provider_for_model(m)
             before_in = getattr(provider, "tokens_in", 0)
             before_out = getattr(provider, "tokens_out", 0)
+            started = time.monotonic()
             result = plan_with_step(provider, prompt, model=m, tool_schema=tool_schema,
                                     layers=layers, step=step)
-            self._record_token_delta(provider, before_in, before_out)
+            self._record_token_delta(provider, before_in, before_out, started)
             return result
 
         return self._call_with_tier_fallback(model, _call)
@@ -288,9 +293,10 @@ class MultiProvider(ModelProvider):
             provider = self._get_provider_for_model(m)
             before_in = getattr(provider, "tokens_in", 0)
             before_out = getattr(provider, "tokens_out", 0)
+            started = time.monotonic()
             result = answer_with_reasoning(provider, messages, model=m, system=system,
                                            layers=layers, reasoning=reasoning, step=step)
-            self._record_token_delta(provider, before_in, before_out)
+            self._record_token_delta(provider, before_in, before_out, started)
             return result
 
         return self._call_with_tier_fallback(model, _call)
@@ -319,8 +325,9 @@ class MultiProvider(ModelProvider):
             provider = self._get_provider_for_model(m)
             before_in = getattr(provider, "tokens_in", 0)
             before_out = getattr(provider, "tokens_out", 0)
+            started = time.monotonic()
             result = provider.web_search(query, model=m, max_results=max_results)
-            self._record_token_delta(provider, before_in, before_out)
+            self._record_token_delta(provider, before_in, before_out, started)
             return result
 
         return self._call_with_tier_fallback(model, _call)

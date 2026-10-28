@@ -33,6 +33,7 @@ import string
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from ..usage import tag_spec
 from .model_registry import TIERS
 
 # The cache layers of ``prompt_layers.PromptLayers`` plus ``none`` for a one-shot prompt.
@@ -81,6 +82,7 @@ class PromptSpec:
         given, wanted = set(values), set(self.inputs)
         if given != wanted:
             raise ValueError(f"prompt {self.id!r} takes {sorted(wanted)}; got {sorted(given)}")
+        tag_spec(self.id)   # the model call that follows is recorded under this id (usage.SpendLog)
         text = self.template.format(**values) if self.inputs else self.template
         return with_no_em_dash_rule(text) if self.writes_text else text
 

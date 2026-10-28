@@ -6,6 +6,11 @@ pickup when the daily limit is exceeded. The counter resets automatically at mid
 
 The deep-runner (Claude Code, run via subscription) does NOT count toward this limit.
 
+Per-call records: every call is also kept as a ``CallRecord`` tagged with the id of the registered prompt spec that
+wrote its prompt (``PromptSpec.render`` sets the tag, ``active_spec`` reads it), in ``SpendLog``. ``SpendLog.summary``
+gives each prompt's fire rate per turn and its average and maximum tokens, dollars and seconds per call, the
+measurement behind ``metric-justified-model-spend``. A call made with no spec in scope is tagged ``UNTAGGED``.
+
 Env vars:
   QAR_DAILY_TOKEN_LIMIT   — daily cap on tokens (input + output, combined); no default (opt-in).
                             Set to a positive integer to enable. Set to 0 or "off" to disable.
@@ -17,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import contextvars
 import threading
 from dataclasses import dataclass
 from datetime import date
@@ -27,6 +33,77 @@ log = logging.getLogger("quest-ai-runner.usage")
 
 
 DEFAULT_DAILY_TOKEN_LIMIT = 2_000_000  # 2M tokens/day when nothing is configured
+
+UNTAGGED = "(untagged)"   # the tag of a call made while no registered prompt spec is in scope
+
+_ACTIVE_SPEC: "contextvars.ContextVar[str]" = contextvars.ContextVar("qar_active_prompt_spec", default="")
+
+
+def tag_spec(spec_id: str) -> None:
+    """Mark ``spec_id`` as the prompt whose model call comes next in this context (set by ``PromptSpec.render``)."""
+    _ACTIVE_SPEC.set(spec_id or "")
+
+
+def active_spec() -> str:
+    """The id of the registered prompt spec last rendered in this context, or ``UNTAGGED``."""
+    return _ACTIVE_SPEC.get() or UNTAGGED
+
+
+@dataclass(frozen=True)
+class CallRecord:
+    """One model call as the usage records keep it."""
+
+    spec_id: str
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float
+    seconds: float
+    turn: int
+    critical_path: bool = True   # the reply waits on the call
+
+
+class SpendLog:
+    """Per-call records tagged with the prompt spec id, and the per-prompt statistics read from them. Thread-safe."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.records: list = []
+        self.turns = 0
+
+    def begin_turn(self) -> int:
+        """Count one turn (the denominator of every fire rate) and return its number."""
+        with self._lock:
+            self.turns += 1
+            return self.turns
+
+    def record(self, spec_id: str, tokens_in: int, tokens_out: int, cost_usd: float = 0.0, seconds: float = 0.0,
+               critical_path: bool = True) -> CallRecord:
+        with self._lock:
+            call = CallRecord(spec_id or UNTAGGED, max(0, int(tokens_in)), max(0, int(tokens_out)), max(0.0, float(cost_usd)),
+                              max(0.0, float(seconds)), self.turns, critical_path)
+            self.records.append(call)
+            return call
+
+    def summary(self) -> dict:
+        """``{spec_id: stats}``: calls, turns it fired in, fire rate per turn, average and maximum of tokens in and out,
+        dollars and seconds per call, the share of its calls on the critical path, and total dollars."""
+        with self._lock:
+            records, turns = list(self.records), self.turns
+        out: dict = {}
+        for spec_id in sorted({r.spec_id for r in records}):
+            mine = [r for r in records if r.spec_id == spec_id]
+            fired = len({r.turn for r in mine})
+
+            def stat(field: str) -> dict:
+                values = [getattr(r, field) for r in mine]
+                return {"avg": sum(values) / len(values), "max": max(values)}
+            out[spec_id] = {
+                "calls": len(mine), "turns_fired": fired, "fire_rate": fired / turns if turns else 0.0,
+                "tokens_in": stat("tokens_in"), "tokens_out": stat("tokens_out"),
+                "cost_usd": stat("cost_usd"), "seconds": stat("seconds"),
+                "critical_path_share": sum(1 for r in mine if r.critical_path) / len(mine),
+                "total_cost_usd": sum(r.cost_usd for r in mine)}
+        return out
 
 
 @dataclass
@@ -77,6 +154,7 @@ class DailyUsageTracker:
         self._date: str = ""
         self._tokens_in: int = 0
         self._tokens_out: int = 0
+        self.spend_log = SpendLog()
         self._load()
 
         if self._limits.enabled():
@@ -144,8 +222,10 @@ class DailyUsageTracker:
             self._tokens_in = 0
             self._tokens_out = 0
 
-    def record(self, tokens_in: int, tokens_out: int) -> None:
-        """Add tokens from one LLM call to today's running total."""
+    def record(self, tokens_in: int, tokens_out: int, spec_id: Optional[str] = None, cost_usd: float = 0.0,
+               seconds: float = 0.0) -> None:
+        """Add tokens from one LLM call to today's running total, and keep the call in ``spend_log`` tagged ``spec_id``."""
+        self.spend_log.record(spec_id or UNTAGGED, tokens_in, tokens_out, cost_usd, seconds)
         with self._lock:
             self._reset_if_new_day()
             self._tokens_in += max(0, tokens_in)

@@ -331,3 +331,45 @@ def test_poller_default_limit_does_not_block_normal_scan():
     assert poller._usage_tracker is not None
     assert not poller._usage_tracker.over_limit()
     assert poller.run_once() == ["task-4"]
+
+
+# ---------------------------------------------------------------------------
+# Per-call records tagged with the prompt spec id (metric-justified-model-spend)
+# ---------------------------------------------------------------------------
+
+def test_rendering_a_spec_tags_the_next_call_and_the_summary_reads_it():
+    from quest_ai_runner.core.prompt_specs import SPECS_BY_ID, PromptSpec
+    from quest_ai_runner.usage import UNTAGGED, active_spec, tag_spec
+    spec = PromptSpec(id="test-usage.tagged", solution="justify-model-calls", metric="metric-justified-model-spend",
+                      tier="fast", cache_layer="none", template="Say hi to {name}.", inputs=("name",))
+    assert "test-usage.tagged" not in SPECS_BY_ID   # not registered: render tags by the spec's own id
+    tag_spec("")
+    assert active_spec() == UNTAGGED
+    spec.render(name="Ann")
+    assert active_spec() == "test-usage.tagged"
+    tracker = DailyUsageTracker()
+    tracker.spend_log.begin_turn()
+    tracker.record(100, 10, spec_id=active_spec(), cost_usd=0.002, seconds=1.5)
+    tracker.record(300, 30, spec_id=active_spec(), cost_usd=0.004, seconds=0.5)
+    tracker.spend_log.begin_turn()
+    tracker.record(50, 5)
+    got = tracker.spend_log.summary()
+    stats = got["test-usage.tagged"]
+    assert stats["calls"] == 2 and stats["turns_fired"] == 1 and stats["fire_rate"] == 0.5
+    assert stats["tokens_in"] == {"avg": 200.0, "max": 300}
+    assert stats["cost_usd"]["max"] == 0.004 and abs(stats["cost_usd"]["avg"] - 0.003) < 1e-9
+    assert stats["seconds"] == {"avg": 1.0, "max": 1.5} and stats["critical_path_share"] == 1.0
+    assert got[UNTAGGED]["calls"] == 1 and tracker.total_tokens() == 495
+
+
+def test_the_tag_is_per_context_so_concurrent_turns_do_not_mix():
+    import contextvars
+    from quest_ai_runner.usage import active_spec, tag_spec
+    tag_spec("outer")
+    seen = {}
+
+    def worker():
+        tag_spec("inner")
+        seen["inner"] = active_spec()
+    contextvars.copy_context().run(worker)
+    assert seen["inner"] == "inner" and active_spec() == "outer"
