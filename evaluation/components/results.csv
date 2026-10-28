@@ -2012,3 +2012,8 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,hold_the_long_view,no_carry,11,5,5/11,0/0,0,0,0,0.0,0.0,968c448,f3649a28,none,,,
 2026-10-28,select_a_rep,persona_resolver_precedence,16,14,14/16,0/0,0,0,0,0.0,0.0,968c448,8d7a8ce2,none,,,
 2026-10-28,select_a_rep,first_registered,16,4,4/16,0/0,0,0,0,0.0,0.0,968c448,8d7a8ce2,none,,,
+2026-10-28,assist_a_terminal_session,fast_model_helpers_live,10,10,10/10,0/0,10,1984,435,0.000372,10.6,33f2db2,495b478a,gemini-3.1-flash-lite,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01",0.9149
+2026-10-28,assist_a_terminal_session,fast_model_helpers,16,14,14/16,0/0,14,2075,285,0.0,0.0,33f2db2,495b478a,simulated,,,0.9125
+2026-10-28,assist_a_terminal_session,fast_model_helpers,10,10,10/10,0/0,10,1876,228,0.0,0.0,33f2db2,495b478a,simulated,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01",1.0
+2026-10-28,assist_a_terminal_session,rules_only,16,16,16/16,0/0,0,0,0,0.0,0.3,33f2db2,495b478a,none,,,0.9986
+2026-10-28,assist_a_terminal_session,rules_only,10,10,10/10,0/0,0,0,0,0.0,0.3,33f2db2,495b478a,none,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01",0.9977
