@@ -3,29 +3,35 @@
  "cases_sha": "0a2ef76a",
  "component": "spec_selection",
  "defaulted_tags": 0,
- "git_sha": "785b9e4-dirty",
+ "git_sha": "b77568d",
  "impl": "lexical_vector",
  "label": "eval-trace",
  "summary": {
-  "accuracy": 0.9333,
-  "balanced": 0.9532,
-  "cases": 30,
+  "accuracy": 0.7368,
+  "balanced": 0.8157,
+  "cases": 76,
   "cli_reported_cost_usd": 0.0,
   "component": "spec_selection",
   "cost_per_case": 0.0,
-  "dev": "17/18",
-  "heldout": "11/12",
+  "dev": "35/50",
+  "heldout": "21/26",
   "impl": "lexical_vector",
   "model": null,
   "model_calls": 0,
-  "passed": 28,
-  "sample": "sample:30",
-  "seconds": 0.2,
+  "passed": 56,
+  "sample": "",
+  "seconds": 0.5,
   "seconds_per_case": 0.01,
   "tokens_in": 0,
   "tokens_out": 0
  },
  "turns": [
+  {
+   "calls": 0,
+   "id": "SPS-001",
+   "kind": "direct",
+   "ok": true
+  },
   {
    "calls": 0,
    "id": "SPS-002",
@@ -40,9 +46,51 @@
   },
   {
    "calls": 0,
+   "id": "SPS-004",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-005",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-006",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
    "id": "SPS-007",
    "kind": "direct",
    "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-008",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-009",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-010",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-011",
+   "kind": "paraphrase",
+   "ok": false
   },
   {
    "calls": 0,
@@ -70,8 +118,50 @@
   },
   {
    "calls": 0,
+   "id": "SPS-016",
+   "kind": "paraphrase",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-017",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-018",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
    "id": "SPS-019",
    "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-020",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-021",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-022",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-023",
+   "kind": "daily",
    "ok": true
   },
   {
@@ -118,9 +208,45 @@
   },
   {
    "calls": 0,
+   "id": "SPS-031",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-032",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-033",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
    "id": "SPS-034",
    "kind": "daily",
    "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-035",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-036",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-037",
+   "kind": "multi",
+   "ok": false
   },
   {
    "calls": 0,
@@ -130,7 +256,19 @@
   },
   {
    "calls": 0,
+   "id": "SPS-039",
+   "kind": "multi",
+   "ok": true
+  },
+  {
+   "calls": 0,
    "id": "SPS-040",
+   "kind": "multi",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-041",
    "kind": "multi",
    "ok": false
   },
@@ -178,8 +316,116 @@
   },
   {
    "calls": 0,
+   "id": "SPS-049",
+   "kind": "solution",
+   "ok": true
+  },
+  {
+   "calls": 0,
    "id": "SPS-050",
    "kind": "solution",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-051",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-052",
+   "kind": "none",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-053",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-054",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-055",
+   "kind": "none",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-056",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-057",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-058",
+   "kind": "none",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-059",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-060",
+   "kind": "paraphrase",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-061",
+   "kind": "paraphrase",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-062",
+   "kind": "paraphrase",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-063",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-064",
+   "kind": "paraphrase",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-065",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-066",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-067",
+   "kind": "daily",
    "ok": true
   },
   {
@@ -202,7 +448,37 @@
   },
   {
    "calls": 0,
+   "id": "SPS-071",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
    "id": "SPS-072",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-073",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-074",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-075",
+   "kind": "none",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-076",
    "kind": "none",
    "ok": false
   }
