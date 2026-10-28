@@ -143,5 +143,197 @@
   },
   "budget_source": "none declared: no existing record states a dollar, token or latency budget for the pre-route, so none is enforced (undeclared, not zero); the only judgment is the ablation",
   "source": "owner metric metric-operate-a-quest; owner cases evaluation/components/quest_ops/cases.json (all 22 cases, the same for both arms); fire rate and cost count only the calls tagged operate-a-quest.pre-route, not the planner calls of the same turns"
+ },
+ {
+  "id": "JMS-NAR",
+  "spec_id": "narrate-a-turn.first-beat",
+  "owner_metric": "metric-narrate-a-turn",
+  "keep": {
+   "component": "narrate_a_turn",
+   "impl": "model_beat"
+  },
+  "ablation": {
+   "component": "narrate_a_turn",
+   "impl": "no_beat",
+   "what": "the call is dropped: a fixed line chosen from the turn's first event"
+  },
+  "case_kinds": [
+   "*"
+  ],
+  "budget": {
+   "cost_usd_per_turn": 0.044,
+   "seconds_per_call": 5,
+   "tokens": null
+  },
+  "budget_source": "cost: the 2026-10-23 spend audit's average production request ($67 over 1,534 requests, about $0.044), the bound the metric record names (the cost of the answer it precedes or informs), declared in esoi.toml [balance.narrate_a_turn]; seconds: Narrator.flush_first joins the first beat for at most 5 seconds and then the turn goes on without it (quest_ai_runner/core/orchestrator_turn.py); no token budget is declared, so none is enforced",
+  "source": "owner metric metric-narrate-a-turn; owner cases evaluation/components/narrate_a_turn/cases.json (all cases, the same for both arms); the grader's calls are tagged eval.judge and are not counted as the prompt's"
+ },
+ {
+  "id": "JMS-EXP",
+  "spec_id": "explain-an-answer.how-i-got-this",
+  "owner_metric": "metric-explain-an-answer",
+  "keep": {
+   "component": "explain_an_answer",
+   "impl": "model_explanation"
+  },
+  "ablation": {
+   "component": "explain_an_answer",
+   "impl": "trace_template",
+   "what": "the call is dropped: the trace-only payload, a template over the recorded facts"
+  },
+  "case_kinds": [
+   "*"
+  ],
+  "budget": {
+   "cost_usd_per_turn": 0.044,
+   "seconds_per_call": null,
+   "tokens": null
+  },
+  "budget_source": "cost: the 2026-10-23 spend audit's average production request ($67 over 1,534 requests, about $0.044), the bound the metric record names (the cost of the answer it precedes or informs), declared in esoi.toml [balance.explain_an_answer] (the metric's 'stated share of the turn's cost' is stated nowhere, so the whole turn cost is the ceiling); seconds: none declared, because the explanation is written after the answer has been sent and adds no time before the reply (core/orchestrator_judges.py write_answer_explanation); no token budget is declared",
+  "source": "owner metric metric-explain-an-answer; owner cases evaluation/components/explain_an_answer/cases.json (all cases, the same for both arms); the metric as recorded scores faithful and complete, and the readability the call buys is reported apart by the owner arm"
+ },
+ {
+  "id": "JMS-DSC",
+  "spec_id": "describe-an-attachment.image",
+  "owner_metric": "metric-describe-an-attachment",
+  "keep": {
+   "component": "describe_an_attachment",
+   "impl": "vision_description"
+  },
+  "ablation": {
+   "component": "describe_an_attachment",
+   "impl": "skip_images",
+   "what": "the call is dropped: the image is named only"
+  },
+  "case_kinds": [
+   "*"
+  ],
+  "budget": {
+   "cost_usd_per_turn": 0.044,
+   "seconds_per_call": null,
+   "tokens": null
+  },
+  "budget_source": "cost: the 2026-10-23 spend audit's average production request ($67 over 1,534 requests, about $0.044), the bound the metric record names (the cost of the answer it precedes or informs), declared in esoi.toml [balance.describe_an_attachment]; seconds: none declared, because no record states how long a person waits for a description; no token budget is declared",
+  "source": "owner metric metric-describe-an-attachment; owner cases evaluation/components/describe_an_attachment/cases.json (all 10 cases, the same for both arms, controls included); fire rate and cost count only the calls tagged describe-an-attachment.image, not the answering call or the grader"
+ },
+ {
+  "id": "JMS-HOA",
+  "spec_id": "hand-off-a-goal.assignee",
+  "owner_metric": "metric-hand-off-a-goal",
+  "keep": {
+   "component": "hand_off_a_goal",
+   "impl": "model_judge_fast"
+  },
+  "ablation": {
+   "component": "hand_off_a_goal",
+   "impl": "creator_keeps_it",
+   "what": "the call is dropped: the goal stays with its creator (the quest owner for an AI-created goal)"
+  },
+  "case_kinds": [
+   "assignee"
+  ],
+  "budget": {
+   "cost_usd_per_turn": null,
+   "seconds_per_call": null,
+   "tokens": null
+  },
+  "budget_source": "none declared: the metric record states the bound in words only, so no dollar, token or latency budget is enforced (undeclared, not zero); the only judgment is the ablation",
+  "source": "owner metric metric-hand-off-a-goal; owner cases evaluation/components/hand_off_a_goal/cases.json (the 3 assignee cases, labels from the backend audit tests, the same for both arms); fire rate and cost count only the calls tagged hand-off-a-goal.assignee"
+ },
+ {
+  "id": "JMS-HOD",
+  "spec_id": "hand-off-a-goal.doability",
+  "owner_metric": "metric-hand-off-a-goal",
+  "keep": {
+   "component": "hand_off_a_goal",
+   "impl": "model_judge_fast"
+  },
+  "ablation": {
+   "component": "hand_off_a_goal",
+   "impl": "creator_keeps_it",
+   "what": "the call is dropped: no goal is handed to an AI representative"
+  },
+  "case_kinds": [
+   "doability"
+  ],
+  "budget": {
+   "cost_usd_per_turn": null,
+   "seconds_per_call": null,
+   "tokens": null
+  },
+  "budget_source": "none declared: the metric record states the bound in words only, so no dollar, token or latency budget is enforced (undeclared, not zero); the only judgment is the ablation",
+  "source": "owner metric metric-hand-off-a-goal; owner cases evaluation/components/hand_off_a_goal/cases.json (the 9 doability cases, labels from tests and the prompt's own example, the same for both arms); fire rate and cost count only the calls tagged hand-off-a-goal.doability"
+ },
+ {
+  "id": "JMS-DRV",
+  "spec_id": "draft-a-metric.value",
+  "owner_metric": "metric-draft-a-metric",
+  "keep": {
+   "component": "draft_a_metric",
+   "impl": "capped_model_draft_fast"
+  },
+  "ablation": {
+   "component": "draft_a_metric",
+   "impl": "ask_owner",
+   "what": "the call is dropped: no draft is made and the owner is asked for the value"
+  },
+  "case_kinds": [
+   "*"
+  ],
+  "budget": {
+   "cost_usd_per_turn": null,
+   "seconds_per_call": null,
+   "tokens": null
+  },
+  "budget_source": "none declared: the metric record states the bound in words only, so no dollar, token or latency budget is enforced (undeclared, not zero); the only judgment is the ablation; the cap of one call per task is enforced by the owner scorer (over_cap)",
+  "source": "owner metric metric-draft-a-metric; owner cases evaluation/components/draft_a_metric/cases.json (all 4 cases, 2 with enough evidence and 2 thin, the same for both arms); the module caps the turn at one model call (metric_draft.MAX_MODEL_CALLS), checked by the owner scorer; the tier is the caller's, measured here on the fast tier"
+ },
+ {
+  "id": "JMS-LCM",
+  "spec_id": "label-context-cards.metadata",
+  "owner_metric": "metric-label-context-cards",
+  "keep": {
+   "component": "label_context_cards",
+   "impl": "fast_model_labels_fast"
+  },
+  "ablation": {
+   "component": "label_context_cards",
+   "impl": "path_rules",
+   "what": "the call is downgraded to rules: title and keywords from the card's own sources"
+  },
+  "case_kinds": [
+   "retrieve"
+  ],
+  "budget": {
+   "cost_usd_per_turn": null,
+   "seconds_per_call": null,
+   "tokens": null
+  },
+  "budget_source": "none declared: the metric record states the bound in words only, so no dollar, token or latency budget is enforced (undeclared, not zero); the only judgment is the ablation",
+  "source": "owner metric metric-label-context-cards; owner cases evaluation/components/label_context_cards/cases.json (the 3 retrieval cases from the card_quality world, the same for both arms); fire rate and cost count only the calls tagged label-context-cards.metadata"
+ },
+ {
+  "id": "JMS-LCP",
+  "spec_id": "label-context-cards.categorize-files",
+  "owner_metric": "metric-label-context-cards",
+  "keep": {
+   "component": "label_context_cards",
+   "impl": "fast_model_labels_fast"
+  },
+  "ablation": {
+   "component": "label_context_cards",
+   "impl": "path_rules",
+   "what": "the call is downgraded to rules: a file goes to the card holding a file in its folder or sharing a word stem"
+  },
+  "case_kinds": [
+   "place"
+  ],
+  "budget": {
+   "cost_usd_per_turn": null,
+   "seconds_per_call": null,
+   "tokens": null
+  },
+  "budget_source": "none declared: the metric record states the bound in words only, so no dollar, token or latency budget is enforced (undeclared, not zero); the only judgment is the ablation",
+  "source": "owner metric metric-label-context-cards; owner case evaluation/components/label_context_cards/cases.json (the one placement case from tests/test_context_card_update.py, the same for both arms), measured through a host generate adapter because the shipped wiring places nothing with a real provider; fire rate and cost count only the calls tagged label-context-cards.categorize-files"
  }
 ]
