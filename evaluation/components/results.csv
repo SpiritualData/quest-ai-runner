@@ -2687,3 +2687,14 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,hand_off_a_goal,model_judge,12,6,6/12,0/0,12,12258,2431,0.0035,35.1,148e560,11f278b8,claude-code-subscription,,,
 2026-10-28,draft_a_metric,capped_model_draft,4,4,4/4,0/0,4,6120,2563,0.0022,19.8,148e560,f1c1dec2,claude-code-subscription,,,
 2026-10-28,label_context_cards,fast_model_labels,4,3,3/4,0/0,4,3443,529,0.001,10.0,148e560,418162fd,claude-code-subscription,,,
+2026-10-28,narrate_a_turn,model_beat,13,6,6/13,0/0,19,19634,2239,0.0256,58.2,ec840dc,df729105,claude-haiku,,,0.4821
+2026-10-28,narrate_a_turn,no_beat,13,2,2/13,0/0,0,0,0,0.0,0.0,ec840dc,df729105,grader-only,,,0.4077
+2026-10-28,explain_an_answer,model_explanation,10,4,4/10,0/0,20,35176,6771,0.0897,81.6,d6777cc,fa037f3a,claude-haiku,,,0.427
+2026-10-28,explain_an_answer,model_explanation,10,2,2/10,0/0,20,35956,6834,0.0899,79.1,148e560,3da3842d,claude-haiku,,,0.2907
+2026-10-28,explain_an_answer,trace_template,10,8,8/10,0/0,10,10018,735,0.0474,30.4,148e560,3da3842d,grader-only,,,0.7982
+2026-10-28,describe_an_attachment,vision_description,10,10,10/10,0/0,20,18908,4117,0.0058,50.3,63fb0e2,e57ae993,claude-haiku,,,0.9226
+2026-10-28,describe_an_attachment,skip_images,10,2,2/10,0/0,10,7307,1105,0.002,25.0,63fb0e2,e57ae993,claude-haiku,,,0.4018
+2026-10-28,explain_an_answer,model_explanation,10,8,8/10,0/0,19,35985,5259,0.0685,68.8,c3b15f6,3da3842d,claude-haiku,,,0.7334
+2026-10-28,explain_an_answer,trace_template,10,8,8/10,0/0,10,11148,1159,0.0561,27.9,c3b15f6,3da3842d,grader-only,,,0.799
+2026-10-28,explain_an_answer,model_explanation,10,8,8/10,0/0,20,37675,4973,0.0762,68.5,b2c4aa6,0fadbfec,claude-haiku,,,0.7313
+2026-10-28,explain_an_answer,trace_template,10,8,8/10,0/0,10,11148,1192,0.0131,32.8,b2c4aa6,0fadbfec,grader-only,,,0.8063

@@ -1,0 +1,271 @@
+{
+ "calls": [
+  {
+   "cost_usd": 0.00013921000000000002,
+   "critical_path": true,
+   "seconds": 3.54613231800613,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2303,
+   "tokens_out": 232,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.0069900000000000006,
+   "critical_path": true,
+   "seconds": 2.791136405998259,
+   "spec_id": "eval.judge",
+   "tokens_in": 1401,
+   "tokens_out": 139,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.00018020000000000015,
+   "critical_path": true,
+   "seconds": 4.017287722002948,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2302,
+   "tokens_out": 314,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.007663999999999999,
+   "critical_path": true,
+   "seconds": 3.2416534799995134,
+   "spec_id": "eval.judge",
+   "tokens_in": 1402,
+   "tokens_out": 206,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.0001824800000000005,
+   "critical_path": true,
+   "seconds": 4.205286314012483,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2280,
+   "tokens_out": 319,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.005672000000000002,
+   "critical_path": true,
+   "seconds": 1.9996635940042324,
+   "spec_id": "eval.judge",
+   "tokens_in": 1374,
+   "tokens_out": 18,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.00019747999999999988,
+   "critical_path": true,
+   "seconds": 3.874445608991664,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2330,
+   "tokens_out": 348,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.006124000000000001,
+   "critical_path": true,
+   "seconds": 2.3418626569909975,
+   "spec_id": "eval.judge",
+   "tokens_in": 1487,
+   "tokens_out": 18,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.0002115999999999993,
+   "critical_path": true,
+   "seconds": 4.420671999003389,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2292,
+   "tokens_out": 377,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.007166000000000002,
+   "critical_path": true,
+   "seconds": 2.5374122060020454,
+   "spec_id": "eval.judge",
+   "tokens_in": 1470,
+   "tokens_out": 129,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.00019514000000000337,
+   "critical_path": true,
+   "seconds": 4.084397596001509,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2296,
+   "tokens_out": 344,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.0057960000000000025,
+   "critical_path": true,
+   "seconds": 2.2738140750007005,
+   "spec_id": "eval.judge",
+   "tokens_in": 1405,
+   "tokens_out": 18,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.0001411499999999996,
+   "critical_path": true,
+   "seconds": 3.293432587001007,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2297,
+   "tokens_out": 236,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.0065759999999999985,
+   "critical_path": true,
+   "seconds": 2.684441652992973,
+   "spec_id": "eval.judge",
+   "tokens_in": 1315,
+   "tokens_out": 132,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.00017095000000000304,
+   "critical_path": true,
+   "seconds": 3.28457840399642,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2327,
+   "tokens_out": 295,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.007486,
+   "critical_path": true,
+   "seconds": 3.1144511250022333,
+   "spec_id": "eval.judge",
+   "tokens_in": 1410,
+   "tokens_out": 185,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.0002360000000000001,
+   "critical_path": true,
+   "seconds": 4.140234663005685,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2282,
+   "tokens_out": 426,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.009008000000000002,
+   "critical_path": true,
+   "seconds": 3.6210878520068945,
+   "spec_id": "eval.judge",
+   "tokens_in": 1488,
+   "tokens_out": 306,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.00023497999999999575,
+   "critical_path": true,
+   "seconds": 4.223658168994007,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2530,
+   "tokens_out": 419,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.011852000000000001,
+   "critical_path": true,
+   "seconds": 4.843925884997589,
+   "spec_id": "eval.judge",
+   "tokens_in": 1684,
+   "tokens_out": 512,
+   "turn": 10
+  }
+ ],
+ "cases_sha": "0fadbfec",
+ "component": "explain_an_answer",
+ "defaulted_tags": 0,
+ "git_sha": "b2c4aa6",
+ "impl": "model_explanation",
+ "label": "eval-trace",
+ "summary": {
+  "accuracy": 0.8,
+  "balanced": 0.7313,
+  "cases": 10,
+  "cli_reported_cost_usd": 0.0762,
+  "component": "explain_an_answer",
+  "cost_per_case": 0.00762,
+  "dev": "8/10",
+  "heldout": "0/0",
+  "impl": "model_explanation",
+  "model": "claude-haiku",
+  "model_calls": 20,
+  "passed": 8,
+  "sample": "",
+  "seconds": 68.5,
+  "seconds_per_case": 6.85,
+  "tokens_in": 37675,
+  "tokens_out": 4973
+ },
+ "turns": [
+  {
+   "calls": 2,
+   "id": "EXA-01",
+   "kind": "read_and_act",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "EXA-02",
+   "kind": "read",
+   "ok": false
+  },
+  {
+   "calls": 2,
+   "id": "EXA-03",
+   "kind": "failed_action",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "EXA-04",
+   "kind": "claim_not_backed",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "EXA-05",
+   "kind": "web",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "EXA-06",
+   "kind": "nothing_ran",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "EXA-07",
+   "kind": "context_only",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "EXA-08",
+   "kind": "verified",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "EXA-09",
+   "kind": "deep_not_met",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "EXA-10",
+   "kind": "metric_facts",
+   "ok": false
+  }
+ ]
+}

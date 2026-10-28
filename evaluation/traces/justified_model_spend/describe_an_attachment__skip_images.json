@@ -1,0 +1,181 @@
+{
+ "calls": [
+  {
+   "cost_usd": 0.0001841,
+   "critical_path": true,
+   "seconds": 2.865557544006151,
+   "spec_id": "eval.answer",
+   "tokens_in": 724,
+   "tokens_out": 79,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.00018089999999999998,
+   "critical_path": true,
+   "seconds": 2.303635975011275,
+   "spec_id": "eval.answer",
+   "tokens_in": 733,
+   "tokens_out": 69,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.00018619999999999997,
+   "critical_path": true,
+   "seconds": 2.545334760012338,
+   "spec_id": "eval.answer",
+   "tokens_in": 732,
+   "tokens_out": 80,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.00017750000000000003,
+   "critical_path": true,
+   "seconds": 2.3184788200014737,
+   "spec_id": "eval.answer",
+   "tokens_in": 721,
+   "tokens_out": 67,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.00018190000000000003,
+   "critical_path": true,
+   "seconds": 2.6308351369953016,
+   "spec_id": "eval.answer",
+   "tokens_in": 733,
+   "tokens_out": 71,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.00019090000000000003,
+   "critical_path": true,
+   "seconds": 1.8061891079996713,
+   "spec_id": "eval.answer",
+   "tokens_in": 733,
+   "tokens_out": 89,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.00018709999999999994,
+   "critical_path": true,
+   "seconds": 2.014104567002505,
+   "spec_id": "eval.answer",
+   "tokens_in": 724,
+   "tokens_out": 85,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.00018620000000000008,
+   "critical_path": true,
+   "seconds": 2.268460576000507,
+   "spec_id": "eval.answer",
+   "tokens_in": 722,
+   "tokens_out": 84,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.00024069999999999994,
+   "critical_path": true,
+   "seconds": 3.0078760780015728,
+   "spec_id": "eval.answer",
+   "tokens_in": 757,
+   "tokens_out": 179,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.00029640000000000005,
+   "critical_path": true,
+   "seconds": 3.128954062995035,
+   "spec_id": "eval.answer",
+   "tokens_in": 728,
+   "tokens_out": 302,
+   "turn": 10
+  }
+ ],
+ "cases_sha": "e57ae993",
+ "component": "describe_an_attachment",
+ "defaulted_tags": 0,
+ "git_sha": "63fb0e2",
+ "impl": "skip_images",
+ "label": "eval-trace",
+ "summary": {
+  "accuracy": 0.2,
+  "balanced": 0.4018,
+  "cases": 10,
+  "cli_reported_cost_usd": 0.002,
+  "component": "describe_an_attachment",
+  "cost_per_case": 0.0002,
+  "dev": "2/10",
+  "heldout": "0/0",
+  "impl": "skip_images",
+  "model": "claude-haiku",
+  "model_calls": 10,
+  "passed": 2,
+  "sample": "",
+  "seconds": 25.0,
+  "seconds_per_case": 2.5,
+  "tokens_in": 7307,
+  "tokens_out": 1105
+ },
+ "turns": [
+  {
+   "calls": 1,
+   "id": "DAI-01",
+   "kind": "needs_image",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAI-02",
+   "kind": "needs_image",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAI-03",
+   "kind": "needs_image",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAI-04",
+   "kind": "needs_image",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAI-05",
+   "kind": "needs_image",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAI-06",
+   "kind": "needs_image",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAI-07",
+   "kind": "needs_image",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAI-08",
+   "kind": "needs_image",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAI-09",
+   "kind": "control",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "DAI-10",
+   "kind": "control",
+   "ok": true
+  }
+ ]
+}

@@ -1,0 +1,280 @@
+{
+ "calls": [
+  {
+   "cost_usd": 3.358e-05,
+   "critical_path": true,
+   "seconds": 3.1215926519944333,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1040,
+   "tokens_out": 46,
+   "turn": 1
+  },
+  {
+   "cost_usd": 3.571000000000001e-05,
+   "critical_path": true,
+   "seconds": 1.6263885219959775,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1053,
+   "tokens_out": 50,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.003764,
+   "critical_path": true,
+   "seconds": 2.536551083991071,
+   "spec_id": "eval.judge",
+   "tokens_in": 892,
+   "tokens_out": 20,
+   "turn": 2
+  },
+  {
+   "cost_usd": 2.5040000000000045e-05,
+   "critical_path": true,
+   "seconds": 2.466803835995961,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1036,
+   "tokens_out": 29,
+   "turn": 3
+  },
+  {
+   "cost_usd": 8.352000000000012e-05,
+   "critical_path": true,
+   "seconds": 3.3478886329976376,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1034,
+   "tokens_out": 146,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.0035919999999999997,
+   "critical_path": true,
+   "seconds": 2.2041962779912865,
+   "spec_id": "eval.judge",
+   "tokens_in": 849,
+   "tokens_out": 20,
+   "turn": 4
+  },
+  {
+   "cost_usd": 2.7000000000000114e-05,
+   "critical_path": true,
+   "seconds": 4.139963773995987,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1032,
+   "tokens_out": 33,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.0036119999999999998,
+   "critical_path": true,
+   "seconds": 2.8771565470087808,
+   "spec_id": "eval.judge",
+   "tokens_in": 854,
+   "tokens_out": 20,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.00012794999999999994,
+   "critical_path": true,
+   "seconds": 3.483486326003913,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1027,
+   "tokens_out": 235,
+   "turn": 6
+  },
+  {
+   "cost_usd": 2.6919999999999722e-05,
+   "critical_path": true,
+   "seconds": 2.25809014699189,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1024,
+   "tokens_out": 33,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.00358,
+   "critical_path": true,
+   "seconds": 1.9863360149902292,
+   "spec_id": "eval.judge",
+   "tokens_in": 846,
+   "tokens_out": 20,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.00016736000000000008,
+   "critical_path": true,
+   "seconds": 3.6257578340009786,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1018,
+   "tokens_out": 314,
+   "turn": 8
+  },
+  {
+   "cost_usd": 3.194999999999934e-05,
+   "critical_path": true,
+   "seconds": 2.4546525459882105,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1027,
+   "tokens_out": 43,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.005412000000000002,
+   "critical_path": true,
+   "seconds": 3.213641717011342,
+   "spec_id": "eval.judge",
+   "tokens_in": 859,
+   "tokens_out": 198,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.00014188000000000048,
+   "critical_path": true,
+   "seconds": 6.079227797003114,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 2052,
+   "tokens_out": 242,
+   "turn": 10
+  },
+  {
+   "cost_usd": 2.388000000000043e-05,
+   "critical_path": true,
+   "seconds": 2.2652260689937975,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1020,
+   "tokens_out": 27,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.00021639999999999854,
+   "critical_path": true,
+   "seconds": 3.577324960002443,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1072,
+   "tokens_out": 411,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.00012237999999999832,
+   "critical_path": true,
+   "seconds": 2.8679067100019893,
+   "spec_id": "narrate-a-turn.first-beat",
+   "tokens_in": 1070,
+   "tokens_out": 223,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.004602000000000002,
+   "critical_path": true,
+   "seconds": 3.0096734770049807,
+   "spec_id": "eval.judge",
+   "tokens_in": 829,
+   "tokens_out": 129,
+   "turn": 13
+  }
+ ],
+ "cases_sha": "df729105",
+ "component": "narrate_a_turn",
+ "defaulted_tags": 0,
+ "git_sha": "ec840dc",
+ "impl": "model_beat",
+ "label": "eval-trace",
+ "summary": {
+  "accuracy": 0.4615,
+  "balanced": 0.4821,
+  "cases": 13,
+  "cli_reported_cost_usd": 0.0256,
+  "component": "narrate_a_turn",
+  "cost_per_case": 0.001969,
+  "dev": "6/13",
+  "heldout": "0/0",
+  "impl": "model_beat",
+  "model": "claude-haiku",
+  "model_calls": 19,
+  "passed": 6,
+  "sample": "",
+  "seconds": 58.2,
+  "seconds_per_case": 4.48,
+  "tokens_in": 19634,
+  "tokens_out": 2239
+ },
+ "turns": [
+  {
+   "calls": 1,
+   "id": "NAT-01",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 2,
+   "id": "NAT-02",
+   "kind": "specific",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "NAT-03",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 2,
+   "id": "NAT-04",
+   "kind": "specific",
+   "ok": true
+  },
+  {
+   "calls": 2,
+   "id": "NAT-05",
+   "kind": "specific",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "NAT-06",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 2,
+   "id": "NAT-07",
+   "kind": "specific",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "NAT-08",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 2,
+   "id": "NAT-09",
+   "kind": "specific",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "NAT-10",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "NAT-11",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "NAT-12",
+   "kind": "repeat",
+   "ok": false
+  },
+  {
+   "calls": 2,
+   "id": "NAT-13",
+   "kind": "repeat",
+   "ok": true
+  }
+ ]
+}

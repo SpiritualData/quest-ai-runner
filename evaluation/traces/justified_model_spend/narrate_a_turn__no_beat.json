@@ -1,0 +1,108 @@
+{
+ "calls": [],
+ "cases_sha": "df729105",
+ "component": "narrate_a_turn",
+ "defaulted_tags": 0,
+ "git_sha": "ec840dc",
+ "impl": "no_beat",
+ "label": "eval-trace",
+ "summary": {
+  "accuracy": 0.1538,
+  "balanced": 0.4077,
+  "cases": 13,
+  "cli_reported_cost_usd": 0.0,
+  "component": "narrate_a_turn",
+  "cost_per_case": 0.0,
+  "dev": "2/13",
+  "heldout": "0/0",
+  "impl": "no_beat",
+  "model": "grader-only",
+  "model_calls": 0,
+  "passed": 2,
+  "sample": "",
+  "seconds": 0.0,
+  "seconds_per_case": 0.0,
+  "tokens_in": 0,
+  "tokens_out": 0
+ },
+ "turns": [
+  {
+   "calls": 0,
+   "id": "NAT-01",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-02",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-03",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-04",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-05",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-06",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-07",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-08",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-09",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-10",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-11",
+   "kind": "specific",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "NAT-12",
+   "kind": "repeat",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "NAT-13",
+   "kind": "repeat",
+   "ok": true
+  }
+ ]
+}
