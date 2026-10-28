@@ -1,0 +1,50 @@
+{
+ "calls": [],
+ "cases_sha": "418162fd",
+ "component": "label_context_cards",
+ "defaulted_tags": 0,
+ "git_sha": "ec840dc",
+ "impl": "path_rules",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 4,
+  "cli_reported_cost_usd": 0.0,
+  "component": "label_context_cards",
+  "dev": "2/4",
+  "heldout": "0/0",
+  "impl": "path_rules",
+  "model": null,
+  "model_calls": 0,
+  "passed": 2,
+  "sample": "",
+  "seconds": 0.0,
+  "tokens_in": 0,
+  "tokens_out": 0
+ },
+ "turns": [
+  {
+   "calls": 0,
+   "id": "LCC-RET-01",
+   "kind": "retrieve",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "LCC-RET-02",
+   "kind": "retrieve",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "LCC-RET-03",
+   "kind": "retrieve",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "LCC-PLC-01",
+   "kind": "place",
+   "ok": true
+  }
+ ]
+}

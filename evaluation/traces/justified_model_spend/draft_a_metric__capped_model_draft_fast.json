@@ -1,0 +1,87 @@
+{
+ "calls": [
+  {
+   "cost_usd": 9.190000000000001e-05,
+   "critical_path": true,
+   "seconds": 2.8564633979985956,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 519,
+   "tokens_out": 100,
+   "turn": 1
+  },
+  {
+   "cost_usd": 7.790000000000001e-05,
+   "critical_path": true,
+   "seconds": 0.9703394359967206,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 439,
+   "tokens_out": 85,
+   "turn": 2
+  },
+  {
+   "cost_usd": 9.39e-05,
+   "critical_path": true,
+   "seconds": 1.085009510992677,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 403,
+   "tokens_out": 134,
+   "turn": 3
+  },
+  {
+   "cost_usd": 8.99e-05,
+   "critical_path": true,
+   "seconds": 1.1008261059905635,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 403,
+   "tokens_out": 124,
+   "turn": 4
+  }
+ ],
+ "cases_sha": "f1c1dec2",
+ "component": "draft_a_metric",
+ "defaulted_tags": 0,
+ "git_sha": "ec840dc",
+ "impl": "capped_model_draft_fast",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 4,
+  "cli_reported_cost_usd": 0.0,
+  "component": "draft_a_metric",
+  "dev": "2/4",
+  "heldout": "0/0",
+  "impl": "capped_model_draft_fast",
+  "model": "gemini-3.1-flash-lite",
+  "model_calls": 4,
+  "passed": 2,
+  "sample": "",
+  "seconds": 6.0,
+  "tokens_in": 1764,
+  "tokens_out": 443
+ },
+ "turns": [
+  {
+   "calls": 1,
+   "id": "DAM-01",
+   "kind": "propose",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAM-02",
+   "kind": "propose",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "DAM-03",
+   "kind": "thin",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "DAM-04",
+   "kind": "thin",
+   "ok": true
+  }
+ ]
+}

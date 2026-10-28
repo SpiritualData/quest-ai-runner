@@ -1,0 +1,207 @@
+{
+ "calls": [
+  {
+   "cost_usd": 4.51e-05,
+   "critical_path": true,
+   "seconds": 3.0064165420044446,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 319,
+   "tokens_out": 33,
+   "turn": 1
+  },
+  {
+   "cost_usd": 4.6200000000000005e-05,
+   "critical_path": true,
+   "seconds": 0.9305738900002325,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 318,
+   "tokens_out": 36,
+   "turn": 2
+  },
+  {
+   "cost_usd": 4.5900000000000004e-05,
+   "critical_path": true,
+   "seconds": 0.8179305410012603,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 319,
+   "tokens_out": 35,
+   "turn": 3
+  },
+  {
+   "cost_usd": 4.51e-05,
+   "critical_path": true,
+   "seconds": 0.970128062996082,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 319,
+   "tokens_out": 33,
+   "turn": 4
+  },
+  {
+   "cost_usd": 4.5400000000000006e-05,
+   "critical_path": true,
+   "seconds": 0.8645074939995538,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 322,
+   "tokens_out": 33,
+   "turn": 5
+  },
+  {
+   "cost_usd": 4.53e-05,
+   "critical_path": true,
+   "seconds": 0.837432564003393,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 321,
+   "tokens_out": 33,
+   "turn": 6
+  },
+  {
+   "cost_usd": 4.71e-05,
+   "critical_path": true,
+   "seconds": 0.5610513590072514,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 319,
+   "tokens_out": 38,
+   "turn": 7
+  },
+  {
+   "cost_usd": 5e-05,
+   "critical_path": true,
+   "seconds": 0.7898544679919723,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 332,
+   "tokens_out": 42,
+   "turn": 8
+  },
+  {
+   "cost_usd": 4.380000000000001e-05,
+   "critical_path": true,
+   "seconds": 0.700424706999911,
+   "spec_id": "hand-off-a-goal.doability",
+   "tokens_in": 322,
+   "tokens_out": 29,
+   "turn": 9
+  },
+  {
+   "cost_usd": 5.3200000000000006e-05,
+   "critical_path": true,
+   "seconds": 0.6827984350093175,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 372,
+   "tokens_out": 40,
+   "turn": 10
+  },
+  {
+   "cost_usd": 5.4099999999999994e-05,
+   "critical_path": true,
+   "seconds": 0.9012653139943723,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 369,
+   "tokens_out": 43,
+   "turn": 11
+  },
+  {
+   "cost_usd": 5.3700000000000004e-05,
+   "critical_path": true,
+   "seconds": 0.723970097998972,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 369,
+   "tokens_out": 42,
+   "turn": 12
+  }
+ ],
+ "cases_sha": "11f278b8",
+ "component": "hand_off_a_goal",
+ "defaulted_tags": 0,
+ "git_sha": "ec840dc",
+ "impl": "model_judge_fast",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 12,
+  "cli_reported_cost_usd": 0.0,
+  "component": "hand_off_a_goal",
+  "dev": "6/12",
+  "heldout": "0/0",
+  "impl": "model_judge_fast",
+  "model": "gemini-3.1-flash-lite",
+  "model_calls": 12,
+  "passed": 6,
+  "sample": "",
+  "seconds": 11.8,
+  "tokens_in": 4001,
+  "tokens_out": 437
+ },
+ "turns": [
+  {
+   "calls": 1,
+   "id": "HOG-DO-01",
+   "kind": "doability",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "HOG-DO-02",
+   "kind": "doability",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-DO-03",
+   "kind": "doability",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-DO-04",
+   "kind": "doability",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "HOG-DO-05",
+   "kind": "doability",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "HOG-DO-06",
+   "kind": "doability",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-DO-07",
+   "kind": "doability",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-DO-08",
+   "kind": "doability",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "HOG-DO-09",
+   "kind": "doability",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-01",
+   "kind": "assignee",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-02",
+   "kind": "assignee",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-03",
+   "kind": "assignee",
+   "ok": false
+  }
+ ]
+}

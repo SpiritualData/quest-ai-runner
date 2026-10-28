@@ -1,0 +1,50 @@
+{
+ "calls": [],
+ "cases_sha": "f1c1dec2",
+ "component": "draft_a_metric",
+ "defaulted_tags": 0,
+ "git_sha": "cded75e",
+ "impl": "ask_owner",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 4,
+  "cli_reported_cost_usd": 0.0,
+  "component": "draft_a_metric",
+  "dev": "2/4",
+  "heldout": "0/0",
+  "impl": "ask_owner",
+  "model": null,
+  "model_calls": 0,
+  "passed": 2,
+  "sample": "",
+  "seconds": 0.0,
+  "tokens_in": 0,
+  "tokens_out": 0
+ },
+ "turns": [
+  {
+   "calls": 0,
+   "id": "DAM-01",
+   "kind": "propose",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "DAM-02",
+   "kind": "propose",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "DAM-03",
+   "kind": "thin",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "DAM-04",
+   "kind": "thin",
+   "ok": true
+  }
+ ]
+}
