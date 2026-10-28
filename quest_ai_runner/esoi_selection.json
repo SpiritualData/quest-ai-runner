@@ -1,4 +1,29 @@
 {
+ "act-as-the-body": {
+  "default": "card_and_reads",
+  "modules": {
+   "card_and_reads": "quest_ai_runner.runner.quest_folder_index"
+  }
+ },
+ "act-in-the-world": {
+  "default": "coding_agent_prompt_reach",
+  "modules": {
+   "coding_agent_prompt_reach": "quest_ai_runner.core.tools",
+   "coding_agent_reach_judge": "quest_ai_runner.core.reach_judge"
+  }
+ },
+ "admit-to-the-mind": {
+  "default": "recency_window",
+  "modules": {
+   "recency_window": "quest_ai_runner.core.planner_context"
+  }
+ },
+ "assist-a-terminal-session": {
+  "default": "fast_model_helpers",
+  "modules": {
+   "fast_model_helpers": "quest_ai_runner.cli_config"
+  }
+ },
  "cache-cards": {
   "default": "file",
   "modules": {
@@ -37,16 +62,34 @@
    "runtime_settings": "quest_ai_runner.core.runtime_settings"
   }
  },
+ "describe-an-attachment": {
+  "default": "vision_description",
+  "modules": {
+   "vision_description": "quest_ai_runner.core.attachments"
+  }
+ },
  "detect-a-stalled-run": {
   "default": "live_reviewer",
   "modules": {
    "goal_runner": "quest_ai_runner.core.goal_runner"
   }
  },
+ "draft-a-metric": {
+  "default": "capped_model_draft",
+  "modules": {
+   "capped_model_draft": "quest_ai_runner.runner.metric_draft"
+  }
+ },
  "escalate-to-a-human": {
   "default": "quest_decision",
   "modules": {
    "quest_decision": "quest_ai_runner.runner.quest_client"
+  }
+ },
+ "explain-an-answer": {
+  "default": "model_explanation",
+  "modules": {
+   "model_explanation": "quest_ai_runner.core.orchestrator_judges"
   }
  },
  "expose-the-public-api": {
@@ -84,7 +127,7 @@
   }
  },
  "ground-in-intent": {
-  "default": "none",
+  "default": "frame-line",
   "modules": {
    "frame-card-drilldown": "quest_ai_runner.runner.quest_client_intents",
    "frame-lazy-spec": "quest_ai_runner.core.tools_quest_intents",
@@ -96,6 +139,18 @@
   "default": "universal",
   "modules": {
    "universal": "quest_ai_runner.core.guidance_provider"
+  }
+ },
+ "hand-off-a-goal": {
+  "default": "model_judge",
+  "modules": {
+   "model_judge": "quest_ai_runner.runner.goal_handoff"
+  }
+ },
+ "hold-the-long-view": {
+  "default": "separate_stores",
+  "modules": {
+   "separate_stores": "quest_ai_runner.core.orchestrator_run_begin"
   }
  },
  "index-by-meaning": {
@@ -112,11 +167,42 @@
    "slice-only": "quest_ai_runner.core.goal_iteration"
   }
  },
+ "justify-model-calls": {
+  "default": "spec_registry",
+  "modules": {
+   "spec_registry": "quest_ai_runner.core.prompt_specs"
+  }
+ },
+ "keep-a-working-stream": {
+  "default": "rebuilt_per_step",
+  "modules": {
+   "rebuilt_full_context": "quest_ai_runner.core.orchestrator_planning",
+   "rebuilt_per_step": "quest_ai_runner.core.orchestrator_planning"
+  }
+ },
+ "know-the-world": {
+  "default": "web_with_support_check",
+  "modules": {
+   "web_with_support_check": "quest_ai_runner.adapters.web_research"
+  }
+ },
+ "label-context-cards": {
+  "default": "fast_model_labels",
+  "modules": {
+   "fast_model_labels": "quest_ai_runner.adapters.card_metadata_generator"
+  }
+ },
  "learn-by-example": {
   "default": "live_examples",
   "modules": {
    "custom_consumer": "examples.custom_consumer",
    "minimal_lane": "examples.minimal_lane"
+  }
+ },
+ "narrate-a-turn": {
+  "default": "model_beat",
+  "modules": {
+   "model_beat": "quest_ai_runner.core.orchestrator_turn"
   }
  },
  "operate-a-quest": {
@@ -222,6 +308,12 @@
    "web_search": "quest_ai_runner.adapters.web_search_adapter"
   }
  },
+ "select-a-rep": {
+  "default": "persona_resolver_precedence",
+  "modules": {
+   "persona_resolver_precedence": "quest_ai_runner.runner.personas"
+  }
+ },
  "select-an-implementation": {
   "default": "live_resolver",
   "modules": {
@@ -272,6 +364,13 @@
    "openclaw": "quest_ai_runner.adapters.openclaw_channel"
   }
  },
+ "think-critically": {
+  "default": "deep_runs_only",
+  "modules": {
+   "deep_runs_only": "quest_ai_runner.core.goal_metrics",
+   "instruction_only": "quest_ai_runner.core.standing_instructions"
+  }
+ },
  "track-usage-and-cost": {
   "default": "qar_usage",
   "modules": {
@@ -289,6 +388,7 @@
  "watch-a-run": {
   "default": "overseer",
   "modules": {
+   "no_overseer": "quest_ai_runner.core.orchestrator_types",
    "overseer": "quest_ai_runner.core.overseer"
   }
  },
