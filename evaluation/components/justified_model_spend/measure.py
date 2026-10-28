@@ -10,6 +10,7 @@ summary. The scorer reads these files only; it never runs a model.
 
 Labelled ``eval-trace``: these calls come from eval cases, not production turns."""
 import argparse
+import functools
 import importlib
 import json
 import sys
@@ -43,6 +44,7 @@ class SpendMeter(harness.CallMeter):
                 continue
 
             def make(fn):
+                @functools.wraps(fn)   # callers inspect the signature for optional keywords
                 def recorded(*args, **kwargs):
                     counters = [getattr(provider, n, 0) or 0 for n in ("tokens_in", "tokens_out", "cost_usd")]
                     started = time.monotonic()
