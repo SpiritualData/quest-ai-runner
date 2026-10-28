@@ -1,0 +1,99 @@
+[
+ {
+  "id": "JMS-ACK",
+  "spec_id": "assist-a-terminal-session.ack",
+  "owner_metric": "metric-assist-a-terminal-session",
+  "keep": {
+   "component": "assist_a_terminal_session",
+   "impl": "fast_model_helpers_live"
+  },
+  "ablation": {
+   "component": "assist_a_terminal_session",
+   "impl": "rules_only",
+   "what": "the call is dropped: the fixed Queued line"
+  },
+  "case_kinds": [
+   "ack"
+  ],
+  "budget": {
+   "cost_usd_per_turn": 0.001,
+   "seconds_per_call": 2,
+   "tokens": null
+  },
+  "budget_source": "esoi.toml [balance.assist_a_terminal_session]: a command is worth at most a tenth of a cent and two seconds; no token budget is declared, so none is enforced",
+  "source": "owner metric metric-assist-a-terminal-session; owner cases evaluation/components/assist_a_terminal_session/cases.json (live-marked ack cases)"
+ },
+ {
+  "id": "JMS-CLS",
+  "spec_id": "assist-a-terminal-session.ask-classify",
+  "owner_metric": "metric-assist-a-terminal-session",
+  "keep": {
+   "component": "assist_a_terminal_session",
+   "impl": "fast_model_helpers_live"
+  },
+  "ablation": {
+   "component": "assist_a_terminal_session",
+   "impl": "rules_only",
+   "what": "the call is downgraded to rules: classification by the shape of the text"
+  },
+  "case_kinds": [
+   "classify",
+   "gate"
+  ],
+  "budget": {
+   "cost_usd_per_turn": 0.001,
+   "seconds_per_call": 2,
+   "tokens": null
+  },
+  "budget_source": "esoi.toml [balance.assist_a_terminal_session]; no token budget is declared, so none is enforced",
+  "source": "owner metric metric-assist-a-terminal-session; owner cases evaluation/components/assist_a_terminal_session/cases.json (live-marked classify and gate cases)"
+ },
+ {
+  "id": "JMS-JDG",
+  "spec_id": "assist-a-terminal-session.goal-judge",
+  "owner_metric": "metric-assist-a-terminal-session",
+  "keep": {
+   "component": "assist_a_terminal_session",
+   "impl": "fast_model_helpers_live"
+  },
+  "ablation": {
+   "component": "assist_a_terminal_session",
+   "impl": "rules_only",
+   "what": "the call is downgraded to rules: a goal is judged only when its name opens with a drafting verb"
+  },
+  "case_kinds": [
+   "judge"
+  ],
+  "budget": {
+   "cost_usd_per_turn": 0.001,
+   "seconds_per_call": 2,
+   "tokens": null
+  },
+  "budget_source": "esoi.toml [balance.assist_a_terminal_session]; no token budget is declared, so none is enforced",
+  "source": "owner metric metric-assist-a-terminal-session; owner cases evaluation/components/assist_a_terminal_session/cases.json (the one live-marked judge case)"
+ },
+ {
+  "id": "JMS-SEL",
+  "spec_id": "spec-selection.batch-judge",
+  "owner_metric": "metric-spec-selection",
+  "keep": {
+   "component": "spec_selection",
+   "impl": "lexical_vector_gated"
+  },
+  "ablation": {
+   "component": "spec_selection",
+   "impl": "lexical_vector",
+   "what": "the call is dropped: lexical plus vector search with no model judge"
+  },
+  "case_kinds": [
+   "*"
+  ],
+  "budget": {
+   "cost_usd_per_turn": 0.005,
+   "seconds_per_call": 10,
+   "tokens": null
+  },
+  "budget_source": "esoi.toml [balance.spec_selection]: a request is worth at most half a cent and ten seconds; no token budget is declared, so none is enforced",
+  "source": "owner metric metric-spec-selection; owner cases evaluation/components/spec_selection/cases.json (the same stratified 30-case sample for both arms)"
+ }
+]

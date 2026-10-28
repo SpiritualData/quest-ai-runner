@@ -75,9 +75,9 @@
  {"id": "QME7", "kind": "structure", "area": "Parts selected by measurement",
   "args": {"rule": "structure_selection", "what": "share of measured solutions whose selected arm has a current row no rival beats"}},
  {"id": "QME8", "kind": "spend", "area": "Justified model spend",
-  "args": {"rule": "pass_rate", "what": "share of average model spend on registered prompts whose owner metric has a current row and whose call beats its ablation inside its own budget (metric-justified-model-spend; not built)",
-   "cheap": [{"arm": "justified_model_spend", "planned": true, "share": 1.0, "run": {},
-              "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on production-shaped cases"}],
-   "full": [{"arm": "justified_model_spend", "planned": true, "share": 1.0, "run": {},
-             "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on production-shaped cases"}]}}
+  "args": {"rule": "spend_share", "what": "share of average model spend on registered prompts whose owner metric has a current row and whose call beats its ablation inside its own budget (metric-justified-model-spend; 4 of 31 registered prompts measured, from eval traces)",
+   "cheap": [{"arm": "justified_model_spend/spec_registry_ablation", "share": 1.0, "run": {"cheap": "esoi run justified_model_spend --impl spec_registry_ablation --record"},
+              "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on eval traces of the owner arms"}],
+   "full": [{"arm": "justified_model_spend/spec_registry_ablation", "share": 1.0, "run": {"full": "esoi run justified_model_spend --impl spec_registry_ablation --record"},
+             "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on eval traces of the owner arms"}]}}
 ]

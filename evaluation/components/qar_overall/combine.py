@@ -149,8 +149,18 @@ def pass_per_dollar(row):
     return pass_rate(row) * (1.0 if cost <= 0 else min(1.0, budget / (cost / passed)))
 
 
+def spend_share(row):  # noqa: ARG001
+    """QME8: the share of average spend, over the measured prompts, on prompts that pass (metric-justified-model-spend). The
+    row says the arm was run and is current; the weights are the per-turn dollars of the prompt traces, which a row of
+    passed and cases cannot carry, so the share is recomputed from them by the component's own scorer."""
+    from justified_model_spend import score as spend_score
+    arm = common.load_impl("spec_registry_ablation", "justified_model_spend")(common.CallMeter())
+    return spend_score.spend_share([spend_score.score_case(arm, c) for c in common.load_cases("justified_model_spend")])
+
+
 RULES = {
     "pass_rate": ("passed cases / cases run", pass_rate),
+    "spend_share": ("average dollars per turn on prompts that pass / on all measured prompts", spend_share),
     "pass_per_dollar": ("pass rate x min(1, budget per passing turn / dollars per passing turn)", pass_per_dollar),
     "structure_coverage": ("solutions (all) whose selected arm has a current row no rival beats / all solutions", None),
     "structure_selection": ("measured solutions whose selected arm has a current row no rival beats / measured solutions", None),

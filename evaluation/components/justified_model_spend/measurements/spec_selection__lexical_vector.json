@@ -1,0 +1,210 @@
+{
+ "calls": [],
+ "cases_sha": "0a2ef76a",
+ "component": "spec_selection",
+ "defaulted_tags": 0,
+ "git_sha": "c333b03",
+ "impl": "lexical_vector",
+ "label": "eval-trace",
+ "summary": {
+  "accuracy": 0.9333,
+  "balanced": 0.9532,
+  "cases": 30,
+  "cli_reported_cost_usd": 0.0,
+  "component": "spec_selection",
+  "cost_per_case": 0.0,
+  "dev": "17/18",
+  "heldout": "11/12",
+  "impl": "lexical_vector",
+  "model": null,
+  "model_calls": 0,
+  "passed": 28,
+  "sample": "sample:30",
+  "seconds": 0.2,
+  "seconds_per_case": 0.01,
+  "tokens_in": 0,
+  "tokens_out": 0
+ },
+ "turns": [
+  {
+   "calls": 0,
+   "id": "SPS-002",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-003",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-007",
+   "kind": "direct",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-012",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-013",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-014",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-015",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-019",
+   "kind": "paraphrase",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-024",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-025",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-026",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-027",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-028",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-029",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-030",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-034",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-038",
+   "kind": "multi",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-040",
+   "kind": "multi",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "SPS-042",
+   "kind": "multi",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-043",
+   "kind": "measure",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-044",
+   "kind": "measure",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-045",
+   "kind": "measure",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-046",
+   "kind": "measure",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-047",
+   "kind": "measure",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-048",
+   "kind": "measure",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-050",
+   "kind": "solution",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-068",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-069",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-070",
+   "kind": "daily",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "SPS-072",
+   "kind": "none",
+   "ok": false
+  }
+ ]
+}
