@@ -15,6 +15,7 @@ from .adapters import (
     FilesAdapter,
 )
 from .core.adapters import ModelProvider
+from .core.prompt_specs import PromptSpec, register, render_prompt
 from .core.resolve import resolve
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import (
@@ -132,6 +133,20 @@ ASSIGNED_GOAL_JUDGE_SYSTEM = (
 )
 
 
+GOAL_JUDGE_SPEC = register(PromptSpec(
+    id="assist-a-terminal-session.goal-judge", solution="assist-a-terminal-session",
+    metric="metric-assist-a-terminal-session", tier="balanced", cache_layer="head",
+    template=ASSIGNED_GOAL_JUDGE_SYSTEM,
+    output_schema={"ai_doable": "boolean", "confidence": "number 0 to 1", "reason": "one sentence"},
+))
+
+ASK_CLASSIFY_SPEC = register(PromptSpec(
+    id="assist-a-terminal-session.ask-classify", solution="assist-a-terminal-session",
+    metric="metric-assist-a-terminal-session", tier="balanced", cache_layer="head",
+    template=ASK_CLASSIFY_SYSTEM,
+))
+
+
 def _quest_model():
     """(provider, model) for the balanced tier, or (None, None) when no model is configured. Never raises."""
     try:
@@ -160,7 +175,7 @@ def _goal_judge(quest_id: str, client):
                              "criteria": (goal.get("criteria") or "")[:400]}, ensure_ascii=False)
         try:
             raw = provider.answer([{"role": "user", "content": prompt}], model=model,
-                                  system=ASSIGNED_GOAL_JUDGE_SYSTEM)
+                                  system=render_prompt("assist-a-terminal-session.goal-judge"))
             return json.loads(_extract_json(raw))
         except Exception as e:  # noqa: BLE001 -- one bad answer leaves that goal with its owner
             log.warning("goal %s not judged: %s", goal.get("id"), e)
@@ -198,7 +213,8 @@ def _ask_classifier(quest_id: str, client):
         prompt = json.dumps({"note": ask.get("text", ""), "author": ask.get("author", ""),
                              "members": members}, ensure_ascii=False)
         try:
-            raw = provider.answer([{"role": "user", "content": prompt}], model=model, system=ASK_CLASSIFY_SYSTEM)
+            raw = provider.answer([{"role": "user", "content": prompt}], model=model,
+                                  system=render_prompt("assist-a-terminal-session.ask-classify"))
             return json.loads(_extract_json(raw))
         except Exception as e:  # noqa: BLE001 -- one bad answer leaves that ask unclassified
             log.warning("ask %s not classified: %s", ask_key_of(ask), e)

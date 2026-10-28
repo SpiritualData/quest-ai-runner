@@ -15,6 +15,7 @@ import re
 from typing import Any, Dict, List, Mapping, Optional
 
 from ..core.adapters_model import STEP_SUMMARIZE, plan_with_step
+from ..core.prompt_specs import PromptSpec, register, render_prompt
 from ..core.tools import ToolContext
 from ..core.tools_metric_values import get_metric_card_spec, propose_metric_value_spec
 
@@ -70,16 +71,20 @@ def card_block(card: Mapping[str, Any]) -> str:
     return json.dumps({k: card.get(k) for k in keep if card.get(k) not in (None, [], {})}, ensure_ascii=False, default=str)[:CONTEXT_CHARS]
 
 
-def draft_prompt(task_text: str, card: Mapping[str, Any], context_view: str) -> str:
-    return (
+DRAFT_SPEC = register(PromptSpec(
+    id="draft-a-metric.value", solution="draft-a-metric", metric="metric-draft-a-metric",
+    tier="caller", cache_layer="none", inputs=("task_text", "card", "context"),
+    output_schema=DRAFT_TOOL,
+    template=(
         "You draft one value for a person's metric from their quest's own data. You have no tools and no way to look anything else up.\n\n"
-        f"The task: {task_text}\n\n"
-        f"The metric card (what the metric is, and what changed since the last update):\n{card_block(card)}\n\n"
-        f"The quest context:\n{(context_view or '')[:CONTEXT_CHARS]}\n\n"
+        "The task: {task_text}\n\n"
+        "The metric card (what the metric is, and what changed since the last update):\n{card}\n\n"
+        "The quest context:\n{context}\n\n"
         "Rules: use only evidence that is in the card or the quest context above. Give a value for every question, within its scale, keyed by the "
         "question's name. The card's purpose says what the metric ensures and its disadvantages say what it cannot see: do not claim more than it "
         "can show, and name in could_not_see anything its disadvantages warn about that the data leaves open. Cite the specific things each value rests on. If the data does not support a value, set propose to false and say why "
-        "in one sentence: a missing value is better than an invented one. Never write a value as if it were recorded: the person confirms it.")
+        "in one sentence: a missing value is better than an invented one. Never write a value as if it were recorded: the person confirms it."),
+))
 
 
 def parse_draft(raw: Any) -> Optional[Dict[str, Any]]:
@@ -137,5 +142,6 @@ class MetricDraft:
         if self.model_calls >= MAX_MODEL_CALLS:
             return None
         self.model_calls += 1
-        return plan_with_step(self.provider, draft_prompt(task_text, card, context_view), step=STEP_SUMMARIZE, model=self.model,
+        return plan_with_step(self.provider, render_prompt("draft-a-metric.value", task_text=task_text, card=card_block(card),
+                                                           context=(context_view or "")[:CONTEXT_CHARS]), step=STEP_SUMMARIZE, model=self.model,
                               tool_schema=DRAFT_TOOL)

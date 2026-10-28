@@ -14,6 +14,24 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProvider
+from ..core.prompt_specs import PromptSpec, register, render_prompt
+
+register(PromptSpec(
+    id="label-context-cards.metadata", solution="label-context-cards",
+    metric="metric-label-context-cards", tier="fast", cache_layer="none", inputs=("sources",),
+    output_schema={"title": "string", "description": "string", "keywords": "list of strings"},
+    template="""Given these knowledge sources that belong together in one card, generate metadata:
+
+SOURCES:
+{sources}
+
+Generate a JSON response with:
+- title: 1-3 words describing the unified topic (e.g., "JWT Authentication", "Error Handling")
+- description: 1-2 sentences summarizing what this card covers and its purpose
+- keywords: list of 4-8 key topics for discovery (e.g., ["jwt", "authentication", "security", "api"])
+
+Return ONLY valid JSON, no other text.""",
+))
 
 
 class CardMetadataGenerator:
@@ -49,17 +67,7 @@ class CardMetadataGenerator:
         # Summarize all sources for the LLM
         source_summaries = self._summarize_sources(card.get("sources", []))
 
-        prompt = f"""Given these knowledge sources that belong together in one card, generate metadata:
-
-SOURCES:
-{source_summaries}
-
-Generate a JSON response with:
-- title: 1-3 words describing the unified topic (e.g., "JWT Authentication", "Error Handling")
-- description: 1-2 sentences summarizing what this card covers and its purpose
-- keywords: list of 4-8 key topics for discovery (e.g., ["jwt", "authentication", "security", "api"])
-
-Return ONLY valid JSON, no other text."""
+        prompt = render_prompt("label-context-cards.metadata", sources=source_summaries)
 
         try:
             response = self.model_provider.answer(

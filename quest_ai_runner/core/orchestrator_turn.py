@@ -10,6 +10,8 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 
+from .prompt_specs import PromptSpec, register, render_prompt
+
 from .adapters import (
     EVENT_PARTIAL,
     EVENT_STATUS,
@@ -375,7 +377,7 @@ class Narrator:
             )
         if self._said:
             user += "What you've already said out loud this turn:\n" + "\n".join(self._said) + "\n\n"
-        user += f"What just happened: {moment}\n\nIn one short first-person sentence, say what you are about to do or what you noticed (or reply with an empty string if nothing fresh is worth saying)."
+        user = render_prompt("narrate-a-turn.first-beat", context=user, moment=moment)
         msgs.append({"role": "user", "content": user})
         line = answer_with_reasoning(self._provider, msgs, model=self._model, step=STEP_NARRATION)
         # A provider swallows a model error (or a refusal) and hands back a stand-in apology string,
@@ -517,3 +519,13 @@ class Narrator:
                 "on", "at", "is", "it", "this", "that", "let", "me", "now", "so", "what",
                 "into", "look", "looking", "check", "checking", "see", "want"}
         return frozenset(w for w in words if w not in stop)
+
+
+# The narrator's per-beat instruction (the system voice is ``Narrator.DEFAULT_SYSTEM``).
+NARRATE_BEAT_SPEC = register(PromptSpec(
+    id="narrate-a-turn.first-beat", solution="narrate-a-turn", metric="metric-narrate-a-turn",
+    tier="caller", cache_layer="tail", inputs=("context", "moment"),
+    template=("{context}What just happened: {moment}\n\nIn one short first-person sentence, say "
+              "what you are about to do or what you noticed (or reply with an empty string if "
+              "nothing fresh is worth saying)."),
+))

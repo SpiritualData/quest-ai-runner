@@ -14,6 +14,29 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..core.prompt_specs import PromptSpec, register, render_prompt
+
+register(PromptSpec(
+    id="label-context-cards.categorize-files", solution="label-context-cards",
+    metric="metric-label-context-cards", tier="fast", cache_layer="none",
+    inputs=("card_summaries", "file_list"), writes_text=False,
+    template="""You have a list of files that were modified during code execution.
+Your task is to categorize each file into one of the context cards below based on semantic relevance.
+
+Context cards (the execution was scoped to these topics):
+{card_summaries}
+
+Modified files:
+{file_list}
+
+For each file, respond with ONLY the card_id it belongs in, one per line.
+If a file doesn't clearly belong to any card, respond with "NONE".
+Format: <file_path> -> <card_id>
+
+Keep responses terse and accurate.
+""",
+))
+
 log = logging.getLogger(__name__)
 
 
@@ -321,21 +344,11 @@ def categorize_files_with_llm(
         summary = card.get("summary", "")
         card_summaries.append(f"- {card_id}: {title}\n  {summary}")
 
-    prompt = f"""You have a list of files that were modified during code execution.
-Your task is to categorize each file into one of the context cards below based on semantic relevance.
-
-Context cards (the execution was scoped to these topics):
-{chr(10).join(card_summaries)}
-
-Modified files:
-{chr(10).join(f"- {fp}" for fp in file_paths)}
-
-For each file, respond with ONLY the card_id it belongs in, one per line.
-If a file doesn't clearly belong to any card, respond with "NONE".
-Format: <file_path> -> <card_id>
-
-Keep responses terse and accurate.
-"""
+    prompt = render_prompt(
+        "label-context-cards.categorize-files",
+        card_summaries="\n".join(card_summaries),
+        file_list="\n".join(f"- {fp}" for fp in file_paths),
+    )
 
     try:
         result = model_provider.generate(

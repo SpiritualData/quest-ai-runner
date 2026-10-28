@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Optional
 
 from .adapters import ModelProvider
 from .model_registry import is_vision_capable
+from .prompt_specs import PromptSpec, register, render_prompt
 
 log = logging.getLogger("quest-ai-runner.attachments")
 
@@ -65,6 +66,12 @@ DESCRIBE_PROMPT = (
     "beyond what is visible and do not add commentary. Write plain prose and short lists only. "
     "Do not use em dashes."
 )
+
+DESCRIBE_IMAGE_SPEC = register(PromptSpec(
+    id="describe-an-attachment.image", solution="describe-an-attachment",
+    metric="metric-describe-an-attachment", tier="caller", cache_layer="none",
+    template=DESCRIBE_PROMPT,
+))
 
 # MIME types (and prefixes) whose bytes are plain text we can decode directly. Anything matching
 # is read as UTF-8 (errors replaced). Everything text-ish (code, csv, json, xml, yaml, html, …)
@@ -294,7 +301,7 @@ def _describe_image(item: Dict[str, Any], vision_provider: ModelProvider,
     block = _native_image_block(item)
     messages = [{
         "role": "user",
-        "content": [block, {"type": "text", "text": DESCRIBE_PROMPT}],
+        "content": [block, {"type": "text", "text": render_prompt("describe-an-attachment.image")}],
     }]
     try:
         desc = vision_provider.answer(messages, model=vision_model)

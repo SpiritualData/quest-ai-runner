@@ -11,6 +11,7 @@ from datetime import date
 
 from .config import ConfigFileError, load_quest_client
 from .cli_context import select_card_ids_for_text
+from .core.prompt_specs import PromptSpec, register, render_prompt
 from .cli_config import _ask_classifier, _goal_judge, _model_provider_from_env
 
 
@@ -236,12 +237,7 @@ def _cmd_send(args, log) -> int:
         provider = _model_provider_from_env()
         from .core.model_registry import ModelRegistry
         ack_model = ModelRegistry(provider).resolve_tier("fast")
-        ack_prompt = (
-            "Write ONE sentence (max 20 words) that restates the following "
-            "request in your own words and says you are looking into it. "
-            "Do NOT use em dashes (--). Be natural and brief.\n\n"
-            f"Request: {args.text[:300]}"
-        )
+        ack_prompt = render_prompt("assist-a-terminal-session.ack", request=args.text[:300])
         ack = provider.answer([{"role": "user", "content": ack_prompt}], model=ack_model)
         if ack and ack.strip():
             print(ack.strip())
@@ -251,6 +247,15 @@ def _cmd_send(args, log) -> int:
     task_id = task.get("id") or task.get("task_id") or "?"
     print(f"Queued: {args.text[:80]}  ({task_id})")
     return 0
+
+
+ACK_SPEC = register(PromptSpec(
+    id="assist-a-terminal-session.ack", solution="assist-a-terminal-session",
+    metric="metric-assist-a-terminal-session", tier="fast", cache_layer="none", inputs=("request",),
+    template=("Write ONE sentence (max 20 words) that restates the following request in your own "
+              "words and says you are looking into it. Do NOT use em dashes (--). Be natural and "
+              "brief.\n\nRequest: {request}"),
+))
 
 
 def _cmd_reconcile_plan(args, log) -> int:

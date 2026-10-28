@@ -17,6 +17,8 @@ import logging
 import re
 from typing import Any, Callable, Dict, List, Optional
 
+from ..core.prompt_specs import PromptSpec, register, render_prompt
+
 log = logging.getLogger("quest-ai-runner.goal_handoff")
 
 MAX_HANDOFF_JUDGMENTS_PER_PASS = 5
@@ -70,6 +72,25 @@ Also answer false when the goal is too vague to tell what finished looks like. I
 doable, answer false.
 
 Answer with one JSON object only: {{"ai_can_do": true|false, "reason": "<one short sentence, no em dashes>"}}"""
+
+ASSIGNEE_SPEC = register(PromptSpec(
+    id="hand-off-a-goal.assignee", solution="hand-off-a-goal", metric="metric-hand-off-a-goal",
+    tier="fast", cache_layer="none", template=ASSIGNEE_PROMPT,
+    inputs=("outcome", "current_state", "preferences", "title", "description", "members"),
+    output_schema={"assignee": "member id or null", "ai_can_do": "boolean"},
+))
+
+DOABILITY_SPEC = register(PromptSpec(
+    id="hand-off-a-goal.doability", solution="hand-off-a-goal", metric="metric-hand-off-a-goal",
+    tier="fast", cache_layer="none", template=DOABILITY_PROMPT,
+    inputs=("outcome", "current_state", "preferences", "title", "description"),
+    output_schema={"ai_can_do": "boolean", "reason": "one short sentence"},
+))
+
+
+def ask_judge(judge: Callable[[str], str], spec_id: str, **values: Any) -> str:
+    """Render the registered prompt ``spec_id`` with ``values`` and put it to ``judge``."""
+    return judge(render_prompt(spec_id, **values))
 
 
 def make_judge(provider: Any, tier: str = "fast") -> Optional[Callable[[str], str]]:
@@ -168,10 +189,10 @@ def choose_assignee(judge: Optional[Callable[[str], str]], members: List[Dict[st
         return fallback
     try:
         listing = "\n".join(member_line(m) for m in human_members(members))
-        verdict = _parse(judge(ASSIGNEE_PROMPT.format(
+        verdict = _parse(ask_judge(judge, "hand-off-a-goal.assignee",
             outcome=outcome or "(none)", current_state=current_state or "(none)",
             preferences=preferences or "(none)", title=title,
-            description=description or "(none)", members=listing)))
+            description=description or "(none)", members=listing))
     except Exception:  # noqa: BLE001 -- a judge failure must not fail the pass
         log.info("goal_handoff: assignee judge failed", exc_info=True)
         return fallback
@@ -223,10 +244,10 @@ def run_goal_handoff(client: Any, judge: Optional[Callable[[str], str]], goals_p
             if not rep_id:
                 continue
             try:
-                verdict = _parse(judge(DOABILITY_PROMPT.format(
+                verdict = _parse(ask_judge(judge, "hand-off-a-goal.doability",
                     outcome=outcome or "(none)", current_state=current_state or "(none)",
                     preferences=preferences or "(none)", title=g.get("name") or "",
-                    description=g.get("description") or "(none)")))
+                    description=g.get("description") or "(none)"))
                 # An unreadable verdict is recorded as "me" (the person keeps the goal, the
                 # conservative answer) so the goal is not judged again on every pass.
                 handling = "rep" if (verdict or {}).get("ai_can_do") is True else "me"

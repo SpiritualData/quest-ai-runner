@@ -54,6 +54,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from .prompt_specs import PromptSpec, register
 from .metric_results import SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, SOURCES, format_value
 
 log = logging.getLogger(__name__)
@@ -196,6 +197,13 @@ HARD RULES:
   simple factual reply.
 - Never use an em dash. Split the sentence, or use a comma, colon, or parentheses.{metric_rule}
 {language}"""
+
+EXPLAIN_SPEC = register(PromptSpec(
+    id="explain-an-answer.how-i-got-this", solution="explain-an-answer",
+    metric="metric-explain-an-answer", tier="fast", cache_layer="tail",
+    inputs=("user_message", "goal_condition", "answer", "record", "metric_rule", "language"),
+    template=EXPLAIN_PROMPT, output_schema=EXPLAIN_TOOL,
+))
 
 # Added to the hard rules only for a turn that has metric results (``metric_rule``); a turn without any
 # gets the prompt it always got. The values are facts the reader sees from the record, so the prose must

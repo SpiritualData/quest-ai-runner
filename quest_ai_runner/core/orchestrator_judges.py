@@ -45,6 +45,7 @@ from .adapters import (
 from .card_filter import _extract_json
 from .planner_context import _is_discovery_obs, _render_gathered
 from .prompt_layers import compose_layers, language_instruction
+from .prompt_specs import render_prompt
 from .quest_judge import select_quest
 from .orchestrator_decisions import (
     VERIFY_WEB_EVIDENCE_MAX_CHARS,
@@ -421,7 +422,8 @@ class JudgesMixin:
         Never raises.
         """
         record = render_record_for_prompt(trace)
-        prompt = EXPLAIN_PROMPT.format(
+        prompt = render_prompt(
+            "explain-an-answer.how-i-got-this",
             user_message=(trace.user_message or "")[:2000],
             goal_condition=(trace.goal_condition or trace.user_message or "")[:1000],
             answer=(trace.answer or "")[:4000],
