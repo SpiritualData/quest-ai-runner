@@ -1,0 +1,72 @@
+[
+ {
+  "id": "RT-01",
+  "area": "edit",
+  "goal": "Update docs/notes.md so the status reads active",
+  "brief": "the status line is stale",
+  "source": "tests/test_fast_edit_runner.py test_whole_file_rewrite_applies: this goal and brief, the SHORT_DOC fixture, and its assertion that the paused status becomes active",
+  "workspace": {
+   "files": {
+    "docs/notes.md": "# Project notes\n\nStatus: paused pending review.\n\nOwner: the platform team.\n"
+   }
+  },
+  "work_check": {
+   "kind": "regex",
+   "path": "docs/notes.md",
+   "pattern": "^Status: active\\b",
+   "absent": [
+    "paused"
+   ]
+  }
+ },
+ {
+  "id": "RT-02",
+  "area": "edit",
+  "goal": "make the retry backoff in app.py exponential",
+  "brief": "",
+  "source": "tests/test_fast_edit_runner.py test_search_replace_applies and the near-miss test: this goal, the LONG_CODE fixture (499 filler comment lines, then retry), and the assertion that the wait becomes 2 ** i",
+  "workspace": {
+   "files": {
+    "app.py": {
+     "numbered_lines": {
+      "template": "# filler line {i}",
+      "count": 499
+     },
+     "text": "def retry(attempts):\n    for i in range(attempts):\n        wait = 1\n        sleep(wait)\n"
+    }
+   }
+  },
+  "work_check": {
+   "kind": "regex",
+   "path": "app.py",
+   "pattern": "wait\\s*=\\s*2\\s*\\*\\*\\s*i"
+  }
+ },
+ {
+  "id": "RT-03",
+  "area": "spec",
+  "goal": "make the greeting function greet a person by name in the standard form",
+  "brief": "",
+  "source": "tests/test_goal_metrics_flow.py GREETING and its repo fixture (esoi.scaffold.init of a demo package, whose records carry the greet-a-person solution and its greeting-pass-rate metric): the task shape that has a specification slice",
+  "workspace": {
+   "scaffold": "demo_pkg"
+  },
+  "work_check": null
+ },
+ {
+  "id": "RT-04",
+  "area": "decline",
+  "goal": "update docs/notes.md if anything is stale",
+  "brief": "",
+  "source": "tests/test_fast_edit_runner.py test_no_edit_sentinel_declines: this goal on the SHORT_DOC fixture, and its assertion that the file stays as it was",
+  "workspace": {
+   "files": {
+    "docs/notes.md": "# Project notes\n\nStatus: paused pending review.\n\nOwner: the platform team.\n"
+   }
+  },
+  "work_check": {
+   "kind": "unchanged",
+   "path": "docs/notes.md"
+  }
+ }
+]

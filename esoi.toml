@@ -13,7 +13,7 @@ plugins = ["scripts/esoi_rules.py"]
 code_paths = ["quest_ai_runner", "evaluation/components", ":(exclude,glob)**/*.md"]
 # Estimated list price in dollars per million tokens of the cheapest tier a live arm pins,, so a run that reports tokens and no
 # dollars is still priced.
-prices = { "gemini-3.1-flash-lite" = { input = 0.10, output = 0.40 } }
+prices = { "gemini-3.1-flash-lite" = { input = 0.10, output = 0.40 }, "claude-code-subscription" = { input = 0.0, output = 0.0 } }
 
 
 [rules.S13]
@@ -41,6 +41,13 @@ seconds_per_case = 10
 weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
 cost_per_case_usd = 0.001
 seconds_per_case = 2
+
+# The task replay (metric-iterate-by-spec): a replayed task goes through a real deep run on the Claude Code subscription, so it costs no API
+# dollars (its price is declared as zero); the wait a person gives a delegated task is minutes, so a task is worth three minutes.
+[balance.task_replay]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.05
+seconds_per_case = 180
 
 # The combined QAR metric (metric-qar-overall, the authoritative metric of QS1; evaluation/components/qar_overall). Keyed by
 # the metric id, not a component name, because the harness reads [balance.<component>] as an accuracy/cost/time balance.
