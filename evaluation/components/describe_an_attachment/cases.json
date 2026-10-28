@@ -1,0 +1,358 @@
+[
+ {
+  "id": "DAI-01",
+  "kind": "needs_image",
+  "stratum": "needs_image",
+  "filename": "dai-01.png",
+  "image": {
+   "rows": [
+    [
+     "Date",
+     "Km",
+     "Effort",
+     "Notes"
+    ],
+    [
+     "Aug 8",
+     "8.2",
+     "4",
+     "Easy aerobic run"
+    ],
+    [
+     "Aug 9",
+     "6.0",
+     "5",
+     "Left knee pain at km 6"
+    ],
+    [
+     "Aug 12",
+     "12.5",
+     "3",
+     "Long run in the park"
+    ],
+    [
+     "Aug 17",
+     "10.0",
+     "5",
+     "10K time trial 54:10"
+    ],
+    [
+     "Aug 20",
+     "5.0",
+     "2",
+     "Recovery jog"
+    ]
+   ]
+  },
+  "question": "How many km was the longest run in the attached picture?",
+  "expect_any": [
+   "12\\.5"
+  ],
+  "source": "chat_quality/world_spec.py journal_run entries (distances, efforts, notes), rendered as a table; the labelled answer is the largest distance_km, 12.5; the date labels are the rendering's own (the seeded entries carry day offsets), and the label is by construction"
+ },
+ {
+  "id": "DAI-02",
+  "kind": "needs_image",
+  "stratum": "needs_image",
+  "filename": "dai-02.png",
+  "image": {
+   "rows": [
+    [
+     "Section",
+     "Words",
+     "Minutes"
+    ],
+    [
+     "Sampling",
+     "600",
+     "90"
+    ],
+    [
+     "Instruments",
+     "450",
+     "75"
+    ],
+    [
+     "Participants",
+     "300",
+     "60"
+    ],
+    [
+     "Instruments",
+     "520",
+     "100"
+    ]
+   ]
+  },
+  "question": "Add up the words written in all the sessions shown in the picture. What is the total?",
+  "expect_any": [
+   "1,?870"
+  ],
+  "source": "chat_quality/world_spec.py writing_log entries (600, 450, 300, 520 words), rendered as a table; the label is their sum, 1870"
+ },
+ {
+  "id": "DAI-03",
+  "kind": "needs_image",
+  "stratum": "needs_image",
+  "filename": "dai-03.png",
+  "image": {
+   "rows": [
+    [
+     "Task",
+     "Owner",
+     "Status",
+     "Cost USD"
+    ],
+    [
+     "Demolition",
+     "Sam",
+     "done",
+     "150"
+    ],
+    [
+     "Plumber: move the drain",
+     "Sam",
+     "blocked",
+     "450"
+    ],
+    [
+     "Buy tiles: matte green",
+     "Mia",
+     "todo",
+     "380"
+    ],
+    [
+     "Buy paint",
+     "Sam",
+     "todo",
+     "90"
+    ]
+   ]
+  },
+  "question": "In the attached screenshot, who owns the tile task and what does it cost?",
+  "expect_any": [
+   "(?s)Mia.*380|380.*Mia"
+  ],
+  "source": "chat_quality/world_spec.py home_tasks entries, rendered as a table; the label is the Buy tiles owner (Mia) and cost_usd (380)"
+ },
+ {
+  "id": "DAI-04",
+  "kind": "needs_image",
+  "stratum": "needs_image",
+  "filename": "dai-04.png",
+  "image": {
+   "rows": [
+    [
+     "Task",
+     "Owner",
+     "Status",
+     "Cost USD"
+    ],
+    [
+     "Demolition",
+     "Sam",
+     "done",
+     "150"
+    ],
+    [
+     "Plumber: move the drain",
+     "Sam",
+     "blocked",
+     "450"
+    ],
+    [
+     "Buy tiles: matte green",
+     "Mia",
+     "todo",
+     "380"
+    ],
+    [
+     "Buy paint",
+     "Sam",
+     "todo",
+     "90"
+    ]
+   ]
+  },
+  "question": "Which task in the picture is blocked?",
+  "expect_any": [
+   "plumber|drain"
+  ],
+  "source": "chat_quality/world_spec.py home_tasks entries, rendered as a table; the label is the one entry with status blocked"
+ },
+ {
+  "id": "DAI-05",
+  "kind": "needs_image",
+  "stratum": "needs_image",
+  "filename": "dai-05.png",
+  "image": {
+   "rows": [
+    [
+     "Title",
+     "Year",
+     "Verdict"
+    ],
+    [
+     "Power analysis in multi-site studies",
+     "2021",
+     "supports"
+    ],
+    [
+     "Instrument validity under translation",
+     "2022",
+     "neutral"
+    ],
+    [
+     "Site heterogeneity and effect size drift",
+     "2023",
+     "contradicts"
+    ]
+   ]
+  },
+  "question": "Which paper in the attached image has the verdict that contradicts my chapter?",
+  "expect_any": [
+   "heterogeneity"
+  ],
+  "source": "chat_quality/world_spec.py reading_log entries, rendered as a table; the label is the entry with verdict contradicts"
+ },
+ {
+  "id": "DAI-06",
+  "kind": "needs_image",
+  "stratum": "needs_image",
+  "filename": "dai-06.png",
+  "image": {
+   "title": "Run Log distance (km)",
+   "bars": [
+    [
+     "Aug 8",
+     8.2
+    ],
+    [
+     "Aug 9",
+     6.0
+    ],
+    [
+     "Aug 12",
+     12.5
+    ],
+    [
+     "Aug 17",
+     10.0
+    ],
+    [
+     "Aug 20",
+     5.0
+    ]
+   ]
+  },
+  "question": "In the chart I attached, which date has the tallest bar and what value is on it?",
+  "expect_any": [
+   "(?s)Aug(?:ust)?\\s*12.*12\\.5|12\\.5.*Aug(?:ust)?\\s*12"
+  ],
+  "source": "chat_quality/world_spec.py journal_run distances, rendered as a labelled bar chart; the label is the largest bar, Aug 12 at 12.5; the date labels are the rendering's own (the seeded entries carry day offsets), and the label is by construction"
+ },
+ {
+  "id": "DAI-07",
+  "kind": "needs_image",
+  "stratum": "needs_image",
+  "filename": "dai-07.png",
+  "image": {
+   "lines": [
+    "Current state",
+    "The wax shipment slipped to 28 Oct,",
+    "so the soft launch is now 3 Nov.",
+    "Budget cap: 2,000 USD"
+   ]
+  },
+  "question": "What budget cap does the attached screenshot state?",
+  "expect_any": [
+   "2,?000"
+  ],
+  "source": "chat_quality/datasets/explicit.json EXP-009: the message's own facts, rendered as text in an image; the label is the budget cap, 2,000 USD"
+ },
+ {
+  "id": "DAI-08",
+  "kind": "needs_image",
+  "stratum": "needs_image",
+  "filename": "dai-08.png",
+  "image": {
+   "lines": [
+    "Reminder",
+    "14 Oct, morning",
+    "Confirm the plumber is coming"
+   ]
+  },
+  "question": "What date is the reminder in the picture for?",
+  "expect_any": [
+   "14\\s*Oct|Oct(?:ober)?\\s*14"
+  ],
+  "source": "chat_quality/datasets/explicit.json EXP-046: the message's own facts, rendered as text in an image; the label is the date, 14 Oct"
+ },
+ {
+  "id": "DAI-09",
+  "kind": "control",
+  "stratum": "control",
+  "filename": "dai-09.png",
+  "image": {
+   "rows": [
+    [
+     "Date",
+     "Km",
+     "Effort",
+     "Notes"
+    ],
+    [
+     "Aug 8",
+     "8.2",
+     "4",
+     "Easy aerobic run"
+    ],
+    [
+     "Aug 9",
+     "6.0",
+     "5",
+     "Left knee pain at km 6"
+    ],
+    [
+     "Aug 12",
+     "12.5",
+     "3",
+     "Long run in the park"
+    ],
+    [
+     "Aug 17",
+     "10.0",
+     "5",
+     "10K time trial 54:10"
+    ],
+    [
+     "Aug 20",
+     "5.0",
+     "2",
+     "Recovery jog"
+    ]
+   ]
+  },
+  "question": "I attached a picture of my Run Log, but all I need is a conversion: my longest run in it was 12.5 km. Roughly how many miles is that?",
+  "expect_any": [
+   "7\\.[6-9]"
+  ],
+  "source": "control: the message holds the figure, so the image changes no verdict; the label is 12.5 km in miles (7.77), the arithmetic of the message itself"
+ },
+ {
+  "id": "DAI-10",
+  "kind": "control",
+  "stratum": "control",
+  "filename": "dai-10.png",
+  "image": {
+   "lines": [
+    "Bathroom Tasks"
+   ]
+  },
+  "question": "I attached a screenshot. Reply with the single word OK.",
+  "expect_any": [
+   "\\bOK\\b"
+  ],
+  "source": "control: the instruction needs nothing from the image, so the image changes no verdict"
+ }
+]

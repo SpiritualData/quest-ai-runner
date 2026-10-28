@@ -1,0 +1,292 @@
+[
+ {
+  "id": "EXA-01",
+  "kind": "read_and_act",
+  "stratum": "read_and_act",
+  "trace": {
+   "kind": "deep",
+   "user_message": "Tidy the notes",
+   "goal_condition": "Notes are tidy",
+   "answer": "Tidied the notes.",
+   "steps": 2,
+   "exit_reason": "deep_met",
+   "gathered": [
+    {
+     "kind": "read",
+     "rel_path": "notes.md",
+     "locator": "head"
+    }
+   ],
+   "actions": [
+    {
+     "goal": "tidy the notes",
+     "succeeded": true,
+     "failed": false
+    }
+   ],
+   "cards": [
+    {
+     "title": "Notes card",
+     "adapter": "files"
+    }
+   ],
+   "sources": [
+    {
+     "label": "Corpus files",
+     "adapter": "files",
+     "item_count": 3
+    }
+   ]
+  },
+  "required": [
+   "the notes file was read",
+   "the notes were tidied (the action succeeded)"
+  ],
+  "source": "tests/test_answer_explanation.py notes_trace (test_the_version_is_3_and_a_turn_without_metrics_keeps_its_version_2_shape): the trace, message, goal and answer are the test's own"
+ },
+ {
+  "id": "EXA-02",
+  "kind": "read",
+  "stratum": "read",
+  "trace": {
+   "kind": "answer",
+   "user_message": "what does the readme say about metrics",
+   "answer": "Metrics are counted weekly.",
+   "steps": 2,
+   "gathered": [
+    {
+     "kind": "read",
+     "rel_path": "README.md",
+     "locator": "head"
+    }
+   ]
+  },
+  "required": [
+   "the README was read"
+  ],
+  "source": "tests/test_answer_explanation.py test_explanation_is_emitted_after_the_result_and_before_done: the message, the one file read and its content are the test's own; the answer restates the file's content"
+ },
+ {
+  "id": "EXA-03",
+  "kind": "failed_action",
+  "stratum": "failed_action",
+  "trace": {
+   "kind": "answer",
+   "user_message": "Send the email",
+   "answer": "Tried.",
+   "steps": 2,
+   "actions": [
+    {
+     "goal": "send the email",
+     "succeeded": false,
+     "failed": true,
+     "error": "smtp refused"
+    }
+   ]
+  },
+  "required": [
+   "sending the email failed (smtp refused), so it was not sent"
+  ],
+  "source": "tests/test_answer_explanation.py test_record_block_reports_a_failed_action_as_failed: the action and error are the test's; the message is the action's goal as a request",
+  "forbidden": [
+   "\\b(?:was|has been|got) sent\\b",
+   "successfully (?:sent|delivered)"
+  ]
+ },
+ {
+  "id": "EXA-04",
+  "kind": "claim_not_backed",
+  "stratum": "claim_not_backed",
+  "trace": {
+   "kind": "answer",
+   "user_message": "Save the note",
+   "answer": "Saved it.",
+   "steps": 2,
+   "goal_verdict": {
+    "met": false,
+    "reason": "no save recorded",
+    "claims_unexecuted": true
+   }
+  },
+  "required": [
+   "no save is recorded, so the answer's claim that it saved is not backed"
+  ],
+  "source": "tests/test_answer_explanation.py test_record_block_flags_a_claim_the_record_does_not_back: the answer, verdict and reason are the test's; the message is the answer's act as a request"
+ },
+ {
+  "id": "EXA-05",
+  "kind": "web",
+  "stratum": "web",
+  "trace": {
+   "kind": "answer",
+   "user_message": "current rates",
+   "answer": "Yes.",
+   "steps": 1,
+   "gathered": [
+    {
+     "kind": "query",
+     "rel_path": "web_search:current rates"
+    }
+   ]
+  },
+  "required": [
+   "the web was searched for current rates"
+  ],
+  "source": "tests/test_answer_explanation.py test_a_web_search_turn_is_eligible: the search query is the test's; the message is that query"
+ },
+ {
+  "id": "EXA-06",
+  "kind": "nothing_ran",
+  "stratum": "nothing_ran",
+  "trace": {
+   "kind": "answer",
+   "user_message": "",
+   "answer": "Yes.",
+   "steps": 3
+  },
+  "required": [
+   "nothing was read, searched or run: the answer came from what was already known"
+  ],
+  "source": "tests/test_answer_explanation.py test_a_multi_step_turn_is_eligible: the trace is the test's (three planning steps, nothing gathered); the prompt names this the case where a model is most tempted to invent a process",
+  "forbidden": [
+   "\\b(?:searched|looked up|read|checked|opened|consulted) (?:the |your |a |some )?(?:web|document|file|notes|readme|sources?|records?)\\b"
+  ]
+ },
+ {
+  "id": "EXA-07",
+  "kind": "context_only",
+  "stratum": "context_only",
+  "trace": {
+   "kind": "answer",
+   "user_message": "",
+   "answer": "Yes.",
+   "steps": 1,
+   "cards": [
+    {
+     "title": "Metrics card",
+     "adapter": "files"
+    }
+   ]
+  },
+  "required": [
+   "background context titled Metrics card was available while answering"
+  ],
+  "source": "tests/test_answer_explanation.py test_a_turn_that_answered_on_assembled_context_is_eligible: the trace is the test's",
+  "forbidden": [
+   "\\bsaved\\b",
+   "\\bsent\\b"
+  ]
+ },
+ {
+  "id": "EXA-08",
+  "kind": "verified",
+  "stratum": "verified",
+  "trace": {
+   "kind": "answer",
+   "user_message": "",
+   "answer": "Yes.",
+   "steps": 2,
+   "exit_reason": "verified",
+   "goal_verdict": {
+    "met": true,
+    "reason": "the document says so"
+   },
+   "gathered": [
+    {
+     "kind": "read",
+     "rel_path": "README.md"
+    }
+   ]
+  },
+  "required": [
+   "the README was read",
+   "the answer was checked against what was asked and met it, because the document says so"
+  ],
+  "source": "tests/test_answer_explanation.py test_payload_signals_carry_the_real_verdict: the trace is the test's"
+ },
+ {
+  "id": "EXA-09",
+  "kind": "deep_not_met",
+  "stratum": "deep_not_met",
+  "trace": {
+   "kind": "deep",
+   "user_message": "",
+   "answer": "Done.",
+   "steps": 1,
+   "exit_reason": "deep_not_met"
+  },
+  "required": [
+   "the deep work's own check found the goal not met"
+  ],
+  "source": "tests/test_answer_explanation.py test_a_deep_turn_carries_its_own_verifier_outcome: the trace is the test's (exit deep_not_met)",
+  "forbidden": [
+   "\\b(?:fully|completely|successfully) (?:done|complete|completed|finished)\\b"
+  ]
+ },
+ {
+  "id": "EXA-10",
+  "kind": "metric_facts",
+  "stratum": "metric_facts",
+  "trace": {
+   "kind": "deep",
+   "user_message": "Improve the greeting",
+   "goal_condition": "Greetings by name",
+   "answer": "Done.",
+   "steps": 1,
+   "exit_reason": "deep_met",
+   "metrics": [
+    {
+     "solution_id": "greet-a-person",
+     "metric_id": "greeting-pass-rate",
+     "name": "Greeting pass rate",
+     "milestone": "Share of sample names greeted in the standard form",
+     "before": 0.5,
+     "after": 0.75,
+     "delta": 0.25,
+     "source": "measured",
+     "reason": "measured by offline_arm",
+     "disagrees": false
+    },
+    {
+     "solution_id": "greet-a-person",
+     "metric_id": "greeting-pass-rate",
+     "name": "Greeting pass rate",
+     "milestone": "Share of sample names greeted in the standard form",
+     "before": 0.5,
+     "after": 0.9,
+     "delta": 0.4,
+     "source": "recorded",
+     "reason": "",
+     "disagrees": true
+    },
+    {
+     "solution_id": "",
+     "metric_id": "",
+     "name": "",
+     "milestone": "",
+     "before": null,
+     "after": null,
+     "delta": null,
+     "source": "not_applicable",
+     "reason": "Only a draft was edited.",
+     "disagrees": false
+    }
+   ]
+  },
+  "required": [
+   "a metric result was kept by the runner for this change and is shown separately",
+   "no figure for it is restated"
+  ],
+  "source": "tests/test_answer_explanation.py test_the_payload_carries_the_metrics_of_a_scripted_result: the result, its three metric entries and the message are the test's; the prompt forbids stating their figures",
+  "forbidden_figures": [
+   "0.5",
+   "0.75",
+   "0.9",
+   "0.25",
+   "0.4",
+   "50%",
+   "75%",
+   "90%"
+  ]
+ }
+]

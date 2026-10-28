@@ -1,0 +1,163 @@
+[
+ {
+  "id": "NAT-01",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "Add a goal to this quest for this week: two swim sessions of at least 30 minutes each as knee-safe cross-training.",
+  "names": [
+   "swim",
+   "cross-training",
+   "goal",
+   "knee"
+  ],
+  "source": "chat_quality dataset explicit case EXP-001: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-02",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "Update my current state: the wax shipment slipped to 28 Oct, so the soft launch is now 3 Nov. The budget cap is still 2,000 USD.",
+  "names": [
+   "current state",
+   "wax",
+   "shipment",
+   "launch",
+   "budget"
+  ],
+  "source": "chat_quality dataset explicit case EXP-009: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-03",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "Log a ride in my Run Log: 22 km, effort 2, notes: easy cycling, knee fine.",
+  "names": [
+   "ride",
+   "run log",
+   "cycling",
+   "22 km"
+  ],
+  "source": "chat_quality dataset explicit case EXP-018: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-04",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "Looking at my Writing Sessions, how many more sessions to reach 6,000 words at my average session size?",
+  "names": [
+   "writing",
+   "session",
+   "words"
+  ],
+  "source": "chat_quality dataset explicit case EXP-032: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-05",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "What does the History toggle under an outcome's progress bar show in Quest, and who can change the percentage?",
+  "names": [
+   "history",
+   "progress",
+   "toggle",
+   "percentage"
+  ],
+  "source": "chat_quality dataset explicit case EXP-041: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-06",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "Remind me on 14 Oct in the morning to confirm the plumber is coming.",
+  "names": [
+   "remind",
+   "plumber",
+   "14 oct"
+  ],
+  "source": "chat_quality dataset explicit case EXP-046: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-07",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "Mark 'Buy paint' in Bathroom Tasks as done.",
+  "names": [
+   "buy paint",
+   "bathroom",
+   "done"
+  ],
+  "source": "chat_quality dataset explicit case EXP-024: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-08",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "I'm thinking of doing a long run on Sunday.",
+  "names": [
+   "run",
+   "sunday"
+  ],
+  "source": "chat_quality dataset implicit case IMP-001: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-09",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "Thinking of getting a better lens for the product photos, maybe 250 dollars.",
+  "names": [
+   "lens",
+   "photos",
+   "250"
+  ],
+  "source": "chat_quality dataset implicit case IMP-013: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-10",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "What should I work on in my next lesson?",
+  "names": [
+   "lesson"
+  ],
+  "source": "chat_quality dataset implicit case IMP-029: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-11",
+  "kind": "specific",
+  "stratum": "specific",
+  "message": "I've got three free hours on Saturday. What should I do with them?",
+  "names": [
+   "saturday",
+   "hours"
+  ],
+  "source": "chat_quality dataset implicit case IMP-034: the message is verbatim; the quest is from chat_quality's seeded fictional world; names are content words of the message itself, the only specifics a first beat can hold before anything is read"
+ },
+ {
+  "id": "NAT-12",
+  "kind": "repeat",
+  "stratum": "repeat",
+  "message": "what's on my plate today?",
+  "names": [
+   "plate",
+   "today"
+  ],
+  "prior_narration": [
+   "Let me look into that for you."
+  ],
+  "source": "tests/test_orchestrator.py test_narrator_prior_narration_suppresses_repeated_ack: the message and the earlier line are the test's own; the label is the test's: a generic line that repeats the earlier one must not be spoken again, so silence or a new specific line is right"
+ },
+ {
+  "id": "NAT-13",
+  "kind": "repeat",
+  "stratum": "repeat",
+  "message": "what's my next step?",
+  "names": [
+   "next step",
+   "step"
+  ],
+  "prior_narration": [
+   "Let me look into that for you."
+  ],
+  "source": "tests/test_orchestrator.py test_narrator_prior_narration_shown_in_ack_prompt: the message and the earlier line are the test's own; the same label as NAT-12"
+ }
+]

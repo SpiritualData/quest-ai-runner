@@ -49,6 +49,26 @@ weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
 cost_per_case_usd = 0.05
 seconds_per_case = 180
 
+# The three model calls with no reply-path budget of their own (metric-narrate-a-turn, metric-explain-an-answer, metric-describe-an-attachment).
+# Their metric records bound the cost by "the cost of the answer it precedes or informs"; the figure used is the 2026-10-23 spend audit's
+# average production request, $67 over 1,534 requests, about $0.044. The first beat is joined by the turn for at most 5 seconds (Narrator.flush_first).
+# The explanation is written after the answer is out and the description is awaited before the answer; no record states the wait a person gives
+# either, so 10 seconds is a declared assumption pending a decision, not a measured figure.
+[balance.narrate_a_turn]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.044
+seconds_per_case = 5
+
+[balance.explain_an_answer]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.044
+seconds_per_case = 10
+
+[balance.describe_an_attachment]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.044
+seconds_per_case = 10
+
 # The combined QAR metric (metric-qar-overall, the authoritative metric of QS1; evaluation/components/qar_overall). Keyed by
 # the metric id, not a component name, because the harness reads [balance.<component>] as an accuracy/cost/time balance.
 # Each of QS1's ideals carries a weight (summing to 1), split equally over the sub-metrics QME1 to QME8 whose ideal_ids name
