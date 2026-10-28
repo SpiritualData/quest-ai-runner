@@ -24,6 +24,7 @@ from .orchestrator_text import _card_update_store, _deep_future_context
 from .orchestrator_constants import DEFAULT_CARD_MERGE_SIMILARITY, log
 from .orchestrator_decisions import _normalize_card_edits, _proposed_card_text
 from .orchestrator_turn import _Emitter
+from .prompt_specs import render_prompt
 from .orchestrator_types import OrchestratorResult
 
 
@@ -123,7 +124,7 @@ class CardsMixin:
             }
 
             model = self.registry.resolve_tier(self.cfg.planner_tier)
-            prompt = CARD_UPDATE_PROMPT.format(
+            prompt = render_prompt("feed-context-sources.card-update", 
                 request=(request or "")[:2000],
                 executed=(executed or "")[:6000],
                 future_context=(future_context or "(none)")[:3000],

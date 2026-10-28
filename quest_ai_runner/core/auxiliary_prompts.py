@@ -10,6 +10,7 @@ that fill these templates stay in ``orchestrator.py``.
 from typing import Any, Dict
 
 from .prompt_layers import language_instruction
+from .prompt_specs import declare
 from .reader_first import READER_FIRST_STANDARD
 
 
@@ -890,3 +891,37 @@ Rules:
 === CONFIRMED HAND-OFF RECORD (what was queued) ===
 {result}
 """
+
+
+# --- prompt specs: each prompt above declared once, with the solution and metric that justify it ---
+VERIFY_GOAL_SPEC = declare(
+    "verify-goal.verdict", solution="QS1", metric="QME2", tier="balanced", cache_layer="tail",
+    template=VERIFY_GOAL_PROMPT, output_schema=VERIFY_GOAL_TOOL)
+LANDED_WORK_DENIAL_SPEC = declare(
+    "judge-a-decision.landed-work-denial", solution="judge-a-decision",
+    metric="metric-judge-a-decision", tier="caller", cache_layer="none",
+    template=LANDED_WORK_DENIAL_PROMPT, output_schema=LANDED_WORK_DENIAL_TOOL)
+INTENT_DIRECTIVE_SPEC = declare(
+    "judge-a-decision.intent-directive", solution="judge-a-decision",
+    metric="metric-judge-a-decision", tier="caller", cache_layer="none",
+    template=INTENT_DIRECTIVE_PROMPT, output_schema=INTENT_DIRECTIVE_TOOL)
+MODE_RELEASE_SPEC = declare(
+    "judge-a-decision.mode-release", solution="judge-a-decision",
+    metric="metric-judge-a-decision", tier="caller", cache_layer="none",
+    template=MODE_RELEASE_PROMPT, output_schema=MODE_RELEASE_TOOL)
+CONDENSE_DECISION_SPEC = declare(
+    "ground-in-intent.condense-decision", solution="ground-in-intent",
+    metric="metric-ground-in-intent", tier="caller", cache_layer="none",
+    template=_CONDENSE_DECISION_PROMPT)
+RESOLVE_REQUEST_SPEC = declare(
+    "ground-in-intent.resolve-request", solution="ground-in-intent",
+    metric="metric-ground-in-intent", tier="caller", cache_layer="tail",
+    template=RESOLVE_REQUEST_PROMPT)
+DERIVE_GOAL_CONDITION_SPEC = declare(
+    "ground-in-intent.derive-goal-condition", solution="ground-in-intent",
+    metric="metric-ground-in-intent", tier="fast", cache_layer="tail",
+    template=DERIVE_GOAL_CONDITION_PROMPT)
+CARD_UPDATE_SPEC = declare(
+    "feed-context-sources.card-update", solution="feed-context-sources",
+    metric="metric-feed-context-sources", tier="caller", cache_layer="tail",
+    template=CARD_UPDATE_PROMPT)

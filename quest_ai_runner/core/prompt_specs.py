@@ -29,6 +29,7 @@ Pure definitions and one registry; no model call is made here and nothing here k
 """
 from __future__ import annotations
 
+import string
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional, Tuple
 
@@ -101,6 +102,25 @@ def register(spec: PromptSpec) -> PromptSpec:
         raise ValueError(f"prompt id {spec.id!r} is already registered with a different spec")
     SPECS_BY_ID[spec.id] = spec
     return spec
+
+
+def declare(spec_id: str, *, solution: str, metric: str, tier: str, cache_layer: str,
+            template: str, output_schema: Optional[Mapping[str, Any]] = None,
+            writes_text: bool = True) -> PromptSpec:
+    """Register a spec whose ``inputs`` are read from the template's own ``{slots}``.
+
+    The usual way to declare a prompt that already exists as a ``str.format`` template: the slots
+    cannot drift from the text, and ``render`` then refuses any call that fills different ones.
+    """
+    slots = []
+    for _, field, _, _ in string.Formatter().parse(template):
+        name = (field or "").split(".")[0].split("[")[0]
+        if name and name not in slots:
+            slots.append(name)
+    return register(PromptSpec(
+        id=spec_id, solution=solution, metric=metric, tier=tier, cache_layer=cache_layer,
+        template=template, inputs=tuple(slots), output_schema=output_schema,
+        writes_text=writes_text))
 
 
 def get_spec(spec_id: str) -> PromptSpec:

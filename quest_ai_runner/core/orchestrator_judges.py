@@ -272,7 +272,7 @@ class JudgesMixin:
                 "--- THIS RUN'S OWN RECORD (INTERNAL: the system's log of what the run actually "
                 "did, built from its runner's own receipts, not the worker's claim in the output "
                 "below) ---\n" + rendered_obs + "\n\n" + VERIFY_RUN_OBSERVATIONS_NOTE + "\n")
-        prompt = VERIFY_GOAL_PROMPT.format(
+        prompt = render_prompt("verify-goal.verdict", 
             persona=persona, standards=standards, claims_rules=claims_rules, context=context_block,
             evidence=evidence_block,
             goal=(goal or "")[:1000], brief=(brief or "")[:2000],
@@ -290,7 +290,7 @@ class JudgesMixin:
             persona=(rep_preamble or ""),
             standards=(quality_standards or ""),
             context=context_text,
-            tail=VERIFY_GOAL_PROMPT.format(
+            tail=render_prompt("verify-goal.verdict", 
                 persona="", standards="", claims_rules=claims_rules, context="",
                 evidence=evidence_block,
                 goal=(goal or "")[:1000], brief=(brief or "")[:2000],
@@ -470,7 +470,7 @@ class JudgesMixin:
             return None
         if not model:
             return None
-        prompt = LANDED_WORK_DENIAL_PROMPT.format(
+        prompt = render_prompt("judge-a-decision.landed-work-denial", 
             request=clip_head_and_tail(request or "", 1000),
             account=(account or "").strip()[:3000],
             reply=(reply or "").strip()[:3000],
@@ -524,7 +524,7 @@ class JudgesMixin:
             return False, fallback_reason
         if not model:
             return False, fallback_reason
-        prompt = INTENT_DIRECTIVE_PROMPT.format(
+        prompt = render_prompt("judge-a-decision.intent-directive", 
             message=clip_head_and_tail(user_message or "", 1000),
             answer=(answer_text or "").strip()[:1500] or "(no answer produced yet)",
         )
@@ -645,7 +645,7 @@ class JudgesMixin:
             return False, "release judge unavailable (tier unresolvable); holding the latch"
         if not model:
             return False, "release judge unavailable (no model); holding the latch"
-        prompt = MODE_RELEASE_PROMPT.format(
+        prompt = render_prompt("judge-a-decision.mode-release", 
             message=message[:1000],
             transcript=(transcript or "").strip()[:1500] or "(no prior turns)",
         )

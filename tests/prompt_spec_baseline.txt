@@ -20,17 +20,10 @@ core/orchestrator_answering.py::AnsweringMixin._synthesize_after_deep
 core/orchestrator_answering.py::AnsweringMixin._synthesize_after_queued
 core/orchestrator_cards.py::CardsMixin._call_card_updater
 core/orchestrator_judges.py::JudgesMixin._detect_execution_directive
-core/orchestrator_judges.py::JudgesMixin._verify_goal
-core/orchestrator_judges.py::JudgesMixin.judge_brainstorm_release
-core/orchestrator_judges.py::JudgesMixin.judge_execution_directive
-core/orchestrator_judges.py::JudgesMixin.reply_denies_landed_work
 core/orchestrator_planning.py::PlanningMixin._plan
 core/orchestrator_planning.py::PlanningMixin.cascade_review
 core/orchestrator_planning.py::PlanningMixin.judge_reach
 core/orchestrator_recipes.py::RecipesMixin._recipe_fill_args
-core/orchestrator_understanding.py::UnderstandingMixin._concise_decision_summary
-core/orchestrator_understanding.py::UnderstandingMixin._derive_goal_condition
-core/orchestrator_understanding.py::UnderstandingMixin._understand_input
 core/overseer.py::oversee
 core/pre_route.py::PreRouter.route
 core/quest_judge.py::rank_quests

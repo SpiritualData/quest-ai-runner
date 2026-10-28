@@ -25,6 +25,7 @@ from .adapters import (
     parse_deadline,
 )
 from .guard import ExecutionRecord
+from .prompt_specs import render_prompt
 from .orchestrator_decisions import (
     _ACK_PHRASES,
     _ANAPHORA_RE,
@@ -59,7 +60,7 @@ class UnderstandingMixin:
             model = self.registry.resolve_tier(self.cfg.planner_tier)
             out = answer_with_reasoning(
                 self.provider,
-                [{"role": "user", "content": _CONDENSE_DECISION_PROMPT.format(text=s[:6000])}],
+                [{"role": "user", "content": render_prompt("ground-in-intent.condense-decision", text=s[:6000])}],
                 model=model,
                 step=STEP_SUMMARIZE,
             )
@@ -171,7 +172,7 @@ class UnderstandingMixin:
         model = self.registry.resolve_tier(self.cfg.planner_tier)
 
         def _resolve(ctx_text: str) -> str:
-            prompt = RESOLVE_REQUEST_PROMPT.format(
+            prompt = render_prompt("ground-in-intent.resolve-request", 
                 conv_context=ctx_text or "=== CURRENT CONVERSATION ===\n(no prior conversation available)",
                 user_message=user_message)
             try:
@@ -264,7 +265,7 @@ class UnderstandingMixin:
         gist = decision_excerpt(user_message)
         try:
             model = self.registry.resolve_tier("fast")
-            prompt = DERIVE_GOAL_CONDITION_PROMPT.format(
+            prompt = render_prompt("ground-in-intent.derive-goal-condition", 
                 user_message=gist, now_block=_format_now_block(now))
             out = answer_with_reasoning(
                 self.provider, [{"role": "user", "content": prompt}], model=model,
