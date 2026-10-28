@@ -1,0 +1,267 @@
+{
+ "calls": [
+  {
+   "cost_usd": 0.0006628000000000001,
+   "critical_path": true,
+   "seconds": 2.187036369999987,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3185,
+   "tokens_out": 52,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.0007448000000000001,
+   "critical_path": true,
+   "seconds": 2.873420486008399,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3290,
+   "tokens_out": 174,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.0007628000000000001,
+   "critical_path": true,
+   "seconds": 3.076715809002053,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3270,
+   "tokens_out": 218,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.0007214999999999999,
+   "critical_path": true,
+   "seconds": 2.60779657799867,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3221,
+   "tokens_out": 155,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.0007841000000000002,
+   "critical_path": true,
+   "seconds": 4.154206467006588,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3229,
+   "tokens_out": 277,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.0007397000000000003,
+   "critical_path": true,
+   "seconds": 2.801910833994043,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3307,
+   "tokens_out": 157,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.0007368000000000001,
+   "critical_path": true,
+   "seconds": 2.9202746439987095,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3310,
+   "tokens_out": 150,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.0007488,
+   "critical_path": true,
+   "seconds": 3.13614307998796,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3335,
+   "tokens_out": 164,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.0006835000000000001,
+   "critical_path": true,
+   "seconds": 2.266283945995383,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3286,
+   "tokens_out": 53,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.0007286999999999997,
+   "critical_path": true,
+   "seconds": 2.8850789349962724,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3307,
+   "tokens_out": 135,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.0007422999999999996,
+   "critical_path": true,
+   "seconds": 2.812670765997609,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3330,
+   "tokens_out": 153,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.0007510999999999993,
+   "critical_path": true,
+   "seconds": 2.924512350000441,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3304,
+   "tokens_out": 181,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.0007901999999999996,
+   "critical_path": true,
+   "seconds": 3.119069031003164,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3307,
+   "tokens_out": 258,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.0007339000000000009,
+   "critical_path": true,
+   "seconds": 2.700232926988974,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3298,
+   "tokens_out": 149,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.0007407000000000004,
+   "critical_path": true,
+   "seconds": 2.801752323997789,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3297,
+   "tokens_out": 163,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.0008759000000000006,
+   "critical_path": true,
+   "seconds": 3.7947908680071123,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3418,
+   "tokens_out": 385,
+   "turn": 16
+  }
+ ],
+ "cases_sha": "1e26ef32",
+ "component": "overseer_signals",
+ "defaulted_tags": 0,
+ "git_sha": "37624ff",
+ "impl": "live_model",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 16,
+  "cli_reported_cost_usd": 0.0119,
+  "component": "overseer_signals",
+  "dev": "15/16",
+  "heldout": "0/0",
+  "impl": "live_model",
+  "model": null,
+  "model_calls": 16,
+  "passed": 15,
+  "sample": "",
+  "seconds": 47.1,
+  "tokens_in": 52694,
+  "tokens_out": 2824
+ },
+ "turns": [
+  {
+   "calls": 1,
+   "id": "OVS-001",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-002",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-003",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-004",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-005",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-006",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-007",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-008",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-009",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "OVS-010",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-011",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-012",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-013",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-014",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-015",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "OVS-016",
+   "kind": "",
+   "ok": true
+  }
+ ]
+}

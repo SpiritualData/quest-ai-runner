@@ -3,7 +3,7 @@
  "cases_sha": "0a2ef76a",
  "component": "spec_selection",
  "defaulted_tags": 0,
- "git_sha": "b77568d",
+ "git_sha": "37624ff",
  "impl": "lexical_vector",
  "label": "eval-trace",
  "summary": {

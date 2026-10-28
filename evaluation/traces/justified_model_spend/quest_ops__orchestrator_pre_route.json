@@ -1,0 +1,1752 @@
+{
+ "calls": [
+  {
+   "cost_usd": 0.00019887,
+   "critical_path": true,
+   "seconds": 4.033283008000581,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1369,
+   "tokens_out": 370,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.00015940000000000003,
+   "critical_path": true,
+   "seconds": 2.5001048620033544,
+   "spec_id": "(untagged)",
+   "tokens_in": 663,
+   "tokens_out": 54,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.00051787,
+   "critical_path": true,
+   "seconds": 5.998358652999741,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 5669,
+   "tokens_out": 922,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.004348900000000001,
+   "critical_path": true,
+   "seconds": 2.7598652159940684,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 21148,
+   "tokens_out": 239,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.00077918,
+   "critical_path": true,
+   "seconds": 4.454344365003635,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4154,
+   "tokens_out": 550,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.014234,
+   "critical_path": true,
+   "seconds": 2.307417071002419,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3447,
+   "tokens_out": 45,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.01825,
+   "critical_path": true,
+   "seconds": 2.8955944049957907,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4226,
+   "tokens_out": 135,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.0006494000000000014,
+   "critical_path": true,
+   "seconds": 3.331054087000666,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2548,
+   "tokens_out": 280,
+   "turn": 1
+  },
+  {
+   "cost_usd": 5.7339999999999996e-05,
+   "critical_path": true,
+   "seconds": 1.8027044119953644,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1366,
+   "tokens_out": 87,
+   "turn": 2
+  },
+  {
+   "cost_usd": 2.8130000000000003e-05,
+   "critical_path": true,
+   "seconds": 1.9341885650064796,
+   "spec_id": "(untagged)",
+   "tokens_in": 645,
+   "tokens_out": 43,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.00011116000000000001,
+   "critical_path": true,
+   "seconds": 2.248093053000048,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 6498,
+   "tokens_out": 92,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.004636,
+   "critical_path": true,
+   "seconds": 3.8499925829964923,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22036,
+   "tokens_out": 458,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.0007785800000000001,
+   "critical_path": true,
+   "seconds": 5.015899153004284,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4146,
+   "tokens_out": 552,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.014334,
+   "critical_path": true,
+   "seconds": 2.3686834960099077,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3462,
+   "tokens_out": 49,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.018966,
+   "critical_path": true,
+   "seconds": 3.488440493005328,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4210,
+   "tokens_out": 213,
+   "turn": 2
+  },
+  {
+   "cost_usd": 0.0007214999999999999,
+   "critical_path": true,
+   "seconds": 4.15821436799888,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2541,
+   "tokens_out": 427,
+   "turn": 2
+  },
+  {
+   "cost_usd": 2.739e-05,
+   "critical_path": true,
+   "seconds": 2.31916227300826,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1371,
+   "tokens_out": 27,
+   "turn": 3
+  },
+  {
+   "cost_usd": 2.6660000000000002e-05,
+   "critical_path": true,
+   "seconds": 2.445084246006445,
+   "spec_id": "(untagged)",
+   "tokens_in": 648,
+   "tokens_out": 40,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.00032674,
+   "critical_path": true,
+   "seconds": 5.027714345997083,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4556,
+   "tokens_out": 562,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.00054958,
+   "critical_path": true,
+   "seconds": 4.788955310010351,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 20490,
+   "tokens_out": 689,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.0003205599999999999,
+   "critical_path": true,
+   "seconds": 2.7018884860008257,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 20288,
+   "tokens_out": 235,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.0007749800000000002,
+   "critical_path": true,
+   "seconds": 4.410117594001349,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4128,
+   "tokens_out": 552,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.014768,
+   "critical_path": true,
+   "seconds": 2.7151932709966786,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3443,
+   "tokens_out": 100,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.033502,
+   "critical_path": true,
+   "seconds": 3.256933058000868,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7650,
+   "tokens_out": 291,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.000818880000000001,
+   "critical_path": true,
+   "seconds": 4.537231451002299,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4415,
+   "tokens_out": 525,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.000641700000000002,
+   "critical_path": true,
+   "seconds": 3.5181772600044496,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2497,
+   "tokens_out": 285,
+   "turn": 3
+  },
+  {
+   "cost_usd": 3.241e-05,
+   "critical_path": true,
+   "seconds": 2.456539299004362,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1373,
+   "tokens_out": 37,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.0001464,
+   "critical_path": true,
+   "seconds": 2.336523522986681,
+   "spec_id": "(untagged)",
+   "tokens_in": 658,
+   "tokens_out": 30,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.00026876,
+   "critical_path": true,
+   "seconds": 5.10301412800618,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 6158,
+   "tokens_out": 414,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.00044799999999999994,
+   "critical_path": true,
+   "seconds": 3.932518412999343,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22182,
+   "tokens_out": 452,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.0005855400000000001,
+   "critical_path": true,
+   "seconds": 4.766302935997373,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 21986,
+   "tokens_out": 731,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.00064528,
+   "critical_path": true,
+   "seconds": 4.2042292200058,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4132,
+   "tokens_out": 291,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.014620000000000001,
+   "critical_path": true,
+   "seconds": 2.8207270019920543,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3441,
+   "tokens_out": 86,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.033376,
+   "critical_path": true,
+   "seconds": 3.15039918399998,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7661,
+   "tokens_out": 274,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.0007915800000000001,
+   "critical_path": true,
+   "seconds": 4.39956222200999,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4411,
+   "tokens_out": 472,
+   "turn": 4
+  },
+  {
+   "cost_usd": 0.0006815000000000015,
+   "critical_path": true,
+   "seconds": 3.7323534630122595,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2501,
+   "tokens_out": 363,
+   "turn": 4
+  },
+  {
+   "cost_usd": 3.545e-05,
+   "critical_path": true,
+   "seconds": 2.331978093003272,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1377,
+   "tokens_out": 43,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.00015710000000000002,
+   "critical_path": true,
+   "seconds": 2.3416597430041293,
+   "spec_id": "(untagged)",
+   "tokens_in": 664,
+   "tokens_out": 49,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.00012216,
+   "critical_path": true,
+   "seconds": 2.4535992329911096,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 7148,
+   "tokens_out": 101,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.0003026000000000001,
+   "critical_path": true,
+   "seconds": 3.3006907630042406,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 21592,
+   "tokens_out": 173,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.0007548800000000002,
+   "critical_path": true,
+   "seconds": 4.933783468004549,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4145,
+   "tokens_out": 505,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.014224,
+   "critical_path": true,
+   "seconds": 2.26931574298942,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3442,
+   "tokens_out": 46,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.018001999999999997,
+   "critical_path": true,
+   "seconds": 2.7049889019981492,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4209,
+   "tokens_out": 117,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.0008903000000000036,
+   "critical_path": true,
+   "seconds": 5.515967321000062,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2535,
+   "tokens_out": 767,
+   "turn": 5
+  },
+  {
+   "cost_usd": 2.539e-05,
+   "critical_path": true,
+   "seconds": 2.4307122939935653,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1371,
+   "tokens_out": 23,
+   "turn": 6
+  },
+  {
+   "cost_usd": 2.9120000000000002e-05,
+   "critical_path": true,
+   "seconds": 2.321376288004103,
+   "spec_id": "(untagged)",
+   "tokens_in": 644,
+   "tokens_out": 45,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.00025401000000000004,
+   "critical_path": true,
+   "seconds": 3.564990750004654,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 6533,
+   "tokens_out": 377,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.0046733,
+   "critical_path": true,
+   "seconds": 4.148614359000931,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22340,
+   "tokens_out": 411,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.0006794800000000005,
+   "critical_path": true,
+   "seconds": 3.850185260991566,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4123,
+   "tokens_out": 363,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.014206,
+   "critical_path": true,
+   "seconds": 2.416511249000905,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3450,
+   "tokens_out": 41,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.017775999999999997,
+   "critical_path": true,
+   "seconds": 2.539940625996678,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4175,
+   "tokens_out": 108,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.0006926999999999975,
+   "critical_path": true,
+   "seconds": 3.760773578003864,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2512,
+   "tokens_out": 381,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.00016543,
+   "critical_path": true,
+   "seconds": 3.2387393609969877,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1375,
+   "tokens_out": 303,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.00015460000000000002,
+   "critical_path": true,
+   "seconds": 1.8519784469972365,
+   "spec_id": "(untagged)",
+   "tokens_in": 649,
+   "tokens_out": 50,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.00018470999999999998,
+   "critical_path": true,
+   "seconds": 3.071860537005705,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4103,
+   "tokens_out": 287,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.00032415000000000005,
+   "critical_path": true,
+   "seconds": 3.231078192999121,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 19897,
+   "tokens_out": 250,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.0007986800000000001,
+   "critical_path": true,
+   "seconds": 4.905799845000729,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4119,
+   "tokens_out": 603,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.01441,
+   "critical_path": true,
+   "seconds": 2.6300088169955416,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3456,
+   "tokens_out": 59,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.03237400000000001,
+   "critical_path": true,
+   "seconds": 2.517675285009318,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7668,
+   "tokens_out": 171,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.0011067000000000021,
+   "critical_path": true,
+   "seconds": 7.942547020007623,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2562,
+   "tokens_out": 1189,
+   "turn": 7
+  },
+  {
+   "cost_usd": 3.0470000000000005e-05,
+   "critical_path": true,
+   "seconds": 2.2596432349964743,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1379,
+   "tokens_out": 33,
+   "turn": 8
+  },
+  {
+   "cost_usd": 3.172e-05,
+   "critical_path": true,
+   "seconds": 2.440135853990796,
+   "spec_id": "(untagged)",
+   "tokens_in": 654,
+   "tokens_out": 50,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.00019145000000000002,
+   "critical_path": true,
+   "seconds": 3.128281933008111,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 3627,
+   "tokens_out": 310,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.00059314,
+   "critical_path": true,
+   "seconds": 5.234372695995262,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 19846,
+   "tokens_out": 789,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.00038364,
+   "critical_path": true,
+   "seconds": 3.6439803130051587,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 19646,
+   "tokens_out": 374,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.00072868,
+   "critical_path": true,
+   "seconds": 4.109292000008281,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4154,
+   "tokens_out": 449,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.014782,
+   "critical_path": true,
+   "seconds": 2.681541026002378,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3454,
+   "tokens_out": 97,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.033726,
+   "critical_path": true,
+   "seconds": 3.258961866988102,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7676,
+   "tokens_out": 303,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.0007618799999999995,
+   "critical_path": true,
+   "seconds": 3.5858653179893736,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4455,
+   "tokens_out": 395,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.0007566000000000031,
+   "critical_path": true,
+   "seconds": 4.590133157005766,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2544,
+   "tokens_out": 496,
+   "turn": 8
+  },
+  {
+   "cost_usd": 3.0310000000000003e-05,
+   "critical_path": true,
+   "seconds": 2.412113957994734,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1363,
+   "tokens_out": 33,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.0001451,
+   "critical_path": true,
+   "seconds": 2.2527392659976613,
+   "spec_id": "(untagged)",
+   "tokens_in": 654,
+   "tokens_out": 29,
+   "turn": 9
+  },
+  {
+   "cost_usd": 5.729e-05,
+   "critical_path": true,
+   "seconds": 1.4415031499956967,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 3611,
+   "tokens_out": 42,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.00031804,
+   "critical_path": true,
+   "seconds": 2.15663608199975,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 19586,
+   "tokens_out": 244,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.0005132800000000001,
+   "critical_path": true,
+   "seconds": 2.4171219439886045,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4077,
+   "tokens_out": 49,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.014078,
+   "critical_path": true,
+   "seconds": 2.251519380006357,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3408,
+   "tokens_out": 45,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.01732,
+   "critical_path": true,
+   "seconds": 3.5445547409908613,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4111,
+   "tokens_out": 88,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.0007536000000000001,
+   "critical_path": true,
+   "seconds": 4.809411263995571,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2449,
+   "tokens_out": 528,
+   "turn": 9
+  },
+  {
+   "cost_usd": 3.1e-05,
+   "critical_path": true,
+   "seconds": 2.1515977600065526,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1382,
+   "tokens_out": 34,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.0001533,
+   "critical_path": true,
+   "seconds": 2.2322649150009966,
+   "spec_id": "(untagged)",
+   "tokens_in": 655,
+   "tokens_out": 45,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.00035649,
+   "critical_path": true,
+   "seconds": 3.1194189759989968,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 21431,
+   "tokens_out": 284,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.0136772,
+   "critical_path": true,
+   "seconds": 5.624649399003829,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 4204,
+   "tokens_out": 440,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.014100000000000001,
+   "critical_path": true,
+   "seconds": 2.327413399994839,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3411,
+   "tokens_out": 46,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.019104,
+   "critical_path": true,
+   "seconds": 2.9211739000020316,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4392,
+   "tokens_out": 154,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.0008038000000000003,
+   "critical_path": true,
+   "seconds": 3.768237657001009,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2910,
+   "tokens_out": 444,
+   "turn": 10
+  },
+  {
+   "cost_usd": 0.00017727999999999998,
+   "critical_path": true,
+   "seconds": 3.430737932998454,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1360,
+   "tokens_out": 327,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.00014330000000000001,
+   "critical_path": true,
+   "seconds": 2.373773972998606,
+   "spec_id": "(untagged)",
+   "tokens_in": 635,
+   "tokens_out": 33,
+   "turn": 11
+  },
+  {
+   "cost_usd": 4.631000000000001e-05,
+   "critical_path": true,
+   "seconds": 1.5698886909958674,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 3513,
+   "tokens_out": 22,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.0005425,
+   "critical_path": true,
+   "seconds": 5.132862666010624,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 19732,
+   "tokens_out": 690,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.00059188,
+   "critical_path": true,
+   "seconds": 3.099264574004337,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 3965,
+   "tokens_out": 251,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.014356,
+   "critical_path": true,
+   "seconds": 2.710947183004464,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3350,
+   "tokens_out": 96,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.031490000000000004,
+   "critical_path": true,
+   "seconds": 2.6875536310108146,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7327,
+   "tokens_out": 219,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.0006181000000000034,
+   "critical_path": true,
+   "seconds": 4.633309715994983,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2464,
+   "tokens_out": 251,
+   "turn": 11
+  },
+  {
+   "cost_usd": 2.8970000000000002e-05,
+   "critical_path": true,
+   "seconds": 1.885533797001699,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1379,
+   "tokens_out": 30,
+   "turn": 12
+  },
+  {
+   "cost_usd": 2.5690000000000003e-05,
+   "critical_path": true,
+   "seconds": 1.7096470620017499,
+   "spec_id": "(untagged)",
+   "tokens_in": 651,
+   "tokens_out": 38,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.00062364,
+   "critical_path": true,
+   "seconds": 6.440025428004446,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 6346,
+   "tokens_out": 1120,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.004544800000000001,
+   "critical_path": true,
+   "seconds": 3.4842246729967883,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22110,
+   "tokens_out": 246,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.0009070800000000002,
+   "critical_path": true,
+   "seconds": 5.110158912008046,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4256,
+   "tokens_out": 765,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.015068000000000002,
+   "critical_path": true,
+   "seconds": 2.932732835994102,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3543,
+   "tokens_out": 90,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.034776,
+   "critical_path": true,
+   "seconds": 3.1580188350053504,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7986,
+   "tokens_out": 284,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.0009888799999999975,
+   "critical_path": true,
+   "seconds": 5.511887646993273,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4630,
+   "tokens_out": 779,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.0007237000000000007,
+   "critical_path": true,
+   "seconds": 3.588041876006173,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2682,
+   "tokens_out": 375,
+   "turn": 12
+  },
+  {
+   "cost_usd": 0.00022915,
+   "critical_path": true,
+   "seconds": 4.907350506997318,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1397,
+   "tokens_out": 430,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.0001537,
+   "critical_path": true,
+   "seconds": 2.369833581004059,
+   "spec_id": "(untagged)",
+   "tokens_in": 672,
+   "tokens_out": 39,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.0006827,
+   "critical_path": true,
+   "seconds": 6.006293745012954,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 7102,
+   "tokens_out": 1223,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.0046753,
+   "critical_path": true,
+   "seconds": 3.3593149520020233,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22520,
+   "tokens_out": 343,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.0008597800000000001,
+   "critical_path": true,
+   "seconds": 4.917148319000262,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4427,
+   "tokens_out": 602,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.014042000000000002,
+   "critical_path": true,
+   "seconds": 2.6018446589878295,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3339,
+   "tokens_out": 69,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.03419,
+   "critical_path": true,
+   "seconds": 2.9826609599986114,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 8022,
+   "tokens_out": 211,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.0007911000000000029,
+   "critical_path": true,
+   "seconds": 5.248135233006906,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2814,
+   "tokens_out": 457,
+   "turn": 13
+  },
+  {
+   "cost_usd": 3.6540000000000006e-05,
+   "critical_path": true,
+   "seconds": 2.29396060500585,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1386,
+   "tokens_out": 45,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.0001535,
+   "critical_path": true,
+   "seconds": 2.23080259100243,
+   "spec_id": "(untagged)",
+   "tokens_in": 666,
+   "tokens_out": 41,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.00036564000000000003,
+   "critical_path": true,
+   "seconds": 4.4250474000000395,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 5546,
+   "tokens_out": 620,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.0007253100000000001,
+   "critical_path": true,
+   "seconds": 6.911711624998134,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 20913,
+   "tokens_out": 1032,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.0043357000000000005,
+   "critical_path": true,
+   "seconds": 3.4491303760005394,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 20827,
+   "tokens_out": 341,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.0008317799999999998,
+   "critical_path": true,
+   "seconds": 4.8464935529918876,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4272,
+   "tokens_out": 608,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.01507,
+   "critical_path": true,
+   "seconds": 2.5231176300003426,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3566,
+   "tokens_out": 81,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.03461600000000001,
+   "critical_path": true,
+   "seconds": 3.1589458000089508,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 8001,
+   "tokens_out": 262,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.0009839800000000024,
+   "critical_path": true,
+   "seconds": 5.637587770004757,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4628,
+   "tokens_out": 770,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.0007341000000000014,
+   "critical_path": true,
+   "seconds": 3.8602980640134774,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2604,
+   "tokens_out": 427,
+   "turn": 14
+  },
+  {
+   "cost_usd": 0.00029553,
+   "critical_path": true,
+   "seconds": 4.6818032000010135,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1385,
+   "tokens_out": 563,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.0001506,
+   "critical_path": true,
+   "seconds": 1.674677684000926,
+   "spec_id": "(untagged)",
+   "tokens_in": 654,
+   "tokens_out": 40,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.00046535,
+   "critical_path": true,
+   "seconds": 5.224010378995445,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 6517,
+   "tokens_out": 800,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.004564100000000001,
+   "critical_path": true,
+   "seconds": 2.977095805006684,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22229,
+   "tokens_out": 237,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.0007779800000000002,
+   "critical_path": true,
+   "seconds": 4.569116009006393,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4323,
+   "tokens_out": 480,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.014585999999999998,
+   "critical_path": true,
+   "seconds": 2.35177419098909,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3555,
+   "tokens_out": 37,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.019032,
+   "critical_path": true,
+   "seconds": 2.802294206005172,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4499,
+   "tokens_out": 104,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.0009134000000000017,
+   "critical_path": true,
+   "seconds": 6.375003381006536,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2648,
+   "tokens_out": 768,
+   "turn": 15
+  },
+  {
+   "cost_usd": 0.00013776,
+   "critical_path": true,
+   "seconds": 3.4824007120041642,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1358,
+   "tokens_out": 248,
+   "turn": 16
+  },
+  {
+   "cost_usd": 0.00014570000000000002,
+   "critical_path": true,
+   "seconds": 1.6775041939981747,
+   "spec_id": "(untagged)",
+   "tokens_in": 642,
+   "tokens_out": 35,
+   "turn": 16
+  },
+  {
+   "cost_usd": 9.285000000000001e-05,
+   "critical_path": true,
+   "seconds": 2.5796740020014113,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 2817,
+   "tokens_out": 129,
+   "turn": 16
+  },
+  {
+   "cost_usd": 0.00033054000000000004,
+   "critical_path": true,
+   "seconds": 3.2337639830075204,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 19036,
+   "tokens_out": 280,
+   "turn": 16
+  },
+  {
+   "cost_usd": 0.0006324800000000002,
+   "critical_path": true,
+   "seconds": 3.536751228995854,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 3953,
+   "tokens_out": 337,
+   "turn": 16
+  },
+  {
+   "cost_usd": 0.013967999999999998,
+   "critical_path": true,
+   "seconds": 2.325766506997752,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3343,
+   "tokens_out": 60,
+   "turn": 16
+  },
+  {
+   "cost_usd": 0.00011676,
+   "critical_path": true,
+   "seconds": 3.0366854449966922,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1358,
+   "tokens_out": 206,
+   "turn": 17
+  },
+  {
+   "cost_usd": 0.0001446,
+   "critical_path": true,
+   "seconds": 1.8682094899995718,
+   "spec_id": "(untagged)",
+   "tokens_in": 649,
+   "tokens_out": 30,
+   "turn": 17
+  },
+  {
+   "cost_usd": 0.00012823,
+   "critical_path": true,
+   "seconds": 2.2665212040010374,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 7855,
+   "tokens_out": 99,
+   "turn": 17
+  },
+  {
+   "cost_usd": 0.0005022399999999999,
+   "critical_path": true,
+   "seconds": 4.321976860999712,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22806,
+   "tokens_out": 548,
+   "turn": 17
+  },
+  {
+   "cost_usd": 0.00022679000000000002,
+   "critical_path": true,
+   "seconds": 3.2705070249940036,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1361,
+   "tokens_out": 426,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.0001486,
+   "critical_path": true,
+   "seconds": 2.406944103000569,
+   "spec_id": "(untagged)",
+   "tokens_in": 644,
+   "tokens_out": 40,
+   "turn": 18
+  },
+  {
+   "cost_usd": 6.527e-05,
+   "critical_path": true,
+   "seconds": 2.4844967929966515,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 3609,
+   "tokens_out": 58,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.00055146,
+   "critical_path": true,
+   "seconds": 4.805839897002443,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 19828,
+   "tokens_out": 706,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.00031315,
+   "critical_path": true,
+   "seconds": 2.3736572490015533,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 19597,
+   "tokens_out": 234,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.0007724800000000001,
+   "critical_path": true,
+   "seconds": 5.12319286300044,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4088,
+   "tokens_out": 563,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.01457,
+   "critical_path": true,
+   "seconds": 2.7925370520097204,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3411,
+   "tokens_out": 93,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.033232000000000005,
+   "critical_path": true,
+   "seconds": 3.1328132360067684,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7595,
+   "tokens_out": 286,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.000642379999999998,
+   "critical_path": true,
+   "seconds": 2.814266249013599,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 4395,
+   "tokens_out": 180,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.0008948999999999971,
+   "critical_path": true,
+   "seconds": 5.296785868995357,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2493,
+   "tokens_out": 793,
+   "turn": 18
+  },
+  {
+   "cost_usd": 0.00015339,
+   "critical_path": true,
+   "seconds": 3.1994065409962786,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1371,
+   "tokens_out": 279,
+   "turn": 19
+  },
+  {
+   "cost_usd": 2.6620000000000003e-05,
+   "critical_path": true,
+   "seconds": 2.8732772520015715,
+   "spec_id": "(untagged)",
+   "tokens_in": 644,
+   "tokens_out": 40,
+   "turn": 19
+  },
+  {
+   "cost_usd": 9.407000000000003e-05,
+   "critical_path": true,
+   "seconds": 2.3907830319949426,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 1089,
+   "tokens_out": 166,
+   "turn": 19
+  },
+  {
+   "cost_usd": 0.00041786000000000004,
+   "critical_path": true,
+   "seconds": 3.4387482330057537,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 17318,
+   "tokens_out": 489,
+   "turn": 19
+  },
+  {
+   "cost_usd": 0.0006013799999999999,
+   "critical_path": true,
+   "seconds": 3.3356837800092762,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 3955,
+   "tokens_out": 274,
+   "turn": 19
+  },
+  {
+   "cost_usd": 0.015658000000000002,
+   "critical_path": true,
+   "seconds": 3.6043201309948927,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3323,
+   "tokens_out": 237,
+   "turn": 19
+  },
+  {
+   "cost_usd": 0.032945999999999996,
+   "critical_path": true,
+   "seconds": 2.8078582969901618,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7366,
+   "tokens_out": 349,
+   "turn": 19
+  },
+  {
+   "cost_usd": 0.0007238999999999995,
+   "critical_path": true,
+   "seconds": 4.852221173001453,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2498,
+   "tokens_out": 449,
+   "turn": 19
+  },
+  {
+   "cost_usd": 0.00020434,
+   "critical_path": true,
+   "seconds": 3.6821446440008003,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1366,
+   "tokens_out": 381,
+   "turn": 20
+  },
+  {
+   "cost_usd": 0.0001518,
+   "critical_path": true,
+   "seconds": 2.3260533199936617,
+   "spec_id": "(untagged)",
+   "tokens_in": 645,
+   "tokens_out": 46,
+   "turn": 20
+  },
+  {
+   "cost_usd": 0.00037631000000000003,
+   "critical_path": true,
+   "seconds": 5.860284649999812,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 7863,
+   "tokens_out": 595,
+   "turn": 20
+  },
+  {
+   "cost_usd": 0.00071934,
+   "critical_path": true,
+   "seconds": 5.851136918994598,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22266,
+   "tokens_out": 993,
+   "turn": 20
+  },
+  {
+   "cost_usd": 4.2980000000000005e-05,
+   "critical_path": true,
+   "seconds": 2.3111032209999394,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1380,
+   "tokens_out": 58,
+   "turn": 21
+  },
+  {
+   "cost_usd": 0.0001472,
+   "critical_path": true,
+   "seconds": 1.9530572490039049,
+   "spec_id": "(untagged)",
+   "tokens_in": 652,
+   "tokens_out": 34,
+   "turn": 21
+  },
+  {
+   "cost_usd": 0.00015798,
+   "critical_path": true,
+   "seconds": 2.6486107649980113,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 5380,
+   "tokens_out": 208,
+   "turn": 21
+  },
+  {
+   "cost_usd": 0.00059933,
+   "critical_path": true,
+   "seconds": 5.263266662004753,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 21115,
+   "tokens_out": 776,
+   "turn": 21
+  },
+  {
+   "cost_usd": 0.0003407000000000001,
+   "critical_path": true,
+   "seconds": 2.4169589829980396,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 20902,
+   "tokens_out": 263,
+   "turn": 21
+  },
+  {
+   "cost_usd": 0.00053388,
+   "critical_path": true,
+   "seconds": 2.5036581750027835,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4145,
+   "tokens_out": 63,
+   "turn": 21
+  },
+  {
+   "cost_usd": 0.014225999999999997,
+   "critical_path": true,
+   "seconds": 2.664414423998096,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3455,
+   "tokens_out": 41,
+   "turn": 21
+  },
+  {
+   "cost_usd": 0.031896,
+   "critical_path": true,
+   "seconds": 2.64017014100682,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7641,
+   "tokens_out": 134,
+   "turn": 21
+  },
+  {
+   "cost_usd": 0.0006316999999999989,
+   "critical_path": true,
+   "seconds": 2.8423312430095393,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2502,
+   "tokens_out": 263,
+   "turn": 21
+  },
+  {
+   "cost_usd": 6.247e-05,
+   "critical_path": true,
+   "seconds": 2.385067761002574,
+   "spec_id": "ground-in-intent.derive-goal-condition",
+   "tokens_in": 1379,
+   "tokens_out": 97,
+   "turn": 22
+  },
+  {
+   "cost_usd": 2.521e-05,
+   "critical_path": true,
+   "seconds": 2.2090794629912125,
+   "spec_id": "(untagged)",
+   "tokens_in": 653,
+   "tokens_out": 37,
+   "turn": 22
+  },
+  {
+   "cost_usd": 0.00012952,
+   "critical_path": true,
+   "seconds": 2.7056236100033857,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 7084,
+   "tokens_out": 117,
+   "turn": 22
+  },
+  {
+   "cost_usd": 0.0045997,
+   "critical_path": true,
+   "seconds": 3.457770774999517,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 22262,
+   "tokens_out": 295,
+   "turn": 22
+  },
+  {
+   "cost_usd": 0.0008726799999999998,
+   "critical_path": true,
+   "seconds": 5.431391788995825,
+   "spec_id": "operate-a-quest.pre-route",
+   "tokens_in": 4164,
+   "tokens_out": 733,
+   "turn": 22
+  },
+  {
+   "cost_usd": 0.015026,
+   "critical_path": true,
+   "seconds": 2.71014999099134,
+   "spec_id": "watch-a-run.overseer",
+   "tokens_in": 3470,
+   "tokens_out": 115,
+   "turn": 22
+  },
+  {
+   "cost_usd": 0.033464,
+   "critical_path": true,
+   "seconds": 3.8262380990054226,
+   "spec_id": "verify-goal.verdict",
+   "tokens_in": 7748,
+   "tokens_out": 248,
+   "turn": 22
+  },
+  {
+   "cost_usd": 0.0007331000000000004,
+   "critical_path": true,
+   "seconds": 4.267679322991171,
+   "spec_id": "explain-an-answer.how-i-got-this",
+   "tokens_in": 2609,
+   "tokens_out": 423,
+   "turn": 22
+  }
+ ],
+ "cases_sha": "de2edf94",
+ "component": "quest_ops",
+ "defaulted_tags": 0,
+ "git_sha": "02a3a8a",
+ "impl": "orchestrator_pre_route",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 22,
+  "cli_reported_cost_usd": 0.921,
+  "component": "quest_ops",
+  "dev": "14/14",
+  "heldout": "7/8",
+  "impl": "orchestrator_pre_route",
+  "model": null,
+  "model_calls": 177,
+  "passed": 21,
+  "sample": "",
+  "seconds": 602.9,
+  "tokens_in": 1092809,
+  "tokens_out": 53035
+ },
+ "turns": [
+  {
+   "calls": 8,
+   "id": "OPS-001",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-002",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 10,
+   "id": "OPS-003",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 10,
+   "id": "OPS-004",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-005",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-006",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-007",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 10,
+   "id": "OPS-008",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-009",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 7,
+   "id": "OPS-010",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-011",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 9,
+   "id": "OPS-012",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-013",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 10,
+   "id": "OPS-014",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 8,
+   "id": "OPS-015",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 6,
+   "id": "OPS-016",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 4,
+   "id": "OPS-017",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 10,
+   "id": "OPS-018",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-019",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 4,
+   "id": "OPS-020",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 9,
+   "id": "OPS-021",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 8,
+   "id": "OPS-022",
+   "kind": "",
+   "ok": true
+  }
+ ]
+}

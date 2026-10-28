@@ -1,0 +1,122 @@
+{
+ "calls": [],
+ "cases_sha": "1e26ef32",
+ "component": "overseer_signals",
+ "defaulted_tags": 0,
+ "git_sha": "37624ff",
+ "impl": "no_overseer",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 16,
+  "cli_reported_cost_usd": 0.0,
+  "component": "overseer_signals",
+  "dev": "6/16",
+  "heldout": "0/0",
+  "impl": "no_overseer",
+  "model": null,
+  "model_calls": 0,
+  "passed": 6,
+  "sample": "",
+  "seconds": 0.0,
+  "tokens_in": 0,
+  "tokens_out": 0
+ },
+ "turns": [
+  {
+   "calls": 0,
+   "id": "OVS-001",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "OVS-002",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-003",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-004",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-005",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-006",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-007",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-008",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "OVS-009",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-010",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "OVS-011",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-012",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-013",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "OVS-014",
+   "kind": "",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "OVS-015",
+   "kind": "",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "OVS-016",
+   "kind": "",
+   "ok": true
+  }
+ ]
+}
