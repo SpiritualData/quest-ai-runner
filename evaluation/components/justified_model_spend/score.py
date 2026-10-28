@@ -1,6 +1,6 @@
 """Score one prompt's justification, weigh it by its spend, and list what is not measured.
 
-Everything is read from the traces ``measure.py`` kept in ``measurements/`` and from the recorded rows of the owner arms;
+Everything is read from the traces ``measure.py`` kept in ``evaluation/traces/justified_model_spend/`` and from the recorded rows of the owner arms;
 nothing here calls a model. ``spend_share`` is the metric: the share of AVERAGE dollars per turn, over the measured prompts,
 that sits on prompts that pass."""
 import importlib
@@ -11,7 +11,7 @@ from pathlib import Path
 import common
 
 HERE = Path(__file__).resolve().parent
-MEASURED = HERE / "measurements"
+MEASURED = HERE.parents[1] / "traces" / "justified_model_spend"   # written by measure.py, outside code_paths
 
 
 def trace(component, impl):
@@ -80,7 +80,11 @@ def owner_row_current(case):
     comp, impl = case["keep"]["component"], case["keep"]["impl"]
     history = combine.history().get(comp, {}).get(impl, [])
     row = history[-1] if history else None
-    return combine.current(comp, row)
+    why = combine.current(comp, row)
+    kept = trace(comp, impl)
+    if not why and kept and (row.get("git_sha") or "") != kept.get("git_sha"):
+        return f"the trace is from {kept.get('git_sha')}, not the row's commit {row.get('git_sha')}"
+    return why
 
 
 def judge(case, ablate=True, check_budget=True, check_owner=True):

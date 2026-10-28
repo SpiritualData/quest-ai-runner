@@ -18,5 +18,5 @@ stay inside its own budget. The score of a run is the share of average spend on 
 The stats come from per-call traces of eval cases (``measure.py``), not production turns, and say so.
 
 An implementation module in ``impls/`` exposes ``build(meter) -> justify``. No arm here calls a model: the paid runs are
-``measure.py``'s, made once and kept in ``measurements/``.
+``measure.py``'s, made once and kept in ``evaluation/traces/justified_model_spend/``.
 """

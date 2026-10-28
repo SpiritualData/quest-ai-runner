@@ -5,7 +5,7 @@
 in the results log is the ordinary one), with the call meter replaced by one that also writes every model call into a
 ``usage.SpendLog`` tagged with the prompt spec id that wrote its prompt (``PromptSpec.render`` sets the tag; a call whose
 tag did not survive a worker thread is tagged with the prompt the case kind belongs to and counted as ``defaulted``).
-The trace is written to ``measurements/<component>__<impl>.json``: the rows, the per-call records and the run's
+The trace is written to ``evaluation/traces/justified_model_spend/<component>__<impl>.json``: the rows, the per-call records and the run's
 summary. The scorer reads these files only; it never runs a model.
 
 Labelled ``eval-trace``: these calls come from eval cases, not production turns."""
@@ -24,7 +24,7 @@ import common  # noqa: E402
 from esoi import harness  # noqa: E402
 from quest_ai_runner import usage  # noqa: E402
 
-OUT = HERE / "measurements"
+OUT = HERE.parents[1] / "traces" / "justified_model_spend"   # outside code_paths: a new trace does not stale the owner rows it describes
 
 
 class SpendMeter(harness.CallMeter):
@@ -69,7 +69,7 @@ class SpendMeter(harness.CallMeter):
 
 
 def measure(component, impl, argv, kind_spec):
-    """Run ``component``/``impl`` with recording; returns the trace dict and writes it to ``measurements/``."""
+    """Run ``component``/``impl`` with recording; returns the trace dict and writes it to ``evaluation/traces/justified_model_spend/``."""
     score = importlib.import_module(f"{component}.score")
     spend = usage.SpendLog()
     SpendMeter.spend, SpendMeter.kind_spec, SpendMeter.defaulted = spend, kind_spec, 0
@@ -89,7 +89,7 @@ def measure(component, impl, argv, kind_spec):
     trace = {"label": "eval-trace", "component": component, "impl": impl, "summary": summary, "turns": turn_rows,
              "calls": [vars(r) for r in spend.records], "defaulted_tags": SpendMeter.defaulted,
              "git_sha": summary.get("git_sha") or harness.current_sha(common.CONFIG), "cases_sha": harness.cases_digest(component, common.CONFIG.root / common.CONFIG.evaluation_dir)}
-    OUT.mkdir(exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
     (OUT / f"{component}__{impl}.json").write_text(json.dumps(trace, indent=1, sort_keys=True), encoding="utf-8")
     return trace
 
