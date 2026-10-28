@@ -2407,3 +2407,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,assist_a_terminal_session,fast_model_helpers,10,10,10/10,0/0,10,1876,228,0.0,0.0,e87bc48,495b478a,simulated,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01",1.0
 2026-10-28,justified_model_spend,spec_registry,6,6,6/6,0/0,0,0,0,0.0,0.0,e87bc48,1e84cd72,none,,,
 2026-10-28,qar_overall,recorded_rows,8,4,4/8,0/0,0,0,0,0.0,1.5,e87bc48,06c7c199,none,,,
+2026-10-28,keep_a_working_stream,rebuilt_per_step,14,13,13/14,0/0,125,1207385,74131,0.8497,581.5,7b9eb2c,07a3c532,unknown,,,
