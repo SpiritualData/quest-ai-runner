@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional
 
 from . import prompt_budget
+from .prompt_specs import declare, render_prompt
 from .adapters import ModelProvider, STEP_SELECT, answer_with_reasoning
 
 _log = logging.getLogger("quest-ai-runner.card-filter")
@@ -408,7 +409,7 @@ def consolidate_context(
                 preview = (it.get("preview", "") or "")[:_CONSOLIDATE_MAX_PREVIEW]
                 meta = " | ".join(p for p in (why, preview) if p)
                 card_lines.append(f"  - ({iid}) {itype}" + (f": {meta}" if meta else ""))
-        prompt = _CONSOLIDATE_PROMPT.format(task=task, cards_block="\n".join(card_lines))
+        prompt = render_prompt("select-context.consolidate", task=task, cards_block="\n".join(card_lines))
         raw = answer_with_reasoning(model_provider, [{"role": "user", "content": prompt}],
                                     model=model, reasoning="minimal", step=STEP_SELECT)
         parsed = json.loads(_extract_json(raw or "") or "[]")
@@ -484,7 +485,7 @@ def _rank_files_batched(
         files = card.get("files", [])[:_RANK_MAX_FILES]
         file_lines = "\n".join(f"  - {f}" for f in files)
         blocks.append(f"[{cid}] {title}\n{file_lines}")
-    prompt = _RANK_FILES_PROMPT.format(task=task, cards_block="\n\n".join(blocks))
+    prompt = render_prompt("select-context.rank-files", task=task, cards_block="\n\n".join(blocks))
     try:
         raw = answer_with_reasoning(model_provider, [{"role": "user", "content": prompt}],
                                     model=model, reasoning="minimal", step=STEP_SELECT)
@@ -697,3 +698,11 @@ Return ONLY cards with score >= 0.5."""
     if stage1_ok:
         _memo_put(model_provider, memo_key, [replace(m, files=list(m.files)) for m in results])
     return results
+
+
+CONSOLIDATE_SPEC = declare(
+    "select-context.consolidate", solution="select-context", metric="metric-select-context",
+    tier="balanced", cache_layer="none", template=_CONSOLIDATE_PROMPT)
+RANK_FILES_SPEC = declare(
+    "select-context.rank-files", solution="select-context", metric="metric-select-context",
+    tier="balanced", cache_layer="none", template=_RANK_FILES_PROMPT)

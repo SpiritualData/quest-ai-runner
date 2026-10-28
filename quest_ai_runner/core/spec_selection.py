@@ -35,6 +35,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 from esoi import implementation, solution
 
 from . import prompt_budget
+from .prompt_specs import declare, render_prompt
 from .adapters import STEP_SELECT, answer_with_reasoning
 
 log = logging.getLogger("quest-ai-runner.spec-selection")
@@ -174,7 +175,7 @@ def parse_ids(text: str, offered: set) -> Optional[List[str]]:
 def judge_batch(task: str, lines: List[str], offered: set, provider: Any, model: Optional[str]) -> Optional[List[str]]:
     """One model call over one batch; None when it fails, so the caller keeps the batch's candidates."""
     try:
-        reply = answer_with_reasoning(provider, [{"role": "user", "content": SELECT_PROMPT.format(task=task, block="\n".join(lines))}],
+        reply = answer_with_reasoning(provider, [{"role": "user", "content": render_prompt("spec-selection.batch-judge", task=task, block="\n".join(lines))}],
                                       model=model, reasoning="minimal", step=STEP_SELECT)
     except Exception:  # noqa: BLE001  a failed call must never lose the candidates
         log.debug("spec batch judge failed", exc_info=True)
@@ -339,3 +340,8 @@ def intent_specs(index: Dict[str, Any], intent_id: str = "") -> List[Dict[str, A
     rank = {"intent": 0, "problem": 1, "ideal": 2, "solution": 3, "metric": 4, "implementation": 5}
     mine = [e for e in index["entries"] if not intent_id or e["intent"] == intent_id or e["id"] == intent_id]
     return [{"id": e["id"], "kind": e["kind"], "title": e["title"]} for e in sorted(mine, key=lambda e: (rank.get(e["kind"], 9), e["id"]))]
+
+
+SELECT_SPEC = declare(
+    "spec-selection.batch-judge", solution="spec-selection", metric="metric-spec-selection",
+    tier="caller", cache_layer="none", template=SELECT_PROMPT)

@@ -56,6 +56,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from ..core.card_filter import _extract_json
+from ..core.prompt_specs import declare, render_prompt
 from ..core.current_rep import _CURRENT_REP, current_rep  # noqa: F401  (re-exported; defined in core)
 
 log = logging.getLogger("quest-ai-runner.personas")
@@ -469,7 +470,7 @@ def llm_explicit_ask(registry: PersonaRegistry, provider: Any, text: str,
             linked = "Linked goal/quest name(s): " + "; ".join(linked_names) + "\n"
         # The gist of the task, never a whole composed brief (``prompt_budget.decision_excerpt``).
         from ..core.prompt_budget import decision_excerpt
-        prompt = JUDGE_PROMPT.format(roster=roster, text=decision_excerpt(text), linked=linked)
+        prompt = render_prompt("select-a-rep.explicit-ask", roster=roster, text=decision_excerpt(text), linked=linked)
         raw = provider.answer([{"role": "user", "content": prompt}],
                               model=_judge_model(provider, tier))
         verdict = json.loads(_extract_json(raw or "") or "{}")
@@ -691,3 +692,8 @@ def build_persona_resolver(cfg: PersonaResolverConfig, *, provider: Any = None,
             return None
 
     return resolver
+
+
+EXPLICIT_ASK_SPEC = declare(
+    "select-a-rep.explicit-ask", solution="select-a-rep", metric="metric-select-a-rep",
+    tier="fast", cache_layer="none", template=JUDGE_PROMPT)

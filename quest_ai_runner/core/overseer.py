@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from .adapters import STEP_JUDGE, plan_with_step
+from .prompt_specs import declare, render_prompt
 
 
 # ===========================================================================
@@ -359,7 +360,7 @@ def oversee(provider: Any, model: str, digest: str) -> OverseerSignal:
     ``OverseerSignal("proceed")`` so the run is never distorted or broken. Never raises.
     """
     try:
-        prompt = OVERSEER_PROMPT.format(digest=digest or "")
+        prompt = render_prompt("watch-a-run.overseer", digest=digest or "")
         raw = plan_with_step(provider, prompt, model=model, tool_schema=OVERSEE_TOOL,
                             step=STEP_JUDGE)
         if not isinstance(raw, dict):
@@ -375,3 +376,8 @@ def oversee(provider: Any, model: str, digest: str) -> OverseerSignal:
         return OverseerSignal(signal=signal, hint=hint, reason=reason)
     except Exception:  # noqa: BLE001 — an overseer failure must degrade to proceed, never break
         return OverseerSignal("proceed", degraded=True)
+
+
+OVERSEER_SPEC = declare(
+    "watch-a-run.overseer", solution="watch-a-run", metric="metric-watch-a-run",
+    tier="caller", cache_layer="none", template=OVERSEER_PROMPT, output_schema=OVERSEE_TOOL)

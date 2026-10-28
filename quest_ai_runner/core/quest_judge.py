@@ -15,6 +15,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .card_filter import _extract_json
+from .prompt_specs import declare, render_prompt
 
 log = logging.getLogger("quest-ai-runner.quest_judge")
 
@@ -174,7 +175,7 @@ def rank_quests(
         shown.append(next(q for q in quests if q.get("quest_id") == home))
     shown_ids = {q["quest_id"] for q in shown}
 
-    prompt = QUEST_RANKING_PROMPT.format(
+    prompt = render_prompt("judge-a-decision.quest-ranking", 
         quests=_quest_lines(shown, home_quest_id),
         messages=_message_blocks(items))
     try:
@@ -238,3 +239,9 @@ def select_quest(
         quests, message, call_judge,
         previous_message=previous_message, home_quest_id=home_quest_id)
     return chosen
+
+
+QUEST_RANKING_SPEC = declare(
+    "judge-a-decision.quest-ranking", solution="judge-a-decision",
+    metric="metric-judge-a-decision", tier="caller", cache_layer="none",
+    template=QUEST_RANKING_PROMPT, output_schema=QUEST_RANKING_TOOL)

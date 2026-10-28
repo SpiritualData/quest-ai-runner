@@ -32,6 +32,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Seque
 from esoi import implementation, solution
 
 from . import prompt_budget
+from .prompt_specs import declare, render_prompt
 from .adapters import STEP_SELECT, answer_with_reasoning
 from .spec_selection import (GATE_POOL, SpecSelection, VectorSearch, attach_links, fuse, gate_decision, lexical_vector_gated,
                              narrow_lexical_scored, parse_ids, semantic_scored, tokens)
@@ -209,7 +210,7 @@ def view_line(view: RecordView) -> str:
 def judge(task: str, pool: List[str], by_key: Mapping[str, RecordView], limit: int, provider: Any,
           model: Optional[str]) -> Optional[List[str]]:
     """One model call over the pool; None when it fails, so the caller keeps the best fused candidates."""
-    prompt = SELECT_PROMPT.format(task=task, limit=limit, block="\n".join(view_line(by_key[k]) for k in pool))
+    prompt = render_prompt("search-cards-and-specs.pool-judge", task=task, limit=limit, block="\n".join(view_line(by_key[k]) for k in pool))
     try:
         reply = answer_with_reasoning(provider, [{"role": "user", "content": prompt}], model=model, reasoning="minimal",
                                       step=STEP_SELECT)
@@ -362,3 +363,9 @@ def render(result: UnifiedSelection, budget: int = 4000) -> str:
         out.append(line)
         used += len(line) + 1
     return "\n".join(out)
+
+
+SELECT_SPEC = declare(
+    "search-cards-and-specs.pool-judge", solution="search-cards-and-specs",
+    metric="metric-search-cards-and-specs", tier="caller", cache_layer="none",
+    template=SELECT_PROMPT)

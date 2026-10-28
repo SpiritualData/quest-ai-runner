@@ -8,6 +8,7 @@ import json
 from typing import Any, Callable, Dict, Optional, Sequence
 
 from .context_update_types import ContextUpdate, _clip, log
+from ..core.prompt_specs import declare, render_prompt
 
 
 # ---------------------------------------------------------------------------------------------
@@ -112,7 +113,7 @@ def llm_relevance_judge(provider_fn: Callable[[], Any], tier: str = "balanced"
             # The work description goes in whole: ``_describe_work`` already clips each field,
             # and clipping the assembled text again cut it off before the description the judge
             # was given it for.
-            prompt = _RELEVANCE_PROMPT.format(work=(work or "").strip() or "unnamed work",
+            prompt = render_prompt("feed-context-sources.relevance", work=(work or "").strip() or "unnamed work",
                                               items=listed)
             raw = provider.answer([{"role": "user", "content": prompt}], model=model)
             text = raw if isinstance(raw, str) else str(getattr(raw, "text", raw) or "")
@@ -215,7 +216,7 @@ def llm_admission_judge(provider_fn: Callable[[], Any], tier: str = "fast"
                 f"{i}. from {u.author or 'an unknown sender'}: {_clip(u.title, 120)}\n"
                 f"   {_clip(u.body or u.excerpt, 300)}"
                 for i, u in enumerate(rows, 1))
-            prompt = _ADMISSION_PROMPT.format(items=listed)
+            prompt = render_prompt("feed-context-sources.admission", items=listed)
             raw = provider.answer([{"role": "user", "content": prompt}], model=model)
             text = raw if isinstance(raw, str) else str(getattr(raw, "text", raw) or "")
             verdict = json.loads(_extract_json(text) or "{}")
@@ -236,3 +237,13 @@ def llm_admission_judge(provider_fn: Callable[[], Any], tier: str = "fast"
             return None
 
     return _judge
+
+
+RELEVANCE_SPEC = declare(
+    "feed-context-sources.relevance", solution="feed-context-sources",
+    metric="metric-feed-context-sources", tier="balanced", cache_layer="none",
+    template=_RELEVANCE_PROMPT)
+ADMISSION_SPEC = declare(
+    "feed-context-sources.admission", solution="feed-context-sources",
+    metric="metric-feed-context-sources", tier="fast", cache_layer="none",
+    template=_ADMISSION_PROMPT)

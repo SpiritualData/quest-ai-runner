@@ -11,8 +11,6 @@ adapters/vector_context_assembler.py::VectorContextAssembler._generate_queries
 adapters/vector_context_assembler.py::VectorContextAssembler._llm_review
 adapters/vector_context_assembler.py::VectorContextAssembler._record_inner
 config_resolvers.py::_resolve_anticipation_refiner
-core/card_filter.py::_rank_files_batched
-core/card_filter.py::consolidate_context
 core/card_filter.py::filter_cards_by_relevance
 core/orchestrator_answering.py::AnsweringMixin._answer_subquestions
 core/orchestrator_answering.py::AnsweringMixin._grounded_answer
@@ -24,12 +22,5 @@ core/orchestrator_planning.py::PlanningMixin._plan
 core/orchestrator_planning.py::PlanningMixin.cascade_review
 core/orchestrator_planning.py::PlanningMixin.judge_reach
 core/orchestrator_recipes.py::RecipesMixin._recipe_fill_args
-core/overseer.py::oversee
 core/pre_route.py::PreRouter.route
-core/quest_judge.py::rank_quests
-core/spec_selection.py::judge_batch
-core/unified_search.py::judge
 interactive_session_persona.py::_resolve_persona_from_corpus
-runner/context_update_judges.py::llm_admission_judge
-runner/context_update_judges.py::llm_relevance_judge
-runner/personas.py::llm_explicit_ask
