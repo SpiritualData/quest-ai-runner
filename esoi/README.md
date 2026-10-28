@@ -408,7 +408,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `hold-the-long-view:separate_stores` | Separate stores read at the start of a request (today) | quest_ai_runner/core/orchestrator_run_begin.py |  |
 | `hold-the-long-view:perspective_note` | Maintained perspective note per quest (proposed) |  |  |
 | `hold-the-long-view:periodic_reflection` | Periodic reflection on the best tier (proposed) |  |  |
-| `hold-the-long-view:outcome_precedents` | Outcome precedents, the Intuition proposal (proposed) |  |  |
+| `admit-to-the-mind:outcome_precedents` | Intuition: outcome precedents surfaced at admission (proposed) |  |  |
 | `watch-a-run:no_overseer` | No overseer (configuration off) | quest_ai_runner/core/orchestrator_types.py |  |
 | `watch-a-run:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
 | `keep-a-working-stream:open_source_harness` | An open-source agent harness as the loop (proposed) |  |  |
