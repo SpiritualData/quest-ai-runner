@@ -2194,3 +2194,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,justified_model_spend,spec_registry_ablation,4,0,0/4,0/0,0,0,0,0.0,0.6,08aa3a0,68c8011b,none,,,
 2026-10-28,intent_grounding,none,10,4,4/10,0/0,15,35193,9844,0.1199,90.4,6a0f48e,f38af8bc,claude-haiku,,,
 2026-10-28,justified_model_spend,spec_registry,4,4,4/4,0/0,0,0,0,0.0,0.5,6a0f48e,68c8011b,none,,,
+2026-10-28,intent_grounding,frame_line,10,7,7/10,0/0,21,62926,14556,0.2278,154.3,0fee2c4,f38af8bc,claude-haiku,,,
+2026-10-28,intent_grounding,none,10,5,5/10,0/0,15,35086,9042,0.119,94.2,0fee2c4,f38af8bc,claude-haiku,,,
