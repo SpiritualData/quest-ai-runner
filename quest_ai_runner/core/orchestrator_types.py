@@ -74,6 +74,9 @@ class OrchestratorConfig:
     # it is running. A deployment whose tasks are work orders (and whose deep runs are free, as on
     # a Claude subscription) turns it on with QAR_TASK_DIRECT_DEEP.
     task_direct_deep: bool = False
+    # A task whose person already chose an environment (``env_id``) or listed its work types
+    # (``work_types``) skips the planner too: nothing is left for it to decide. On by default.
+    task_route_declared: bool = True
     # Token budget over the whole chain of runs (the first run plus its follow-ups); None disables
     # the guard (then only the run cap applies).
     auto_followup_token_budget: Optional[int] = AUTO_FOLLOWUP_TOKEN_BUDGET

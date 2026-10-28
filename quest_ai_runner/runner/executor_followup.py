@@ -6,7 +6,7 @@ this is the loop that applies it around ``Orchestrator.run`` and writes the audi
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, FrozenSet, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 
 from ..core import provider_outage, usage_limit
 from ..core.orchestrator import OrchestratorResult
@@ -33,16 +33,40 @@ class FollowUpMixin:
             budget = AUTO_FOLLOWUP_TOKEN_BUDGET
         return max(0, runs), budget
 
-    def _direct_deep_extra(self, ask: str, supports_deep_goal: bool) -> Optional[Dict[str, Any]]:
-        """``{"deep_goal": ...}`` for a task's FIRST run when the brain is set to send queued tasks
-        straight to a deep run (``task_direct_deep``), else None. The orchestrator builds the plan
-        from the goal, so the run makes no planner call. Needs a brain whose ``run`` accepts
+    _WORK_TYPE_LABELS = {"web_search": "web search", "quest_ops": "Quest operations",
+                         "quest_docs_ops": "Quest docs operations"}
+
+    @classmethod
+    def _declared_route(cls, task: Optional[Dict[str, Any]]) -> Tuple[bool, List[str]]:
+        """``(known, work type labels)`` from what the task itself declares. A task is "known" when
+        the person chose an environment (``env_id``) or listed its work types (``work_types``, any
+        mix of web_search, quest_ops, quest_docs_ops). The planner would only rediscover that."""
+        task = task if isinstance(task, dict) else {}
+        raw = task.get("work_types")
+        types = [str(t) for t in raw if isinstance(t, str) and t] if isinstance(raw, (list, tuple)) else []
+        labels = [cls._WORK_TYPE_LABELS.get(t, t.replace("_", " ")) for t in types]
+        return bool(types or task.get("env_id")), labels
+
+    def _direct_deep_extra(self, ask: str, supports_deep_goal: bool,
+                           task: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """``{"deep_goal": ...}`` for a task's FIRST run when it should skip the planner, else None.
+        That is when the brain is set to send queued tasks straight to a deep run
+        (``task_direct_deep``), or when the task already declares its environment or work types
+        (``_declared_route``): a choice the person made needs no planner call to rediscover. The
+        orchestrator builds the plan from the goal. Needs a brain whose ``run`` accepts
         ``deep_goal``; an older brain keeps the planner path."""
         cfg = getattr(self._orch, "cfg", None)
-        if getattr(cfg, "task_direct_deep", False) is not True or not supports_deep_goal:
+        known, labels = self._declared_route(task)
+        enabled = getattr(cfg, "task_direct_deep", False) is True
+        if not supports_deep_goal or not (enabled or (known and getattr(cfg, "task_route_declared", True) is not False)):
             return None
         goal = " ".join((ask or "").split())[:_GOAL_ASK_CHARS]
-        return {"deep_goal": "Complete this task: " + goal} if goal else None
+        if not goal:
+            return None
+        prefix = "Complete this task"
+        if labels:
+            prefix += " (work: " + ", ".join(labels) + ")"
+        return {"deep_goal": prefix + ": " + goal}
 
     def _open_decision_ids(self, quest_id: Optional[str]) -> FrozenSet[str]:
         """The quest's open decision ids, empty when they cannot be read (never raises)."""

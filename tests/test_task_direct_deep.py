@@ -81,3 +81,17 @@ def test_the_executor_passes_the_task_text_as_the_goal_only_when_enabled():
 
 def test_the_setting_defaults_to_off():
     assert OrchestratorConfig().task_direct_deep is False
+
+
+def test_a_task_that_declares_its_environment_or_work_types_skips_the_planner():
+    ex = Executor(False)
+    assert ex._direct_deep_extra("Do it", True) is None
+    assert ex._direct_deep_extra("Do it", True, {}) is None
+    by_env = ex._direct_deep_extra("Do it", True, {"env_id": "env_1"})
+    assert by_env == {"deep_goal": "Complete this task: Do it"}
+    mixed = ex._direct_deep_extra("Do it", True, {"work_types": ["web_search", "quest_docs_ops"]})
+    assert mixed["deep_goal"] == "Complete this task (work: web search, Quest docs operations): Do it"
+    assert ex._direct_deep_extra("Do it", False, {"env_id": "e"}) is None  # old brain keeps planner
+    off = Executor(False)
+    off._orch.cfg.task_route_declared = False
+    assert off._direct_deep_extra("Do it", True, {"env_id": "e"}) is None

@@ -318,3 +318,10 @@ The noise floor is large and easy to mistake for a result. Running one configura
 over 86 cases, 14 of them changed their answer, and one scenario-group of 19 rows scored anywhere
 from 11 to 26 percent across single runs of the SAME configuration. Compare on the whole split, use
 `--repeat` to see which cases are unstable, and treat a per-group swing on twenty rows as nothing.
+
+### Declared tasks skip the planner (`task_route_declared`, on by default)
+
+A task that carries an `env_id` (the person chose an environment) or `work_types` (any mix of
+`web_search`, `quest_ops`, `quest_docs_ops`) skips the planner even when `QAR_TASK_DIRECT_DEEP` is
+off, and the work types are named in the deep goal. Tested offline in `tests/test_task_direct_deep.py`.
+The backend does not send `work_types` yet; until it does only `env_id` triggers this.
