@@ -2675,3 +2675,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,esoi_behavior,standing_instructions,60,30,23/44,7/16,118,498910,93465,0.0782,713.3,cded75e,3b9c9d97,unknown,,,
 2026-10-28,context_and_specs,two_pipelines,17,10,10/17,0/0,0,0,0,0.0,0.6,cded75e,70798068,none,,,
 2026-10-28,draft_a_metric,ask_owner,4,2,2/4,0/0,0,0,0,0.0,0.0,cded75e,f1c1dec2,none,,,
+2026-10-28,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.3,984514b,ae7e2b22,none,,,
