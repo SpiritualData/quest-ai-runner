@@ -27,9 +27,9 @@
      "run": {"full": "esoi run deep_run --impl goal_contract --record"}},
     {"arm": "deep_runner/subprocess_runner", "share": 0.16, "proxy": "outcome reporting of the runner, not task outcomes",
      "run": {"full": "esoi run deep_runner --impl subprocess_runner --record"}},
-    {"arm": "task_replay", "share": 0.5, "planned": true, "cheap_cases": 3, "planned_cases": 10,
-     "what": "metric-iterate-by-spec: replayed tasks the done verifier accepts on the first attempt, through a real deep run",
-     "run": {"cheap": "esoi run task_replay --impl <arm> --sample 3 --record", "full": "esoi run task_replay --impl <arm> --record"}}]}},
+    {"arm": "task_replay/slice_and_writeback", "share": 0.5, "paid": true, "cheap_cases": 3,
+     "proxy": "metric-iterate-by-spec: replayed task shapes the done verifier accepts on the first attempt, through a real deep run on the Claude subscription (no API dollars)",
+     "run": {"cheap": "esoi run task_replay --impl slice_and_writeback --sample 3 --max-calls 30 --record", "full": "esoi run task_replay --impl slice_and_writeback --max-calls 40 --record"}}]}},
  {"id": "QME3", "kind": "changes", "area": "Exact and consented changes",
   "args": {"rule": "pass_rate", "what": "no unrequested writes, every requested write, no human-only step taken alone",
    "cheap": [
