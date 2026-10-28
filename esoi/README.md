@@ -197,6 +197,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `draft-a-metric` | Metric drafting for a task | capped_model_draft | Drafted metrics accepted per unit of cost |
 | `label-context-cards` | Card categories and metadata | fast_model_labels | Retrieval hits and category precision per unit of cost |
 | `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
+| `justify-model-calls` | Justified model calls | spec_registry | Justified share of model spend |
 
 ## Implementations
 
@@ -452,6 +453,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) |  |  |
 | `assist-a-terminal-session:fast_model_helpers` | Fast-tier model calls in the terminal (today) | quest_ai_runner/cli_config.py |  |
 | `assist-a-terminal-session:rules_only` | Rules only, no model call (floor, proposed) |  |  |
+| `justify-model-calls:spec_registry` | Registered prompt specs with an enforcement test (today) | quest_ai_runner/core/prompt_specs.py |  |
+| `justify-model-calls:spec_registry_ablation` | Registry plus per-call ablation against the owner metric (proposed) |  |  |
 
 ## Metrics
 
@@ -533,3 +536,5 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-draft-a-metric`, Drafted metrics accepted per unit of cost: `none`
 - `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: `none`
 - `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `esoi run assist_a_terminal_session --impl fast_model_helpers`
+- `metric-justified-model-spend`, Justified share of model spend: `none`
+- `QME8`, Justified model spend: `none`

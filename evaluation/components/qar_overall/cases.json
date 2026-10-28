@@ -73,5 +73,11 @@
  {"id": "QME6", "kind": "structure", "area": "Measured coverage",
   "args": {"rule": "structure_coverage", "what": "share of all solutions with a current measured result whose selection follows it"}},
  {"id": "QME7", "kind": "structure", "area": "Parts selected by measurement",
-  "args": {"rule": "structure_selection", "what": "share of measured solutions whose selected arm has a current row no rival beats"}}
+  "args": {"rule": "structure_selection", "what": "share of measured solutions whose selected arm has a current row no rival beats"}},
+ {"id": "QME8", "kind": "spend", "area": "Justified model spend",
+  "args": {"rule": "pass_rate", "what": "share of average model spend on registered prompts whose owner metric has a current row and whose call beats its ablation inside its own budget (metric-justified-model-spend; not built)",
+   "cheap": [{"arm": "justified_model_spend", "planned": true, "share": 1.0, "run": {},
+              "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on production-shaped cases"}],
+   "full": [{"arm": "justified_model_spend", "planned": true, "share": 1.0, "run": {},
+             "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on production-shaped cases"}]}}
 ]

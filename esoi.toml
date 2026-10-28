@@ -44,7 +44,7 @@ seconds_per_case = 2
 
 # The combined QAR metric (metric-qar-overall, the authoritative metric of QS1; evaluation/components/qar_overall). Keyed by
 # the metric id, not a component name, because the harness reads [balance.<component>] as an accuracy/cost/time balance.
-# Each of QS1's ideals carries a weight (summing to 1), split equally over the sub-metrics QME1 to QME7 whose ideal_ids name
+# Each of QS1's ideals carries a weight (summing to 1), split equally over the sub-metrics QME1 to QME8 whose ideal_ids name
 # it (esoi/metrics.csv). Joshua can change any weight; the reason beside it says why it is what it is now.
 [balance.metric-qar-overall]
 ideals = { QI1 = 0.25, QI2 = 0.25, QI3 = 0.15, QI4 = 0.10, QI5 = 0.10, QI6 = 0.15 }
