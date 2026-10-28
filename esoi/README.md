@@ -64,6 +64,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-no-environment-tasks-untested`: Most people have no external environment connected, so their delegated tasks can use only the app's own operations, its documentation, a review of their own data and web search, and that path has not been tested end to end.
 - `prob-experiments-not-proposed`: Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose or find an experiment that would settle it, though the app has an Experiments feature built for that.
 - `prob-metric-enforced-on-deep-runs-only`: The before-and-after reading of the relevant ESOI metric is enforced by code only on deep runs. Chat turns and other in-process work find no slice and take no reading; a request whose records hold no slice or no metric ends with nothing measured and nothing proposed; a reading that got worse is recorded and shown, but nothing acts on it; and a run that ends with no metric on record is marked and then forgotten.
+- `prob-risk-handled-uniformly`: Risky moments in a run (re-proposing a declined act, claiming work that did not run, handing back a step the AI could do, a wrong route, an irreversible act, a cross-scope read) are watched by one overseer that reviews a digest with one prompt on one tier, whatever the risk, and nothing shows which response works for which kind of risk.
 
 ## Ideals
 
@@ -115,6 +116,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-asks-only-what-is-theirs`, Questions Only Where Theirs: The person is asked only what is theirs to decide, and a question they waved off is not asked again.
 - `ideal-self-explaining-app`, Self-Explaining App: Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.
 - `ideal-most-likely-path`, Most-Likely Path: Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
+- `ideal-risk-handled-where-it-is`, Risk Handled Where It Is: Each high-risk case gets the response proven best for its kind of risk, and a low-risk case pays nothing for review.
 
 ## Solutions
 
@@ -140,7 +142,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `guide-by-feedback` | Feedback-to-guidance loop | universal | Repeat-correction recall and precision over feedback sequences |
 | `talk-over-a-channel` | Live messaging channel transport | openclaw | Channel transport conformance to the gateway wire contract |
 | `replay-known-operations` | Learned-operation fast path | evaluation/components/recipe_fast_path/impls/recipe_replay.py | Fast-path hit rate and parity with the planner-only path |
-| `watch-a-run` | Minimal-intervention run overseer | quest_ai_runner/core/overseer.py | Overseer digest evidence and signal correctness on labelled scenarios |
+| `watch-a-run` | Overseer: risk management that raises the overall metric | quest_ai_runner/core/overseer.py | Overseer digest evidence and signal correctness on labelled scenarios |
 | `detect-stale-cards` | Source-change staleness detector | evaluation/components/staleness/impls/store_sha256.py | Staleness detection precision and recall over mutation cases |
 | `assemble-a-prompt` | Budgeted prompt assembler | evaluation/components/prompt_size/impls/live.py | Prompt size against budget and duplicated-block count |
 | `judge-a-decision` | Guarded model-verdict judge | evaluation/components/judges/impls/qar_judges.py | Judge deterministic-half correctness with a scripted provider |
@@ -416,6 +418,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `think-critically:every_request_measured` | Every request measured by code (proposed) |  |  |
 | `think-critically:measured_proposed_and_answered` | Measured, proposed and answered (proposed) |  |  |
 | `act-in-the-world:best_open_source_harness` | Best open-source agent harness by the combined metric, with declared inventory (proposed) |  |  |
+| `watch-a-run:per_risk_response` | Per-risk response chosen by metric (proposed) |  |  |
 
 ## Metrics
 
