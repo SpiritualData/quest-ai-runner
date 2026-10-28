@@ -51,6 +51,12 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `esoi-r3-co-change-missed`: R3: Not being aware of solutions that need to change definition or implementation due to something else changing.
 - `esoi-r4-solution-misused`: R4: Using a solution when it should not be for the particular use case.
 - `prob-index-walks-into-copies`: A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count. A machine's daily backup snapshots, one dated folder per day and each a copy of the whole tree, each carried the card store the tree had that day: one backups folder held 155 stores with 760,608 cards, and any corpus rooted above it would have walked, imported and mounted every one of them. Earlier, on one real corpus of 81,465 indexable files, most of the files were a single vendored tree present twice and generated data. Before the risk gate, the folder review that decides this ran only above a 2,000-file floor and failed open: with no model, the review switched off or a failed call, every folder was read.
+- `prob-step-loses-the-request`: Within one request, each planning step is a separate model call rebuilt from parts, not a continuation of the step before. From the second step on, the transcript and the whole context block (the resolved request, declined proposals, standing corrections, recent context and cards) are replaced by a note saying they were provided at step one, which a separate call never saw, and older observations are collapsed to one line, so a later step decides from the raw message and the newest reads alone.
+- `prob-admission-by-recency-not-relevance`: What of the person's own material enters a step's view is decided by position and size, not by what the request needs: cards are chosen once from the request text at the start, the newest few observations are shown in full and older ones collapsed, and a lookup's result is admitted whether or not it is what was asked for. A finding the goal turns on can be collapsed out while an irrelevant read stays in full, and a near miss can be treated as the thing requested.
+- `prob-world-claims-unweighed`: A question about the world rather than the person's own material (health, training, research, experiences others have reported) is answered from the model's general knowledge or one web passage, with no sign of how strong the evidence is, and research sources a host already has are not consulted.
+- `prob-reach-claims-unfounded`: The AI states what it can and cannot do outside the host's own data without a source of truth for it: it describes a capability that does not exist, reports a setting as blocking when the setting was never read, or says outside work has started when nothing ran.
+- `prob-account-state-contradicts`: What the AI says about the person's own account (which quests exist, what changed, whether a change ran) is re-derived each turn from whatever slice it read, and a change it made is not read back, so within one session it reports the same state two ways, repeats a change it already made, or proposes again what it said was done.
+- `prob-long-view-scattered`: What is known across requests (what a quest has decided, declined and learned, what the person corrected, where the work is heading) is kept in several stores with their own keys, budgets and retrieval: past conversations, recent context, the feedback ledger and its guidance, the prediction store, the host's reflections and the quest cards. None of them holds the quest's standing view, so each request rebuilds it from fragments, background work can lack what the chat already knew, and each store needs its own scope fence.
 
 ## Ideals
 
@@ -93,6 +99,12 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-checked-improvement`, Checked Improvement per Run: Every run leaves, on the record it served, what it measured, what it moved and what it changed in the record and why, so improvement is checked per run instead of hoped for.
 - `ideal-risks-identified-by-tag`, Constraining Solutions Identified: Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which names the problems it mitigates.
 - `ideal-proportionate-index-scope`, Proportionate Index Scope: The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the risk is real.
+- `ideal-continuous-mind`, Continuous Mind: Every step of a request acts with everything the request has established so far: what the person said, refused and corrected, what the request was resolved to mean, and what earlier steps found.
+- `ideal-goal-relevant-attention`, Goal-Relevant Attention: Only what bears on the request's goal enters the working stream, and nothing from outside the request's scope ever does.
+- `ideal-weighed-knowledge`, Weighed World Knowledge: A claim about the world comes with where it came from and how strong its evidence is, and the best evidence source available is consulted before the cheapest.
+- `ideal-known-reach`, Known Reach: The AI says it can do only what it can, says it cannot only after checking, and claims an outside act only with the receipt of the act.
+- `ideal-consistent-account-state`, Consistent Account State: What the AI says about the person's own account is true of the account when it says it, every time in a session.
+- `ideal-standing-perspective`, Standing Perspective: Each quest carries one view across requests of what was decided, declined, learned and where it is heading, and every request on it starts from that view.
 
 ## Solutions
 
@@ -154,6 +166,12 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `search-cards-and-specs` | Unified card and specification search | two_pipelines | Mixed card and specification selection, with both existing selection metrics held |
 | `tag-solutions` | Problem-linked tags that identify solutions | tag_list_with_check | Right solution missed without the tag |
 | `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
+| `keep-a-working-stream` | Mind: one goal-focused working stream per request | rebuilt_per_step | Step continuity at cost over multi-step requests |
+| `admit-to-the-mind` | Subconscious: the person's own knowledge, admitted to the working stream by the goal | recency_window | Goal-relevant admission at a precision floor with nothing out of scope |
+| `know-the-world` | Science: evidence-weighted knowledge about the world | web_with_support_check | Supported and calibrated answers to world questions |
+| `act-in-the-world` | World: declared reach and receipts for acts outside the host | prompt_described_reach | Reach-claim accuracy and act receipts over labelled requests |
+| `act-as-the-body` | Body: the host's data model as the agent's own consistent state | card_and_reads | Account-state consistency across scripted sessions |
+| `hold-the-long-view` | Higher mind: one standing perspective per quest across requests | separate_stores | Long-view carry-through across sessions with nothing out of scope |
 
 ## Implementations
 
@@ -359,6 +377,31 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `repair-a-card-store:repository_tidy` | Repository tidy | quest_ai_runner/adapters/card_store_tidy.py |  |
 | `repair-a-card-store:local_folder_tidy` | Tidy at open of a local folder | quest_ai_runner/adapters/card_store_hygiene.py |  |
 | `repair-a-card-store:no_cleanup` | Store as copy mode leaves it | evaluation/components/card_growth/impls/no_cleanup.py |  |
+| `keep-a-working-stream:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | quest_ai_runner/core/orchestrator_planning.py |  |
+| `keep-a-working-stream:rebuilt_full_context` | Rebuilt prompt per step with the context re-sent from cache | quest_ai_runner/core/orchestrator_planning.py |  |
+| `keep-a-working-stream:append_only_stream` | Carried message stream per request (proposed) |  |  |
+| `keep-a-working-stream:stream_with_compaction` | Carried stream with compaction (proposed) |  |  |
+| `admit-to-the-mind:recency_window` | Start-of-run card filter and a recency window (today) | quest_ai_runner/core/planner_context.py |  |
+| `admit-to-the-mind:goal_judge` | Small-model judge of every candidate (proposed) |  |  |
+| `admit-to-the-mind:score_thresholds` | Score thresholds per source (proposed) |  |  |
+| `admit-to-the-mind:thresholds_then_judge` | Thresholds with a judge on the borderline (proposed) |  |  |
+| `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | quest_ai_runner/adapters/web_research.py |  |
+| `know-the-world:research_sources_first` | Host research sources first, then the web (proposed) |  |  |
+| `know-the-world:evidence_weighted` | Findings weighed by a host's evidence-estimation service (proposed) |  |  |
+| `act-in-the-world:prompt_described_reach` | Effectors describe themselves in the prompt (today) | quest_ai_runner/core/tools.py |  |
+| `act-in-the-world:reach_summary_and_judge` | Host reach summary and a reach judge (built, off by default) | quest_ai_runner/core/reach_judge.py |  |
+| `act-in-the-world:declared_inventory` | One declared inventory with receipts (proposed) |  |  |
+| `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | quest_ai_runner/runner/quest_folder_index.py |  |
+| `act-as-the-body:read_after_write` | Read back what a change touched (proposed) |  |  |
+| `act-as-the-body:live_read_only` | A live read behind every state claim (proposed) |  |  |
+| `hold-the-long-view:separate_stores` | Separate stores read at the start of a request (today) | quest_ai_runner/core/orchestrator_run_begin.py |  |
+| `hold-the-long-view:perspective_note` | Maintained perspective note per quest (proposed) |  |  |
+| `hold-the-long-view:periodic_reflection` | Periodic reflection on the best tier (proposed) |  |  |
+| `hold-the-long-view:outcome_precedents` | Outcome precedents, the Intuition proposal (proposed) |  |  |
+| `watch-a-run:no_overseer` | No overseer (configuration off) | quest_ai_runner/core/orchestrator_types.py |  |
+| `watch-a-run:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
+| `iterate-by-spec:every_change_names_its_metric` | Every request that changes something names its metric (proposed) |  |  |
+| `iterate-by-spec:experiment_when_uncertain` | An experiment when the better choice is unknown (proposed) |  |  |
 
 ## Metrics
 
@@ -425,3 +468,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-track-runs-on-records`, Runs that leave a durable, attributed record of what they changed: `esoi run record_tracking`
 - `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_solutions --impl tag_list_with_check`
 - `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`
+- `metric-keep-a-working-stream`, Step continuity at cost over multi-step requests: `none`
+- `metric-admit-to-the-mind`, Goal-relevant admission at a precision floor with nothing out of scope: `none`
+- `metric-know-the-world`, Supported and calibrated answers to world questions: `none`
+- `metric-act-in-the-world`, Reach-claim accuracy and act receipts over labelled requests: `none`
+- `metric-act-as-the-body`, Account-state consistency across scripted sessions: `none`
+- `metric-hold-the-long-view`, Long-view carry-through across sessions with nothing out of scope: `none`
