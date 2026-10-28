@@ -136,7 +136,10 @@ Choose EXACTLY ONE signal via the tool:
     case an AI plainly should not decide or execute on its own. A request NOTHING here can carry out
     (a physical-world act, a system nothing here is connected to) is not a fork either, once the
     draft already says plainly it cannot be done and what the person can do instead: proceed.
-    escalate_human is for a decision the person must make before the work can go on.
+    escalate_human is for a decision the person must make before the work can go on. It is never
+    for a question the person's own records may already answer (when someone is available, what
+    they decided, what they prefer): while OPERATIONS THIS TURN shows the run is still reading, or
+    CURRENT PLAN is another read, those records are being gathered, so proceed.
 
 Rules:
   - Redirect or stop the run only when the drift or waste is obvious, EXCEPT a mismatch between an

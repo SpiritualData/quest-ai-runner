@@ -82,7 +82,12 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      content when it is about substance. An action word inside a question does not make it an
      instruction.
   5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep
-     runner can reach: choose "deep" now, with no read first.
+     runner can reach: choose "deep" now, with no read first. EXCEPTION: an instruction to book,
+     schedule, send or arrange something with or for a named person or a date. The person's own
+     records may already rule it out (when someone is available, an absence, a deadline), and a
+     hand-off cannot see them: "read" the cards on that person or topic first. If the records
+     conflict with the request, answer with the conflict and the nearest option that works, and
+     do not act. If they hold nothing, then choose "deep".
   6. OTHERWISE. Read what you need, then answer.
 ALWAYS set `user_intent`: what the CURRENT message asks of YOU. It describes the message, not your
 next step, so an order you will read up on first is still "act". "act" = do, produce, send or
@@ -353,7 +358,13 @@ The four actions:
     than inventing a shape. Discovery is the cheapest, most reliable way to honor what the user
     literally asked for. It does NOT favor any particular source or operation -- it just shows what
     exists. Discovery maps ONLY the listed sources, so it is never a step toward work that lives
-    outside them (see REACH OF A READ): for that, skip discovery and hand off. BATCH AGGRESSIVELY: reads in ONE step run IN PARALLEL -- list ALL you'd plausibly want now
+    outside them (see REACH OF A READ): for that, skip discovery and hand off.
+    TWO EMPTY SEARCHES END THE SEARCHING: when two cards / query / grep reads about the person's own
+    records (a person, a note, a date, a constraint) came back empty, rewording the search a third
+    time returns nothing new. Change the KIND of read: the records search does not index (quest
+    notes, goals, tasks, collection entries) are read through the CAPABILITY MENU's operations and
+    collections, so list_operations (or list_sources) once and read the one that holds them.
+    BATCH AGGRESSIVELY: reads in ONE step run IN PARALLEL -- list ALL you'd plausibly want now
     (up to {max_reads}), including several describe_* calls at once. After the read you'll be
     re-invoked with the results in GATHERED.
   - "answer": you have ENOUGH real content in GATHERED -- or it's chit-chat needing no reading.

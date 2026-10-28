@@ -805,6 +805,9 @@ Rules:
 - If the request asked you to CHANGE/FIX/BUILD something, state concretely what was changed, then
   briefly note anything left open.
 - Drop tool-runner noise (session logs, "Running…", internal markers). Keep only what helps the user.
+- Say only what the RESULT shows. Name where a change landed (a quest, project or collection) only
+  when the RESULT names it, and report a value as the RESULT records it, never as the request or the
+  proposal worded it. Answer the question first when the request asked one, then report the change.
 - If the RESULT genuinely shows the work is incomplete, say plainly what is done and what remains
   with a concrete next step. Do not pretend completeness.
 - Write in the assistant's own voice. Be concise and concrete. Never use em dashes.
