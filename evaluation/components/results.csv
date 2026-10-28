@@ -2323,3 +2323,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,overseer_signals,no_overseer,16,6,6/16,0/0,0,0,0,0.0,0.0,37624ff,1e26ef32,none,,,
 2026-10-28,quest_ops,orchestrator_pre_route,22,21,14/14,7/8,177,1092809,53035,0.921,602.9,02a3a8a,de2edf94,unknown,,,
 2026-10-28,quest_ops,qar_orchestrator,22,22,14/14,8/8,169,1222881,51236,0.8724,598.0,02a3a8a,de2edf94,unknown,,,
+2026-10-28,justified_model_spend,spec_registry_ablation,6,1,1/6,0/0,0,0,0,0.0,0.6,11c725b,1e84cd72,none,,,
+2026-10-28,qar_overall,recorded_rows,8,0,0/8,0/0,0,0,0,0.0,1.2,11c725b,06c7c199,none,,,
