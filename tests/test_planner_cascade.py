@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from quest_ai_runner.core.prompt_specs import NO_EM_DASH_RULE
 from quest_ai_runner.core.adapters import PlanDecision
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
@@ -178,7 +179,8 @@ def test_build_review_digest_framing_around_the_rubric_is_unchanged_when_web_is_
     # everything AROUND it: the framing before the rubric and the review instructions after it.
     before, after = default.split(PLANNER_DECISION_RUBRIC)
     assert _PRE_CHANGE_REVIEW_DIGEST_NO_WEB.startswith(before)
-    assert _PRE_CHANGE_REVIEW_DIGEST_NO_WEB.endswith(after)
+    # After the review instructions comes the no-em-dash rule every registered prompt now carries.
+    assert (_PRE_CHANGE_REVIEW_DIGEST_NO_WEB.rstrip() + "\n\n" + NO_EM_DASH_RULE).endswith(after)
     explicit_false = build_review_digest("restart the deploy pipeline please", decision,
                                          PLANNER_DECISION_RUBRIC, web_configured=False)
     assert explicit_false == default

@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Protocol
 from esoi import implementation
 
+from .prompt_specs import PromptSpec, register, render_prompt
+
 ROUTES = ("answer", "tool", "deep", "confirm", "clarify")
 
 SYSTEM = (
@@ -41,6 +43,12 @@ SYSTEM = (
     "sure: false when the message is ambiguous, risky, could be read two ways, or leans on an earlier "
     "turn you cannot see. Use the argument names and formats the tool listing shows; when a tool has "
     "a user_asked_for_this_field argument, set it to true on every write the user asked for.")
+
+
+PRE_ROUTE_SPEC = register(PromptSpec(
+    id="operate-a-quest.pre-route", solution="operate-a-quest", metric="metric-operate-a-quest",
+    tier="caller", cache_layer="head", template=SYSTEM,
+    output_schema={"route": "answer|tool|deep|confirm|clarify", "calls": "list", "sure": "boolean"}))
 
 
 @dataclass
@@ -115,7 +123,8 @@ class PreRouter:
         parts.append(f"Message: {message}")
         try:
             text = self.provider.answer([{"role": "user", "content": "\n".join(parts)}],
-                                        model=self.model, system=SYSTEM)
+                                        model=self.model,
+                                        system=render_prompt("operate-a-quest.pre-route"))
         except Exception:  # noqa: BLE001  a failed pre-route must cost nothing: the planner decides
             return None
         return parse(text)

@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
+from quest_ai_runner.core.prompt_specs import NO_EM_DASH_RULE
 from quest_ai_runner.core.orchestrator import (
     Orchestrator,
     OrchestratorConfig,
@@ -276,10 +277,11 @@ _PRE_CHANGE_JUDGE_PROMPT_NO_WEB = (
 
 def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
     prompt_default = judge_prompt("check the latest score", "a short summary")
-    assert prompt_default == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB
+    # Unchanged apart from the no-em-dash rule every registered prompt now carries.
+    assert prompt_default == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB.rstrip() + "\n\n" + NO_EM_DASH_RULE
     prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
                                          web_configured=False)
-    assert prompt_explicit_false == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB
+    assert prompt_explicit_false == prompt_default
     assert WEB_REACH_NOTE not in prompt_default
 
 

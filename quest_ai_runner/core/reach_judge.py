@@ -41,6 +41,8 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Optional
 
+from .prompt_specs import declare, render_prompt
+
 #: The verdicts the judge may return. Anything else is treated as "no verdict" and changes nothing.
 REACH_VERDICTS = ("inside", "outside", "world")
 
@@ -170,7 +172,8 @@ def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000
     (a leading and trailing blank line); with no note the template collapses back to the single
     blank line the unchanged, web-off rendering has always had.
     """
-    return REACH_JUDGE_PROMPT.format(
+    return render_prompt(
+        "act-in-the-world.reach-judge",
         reach_summary=reach_summary.strip(), message=(message or "")[:max_message_chars],
         web_note=("\n" + WEB_REACH_NOTE + "\n") if web_configured else "")
 
@@ -219,3 +222,8 @@ def parse_judge_text(text: Any) -> Optional[Dict[str, Any]]:
         return normalize_verdict(json.loads(body))
     except Exception:  # noqa: BLE001
         return None
+
+
+REACH_JUDGE_SPEC = declare(
+    "act-in-the-world.reach-judge", solution="act-in-the-world", metric="metric-act-in-the-world",
+    tier="caller", cache_layer="none", template=REACH_JUDGE_PROMPT)

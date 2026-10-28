@@ -38,6 +38,7 @@ import json
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from .adapters import PlanDecision
+from .prompt_specs import declare, render_prompt
 
 #: The confidence values a planner may report, weakest first.
 CONFIDENCE_LEVELS = ("low", "medium", "high")
@@ -229,13 +230,13 @@ def build_review_digest(user_message: str, decision: PlanDecision, rubric: str,
     decision_text = describe_decision(decision)
     gathered_text = json.dumps(gathered or [])[:800]
     web_note = WEB_REVIEW_NOTE if web_configured else ""
-    fixed = REVIEW_PROMPT.format(rubric=rubric, user_message=user_message[:2000],
+    fixed = render_prompt("route-a-message.cascade-review", rubric=rubric, user_message=user_message[:2000],
                                  context="", gathered=gathered_text, decision=decision_text,
                                  web_note=web_note)
     room = max(0, max_chars - len(fixed))
     context = truncate_keep_both_ends(
         (context_view or "").strip(), room, "\n(middle of the grounding omitted)\n")
-    return REVIEW_PROMPT.format(rubric=rubric, user_message=user_message[:2000],
+    return render_prompt("route-a-message.cascade-review", rubric=rubric, user_message=user_message[:2000],
                                 context=context or "(none)", gathered=gathered_text,
                                 decision=decision_text, web_note=web_note)
 
@@ -312,3 +313,8 @@ def user_goal_fallback(cheap: PlanDecision) -> str:
     return (cheap.goal or cheap.deep_brief
             or (cheap.deferred_deep or {}).get("goal")
             or "Carry out what the request asked for.")
+
+
+REVIEW_SPEC = declare(
+    "route-a-message.cascade-review", solution="route-a-message", metric="metric-route-a-message",
+    tier="caller", cache_layer="none", template=REVIEW_PROMPT)

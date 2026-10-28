@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .runtime_settings import process_environment
+from .prompt_specs import declare, render_prompt
 from .scope_tags import as_tag_list, scope_tags_allow
 
 log = logging.getLogger(__name__)
@@ -464,7 +465,7 @@ class RecipeRunner:
                 # conversation ("add that"), so it always has its arguments re-derived.
                 args = dict(recipe.example_args)
             else:
-                prompt = RECIPE_ARGS_PROMPT.format(
+                prompt = render_prompt("replay-known-operations.fill-args", 
                     tool=spec.name, description=(spec.description or "")[:400],
                     schema=json.dumps(spec.parameters or {}, separators=(",", ":"))[:1500],
                     example_request=recipe.examples[0],
@@ -506,3 +507,9 @@ def build_recipe_store_from_env(env: Optional[Dict[str, str]] = None) -> Optiona
         env.get("QAR_CORPUS_ROOT") or ".", ".quest-context", "recipes")
     min_score = float(env.get("QAR_RECIPES_MIN_SCORE") or DEFAULT_MIN_SCORE)
     return RecipeStore(Path(base) / "recipes.json", min_score=min_score)
+
+
+RECIPE_ARGS_SPEC = declare(
+    "replay-known-operations.fill-args", solution="replay-known-operations",
+    metric="metric-replay-known-operations", tier="fast", cache_layer="none",
+    template=RECIPE_ARGS_PROMPT, output_schema=None)

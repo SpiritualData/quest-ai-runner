@@ -22,5 +22,4 @@ core/orchestrator_planning.py::PlanningMixin._plan
 core/orchestrator_planning.py::PlanningMixin.cascade_review
 core/orchestrator_planning.py::PlanningMixin.judge_reach
 core/orchestrator_recipes.py::RecipesMixin._recipe_fill_args
-core/pre_route.py::PreRouter.route
 interactive_session_persona.py::_resolve_persona_from_corpus
