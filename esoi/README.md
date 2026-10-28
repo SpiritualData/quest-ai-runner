@@ -173,7 +173,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `persist-predictions` | Scoped prediction store | file | Prediction store contract pass rate |
 | `gate-an-autopilot-pass` | Autopilot run-or-skip gate | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py | Autopilot gate decision correctness |
 | `evolve-by-metric` | Evolve by metric | structure-library | Parts selected by measurement |
-| `ground-in-intent` | Intent frame for quest-scoped prompts | none | Intent-grounded pass rate |
+| `ground-in-intent` | Intent frame for quest-scoped prompts | frame-line | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit;Runs that leave a durable, attributed record of what they changed |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
@@ -511,8 +511,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-persist-predictions`, Prediction store contract pass rate: `esoi run persist_predictions --impl file_store`
 - `metric-gate-an-autopilot-pass`, Autopilot gate decision correctness: `esoi run gate_an_autopilot_pass --impl live_pass`
 - `QME7`, Parts selected by measurement: `none`
-- `metric-ground-in-intent`, Intent-grounded pass rate: `esoi run intent_grounding`
-- `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay`
+- `metric-ground-in-intent`, Intent-grounded pass rate: `esoi run intent_grounding --impl frame_line`
+- `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay --impl slice_and_writeback`
 - `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
 - `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
 - `metric-bound-card-growth`, Cards per source-file group after repeated passes, for the guards that prevent growth: `esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store; esoi run card_growth --impl no_cleanup`
@@ -536,5 +536,5 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-draft-a-metric`, Drafted metrics accepted per unit of cost: `none`
 - `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: `none`
 - `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `esoi run assist_a_terminal_session --impl fast_model_helpers`
-- `metric-justified-model-spend`, Justified share of model spend: `none`
-- `QME8`, Justified model spend: `none`
+- `metric-justified-model-spend`, Justified share of model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
+- `QME8`, Justified model spend: `esoi run justified_model_spend --impl spec_registry_ablation`

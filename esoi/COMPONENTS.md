@@ -7,7 +7,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 |---|---|---|---|
 | `core-ports` | core | The generic boundary: adapter interfaces, value objects, streaming sinks, event constants | show-progress |
 | `core-orchestrator-loop` | core | The bounded plan, gather, re-plan, answer/deep/confirm loop, split into role mixins | route-a-message, answer-a-turn, act-as-the-body |
-| `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message, keep-a-working-stream, admit-to-the-mind, hold-the-long-view |
+| `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message, keep-a-working-stream, admit-to-the-mind, hold-the-long-view, justify-model-calls |
 | `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | watch-a-run, judge-a-decision |
 | `core-model-selection` | core | Tier to live model id, family resolution, deep-run starting model, outage and usage-limit memory | choose-a-model-tier |
 | `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-run control channel (steer, stop, pause), per-turn execution record | run-deep-work, receive-input-mid-run, detect-a-stalled-run |
@@ -32,7 +32,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `adapters-conversations` | adapters | Claude session transcripts as context and ConversationStore | remember-conversations |
 | `config` | config | RunnerConfig and build_orchestrator(): the one seam for consumer specifics | configure-a-lane |
 | `cli-and-ui` | cli | Console entry point, attended chat session and Textual UI, card-store maintenance CLI | operate-from-a-terminal, assist-a-terminal-session |
-| `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | track-usage-and-cost |
+| `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | track-usage-and-cost, justify-model-calls |
 | `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | expose-the-public-api |
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |
 | `prompts` | prompts | Prompt text shipped as data and the scripts that keep each copy equal to its source: standing deep-run instructions (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) and the vendored quest field guidance | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
