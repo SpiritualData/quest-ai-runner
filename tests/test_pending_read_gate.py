@@ -76,3 +76,18 @@ def test_the_same_read_failing_twice_is_not_issued_a_third_time():
     provider = StubProvider([missing, missing, missing, answer([])])
     orch(provider, retrieval).run("Which port does it listen on?")
     assert retrieval.read_calls.count("a/nope.md") == 2
+
+
+def test_a_read_step_with_its_specs_in_pending_read_reads_them():
+    """A cheap planner chose "read" but wrote the web query into `pending_read`: it ran nothing."""
+    raw = {"action": "read", "user_intent": "ask", "rationale": "check",
+           "pending_read": [{"web": "an event date 2026"}]}
+    plan = normalize_decision(raw, OrchestratorConfig(), web_enabled=True)
+    assert plan.reads == [{"web": "an event date 2026"}]
+    assert plan.pending_read == []
+    # An answer keeps its pending reads for the gate, and a real `reads` list is left alone.
+    kept = normalize_decision({**raw, "action": "answer"}, OrchestratorConfig(), web_enabled=True)
+    assert kept.reads == [] and kept.pending_read == [{"web": "an event date 2026"}]
+    own = normalize_decision({**raw, "reads": [{"rel_path": "x.md"}]}, OrchestratorConfig(),
+                             web_enabled=True)
+    assert own.reads == [{"rel_path": "x.md"}]

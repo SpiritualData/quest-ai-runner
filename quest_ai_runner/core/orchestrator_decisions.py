@@ -96,6 +96,13 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
                                    web_enabled=web_enabled)
     pending_read = clean_read_specs(raw.get("pending_read"), cfg, tools_enabled=tools_enabled,
                                     web_enabled=web_enabled)
+    # A "read" step whose specs were written into `pending_read` (the field for reads it still
+    # owes AFTER an answer) instead of `reads` would run nothing and answer from memory: measured
+    # live on a cheap planner, which chose read and wrote {"web": ...} there, so the turn answered
+    # a current-fact question unread and uncited. The structured action says a read is intended and
+    # the specs are already cleaned, so they are the reads of this step.
+    if action == "read" and not clean_reads and pending_read:
+        clean_reads, pending_read = pending_read, []
 
     tier = raw.get("model_tier")
     if isinstance(tier, str):
