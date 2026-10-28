@@ -1763,3 +1763,7 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-22,qar_overall,recorded_rows,7,4,4/7,0/0,0,0,0,0.0,0.9,6c31bc0,83b337d3,none,,,
 2026-10-22,spec_selection,lexical_vector_gated,76,70,46/50,24/26,48,121336,10861,0.0297,158.5,01a6245,0a2ef76a,unknown,,,0.9017
 2026-10-22,spec_selection,lexical_vector_llm,76,31,19/50,12/26,222,331193,63130,0.0978,310.6,01a6245,0a2ef76a,unknown,,,0.4856
+2026-10-28,keep_a_working_stream,rebuilt_per_step,3,3,3/3,0/0,29,261442,15167,0.2044,149.0,0f68d0b,fd1b6015,unknown,,sample:3,
+2026-10-28,keep_a_working_stream,rebuilt_full_context,3,3,3/3,0/0,27,233684,12566,0.1617,110.4,0f68d0b,fd1b6015,unknown,,sample:3,
+2026-10-28,keep_a_working_stream,rebuilt_per_step,3,3,3/3,0/0,26,217625,13721,0.2059,123.6,0f68d0b,fd1b6015,unknown,,"only:CS-01,CS-02,CS-03",
+2026-10-28,keep_a_working_stream,rebuilt_full_context,3,3,3/3,0/0,26,217846,12988,0.1731,111.8,0f68d0b,fd1b6015,unknown,,"only:CS-01,CS-02,CS-03",
