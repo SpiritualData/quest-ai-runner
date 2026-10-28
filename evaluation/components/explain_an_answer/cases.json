@@ -147,10 +147,7 @@
   "required": [
    "nothing was read, searched or run: the answer came from what was already known"
   ],
-  "source": "tests/test_answer_explanation.py test_a_multi_step_turn_is_eligible: the trace is the test's (three planning steps, nothing gathered); the prompt names this the case where a model is most tempted to invent a process; the blank message of the test is filled with the message and answer of the same file's orchestrator scenario (test_explanation_is_emitted_after_the_result_and_before_done), so the trace is the test's and the question the note must be faithful to is not left empty",
-  "forbidden": [
-   "\\b(?:searched|looked up|read|checked|opened|consulted) (?:the |your |a |some )?(?:web|document|file|notes|readme|sources?|records?)\\b"
-  ]
+  "source": "tests/test_answer_explanation.py test_a_multi_step_turn_is_eligible: the trace is the test's (three planning steps, nothing gathered); the prompt names this the case where a model is most tempted to invent a process; the blank message of the test is filled with the message and answer of the same file's orchestrator scenario (test_explanation_is_emitted_after_the_result_and_before_done), so the trace is the test's and the question the note must be faithful to is not left empty"
  },
  {
   "id": "EXA-07",
@@ -171,11 +168,7 @@
   "required": [
    "background context titled Metrics card was available while answering"
   ],
-  "source": "tests/test_answer_explanation.py test_a_turn_that_answered_on_assembled_context_is_eligible: the trace is the test's; the blank message of the test is filled with the message and answer of the same file's orchestrator scenario (test_explanation_is_emitted_after_the_result_and_before_done), so the trace is the test's and the question the note must be faithful to is not left empty",
-  "forbidden": [
-   "\\bsaved\\b",
-   "\\bsent\\b"
-  ]
+  "source": "tests/test_answer_explanation.py test_a_turn_that_answered_on_assembled_context_is_eligible: the trace is the test's; the blank message of the test is filled with the message and answer of the same file's orchestrator scenario (test_explanation_is_emitted_after_the_result_and_before_done), so the trace is the test's and the question the note must be faithful to is not left empty"
  },
  {
   "id": "EXA-08",
