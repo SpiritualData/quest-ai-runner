@@ -3,7 +3,7 @@ reading of a payload as text."""
 import types
 
 import common  # noqa: F401  (puts the repository on the path)
-from quest_ai_runner.core.answer_explanation import TurnTrace, build_payload, render_record_for_prompt
+from quest_ai_runner.core.answer_explanation import TurnTrace, build_payload, render_record_for_prompt, render_signals
 from quest_ai_runner.core.orchestrator_judges import JudgesMixin
 
 MODEL = "claude-haiku"   # the fast tier (explain_tier default) on the claude CLI backend
@@ -64,8 +64,18 @@ def prose_of(payload):
     return "\n".join(text_of({k: v for k, v in payload.items() if k not in ("used", "signals", "metrics", "metric_missing")}).splitlines())
 
 
+def grader_record(trace):
+    """What the grader may treat as true: the record the writer was constrained to, plus the other facts the trace holds and the
+    panel's recorded half shows (the run's exit reason and verdict, the planning steps, the item counts of its sources)."""
+    signals = render_signals(trace)
+    lines = [render_record_for_prompt(trace), f"Run outcome facts: exit reason {signals['exit_reason'] or 'none'}; goal met {signals['goal_met']}; "
+             f"planning steps {signals['steps']}; deep run {signals['deep']}."]
+    lines += [f"Source {s.get('label')}: {s.get('item_count', 0)} items." for s in trace.sources if isinstance(s, dict)]
+    return "\n".join(lines)
+
+
 def result_of(trace, payload):
-    return {"payload": payload, "text": text_of(payload), "prose": prose_of(payload), "record": render_record_for_prompt(trace)}
+    return {"payload": payload, "text": text_of(payload), "prose": prose_of(payload), "record": grader_record(trace)}
 
 
 def trace_only(trace):
