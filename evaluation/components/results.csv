@@ -2098,3 +2098,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,hold_the_long_view,no_carry,11,5,5/11,0/0,0,0,0,0.0,0.0,1b53a78,f3649a28,none,,,
 2026-10-28,select_a_rep,persona_resolver_precedence,16,14,14/16,0/0,0,0,0,0.0,0.0,1b53a78,8d7a8ce2,none,,,
 2026-10-28,select_a_rep,first_registered,16,4,4/16,0/0,0,0,0,0.0,0.0,1b53a78,8d7a8ce2,none,,,
+2026-10-28,qar_overall,recorded_rows,8,0,0/8,0/0,0,0,0,0.0,0.8,86c5709,288b4314,none,,,
