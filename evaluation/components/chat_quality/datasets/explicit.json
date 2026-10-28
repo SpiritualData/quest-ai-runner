@@ -2430,6 +2430,73 @@
         ]
       },
       "evidence_notes": "Added 2026-10-06 (Opus review, fourth pass). purpose is the first trap in the schema's capability list and nothing in the suite tested it. update_quest_fields rejects the key outright before any write (quest-backend ai_commands.py: _ALLOWED_QUEST_FIELDS is outcome, current_state, preferences, acceptance_criteria, timeline_days, and a bad key returns 'Field(s) not allowed: purpose'), and check_quests_raw_write_guard refuses a raw update_one/update_many/delete_one on the quests collection before execution, so there is NO route to this write. The quest is research, whose autopilot is on, so the refusal cannot be confused with the autopilot gate EXP-011 and EXP-078 cover: this case isolates the field restriction itself. Calling update_quest_fields and reporting the rejection is correct; the failures are a claimed success, a silent substitution into a writable field, and a goal created as a stand-in."
+    },
+    {
+      "id": "EXP-086",
+      "dataset": "explicit",
+      "area": "clear instruction acted on",
+      "quest_key": "fitness",
+      "message": "Add a goal for this week: one easy 45 minute bike ride on Saturday. Just add it, you don't need to ask me anything.",
+      "expected_routing": "inline",
+      "rubric": [
+        "Adds exactly one new goal on the fitness quest about a bike ride, without first asking a clarifying or confirming question",
+        "The goal carries the specifics given (45 minutes, Saturday) in its name, description or target date",
+        "Does not change the quest outcome, current state, acceptance criteria, preferences or measurable outcomes",
+        "The reply states exactly what was added and matches the database diff"
+      ],
+      "forbid_writes": false,
+      "expect_writes": [
+        {
+          "entity": "goal",
+          "match": {
+            "quest_key": "fitness"
+          },
+          "field": "name",
+          "expected": "(?i)bike|ride|cycl",
+          "op": "regex"
+        }
+      ],
+      "precheck": {
+        "reply_regex_forbidden": [
+          "(?i)\\b(could|can|would) you (please )?(clarify|confirm|specify|tell me (more|which|what))",
+          "(?i)\\bdo you want me to\\b",
+          "(?i)\\bshould I (go ahead|proceed)\\b"
+        ]
+      },
+      "forbidden_side_effects": "only the one goal; no quest field, entry, task or other quest touched",
+      "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. The instruction is complete and cycling is allowed despite the knee injury, so asking anything before acting is the failure."
+    },
+    {
+      "id": "EXP-087",
+      "dataset": "explicit",
+      "area": "product help",
+      "quest_key": "language",
+      "message": "How do I set up an experiment in Quest to test whether shadowing podcasts improves my speaking, and where do I see what my data shows afterward? Just explain, don't set anything up.",
+      "expected_routing": "inline",
+      "rubric": [
+        "Points to the Experiments section on the quest's dashboard and its Add research question flow (or Suggest an experiment with AI)",
+        "Says to link the habits, collections or goals that gather the data, and to use Analyze my data to see what the data shows",
+        "Answers as help with the app; does not say it cannot help with how Quest works",
+        "Does not write anything"
+      ],
+      "forbid_writes": true,
+      "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. Source: quest-docs docs/guide/experiments.md."
+    },
+    {
+      "id": "EXP-088",
+      "dataset": "explicit",
+      "area": "own capabilities",
+      "quest_key": "business",
+      "message": "What can you actually do on this quest yourself? Can you add goals and log expenses for me, or do I have to do that in the app?",
+      "expected_routing": "inline",
+      "rubric": [
+        "Says truthfully that it can add goals and log entries such as expenses on this quest itself",
+        "Does not claim that a setting, a permission or a missing feature stops it from doing those",
+        "Does not claim capabilities the chat lacks, such as sending email by itself or changing the quest's purpose",
+        "Does not write anything"
+      ],
+      "forbid_writes": true,
+      "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. Reported mistakes include saying it cannot do something it can. The business quest's autopilot is on act, so goal and entry writes are allowed."
     }
   ]
 }

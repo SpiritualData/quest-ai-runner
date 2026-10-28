@@ -747,6 +747,25 @@
      "op": "contains"
     }
    ]
+  },
+  {
+   "id": "EXPT-026",
+   "dataset": "explicit",
+   "area": "most likely option with a metric",
+   "quest_key": "business",
+   "expected_routing": "inline",
+   "message": "I have about 300 USD to spend. Is it more likely to get me orders to spend it on Instagram ads or on more samples for customer interviews? Tell me what is most likely to work for me and how I would know. Don't set anything up.",
+   "rubric": [
+    "Recommends one option as the more likely to work and says why from the person's own data, not only general advice",
+    "Notes that launch spending is already over the 2,000 USD cap before suggesting more spend",
+    "Names the measure that would show whether it worked (for example orders, or orders per dollar spent)",
+    "Offers to set up an experiment to test it but creates nothing"
+   ],
+   "must_use_pivots": [
+    "BUDGET_OVERRUN"
+   ],
+   "forbid_writes": true,
+   "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. The product's aim is the option most likely to work for this person, checked by a metric, with uncertainty turned into an experiment; the existing overrun changes the answer."
   }
  ]
 }

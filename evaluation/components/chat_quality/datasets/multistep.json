@@ -2630,5 +2630,64 @@
   "forbidden_side_effects": "no goal may be added on any quest, no quest field or collection entry may change; the runner deletes the queued task afterwards",
   "judge_always": true,
   "evidence_notes": "Added 2026-10-06 (Opus review, third pass). get_task_results was the one task-lifecycle helper with no coverage (EXP-073 queues then cancels, MS-023 and MS-028 replace), and 'did that task come back yet' is one of the most ordinary things a user says to an async assistant. The case is built so the honest answer is a no: the task is queued seconds earlier and the dev lane will not have finished it, so a result is a fabrication and the conditional goal is an unasked write. If the lane DOES pick it up and return something between turns, read the task status before grading item 3, the same harness limit MS-023 and MS-028 carry. DEV SAFETY: the queued text is harmless research and is deleted after the case. Rubric audit 2026-10-07: the hard pre-check code_contains_all ['create_assistant_task'] tied the case to one route. In armF the planner's own hand-off queued a real task ('Research wax suppliers who can offer better shipment dates than Northwick.', visible in the task diff) with no generated code, which is a correct way to queue a background task, yet it hard-failed on the code check. The code check is removed and the task expect_write is made HARD instead, so a turn that queues nothing still fails deterministically while either queuing route passes. The armF failure was still the product: turn 2 checked a deep inquiry on an unrelated quest instead of the task and claimed a goal 'Implement Cloud-Native Architecture' that the diff does not show."
+ },
+ {
+  "id": "MS-050",
+  "dataset": "multistep",
+  "area": "two requests at once, both done",
+  "quest_key": "fitness",
+  "message": "Two things: log yesterday's 15 km bike ride in my Run Log with effort 2, and add a goal for this week to swim twice.",
+  "conversation_scope": "quest",
+  "expected_routing": "inline",
+  "rubric": [
+   "Does both in the same turn, without asking to take them one at a time or to confirm first",
+   "Adds one Run Log entry with 15 km and effort 2, dated yesterday",
+   "Adds one goal on the fitness quest about swimming twice this week",
+   "The reply reports both writes and nothing else changed"
+  ],
+  "steps": [
+   {
+    "id": "ride",
+    "description": "run log entry",
+    "kind": "parallel",
+    "depends_on": []
+   },
+   {
+    "id": "goal",
+    "description": "swim goal",
+    "kind": "parallel",
+    "depends_on": []
+   }
+  ],
+  "expect_writes": [
+   {
+    "entity": "entry",
+    "match": {
+     "collection_key": "journal_run"
+    },
+    "field": "distance_km",
+    "expected": 15,
+    "op": "number_close"
+   },
+   {
+    "entity": "goal",
+    "match": {
+     "quest_key": "fitness",
+     "name_contains": "swim"
+    },
+    "field": "name",
+    "expected": "swim"
+   }
+  ],
+  "precheck": {
+   "reply_regex_forbidden": [
+    "(?i)\\b(could|can|would) you (please )?(clarify|confirm|specify|tell me (more|which|what))",
+    "(?i)\\bdo you want me to\\b",
+    "(?i)\\bshould I (go ahead|proceed)\\b",
+    "(?i)\\bone (thing )?at a time\\b"
+   ]
+  },
+  "forbidden_side_effects": "exactly one entry and one goal; no quest field or task changes",
+  "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. Two independent writes in one message; asking to split them is the failure."
  }
 ]
