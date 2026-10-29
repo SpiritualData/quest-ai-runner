@@ -3515,3 +3515,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,5.0,1622c35,a9f86c1a,none,,,
 2026-10-29,chat_quality,dev_quest_chat,10,5,5/10,0/0,186,1054571,15125,3.3906,367.1,bcaa7c0,8c27caa9,gemini-3.1-flash-lite,,sample:10,
 2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,4.6,41c01f7,a9f86c1a,none,,,
+2026-10-29,qar_overall,recorded_rows,9,5,5/9,0/0,0,0,0,0.0,4.8,103054b,a9f86c1a,none,,,
