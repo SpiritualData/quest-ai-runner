@@ -28,6 +28,12 @@ what is specific to QAR.
 - **Add a search API** that answers JSON by describing it in the file named by `QAR_WEB_SEARCH_APIS_FILE` ([Web search](web-search.md),
   field list in the hub's `docs/search-api-entries.md`). One service per entry, so it is a convenience and not a hub connection.
 
+## Whose tokens (decided)
+
+Decision `teamdec_6255a298dc8a`, approved by Payal as recommended: the consuming product holds users' integration tokens, encrypted,
+using the MCP-spec OAuth flow; a third-party aggregator is used only for apps with no official server. QAR itself keeps no
+long-lived provider tokens: a lane receives a token through the environment variable named by `token_env`.
+
 ## How QAR uses the hub
 
 - **Import.** The hub is imported the way the esoi library is: install it (`pip install -e ../ai-hub-of-hubs-structure`, or the

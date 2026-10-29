@@ -201,3 +201,11 @@ that `metrics` carries the ledger's values whatever a model writes (a stub that 
 changes nothing), that the facts survive a failed or impossible generation call, that a turn with no
 metric results keeps its version 2 payload and prompt, and that older payloads render as before. The
 terminal's metric lines are pinned in `tests/test_deep_output_ui.py` and `tests/test_terminal_calm_output.py`.
+
+## Selection decision
+
+Decision `teamdec_96793b0729b9`, approved by Payal as recommended (no per-option note was recorded): keep the no-model template
+(`explain-an-answer:trace_template`) as the preferred arm and do not add readability to `metric-explain-an-answer`. The metric
+ties the template and the model call inside its margin, so the metric stays as it is. Unconfirmed: for Payal to confirm that
+reading of her bare "approve". The template is not yet a registered implementation with code behind it, so `selected` in
+`esoi/solutions.csv` still names `model_explanation` and no runtime behaviour changed.

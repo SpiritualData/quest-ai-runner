@@ -85,3 +85,14 @@ spend of the runs behind each. Counted from `git log` of `solutions.csv` and `re
 | each offline component's metric | offline | every change to the component or its cases | whole set | none | none | none | cases changed, code changed since commit, dirty |
 | classification, quest_ops, recipe_fast_path, esoi_behavior (chat arm), esoi_judge, chat_quality | live | a decision | 3, 10, 30 | set per run in the task before the first stage, inside the $5 per rolling 24 hours cap across Spiritual Data | calls x price, written first | AI for dev 3 and 10-case stages within the cap, Joshua beyond | as above, and a model or price change |
 | answer-a-turn (dev arm) | live | a decision | 3, 10 | set per run | calls x price | AI for dev, Joshua beyond | as above, and any change to the dev world |
+
+## Approved waivers
+
+Approved by Payal via decision `teamdec_53070164972e` (read as accepting the recommendation, unconfirmed: for Payal to confirm),
+each kept valid and re-run by the staged ladder when budget allows:
+
+- Serper and Brave web-search fallbacks: `web_search_live` (waiver `S20,search-the-web` in `esoi/waivers.csv`).
+- The `claude -p` reference worker (`run-deep-work` subprocess): `evaluation/components/deep_runner`.
+- The fast-tier arm of label-context-cards: waiver `S10,label-context-cards:fast_model_labels_fast` in `esoi/waivers.csv`.
+- Paid live runs stay inside the daily cap set in this file.
+

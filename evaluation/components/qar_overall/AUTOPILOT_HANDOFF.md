@@ -16,3 +16,6 @@ At the END of every pass, after re-recording and `esoi tracker build`:
 6. Mention the page refresh in the goal update.
 
 Never put names, ids, real paths or the content file in this repository. No em dashes in any text added to the content file.
+
+When a decision resolves with a bare "approve" and no note, treat it as accepting the recommendation, apply exactly that, and record
+that reading in the content file and the record you change (marked unconfirmed for the person to confirm).
