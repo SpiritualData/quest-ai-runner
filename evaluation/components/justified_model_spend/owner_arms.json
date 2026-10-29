@@ -65,6 +65,14 @@
    "args": []
   },
   {
+   "component": "judge_live_decisions",
+   "impl": "live_judges",
+   "tier": "subscription",
+   "max_calls": 30,
+   "args": [],
+   "min_calls": 1
+  },
+  {
    "component": "explain_an_answer",
    "impl": "trace_template",
    "tier": "subscription",
@@ -133,14 +141,6 @@
    "impl": "vision_description",
    "tier": "subscription",
    "max_calls": 60,
-   "args": [],
-   "min_calls": 1
-  },
-  {
-   "component": "judge_live_decisions",
-   "impl": "live_judges",
-   "tier": "subscription",
-   "max_calls": 30,
    "args": [],
    "min_calls": 1
   },

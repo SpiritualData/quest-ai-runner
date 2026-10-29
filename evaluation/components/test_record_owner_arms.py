@@ -32,7 +32,7 @@ def test_the_order_is_floors_then_paid_arms_then_ablation():
 
 def test_every_command_runs_under_the_heavy_lock_and_records():
     for label, cmd in rec.build_plan(MANIFEST, api=True):
-        assert cmd[:3] == ["flock", rec.LOCK, sys.executable] and "--record" in cmd, label
+        assert cmd[:3] == ["flock", rec.LOCK, rec.PYTHON] and "--record" in cmd, label
 
 
 def test_a_paid_arm_refuses_a_zero_call_run():
@@ -58,8 +58,8 @@ def test_a_dirty_tree_is_refused_before_anything_runs():
 
     def run(cmd, **kw):
         calls.append(cmd)
-        return SimpleNamespace(returncode=0, stdout=" M quest_ai_runner/core/x.py\n?? evaluation/traces/a.json\n M notes.md\n")
-    assert rec.main([], run=run) == 3 and len(calls) == 1 and calls[0][0] == "git"
+        return SimpleNamespace(returncode=0, stdout=" M quest_ai_runner/core/x.py\n M evaluation/traces/a.json\n M evaluation/components/results.csv\n M notes.md\n")
+    assert rec.main([], run=run) == 3 and len(calls) == 1 and calls[0][0] == "git" and "-uno" in calls[0]
 
 
 def test_the_pass_stops_at_the_first_failing_arm():

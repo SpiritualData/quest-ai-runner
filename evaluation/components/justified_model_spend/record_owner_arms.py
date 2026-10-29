@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 LOCK = "/tmp/qar-heavy.lock"
 TIER_ORDER = ("offline", "subscription", "api")
+PYTHON = str(REPO / ".venv" / "bin" / "python3") if (REPO / ".venv" / "bin" / "python3").exists() else sys.executable   # the repo's own interpreter
 SIBLING_ESOI = REPO.parent / "evolvable-structure" / "implementations" / "python"
 
 
@@ -47,7 +48,7 @@ def select_arms(manifest, tiers=None, only=None, api=False):
 
 
 def arm_command(arm):
-    cmd = ["flock", LOCK, sys.executable, str(HERE / "measure.py"), arm["component"], arm["impl"], "--record"]
+    cmd = ["flock", LOCK, PYTHON, str(HERE / "measure.py"), arm["component"], arm["impl"], "--record"]
     if arm.get("max_calls"):
         cmd += ["--max-calls", str(arm["max_calls"])]
     if arm.get("min_calls"):
@@ -57,7 +58,7 @@ def arm_command(arm):
 
 def ablation_command(manifest):
     ab = manifest["ablation"]
-    return ["flock", LOCK, sys.executable, "-m", "esoi", "run", ab["component"], "--impl", ab["impl"], "--record"]
+    return ["flock", LOCK, PYTHON, "-m", "esoi", "run", ab["component"], "--impl", ab["impl"], "--record"]
 
 
 def build_plan(manifest, tiers=None, only=None, api=False):
@@ -74,10 +75,12 @@ def api_estimate(manifest, api=False, tiers=None, only=None):
 
 
 def dirty_paths(run=subprocess.run, cwd=REPO):
-    """Uncommitted changes under the measured code (``quest_ai_runner`` and ``evaluation/components``, prose excluded)."""
-    out = run(["git", "-C", str(cwd), "status", "--porcelain", "--", "quest_ai_runner", "evaluation/components"],
+    """Uncommitted edits to tracked measured code (``quest_ai_runner`` and ``evaluation/components``; prose, the results log and traces
+    excluded: recording writes them). Untracked files are not counted: a row is stale when committed code changed, not when a new file waits."""
+    out = run(["git", "-C", str(cwd), "status", "--porcelain", "-uno", "--", "quest_ai_runner", "evaluation/components"],
               capture_output=True, text=True).stdout.splitlines()
-    return [line[3:] for line in out if not line.endswith(".md") and "__pycache__" not in line and not line[3:].startswith("evaluation/traces")]
+    return [line[3:] for line in out if not line.endswith(".md") and "__pycache__" not in line
+            and not line.endswith("evaluation/components/results.csv") and not line[3:].startswith("evaluation/traces")]
 
 
 def last_cost(component, impl, results=REPO / "evaluation" / "components" / "results.csv"):
