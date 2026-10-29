@@ -3113,3 +3113,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,end_to_end,reference_script,13,13,13/13,0/0,64,52,7,0.0,0.2,443d348,489a4a26,simulated,,,1.0
 2026-10-29,end_to_end,rules_only,13,6,6/13,0/0,0,0,0,0.0,0.1,443d348,489a4a26,none,,,0.6231
 2026-10-29,end_to_end,qar_live,13,12,12/13,0/0,90,689003,30077,0.5229,320.9,443d348,489a4a26,claude-code-subscription,,,0.7638
+2026-10-29,hub_of_hubs,registry_scan,70,55,55/70,0/0,0,0,0,0.0,0.0,0e64323,83ab3526,none,,,
+2026-10-29,hub_of_hubs,registry_scan,70,55,55/70,0/0,0,0,0,0.0,0.0,bda1a30,83ab3526,none,,,
