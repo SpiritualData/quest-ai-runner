@@ -12,7 +12,8 @@ import claude_judge
 
 HERE = Path(__file__).resolve().parent
 REPLY_MODEL = "claude-haiku"
-MAX_WORDS = 110
+MAX_WORDS = 110          # what the prompt asks for
+HARD_MAX_WORDS = 150     # what the scorer tolerates (an urgent how-to needs its steps)
 BREVITY = (f"\n\nThis turn is text only and you cannot change anything, so never say you did something. Keep the reply under {MAX_WORDS} "
            "words. Use only the facts given in this prompt and never invent a quest, date, number or milestone.")
 GUIDANCE_DIRECTIVE = (
@@ -23,6 +24,18 @@ GUIDANCE_DIRECTIVE = (
     "whose milestone matters most now. Name the real milestone and the real current reading exactly as given. Leave the pointer out "
     "completely, with no encouragement about the long-term goal at all, when the matter is urgent or about safety, the person is upset, "
     "the question is a quick narrow or unrelated lookup, or the milestone was already raised in this conversation or they asked you to stop.")
+
+GUIDANCE_DIRECTIVE_V2 = (
+    "\n\nLong-term guidance. The context above holds the next milestone or target and its current reading; use only those.\n"
+    "Step 1, decide. Write the answer alone, with no word about milestones, targets, goals, progress or what is due, when ANY of these holds: "
+    "the matter is urgent, an injury, a safety issue, an outage or due today; the person is upset, discouraged or worried; the message is a "
+    "narrow lookup, calculation, format, translation or recommendation; it has nothing to do with this work; the milestone was already raised "
+    "in this conversation or they asked you to stop. When in doubt, write the answer alone.\n"
+    "Step 2, otherwise. Answer fully first. Then end with exactly one sentence, never more, that names the next target and where it stands now, "
+    "using the context's own words and numbers. Choose it by what the context holds: if a goal is in focus, name that goal's next target and its "
+    "current reading, not the quest's far milestone; if only one quest is described, name its next milestone and its current reading; if you look "
+    "after several quests, name the one whose milestone is nearest, with its date or target and its current reading, and say why it comes first. "
+    "Never invent a date or figure. Never put the sentence before the answer.")
 
 
 def load_cases():

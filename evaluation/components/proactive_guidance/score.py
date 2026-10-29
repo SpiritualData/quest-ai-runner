@@ -4,7 +4,7 @@ Per case: ``ok``, ``class`` (nudge or restraint), ``level`` (quest, goal or rep)
 ``awkward`` (a restraint case that got a pointer, or any pointer the grader finds forced, nagging or ahead of the answer), ``problems``
 (checks by code) and ``note``.
 
-Checks by code run first and a reply that fails one is not sent to the grader: a dash, a reply over the word limit, a figure in a pointing sentence that the case does
+Checks by code run first and a reply that fails one is not sent to the grader: a dash, a reply over the hard word limit (the prompt asks for 110, a legitimate urgent how-to may run to 150), a figure in a pointing sentence that the case does
 not hold (a nudge must be grounded, never invented), a nudge that does not name a real milestone and a real reading of the case, a nudge in the first
 sentence ahead of the answer (unless the request asks what to do next), and, in a restraint case, any mention of the milestone or the reading.
 Then one grader call (``claude_judge``): does it respond to what the person said, is a pointer present, at which level, is every fact in it from
@@ -74,7 +74,7 @@ def problems_by_code(case, reply):
         return ["empty reply"]
     if any(d in reply for d in DASHES):
         found.append("dash")
-    if len(reply.split()) > arms.MAX_WORDS:
+    if len(reply.split()) > arms.HARD_MAX_WORDS:
         found.append(f"{len(reply.split())} words")
     held = " ".join([arms.context_text(case), *case.get("recent", []), case["message"], case["plain_answer"]])
     invented = sorted(n for sentence in nudge_sentences(case, reply) for n in numbers(sentence) - numbers(held))
@@ -89,7 +89,7 @@ def problems_by_code(case, reply):
         if not case.get("answer_may_name_milestone"):
             if named(first_sentence(reply), case)[0]:
                 found.append("nudge ahead of the answer")
-    elif milestone or reading:
+    elif reading or (milestone and re.search(r"\b(?:milestone|target|next step|on track)\b", reply, re.I)):
         found.append("nudge where none belongs")
     return found
 

@@ -123,3 +123,26 @@ def test_a_world_fact_with_a_figure_is_not_an_invented_milestone_but_an_invented
     assert score.score_case(lambda c: {"reply": fact, "provider": stub}, BY_ID["PG-R-Q2"])["ok"]
     wrong = "Log the distance and pace. Your next milestone is the 25 km long run and you are at 22 km."
     assert "figure not in the case: 22" in score.score_case(lambda c: {"reply": wrong, "provider": stub}, BY_ID["PG-N-Q1"])["note"]
+
+
+def test_hand_labelled_replies_classify_correctly_by_code():
+    """The floor, a scripted ideal, the broken baseline and hand-written good and bad replies, all by the checks by code alone."""
+    for case in CASES:
+        plain = case["plain_answer"]
+        ideal = f"{plain} Your next milestone is {case['milestone_keys'][0]}, and you are at {case['metric_values'][0]}."
+        if case["class"] == "nudge":
+            assert score.problems_by_code(case, ideal) == [], case["id"]          # scripted ideal passes
+            assert score.problems_by_code(case, plain), case["id"]                # the floor misses the nudge
+        else:
+            assert score.problems_by_code(case, plain) == [], case["id"]          # the floor is right to say nothing
+            assert score.problems_by_code(case, ideal), case["id"]                # an ideal nudge is wrong here
+    hand = [
+        ("PG-N-R4", "The team agreed on Tuesday and Thursday mornings. Standups are your next milestone, and you are at 0 of 2 held.", True),
+        ("PG-N-R4", "The team agreed on Tuesday and Thursday mornings. The next milestone is the standups.", False),
+        ("PG-R-R3", "I am sorry about your dad. Tell me which deadline, the Friday newsletter or chapter 12, and I will help you replan.", True),
+        ("PG-R-R3", "I am sorry. Your next milestone is chapter 12 and chapter 11 is done, so keep going.", False),
+        ("PG-R-Q1", " ".join(["Check the status page and the last deploy."] * 14), True),       # 126 words: a legitimate how-to
+        ("PG-R-Q1", " ".join(["Check the status page and the last deploy."] * 20), False),      # 180 words: too long
+    ]
+    for case_id, reply, good in hand:
+        assert (score.problems_by_code(BY_ID[case_id], reply) == []) is good, (case_id, reply[:60])

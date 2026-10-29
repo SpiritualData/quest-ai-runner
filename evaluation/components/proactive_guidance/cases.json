@@ -294,7 +294,7 @@
   "expected_level": "rep",
   "context": [
    "Where this sits: You are the operations representative for three quests under the Company intent",
-   "Quest A, Weekly team rhythm: next milestone hold the first Tuesday and Thursday standups this week; agreed meeting days are Tuesday and Thursday mornings",
+   "Quest A, Weekly team rhythm: next milestone hold the first Tuesday and Thursday standups this week; agreed meeting days are Tuesday and Thursday mornings; standups held 0 of 2 so far",
    "Quest B, Close the quarter: next milestone file the expense report by 30 November; 14 of 22 receipts matched",
    "Quest C, Update the handbook: next milestone review section 3 by 6 December; 2 of 5 sections reviewed"
   ],
@@ -310,7 +310,8 @@
   ],
   "metric_values": [
    "14 of 22",
-   "2 of 5"
+   "2 of 5",
+   "0 of 2"
   ],
   "answer_may_name_milestone": false,
   "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
