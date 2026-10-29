@@ -517,6 +517,8 @@ makes a run worse, and the task-memory makes it better over time.
 Full methodology, dataset, and honest limitations: see [evaluation/README.md](evaluation/README.md).
 Re-run: `esoi run context_selection --impl hybrid_union` (free) and
 `esoi run claude_code_ab --impl warm_claude` (spends a little Haiku token, runs on a repo copy).
+Handoff page from the recorded rows (free, offline): `python evaluation/components/qar_overall/render_handoff.py --content <content.json>`
+(`--check` exits 1 when stale; the daily steps are in `evaluation/components/qar_overall/AUTOPILOT_HANDOFF.md`).
 
 ## Contributing
 
