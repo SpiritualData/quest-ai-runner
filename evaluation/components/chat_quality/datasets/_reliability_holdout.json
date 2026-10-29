@@ -1,0 +1,25 @@
+{
+ "holdout": [
+  "REL-GRD-03",
+  "REL-GRD-08",
+  "REL-GRD-14",
+  "REL-GRD-20",
+  "REL-GRD-24",
+  "REL-WRS-02",
+  "REL-WRS-09",
+  "REL-WRS-14",
+  "REL-WRS-19",
+  "REL-RTE-02",
+  "REL-RTE-11",
+  "REL-RTE-14",
+  "REL-MUL-04",
+  "REL-MUL-09",
+  "REL-MUL-14",
+  "REL-ISO-03",
+  "REL-ISO-08",
+  "REL-CST-02",
+  "REL-CST-09",
+  "REL-ADV-04"
+ ],
+ "note": "20 cases kept unseen until the end of the triage so fixes are not fitted to the test"
+}
