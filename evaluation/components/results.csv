@@ -3644,3 +3644,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,justified_model_spend,spec_registry_ablation,15,0,0/15,0/0,0,0,0,0.0,1.7,205b6dd,f4536c6e,none,,,
 2026-10-29,qar_overall,recorded_rows,9,5,5/9,0/0,0,0,0,0.0,5.6,205b6dd,6d7d1f64,none,,,
 2026-10-29,end_to_end,qar_live,13,12,12/13,0/0,87,654831,27687,0.5799,315.0,4fb16c1,489a4a26,claude-code-subscription,,,0.7518
+2026-10-29,qar_overall,recorded_rows,9,5,5/9,0/0,0,0,0,0.0,4.5,79af78f,6d7d1f64,none,,,
