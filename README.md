@@ -44,6 +44,8 @@ A request flows from the world through the Subconscious, Mind and Critical think
 
 The outside tools QAR builds on, and which part uses each, are in [QAR as a hub of hubs](docs/anatomy.md#b-qar-as-a-hub-of-hubs). The parts table is in [docs/anatomy.md](docs/anatomy.md).
 
+Why QAR sits on open-source hubs instead of building each integration, how to add a tool server, agent, model vendor or search backend by configuration, and where each area stands: [Hub of hubs](docs/hub-of-hubs.md).
+
 ## What Quest is, and where this fits
 
 [**Quest**](https://quest.spiritualdata.org) is a goal app for the goals that actually take a

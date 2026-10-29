@@ -1,0 +1,21 @@
+capability_id,area,capability,hub,connect,evidence_path
+cap-deep-claude,agent_harness,Deep work through Claude Code,Claude Code CLI,code,quest_ai_runner/core/goal_runner.py
+cap-deep-acp,agent_harness,Deep work through any ACP agent,Agent Client Protocol,config,quest_ai_runner/adapters/acp_deep_runner_config.py
+cap-mcp-read,tools_mcp,Read through any MCP server,MCP Python SDK,config,quest_ai_runner/config_file.py
+cap-mcp-write,tools_mcp,Write through any allowlisted MCP server tool,MCP Python SDK,config,quest_ai_runner/config_file.py
+cap-search-serper,web_search,Search with Serper,Serper,code,quest_ai_runner/adapters/web_search_backends.py
+cap-search-brave,web_search,Search with Brave,Brave Search API,code,quest_ai_runner/adapters/web_search_backends.py
+cap-search-tavily,web_search,Search with Tavily,Tavily,code,quest_ai_runner/adapters/web_search_backends.py
+cap-search-searxng,web_search,Search with SearXNG,SearXNG,code,quest_ai_runner/adapters/web_search_backends.py
+cap-search-gemini,web_search,Search with Gemini grounding,Gemini grounding,code,quest_ai_runner/adapters/web_search_backends.py
+cap-world-notion,world,Read Notion,none,code,quest_ai_runner/adapters/notion_adapter.py
+cap-world-drive,world,Read Google Drive,none,code,quest_ai_runner/adapters/google_drive_adapter.py
+cap-world-chat,world,Read Google Chat,none,code,quest_ai_runner/adapters/google_chat_adapter.py
+cap-ctx-bm25,context_assembly,Keyword index,bm25s,code,quest_ai_runner/adapters/bm25_content_store.py
+cap-ctx-qdrant,context_assembly,Vector index,Qdrant and fastembed,code,quest_ai_runner/adapters/qdrant_vector_store.py
+cap-model-anthropic,model_providers,Call Anthropic models,Anthropic SDK,code,quest_ai_runner/adapters/anthropic_provider.py
+cap-model-gemini,model_providers,Call Gemini models,Google GenAI SDK,code,quest_ai_runner/adapters/gemini_provider.py
+cap-model-openai,model_providers,Call OpenAI models,OpenAI SDK,code,quest_ai_runner/adapters/openai_provider.py
+cap-model-deepseek,model_providers,Call DeepSeek models,OpenAI SDK,code,quest_ai_runner/adapters/deepseek_provider.py
+cap-memory-cards,memory,Durable cards,none (own card store),code,quest_ai_runner/adapters/file_context_store.py
+cap-evals-esoi,evals,Component evals selected by metric,esoi,code,evaluation/components

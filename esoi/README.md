@@ -67,6 +67,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-risk-handled-uniformly`: Risky moments in a run (re-proposing a declined act, claiming work that did not run, handing back a step the AI could do, a wrong route, an irreversible act, a cross-scope read) are watched by one overseer that reviews a digest with one prompt on one tier, whatever the risk, and nothing shows which response works for which kind of risk.
 - `prob-long-view-scope-not-hierarchical`: A representative's high-level view legitimately spans its assigned quests and the intents above them, but the library's fence compares flat tag sets: an item is visible to a turn only when their tags intersect, or everywhere when it has none. Nothing can say visible to this representative's assigned quests and their ancestor intents, never to another representative's quests, a sibling intent or another person; and a representative's learned notes and context preferences carry no scope at all, so what it learned on one quest reaches every other.
 - `prob-wrong-or-inconsistent-rep`: Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative. A quest can have several representatives, each with its own higher mind, so a wrong choice also grounds the request in the wrong view.
+- `prob-long-term-goal-goes-quiet`: The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply, nags, hijacks a simple question or lands on a person who is in a hurry or upset.
 
 ## Ideals
 
@@ -121,6 +122,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-risk-handled-where-it-is`, Risk Handled Where It Is: Each high-risk case gets the response proven best for its kind of risk, and a low-risk case pays nothing for review.
 - `ideal-hierarchy-contained-scope`, Hierarchy-Contained Scope: What a representative learns reaches its own assigned quests and the intents above them, and never another representative's quests, a sibling intent or another person.
 - `ideal-right-rep`, Right Representative: Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
+- `ideal-moves-me-forward`, Moves Me Forward Without Nagging: Unconfirmed, from the call: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
 
 ## Solutions
 
@@ -198,6 +200,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `label-context-cards` | Card categories and metadata | fast_model_labels | Retrieval hits and category precision per unit of cost |
 | `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
 | `justify-model-calls` | Justified model calls | spec_registry | Justified share of model spend |
+| `answer-end-to-end` | Whole-path answer check | qar_live | Whole-path turns right on a small mixed set |
+| `guide-toward-the-long-term-goal` | Guidance toward the long-term goal | reply_voice | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
+| `use-open-source-hubs` | Open-source hubs before bespoke integrations | registry_scan | Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 
 ## Implementations
 
@@ -455,6 +460,15 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `assist-a-terminal-session:rules_only` | Rules only, no model call (floor, proposed) |  |  |
 | `justify-model-calls:spec_registry` | Registered prompt specs with an enforcement test (today) | quest_ai_runner/core/prompt_specs.py |  |
 | `justify-model-calls:spec_registry_ablation` | Registry plus per-call ablation against the owner metric (proposed) |  |  |
+| `judge-a-decision:no_call_floor` | No-call floor of the quest ranker and reach judge | evaluation/components/judge_live_decisions/impls/no_call_floor.py |  |
+| `judge-a-decision:live_judges` | Live quest ranker and reach judge on a small model | evaluation/components/judge_live_decisions/impls/live_judges.py |  |
+| `answer-end-to-end:qar_live` | QAR as shipped, live on the subscription (today) | quest_ai_runner/core/orchestrator.py |  |
+| `answer-end-to-end:reference_script` | Scripted ideal planner (offline) |  |  |
+| `answer-end-to-end:rules_only` | Rules only, no model (floor) |  |  |
+| `guide-toward-the-long-term-goal:reply_voice` | Reply voice as shipped (today) | quest_ai_runner/core/auxiliary_prompts.py |  |
+| `guide-toward-the-long-term-goal:guided` | Reply voice plus a long-term guidance directive (proposed) |  |  |
+| `guide-toward-the-long-term-goal:no_nudge` | Plain answer only (floor) |  |  |
+| `use-open-source-hubs:registry_scan` | Registry read together with the code (today) | evaluation/components/hub_of_hubs/impls/registry_scan.py |  |
 
 ## Metrics
 
@@ -487,7 +501,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-watch-a-run`, Overseer digest evidence and signal correctness on labelled scenarios: `esoi run overseer_signals --impl digest_probe`
 - `metric-detect-stale-cards`, Staleness detection precision and recall over mutation cases: `esoi run staleness --impl store_sha256`
 - `metric-assemble-a-prompt`, Prompt size against budget and duplicated-block count: `esoi run prompt_size --impl live`
-- `metric-judge-a-decision`, Judge deterministic-half correctness with a scripted provider: `esoi run judges --impl qar_judges`
+- `metric-judge-a-decision`, Judge deterministic-half correctness with a scripted provider: `esoi run judges --impl qar_judges; esoi run judge_live_decisions --impl live_judges`
 - `metric-guard-a-reply`, Reply guard correctness over link, recipe and anticipation cases: `esoi run reply_guards --impl qar_guards`
 - `metric-feed-context-sources`, Update-offering correctness over synthetic quest channels: `esoi run feed_context_sources --impl update_engine`
 - `metric-store-feedback`, Correction carry-through over the feedback-loop cases: `esoi run feedback_loop --impl ledger_guidance`
@@ -538,3 +552,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `esoi run assist_a_terminal_session --impl fast_model_helpers`
 - `metric-justified-model-spend`, Justified share of model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
 - `QME8`, Justified model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
+- `metric-answer-end-to-end`, Whole-path turns right on a small mixed set: `esoi run end_to_end --impl qar_live --sample 3 --max-calls 60`
+- `metric-guide-toward-the-long-term-goal`, Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere: `esoi run proactive_guidance --impl reply_voice`
+- `metric-hub-of-hubs`, Hub of hubs: coverage, integration by configuration, research freshness, code structure: `esoi run hub_of_hubs --impl registry_scan`
+- `QME9`, Hub of hubs: `esoi run hub_of_hubs --impl registry_scan`

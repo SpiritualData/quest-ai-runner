@@ -1,0 +1,982 @@
+[
+ {
+  "id": "HUB-001",
+  "area": "agent_harness",
+  "kind": "registered",
+  "description": "agent_harness: registered",
+  "args": {
+   "area": "agent_harness"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-002",
+  "area": "agent_harness",
+  "kind": "by_config",
+  "description": "agent_harness: by_config",
+  "args": {
+   "area": "agent_harness"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-003",
+  "area": "agent_harness",
+  "kind": "fresh",
+  "description": "agent_harness: fresh",
+  "args": {
+   "area": "agent_harness"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-004",
+  "area": "agent_harness",
+  "kind": "seam",
+  "description": "agent_harness: seam",
+  "args": {
+   "area": "agent_harness"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-005",
+  "area": "agent_harness",
+  "kind": "selectable",
+  "description": "agent_harness: selectable",
+  "args": {
+   "area": "agent_harness"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-006",
+  "area": "agent_harness",
+  "kind": "core_clean",
+  "description": "agent_harness: core_clean",
+  "args": {
+   "area": "agent_harness"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-007",
+  "area": "agent_harness",
+  "kind": "fake_hub",
+  "description": "agent_harness: fake_hub",
+  "args": {
+   "area": "agent_harness"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-008",
+  "area": "tools_mcp",
+  "kind": "registered",
+  "description": "tools_mcp: registered",
+  "args": {
+   "area": "tools_mcp"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-009",
+  "area": "tools_mcp",
+  "kind": "by_config",
+  "description": "tools_mcp: by_config",
+  "args": {
+   "area": "tools_mcp"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-010",
+  "area": "tools_mcp",
+  "kind": "fresh",
+  "description": "tools_mcp: fresh",
+  "args": {
+   "area": "tools_mcp"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-011",
+  "area": "tools_mcp",
+  "kind": "seam",
+  "description": "tools_mcp: seam",
+  "args": {
+   "area": "tools_mcp"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-012",
+  "area": "tools_mcp",
+  "kind": "selectable",
+  "description": "tools_mcp: selectable",
+  "args": {
+   "area": "tools_mcp"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-013",
+  "area": "tools_mcp",
+  "kind": "core_clean",
+  "description": "tools_mcp: core_clean",
+  "args": {
+   "area": "tools_mcp"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-014",
+  "area": "tools_mcp",
+  "kind": "fake_hub",
+  "description": "tools_mcp: fake_hub",
+  "args": {
+   "area": "tools_mcp"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-015",
+  "area": "web_search",
+  "kind": "registered",
+  "description": "web_search: registered",
+  "args": {
+   "area": "web_search"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-016",
+  "area": "web_search",
+  "kind": "by_config",
+  "description": "web_search: by_config",
+  "args": {
+   "area": "web_search"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-017",
+  "area": "web_search",
+  "kind": "fresh",
+  "description": "web_search: fresh",
+  "args": {
+   "area": "web_search"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-018",
+  "area": "web_search",
+  "kind": "seam",
+  "description": "web_search: seam",
+  "args": {
+   "area": "web_search"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-019",
+  "area": "web_search",
+  "kind": "selectable",
+  "description": "web_search: selectable",
+  "args": {
+   "area": "web_search"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-020",
+  "area": "web_search",
+  "kind": "core_clean",
+  "description": "web_search: core_clean",
+  "args": {
+   "area": "web_search"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-021",
+  "area": "web_search",
+  "kind": "fake_hub",
+  "description": "web_search: fake_hub",
+  "args": {
+   "area": "web_search"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-022",
+  "area": "world",
+  "kind": "registered",
+  "description": "world: registered",
+  "args": {
+   "area": "world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-023",
+  "area": "world",
+  "kind": "by_config",
+  "description": "world: by_config",
+  "args": {
+   "area": "world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-024",
+  "area": "world",
+  "kind": "fresh",
+  "description": "world: fresh",
+  "args": {
+   "area": "world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-025",
+  "area": "world",
+  "kind": "seam",
+  "description": "world: seam",
+  "args": {
+   "area": "world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-026",
+  "area": "world",
+  "kind": "selectable",
+  "description": "world: selectable",
+  "args": {
+   "area": "world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-027",
+  "area": "world",
+  "kind": "core_clean",
+  "description": "world: core_clean",
+  "args": {
+   "area": "world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-028",
+  "area": "world",
+  "kind": "fake_hub",
+  "description": "world: fake_hub",
+  "args": {
+   "area": "world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-029",
+  "area": "context_assembly",
+  "kind": "registered",
+  "description": "context_assembly: registered",
+  "args": {
+   "area": "context_assembly"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-030",
+  "area": "context_assembly",
+  "kind": "by_config",
+  "description": "context_assembly: by_config",
+  "args": {
+   "area": "context_assembly"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-031",
+  "area": "context_assembly",
+  "kind": "fresh",
+  "description": "context_assembly: fresh",
+  "args": {
+   "area": "context_assembly"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-032",
+  "area": "context_assembly",
+  "kind": "seam",
+  "description": "context_assembly: seam",
+  "args": {
+   "area": "context_assembly"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-033",
+  "area": "context_assembly",
+  "kind": "selectable",
+  "description": "context_assembly: selectable",
+  "args": {
+   "area": "context_assembly"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-034",
+  "area": "context_assembly",
+  "kind": "core_clean",
+  "description": "context_assembly: core_clean",
+  "args": {
+   "area": "context_assembly"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-035",
+  "area": "context_assembly",
+  "kind": "fake_hub",
+  "description": "context_assembly: fake_hub",
+  "args": {
+   "area": "context_assembly"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-036",
+  "area": "science",
+  "kind": "registered",
+  "description": "science: registered",
+  "args": {
+   "area": "science"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-037",
+  "area": "science",
+  "kind": "by_config",
+  "description": "science: by_config",
+  "args": {
+   "area": "science"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-038",
+  "area": "science",
+  "kind": "fresh",
+  "description": "science: fresh",
+  "args": {
+   "area": "science"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-039",
+  "area": "science",
+  "kind": "seam",
+  "description": "science: seam",
+  "args": {
+   "area": "science"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-040",
+  "area": "science",
+  "kind": "selectable",
+  "description": "science: selectable",
+  "args": {
+   "area": "science"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-041",
+  "area": "science",
+  "kind": "core_clean",
+  "description": "science: core_clean",
+  "args": {
+   "area": "science"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-042",
+  "area": "science",
+  "kind": "fake_hub",
+  "description": "science: fake_hub",
+  "args": {
+   "area": "science"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-043",
+  "area": "model_providers",
+  "kind": "registered",
+  "description": "model_providers: registered",
+  "args": {
+   "area": "model_providers"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-044",
+  "area": "model_providers",
+  "kind": "by_config",
+  "description": "model_providers: by_config",
+  "args": {
+   "area": "model_providers"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-045",
+  "area": "model_providers",
+  "kind": "fresh",
+  "description": "model_providers: fresh",
+  "args": {
+   "area": "model_providers"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-046",
+  "area": "model_providers",
+  "kind": "seam",
+  "description": "model_providers: seam",
+  "args": {
+   "area": "model_providers"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-047",
+  "area": "model_providers",
+  "kind": "selectable",
+  "description": "model_providers: selectable",
+  "args": {
+   "area": "model_providers"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-048",
+  "area": "model_providers",
+  "kind": "core_clean",
+  "description": "model_providers: core_clean",
+  "args": {
+   "area": "model_providers"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-049",
+  "area": "model_providers",
+  "kind": "fake_hub",
+  "description": "model_providers: fake_hub",
+  "args": {
+   "area": "model_providers"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-050",
+  "area": "memory",
+  "kind": "registered",
+  "description": "memory: registered",
+  "args": {
+   "area": "memory"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-051",
+  "area": "memory",
+  "kind": "by_config",
+  "description": "memory: by_config",
+  "args": {
+   "area": "memory"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-052",
+  "area": "memory",
+  "kind": "fresh",
+  "description": "memory: fresh",
+  "args": {
+   "area": "memory"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-053",
+  "area": "memory",
+  "kind": "seam",
+  "description": "memory: seam",
+  "args": {
+   "area": "memory"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-054",
+  "area": "memory",
+  "kind": "selectable",
+  "description": "memory: selectable",
+  "args": {
+   "area": "memory"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-055",
+  "area": "memory",
+  "kind": "core_clean",
+  "description": "memory: core_clean",
+  "args": {
+   "area": "memory"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-056",
+  "area": "memory",
+  "kind": "fake_hub",
+  "description": "memory: fake_hub",
+  "args": {
+   "area": "memory"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-057",
+  "area": "evals",
+  "kind": "registered",
+  "description": "evals: registered",
+  "args": {
+   "area": "evals"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-058",
+  "area": "evals",
+  "kind": "by_config",
+  "description": "evals: by_config",
+  "args": {
+   "area": "evals"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-059",
+  "area": "evals",
+  "kind": "fresh",
+  "description": "evals: fresh",
+  "args": {
+   "area": "evals"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-060",
+  "area": "evals",
+  "kind": "seam",
+  "description": "evals: seam",
+  "args": {
+   "area": "evals"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-061",
+  "area": "evals",
+  "kind": "selectable",
+  "description": "evals: selectable",
+  "args": {
+   "area": "evals"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-062",
+  "area": "evals",
+  "kind": "core_clean",
+  "description": "evals: core_clean",
+  "args": {
+   "area": "evals"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-063",
+  "area": "evals",
+  "kind": "fake_hub",
+  "description": "evals: fake_hub",
+  "args": {
+   "area": "evals"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-064",
+  "area": "voice",
+  "kind": "registered",
+  "description": "voice: registered",
+  "args": {
+   "area": "voice"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-065",
+  "area": "voice",
+  "kind": "by_config",
+  "description": "voice: by_config",
+  "args": {
+   "area": "voice"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-066",
+  "area": "voice",
+  "kind": "fresh",
+  "description": "voice: fresh",
+  "args": {
+   "area": "voice"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-067",
+  "area": "voice",
+  "kind": "seam",
+  "description": "voice: seam",
+  "args": {
+   "area": "voice"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-068",
+  "area": "voice",
+  "kind": "selectable",
+  "description": "voice: selectable",
+  "args": {
+   "area": "voice"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-069",
+  "area": "voice",
+  "kind": "core_clean",
+  "description": "voice: core_clean",
+  "args": {
+   "area": "voice"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-070",
+  "area": "voice",
+  "kind": "fake_hub",
+  "description": "voice: fake_hub",
+  "args": {
+   "area": "voice"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ }
+]

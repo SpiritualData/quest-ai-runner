@@ -6,8 +6,8 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | Component | Layer | Role | Serves |
 |---|---|---|---|
 | `core-ports` | core | The generic boundary: adapter interfaces, value objects, streaming sinks, event constants | show-progress |
-| `core-orchestrator-loop` | core | The bounded plan, gather, re-plan, answer/deep/confirm loop, split into role mixins | route-a-message, answer-a-turn, act-as-the-body, narrate-a-turn |
-| `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message, keep-a-working-stream, admit-to-the-mind, hold-the-long-view, justify-model-calls |
+| `core-orchestrator-loop` | core | The bounded plan, gather, re-plan, answer/deep/confirm loop, split into role mixins | route-a-message, answer-a-turn, act-as-the-body, narrate-a-turn, answer-end-to-end |
+| `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message, keep-a-working-stream, admit-to-the-mind, hold-the-long-view, justify-model-calls, guide-toward-the-long-term-goal |
 | `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | watch-a-run, judge-a-decision, explain-an-answer |
 | `core-model-selection` | core | Tier to live model id, family resolution, deep-run starting model, outage and usage-limit memory | choose-a-model-tier |
 | `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-run control channel (steer, stop, pause), per-turn execution record | run-deep-work, receive-input-mid-run, detect-a-stalled-run, describe-an-attachment |
@@ -37,11 +37,11 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |
 | `prompts` | prompts | Prompt text shipped as data and the scripts that keep each copy equal to its source: standing deep-run instructions (evolvable_structure.md and the public docs/evolvable-structure.md generated from the ESOI skill) and the vendored quest field guidance | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
 | `vendor` | vendor | Vendored third-party code, unmodified | expose-the-public-api |
-| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset,  the combined QAR metric (qar_overall) reads their recorded rows | verify-offline, spec-selection, QS1 |
+| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset,  the combined QAR metric (qar_overall) reads their recorded rows | verify-offline, spec-selection, QS1, answer-end-to-end, use-open-source-hubs |
 | `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (repair-a-card-store), restart-if-idle (run-queued-tasks) | search-the-web, repair-a-card-store, run-queued-tasks |
 | `examples` | examples | Runnable reference consumers (env-driven, no real data) | learn-by-example |
 | `tests` | tests | Offline test suite and shared fakes | verify-offline |
-| `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | verify-offline, keep-secrets-out |
+| `structure-registry` | docs | This registry, the solutions ontology, and the check that keeps them true | verify-offline, keep-secrets-out, use-open-source-hubs |
 | `solution-tags` | scripts | Solution tags: rule Q1 over esoi/tags.csv and the tags columns, and the lookup of the solutions that share a tag or a connected problem | tag-solutions |
 | `docs-and-meta` | docs | Documentation and repo-level project files | explain-qar |
 | `core-selection` | core | Selection by name: resolve(solution_id, name) turns a name into the implementation declared beside its code, with the records as the only list and the snapshot for an installed copy, so switching an implementation is a data or config change | select-an-implementation |

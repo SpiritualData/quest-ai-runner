@@ -79,5 +79,11 @@
    "cheap": [{"arm": "justified_model_spend/spec_registry_ablation", "share": 1.0, "run": {"cheap": "esoi run justified_model_spend --impl spec_registry_ablation --record"},
               "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on eval traces of the owner arms"}],
    "full": [{"arm": "justified_model_spend/spec_registry_ablation", "share": 1.0, "run": {"full": "esoi run justified_model_spend --impl spec_registry_ablation --record"},
-             "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on eval traces of the owner arms"}]}}
+             "what": "metric-justified-model-spend: per-call ablation of each registered prompt against its owner metric, on eval traces of the owner arms"}]}},
+ {"id": "QME9", "kind": "hubs", "area": "Hub of hubs",
+  "args": {"rule": "pass_rate", "what": "share of the hub-of-hubs checks that hold per area: hub registered, built on by configuration, researched within 90 days, one seam, selectable by metric, no vendor branch in core, a fake hub accepted by configuration (metric-hub-of-hubs)",
+   "cheap": [{"arm": "hub_of_hubs/registry_scan", "share": 1.0, "run": {"cheap": "esoi run hub_of_hubs --impl registry_scan --record"},
+              "what": "metric-hub-of-hubs: the registry in esoi/hubs.csv read together with the code, offline"}],
+   "full": [{"arm": "hub_of_hubs/registry_scan", "share": 1.0, "run": {"full": "esoi run hub_of_hubs --impl registry_scan --record"},
+             "what": "metric-hub-of-hubs: the registry in esoi/hubs.csv read together with the code, offline"}]}}
 ]

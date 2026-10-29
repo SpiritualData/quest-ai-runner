@@ -21,6 +21,8 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   decision-routing roles) and `load_client`, the lightweight sibling of `load_config` for a
   script, notebook, or one-off lookup that only needs a `QuestClient` (see also the README's
   "Scripting the Quest API" and the `quest-ai-runner quest <method>` CLI subcommand).
+- **[Hub of hubs](hub-of-hubs.md)**: why QAR builds on open-source hubs, how to add a tool server, agent,
+  model vendor or search backend by configuration with no code, and the status of each area.
 - **[Keeping the repository clean](public-hygiene.md)**: the scan that keeps secrets, real machine
   paths and real addresses out of a public repository.
 - **[Implementing adapters](adapters.md)**: the four interfaces (`RetrievalAdapter`,
