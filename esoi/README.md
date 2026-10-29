@@ -177,7 +177,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `evolve-by-metric` | Evolve by metric | structure-library | Parts selected by measurement |
 | `ground-in-intent` | Intent frame for quest-scoped prompts | frame-line | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit;Runs that leave a durable, attributed record of what they changed |
-| `core-ml-tasks` | Core ML tasks: quest classification and recommendation |  | Accuracy of core ML tasks over labelled cases |
+| `core-ml-tasks` | Core ML tasks: quest classification and recommendation | message-route-family | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 | `bound-card-growth` | Card store growth prevention | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
 | `repair-a-card-store` | Card store repair | repository_tidy | Cards per source-file group and duplicate share after a repair of an inflated store |
@@ -470,6 +470,13 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `guide-toward-the-long-term-goal:no_nudge` | Plain answer only (floor) |  |  |
 | `use-open-source-hubs:registry_scan` | Registry read together with the code (today) | evaluation/components/hub_of_hubs/impls/registry_scan.py |  |
 | `guide-toward-the-long-term-goal:guided_v2` | Long-term guidance section in the reply voice | quest_ai_runner/core/auxiliary_prompts.py |  |
+| `evolve-by-metric:structure_library` | unconfirmed: for Payal to confirm | evaluation/components/evolve_by_metric/impls/structure_library.py |  |
+| `evolve-by-metric:keep_current` | unconfirmed: for Payal to confirm | evaluation/components/evolve_by_metric/impls/keep_current.py |  |
+| `core-ml-tasks:labelled_rows` | unconfirmed: for Payal to confirm | evaluation/components/core_ml_tasks/impls/labelled_rows.py |  |
+| `core-ml-tasks:none_mapped` | unconfirmed: for Payal to confirm | evaluation/components/core_ml_tasks/impls/none_mapped.py |  |
+| `know-the-world:memory_only` | unconfirmed: for Payal to confirm | evaluation/components/know_the_world/impls/memory_only.py |  |
+| `act-in-the-world:scripted_ideal` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/scripted_ideal.py |  |
+| `act-in-the-world:rules_only` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/rules_only.py |  |
 
 ## Metrics
 
@@ -525,10 +532,10 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-explain-qar`, Documentation coverage and voice conformance: `esoi run explain_qar --impl shipped_docs`
 - `metric-persist-predictions`, Prediction store contract pass rate: `esoi run persist_predictions --impl file_store`
 - `metric-gate-an-autopilot-pass`, Autopilot gate decision correctness: `esoi run gate_an_autopilot_pass --impl live_pass`
-- `QME7`, Parts selected by measurement: `none`
+- `QME7`, Parts selected by measurement: `esoi run evolve_by_metric --impl structure_library`
 - `metric-ground-in-intent`, Intent-grounded pass rate: `esoi run intent_grounding --impl frame_line`
 - `metric-iterate-by-spec`, First-pass acceptance and exploration before the first edit: `esoi run task_replay --impl slice_and_writeback`
-- `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `none`
+- `metric-core-ml-tasks`, Accuracy of core ML tasks over labelled cases: `esoi run core_ml_tasks --impl labelled_rows; esoi run classification --impl qar_planner`
 - `metric-spec-selection`, Specification selection pass rate: `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
 - `metric-bound-card-growth`, Cards per source-file group after repeated passes, for the guards that prevent growth: `esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store; esoi run card_growth --impl no_cleanup`
 - `metric-repair-a-card-store`, Cards per source-file group and duplicate share after a repair of an inflated store: `esoi run card_growth --impl repository_tidy; esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup`
@@ -538,11 +545,11 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`
 - `metric-keep-a-working-stream`, Step continuity at cost over multi-step requests: `esoi run keep_a_working_stream --impl rebuilt_per_step --sample 3 --max-calls 40`
 - `metric-admit-to-the-mind`, Goal-relevant admission at a precision floor with nothing out of scope: `esoi run admit_to_the_mind --impl recency_window`
-- `metric-know-the-world`, Supported and calibrated answers to world questions: `none`
-- `metric-act-in-the-world`, Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety: `none`
+- `metric-know-the-world`, Supported and calibrated answers to world questions: `esoi run know_the_world --impl web_with_support_check`
+- `metric-act-in-the-world`, Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety: `esoi run act_in_the_world --impl scripted_ideal`
 - `metric-act-as-the-body`, Account-state consistency across scripted sessions: `esoi run act_as_the_body --impl card_and_reads`
 - `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `esoi run hold_the_long_view --impl separate_stores`
-- `metric-think-critically`, Requests held to their ESOI metric by code: `none`
+- `metric-think-critically`, Requests held to their ESOI metric by code: `esoi run think_critically --impl deep_runs_only`
 - `metric-select-a-rep`, Representative choice accuracy and thread consistency: `esoi run select_a_rep --impl persona_resolver_precedence`
 - `metric-narrate-a-turn`, Supported first beats within the time and cost the turn allows: `esoi run narrate_a_turn --impl model_beat`
 - `metric-explain-an-answer`, Faithful explanations per unit of cost and time: `esoi run explain_an_answer --impl model_explanation`

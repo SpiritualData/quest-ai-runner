@@ -1,0 +1,62 @@
+[
+ {
+  "id": "AIW-OWN-01",
+  "source": "E2E-OWN-01",
+  "area": "own_data"
+ },
+ {
+  "id": "AIW-OWN-02",
+  "source": "E2E-OWN-02",
+  "area": "own_data"
+ },
+ {
+  "id": "AIW-NOTE-01",
+  "source": "E2E-NOTE-01",
+  "area": "note_write"
+ },
+ {
+  "id": "AIW-GOAL-01",
+  "source": "E2E-GOAL-01",
+  "area": "goal_write"
+ },
+ {
+  "id": "AIW-MULTI-01",
+  "source": "E2E-MULTI-01",
+  "area": "multistep"
+ },
+ {
+  "id": "AIW-MULTI-02",
+  "source": "E2E-MULTI-02",
+  "area": "multistep"
+ },
+ {
+  "id": "AIW-IMPL-01",
+  "source": "E2E-IMPL-01",
+  "area": "implicit_quest"
+ },
+ {
+  "id": "AIW-IMPL-02",
+  "source": "E2E-IMPL-02",
+  "area": "implicit_quest"
+ },
+ {
+  "id": "AIW-WEB-01",
+  "source": "E2E-WEB-01",
+  "area": "web"
+ },
+ {
+  "id": "AIW-HAND-01",
+  "source": "E2E-HAND-01",
+  "area": "hand_off"
+ },
+ {
+  "id": "AIW-REFUSE-01",
+  "source": "E2E-REFUSE-01",
+  "area": "refusal"
+ },
+ {
+  "id": "AIW-CONSENT-01",
+  "source": "E2E-CONSENT-01",
+  "area": "refusal"
+ }
+]

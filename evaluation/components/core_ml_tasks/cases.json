@@ -1,0 +1,101 @@
+[
+ {
+  "id": "CML-01",
+  "area": "classification",
+  "task": "message-route-family",
+  "component": "classification",
+  "arm": "qar_planner",
+  "label": "message router",
+  "expect_measured": true
+ },
+ {
+  "id": "CML-02",
+  "area": "classification",
+  "task": "registry-conditioned-routing",
+  "component": null,
+  "arm": null,
+  "label": "intent routing by tier",
+  "expect_measured": true
+ },
+ {
+  "id": "CML-03",
+  "area": "classification",
+  "task": "shared-quest-ranker",
+  "component": null,
+  "arm": null,
+  "label": "which-quest ranking, shared embeddings",
+  "expect_measured": true
+ },
+ {
+  "id": "CML-04",
+  "area": "classification",
+  "task": "hybrid-candidate-ranker",
+  "component": null,
+  "arm": null,
+  "label": "which-quest ranking, words and meaning",
+  "expect_measured": true
+ },
+ {
+  "id": "CML-05",
+  "area": "classification",
+  "task": "category-vector-match",
+  "component": null,
+  "arm": null,
+  "label": "area-of-life classification",
+  "expect_measured": true
+ },
+ {
+  "id": "CML-06",
+  "area": "recommendation",
+  "task": "intent-placement-llm",
+  "component": null,
+  "arm": null,
+  "label": "quest placement under top intents",
+  "expect_measured": true
+ },
+ {
+  "id": "CML-07",
+  "area": "recommendation",
+  "task": "intent-suggestion-llm",
+  "component": null,
+  "arm": null,
+  "label": "top-intent recommendation",
+  "expect_measured": true
+ },
+ {
+  "id": "CML-08",
+  "area": "recommendation",
+  "task": "period-placement-llm",
+  "component": null,
+  "arm": null,
+  "label": "backlog goal placement in the next period",
+  "expect_measured": true
+ },
+ {
+  "id": "CML-09",
+  "area": "trap",
+  "task": "trap: component named but absent",
+  "component": "no_such_component",
+  "arm": "qar_planner",
+  "label": "a component that does not exist",
+  "expect_measured": false
+ },
+ {
+  "id": "CML-10",
+  "area": "trap",
+  "task": "trap: arm named but never recorded",
+  "component": "classification",
+  "arm": "no_such_arm",
+  "label": "an arm with no row",
+  "expect_measured": false
+ },
+ {
+  "id": "CML-11",
+  "area": "trap",
+  "task": "trap: row below the bar",
+  "component": "classification",
+  "arm": "keyword_rules",
+  "label": "the zero-call floor of the router, which reads under the bar",
+  "expect_measured": false
+ }
+]

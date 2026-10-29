@@ -1,0 +1,284 @@
+[
+ {
+  "id": "EBM-01",
+  "kind": "challenger",
+  "area": "switch_on_a_win",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 6,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": "b",
+    "status": "switch"
+   }
+  }
+ },
+ {
+  "id": "EBM-02",
+  "kind": "challenger",
+  "area": "keep_on_a_tie",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": null,
+    "status": "keep"
+   }
+  }
+ },
+ {
+  "id": "EBM-03",
+  "kind": "challenger",
+  "area": "keep_on_other_cases",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 5,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 10,
+     "cases": 10,
+     "cases_sha": "s2",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": null,
+    "status": "keep"
+   }
+  }
+ },
+ {
+  "id": "EBM-04",
+  "kind": "challenger",
+  "area": "switch_on_cheaper",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 1000
+    },
+    "b": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 100
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": "b",
+    "status": "switch"
+   }
+  }
+ },
+ {
+  "id": "EBM-05",
+  "kind": "challenger",
+  "area": "keep_cheaper_but_worse",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 1000
+    },
+    "b": {
+     "passed": 6,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 100
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": null,
+    "status": "keep"
+   }
+  }
+ },
+ {
+  "id": "EBM-06",
+  "kind": "challenger",
+  "area": "unmeasured_selected",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "b": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": null,
+    "status": "unmeasured"
+   }
+  }
+ },
+ {
+  "id": "EBM-07",
+  "kind": "challenger",
+  "area": "best_of_two_rivals",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 5,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 8,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "c": {
+     "passed": 10,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": "c",
+    "status": "switch"
+   }
+  }
+ },
+ {
+  "id": "EBM-08",
+  "kind": "drift",
+  "area": "snapshot_drift",
+  "args": {
+   "snapshot": {
+    "s1": "x",
+    "s2": "y"
+   },
+   "records": {
+    "s1": "x",
+    "s2": "z"
+   }
+  },
+  "expect": {
+   "eq": {
+    "disagreeing": [
+     "s2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "EBM-09",
+  "kind": "drift",
+  "area": "snapshot_in_step",
+  "args": {
+   "snapshot": {
+    "s1": "x"
+   },
+   "records": {
+    "s1": "x"
+   }
+  },
+  "expect": {
+   "eq": {
+    "disagreeing": []
+   }
+  }
+ },
+ {
+  "id": "EBM-10",
+  "kind": "drift",
+  "area": "snapshot_missing_solution",
+  "args": {
+   "snapshot": {
+    "s1": "x"
+   },
+   "records": {
+    "s1": "x",
+    "s2": "y"
+   }
+  },
+  "expect": {
+   "eq": {
+    "disagreeing": [
+     "s2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "EBM-11",
+  "kind": "repo_drift",
+  "area": "this_repository",
+  "args": {},
+  "expect": {
+   "eq": {
+    "disagreeing": []
+   }
+  }
+ }
+]

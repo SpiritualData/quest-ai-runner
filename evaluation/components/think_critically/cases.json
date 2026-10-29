@@ -1,0 +1,92 @@
+[
+ {
+  "id": "TCR-01",
+  "area": "deep_improved",
+  "kind": "deep",
+  "has_metric": true,
+  "changed": true,
+  "before": 0.5,
+  "after": 0.6
+ },
+ {
+  "id": "TCR-02",
+  "area": "deep_steady",
+  "kind": "deep",
+  "has_metric": true,
+  "changed": true,
+  "before": 0.5,
+  "after": 0.5
+ },
+ {
+  "id": "TCR-03",
+  "area": "deep_regressed",
+  "kind": "deep",
+  "has_metric": true,
+  "changed": true,
+  "before": 0.6,
+  "after": 0.4
+ },
+ {
+  "id": "TCR-04",
+  "area": "deep_no_metric_changed",
+  "kind": "deep",
+  "has_metric": false,
+  "changed": true,
+  "before": 0.0,
+  "after": 0.0
+ },
+ {
+  "id": "TCR-05",
+  "area": "deep_no_metric_nothing_changed",
+  "kind": "deep",
+  "has_metric": false,
+  "changed": false,
+  "before": 0.0,
+  "after": 0.0
+ },
+ {
+  "id": "TCR-06",
+  "area": "chat_improved",
+  "kind": "chat",
+  "has_metric": true,
+  "changed": true,
+  "before": 0.5,
+  "after": 0.6
+ },
+ {
+  "id": "TCR-07",
+  "area": "chat_no_metric_changed",
+  "kind": "chat",
+  "has_metric": false,
+  "changed": true,
+  "before": 0.0,
+  "after": 0.0
+ },
+ {
+  "id": "TCR-08",
+  "area": "chat_no_metric_nothing_changed",
+  "kind": "chat",
+  "has_metric": false,
+  "changed": false,
+  "before": 0.0,
+  "after": 0.0
+ },
+ {
+  "id": "TCR-09",
+  "area": "task_regressed",
+  "kind": "task",
+  "has_metric": true,
+  "changed": true,
+  "before": 0.6,
+  "after": 0.4
+ },
+ {
+  "id": "TCR-10",
+  "area": "task_improved",
+  "kind": "task",
+  "has_metric": true,
+  "changed": true,
+  "before": 0.5,
+  "after": 0.7
+ }
+]

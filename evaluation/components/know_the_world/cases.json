@@ -1,0 +1,92 @@
+[
+ {
+  "id": "KTW-01",
+  "source": "WEB-001",
+  "area": "supported",
+  "question": "capital of Mongolia",
+  "claim": "Ulaanbaatar",
+  "gold": "https://reference.example.net/1b",
+  "supported": true,
+  "memory_answer": "Ulaanbaatar is the capital of Mongolia."
+ },
+ {
+  "id": "KTW-02",
+  "source": "WEB-002",
+  "area": "supported",
+  "question": "latest stable Python release",
+  "claim": "downloads page",
+  "gold": "https://reference.example.net/2b",
+  "supported": true,
+  "memory_answer": "The latest stable Python release is announced on the downloads page."
+ },
+ {
+  "id": "KTW-03",
+  "source": "WEB-003",
+  "area": "supported",
+  "question": "how to rotate a Postgres password",
+  "claim": "ALTER ROLE",
+  "gold": "https://reference.example.net/3b",
+  "supported": true,
+  "memory_answer": "Run ALTER ROLE name PASSWORD to rotate it."
+ },
+ {
+  "id": "KTW-04",
+  "source": "WEB-004",
+  "area": "supported",
+  "question": "current Expo SDK version",
+  "claim": "changelog",
+  "gold": "https://reference.example.net/4b",
+  "supported": true,
+  "memory_answer": "The current SDK is listed in the changelog."
+ },
+ {
+  "id": "KTW-05",
+  "source": "WEB-005",
+  "area": "supported",
+  "question": "fix CORS error FastAPI",
+  "claim": "CORSMiddleware",
+  "gold": "https://reference.example.net/5b",
+  "supported": true,
+  "memory_answer": "Add CORSMiddleware to the FastAPI application."
+ },
+ {
+  "id": "KTW-06",
+  "source": "WEB-006",
+  "area": "supported",
+  "question": "boiling point of water at altitude",
+  "claim": "atmospheric pressure",
+  "gold": "https://reference.example.net/6b",
+  "supported": true,
+  "memory_answer": "Water boils lower at altitude because atmospheric pressure drops."
+ },
+ {
+  "id": "KTW-07",
+  "source": "WEB-001",
+  "area": "claim_no_page_holds",
+  "question": "Mongolia capital population in 1950 and in 1990",
+  "claim": "1.2 million people in 1950",
+  "gold": "",
+  "supported": false,
+  "memory_answer": "Its capital had about 1.2 million people in 1950."
+ },
+ {
+  "id": "KTW-08",
+  "source": "WEB-014",
+  "area": "search_found_nothing",
+  "question": "query nobody has an answer to",
+  "claim": "the answer is forty-two",
+  "gold": "",
+  "supported": false,
+  "memory_answer": "The answer is forty-two."
+ },
+ {
+  "id": "KTW-09",
+  "source": "WEB-015",
+  "area": "search_failed",
+  "question": "rate limited query",
+  "claim": "the limit is ten per minute",
+  "gold": "",
+  "supported": false,
+  "memory_answer": "The limit is ten per minute."
+ }
+]
