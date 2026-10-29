@@ -3382,3 +3382,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,3.5,4ad1796,a9f86c1a,none,,,
 2026-10-29,proactive_guidance,guided_v2,24,20,20/24,0/0,46,103374,14264,0.169,201.3,e90f546,b27633e9,claude-haiku,,,
 2026-10-29,proactive_guidance,no_nudge,24,12,12/24,0/0,12,15279,1092,0.072,45.0,034009b,b27633e9,grader-only,,,
+2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,4.6,0764621,a9f86c1a,none,,,
