@@ -137,8 +137,8 @@ def test_hand_labelled_replies_classify_correctly_by_code():
             assert score.problems_by_code(case, plain) == [], case["id"]          # the floor is right to say nothing
             assert score.problems_by_code(case, ideal), case["id"]                # an ideal nudge is wrong here
     hand = [
-        ("PG-N-R4", "The team agreed on Tuesday and Thursday mornings. Standups are your next milestone, and you are at 0 of 2 held.", True),
-        ("PG-N-R4", "The team agreed on Tuesday and Thursday mornings. The next milestone is the standups.", False),
+        ("PG-N-R4", "The team agreed on Tuesday and Thursday mornings. Filing the expense report is your next milestone, and 14 of 22 receipts are matched.", True),
+        ("PG-N-R4", "The team agreed on Tuesday and Thursday mornings. The next milestone is the expense report.", False),
         ("PG-R-R3", "I am sorry about your dad. Tell me which deadline, the Friday newsletter or chapter 12, and I will help you replan.", True),
         ("PG-R-R3", "I am sorry. Your next milestone is chapter 12 and chapter 11 is done, so keep going.", False),
         ("PG-R-Q1", " ".join(["Check the status page and the last deploy."] * 14), True),       # 126 words: a legitimate how-to
