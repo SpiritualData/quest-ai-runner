@@ -3116,3 +3116,12 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,hub_of_hubs,registry_scan,70,55,55/70,0/0,0,0,0,0.0,0.0,0e64323,83ab3526,none,,,
 2026-10-29,hub_of_hubs,registry_scan,70,55,55/70,0/0,0,0,0,0.0,0.0,bda1a30,83ab3526,none,,,
 2026-10-29,hub_of_hubs,registry_scan,70,56,56/70,0/0,0,0,0,0.0,0.0,a698c3f,83ab3526,none,,,
+2026-10-29,proactive_guidance,no_nudge,24,12,12/24,0/0,12,14609,1216,0.0705,42.7,4bd0a20,d2157d4b,grader-only,,,
+2026-10-29,proactive_guidance,proactive_guidance.broken.nudge_every_time:build,24,0,0/24,0/0,0,0,0,0.0,0.0,4bd0a20,d2157d4b,none,,,
+2026-10-29,assist_a_terminal_session,rules_only,10,10,10/10,0/0,0,0,0,0.0,0.0,d9d114a,495b478a,none,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01",1.0
+2026-10-29,spec_selection,lexical_vector,76,56,35/50,21/26,0,0,0,0.0,0.7,d9d114a,0a2ef76a,none,,,0.8157
+2026-10-29,overseer_signals,no_overseer,16,6,6/16,0/0,0,0,0,0.0,0.0,d9d114a,1e26ef32,none,,,
+2026-10-29,end_to_end,reference_script,13,13,13/13,0/0,64,52,7,0.0,0.2,4bd0a20,489a4a26,simulated,,,1.0
+2026-10-29,end_to_end,rules_only,13,6,6/13,0/0,0,0,0,0.0,0.1,4bd0a20,489a4a26,none,,,0.6231
+2026-10-29,end_to_end,qar_live,13,12,12/13,0/0,94,720715,27149,0.5981,314.4,4bd0a20,489a4a26,claude-code-subscription,,,0.7477
+2026-10-29,qar_overall,recorded_rows,9,4,4/9,0/0,0,0,0,0.0,3.6,4bd0a20,a9f86c1a,none,,,
