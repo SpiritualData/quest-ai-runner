@@ -51,8 +51,15 @@ def select_arms(manifest, tiers=None, only=None, api=False):
     return chosen
 
 
+LOCKED_ENV = "QAR_JMS_LOCK_HELD"   # set by --one-lock: the whole pass already runs under the lock, so commands do not take it again
+
+
+def lock_prefix():
+    return [] if os.environ.get(LOCKED_ENV) else ["flock", LOCK]
+
+
 def arm_command(arm):
-    cmd = ["flock", LOCK, PYTHON, str(HERE / "measure.py"), arm["component"], arm["impl"], "--record"]
+    cmd = [*lock_prefix(), PYTHON, str(HERE / "measure.py"), arm["component"], arm["impl"], "--record"]
     if arm.get("max_calls"):
         cmd += ["--max-calls", str(arm["max_calls"])]
     if arm.get("min_calls"):
@@ -62,7 +69,7 @@ def arm_command(arm):
 
 def ablation_command(manifest):
     ab = manifest["ablation"]
-    return ["flock", LOCK, PYTHON, "-m", "esoi", "run", ab["component"], "--impl", ab["impl"], "--record"]
+    return [*lock_prefix(), PYTHON, "-m", "esoi", "run", ab["component"], "--impl", ab["impl"], "--record"]
 
 
 def build_plan(manifest, tiers=None, only=None, api=False):
@@ -199,10 +206,13 @@ def main(argv=None, run=subprocess.run):
     ap.add_argument("--api-usd-cap", type=float, default=0.05, help="stop when the API arms have cost more than this (dollars)")
     ap.add_argument("--tier", action="append", choices=TIER_ORDER, help="only these tiers (the ablation arm is then skipped)")
     ap.add_argument("--only", action="append", metavar="COMPONENT/IMPL", help="only these arms (the ablation arm is then skipped)")
+    ap.add_argument("--one-lock", action="store_true", help="take the heavy lock once for the whole pass instead of per command (a busy machine would otherwise queue every command behind other jobs)")
     ap.add_argument("--in-place", action="store_true", help="run in this working copy instead of a clean snapshot of HEAD (needs a clean tree)")
     ap.add_argument("--wait-clean", type=int, default=0, metavar="SECONDS", help="--in-place: wait this long for other edits to be committed")
     ap.add_argument("--allow-dirty", action="store_true", help="--in-place: run on a tree with uncommitted measured code")
     args = ap.parse_args(argv)
+    if args.one_lock and not os.environ.get(LOCKED_ENV) and not args.plan:
+        os.execvpe("flock", ["flock", LOCK, sys.executable, *sys.argv], {**os.environ, LOCKED_ENV: "1"})
     manifest = load_manifest()
     plan = build_plan(manifest, args.tier, args.only, args.api)
     estimate = api_estimate(manifest, args.api, args.tier, args.only)

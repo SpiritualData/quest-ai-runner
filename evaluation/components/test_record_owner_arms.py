@@ -121,3 +121,8 @@ def test_sync_copies_new_rows_and_traces_back_once(tmp_path, monkeypatch):
     assert sync.copy() == 1 and sync.copy() == 0
     assert (repo / "evaluation/components/results.csv").read_text().endswith("2026-10-29,a\n2026-10-29,b\n")
     assert (repo / "evaluation/traces/justified_model_spend/b__x.json").read_text() == "{}"
+
+
+def test_one_lock_mode_drops_the_per_command_lock(monkeypatch):
+    monkeypatch.setenv(rec.LOCKED_ENV, "1")
+    assert rec.arm_command(MANIFEST["arms"][0])[0] == rec.PYTHON
