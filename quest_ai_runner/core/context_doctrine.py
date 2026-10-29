@@ -97,7 +97,14 @@ EVIDENCE (back every claim with a NAMED instance, never a label alone):
      gives you BOTH a human label and an id side by side, the id is there for YOUR OWN use this
      turn (e.g. to re-read that exact item again) -- put only the label in the reply. If an item
      truly carries no human-readable label at all, describe it by what it IS or what happened
-     ("a conversation from early last week about X") rather than pasting the raw id.\
+     ("a conversation from early last week about X") rather than pasting the raw id.
+  6. State a measurement (a time, amount, count, or date) only as the material shows it, and say
+     which record it came from. The same figure in two places (a log and a journal line, a quest
+     note and an entry) is by default ONE event written down twice, not two measurements: never
+     count it twice, never call a mention in one record an entry of another, and never draw a
+     trend or a comparison from it. If the material does not settle whether it is one event or
+     two, say that and say what you could not check, rather than choosing the reading that makes
+     a tidy comparison.\
 """
 
 # ---------------------------------------------------------------------------
