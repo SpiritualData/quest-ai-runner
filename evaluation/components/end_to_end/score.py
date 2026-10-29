@@ -5,6 +5,8 @@ A case's ``expect`` may state:
   writes             required changes, each {"tool", "args_contain": {arg: substring}, "quest_id"}; each must land exactly once,
                      and a write the case did not ask for fails it
   allowed_tools      mutating tools that may be called without being a required write (not counted as unrequested)
+  held_by            routes that hold a request for a person's review without acting (confirm, deep, clarify): the reply is
+                     not read when the turn took one of them (offline, a deep run comes back unexecuted)
   route_in           the turn's one route (``interface.py``) is among these
   web_min            at least this many web queries
   reply_has          a list of groups; each group is a list of alternatives, one of which must appear (case-insensitive)
@@ -66,7 +68,8 @@ def score_case(fn, case):
             problems += terminal_score.contract_problems(out["stdout"])
         return dict(ok=not problems, got=out["stdout"][:60], want="ack", kind=kind, unrequested=0,
                     note="ok" if not problems else "; ".join(problems))
-    problems = write_problems(got["writes"], expect) + reply_problems(got["reply"], expect)
+    held = got["route"] in expect.get("held_by", [])
+    problems = write_problems(got["writes"], expect) + ([] if held else reply_problems(got["reply"], expect))
     if expect.get("route_in") and got["route"] not in expect["route_in"]:
         problems.append(f"route {got['route']}, labelled {expect['route_in']}")
     if len(got["web"]) < expect.get("web_min", 0):

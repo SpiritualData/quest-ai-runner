@@ -6,7 +6,7 @@
    "outcome": "Run a sub-50 10K at the Riverside 10K on 22 Nov 2026.",
    "current_state": "Best recent 10K is 52:40. Knee is healing after a minor strain; easy running only this week.",
    "goals": [
-    {"id": "g_fit_1", "title": "Three easy runs this week", "done": false, "due": "2026-11-01"},
+    {"id": "g_fit_1", "title": "Long easy ride on Sunday", "done": false, "due": "2026-11-01"},
     {"id": "g_fit_2", "title": "Book the physio follow-up", "done": true, "due": "2026-10-25"}
    ],
    "notes": ["Physio said the knee is fine for easy running if there is no pain."]
