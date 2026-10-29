@@ -5,7 +5,7 @@ per-run model comparison cannot change them. With ``QUAL_INPROCESS=1`` every har
 the chat stream) goes to the same app code in this process instead of over HTTP, against the same
 dev database, with the tier models pinned for this run only:
 
-    QUAL_INPROCESS=1 QUAL_INPROCESS_MODEL=<model id> <quest-backend python> runner.py run ...
+    QUAL_INPROCESS=1 [QUAL_INPROCESS_MODEL=<model id>, default claude-haiku-5-5] <quest-backend python> runner.py run ...
 
 Every call goes in-process, not just the chat: the dev server's in-memory caches would not see this
 process's writes, so mixing transports would make snapshots read stale data.
@@ -31,9 +31,12 @@ USAGE_LOCK = threading.Lock()  # never LOCK here: LLM calls run on worker thread
 STATE = {"client": None, "models": None, "usage": {}}
 
 
+DEFAULT_MODEL = "claude-haiku-5-5"  # Anthropic's cheap tier serves every tier of a measured run (Joshua, 2026-10-29); Gemini only as a named candidate
+
+
 def model_pins():
-    """{tier: model} from QUAL_INPROCESS_MODEL (one id for every tier), else {} (the .env models)."""
-    model = (os.environ.get("QUAL_INPROCESS_MODEL") or "").strip()
+    """{tier: model} from QUAL_INPROCESS_MODEL (one id for every tier), else DEFAULT_MODEL."""
+    model = (os.environ.get("QUAL_INPROCESS_MODEL") or "").strip() or DEFAULT_MODEL
     return {tier: model for tier in TIERS} if model else {}
 
 

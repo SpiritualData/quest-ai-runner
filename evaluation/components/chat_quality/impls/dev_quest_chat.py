@@ -9,7 +9,7 @@ Cases come from the component's whole set (``score.load_cases``); draw a few wit
 world put back afterwards, the cards it learned swept. The command holds the world lock for its whole run.
 
 Spend. With ``QUAL_INPROCESS=1`` (quest-backend's interpreter, the app served in this process) the chat model is pinned
-by ``QUAL_INPROCESS_MODEL`` and every model call is counted: ``model_calls``, tokens and an estimated list-price
+by ``QUAL_INPROCESS_MODEL`` (default ``claude-haiku-5-5`` on the Anthropic API; a Gemini id is a candidate) and every model call is counted: ``model_calls``, tokens and an estimated list-price
 dollar figure are real, and ``--max-calls`` stops the run before the next case once the budget is passed. Over HTTP
 the server's own models answer and nothing is counted, so ``model_calls`` is one per case (a case is several calls).
 Either way the judge is ``claude -p`` on the subscription and is not in the dollar figure."""
@@ -46,7 +46,7 @@ def build(meter):
     served = None
     if INPROCESS:
         inprocess.client()  # builds the app now, so the pinned models are printed before any case spends
-        served = f"in-process, pinned {os.environ.get('QUAL_INPROCESS_MODEL') or 'from the backend .env'}"
+        served = f"in-process, pinned {inprocess.model_pins().get('fast')}"
     print(f"chat_quality: driving the dev chat ({served or 'over HTTP, the server picks the models'}), "
           f"quest_ai_runner {brain_version}, {len(state['quests'])} world quests, "
           f"model-call budget {meter.max_calls if meter.max_calls is not None else 'none'}")

@@ -31,6 +31,14 @@ def test_an_anthropic_model_keeps_its_rate_and_the_five_times_output_ratio():
     assert list_price(["claude-sonnet-4-6"], 1_000_000, 1_000_000) == pytest.approx(3.0 + 15.0)
 
 
+def test_haiku_5_5_is_priced_at_its_cited_rate_and_is_the_default_pin():
+    from chat_quality import inprocess
+    list_price = load_list_price()
+    # $0.10 in, $0.50 out per 1M for prompts up to 100,000 tokens (https://platform.claude.com/docs/en/about-claude/pricing, read 2026-10-29)
+    assert list_price(["claude-haiku-5-5"], 1_000_000, 1_000_000) == pytest.approx(0.60)
+    assert inprocess.DEFAULT_MODEL == "claude-haiku-5-5"
+
+
 def test_pricing_knows_the_provider_of_a_model_by_name():
     assert pricing.provider_for_model("gemini-3.1-flash-lite") == "gemini"
     assert pricing.provider_for_model("gpt-4o") == "openai"

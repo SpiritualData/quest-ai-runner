@@ -13,7 +13,7 @@ plugins = ["scripts/esoi_rules.py"]
 code_paths = ["quest_ai_runner", "evaluation/components", ":(exclude,glob)**/*.md"]
 # Estimated list price in dollars per million tokens of the cheapest tier a live arm pins,, so a run that reports tokens and no
 # dollars is still priced.
-prices = { "gemini-3.1-flash-lite" = { input = 0.10, output = 0.40 }, "claude-code-subscription" = { input = 0.0, output = 0.0 } }
+prices = { "claude-haiku-5-5" = { input = 0.10, output = 0.50 }, "gemini-3.1-flash-lite" = { input = 0.25, output = 1.50 }, "claude-code-subscription" = { input = 0.0, output = 0.0 } }
 
 
 [rules.S13]

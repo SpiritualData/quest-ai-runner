@@ -2,7 +2,7 @@
 
 ``subscription``: the Claude Code subscription through ``claude -p`` on its cheapest tier. No API dollars; the dollar figure the
 CLI reports is a list-price equivalent, and its token counts include the CLI's own harness, so they are not a prompt's size.
-``fast_api``: the fast tier the shipped configuration pins (a Gemini flash-lite model), priced by ``prices`` in esoi.toml. It is the
+``fast_api``: the cheap tier on the Anthropic API (``claude-haiku-5-5``; Gemini is a candidate through ``QAR_EVAL_LIVE_MODEL``, never the default), priced by ``prices`` in esoi.toml. It is the
 route that tells what a prompt costs and how long it takes in production, so the per-prompt statistics of
 ``justified_model_spend`` come from it.
 
@@ -12,7 +12,7 @@ import os
 
 SUBSCRIPTION_MODEL = "claude-haiku"
 FAST_MODEL_ENV = "QAR_EVAL_LIVE_MODEL"
-FAST_MODEL_DEFAULT = "gemini-3.1-flash-lite"
+FAST_MODEL_DEFAULT = "claude-haiku-5-5"
 
 
 class Pinned:
@@ -32,6 +32,15 @@ class Pinned:
         return self.provider.answer([{"role": "user", "content": prompt}], model=self.model)
 
 
+def api_provider(model):
+    """The API provider that serves ``model``: Anthropic for a Claude id (the default), Gemini only for a Gemini candidate."""
+    if str(model).lower().startswith("gemini"):
+        from quest_ai_runner.adapters.gemini_provider import GeminiProvider
+        return GeminiProvider()
+    from quest_ai_runner.adapters.anthropic_provider import AnthropicProvider
+    return AnthropicProvider()
+
+
 def build(meter, route):
     """``(pinned provider, model name)`` for ``route`` (``subscription`` or ``fast_api``), counted on ``meter``."""
     if route == "subscription":
@@ -40,9 +49,8 @@ def build(meter, route):
         meter.model = "claude-code-subscription"
         return Pinned(provider, SUBSCRIPTION_MODEL), SUBSCRIPTION_MODEL
     if route == "fast_api":
-        from quest_ai_runner.adapters.gemini_provider import GeminiProvider
         model = os.environ.get(FAST_MODEL_ENV) or FAST_MODEL_DEFAULT
-        provider = meter.wrap(GeminiProvider())
+        provider = meter.wrap(api_provider(model))
         meter.model = model
         return Pinned(provider, model), model
     raise ValueError(f"unknown route {route!r}")

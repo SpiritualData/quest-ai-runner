@@ -34,6 +34,19 @@ ANTHROPIC_PRICING = {
     "claude-3-haiku": 0.8,
     "claude-haiku-4-5": 0.8,  # Haiku 4 (2025+)
     "claude-haiku-4": 0.8,
+    # Claude 5.5 family, base input, prompts up to 100,000 tokens (a Haiku 5.5 prompt over 100,000 tokens costs
+    # $0.50 in / $2.50 out). Source: https://platform.claude.com/docs/en/about-claude/pricing (read 2026-10-29).
+    "claude-haiku-5-5": 0.10,
+    "claude-sonnet-5-5": 2.0,
+    "claude-opus-5-5": 4.0,
+}
+
+# Pricing per 1M OUTPUT tokens (USD) of the Claude 5.5 family. Source: https://platform.claude.com/docs/en/about-claude/pricing
+# (read 2026-10-29).
+ANTHROPIC_OUTPUT_PRICING = {
+    "claude-haiku-5-5": 0.50,
+    "claude-sonnet-5-5": 10.0,
+    "claude-opus-5-5": 20.0,
 }
 
 OPENAI_PRICING = {
@@ -168,7 +181,8 @@ def get_input_cost_per_mtok(provider: str, model: str) -> Optional[float]:
                 return price
         # A bare family name ("haiku", "claude-opus") or any release not listed above prices by
         # family, so a new Claude release needs no edit here.
-        for fam, price in (("haiku", 0.8), ("sonnet", 3.0), ("opus", 15.0)):
+        # (the 5.5 family list prices, read 2026-10-29; the aliases resolve to the newest release)
+        for fam, price in (("haiku", 0.10), ("sonnet", 2.0), ("opus", 4.0)):
             if fam in model_lower:
                 return price
         # Default to Claude 3.5 Sonnet (most common)
@@ -214,6 +228,10 @@ def get_output_cost_per_mtok(provider: str, model: str) -> Optional[float]:
     name = (model or "").lower()
     if provider == "gemini":
         for key, price in GOOGLE_OUTPUT_PRICING.items():
+            if key == name or key in name:
+                return price
+    if provider == "anthropic":
+        for key, price in ANTHROPIC_OUTPUT_PRICING.items():
             if key == name or key in name:
                 return price
     input_price = get_input_cost_per_mtok(provider, model)

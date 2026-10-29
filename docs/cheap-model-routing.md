@@ -1,4 +1,5 @@
 # Running routing reliably on a cheap model
+> Update 2026-10-29: the Gemini figures below are the history of this work. Measured runs now use Anthropic `claude-haiku-5-5` for every tier ($0.10 in, $0.50 out per million tokens up to 100,000-token prompts; https://platform.claude.com/docs/en/about-claude/pricing, read 2026-10-29). Gemini stays only as a named candidate arm.
 
 A planner call is almost entirely INPUT. It carries thousands of input tokens and returns about a
 hundred, so what a routing decision costs is set by the prompt, not the answer. That makes two
