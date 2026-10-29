@@ -11,6 +11,8 @@ from pathlib import Path
 
 import common
 from quest_ai_runner.core.adapters import Observation
+from quest_ai_runner.core.tools import ToolResult
+from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT
 
 SPEC = json.loads((Path(__file__).resolve().parent / "world.json").read_text(encoding="utf-8"))
 
@@ -58,17 +60,20 @@ class World:
         registry = build_tool_registry(dict(os.environ, QUEST_BASE_URL=common.OFFLINE_QUEST_URL, QUEST_API_KEY="offline-eval"))
         for name in registry.names():
             spec = registry.get(name)
-            spec.handler = self.handler(name, bool(getattr(spec, "mutates", False)))
+            spec.handler = self.handler(name, bool(getattr(spec, "mutates", False)), "quest_id" in (spec.properties() or {}))
         return registry
 
     def target(self, args):
         qid = args.get("quest_id") or self.pinned
         return qid if qid in self.quests else None
 
-    def handler(self, name, mutates):
+    def handler(self, name, mutates, takes_quest=False):
         def handle(args, ctx):  # noqa: ARG001
             args = dict(args)
             qid = self.target(args)
+            if mutates and takes_quest and qid is None:
+                # What the production handlers answer when no quest is named or pinned: nothing is written, the planner re-plans.
+                return ToolResult(ok=False, text="No quest was named, so nothing was changed." + NO_QUEST_HINT)
             if mutates:
                 self.writes.append({"tool": name, "args": {k: v for k, v in args.items() if k != "quest_id"}, "quest_id": qid})
                 return f"ok: {name}"

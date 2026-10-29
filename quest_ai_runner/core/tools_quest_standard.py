@@ -181,7 +181,12 @@ _ASKED_PARAM = {
                     "out of your own wording. False means it is offered for the owner to approve "
                     "(or, for an item, not created) instead of applied."),
 }
-_QUEST_ID_PARAM = {"type": "string", "description": "Quest to change (defaults to this chat's quest)."}
+# Appended to every "no quest" refusal: a cheap planner that left quest_id out is told how to fix the call, not only that it failed.
+NO_QUEST_HINT = (" No quest is open in this chat, so call again with quest_id set to the id of the quest the request is "
+                 "about, taken from the quests listed in context.")
+_QUEST_ID_PARAM = {"type": "string", "description": ("Quest to change. Defaults to this chat's quest; when the chat has none, "
+                                                    "pass the id of the quest the request is about, taken from the quests "
+                                                    "listed in context. Never omit it then.")}
 
 
 def _with_standard(description: str, key: str, period: Optional[str] = None) -> str:
@@ -213,7 +218,7 @@ def quest_field_tool_spec(field_name: str, env: Mapping[str, str],
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         quest_id = _quest_id(args, ctx)
         if not quest_id:
-            return ToolResult(ok=False, text="No quest was named, so there is nothing to update.")
+            return ToolResult(ok=False, text="No quest was named, so there is nothing to update." + NO_QUEST_HINT)
         value = args.get("value")
         if not isinstance(value, str) or not value.strip():
             return ToolResult(ok=False, text=f"No new {spec_text.label} was given, so nothing was "
@@ -278,7 +283,7 @@ def add_measurable_outcome_spec(env: Mapping[str, str], client_factory=None) -> 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         quest_id = _quest_id(args, ctx)
         if not quest_id:
-            return ToolResult(ok=False, text="No quest was named, so there is nothing to update.")
+            return ToolResult(ok=False, text="No quest was named, so there is nothing to update." + NO_QUEST_HINT)
         text = str(args.get("text") or "").strip()
         if not text:
             return ToolResult(ok=False, text="No measurable outcome text was given, so nothing "
@@ -353,7 +358,7 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         period = str(args.get("period") or "").strip()
         if not quest_id or not title or not period:
             return ToolResult(ok=False, text="A goal needs a quest, a title and a period; nothing "
-                                             "was created.")
+                                             "was created." + NO_QUEST_HINT)
         if not args.get("user_asked_for_this_field"):
             return ToolResult(ok=False, text=(f"Not created: the user did not ask for the goal "
                                               f"{title!r}. Suggest it in your reply instead."))
@@ -418,7 +423,7 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
         title = str(args.get("title") or "").strip()
         if not quest_id or not title:
             return ToolResult(ok=False, text="A strategy needs a quest and a title; nothing was "
-                                             "added.")
+                                             "added." + NO_QUEST_HINT)
         raw_ids = args.get("problem_ids")
         problem_ids = [str(i).strip() for i in raw_ids if str(i).strip()] \
             if isinstance(raw_ids, (list, tuple)) else []
@@ -485,7 +490,7 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
         name = str(args.get("name") or "").strip()
         if not quest_id or not name:
             return ToolResult(ok=False, text="A habit needs a quest and a name; nothing was "
-                                             "created.")
+                                             "created." + NO_QUEST_HINT)
         if not args.get("user_asked_for_this_field"):
             return ToolResult(ok=False, text=(f"Not created: the user did not ask for the habit "
                                               f"{name!r}. Suggest it in your reply instead."))

@@ -479,3 +479,14 @@ def test_delete_experiment_previews_then_needs_confirmation_and_spares_the_defau
                              "user_asked_for_this_field": True, "confirm_delete": True},
                             ToolContext()).ok
     assert [c for c in client.calls if c[0] == "delete_experiment"] == [("delete_experiment", "q1", "rq_sleep")]
+
+
+def test_a_quest_tool_with_no_quest_tells_the_planner_how_to_fix_the_call():
+    from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT, _QUEST_ID_PARAM
+    client = FakeQuestClient()
+    spec = create_quest_goal_spec({}, client_factory=factory(client))
+    refused = spec.handler({"title": "Call the plumber", "period": "2026_W44", "user_asked_for_this_field": True},
+                           ToolContext())
+    assert not refused.ok and refused.text.endswith(NO_QUEST_HINT) and client.calls == []
+    assert "listed in context" in NO_QUEST_HINT
+    assert "chat has none" in _QUEST_ID_PARAM["description"]
