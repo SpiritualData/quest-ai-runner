@@ -408,6 +408,19 @@ class LinkGuard:
         return LinkVerdict(url, UNKNOWN, "not found in anything read this turn",
                            note="(link removed: I did not find this address in anything I read)")
 
+    def settle_seen_unknown(self, verdict: str, reason: str,
+                            seen_urls: Optional[frozenset]) -> Tuple[str, str]:
+        """Under provenance, a link the turn read that the host merely would not confirm is kept.
+
+        The link passed the provenance test, so it came from the turn's own search or page reads.
+        An ``unknown`` probe (429 rate limit, 5xx, timeout, bot wall) says the check was unsettled,
+        not that the page is absent, so it must not delete a real source the reader asked for.
+        ``dead`` (404/410, no DNS, refused, not a page) still strips it.
+        """
+        if verdict == UNKNOWN and seen_urls is not None and self.policy.require_provenance:
+            return OK, f"seen in this turn's material; host did not confirm ({reason})"
+        return verdict, reason
+
     def verify(self, url: str, seen_urls: Optional[frozenset] = None) -> LinkVerdict:
         """Judge one URL. Re-checks an ``unknown`` up to ``policy.passes`` times before settling.
 
@@ -454,6 +467,7 @@ class LinkGuard:
             if not self.policy.check_external:
                 return LinkVerdict(url, UNKNOWN, "external checking is off", replaced)
             verdict, reason = self.check_external(target)
+            verdict, reason = self.settle_seen_unknown(verdict, reason, seen_urls)
             return LinkVerdict(url, verdict, reason, replaced, note_for_reason(reason))
         if target.lower().startswith("www."):
             unseen = self.unseen(url, target, seen_urls)
@@ -463,6 +477,7 @@ class LinkGuard:
             if not self.policy.check_external:
                 return LinkVerdict(url, UNKNOWN, "external checking is off", replaced)
             verdict, reason = self.check_external("https://" + target)
+            verdict, reason = self.settle_seen_unknown(verdict, reason, seen_urls)
             return LinkVerdict(url, verdict, reason, replaced, note_for_reason(reason))
 
         # Anything else (a bare word in link position, an unknown scheme) is not something we can

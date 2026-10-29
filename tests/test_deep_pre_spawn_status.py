@@ -490,3 +490,28 @@ def test_turn_start_context_leaves_a_failed_fetch_to_the_caller():
     future.set_exception(RuntimeError("store unavailable"))
     cache.register_prefetch("q", future)
     assert cache.turn_start_context(0.05) == (None, "")
+
+
+# --- a self-started search is told it may not write (chat_quality IMP-027, 2026-10-29) -----------
+
+class BriefCapturingRunner(OrderedRunner):
+    def run_goal(self, *, goal: str, brief: str, model: Optional[str] = None,
+                 max_turns: Optional[int] = None,
+                 context_preamble: Optional[str] = None) -> DeepResult:
+        self.calls.append({"brief": brief})
+        return DeepResult(met=True, output="done")
+
+
+def test_a_self_started_search_gets_the_read_only_instruction_and_an_ordered_run_does_not():
+    from quest_ai_runner.core.auxiliary_prompts import SELF_INITIATED_READ_ONLY_INSTRUCTION
+
+    def brief_for(**kw):
+        timeline = Timeline()
+        runner = BriefCapturingRunner(timeline)
+        run_deep_directly(build(runner, CountingAssembler()), timeline, "Find the date", **kw)
+        return runner.calls[0]["brief"]
+
+    assert SELF_INITIATED_READ_ONLY_INSTRUCTION in brief_for(self_initiated=True, user_ordered=False)
+    assert SELF_INITIATED_READ_ONLY_INSTRUCTION not in brief_for(self_initiated=True, user_ordered=True)
+    assert SELF_INITIATED_READ_ONLY_INSTRUCTION not in brief_for()
+    assert "—" not in SELF_INITIATED_READ_ONLY_INSTRUCTION

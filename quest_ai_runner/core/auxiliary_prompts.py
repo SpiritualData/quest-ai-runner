@@ -455,6 +455,21 @@ DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION = (
     "'- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
 )
 
+# Appended to a deep run's brief when the ORCHESTRATOR started it (the answer verifier wanted more
+# context, or the last-resort run before giving up) and the planner did not read the user's message as
+# an order. Found by the chat_quality 10-case run (IMP-027, 2026-10-29): "My in-laws just said they
+# might come a week early." was only a statement, the escalation goal was "identify the date one week
+# earlier", and the generated code also called add_quest_note, so the reply claimed a note the person
+# never asked for. A statement of news is not an instruction to record it.
+SELF_INITIATED_READ_ONLY_INSTRUCTION = (
+    "\n\n--- THIS RUN IS A SEARCH, NOT AN ORDER ---\n"
+    "You were started to find out or work out something so the answer can be right. The person has "
+    "not asked for anything to be created, changed, recorded or deleted. Read and compute only: do "
+    "not add notes, goals, updates or any other record, and do not report any change as made. If "
+    "something seems worth recording, say so in your result and let the person decide. Do not use "
+    "em dashes; use a comma, a colon, or parentheses instead."
+)
+
 # Appended to a deep process's brief ONLY when the plan's `deep_target == "quest_data"` and the
 # ladder guard (``ladder_for_quest_data`` below) could not narrow the ladder to a governed-
 # operations rung (either nothing on the ladder has that write surface, or the rung was a

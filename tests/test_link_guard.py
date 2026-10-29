@@ -561,6 +561,23 @@ def test_a_seen_but_unreachable_link_is_still_stripped():
     assert verdicts[0].verdict == DEAD
 
 
+def test_a_seen_link_the_host_would_not_confirm_is_kept_but_an_unseen_one_is_not():
+    # 429 and a timeout are unsettled (unknown), not absent: a source the turn read stays a link.
+    seen = "https://seen.example.com/page"
+    for answer in ((429, "HTTP 429"), (503, "HTTP 503"), (None, "timeout")):
+        guard = LinkGuard(PROV, fetcher=fetcher_for({seen: answer}))
+        out, verdicts = guard.sanitize(f"See [it]({seen}).", evidence=seen)
+        assert verdicts[0].verdict == OK, answer
+        assert f"[it]({seen})" in out
+    guard = LinkGuard(PROV, fetcher=fetcher_for({"https://invented.example.com/page": (429, "HTTP 429")}))
+    out, _ = guard.sanitize("[x](https://invented.example.com/page)", evidence=seen)
+    assert "invented.example.com" not in out
+    # Without provenance an unsettled probe still strips (the earlier, safe reading).
+    off = LinkGuard(LinkPolicy(passes=1), fetcher=fetcher_for({seen: (429, "HTTP 429")}))
+    out, _ = off.sanitize(f"[it]({seen})", evidence=seen)
+    assert seen not in out
+
+
 def test_the_orchestrator_hands_the_turns_own_material_to_the_guard():
     """End to end: a link from the user's message and one from a gathered read pass; an invented
     one is stripped. The evidence comes from the run, not from a global."""

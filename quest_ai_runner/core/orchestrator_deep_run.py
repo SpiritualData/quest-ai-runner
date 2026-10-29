@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .auxiliary_prompts import (
     DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION,
     DEEP_FUTURE_CONTEXT_INSTRUCTION,
+    SELF_INITIATED_READ_ONLY_INSTRUCTION,
 )
 from .adapters import (
     DeepResult,
@@ -387,6 +388,8 @@ class DeepRunMixin:
                 return DeepResult(met=False, output="", declined_background=True,
                                   error="escalation not started: the runner it resolved to "
                                         "starts background work the user did not ask for")
+            if self_initiated and not user_ordered:
+                brief = brief + SELF_INITIATED_READ_ONLY_INSTRUCTION
             # The goal's own context, now that its runner is resolved and the run will start (a
             # declined escalation above never pays for an assembly). Bounded by the same budget as
             # the turn-start one, so a slow store costs a stated wait, never a silent one; the

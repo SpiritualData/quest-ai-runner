@@ -289,7 +289,12 @@ def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
         "inventing details. "
         "For a current-status or 'what's next' answer, rely on the most on-subject material and note "
         "the date or age of any dated item you use rather than presenting an old document as the "
-        "present state."
+        "present state. When a stored summary or current-state line (a quest's 'currently ...' "
+        "field, an old note) disagrees with a NEWER dated entry or measurement, the newer entry is "
+        "where they are now: name both, say which is newer, and answer a progress or trend "
+        "question by comparing the stored baseline with the newest measurement, giving the "
+        "numbers (such as the time and the pace). Never average the two or conclude from the old "
+        "figure alone."
     )
     parts.append(EVIDENCE_GATE)
     return "\n\n".join(parts)

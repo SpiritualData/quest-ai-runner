@@ -49,7 +49,7 @@ Sheets, Slides, Forms or Drive address is compared by its document id, so `/d/<I
 `/view` and `open?id=<ID>` all match each other. A host that was seen
 does not vouch for an invented path on it. An unseen link is never fetched; it is stripped with
 "I did not find this address in anything I read". In-app links (route table), `mailto:`, `tel:` and
-declared schemes are exempt. **Model output is never evidence.** A real Claude Code deep worker's
+declared schemes are exempt. A link that passes provenance but whose host answers `unknown` (429 rate limit, 5xx, timeout, a bot wall) is kept: it came from this turn's own search or page reads, and an unsettled check does not prove it absent. Only `dead` (404/410, no DNS, refused, not a page) strips a seen link. **Model output is never evidence.** A real Claude Code deep worker's
 output is exempt from the rule, since what that worker read is not visible to the brain
 (reachability and the route table still apply), and it counts as evidence. A runner that answers
 in-process (`uses_deep_model = False`) is model-written: `DeepResult.model_written` is set by the
