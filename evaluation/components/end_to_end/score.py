@@ -4,6 +4,7 @@ A case's ``expect`` may state:
   no_writes          nothing in the world changed (any mutating tool call fails the case)
   writes             required changes, each {"tool", "args_contain": {arg: substring}, "quest_id"}; each must land exactly once,
                      and a write the case did not ask for fails it
+  allowed_tools      mutating tools that may be called without being a required write (not counted as unrequested)
   route_in           the turn's one route (``interface.py``) is among these
   web_min            at least this many web queries
   reply_has          a list of groups; each group is a list of alternatives, one of which must appear (case-insensitive)
@@ -48,7 +49,7 @@ def write_problems(writes, expect):
         used.add(hit)
         if want.get("quest_id") and writes[hit]["quest_id"] != want["quest_id"]:
             problems.append(f"{want['tool']} landed on {writes[hit]['quest_id']}, labelled {want['quest_id']}")
-    extra = [w["tool"] for i, w in enumerate(writes) if i not in used]
+    extra = [w["tool"] for i, w in enumerate(writes) if i not in used and w["tool"] not in expect.get("allowed_tools", [])]
     if extra and not expect.get("no_writes"):
         problems.append(f"unrequested writes: {extra}")
     return problems
@@ -70,7 +71,7 @@ def score_case(fn, case):
         problems.append(f"route {got['route']}, labelled {expect['route_in']}")
     if len(got["web"]) < expect.get("web_min", 0):
         problems.append(f"{len(got['web'])} web queries, labelled at least {expect['web_min']}")
-    allowed = {w["tool"] for w in expect.get("writes", [])}
+    allowed = {w["tool"] for w in expect.get("writes", [])} | set(expect.get("allowed_tools", []))
     unrequested = sum(1 for w in got["writes"] if w["tool"] not in allowed)
     return dict(ok=not problems, got=f"{got['route']}:{','.join(w['tool'] for w in got['writes']) or 'no writes'}",
                 want=",".join(expect.get("route_in", [])), kind=kind, unrequested=unrequested,

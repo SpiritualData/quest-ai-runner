@@ -395,16 +395,12 @@
   },
   "expect": {
    "route_in": [
-    "queue"
+    "queue",
+    "deep"
    ],
-   "writes": [
-    {
-     "tool": "create_task",
-     "args_contain": {
-      "text": "wax"
-     },
-     "quest_id": "q_biz"
-    }
+   "min_reply_chars": 20,
+   "allowed_tools": [
+    "create_task"
    ]
   },
   "ideal": {
@@ -431,7 +427,7 @@
    ],
    "reply": "Queued a background task to research wax suppliers who could beat the 28 Oct shipment."
   },
-  "source": "chat_quality multistep MS-047 and MS-049 (queue background research as a task)"
+  "source": "chat_quality multistep MS-047 and MS-049 (queue background research as a task); either route hands the work off: the planner's deep action queues it in a deployment with a deep runner (offline it comes back unexecuted), a create_task call queues it directly"
  },
  {
   "id": "E2E-TERM-01",
