@@ -318,6 +318,13 @@ NOT_QUEUED_NOTE = (
 )
 
 _PLANNER_ACTIONS = """\
+FIRST, CAN IT BE DONE AT ALL? "deep" is for work the deep runner can really execute: code and files,
+the person's own records, the web, and the connected services this deployment lists. A request to DO
+something in the outside world for the person (place an order, pay a bill, book a ticket, post
+publicly, call someone) that nothing listed here can do is NOT deep work: choose "answer", say
+plainly "I can't do that" and why, and offer the nearest thing you can do (a goal, a note, a draft
+message). Never queue work that cannot be done.
+
 The four actions:
   - "read": TARGETED, PARTIAL reads to gather what you need. In `reads`, list one or more of:
       * a section: {{"rel_path": "...", "heading": "Metrics"}} OR
@@ -388,11 +395,6 @@ The four actions:
     measurable outcome", "make this goal more ambitious", "update my X", "create a strategy") -- AND
     code or files: FIX a bug, IMPLEMENT / BUILD / REFACTOR a feature, EDIT or APPLY a change to a
     file (e.g. "fix the back button", "implement the new endpoint", "add a field to the form").
-    NOT EVERYTHING IS DEEP: a request to DO something in the outside world for the person (place an
-    order, pay a bill, book a ticket, post publicly) is "deep" only when a tool or connected service
-    listed for this deployment can do it. Otherwise it is an "answer" that says plainly you cannot do
-    that, and offers the nearest thing you can do (a goal, a note, a draft). Never queue work that
-    cannot be done.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
     change lands on. "quest_data" = the person's own quest records and fields -- the quest's
     outcome or vision statement, measurable outcomes (like "add a measurable outcome" above),
@@ -750,6 +752,13 @@ after a "read" you are called again with what was read, so you can narrow in.
 """
 
 _PLANNER_COMPACT_ACTIONS = """\
+FIRST, CAN IT BE DONE AT ALL? "deep" is for work the deep runner can really execute: code and files,
+the person's own records, the web, and the connected services this deployment lists. A request to DO
+something in the outside world for the person (place an order, pay a bill, book a ticket, post
+publicly, call someone) that nothing listed here can do is NOT deep work: choose "answer", say
+plainly "I can't do that" and why, and offer the nearest thing you can do (a goal, a note, a draft
+message). Never queue work that cannot be done.
+
 THE ACTIONS:
   - "read": targeted PARTIAL reads, run IN PARALLEL, up to {max_reads} per step. List any of:
       {{"rel_path": "...", "heading": "..."}} or {{"rel_path": "...", "start_line": N, "end_line": M}}
@@ -782,9 +791,6 @@ THE ACTIONS:
     Set `deep_target`: "quest_data" for the person's own records and fields (these change through
     the product's own field-update operation, NEVER by writing code), "code_or_files" for a repo
     or corpus change, else "other" or null.
-    A request to DO something in the outside world (place an order, pay, book, post publicly) is "deep"
-    only when a listed tool or connected service can do it; else "answer" that you cannot, and offer the
-    nearest thing you can do. Never queue work that cannot be done.
     Give BOTH, and keep them DISTINCT:
       `goal` = the short CHECKABLE done-standard only, one sentence under 200 characters, the
         single condition an executor is held to. Not the plan, the analysis, or the request again.
