@@ -32,7 +32,7 @@ maximum seconds, tokens and dollars per call from it, and says so (exit 1) when 
 
 Why each is still unmeasured (none has an owner arm that runs the shipped prompt on labelled cases with a no-call ablation):
 
-- `verify-goal.verdict`: the goal verifier runs inside a deep run's goal loop; its owner QME2 (`deep_run`) measures whole runs, not the verdict call, and a verdict needs a finished piece of work to judge. Needs a labelled work-product set.
+- `verify-goal.verdict`: the goal verifier runs inside a deep run's goal loop; its owner QME2 measures delegated tasks meeting their goal (whole runs), not the verdict call, and a verdict needs a finished piece of work to judge. Needs a labelled work-product set.
 - `route-a-message.cascade-review`: off by default (`planner_cascade`); a review of a low-confidence routing decision needs labelled decisions with their gathered context, and no component has them.
 - `judge-a-decision.intent-directive`, `.mode-release`, `.landed-work-denial`: the owner `judges` arm runs them under a scripted provider only; no live labelled cases yet.
 - `feed-context-sources.*`, `ground-in-intent.*`, `replay-known-operations.fill-args`, `search-cards-and-specs.pool-judge`, `select-context.*`, `select-a-rep.explicit-ask`: the owner components score the surrounding rule or a whole chat turn (`intent_grounding`, `feed_context_sources`, `select_a_rep`), not the one call, and have no ablation with the call dropped.
