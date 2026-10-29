@@ -65,7 +65,19 @@ GOOGLE_PRICING = {
     # Gemini 1.5 Flash
     "gemini-1.5-flash": 0.075,
     "gemini-1.5-flash-001": 0.075,
+    # Gemini 3.1 Flash-Lite, paid tier standard, text input. Source: https://ai.google.dev/gemini-api/docs/pricing
+    # (read 2026-10-29: $0.25 in, $1.50 out per 1M tokens, output includes thinking tokens)
+    "gemini-3.1-flash-lite": 0.25,
 }
+
+# Pricing per 1M OUTPUT tokens (USD), where the output rate is not the family ratio times the input rate.
+GOOGLE_OUTPUT_PRICING = {
+    # Source: https://ai.google.dev/gemini-api/docs/pricing (read 2026-10-29)
+    "gemini-3.1-flash-lite": 1.50,
+}
+
+# Output tokens cost this many input tokens when a model has no output rate listed (Anthropic's ratio).
+DEFAULT_OUTPUT_RATIO = 5.0
 
 CLAUDE_CLI_PRICING = {
     # Claude CLI uses subscription (no per-token billing)
@@ -181,6 +193,27 @@ def get_input_cost_per_mtok(provider: str, model: str) -> Optional[float]:
         return CLAUDE_CLI_PRICING.get("default", 0.0167)
 
     return None
+
+
+def provider_for_model(model: str) -> str:
+    """The provider that serves a model id, by its name ("gemini-..." is google, "gpt-"/"o1"/"o3" openai)."""
+    name = (model or "").lower()
+    if name.startswith("gemini"):
+        return "gemini"
+    if name.startswith(("gpt-", "o1", "o3")):
+        return "openai"
+    return "anthropic"
+
+
+def get_output_cost_per_mtok(provider: str, model: str) -> Optional[float]:
+    """Output cost per 1M tokens: the listed rate when known, else the input rate times DEFAULT_OUTPUT_RATIO."""
+    name = (model or "").lower()
+    if provider == "gemini":
+        for key, price in GOOGLE_OUTPUT_PRICING.items():
+            if key == name or key in name:
+                return price
+    input_price = get_input_cost_per_mtok(provider, model)
+    return None if input_price is None else input_price * DEFAULT_OUTPUT_RATIO
 
 
 def estimate_bootstrap_cost(

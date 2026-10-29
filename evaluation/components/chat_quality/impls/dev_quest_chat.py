@@ -21,13 +21,13 @@ from quest_ai_runner import __version__ as brain_version
 from quest_ai_runner import pricing
 from quest_ops import dev_world
 
-OUTPUT_PRICE_RATIO = 5.0  # an output token costs this many input tokens at list price (Anthropic's ratio)
-
-
 def list_price(models, prompt_tokens, completion_tokens):
-    """Estimated dollars for the tokens, at the input price ``pricing`` knows for the model that served them."""
-    price = pricing.get_input_cost_per_mtok("anthropic", models[0] if models else "haiku") or 0.0
-    return (prompt_tokens + OUTPUT_PRICE_RATIO * completion_tokens) * price / 1e6
+    """Estimated dollars for the tokens, at the served model's own provider, input rate and output rate in ``pricing``."""
+    model = models[0] if models else "haiku"
+    provider = pricing.provider_for_model(model)
+    input_rate = pricing.get_input_cost_per_mtok(provider, model) or 0.0
+    output_rate = pricing.get_output_cost_per_mtok(provider, model) or 0.0
+    return (prompt_tokens * input_rate + completion_tokens * output_rate) / 1e6
 
 
 def build(meter):
