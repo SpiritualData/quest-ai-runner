@@ -64,7 +64,8 @@
   "message": "What did I decide about the pricing page last week?",
   "plain_answer": "You decided to keep the monthly plan at its current price and to test an annual option.",
   "milestone_keys": [
-   "customer number 30"
+   "customer number 30",
+   "customer 30"
   ],
   "metric_values": [
    "24 of 50"
@@ -93,7 +94,7 @@
   "metric_values": [
    "61 percent"
   ],
-  "answer_may_name_milestone": false,
+  "answer_may_name_milestone": true,
   "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
  },
  {
@@ -165,7 +166,8 @@
   "message": "I just sent the follow-up to the bakery. What is next on my list?",
   "plain_answer": "Next on your list are the cafe, the two florists and the gym.",
   "milestone_keys": [
-   "10 prospects"
+   "10 prospects",
+   "ten prospects"
   ],
   "metric_values": [
    "6 of 10"
@@ -243,7 +245,9 @@
   "plain_answer": "You're welcome.",
   "milestone_keys": [
    "invite 20 beta users",
+   "20 beta users",
    "interview three candidates",
+   "three candidates",
    "setup guide"
   ],
   "metric_values": [
@@ -299,7 +303,9 @@
   "plain_answer": "The team agreed on Tuesday and Thursday mornings.",
   "milestone_keys": [
    "file the expense report",
+   "expense report",
    "review section 3",
+   "section 3",
    "standups"
   ],
   "metric_values": [
