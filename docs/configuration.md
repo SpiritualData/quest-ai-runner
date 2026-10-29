@@ -25,7 +25,7 @@ the docs and `.env.example` that describe what it does.
 | `HF_HUB_VERBOSITY` | Hugging Face hub log level; the CLI sets it to error (unless already set) so its unauthenticated-request warning never reaches the chat. | `cli.py` | - |
 | `MAX_THINKING_TOKENS` | Claude Code variable the CLI provider sets to cap extended thinking on plan() calls (0 turns thinking off). | `adapters/claude_cli_provider.py` | - |
 | `OPENAI_API_KEY` | OpenAI key: registers the OpenAI provider and the OpenAI embedder. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `cli_config.py` +2 | - |
-| `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible endpoint (a LiteLLM proxy, vLLM, Ollama or a gateway) the OpenAI provider calls instead of the OpenAI service; no key is needed for a self-hosted one. Pair with QAR_OPENAI_MODEL_PREFIXES so its model ids route to this provider. | `adapters/openai_provider.py` | - |
+| `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible endpoint (a LiteLLM proxy, vLLM, Ollama or a gateway) the OpenAI provider calls instead of the OpenAI service; no key is needed for a self-hosted one. Pair with QAR_OPENAI_MODEL_PREFIXES so its model ids route to this provider. | `adapters/openai_provider.py` | `docs/hub-of-hubs.md` |
 | `QAR_ACP_AGENT_COMMAND` |  | `adapters/acp_deep_runner_protocol.py` | `docs/acp-deep-runner.md`, `docs/hub-of-hubs.md` |
 | `QAR_ACP_NODE_PATH` |  | `adapters/acp_deep_runner_protocol.py` | `docs/acp-deep-runner.md` |
 | `QAR_ANSWER_TIMEOUT` |  | `cli_config.py` | `.env.example` |
@@ -209,7 +209,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_PAGE_TTL_SECONDS` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_APIS_FILE` | Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py. | `adapters/web_search_backends.py` | `docs/hub-of-hubs.md`, `docs/web-search.md` |
-| `QAR_WEB_SEARCH_BACKEND` |  | `adapters/web_search_backends.py` | `docs/hub-of-hubs.md`, `docs/web-search.md` |
+| `QAR_WEB_SEARCH_BACKEND` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_MODEL` |  | `adapters/web_research.py`, `adapters/web_search_backends.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_PROVIDER_MODEL` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |

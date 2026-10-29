@@ -5,19 +5,15 @@ agent harnesses, paper indexes. Building each one into QAR by hand would never f
 project it copied. So QAR sits on top of those hubs and picks up what they support. The aim is **no code per integration**:
 when a hub gains a capability, a lane gains it by editing a configuration file.
 
-## The rule: connect a hub, do not re-wire its services
-
-QAR gains a **class** of things through each hub connection: every tool an MCP server exposes, every engine SearXNG federates,
-every model an OpenAI-compatible gateway routes, every app an integration aggregator exposes. One connection counts once. A
-single named service (Notion, Drive, a chat tool, one search vendor, one model vendor) is an **integration**, not a capability,
-and writing one by hand while a hub already covers it is a violation unless a reason is recorded (`esoi/hub_integrations.csv`).
-The apps a lane can reach grow when the hub grows, not when QAR gains code.
+The registry of hubs, the research behind it, the scorer and the guides live in the public
+[ai-hub-of-hubs-structure](https://github.com/SpiritualData/ai-hub-of-hubs-structure) repository, which QAR imports. This page is
+what is specific to QAR.
 
 ## What you can do by configuration today
 
-- **Reach any tool or data source an MCP server offers.** One `[[mcp_servers]]` table in the lane file. Prefer one aggregator
-  over one entry per app (see `examples/lane-world-hub.toml`: a single connection to an integration aggregator; the first one
-  recommended is Activepieces, MIT and self-hostable). The token stays in an environment variable named by `token_env`.
+- **Reach any tool or data source an MCP server offers.** One `[[mcp_servers]]` table in the lane file; prefer one aggregator
+  over one entry per app (the hub's `ai_hub_of_hubs/examples/lane-world-hub.toml` is the shape). The token stays in an
+  environment variable named by `token_env`.
   ```toml
   [[mcp_servers]]
   alias = "world-hub"
@@ -29,55 +25,45 @@ The apps a lane can reach grow when the hub grows, not when QAR gains code.
   names it (see [the ACP runner](acp-deep-runner.md)).
 - **Reach any model an OpenAI-compatible gateway routes** (LiteLLM, vLLM, Ollama): `OPENAI_BASE_URL`, and
   `QAR_OPENAI_MODEL_PREFIXES` to route its model ids.
-- **Add a search API** that answers JSON by describing it in the file named by `QAR_WEB_SEARCH_APIS_FILE`
-  ([Web search](web-search.md)). This is a convenience for one service, not a hub connection, so it does not count as a
-  capability; the hub for search is a federating engine such as SearXNG.
+- **Add a search API** that answers JSON by describing it in the file named by `QAR_WEB_SEARCH_APIS_FILE` ([Web search](web-search.md),
+  field list in the hub's `docs/search-api-entries.md`). One service per entry, so it is a convenience and not a hub connection.
 
-Where QAR still hand-wires what a hub covers, the status table names it, and `esoi/hubs.csv` holds the recommendation.
+## How QAR uses the hub
 
-## How it is measured
-
-The `hub_of_hubs` component (`evaluation/components/hub_of_hubs`) reads four data files in `esoi/` and the code. It is free and
-offline. A hub connection that is only prepared and not wired in a lane does not count.
-
-1. **Coverage:** areas with a hub we build on or compare against, or a recorded decision that none exists, over all areas.
-2. **Integration by configuration:** wired hub connections that need no code, over all wired hub connections
-   (`esoi/hub_capabilities.csv`).
-3. **No reinvented integration:** per area, single-service integrations QAR hand-wires where a registered hub already covers
-   them, unless waived with a reason (`esoi/hub_integrations.csv`).
-4. **Research freshness:** days since each area was last researched online for hubs to adopt or compare. Older than 90 days is
-   stale. The component README holds the instruction for re-researching the stalest area.
-5. **Code structure:** each area has one registry in code, a hub is an ESOI implementation that `esoi select` can choose by
-   metric, no vendor-specific branch sits in `quest_ai_runner/core` (a static scan with a stated rule), and a fake hub added
-   through configuration works with zero library edits.
+- **Import.** The hub is imported the way the esoi library is: install it (`pip install -e ../ai-hub-of-hubs-structure`, or the
+  `hubs` extra of this package) or keep a sibling checkout beside this repository, which the `hub_of_hubs` component puts on the
+  path. Nothing at runtime imports it; only the evaluation does.
+- **Bindings.** `esoi/hub_seats.csv` says which QAR solution fills each area, the vendor terms to look for in `quest_ai_runner/core`
+  and the code paths. The hub's registry rows for this consumer (`quest-ai-runner` in `hub_capabilities.csv` and
+  `hub_integrations.csv`) say which hub connections are wired and which single services are hand-wired.
+- **Measure.** `esoi run hub_of_hubs --impl registry_scan` hands those bindings to the hub's scorer; it is sub-metric QME9 of
+  `qar_overall`. The component folder holds only the binding, the probes (one per area, each proving a fake hub can be added
+  through that area's configuration entry) and the thin scoring hand-off.
 
 ## Status
 
-Generated from `esoi/hubs.csv`; edit the CSV and run `python3 evaluation/components/hub_of_hubs/render_docs.py`. Findings
-(candidates, licenses, links, dates) are in `esoi/hub_findings.csv`.
+Generated by `python3 evaluation/components/hub_of_hubs/render_docs.py` from the hub's registry and the scorer's reading of QAR.
 
 <!-- hub-table:begin (generated by evaluation/components/hub_of_hubs/render_docs.py; do not edit) -->
-
-| Area | Built on today | Candidates | Connect | Hand-wired where a hub covers it | Researched | Freshness |
+| Area | Seat | Built on | Candidates | Researched | Freshness | Hand-wired where a hub covers it |
 |---|---|---|---|---|---|---|
-| agent_harness | Claude Code CLI, Agent Client Protocol agents (claude-agent-acp) | OpenCode; Goose; OpenHands; Codex CLI | code for the default claude -p runner; config for any ACP agent (QAR_ACP_AGENT_COMMAND) | none | 2026-10-29 | fresh |
-| tools_mcp | Model Context Protocol Python SDK | Official MCP Registry; PulseMCP subregistry; GitHub MCP directory | config: [[mcp_servers]] in the lane file reaches every tool any MCP server exposes | none | 2026-10-29 | fresh |
-| web_search | SearXNG, Serper, Brave Search API, Tavily, Gemini Google Search grounding | Firecrawl; Crawl4AI; Exa; self-hosted SearXNG with MCP | SearXNG federates many engines (code connection); Serper and Brave are hosted fallbacks written as data entries (a reinvented-integration waiver); SearXNG and Gemini grounding are code | none | 2026-10-29 | fresh |
-| world | none yet | Activepieces; Pipedream; Composio; n8n | none wired yet: one preset connection to an aggregator over MCP (examples/lane-world-hub.toml); Notion, Drive and chat are hand-written adapters today (see hub_integrations.csv) | Notion, Google Drive, Google Chat | 2026-10-29 | fresh |
-| context_assembly | bm25s, Qdrant and fastembed | Haystack; LlamaIndex; LightRAG | code per store (BM25 store, Qdrant store, own hybrid assembler) | none | 2026-10-29 | fresh |
-| science | none yet | OpenAlex API; Semantic Scholar API; PaperQA2; community scholarly MCP servers | none today; candidates reach QAR as MCP servers by config | none | 2026-10-29 | fresh |
-| model_providers | none yet | LiteLLM; Portkey gateway; OpenRouter | one config connection to any OpenAI-compatible gateway; four vendor provider classes are still hand-wired (hub_integrations.csv) | Anthropic, Gemini, OpenAI, DeepSeek | 2026-10-29 | fresh |
-| memory | none yet | Mem0; Letta; Graphiti; Cognee | code: QAR's own card store and repositories | none | 2026-10-29 | fresh |
-| evals | esoi (evolvable-structure Python tools) | Inspect AI; promptfoo; DeepEval; Ragas | code: evaluation/components, one function per component | none | 2026-10-29 | fresh |
-| voice | none yet | Pipecat; LiveKit Agents; TEN Framework | none in QAR: voice lives in the Quest backend, not in this library | none | 2026-10-29 | fresh |
+| agent_harness | act-in-the-world | Claude Code CLI, Agent Client Protocol agents (claude-agent-acp) | OpenCode; Goose; OpenHands; Codex CLI | 2026-10-29 | fresh | none |
+| tools_mcp | act-in-the-world | Model Context Protocol Python SDK | Official MCP Registry; PulseMCP subregistry; GitHub MCP directory | 2026-10-29 | fresh | none |
+| web_search | know-the-world | SearXNG, Serper, Brave Search API, Tavily, Gemini Google Search grounding | Firecrawl; Crawl4AI; Exa; self-hosted SearXNG with MCP | 2026-10-29 | fresh | none |
+| world | take-in-the-world | none | Activepieces; Pipedream; Composio; n8n | 2026-10-29 | fresh | Notion, Google Drive, Google Chat |
+| context_assembly | remember-and-recall | bm25s, Qdrant and fastembed | Haystack; LlamaIndex; LightRAG | 2026-10-29 | fresh | none |
+| science | know-the-world | none | OpenAlex API; Semantic Scholar API; PaperQA2; community scholarly MCP servers | 2026-10-29 | fresh | none |
+| model_providers | reason-and-answer | none | LiteLLM; Portkey gateway; OpenRouter | 2026-10-29 | fresh | Anthropic, Gemini, OpenAI, DeepSeek |
+| memory | remember-and-recall | none | Mem0; Letta; Graphiti; Cognee | 2026-10-29 | fresh | none |
+| evals | stay-current | esoi (evolvable-structure Python tools) | Inspect AI; promptfoo; DeepEval; Ragas | 2026-10-29 | fresh | none |
+| voice | take-in-the-world | none | Pipecat; LiveKit Agents; TEN Framework | 2026-10-29 | fresh | none |
 
-Metric `hub_of_hubs` (recomputed by `render_docs.py`, from the registry and a static scan of the code):
+Reading of the hub's scorer on QAR's bindings:
 
 - coverage (areas with a hub or a recorded decision): 1.00
 - integration by configuration (share of wired hub connections that need no code): 0.38
-- research freshness: share of areas researched within 90 days 1.00; stale: none (days since each date: `esoi run hub_of_hubs --impl registry_scan`)
-- reinvented integrations (single services QAR hand-wires that a hub covers, no waiver): 7 (3 more waived with a reason); areas free of them 0.80
+- research freshness: share of areas researched within 90 days 1.00; stale: none
+- reinvented integrations (single services hand-wired where a hub covers them, no waiver): 7 (3 more waived with a reason); areas free of them 0.80
 - code: areas with one seam 0.80, selectable by metric 0.70, vendor branches in core 0
 - score: 0.802
-
 <!-- hub-table:end -->

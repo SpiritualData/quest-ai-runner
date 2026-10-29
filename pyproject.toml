@@ -53,6 +53,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The hub registry and scorer (evaluation only; nothing at runtime imports it). A sibling checkout also works.
+hubs = ["ai-hub-of-hubs-structure @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main"]
 anthropic = ["anthropic>=0.40"]
 gemini = ["google-genai>=2.0"]
 qdrant = ["qdrant-client>=1.7", "fastembed>=0.3"]

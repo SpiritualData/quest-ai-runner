@@ -201,7 +201,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
 | `justify-model-calls` | Justified model calls | spec_registry | Justified share of model spend |
 | `answer-end-to-end` | Whole-path answer check | qar_live | Whole-path turns right on a small mixed set |
-| `guide-toward-the-long-term-goal` | Guidance toward the long-term goal | reply_voice | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
+| `guide-toward-the-long-term-goal` | Guidance toward the long-term goal | guided_v2 | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
 | `use-open-source-hubs` | Open-source hubs before bespoke integrations | registry_scan | Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 
 ## Implementations
@@ -465,10 +465,11 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `answer-end-to-end:qar_live` | QAR as shipped, live on the subscription (today) | quest_ai_runner/core/orchestrator.py |  |
 | `answer-end-to-end:reference_script` | Scripted ideal planner (offline) |  |  |
 | `answer-end-to-end:rules_only` | Rules only, no model (floor) |  |  |
-| `guide-toward-the-long-term-goal:reply_voice` | Reply voice as shipped (today) | quest_ai_runner/core/auxiliary_prompts.py |  |
+| `guide-toward-the-long-term-goal:reply_voice` | Reply voice before the long-term guidance section (prior) |  |  |
 | `guide-toward-the-long-term-goal:guided` | Reply voice plus a long-term guidance directive (proposed) |  |  |
 | `guide-toward-the-long-term-goal:no_nudge` | Plain answer only (floor) |  |  |
 | `use-open-source-hubs:registry_scan` | Registry read together with the code (today) | evaluation/components/hub_of_hubs/impls/registry_scan.py |  |
+| `guide-toward-the-long-term-goal:guided_v2` | Long-term guidance section in the reply voice | quest_ai_runner/core/auxiliary_prompts.py |  |
 
 ## Metrics
 
@@ -553,6 +554,6 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-justified-model-spend`, Justified share of model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
 - `QME8`, Justified model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
 - `metric-answer-end-to-end`, Whole-path turns right on a small mixed set: `esoi run end_to_end --impl qar_live --sample 3 --max-calls 60`
-- `metric-guide-toward-the-long-term-goal`, Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere: `esoi run proactive_guidance --impl reply_voice`
+- `metric-guide-toward-the-long-term-goal`, Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere: `esoi run proactive_guidance --impl guided_v2`
 - `metric-hub-of-hubs`, Hub of hubs: coverage, integration by configuration, research freshness, code structure: `esoi run hub_of_hubs --impl registry_scan`
 - `QME9`, Hub of hubs: `esoi run hub_of_hubs --impl registry_scan`

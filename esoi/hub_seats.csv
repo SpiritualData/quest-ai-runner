@@ -1,0 +1,11 @@
+area,seam_solution_id,vendor_terms,code_paths
+agent_harness,run-deep-work,claude-agent-acp;codex;opencode;goose;openhands,quest_ai_runner/core/goal_runner.py;quest_ai_runner/adapters/acp_deep_runner_config.py
+tools_mcp,write-through-mcp,,quest_ai_runner/adapters/mcp_client.py;quest_ai_runner/config_file.py
+web_search,search-the-web,serper;brave;tavily;searxng,quest_ai_runner/adapters/web_search_backends.py;quest_ai_runner/adapters/web_search_apis.py
+world,gather-evidence,notion;google_chat;openclaw,quest_ai_runner/adapters/notion_adapter.py;quest_ai_runner/adapters/google_drive_adapter.py;quest_ai_runner/adapters/google_chat_adapter.py
+context_assembly,select-context;index-by-meaning,qdrant;bm25;fastembed,quest_ai_runner/adapters/bm25_content_store.py;quest_ai_runner/adapters/qdrant_vector_store.py;quest_ai_runner/adapters/hybrid_context_assembler.py
+science,know-the-world,openalex;arxiv;semantic scholar;pubmed,
+model_providers,call-a-model,anthropic;openai;gemini;deepseek;claude;gpt,quest_ai_runner/adapters/multi_provider.py;quest_ai_runner/adapters/openai_provider.py
+memory,persist-cards,mem0;letta;graphiti;cognee,quest_ai_runner/adapters/file_context_store.py;quest_ai_runner/adapters/card_repository.py
+evals,evolve-by-metric,promptfoo;deepeval;ragas;inspect,evaluation/components;esoi.toml
+voice,,pipecat;livekit;whisper,
