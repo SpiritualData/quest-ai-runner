@@ -6,12 +6,12 @@
   "goal": {
    "id": "g1",
    "name": "Draft the FAQ",
-   "description": "",
+   "description": "Write ten questions and answers about tickets, parking and volunteering from the notes in the shared folder; the person reviews the draft.",
    "assigned_to": "u_bob"
   },
   "quest": {
-   "outcome": "",
-   "current_state": "",
+   "outcome": "Launch the Spring Fair website",
+   "current_state": "Event details and volunteer notes are in the shared folder",
    "preferences": ""
   },
   "members": [
@@ -35,7 +35,7 @@
   "label": {
    "ai_can_do": true
   },
-  "source": "tests/test_autopilot_goal_assignment.py test_handoff_prompt_asks_for_full_sufficiency_and_bans_em_dashes: the goal named Draft the FAQ is the one the test's judge answers ai_can_do true for, and the doability prompt names drafting a document as AI work"
+  "source": "tests/test_autopilot_goal_assignment.py test_handoff_prompt_asks_for_full_sufficiency_and_bans_em_dashes: the goal named Draft the FAQ is the one the test's judge answers ai_can_do true for, and the doability prompt names drafting a document as AI work; the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's"
  },
  {
   "id": "HOG-DO-02",
@@ -82,12 +82,12 @@
   "goal": {
    "id": "g3",
    "name": "Research competitor pricing",
-   "description": "",
+   "description": "Find the public monthly prices of the five biggest competitors and put them in a comparison table with a source link for each; the person reviews it.",
    "assigned_to": "u_bob"
   },
   "quest": {
-   "outcome": "",
-   "current_state": "",
+   "outcome": "Price our new subscription plan",
+   "current_state": "Competitor list is in the quest notes",
    "preferences": ""
   },
   "members": [
@@ -111,7 +111,7 @@
   "label": {
    "ai_can_do": true
   },
-  "source": "quest-backend/tests/test_audit_goal_assignments.py test_research_goal_goes_to_ai_rep_of_owner_when_unassigned: the audit classifies this goal hand_to_ai (research is AI work in its AI_VERBS and in the doability prompt)"
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_research_goal_goes_to_ai_rep_of_owner_when_unassigned: the audit classifies this goal hand_to_ai (research is AI work in its AI_VERBS and in the doability prompt); the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's"
  },
  {
   "id": "HOG-DO-04",
@@ -120,12 +120,12 @@
   "goal": {
    "id": "g4",
    "name": "Compare three vendors",
-   "description": "",
+   "description": "Compare the three shortlisted vendors and write a one-page table with a recommendation for review. Vendor notes pasted here: Acme Pay 2.9% plus 30 cents per charge, setup 2 days, refunds within 30 days. Brightway 2.7% plus 25 cents, setup 5 days, refunds within 14 days. Coinly 3.1% flat, setup 1 day, refunds within 60 days.",
    "assigned_to": "u_bob"
   },
   "quest": {
-   "outcome": "",
-   "current_state": "",
+   "outcome": "Choose a payment vendor",
+   "current_state": "The vendor notes are pasted in the goal's details",
    "preferences": ""
   },
   "members": [
@@ -149,7 +149,7 @@
   "label": {
    "ai_can_do": true
   },
-  "source": "quest-backend/tests/test_audit_goal_assignments.py test_ai_work_goes_to_current_assignee_rep: classified hand_to_ai for the assignee's rep (comparing options is named in the doability prompt)"
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_ai_work_goes_to_current_assignee_rep: classified hand_to_ai for the assignee's rep (comparing options is named in the doability prompt); the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's"
  },
  {
   "id": "HOG-DO-05",
@@ -158,12 +158,12 @@
   "goal": {
    "id": "g5",
    "name": "Complete an audit of the pages",
-   "description": "",
+   "description": "Audit these pages for broken links and missing titles and write the findings as a table. Page text pasted here: /about has no title tag and links to /old-team and /contact. /contact has the title Contact and links to /about. /old-team returns 404 and is linked from /about.",
    "assigned_to": "u_bob"
   },
   "quest": {
-   "outcome": "",
-   "current_state": "",
+   "outcome": "Fix the help site",
+   "current_state": "The page text is pasted in the goal's details",
    "preferences": ""
   },
   "members": [
@@ -187,7 +187,7 @@
   "label": {
    "ai_can_do": true
   },
-  "source": "quest-backend/tests/test_audit_goal_assignments.py test_human_verb_beats_ai_verb: looks_ai_doable is asserted true for this goal (auditing a page is named in the doability prompt)"
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_human_verb_beats_ai_verb: looks_ai_doable is asserted true for this goal (auditing a page is named in the doability prompt); the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's"
  },
  {
   "id": "HOG-DO-06",
@@ -272,12 +272,12 @@
   "goal": {
    "id": "g8",
    "name": "Identify and document the top 3 'False Balance' misapplications on Wikipedia pages",
-   "description": "",
+   "description": "From public Wikipedia articles, list three pages where the False Balance guideline is misapplied, quoting each passage with its link, in a table for review.",
    "assigned_to": "u_bob"
   },
   "quest": {
-   "outcome": "",
-   "current_state": "",
+   "outcome": "Document guideline misuse",
+   "current_state": "Public Wikipedia articles only",
    "preferences": ""
   },
   "members": [
@@ -301,7 +301,7 @@
   "label": {
    "ai_can_do": true
   },
-  "source": "quest_ai_runner/runner/goal_handoff.py ASSIGNEE_PROMPT: the prompt's own worked example of a goal an AI can do itself (research, audits, documentation) and so ai_can_do true"
+  "source": "quest_ai_runner/runner/goal_handoff.py ASSIGNEE_PROMPT: the prompt's own worked example of a goal an AI can do itself (research, audits, documentation) and so ai_can_do true; the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's"
  },
  {
   "id": "HOG-DO-09",
