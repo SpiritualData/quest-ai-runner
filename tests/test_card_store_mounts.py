@@ -636,3 +636,14 @@ class TestVectorMounting:
 def shutil_tree(src: Path, dst: Path) -> None:
     import shutil
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".quest-context"))
+
+
+def test_mount_request_on_a_backend_that_cannot_mount_does_not_copy_import(tmp_path):
+    """Mounting falls back to copy mode on the Quest backend; that must not revive the copy-import,
+    which compounds imported ids (``root-a--root-b--...``) that ``card_origin.refuse`` then rejects."""
+    from quest_ai_runner.adapters.quest_api_card_repository import QuestApiCardRepository
+    repo = QuestApiCardRepository("https://quest.example.test", "k", "u1")
+    store = FileContextStore(str(tmp_path / "cards"), card_repository=repo, mount_mode="mount",
+                             repo_root=str(tmp_path))
+    assert store._mount_mode == "copy"
+    assert store._reuse_nested_cards is False

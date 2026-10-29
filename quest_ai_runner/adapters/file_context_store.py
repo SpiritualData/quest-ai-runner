@@ -259,6 +259,7 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         # ``_repo`` additionally serves the mounted views (and refuses writes addressed to them).
         self._own_repo: CardRepository = self._repo
         self._mount_mode = (mount_mode or mount_mode_from_env()).strip().lower()
+        mount_unavailable = False
         if self._mount_mode == MODE_MOUNT and card_repository is not None:
             # Expected under the Quest card backend (cards are remote, there is nothing to mount):
             # info there, a warning for any other injected repository.
@@ -267,6 +268,7 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
                 "card_repository (%s) owns card storage, so mounting is OFF for this store",
                 type(card_repository).__name__)
             self._mount_mode = "copy"
+            mount_unavailable = True
         self._mounts: List[Mount] = []
         self._mounts_stamp: Any = "unset"
         self._mounted_repo: Optional[MountedCardRepository] = None
@@ -321,6 +323,11 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
             if reuse_nested_cards is not None
             else os.getenv("QAR_REUSE_NESTED_CARDS", "1").strip().lower() not in ("0", "false", "no")
         )
+        if mount_unavailable:
+            # A deployment that asked for mounts wants the stores around it read, not copied. On a
+            # backend that cannot mount, the legacy copy-import would re-key every imported card
+            # under another namespace each pass (compounded ids, refused by ``card_origin.refuse``).
+            self._reuse_nested_cards = False
         # Optional ModelProvider for LLM-based card relevance filtering.
         # When wired, IDF-selected candidates are re-ranked and filtered by the LLM
         # so only cards genuinely relevant to the task are injected.
