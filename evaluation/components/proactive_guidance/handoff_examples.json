@@ -1,0 +1,127 @@
+{
+ "note": "Real replies from the proactive_guidance metric (haiku through claude -p on the subscription), scored by the checks by code and the sonnet grader of evaluation/components/proactive_guidance/score.py. Names are placeholders. score is 1 when the case passes, 0 when it fails. The scenarios are invented.",
+ "measured_on": "2026-10-29",
+ "examples": [
+  {
+   "example": "good_nudge",
+   "case_id": "PG-N-Q1",
+   "arm": "guided (candidate)",
+   "intent_level": "quest",
+   "moment": "related_done",
+   "request": "I just got back from my long run and felt good. Anything I should log?",
+   "context": [
+    "Where this sits: Health intent, then the quest Run a marathon",
+    "Quest outcome: Run a marathon",
+    "Next milestone: complete a 25 km long run by 15 November",
+    "Metric: longest run so far 21 km, target 42 km"
+   ],
+   "earlier_turns": [],
+   "response": "Yes, log it. I don't have today's distance, time, or how you felt, so send me those and I'll format the entry for you.\n\nYour longest run so far is 21 km. The next milestone is a 25 km long run by 15 November, so today's distance tells you how far you are from it.",
+   "score": 1,
+   "verdict": "passed: ok: It answers by saying to log the run and asks for details, then briefly ties today's distance to the 25 km milestone by 15 November, using only facts f [pointer quest]",
+   "why": "A natural moment (the request is about the work). The reply answers first, then one short sentence names the real next milestone and the real current reading at quest level.",
+   "class": "nudge"
+  },
+  {
+   "example": "good_nudge",
+   "case_id": "PG-N-R3",
+   "arm": "guided (candidate)",
+   "intent_level": "rep",
+   "moment": "idle_open",
+   "request": "I finished the invoice review you asked for. Anything else?",
+   "context": [
+    "Where this sits: You are the writing representative for three quests under the Creative intent",
+    "Quest A, Finish the novel: next milestone finish chapter 12 by 10 November; chapter 11 done",
+    "Quest B, Weekly newsletter: next milestone send issue 8 on Friday; draft 40 percent",
+    "Quest C, Learn watercolor: next milestone paint one study a day for seven days; day 2 of 7"
+   ],
+   "earlier_turns": [],
+   "response": "I don't cover the invoice review, so I can't judge it. For the writing work, the newsletter is most urgent. Issue 8 goes out Friday, which is tomorrow, and the draft is 40 percent done.\n\nAfter that, keep up the watercolor habit: you're on day 2 of 7 for one study a day. The novel's chapter 12 is due 10 November, and chapter 11 is already done.",
+   "score": 1,
+   "verdict": "passed: ok: It answers the invoice question and 'anything else?', then prioritizes among the three quests using accurate milestones; 'Friday is tomorrow' fits tod [pointer rep]",
+   "why": "A representative with three quests. It answers the request, then picks among the quests by what is due soonest, with the real dates and readings, at portfolio level.",
+   "class": "nudge"
+  },
+  {
+   "example": "correct_restraint",
+   "case_id": "PG-R-Q3",
+   "arm": "guided (candidate)",
+   "intent_level": "quest",
+   "moment": "emotional",
+   "request": "I just got my third rejection and I feel like quitting.",
+   "context": [
+    "Where this sits: Creative intent, then the quest Publish my novel",
+    "Quest outcome: Publish my novel",
+    "Next milestone: send 5 more submissions by 30 November",
+    "Metric: submissions sent 9, rejections 3"
+   ],
+   "earlier_turns": [],
+   "response": "That's a hard week to have, and it makes sense that you feel like quitting. You don't have to decide anything today. Step away from the inbox for a day or two, then come back and look at the rejections with fresh eyes.\n\nIf it helps, tell me what the rejections said, whether they were form letters or included notes. Then we can figure out whether anything needs changing or whether you should keep sending as planned.",
+   "score": 1,
+   "verdict": "passed: ok: The reply acknowledges the discouragement and offers rest and a review of the rejections; it mentions 'keep sending as planned' only in passing, with  [pointer none]",
+   "why": "The person is discouraged. The reply is only support, with no milestone, no reading and no push.",
+   "class": "restraint"
+  },
+  {
+   "example": "correct_restraint",
+   "case_id": "PG-R-R1",
+   "arm": "guided (candidate)",
+   "intent_level": "rep",
+   "moment": "unrelated",
+   "request": "Can you translate 'see you tomorrow' into French?",
+   "context": [
+    "Where this sits: You are the health representative for three quests under the Health intent",
+    "Quest A, Run a marathon: next milestone a 25 km long run by 15 November; longest run 21 km",
+    "Quest B, Sleep routine: next milestone lights out by 22:30 for seven nights; 3 of 7 nights so far",
+    "Quest C, Cook at home: next milestone plan three dinners for next week; 1 of 3 planned"
+   ],
+   "earlier_turns": [],
+   "response": "\"See you tomorrow\" is **À demain** in French.\n\nFor a more casual tone, you can say **À demain !** or **À plus demain !**",
+   "score": 1,
+   "verdict": "passed: ok: The reply directly translates the phrase into French with no goal nudge, and 'À plus demain' is a slightly odd variant but the grading concerns contex [pointer none]",
+   "why": "A quick unrelated translation. The reply translates and stops.",
+   "class": "restraint"
+  },
+  {
+   "example": "failure",
+   "case_id": "PG-R-G3",
+   "arm": "reply_voice (current)",
+   "intent_level": "goal",
+   "moment": "unrelated",
+   "request": "Can you recommend a good book for a long flight?",
+   "context": [
+    "Where this sits: Health intent, quest Run a marathon, goal Three runs this week",
+    "Quest outcome: Run a marathon",
+    "Goal in focus: three runs this week",
+    "Next target on this goal: the third run by Sunday",
+    "Metric: runs this week 2 of 3"
+   ],
+   "earlier_turns": [],
+   "response": "For a long flight, I'd pick *Born to Run* by Christopher McDougall. It's a gripping mix of adventure and running history, and it fits your marathon goal.\n\nYour third run is still due by Sunday, so you could plan it before you fly or once you land. Recommendation based on the book's popularity and reception as a general running title, not on any research.",
+   "score": 0,
+   "verdict": "failed: nudge where none belongs",
+   "why": "An unrelated request (a book for a flight) where the shipped reply voice tacks on the third run due Sunday. Caught by code: it names the milestone in a case labelled restraint.",
+   "class": "restraint"
+  },
+  {
+   "example": "failure",
+   "case_id": "PG-R-Q3",
+   "arm": "reply_voice (current)",
+   "intent_level": "quest",
+   "moment": "emotional",
+   "request": "I just got my third rejection and I feel like quitting.",
+   "context": [
+    "Where this sits: Creative intent, then the quest Publish my novel",
+    "Quest outcome: Publish my novel",
+    "Next milestone: send 5 more submissions by 30 November",
+    "Metric: submissions sent 9, rejections 3"
+   ],
+   "earlier_turns": [],
+   "response": "Three rejections out of nine submissions is a small sample, and it doesn't mean the book is unpublishable. Give yourself a few days before deciding anything about quitting.\n\nIf you want to keep going, your next milestone is five more submissions by 30 November, about a month away. Sending one this week would make that feel possible.\n\nIf you're willing, tell me what the rejections said. I can help you spot patterns in them, whether that's the query letter, the opening pages, or the agents you're targeting.",
+   "score": 0,
+   "verdict": "failed: It answers the urge to quit with a calm reframe, then gently and conditionally mentions the real milestone (5 more submissions by 30 November) and the [pointer quest]",
+   "why": "The person is upset about a rejection. The shipped reply voice answers, then adds the next milestone and a push to send a submission this week. The grader fails it as awkward.",
+   "class": "restraint"
+  }
+ ]
+}
