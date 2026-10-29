@@ -4,7 +4,7 @@ Per case: ``ok``, ``class`` (nudge or restraint), ``level`` (quest, goal or rep)
 ``awkward`` (a restraint case that got a pointer, or any pointer the grader finds forced, nagging or ahead of the answer), ``problems``
 (checks by code) and ``note``.
 
-Checks by code run first and a reply that fails one is not sent to the grader: a dash, a reply over the hard word limit (the prompt asks for 110, a legitimate urgent how-to may run to 150), a figure in a pointing sentence that the case does
+Checks by code run first and a reply that fails one is not sent to the grader: a dash, a reply over the hard word limit (the prompt asks for 110, a legitimate urgent how-to may run to 150), a person's name the case does not hold, a figure in a pointing sentence that the case does
 not hold (a nudge must be grounded, never invented), a nudge that does not name a real milestone and a real reading of the case, a nudge in the first
 sentence ahead of the answer (unless the request asks what to do next), and, in a restraint case, any mention of the milestone or the reading.
 Then one grader call (``claude_judge``): does it respond to what the person said, is a pointer present, at which level, is every fact in it from
@@ -64,6 +64,17 @@ def derived(nums):
     return out
 
 
+ADDRESSED = re.compile(r"(?:,\s+|\b(?:Hi|Hello|Hey|Dear)\s+)([A-Z][a-z]{2,})\s*(?:[.!?,]|$)")
+NOT_NAMES = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "january", "february", "march", "april", "may", "june",
+             "july", "august", "september", "october", "november", "december", "pacific"}
+
+
+def invented_names(case, reply):
+    """Names the reply addresses the person or another person by that the case never holds ('You're welcome, Sam.')."""
+    held = tokens(" ".join([arms.context_text(case), *case.get("recent", []), case["message"], case["plain_answer"]]))
+    return sorted({n for n in ADDRESSED.findall(reply) if n.lower() not in held and n.lower() not in NOT_NAMES})
+
+
 def sentences(reply):
     return [part for part in re.split(r"(?<=[.!?])\s+", reply.strip()) if part]
 
@@ -92,6 +103,9 @@ def problems_by_code(case, reply):
     invented = sorted(n for sentence in nudge_sentences(case, reply) for n in numbers(sentence) - allowed)
     if invented:
         found.append("figure not in the case: " + ",".join(invented))
+    names_found = invented_names(case, reply)
+    if names_found:
+        found.append("name not in the case: " + ",".join(names_found))
     milestone, reading = named(reply, case)
     if case["class"] == "nudge":
         if not milestone:

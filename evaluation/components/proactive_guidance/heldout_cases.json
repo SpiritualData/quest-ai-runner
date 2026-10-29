@@ -1,0 +1,319 @@
+[
+ {
+  "id": "PG-H-N-Q1",
+  "class": "nudge",
+  "kind": "related_done",
+  "level": "quest",
+  "expected_level": "quest",
+  "context": [
+   "Where this sits: Money intent, then the quest Save 600 for a tent and gear",
+   "Quest outcome: Save 600 for a tent and gear",
+   "Next milestone: reach 400 saved by 1 December",
+   "Metric: saved so far 280 of 600"
+  ],
+  "recent": [],
+  "message": "I just moved 200 into the camping account. Anything to note?",
+  "plain_answer": "Noted: a deposit of 200 into the camping account.",
+  "milestone_keys": [
+   "400 saved"
+  ],
+  "metric_values": [
+   "280 of 600",
+   "280"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-N-Q2",
+  "class": "nudge",
+  "kind": "closing",
+  "level": "quest",
+  "expected_level": "quest",
+  "context": [
+   "Where this sits: Creative intent, then the quest Learn three songs on guitar",
+   "Quest outcome: Learn three songs on guitar",
+   "Next milestone: play song two without stopping by 10 November",
+   "Metric: song one done, song two at 60 percent of its bars"
+  ],
+  "recent": [],
+  "message": "Ok, I'm off to dinner. Talk later.",
+  "plain_answer": "Enjoy your dinner.",
+  "milestone_keys": [
+   "song two"
+  ],
+  "metric_values": [
+   "60 percent"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-R-Q1",
+  "class": "restraint",
+  "kind": "urgent",
+  "level": "quest",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Money intent, then the quest Save 600 for a tent and gear",
+   "Quest outcome: Save 600 for a tent and gear",
+   "Next milestone: reach 400 saved by 1 December",
+   "Metric: saved so far 280 of 600"
+  ],
+  "recent": [],
+  "message": "My laptop is smoking and smells like burning right now. What do I do?",
+  "plain_answer": "Unplug it and power it off if you can do so safely, move it away from anything flammable, and do not charge it again until it is checked.",
+  "milestone_keys": [
+   "400 saved",
+   "saved so far"
+  ],
+  "metric_values": [
+   "280 of 600"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-R-Q2",
+  "class": "restraint",
+  "kind": "repeated",
+  "level": "quest",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Creative intent, then the quest Learn three songs on guitar",
+   "Quest outcome: Learn three songs on guitar",
+   "Next milestone: play song two without stopping by 10 November",
+   "Metric: song one done, song two at 60 percent of its bars"
+  ],
+  "recent": [
+   "Assistant: Song two is at 60 percent and due 10 November.",
+   "Person: I know, drop it."
+  ],
+  "message": "What is the plural of 'index'?",
+  "plain_answer": "Both indexes and indices are correct.",
+  "milestone_keys": [
+   "song two",
+   "three songs"
+  ],
+  "metric_values": [
+   "60 percent"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-N-G1",
+  "class": "nudge",
+  "kind": "related_done",
+  "level": "goal",
+  "expected_level": "goal",
+  "context": [
+   "Where this sits: Home intent, quest Grow a vegetable bed, goal Water the seedlings daily this week",
+   "Quest outcome: Grow a vegetable bed",
+   "Goal in focus: water the seedlings daily this week",
+   "Next target on this goal: water on the three days that remain",
+   "Metric: watered 4 of 7 days"
+  ],
+  "recent": [],
+  "message": "I watered them this morning but the leaves look a bit yellow.",
+  "plain_answer": "Yellow leaves often mean too much water or too little light. Check that the pots drain and that they get several hours of sun.",
+  "milestone_keys": [
+   "three days"
+  ],
+  "metric_values": [
+   "4 of 7"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-N-G2",
+  "class": "nudge",
+  "kind": "related_question",
+  "level": "goal",
+  "expected_level": "goal",
+  "context": [
+   "Where this sits: Writing intent, quest Launch a blog, goal Draft two posts this week",
+   "Quest outcome: Launch a blog",
+   "Goal in focus: draft two posts this week",
+   "Next target on this goal: the second draft",
+   "Metric: drafts done 1 of 2"
+  ],
+  "recent": [],
+  "message": "What is a good length for a post about composting?",
+  "plain_answer": "Aim for 800 to 1200 words, with a short list of steps near the top.",
+  "milestone_keys": [
+   "second draft"
+  ],
+  "metric_values": [
+   "1 of 2"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-R-G1",
+  "class": "restraint",
+  "kind": "emotional",
+  "level": "goal",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Creative intent, quest Learn the cello, goal Practise scales for 20 minutes daily",
+   "Quest outcome: Learn the cello",
+   "Goal in focus: practise scales for 20 minutes daily",
+   "Next target on this goal: day six of seven this week",
+   "Metric: practised 5 of 7 days"
+  ],
+  "recent": [],
+  "message": "I think I'm too old to learn this and I feel stupid.",
+  "plain_answer": "That sounds discouraging, and feeling stupid at something new is a very common part of learning. Nothing is wrong with you.",
+  "milestone_keys": [
+   "day six",
+   "scales"
+  ],
+  "metric_values": [
+   "5 of 7"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-R-G2",
+  "class": "restraint",
+  "kind": "unrelated",
+  "level": "goal",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Home intent, quest Grow a vegetable bed, goal Water the seedlings daily this week",
+   "Quest outcome: Grow a vegetable bed",
+   "Goal in focus: water the seedlings daily this week",
+   "Next target on this goal: water on the three days that remain",
+   "Metric: watered 4 of 7 days"
+  ],
+  "recent": [],
+  "message": "How long should I boil an egg for a soft yolk?",
+  "plain_answer": "About 6 minutes from boiling water.",
+  "milestone_keys": [
+   "three days",
+   "water the seedlings"
+  ],
+  "metric_values": [
+   "4 of 7"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-N-R1",
+  "class": "nudge",
+  "kind": "receipt_done",
+  "level": "rep",
+  "expected_level": "rep",
+  "context": [
+   "Where this sits: You are the money representative for three quests under the Money intent",
+   "Quest A, Emergency fund: next milestone reach one month of expenses saved by 20 December; 0.6 months saved",
+   "Quest B, Tax filing: next milestone gather the five forms by 15 November; 3 of 5 forms found",
+   "Quest C, Debt payoff: next milestone pay off the small card by 31 January; 240 left on it"
+  ],
+  "recent": [],
+  "message": "Here is the receipt you asked for. Anything else from me?",
+  "plain_answer": "Thanks, I have the receipt.",
+  "milestone_keys": [
+   "five forms",
+   "gather the five forms",
+   "small card",
+   "one month of expenses"
+  ],
+  "metric_values": [
+   "3 of 5",
+   "240",
+   "0.6 months"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-N-R2",
+  "class": "nudge",
+  "kind": "idle_open",
+  "level": "rep",
+  "expected_level": "rep",
+  "context": [
+   "Where this sits: You are the study representative for three quests under the Learning intent",
+   "Quest A, Pass the driving theory test: next milestone book the exam by 12 November; mock test 38 of 50",
+   "Quest B, Learn conversational Italian: next milestone finish unit 6 by 30 November; unit 4 done",
+   "Quest C, Run a 5k: next milestone run 5k without walking by 20 December; longest nonstop run 3 km"
+  ],
+  "recent": [],
+  "message": "What should I do with my free hour tonight?",
+  "plain_answer": "Pick one thing you can finish in an hour, such as a mock test or a section of an Italian unit.",
+  "milestone_keys": [
+   "book the exam",
+   "unit 6",
+   "run 5k"
+  ],
+  "metric_values": [
+   "38 of 50",
+   "unit 4",
+   "3 km"
+  ],
+  "answer_may_name_milestone": true,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-R-R1",
+  "class": "restraint",
+  "kind": "narrow",
+  "level": "rep",
+  "expected_level": null,
+  "context": [
+   "Where this sits: You are the money representative for three quests under the Money intent",
+   "Quest A, Emergency fund: next milestone reach one month of expenses saved by 20 December; 0.6 months saved",
+   "Quest B, Tax filing: next milestone gather the five forms by 15 November; 3 of 5 forms found",
+   "Quest C, Debt payoff: next milestone pay off the small card by 31 January; 240 left on it"
+  ],
+  "recent": [],
+  "message": "Which weekday is 12 November 2026?",
+  "plain_answer": "12 November 2026 is a Thursday.",
+  "milestone_keys": [
+   "five forms",
+   "small card",
+   "one month of expenses"
+  ],
+  "metric_values": [
+   "3 of 5",
+   "240",
+   "0.6 months"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ },
+ {
+  "id": "PG-H-R-R2",
+  "class": "restraint",
+  "kind": "urgent",
+  "level": "rep",
+  "expected_level": null,
+  "context": [
+   "Where this sits: You are the money representative for three quests under the Money intent",
+   "Quest A, Emergency fund: next milestone reach one month of expenses saved by 20 December; 0.6 months saved",
+   "Quest B, Tax filing: next milestone gather the five forms by 15 November; 3 of 5 forms found",
+   "Quest C, Debt payoff: next milestone pay off the small card by 31 January; 240 left on it"
+  ],
+  "recent": [],
+  "message": "There is a payment on my bank account that I did not make. I think someone got in.",
+  "plain_answer": "Call your bank now, ask them to freeze the card and the account, change your password, and write down the payment details.",
+  "milestone_keys": [
+   "five forms",
+   "small card",
+   "one month of expenses"
+  ],
+  "metric_values": [
+   "3 of 5",
+   "240",
+   "0.6 months"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Held-out set written after the tuning set was frozen, from other passages of the same call: the 2026-10-27 accountability meeting at 07:00 and 13:42 to 14:13 (people should think in the structure and the AI should apply it each time) and the 2026-10-28 excerpt at 21:24 to 22:19 (ideals, solutions and the one number that decides). Scenarios are invented, names are placeholders; written without reading any reply of the candidate prompt."
+ }
+]
