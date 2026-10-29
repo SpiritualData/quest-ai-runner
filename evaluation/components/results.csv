@@ -3379,3 +3379,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,hub_of_hubs,hub_of_hubs.broken.vendor_grep:build,80,28,28/80,0/0,0,0,0,0.0,5.2,06fc2b9,bc172b4a,none,,,
 2026-10-29,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.4,77b834b,ae7e2b22,none,,,
 2026-10-29,end_to_end,qar_live,13,13,13/13,0/0,94,665172,32979,0.6495,356.6,b290c40,489a4a26,claude-code-subscription,,,0.7815
+2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,3.5,4ad1796,a9f86c1a,none,,,
