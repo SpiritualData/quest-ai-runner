@@ -457,5 +457,274 @@
    "ai_can_do": true
   },
   "source": "quest-backend/tests/test_audit_goal_assignments.py test_research_goal_goes_to_ai_rep_of_owner_when_unassigned: an AI-created research goal goes to the quest owner and to that person's AI rep"
+ },
+ {
+  "id": "HOG-AS-04",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g24",
+   "name": "Book the venue",
+   "description": "Alice already has the venue manager's number and will make the booking."
+  },
+  "quest": {
+   "outcome": "Run the spring fair",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   },
+   {
+    "user_id": "u_dana",
+    "name": "Dana Day",
+    "role": "admin"
+   }
+  ],
+  "creator": "",
+  "label": {
+   "assignee": "u_alice",
+   "ai_can_do": false
+  },
+  "source": "labelled from the goal's own text, which says outright who does it (or that it needs the owner's own sign-off); not from any model output: the description names Alice as the one who will book (a call)"
+ },
+ {
+  "id": "HOG-AS-05",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g25",
+   "name": "Present the budget to the board",
+   "description": "Bob will present at Thursday's board meeting."
+  },
+  "quest": {
+   "outcome": "Secure funding",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   },
+   {
+    "user_id": "u_dana",
+    "name": "Dana Day",
+    "role": "admin"
+   }
+  ],
+  "creator": "",
+  "label": {
+   "assignee": "u_bob",
+   "ai_can_do": false
+  },
+  "source": "labelled from the goal's own text, which says outright who does it (or that it needs the owner's own sign-off); not from any model output: Bob is named as the presenter, which needs his presence"
+ },
+ {
+  "id": "HOG-AS-06",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g26",
+   "name": "Sign the lease",
+   "description": "The lease must be signed by the quest owner personally."
+  },
+  "quest": {
+   "outcome": "Open the new shop",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   },
+   {
+    "user_id": "u_dana",
+    "name": "Dana Day",
+    "role": "admin"
+   }
+  ],
+  "creator": "",
+  "label": {
+   "assignee": "u_olive",
+   "ai_can_do": false
+  },
+  "source": "labelled from the goal's own text, which says outright who does it (or that it needs the owner's own sign-off); not from any model output: signature by the owner is stated"
+ },
+ {
+  "id": "HOG-AS-07",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g27",
+   "name": "Compare the three vendor quotes and write a one-page recommendation",
+   "description": "Carol's task: the quotes are already in the shared folder as documents."
+  },
+  "quest": {
+   "outcome": "Relaunch the site",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   },
+   {
+    "user_id": "u_dana",
+    "name": "Dana Day",
+    "role": "admin"
+   },
+   {
+    "user_id": "u_carol",
+    "name": "Carol Cole",
+    "role": "member"
+   }
+  ],
+  "creator": "",
+  "label": {
+   "assignee": "u_carol",
+   "ai_can_do": true
+  },
+  "source": "labelled from the goal's own text, which says outright who does it (or that it needs the owner's own sign-off); not from any model output: Carol is named as owner of a document comparison, which is work an AI can finish alone from files already shared"
+ },
+ {
+  "id": "HOG-AS-08",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g28",
+   "name": "Approve the final invoice",
+   "description": "Per the preferences, spending sign-off belongs to Dana."
+  },
+  "quest": {
+   "outcome": "Close the event",
+   "current_state": "",
+   "preferences": "Dana Day approves all spending"
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   },
+   {
+    "user_id": "u_dana",
+    "name": "Dana Day",
+    "role": "admin"
+   }
+  ],
+  "creator": "",
+  "label": {
+   "assignee": "u_dana",
+   "ai_can_do": false
+  },
+  "source": "labelled from the goal's own text, which says outright who does it (or that it needs the owner's own sign-off); not from any model output: the preferences give spending sign-off to Dana"
+ },
+ {
+  "id": "HOG-AS-09",
+  "kind": "assignee",
+  "stratum": "assignee",
+  "goal": {
+   "id": "g29",
+   "name": "Summarize the survey results into a one-page brief",
+   "description": "Bob owns the survey follow-up and will review the brief."
+  },
+  "quest": {
+   "outcome": "Understand our members",
+   "current_state": "",
+   "preferences": ""
+  },
+  "members": [
+   {
+    "user_id": "u_olive",
+    "name": "Olive Owner",
+    "is_owner": true,
+    "role": "owner"
+   },
+   {
+    "user_id": "u_alice",
+    "name": "Alice Able",
+    "role": "member"
+   },
+   {
+    "user_id": "u_bob",
+    "name": "Bob Baker",
+    "role": "member"
+   },
+   {
+    "user_id": "u_dana",
+    "name": "Dana Day",
+    "role": "admin"
+   }
+  ],
+  "creator": "",
+  "label": {
+   "assignee": "u_bob",
+   "ai_can_do": true
+  },
+  "source": "labelled from the goal's own text, which says outright who does it (or that it needs the owner's own sign-off); not from any model output: Bob owns the follow-up and the summary is work an AI can finish alone"
  }
 ]

@@ -193,5 +193,297 @@
    "values": null
   },
   "source": "quest-backend/tests/api/endpoints/intents/test_metric_values_api.py test_the_row_says_why_no_draft_is_waiting_only_when_the_quest_has_nothing_new (a quest with nothing new gets no draft) and the draft prompt rule 'a missing value is better than an invented one'; the card of DAM-02 with its one note removed"
+ },
+ {
+  "id": "DAM-05",
+  "kind": "propose",
+  "stratum": "propose",
+  "task_text": "Draft a value for the metric \"Average sleep\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Average sleep",
+   "purpose": "Know how much the person sleeps",
+   "disadvantages": "Cannot see sleep quality",
+   "questions": [
+    {
+     "name": "Hours",
+     "type": "number",
+     "min": 0,
+     "max": 24
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 6.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [
+    {
+     "at": "2026-10-21",
+     "text": "Slept 7 hours on average this week"
+    }
+   ],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [],
+   "answeredAsksSinceBaseline": [],
+   "outcome": {
+    "text": "Sleep 8 hours a night"
+   },
+   "hasNewContext": true
+  },
+  "label": {
+   "propose": true,
+   "values": {
+    "Hours": 7
+   }
+  },
+  "source": "labelled from the card's own text: the value is the number a note, entry or answered ask states outright, or the card holds nothing new (note says 7 hours)"
+ },
+ {
+  "id": "DAM-06",
+  "kind": "propose",
+  "stratum": "propose",
+  "task_text": "Draft a value for the metric \"Pages read\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Pages read",
+   "purpose": "Know how much the person reads",
+   "disadvantages": "Cannot see how well the reading was understood",
+   "questions": [
+    {
+     "name": "Pages",
+     "type": "number",
+     "min": 0,
+     "max": null
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 80.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [],
+   "answeredAsksSinceBaseline": [
+    {
+     "at": "2026-10-23",
+     "question": "How many pages did you read this week?",
+     "answer": "About 120 pages"
+    }
+   ],
+   "outcome": {
+    "text": "Read 100 pages a week"
+   },
+   "hasNewContext": true
+  },
+  "label": {
+   "propose": true,
+   "values": {
+    "Pages": 120
+   }
+  },
+  "source": "labelled from the card's own text: the value is the number a note, entry or answered ask states outright, or the card holds nothing new (answered ask says 120 pages)"
+ },
+ {
+  "id": "DAM-07",
+  "kind": "propose",
+  "stratum": "propose",
+  "task_text": "Draft a value for the metric \"Grant hours\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Grant hours",
+   "purpose": "Know how long the person works on the grant",
+   "disadvantages": "Cannot see the quality of the draft",
+   "questions": [
+    {
+     "name": "Hours",
+     "type": "number",
+     "min": 0,
+     "max": null
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [],
+   "notesSinceBaseline": [
+    {
+     "at": "2026-10-20",
+     "text": "Spent 3 hours on the grant draft"
+    },
+    {
+     "at": "2026-10-24",
+     "text": "Spent another 2 hours on the grant draft"
+    }
+   ],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [],
+   "answeredAsksSinceBaseline": [],
+   "outcome": {
+    "text": "Finish the grant draft"
+   },
+   "hasNewContext": true
+  },
+  "label": {
+   "propose": true,
+   "values": {
+    "Hours": 5
+   }
+  },
+  "source": "labelled from the card's own text: the value is the number a note, entry or answered ask states outright, or the card holds nothing new (3 plus 2 hours stated in two notes)"
+ },
+ {
+  "id": "DAM-08",
+  "kind": "propose",
+  "stratum": "propose",
+  "task_text": "Draft a value for the metric \"Weekly mood\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Weekly mood",
+   "purpose": "Know the person's mood",
+   "disadvantages": "A single number hides what drove the mood",
+   "questions": [
+    {
+     "name": "Mood",
+     "type": "number",
+     "min": 1,
+     "max": 5
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 3.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [
+    {
+     "at": "2026-10-22",
+     "text": "Mood was 4 out of 5 most days"
+    }
+   ],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [],
+   "answeredAsksSinceBaseline": [],
+   "outcome": {
+    "text": "Feel steadier"
+   },
+   "hasNewContext": true
+  },
+  "label": {
+   "propose": true,
+   "values": {
+    "Mood": 4
+   }
+  },
+  "source": "labelled from the card's own text: the value is the number a note, entry or answered ask states outright, or the card holds nothing new (note says 4 out of 5)"
+ },
+ {
+  "id": "DAM-09",
+  "kind": "thin",
+  "stratum": "thin",
+  "task_text": "Draft a value for the metric \"Average sleep\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Average sleep",
+   "purpose": "Know how much the person sleeps",
+   "disadvantages": "Cannot see sleep quality",
+   "questions": [
+    {
+     "name": "Hours",
+     "type": "number",
+     "min": 0,
+     "max": 24
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 6.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [
+    {
+     "at": "2026-10-22",
+     "name": "Plan the garden",
+     "status": "open",
+     "target": ""
+    }
+   ],
+   "answeredAsksSinceBaseline": [],
+   "outcome": {
+    "text": "Sleep 8 hours a night"
+   },
+   "hasNewContext": true
+  },
+  "label": {
+   "propose": false,
+   "values": null
+  },
+  "source": "the card's only new item is an open goal about a garden, which says nothing about sleep, and the prompt rule 'a missing value is better than an invented one'"
+ },
+ {
+  "id": "DAM-10",
+  "kind": "thin",
+  "stratum": "thin",
+  "task_text": "Draft a value for the metric \"Pages read\" (metric collection coll_1) for 2026-10-19 to 2026-10-25.",
+  "card": {
+   "name": "Pages read",
+   "purpose": "Know how much the person reads",
+   "disadvantages": "Cannot see how well the reading was understood",
+   "questions": [
+    {
+     "name": "Pages",
+     "type": "number",
+     "min": 0,
+     "max": null
+    }
+   ],
+   "period": {
+    "start": "2026-10-19",
+    "end": "2026-10-25"
+   },
+   "recentValues": [
+    {
+     "value": 80.0,
+     "at": "2026-10-18T09:00:00"
+    }
+   ],
+   "notesSinceBaseline": [
+    {
+     "at": "2026-10-21",
+     "text": "Felt tired and busy"
+    }
+   ],
+   "otherEntriesInPeriod": [],
+   "goalsSinceBaseline": [],
+   "answeredAsksSinceBaseline": [],
+   "outcome": {
+    "text": "Read 100 pages a week"
+   },
+   "hasNewContext": true
+  },
+  "label": {
+   "propose": false,
+   "values": null
+  },
+  "source": "the only note gives no count of pages, so no number can be read from the card, and the prompt rule 'a missing value is better than an invented one'"
  }
 ]

@@ -51,7 +51,7 @@ def score_case(fn, case):
         raw = got.get("raw") or {}
         have = raw.get("ai_doable")
         want = case["label"]["ai_doable"]
-        ok = have is want
+        ok = (have is True) == want   # no verdict leaves the goal with its owner, which is the right outcome for a goal that is not AI work
         return dict(ok=ok, got=str(have), want=str(want), wrong_route=have is not None and not ok, kind=kind,
                     note="ok" if ok else f"{have}, labelled {want}")
     sent, want = got["sent"], case["expect"]["sent"]

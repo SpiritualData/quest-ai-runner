@@ -83,7 +83,11 @@ DRAFT_SPEC = register(PromptSpec(
         "Rules: use only evidence that is in the card or the quest context above. Give a value for every question, within its scale, keyed by the "
         "question's name. The card's purpose says what the metric ensures and its disadvantages say what it cannot see: do not claim more than it "
         "can show, and name in could_not_see anything its disadvantages warn about that the data leaves open. Cite the specific things each value rests on. If the data does not support a value, set propose to false and say why "
-        "in one sentence: a missing value is better than an invented one. Never write a value as if it were recorded: the person confirms it."),
+        "in one sentence: a missing value is better than an invented one. Never write a value as if it were recorded: the person confirms it.\n\n"
+        "Answer with one JSON object only: {{\"propose\": true|false, \"reason\": \"<one sentence, only when propose is false>\", "
+        "\"values\": {{\"<question name>\": <value>}}, \"confidence\": \"low|medium|high\", \"confidence_reason\": \"<short>\", "
+        "\"could_not_see\": \"<short>\", \"evidence\": [{{\"kind\": \"note|entry|goal|habit\", \"summary\": \"<what it says, a few words at least>\", "
+        "\"date\": \"<date>\"}}]}}"),
 ))
 
 

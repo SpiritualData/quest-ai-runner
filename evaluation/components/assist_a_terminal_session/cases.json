@@ -1,74 +1,550 @@
 [
- {"id": "AST-ACK-01", "kind": "ack", "stratum": "ack", "live": true,
-  "request": "Send the board the Q3 numbers", "create_task": "ok", "stub_answer": {"mode": "reference"},
-  "expect": {"exit": 0, "contract": true},
-  "source": "quest_ai_runner/cli_quest.py _cmd_send and the ack prompt spec: a queued task prints one acknowledgement sentence, at most 20 words, no dash; the request text is the fixture ASKS of tests/test_quest_asks_brief.py"},
- {"id": "AST-ACK-02", "kind": "ack", "stratum": "ack", "live": true,
-  "request": "Draft the grant letter", "create_task": "ok", "stub_answer": {"mode": "reference"},
-  "expect": {"exit": 0, "contract": true},
-  "source": "same contract as AST-ACK-01; request text from the fixture ASKS of tests/test_quest_asks_brief.py"},
- {"id": "AST-ACK-03", "kind": "ack", "stratum": "ack_failure",
-  "request": "Fix the logo", "create_task": "no_id", "stub_answer": {"mode": "reference"},
-  "expect": {"exit": 1, "stdout_starts": "Could not queue the task", "max_calls": 0},
-  "source": "cli_quest.py comment 'never ack a task that may not exist' and the docstring of tests/test_quest_client_create_task.py ('an ack is a promise')"},
- {"id": "AST-ACK-04", "kind": "ack", "stratum": "ack_failure",
-  "request": "Send Ana the deck", "create_task": "raises", "stub_answer": {"mode": "reference"},
-  "expect": {"exit": 1, "stdout_starts": "Could not queue the task", "max_calls": 0},
-  "source": "cli_quest.py except branch for QuestApiError: the enqueue failure is reported and no acknowledgement is made"},
- {"id": "AST-ACK-05", "kind": "ack", "stratum": "ack_failure",
-  "request": "Send the board the Q3 numbers", "create_task": "ok", "stub_answer": {"mode": "raises"},
-  "expect": {"exit": 0, "stdout_starts": "Queued: Send the board the Q3 numbers", "contract": true},
-  "source": "cli_quest.py comment 'ack failure is non-fatal': the model call failing falls back to the Queued line and exit 0"},
- {"id": "AST-ACK-06", "kind": "ack", "stratum": "ack_failure",
-  "request": "Draft the grant letter", "create_task": "ok", "stub_answer": {"mode": "text", "text": "   \n"},
-  "expect": {"exit": 0, "stdout_starts": "Queued: Draft the grant letter", "contract": true},
-  "source": "cli_quest.py: an empty acknowledgement is not printed, the Queued line is"},
- {"id": "AST-ACK-07", "kind": "ack", "stratum": "ack_contract",
-  "request": "Fix the logo", "create_task": "ok",
-  "stub_answer": {"mode": "text", "text": "I am looking into this right now \u2014 the logo fix is on my list."},
-  "expect": {"exit": 0, "contract": true},
-  "source": "the ack prompt spec ('Do NOT use em dashes') and the repository rule of no em dashes in anything a user sees; the stubbed answer was written for this case, it is not a recorded model output"},
- {"id": "AST-ACK-08", "kind": "ack", "stratum": "ack_contract",
-  "request": "Send Ana the deck", "create_task": "ok",
-  "stub_answer": {"mode": "text", "text": "Thanks for the request, I have understood that you would like me to send Ana the deck, and I will start looking into it as soon as I can so that you have it quickly."},
-  "expect": {"exit": 0, "contract": true},
-  "source": "the ack prompt spec ('ONE sentence (max 20 words)'); the stubbed answer was written for this case, it is not a recorded model output"},
-
- {"id": "AST-CLS-01", "kind": "classify", "stratum": "classify", "live": true,
-  "ask": {"key": "k_open", "kind": "unknown", "state": "open", "text": "Send the board the Q3 numbers"},
-  "label": {"kind": "request"},
-  "source": "tests/test_quest_asks_brief.py ASKS: this text is stored as kind request"},
- {"id": "AST-CLS-02", "kind": "classify", "stratum": "classify", "live": true,
-  "ask": {"key": "k_prog", "kind": "unknown", "state": "open", "text": "Draft the grant letter"},
-  "label": {"kind": "request"},
-  "source": "tests/test_quest_asks_brief.py ASKS: this text is stored as kind request"},
- {"id": "AST-CLS-03", "kind": "classify", "stratum": "classify", "live": true,
-  "ask": {"key": "k_done", "kind": "unknown", "state": "open", "text": "Fix the logo"},
-  "label": {"kind": "request"},
-  "source": "tests/test_quest_asks_brief.py ASKS: this text is stored as kind request"},
- {"id": "AST-CLS-04", "kind": "classify", "stratum": "classify", "live": true,
-  "ask": {"key": "k_rec", "kind": "unknown", "state": "open", "text": "Send Ana the deck"},
-  "label": {"kind": "request"},
-  "source": "tests/test_quest_asks_brief.py record_ask test: this text is recorded with kind request"},
- {"id": "AST-CLS-05", "kind": "classify", "stratum": "classify", "live": true,
-  "ask": {"key": "k_rule", "kind": "unknown", "state": "open", "text": "Always cc Dana"},
-  "label": {"kind": "standing"},
-  "source": "tests/test_quest_asks_brief.py ASKS: this text is stored as kind standing"},
- {"id": "AST-CLS-06", "kind": "classify", "stratum": "classify", "live": true,
-  "ask": {"key": "k9", "kind": "unknown", "state": "open", "text": "Send the links"},
-  "label": {"kind": "request", "stated_assignee": "u2"},
-  "source": "tests/test_plan_reconcile.py test_write_applies_a_classified_request: this text becomes a request for u2; only the kind is scored because the case gives the model no evidence for the member"},
-
- {"id": "AST-JDG-01", "kind": "judge", "stratum": "judge", "live": true,
-  "goal": {"id": "ok", "name": "draft", "time_scope": "day", "period": "2026-10-14", "assigned_to_user_id": "u1"},
-  "label": {"ai_doable": true},
-  "source": "tests/test_plan_reconcile.py test_write_routes_a_handoff_to_the_rep: the goal named draft is handed to the rep"},
-
- {"id": "AST-GATE-01", "kind": "gate", "stratum": "gate", "live": true,
+ {
+  "id": "AST-ACK-01",
+  "kind": "ack",
+  "stratum": "ack",
+  "live": true,
+  "request": "Send the board the Q3 numbers",
+  "create_task": "ok",
+  "stub_answer": {
+   "mode": "reference"
+  },
+  "expect": {
+   "exit": 0,
+   "contract": true
+  },
+  "source": "quest_ai_runner/cli_quest.py _cmd_send and the ack prompt spec: a queued task prints one acknowledgement sentence, at most 20 words, no dash; the request text is the fixture ASKS of tests/test_quest_asks_brief.py"
+ },
+ {
+  "id": "AST-ACK-02",
+  "kind": "ack",
+  "stratum": "ack",
+  "live": true,
+  "request": "Draft the grant letter",
+  "create_task": "ok",
+  "stub_answer": {
+   "mode": "reference"
+  },
+  "expect": {
+   "exit": 0,
+   "contract": true
+  },
+  "source": "same contract as AST-ACK-01; request text from the fixture ASKS of tests/test_quest_asks_brief.py"
+ },
+ {
+  "id": "AST-ACK-03",
+  "kind": "ack",
+  "stratum": "ack_failure",
+  "request": "Fix the logo",
+  "create_task": "no_id",
+  "stub_answer": {
+   "mode": "reference"
+  },
+  "expect": {
+   "exit": 1,
+   "stdout_starts": "Could not queue the task",
+   "max_calls": 0
+  },
+  "source": "cli_quest.py comment 'never ack a task that may not exist' and the docstring of tests/test_quest_client_create_task.py ('an ack is a promise')"
+ },
+ {
+  "id": "AST-ACK-04",
+  "kind": "ack",
+  "stratum": "ack_failure",
+  "request": "Send Ana the deck",
+  "create_task": "raises",
+  "stub_answer": {
+   "mode": "reference"
+  },
+  "expect": {
+   "exit": 1,
+   "stdout_starts": "Could not queue the task",
+   "max_calls": 0
+  },
+  "source": "cli_quest.py except branch for QuestApiError: the enqueue failure is reported and no acknowledgement is made"
+ },
+ {
+  "id": "AST-ACK-05",
+  "kind": "ack",
+  "stratum": "ack_failure",
+  "request": "Send the board the Q3 numbers",
+  "create_task": "ok",
+  "stub_answer": {
+   "mode": "raises"
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_starts": "Queued: Send the board the Q3 numbers",
+   "contract": true
+  },
+  "source": "cli_quest.py comment 'ack failure is non-fatal': the model call failing falls back to the Queued line and exit 0"
+ },
+ {
+  "id": "AST-ACK-06",
+  "kind": "ack",
+  "stratum": "ack_failure",
+  "request": "Draft the grant letter",
+  "create_task": "ok",
+  "stub_answer": {
+   "mode": "text",
+   "text": "   \n"
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_starts": "Queued: Draft the grant letter",
+   "contract": true
+  },
+  "source": "cli_quest.py: an empty acknowledgement is not printed, the Queued line is"
+ },
+ {
+  "id": "AST-ACK-07",
+  "kind": "ack",
+  "stratum": "ack_contract",
+  "request": "Fix the logo",
+  "create_task": "ok",
+  "stub_answer": {
+   "mode": "text",
+   "text": "I am looking into this right now \u2014 the logo fix is on my list."
+  },
+  "expect": {
+   "exit": 0,
+   "contract": true
+  },
+  "source": "the ack prompt spec ('Do NOT use em dashes') and the repository rule of no em dashes in anything a user sees; the stubbed answer was written for this case, it is not a recorded model output"
+ },
+ {
+  "id": "AST-ACK-08",
+  "kind": "ack",
+  "stratum": "ack_contract",
+  "request": "Send Ana the deck",
+  "create_task": "ok",
+  "stub_answer": {
+   "mode": "text",
+   "text": "Thanks for the request, I have understood that you would like me to send Ana the deck, and I will start looking into it as soon as I can so that you have it quickly."
+  },
+  "expect": {
+   "exit": 0,
+   "contract": true
+  },
+  "source": "the ack prompt spec ('ONE sentence (max 20 words)'); the stubbed answer was written for this case, it is not a recorded model output"
+ },
+ {
+  "id": "AST-CLS-01",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k_open",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Send the board the Q3 numbers"
+  },
+  "label": {
+   "kind": "request"
+  },
+  "source": "tests/test_quest_asks_brief.py ASKS: this text is stored as kind request"
+ },
+ {
+  "id": "AST-CLS-02",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k_prog",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Draft the grant letter"
+  },
+  "label": {
+   "kind": "request"
+  },
+  "source": "tests/test_quest_asks_brief.py ASKS: this text is stored as kind request"
+ },
+ {
+  "id": "AST-CLS-03",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k_done",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Fix the logo"
+  },
+  "label": {
+   "kind": "request"
+  },
+  "source": "tests/test_quest_asks_brief.py ASKS: this text is stored as kind request"
+ },
+ {
+  "id": "AST-CLS-04",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k_rec",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Send Ana the deck"
+  },
+  "label": {
+   "kind": "request"
+  },
+  "source": "tests/test_quest_asks_brief.py record_ask test: this text is recorded with kind request"
+ },
+ {
+  "id": "AST-CLS-05",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k_rule",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Always cc Dana"
+  },
+  "label": {
+   "kind": "standing"
+  },
+  "source": "tests/test_quest_asks_brief.py ASKS: this text is stored as kind standing"
+ },
+ {
+  "id": "AST-CLS-06",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k9",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Send the links"
+  },
+  "label": {
+   "kind": "request",
+   "stated_assignee": "u2"
+  },
+  "source": "tests/test_plan_reconcile.py test_write_applies_a_classified_request: this text becomes a request for u2; only the kind is scored because the case gives the model no evidence for the member"
+ },
+ {
+  "id": "AST-JDG-01",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "ok",
+   "name": "draft",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": true
+  },
+  "source": "tests/test_plan_reconcile.py test_write_routes_a_handoff_to_the_rep: the goal named draft is handed to the rep"
+ },
+ {
+  "id": "AST-GATE-01",
+  "kind": "gate",
+  "stratum": "gate",
+  "live": true,
   "asks": [
-   {"key": "a1", "kind": "unknown", "state": "open", "text": "x"},
-   {"key": "a2", "kind": "request", "state": "open", "assignee_id": "u1", "text": "x"},
-   {"key": "a3", "kind": "unknown", "state": "done", "text": "x"}],
-  "expect": {"sent": ["a1"]},
-  "source": "tests/test_plan_reconcile.py test_only_unclassified_open_asks_are_sent_to_the_model"}
+   {
+    "key": "a1",
+    "kind": "unknown",
+    "state": "open",
+    "text": "x"
+   },
+   {
+    "key": "a2",
+    "kind": "request",
+    "state": "open",
+    "assignee_id": "u1",
+    "text": "x"
+   },
+   {
+    "key": "a3",
+    "kind": "unknown",
+    "state": "done",
+    "text": "x"
+   }
+  ],
+  "expect": {
+   "sent": [
+    "a1"
+   ]
+  },
+  "source": "tests/test_plan_reconcile.py test_only_unclassified_open_asks_are_sent_to_the_model"
+ },
+ {
+  "id": "AST-JDG-02",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "g2",
+   "name": "Pull the Q3 figures into a short summary",
+   "description": "From the finance sheet in the quest, give totals per month.",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": true
+  },
+  "source": "labelled from the goal-judge prompt's own definition (ai_doable is true for drafting, reading figures, summarising or writing a plan from text; false for a person's voice, a meeting, a physical action, a decision only a person can make, or contact with someone outside the team); the goal text was written for this case, not a recorded model output: reading figures and summarising"
+ },
+ {
+  "id": "AST-JDG-03",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "g3",
+   "name": "Plan the agenda for the volunteer meeting",
+   "description": "List the topics and the order from the notes in the quest.",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": true
+  },
+  "source": "labelled from the goal-judge prompt's own definition (ai_doable is true for drafting, reading figures, summarising or writing a plan from text; false for a person's voice, a meeting, a physical action, a decision only a person can make, or contact with someone outside the team); the goal text was written for this case, not a recorded model output: writing a plan from text"
+ },
+ {
+  "id": "AST-JDG-04",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "g4",
+   "name": "Read the survey report and list the key findings",
+   "description": "The report is attached to the quest.",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": true
+  },
+  "source": "labelled from the goal-judge prompt's own definition (ai_doable is true for drafting, reading figures, summarising or writing a plan from text; false for a person's voice, a meeting, a physical action, a decision only a person can make, or contact with someone outside the team); the goal text was written for this case, not a recorded model output: reading a report and summarising"
+ },
+ {
+  "id": "AST-JDG-05",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "g5",
+   "name": "Call the supplier about the late delivery",
+   "description": "Ask for a new date.",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": false
+  },
+  "source": "labelled from the goal-judge prompt's own definition (ai_doable is true for drafting, reading figures, summarising or writing a plan from text; false for a person's voice, a meeting, a physical action, a decision only a person can make, or contact with someone outside the team); the goal text was written for this case, not a recorded model output: a call with someone outside the team"
+ },
+ {
+  "id": "AST-JDG-06",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "g6",
+   "name": "Meet the landlord on site",
+   "description": "Walk through the unit together on Friday.",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": false
+  },
+  "source": "labelled from the goal-judge prompt's own definition (ai_doable is true for drafting, reading figures, summarising or writing a plan from text; false for a person's voice, a meeting, a physical action, a decision only a person can make, or contact with someone outside the team); the goal text was written for this case, not a recorded model output: a meeting and a physical action"
+ },
+ {
+  "id": "AST-JDG-07",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "g7",
+   "name": "Decide whether to hire a second designer",
+   "description": "Weigh the budget against the workload.",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": false
+  },
+  "source": "labelled from the goal-judge prompt's own definition (ai_doable is true for drafting, reading figures, summarising or writing a plan from text; false for a person's voice, a meeting, a physical action, a decision only a person can make, or contact with someone outside the team); the goal text was written for this case, not a recorded model output: a decision only a person can make"
+ },
+ {
+  "id": "AST-JDG-08",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "g8",
+   "name": "List arrivals at the door on Saturday",
+   "description": "Stand at the entrance and tick each guest off the paper list.",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": false
+  },
+  "source": "labelled from the goal-judge prompt's own definition (ai_doable is true for drafting, reading figures, summarising or writing a plan from text; false for a person's voice, a meeting, a physical action, a decision only a person can make, or contact with someone outside the team); the goal text was written for this case, not a recorded model output: a physical action, though it opens with a drafting verb"
+ },
+ {
+  "id": "AST-JDG-09",
+  "kind": "judge",
+  "stratum": "judge",
+  "live": true,
+  "goal": {
+   "id": "g9",
+   "name": "Write the thank-you speech and deliver it at the dinner",
+   "description": "You will speak in your own voice to the guests.",
+   "time_scope": "day",
+   "period": "2026-10-14",
+   "assigned_to_user_id": "u1"
+  },
+  "label": {
+   "ai_doable": false
+  },
+  "source": "labelled from the goal-judge prompt's own definition (ai_doable is true for drafting, reading figures, summarising or writing a plan from text; false for a person's voice, a meeting, a physical action, a decision only a person can make, or contact with someone outside the team); the goal text was written for this case, not a recorded model output: a person's voice, delivered in person"
+ },
+ {
+  "id": "AST-CLS-07",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k7",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Thanks, the deck looked great"
+  },
+  "label": {
+   "kind": "context"
+  },
+  "source": "labelled from the ask-classify prompt's own definition (request: someone must do one specific thing that is finished once; standing: an ongoing rule; context: a note that only reports, thanks or gives feedback; question: asks for an answer); the note text was written for this case, not a recorded model output"
+ },
+ {
+  "id": "AST-CLS-08",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k8",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Sent the report to Ana yesterday"
+  },
+  "label": {
+   "kind": "context"
+  },
+  "source": "labelled from the ask-classify prompt's own definition (request: someone must do one specific thing that is finished once; standing: an ongoing rule; context: a note that only reports, thanks or gives feedback; question: asks for an answer); the note text was written for this case, not a recorded model output"
+ },
+ {
+  "id": "AST-CLS-09",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k9",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Please send the invoice to the printer"
+  },
+  "label": {
+   "kind": "request"
+  },
+  "source": "labelled from the ask-classify prompt's own definition (request: someone must do one specific thing that is finished once; standing: an ongoing rule; context: a note that only reports, thanks or gives feedback; question: asks for an answer); the note text was written for this case, not a recorded model output"
+ },
+ {
+  "id": "AST-CLS-10",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k10",
+   "kind": "unknown",
+   "state": "open",
+   "text": "The venue deposit needs paying by Friday"
+  },
+  "label": {
+   "kind": "request"
+  },
+  "source": "labelled from the ask-classify prompt's own definition (request: someone must do one specific thing that is finished once; standing: an ongoing rule; context: a note that only reports, thanks or gives feedback; question: asks for an answer); the note text was written for this case, not a recorded model output"
+ },
+ {
+  "id": "AST-CLS-11",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k11",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Keep every email to the board under 100 words"
+  },
+  "label": {
+   "kind": "standing"
+  },
+  "source": "labelled from the ask-classify prompt's own definition (request: someone must do one specific thing that is finished once; standing: an ongoing rule; context: a note that only reports, thanks or gives feedback; question: asks for an answer); the note text was written for this case, not a recorded model output"
+ },
+ {
+  "id": "AST-CLS-12",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k12",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Who is bringing the projector on Saturday?"
+  },
+  "label": {
+   "kind": "question"
+  },
+  "source": "labelled from the ask-classify prompt's own definition (request: someone must do one specific thing that is finished once; standing: an ongoing rule; context: a note that only reports, thanks or gives feedback; question: asks for an answer); the note text was written for this case, not a recorded model output"
+ },
+ {
+  "id": "AST-CLS-13",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k13",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Feedback from the pilot: people found the signup page confusing"
+  },
+  "label": {
+   "kind": "context"
+  },
+  "source": "labelled from the ask-classify prompt's own definition (request: someone must do one specific thing that is finished once; standing: an ongoing rule; context: a note that only reports, thanks or gives feedback; question: asks for an answer); the note text was written for this case, not a recorded model output"
+ },
+ {
+  "id": "AST-CLS-14",
+  "kind": "classify",
+  "stratum": "classify",
+  "live": true,
+  "ask": {
+   "key": "k14",
+   "kind": "unknown",
+   "state": "open",
+   "text": "Translate the flyer into Spanish"
+  },
+  "label": {
+   "kind": "request"
+  },
+  "source": "labelled from the ask-classify prompt's own definition (request: someone must do one specific thing that is finished once; standing: an ongoing rule; context: a note that only reports, thanks or gives feedback; question: asks for an answer); the note text was written for this case, not a recorded model output"
+ }
 ]

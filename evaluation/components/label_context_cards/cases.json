@@ -328,5 +328,265 @@
    "docs/habits.md": "habits-tracking"
   },
   "source": "tests/test_context_card_update.py test_context_card_categorization: the two cards, the four edited files and the placement the test asserts (handler and tests and docs to habits-tracking, planning to daily-actions); the cards' existing files are listed as the test lists them"
+ },
+ {
+  "id": "LCC-PLC-02",
+  "kind": "place",
+  "stratum": "place",
+  "cards": [
+   {
+    "id": "sign-in",
+    "title": "Sign in and sessions",
+    "summary": "Login flow, token refresh and logout",
+    "files": [
+     "src/auth/login.py"
+    ]
+   },
+   {
+    "id": "alerts",
+    "title": "Reminders and alerts",
+    "summary": "Email and push delivery, message templates",
+    "files": [
+     "src/notify/send.py"
+    ]
+   }
+  ],
+  "files": [
+   "src/auth/tokens.py",
+   "src/notify/templates/reminder.html",
+   "tests/test_logout.py",
+   "docs/push.md"
+  ],
+  "label": {
+   "src/auth/tokens.py": "sign-in",
+   "src/notify/templates/reminder.html": "alerts",
+   "tests/test_logout.py": "sign-in",
+   "docs/push.md": "alerts"
+  },
+  "source": "labelled from what each file is about against what each card says it covers; the cards and files were written for this case in the style of LCC-PLC-01, not a recorded model output"
+ },
+ {
+  "id": "LCC-PLC-03",
+  "kind": "place",
+  "stratum": "place",
+  "cards": [
+   {
+    "id": "billing",
+    "title": "Billing and invoices",
+    "summary": "Charging customers, invoice documents, refunds",
+    "files": [
+     "src/shop/invoice.py"
+    ]
+   },
+   {
+    "id": "catalog",
+    "title": "Product catalog",
+    "summary": "Listing items, prices shown, search",
+    "files": [
+     "src/shop/items.py"
+    ]
+   }
+  ],
+  "files": [
+   "src/shop/refunds.py",
+   "src/shop/search.py",
+   "tests/test_receipts.py",
+   "docs/item_search_help.md"
+  ],
+  "label": {
+   "src/shop/refunds.py": "billing",
+   "src/shop/search.py": "catalog",
+   "tests/test_receipts.py": "billing",
+   "docs/item_search_help.md": "catalog"
+  },
+  "source": "labelled from what each file is about against what each card says it covers; the cards and files were written for this case in the style of LCC-PLC-01, not a recorded model output"
+ },
+ {
+  "id": "LCC-PLC-04",
+  "kind": "place",
+  "stratum": "place",
+  "cards": [
+   {
+    "id": "deploy",
+    "title": "Deployment pipeline",
+    "summary": "Build steps, release scripts, environment settings",
+    "files": [
+     "ops/release.sh"
+    ]
+   },
+   {
+    "id": "monitoring",
+    "title": "Monitoring and logs",
+    "summary": "Error tracking, dashboards, alert thresholds",
+    "files": [
+     "ops/dashboards.yaml"
+    ]
+   }
+  ],
+  "files": [
+   "ops/rollback.sh",
+   "ops/error_rates.yaml",
+   "docs/staging_env.md",
+   "tests/test_log_format.py"
+  ],
+  "label": {
+   "ops/rollback.sh": "deploy",
+   "ops/error_rates.yaml": "monitoring",
+   "docs/staging_env.md": "deploy",
+   "tests/test_log_format.py": "monitoring"
+  },
+  "source": "labelled from what each file is about against what each card says it covers; the cards and files were written for this case in the style of LCC-PLC-01, not a recorded model output"
+ },
+ {
+  "id": "LCC-PLC-05",
+  "kind": "place",
+  "stratum": "place",
+  "cards": [
+   {
+    "id": "onboarding",
+    "title": "New member onboarding",
+    "summary": "Welcome steps, first-run tour, profile setup",
+    "files": [
+     "app/welcome/tour.tsx"
+    ]
+   },
+   {
+    "id": "settings",
+    "title": "Account settings",
+    "summary": "Language, privacy choices, deleting an account",
+    "files": [
+     "app/settings/privacy.tsx"
+    ]
+   }
+  ],
+  "files": [
+   "app/welcome/profile_form.tsx",
+   "app/settings/language.tsx",
+   "tests/test_account_delete.py",
+   "docs/first_run.md"
+  ],
+  "label": {
+   "app/welcome/profile_form.tsx": "onboarding",
+   "app/settings/language.tsx": "settings",
+   "tests/test_account_delete.py": "settings",
+   "docs/first_run.md": "onboarding"
+  },
+  "source": "labelled from what each file is about against what each card says it covers; the cards and files were written for this case in the style of LCC-PLC-01, not a recorded model output"
+ },
+ {
+  "id": "LCC-PLC-06",
+  "kind": "place",
+  "stratum": "place",
+  "cards": [
+   {
+    "id": "ingest",
+    "title": "Data ingest",
+    "summary": "Reading CSV uploads, validation, cleaning rows",
+    "files": [
+     "etl/read_csv.py"
+    ]
+   },
+   {
+    "id": "reports",
+    "title": "Reports",
+    "summary": "Weekly summaries, charts, export to PDF",
+    "files": [
+     "etl/weekly.py"
+    ]
+   },
+   {
+    "id": "auth",
+    "title": "Access control",
+    "summary": "Roles, permissions, who can see which report",
+    "files": [
+     "etl/roles.py"
+    ]
+   }
+  ],
+  "files": [
+   "etl/validate_rows.py",
+   "etl/pdf_export.py",
+   "etl/permissions_check.py",
+   "tests/test_chart_labels.py"
+  ],
+  "label": {
+   "etl/validate_rows.py": "ingest",
+   "etl/pdf_export.py": "reports",
+   "etl/permissions_check.py": "auth",
+   "tests/test_chart_labels.py": "reports"
+  },
+  "source": "labelled from what each file is about against what each card says it covers; the cards and files were written for this case in the style of LCC-PLC-01, not a recorded model output"
+ },
+ {
+  "id": "LCC-PLC-07",
+  "kind": "place",
+  "stratum": "place",
+  "cards": [
+   {
+    "id": "search",
+    "title": "Search ranking",
+    "summary": "Scoring results, synonyms, typo tolerance",
+    "files": [
+     "lib/rank.py"
+    ]
+   },
+   {
+    "id": "indexing",
+    "title": "Indexing jobs",
+    "summary": "Nightly rebuild, incremental updates, queue workers",
+    "files": [
+     "lib/rebuild.py"
+    ]
+   }
+  ],
+  "files": [
+   "lib/typos.py",
+   "lib/worker_queue.py",
+   "docs/synonyms.md",
+   "tests/test_nightly.py"
+  ],
+  "label": {
+   "lib/typos.py": "search",
+   "lib/worker_queue.py": "indexing",
+   "docs/synonyms.md": "search",
+   "tests/test_nightly.py": "indexing"
+  },
+  "source": "labelled from what each file is about against what each card says it covers; the cards and files were written for this case in the style of LCC-PLC-01, not a recorded model output"
+ },
+ {
+  "id": "LCC-PLC-08",
+  "kind": "place",
+  "stratum": "place",
+  "cards": [
+   {
+    "id": "maps",
+    "title": "Map view",
+    "summary": "Pins, clusters, zoom levels",
+    "files": [
+     "ui/map/pins.js"
+    ]
+   },
+   {
+    "id": "lists",
+    "title": "List view",
+    "summary": "Sorting, filters, empty states",
+    "files": [
+     "ui/list/filters.js"
+    ]
+   }
+  ],
+  "files": [
+   "ui/map/clusters.js",
+   "ui/list/empty.js",
+   "tests/test_zoom.js",
+   "docs/sorting.md"
+  ],
+  "label": {
+   "ui/map/clusters.js": "maps",
+   "ui/list/empty.js": "lists",
+   "tests/test_zoom.js": "maps",
+   "docs/sorting.md": "lists"
+  },
+  "source": "labelled from what each file is about against what each card says it covers; the cards and files were written for this case in the style of LCC-PLC-01, not a recorded model output"
  }
 ]
