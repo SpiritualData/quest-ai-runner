@@ -5,10 +5,12 @@ This file orients any contributor (human or AI) working in `quest-ai-runner`, an
 
 ## What this project is
 
-`quest-ai-runner` is a **domain-free** library: the orchestrator **brain** (`quest_ai_runner.core`)
-plus the queued-task **executor** (`quest_ai_runner.runner`) for Quest AI tasks. It is published as
-open source (Apache-2.0) and is meant to run for *any* org, not one specific deployment.
-
+`quest-ai-runner` is **Quest's connector** and the production consumer of the hub of hubs (`hubofhubs`, a required
+dependency; `quest_ai_runner/hub.py` imports it at startup and registers QAR's parts under names QAR owns): the
+orchestrator **brain** (`quest_ai_runner.core`) plus the queued-task **executor** (`quest_ai_runner.runner`) for Quest AI
+tasks. It is published as open source (Apache-2.0) and is meant to run for *any* org, not one specific deployment. The
+brain (`core/`) stays free of Quest; the Quest-specific parts are the adapters, the runner and the config. Generic engines
+are moving into the hub seat by seat (`docs/hub-of-hubs.md`); QAR keeps what knows Quest.
 - `core/`: the brain, a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
   nothing about Quest, any database, any org, or any user. Depends only on the adapter
   *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; `esoi/solutions.csv` lists them all.
@@ -81,11 +83,12 @@ write the class, add the decorator, run `esoi records sync`, fill the text, add 
   starts with the id of the rule it breaks. After committing measured code or cases (`quest_ai_runner/`,
   `evaluation/components/`), run `esoi run --stale` and commit `evaluation/components/results.csv`, then `esoi check --strict`.
   Offline arms only: a live arm (model calls) is run only by decision, per `esoi/metric-run-policy.md`.
-- **The hub of hubs** (`ai-hub-of-hubs-structure`, a sibling repository) holds the registry of AI-intelligence hubs and the scorer
-  behind sub-metric QME9. Import it like esoi: `pip install -e ../ai-hub-of-hubs-structure` (or the `hubs` extra), or just keep the
-  sibling checkout, which `evaluation/components/hub_of_hubs` puts on the path. QAR keeps only its bindings
-  (`esoi/hub_seats.csv`), its probes and its adapters; registry facts are changed in the hub repository, never copied here
-  (`docs/hub-of-hubs.md`).
+- **The hub of hubs** (`ai-hub-of-hubs-structure`, a sibling repository; package `hubofhubs`) is a REQUIRED dependency: the
+  registry of AI-intelligence hubs, the seats (Protocols), the assembly and the scorer behind sub-metric QME9. QAR imports it at
+  startup in one place, `quest_ai_runner/hub.py`, and registers its parts there. For dev and tests keep the sibling checkout
+  beside this repository (pytest `pythonpath` in `pyproject.toml`; `evaluation/components/hub_of_hubs` also puts it on the path)
+  rather than pip-installing it. QAR keeps its bindings (`esoi/hub_seats.csv`), probes and Quest adapters; registry facts are
+  changed in the hub repository, never copied here (`docs/hub-of-hubs.md`).
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
   when its metric wins on the same cases.

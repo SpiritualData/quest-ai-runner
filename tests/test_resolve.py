@@ -185,6 +185,7 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     esoi_home = str(Path(runtime.__file__).resolve().parent.parent)
+    hub_home = str(ROOT.parent / "ai-hub-of-hubs-structure")   # the required hub, as a sibling checkout (not pip-installed here)
     code = (
         "import quest_ai_runner.core.resolve as r\n"
         f"assert r.__file__.startswith({str(site)!r}), r.__file__\n"
@@ -194,5 +195,5 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
         "assert r.resolve('run-deep-work', 'acp').__name__ == 'AcpDeepRunner'\n"
     )
     done = subprocess.run([sys.executable, "-c", code], cwd=elsewhere, capture_output=True, text=True,
-                          env={"PATH": "/usr/bin:/bin", "PYTHONPATH": f"{site}:{esoi_home}", "HOME": str(tmp_path)})
+                          env={"PATH": "/usr/bin:/bin", "PYTHONPATH": f"{site}:{esoi_home}:{hub_home}", "HOME": str(tmp_path)})
     assert done.returncode == 0, done.stderr

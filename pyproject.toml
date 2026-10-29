@@ -50,11 +50,14 @@ dependencies = [
     # (core/resolve.py). Core, since the adapters import it; no dependencies of its own. Tracks esoi main like the
     # backend and conceptai do: two different direct-URL commits of one package cannot be installed together.
     "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@main#subdirectory=implementations/python",
+    # The hub of hubs: the registry of AI-intelligence hubs, the seats (Protocols) and the assembly that wires them. QAR is
+    # Quest's connector and the production consumer: quest_ai_runner/hub.py imports it at startup and registers QAR's parts.
+    # Required, not an extra. Its own dependency is `esoi` (bare), met by the esoi line above. Dev and tests may use the
+    # sibling checkout `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
+    "hubofhubs @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main",
 ]
 
 [project.optional-dependencies]
-# The hub registry and scorer (evaluation only; nothing at runtime imports it). A sibling checkout also works.
-hubs = ["ai-hub-of-hubs-structure @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main"]
 anthropic = ["anthropic>=0.40"]
 gemini = ["google-genai>=2.0"]
 qdrant = ["qdrant-client>=1.7", "fastembed>=0.3"]
@@ -115,6 +118,8 @@ quest_ai_runner = ["prompts/*.md", "esoi_selection.json", "core/quest_field_guid
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evaluation/components"]
+# The sibling checkout of the hub (a required dependency) when it is not pip-installed: dev and tests import it from here.
+pythonpath = ["../ai-hub-of-hubs-structure"]
 # Async TUI tests (textual's run_test harness) are marked @pytest.mark.asyncio explicitly,
 # so keep strict mode — only marked coroutines run on the event loop.
 asyncio_mode = "strict"

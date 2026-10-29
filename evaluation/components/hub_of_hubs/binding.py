@@ -3,7 +3,7 @@ hub's scorer reads this; it never imports QAR."""
 import csv
 from pathlib import Path
 
-from ai_hub_of_hubs import Binding
+from hubofhubs import Binding
 
 from hub_of_hubs import probes
 

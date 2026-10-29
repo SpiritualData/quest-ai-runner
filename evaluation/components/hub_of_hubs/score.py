@@ -1,5 +1,5 @@
-"""Scoring is the hub's (``ai_hub_of_hubs.score``); this module only hands it QAR's bindings."""
-from ai_hub_of_hubs import evaluate, score as hub_score
+"""Scoring is the hub's (``hubofhubs.score``); this module only hands it QAR's bindings."""
+from hubofhubs import evaluate, score as hub_score
 
 from hub_of_hubs.binding import binding
 

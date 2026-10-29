@@ -8,8 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402,F401  (puts the repository and this folder on the path)
 import hub_of_hubs  # noqa: E402,F401  (puts the hub package on the path when it is not installed)
-from ai_hub_of_hubs import evaluate, registry  # noqa: E402
-from ai_hub_of_hubs.measure import KINDS, check  # noqa: E402
+from hubofhubs import evaluate, registry  # noqa: E402
+from hubofhubs.measure import KINDS, check  # noqa: E402
 
 from hub_of_hubs import probes  # noqa: E402
 from hub_of_hubs.binding import REPO, binding  # noqa: E402
@@ -63,8 +63,8 @@ def test_a_fake_hub_needs_configuration_and_no_core_edit():
 
 
 def test_the_world_is_one_aggregator_connection_with_no_per_app_entry():
-    import ai_hub_of_hubs
-    text = (Path(ai_hub_of_hubs.__file__).parent / "examples" / "lane-world-hub.toml").read_text()
+    import hubofhubs
+    text = (Path(hubofhubs.__file__).parent / "examples" / "lane-world-hub.toml").read_text()
     assert text.count("[[mcp_servers]]") == 1 and "token_env" in text
     assert probes.world_hub()[0]
 

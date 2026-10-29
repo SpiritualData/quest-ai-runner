@@ -11,7 +11,8 @@
 cannot *run* them: no internal worker, no callback contract, no reference client. This library
 closes that gap, generically.
 
-It is **domain-free**. The brain knows how to ground, reason, run to a written `/goal` standard,
+It is Quest's connector and the production consumer of the hub of hubs (`hubofhubs`, a required dependency), and its brain is
+**domain-free**. The brain knows how to ground, reason, run to a written `/goal` standard,
 confirm-before-act, and escalate. It does **not** know about any specific org, cockpit, or person.
 Those specifics are **config + adapters the consumer supplies** via
 `quest_ai_runner.config.RunnerConfig`.
@@ -44,7 +45,7 @@ A request flows from the world through the Subconscious, Mind and Critical think
 
 The outside tools QAR builds on, and which part uses each, are in [QAR as a hub of hubs](docs/anatomy.md#b-qar-as-a-hub-of-hubs). The parts table is in [docs/anatomy.md](docs/anatomy.md).
 
-Why QAR sits on open-source hubs instead of building each integration, how to add a tool server, agent, model vendor or search backend by configuration, and where each area stands: [Hub of hubs](docs/hub-of-hubs.md).
+Why QAR sits on open-source hubs instead of building each integration, how to add a tool server, agent, model vendor or search backend by configuration, and where each area stands: [Hub of hubs](docs/hub-of-hubs.md). QAR imports the hub package `hubofhubs` at startup (a required dependency) and registers its own parts with it.
 
 ## What Quest is, and where this fits
 

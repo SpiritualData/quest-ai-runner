@@ -4,7 +4,7 @@ so nothing is by configuration; it knows no solution records, so nothing is sele
 tell a hub from a name in a comment. The floor the registry must beat. Zero model calls."""
 import re
 
-from ai_hub_of_hubs import registry
+from hubofhubs import registry
 
 from hub_of_hubs.binding import REPO, seats
 

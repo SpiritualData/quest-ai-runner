@@ -22,6 +22,12 @@ from .config_core_settings import install_environment_backed_core as _install_co
 
 _install_core_env()
 
+# QAR is Quest's connector to the hub of hubs (``hubofhubs``, a required dependency): the one startup registration of the
+# parts QAR owns, under names QAR owns, where the hub has a seat for them (quest_ai_runner/hub.py).
+from .hub import register_with_hub as _register_with_hub  # noqa: E402
+
+_register_with_hub()
+
 from .runner.config_wiring import install_config_builders as _install_config_builders  # noqa: E402
 
 

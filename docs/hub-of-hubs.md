@@ -6,13 +6,13 @@ project it copied. So QAR sits on top of those hubs and picks up what they suppo
 when a hub gains a capability, a lane gains it by editing a configuration file.
 
 The registry of hubs, the research behind it, the scorer and the guides live in the public
-[ai-hub-of-hubs-structure](https://github.com/SpiritualData/ai-hub-of-hubs-structure) repository, which QAR imports. This page is
-what is specific to QAR.
+[ai-hub-of-hubs-structure](https://github.com/SpiritualData/ai-hub-of-hubs-structure) repository (package `hubofhubs`), a required
+dependency that QAR imports at startup. QAR is Quest's connector and the production consumer of it. This page is what is specific to QAR.
 
 ## What you can do by configuration today
 
 - **Reach any tool or data source an MCP server offers.** One `[[mcp_servers]]` table in the lane file; prefer one aggregator
-  over one entry per app (the hub's `ai_hub_of_hubs/examples/lane-world-hub.toml` is the shape). The token stays in an
+  over one entry per app (the hub's `hubofhubs/examples/lane-world-hub.toml` is the shape). The token stays in an
   environment variable named by `token_env`.
   ```toml
   [[mcp_servers]]
@@ -36,9 +36,14 @@ long-lived provider tokens: a lane receives a token through the environment vari
 
 ## How QAR uses the hub
 
-- **Import.** The hub is imported the way the esoi library is: install it (`pip install -e ../ai-hub-of-hubs-structure`, or the
-  `hubs` extra of this package) or keep a sibling checkout beside this repository, which the `hub_of_hubs` component puts on the
-  path. Nothing at runtime imports it; only the evaluation does.
+- **Import.** `hubofhubs` is a required dependency (`pyproject.toml`). `quest_ai_runner/hub.py` imports it once, at startup, and
+  registers the parts QAR owns under names QAR owns, only where the hub has a seat (Protocol) for them: today the card store, as
+  `qar-card-repository` (a hub `CardStore` over QAR's `CardRepository`, `adapters/hub_card_store.py`). The model call and the
+  web search backend are external seats that QAR passes in `provided`. For dev and tests a sibling checkout beside this
+  repository works instead of an install (pytest `pythonpath`; the `hub_of_hubs` component also puts it on the path).
+- **Ports.** For this pass `core/adapters.py` stays the import path of QAR's ports; the Protocols that need no Quest knowledge
+  are moving into the hub seat by seat, with `core/adapters.py` re-exporting the hub names, and the importers are rewritten as
+  each seat moves (`CHANGELOG.md`).
 - **Bindings.** `esoi/hub_seats.csv` says which QAR solution fills each area, the vendor terms to look for in `quest_ai_runner/core`
   and the code paths. The hub's registry rows for this consumer (`quest-ai-runner` in `hub_capabilities.csv` and
   `hub_integrations.csv`) say which hub connections are wired and which single services are hand-wired.
