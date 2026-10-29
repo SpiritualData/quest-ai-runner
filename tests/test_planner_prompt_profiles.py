@@ -403,3 +403,11 @@ def test_already_said_echo_back_is_bounded_to_the_most_recent_lines():
         assert line not in prompt
     for line in said[-3:]:
         assert line in prompt
+
+
+def test_both_profiles_say_that_outside_world_work_nothing_can_do_is_not_queued():
+    """Found by evaluation/components/end_to_end (E2E-REFUSE-01): "Order 10 more kilos of wax from my supplier" went
+    to a deep run instead of an honest "I cannot place orders"."""
+    from quest_ai_runner.core.planner_prompt import PLANNER_PROFILES
+    for name, prompt in PLANNER_PROFILES.items():
+        assert "Never queue work that cannot be done" in prompt, name
