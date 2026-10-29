@@ -3087,3 +3087,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,qar_overall,recorded_rows,8,3,3/8,0/0,0,0,0,0.0,2.2,8c11e66,06c7c199,none,,,
 2026-10-29,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.3,804cfe8,ae7e2b22,none,,,
 2026-10-29,chat_quality,dev_quest_chat,3,1,1/3,0/0,55,301455,10169,0.2818,154.3,804cfe8,8c27caa9,claude-haiku-5-5,,"only:IMP-028,REL-MUL-07,WEB-001",
+2026-10-29,hub_of_hubs,registry_scan,70,43,43/70,0/0,0,0,0,0.0,0.0,75f4a7d,83ab3526,none,,,
+2026-10-29,hub_of_hubs,hub_of_hubs.broken.vendor_grep:build,70,21,21/70,0/0,0,0,0,0.0,4.8,75f4a7d,83ab3526,none,,,
