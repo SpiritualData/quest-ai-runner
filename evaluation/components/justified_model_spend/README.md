@@ -16,7 +16,7 @@ every owner arm and the ablation arm, in order, each under `flock /tmp/qar-heavy
     python3 evaluation/components/justified_model_spend/record_owner_arms.py --api       # also the four paid fast-tier arms (cap: --api-usd-cap, default 0.05)
 
 The order and arguments are `owner_arms.json` (tier `offline`, `subscription` for `claude -p`, `api` for a paid fast-tier call). Run it on a
-committed tree: it refuses a dirty one (`--allow-dirty` overrides), because a row recorded on uncommitted code is stale at birth. Each arm goes
+committed tree: it refuses a dirty one (`--allow-dirty` overrides; `--wait-clean SECONDS` waits for other agents' edits to be committed), because a row recorded on uncommitted code is stale at birth. Each arm goes
 through `measure.py`, which records the results row and the per-call trace in `evaluation/traces/justified_model_spend/` together; a paid arm
 that makes no model call records nothing (`--min-calls`) and stops the pass. Narrow a pass with `--tier` or `--only component/impl` (the ablation
 arm is then skipped). Rebuild the trackers afterwards with `esoi tracker build`. A new measured prompt is a `cases.json` entry plus its owner arms

@@ -91,9 +91,12 @@ def test_the_production_report_reads_the_persisted_log_and_never_guesses(tmp_pat
     assert found and "2 calls" in lines[0] and "avg 2.00 max 3.00" in lines[0]
 
 
-def test_another_components_edit_does_not_block_the_pass():
+def test_the_pass_waits_for_the_tree_to_become_clean():
+    states = [" M quest_ai_runner/a.py\n", " M quest_ai_runner/a.py\n", ""]
+    slept = []
+
     def run(cmd, **kw):
-        return SimpleNamespace(returncode=0, stdout=" M evaluation/components/hold_the_long_view/cases.json\n M evaluation/components/common.py\n"
-                                                     " M evaluation/components/quest_ops/score.py\n")
-    got = rec.dirty_paths(run, components={"quest_ops"})
-    assert got == ["evaluation/components/common.py", "evaluation/components/quest_ops/score.py"]
+        return SimpleNamespace(returncode=0, stdout=states.pop(0) if len(states) > 1 else states[0])
+    assert rec.wait_until_clean(run, 300, sleep=slept.append, interval=30) == [] and slept == [30, 30]
+    assert rec.wait_until_clean(lambda c, **k: SimpleNamespace(returncode=0, stdout=" M quest_ai_runner/a.py\n"), 60,
+                                sleep=lambda s: None, interval=30) == ["quest_ai_runner/a.py"]

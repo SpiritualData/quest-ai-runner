@@ -19,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -88,6 +89,18 @@ def dirty_paths(run=subprocess.run, cwd=REPO, components=None):
     return [f for f in found if not f.startswith(prefix) or "/" not in f[len(prefix):] or f[len(prefix):].split("/")[0] in components]
 
 
+def wait_until_clean(run, seconds, sleep=time.sleep, interval=30):
+    """The uncommitted measured code, re-checked every ``interval`` seconds for up to ``seconds`` (another agent may be mid-edit; any
+    change to the measured code makes the row's ``git_sha`` carry ``-dirty``, so a pass cannot record until the tree is clean)."""
+    waited = 0
+    found = dirty_paths(run)
+    while found and waited < seconds:
+        sleep(interval)
+        waited += interval
+        found = dirty_paths(run)
+    return found
+
+
 def last_cost(component, impl, results=REPO / "evaluation" / "components" / "results.csv"):
     """Dollars of the newest recorded row of an arm (0.0 when none or unreadable)."""
     try:
@@ -133,6 +146,7 @@ def main(argv=None, run=subprocess.run):
     ap.add_argument("--api-usd-cap", type=float, default=0.05, help="stop when the API arms have cost more than this (dollars)")
     ap.add_argument("--tier", action="append", choices=TIER_ORDER, help="only these tiers (the ablation arm is then skipped)")
     ap.add_argument("--only", action="append", metavar="COMPONENT/IMPL", help="only these arms (the ablation arm is then skipped)")
+    ap.add_argument("--wait-clean", type=int, default=0, metavar="SECONDS", help="wait up to this long for other edits to the measured code to be committed")
     ap.add_argument("--allow-dirty", action="store_true", help="run on a tree with uncommitted measured code")
     args = ap.parse_args(argv)
     manifest = load_manifest()
@@ -146,7 +160,7 @@ def main(argv=None, run=subprocess.run):
     if args.plan:
         print(f"API estimate ${estimate:.4f}; cap ${args.api_usd_cap}")
         return 0
-    dirty = [] if args.allow_dirty else dirty_paths(run, components={a["component"] for a in manifest["arms"]} | {manifest["ablation"]["component"]})
+    dirty = [] if args.allow_dirty else wait_until_clean(run, args.wait_clean)
     if dirty:
         print("refused: uncommitted changes under the measured code would make every recorded row stale at birth:\n  " + "\n  ".join(dirty[:20]))
         return 3
