@@ -43,7 +43,9 @@ whole point: a stranger's org can adopt the library by implementing five small s
 The definitions live in ``adapters_<role>`` modules (``_scope``, ``_events``, ``_values``,
 ``_retrieval``, ``_model``, ``_deep``, ``_context``, ``_guidance``, ``_bases``, ``_sinks``,
 ``_channels``); this module re-exports every name so ``from .adapters import X`` keeps working.
-Put a new port in the module that owns its role.
+Put a new port in the module that owns its role. ``_scope``, ``_model`` and ``_context`` are themselves thin re-exports
+of ``hubofhubs.ports`` (the neutral ports moved to the hub package); the other modules hold ports that carry this
+library's own value objects and events and stay here.
 """
 from __future__ import annotations
 
