@@ -3087,8 +3087,18 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,qar_overall,recorded_rows,8,3,3/8,0/0,0,0,0,0.0,2.2,8c11e66,06c7c199,none,,,
 2026-10-29,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.3,804cfe8,ae7e2b22,none,,,
 2026-10-29,chat_quality,dev_quest_chat,3,1,1/3,0/0,55,301455,10169,0.2818,154.3,804cfe8,8c27caa9,claude-haiku-5-5,,"only:IMP-028,REL-MUL-07,WEB-001",
+2026-10-29,draft_a_metric,capped_model_draft,4,4,4/4,0/0,4,6120,2852,0.0024,21.6,06bcfa2-dirty,f1c1dec2,claude-code-subscription,,,
+2026-10-29,end_to_end,reference_script,13,13,13/13,0/0,64,52,7,0.0,0.2,351944a-dirty,103e18d4,simulated,,,1.0
+2026-10-29,end_to_end,rules_only,13,7,7/13,0/0,0,0,0,0.0,0.1,351944a-dirty,103e18d4,none,,,0.6769
 2026-10-29,hub_of_hubs,registry_scan,70,43,43/70,0/0,0,0,0,0.0,0.0,75f4a7d,83ab3526,none,,,
 2026-10-29,hub_of_hubs,hub_of_hubs.broken.vendor_grep:build,70,21,21/70,0/0,0,0,0,0.0,4.8,75f4a7d,83ab3526,none,,,
+2026-10-29,end_to_end,qar_live,3,0,0/3,0/0,20,156748,7394,0.1411,78.6,4400d12-dirty,103e18d4,claude-code-subscription,,sample:3,0.0934
+2026-10-29,proactive_guidance,reply_voice,3,0,0/3,0/0,3,7243,1377,0.0015,14.0,4400d12-dirty,e01ae415,claude-haiku,,sample:3,
+2026-10-29,proactive_guidance,guided,3,1,1/3,0/0,5,10656,1540,0.0138,20.2,4400d12-dirty,e01ae415,claude-haiku,,sample:3,
+2026-10-29,proactive_guidance,reply_voice,3,1,1/3,0/0,4,8552,1338,0.007,14.4,3920f6d-dirty,e01ae415,claude-haiku,,sample:3,
+2026-10-29,proactive_guidance,guided,3,2,2/3,0/0,6,11923,1921,0.0229,27.9,3920f6d-dirty,e01ae415,claude-haiku,,sample:3,
+2026-10-29,proactive_guidance,reply_voice,10,3,3/10,0/0,13,28243,3977,0.0229,50.5,3920f6d-dirty,e01ae415,claude-haiku,,sample:10,
+2026-10-29,proactive_guidance,guided,10,6,6/10,0/0,18,37391,6057,0.0598,87.4,3920f6d-dirty,e01ae415,claude-haiku,,sample:10,
 2026-10-29,proactive_guidance,reply_voice,3,0,0/3,0/0,3,7243,1524,0.0008,14.7,aa667ef-dirty,daf8e9f5,claude-haiku,,sample:3,
 2026-10-29,proactive_guidance,guided,3,2,2/3,0/0,6,11922,1542,0.0193,22.4,aa667ef-dirty,daf8e9f5,claude-haiku,,sample:3,
 2026-10-29,proactive_guidance,reply_voice,10,4,4/10,0/0,14,29627,5066,0.0289,62.0,aa667ef-dirty,daf8e9f5,claude-haiku,,sample:10,
@@ -3099,3 +3109,7 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,proactive_guidance,proactive_guidance.broken.nudge_every_time:build,24,0,0/24,0/0,0,0,0,0.0,0.0,aa667ef-dirty,daf8e9f5,none,,,
 2026-10-29,hold_the_long_view,separate_stores,15,13,13/15,0/0,0,0,0,0.0,0.0,443d348,73df6626,none,,,
 2026-10-29,hold_the_long_view,no_carry,15,6,6/15,0/0,0,0,0,0.0,0.0,443d348,73df6626,none,,,
+2026-10-29,spec_selection,lexical_vector,76,56,35/50,21/26,0,0,0,0.0,0.5,c8fbc11,0a2ef76a,none,,,0.8157
+2026-10-29,end_to_end,reference_script,13,13,13/13,0/0,64,52,7,0.0,0.2,443d348,489a4a26,simulated,,,1.0
+2026-10-29,end_to_end,rules_only,13,6,6/13,0/0,0,0,0,0.0,0.1,443d348,489a4a26,none,,,0.6231
+2026-10-29,end_to_end,qar_live,13,12,12/13,0/0,90,689003,30077,0.5229,320.9,443d348,489a4a26,claude-code-subscription,,,0.7638

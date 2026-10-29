@@ -18,6 +18,12 @@
    "recency_window": "quest_ai_runner.core.planner_context"
   }
  },
+ "answer-end-to-end": {
+  "default": "qar_live",
+  "modules": {
+   "qar_live": "quest_ai_runner.core.orchestrator"
+  }
+ },
  "assist-a-terminal-session": {
   "default": "fast_model_helpers",
   "modules": {
@@ -139,6 +145,12 @@
   "default": "universal",
   "modules": {
    "universal": "quest_ai_runner.core.guidance_provider"
+  }
+ },
+ "guide-toward-the-long-term-goal": {
+  "default": "reply_voice",
+  "modules": {
+   "reply_voice": "quest_ai_runner.core.auxiliary_prompts"
   }
  },
  "hand-off-a-goal": {
