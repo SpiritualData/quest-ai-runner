@@ -469,3 +469,24 @@ def test_select_provider_native_requires_model_and_support():
 
     env_unsupported = {"QAR_WEB_SEARCH_BACKEND": "provider", "QAR_WEB_SEARCH_PROVIDER_MODEL": "bad-model"}
     assert select_search_backend(env_unsupported, provider=SupportingProvider()) is None
+
+
+def test_a_registered_backend_is_selected_by_name_with_no_branch_in_the_module():
+    from esoi import runtime
+
+    class Hub:
+        name = "hub"
+
+        @classmethod
+        def from_env(cls, env):
+            return cls() if env.get("HUB_URL") else None
+
+    runtime.register("search-the-web", "newhub", Hub, scope="quest_ai_runner", replace=True)
+    try:
+        got = select_search_backend(env={"QAR_WEB_SEARCH_BACKEND": "newhub", "HUB_URL": "http://hub.invalid"})
+        assert isinstance(got, Hub)
+        assert select_search_backend(env={"QAR_WEB_SEARCH_BACKEND": "newhub"}) is None   # not configured: off, loudly logged
+    finally:
+        entry = runtime.entry_for("search-the-web", None, "quest_ai_runner")
+        entry.implementations.pop("newhub", None)
+        entry.replaced.discard("newhub")

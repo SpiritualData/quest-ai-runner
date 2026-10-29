@@ -661,7 +661,17 @@ def select_search_backend(
             return {"provider": provider, "model": provider_model}
         return None
 
+    shipped = ("serper", "brave", "tavily", "searxng", "gemini", "provider")
+
     def build(name: str) -> Optional[Any]:
+        if name not in shipped:
+            # A backend added by registration builds itself from the environment (``from_env``), so a new hub needs no
+            # branch in this function: the branches in ``constructor_args`` are only for the backends this module ships.
+            try:
+                from_env = getattr(resolve("search-the-web", name), "from_env", None)
+            except ValueError:
+                return None
+            return from_env(env) if callable(from_env) else None
         args = constructor_args(name)
         if args is None:
             return None
