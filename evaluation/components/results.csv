@@ -2891,3 +2891,16 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,justified_model_spend,spec_registry_ablation,14,0,0/14,0/0,0,0,0,0.0,0.3,d3c23b0,4daf9f8a,none,,,
 2026-10-28,justified_model_spend,spec_registry,14,14,14/14,0/0,0,0,0,0.0,0.1,d3c23b0,4daf9f8a,none,,,
 2026-10-28,explain_an_answer,model_explanation,10,8,8/10,0/0,20,37167,4467,0.0785,65.7,d3c23b0,0fadbfec,claude-haiku,,,0.7347
+2026-10-28,narrate_a_turn,model_beat,13,7,7/13,0/0,19,20757,2280,0.026,62.6,8d2df66,df729105,claude-haiku,,,0.5256
+2026-10-28,describe_an_attachment,vision_description,10,10,10/10,0/0,20,18471,4955,0.0062,56.1,8d2df66,e57ae993,claude-haiku,,,0.9137
+2026-10-28,describe_an_attachment,skip_images,10,2,2/10,0/0,10,7307,938,0.0019,24.6,8d2df66,e57ae993,claude-haiku,,,0.4025
+2026-10-28,hand_off_a_goal,model_judge,12,6,6/12,0/0,12,12258,2826,0.0039,37.4,8d2df66,11f278b8,claude-code-subscription,,,
+2026-10-28,hand_off_a_goal,model_judge_fast,12,6,6/12,0/0,12,4001,446,0.000579,12.7,8d2df66,11f278b8,gemini-3.1-flash-lite,,,
+2026-10-28,draft_a_metric,capped_model_draft,4,4,4/4,0/0,4,6120,2350,0.0021,18.3,8d2df66,f1c1dec2,claude-code-subscription,,,
+2026-10-28,draft_a_metric,capped_model_draft_fast,4,2,2/4,0/0,4,1764,506,0.000379,5.9,8d2df66,f1c1dec2,gemini-3.1-flash-lite,,,
+2026-10-28,label_context_cards,fast_model_labels,4,3,3/4,0/0,4,3443,525,0.001,10.2,aedfd0b,418162fd,claude-code-subscription,,,
+2026-10-28,label_context_cards,fast_model_labels_fast,4,2,2/4,0/0,4,789,343,0.000216,5.1,aedfd0b,418162fd,gemini-3.1-flash-lite,,,
+2026-10-28,assist_a_terminal_session,fast_model_helpers_live,10,10,10/10,0/0,10,1984,436,0.000373,10.5,aedfd0b,495b478a,gemini-3.1-flash-lite,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01",0.9157
+2026-10-28,intent_grounding,none,10,5,5/10,0/0,15,35176,10300,0.1244,81.0,aedfd0b,f38af8bc,claude-haiku,,,
+2026-10-28,intent_grounding,frame_line,10,9,9/10,0/0,21,63510,14419,0.2534,121.9,aedfd0b,f38af8bc,claude-haiku,,,
+2026-10-28,qar_overall,recorded_rows,8,4,4/8,0/0,0,0,0,0.0,2.2,aedfd0b,06c7c199,none,,,
