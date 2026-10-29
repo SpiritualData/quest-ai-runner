@@ -74,13 +74,18 @@ def api_estimate(manifest, api=False, tiers=None, only=None):
     return sum(a.get("est_usd", 0.0) for a in select_arms(manifest, tiers, only, api) if a["tier"] == "api")
 
 
-def dirty_paths(run=subprocess.run, cwd=REPO):
+def dirty_paths(run=subprocess.run, cwd=REPO, components=None):
     """Uncommitted edits to tracked measured code (``quest_ai_runner`` and ``evaluation/components``; prose, the results log and traces
-    excluded: recording writes them). Untracked files are not counted: a row is stale when committed code changed, not when a new file waits."""
+    excluded: recording writes them). Untracked files are not counted: a row is stale when committed code changed, not when a new file waits.
+    With ``components``, an edit inside another component's folder (another agent's work) is not counted; shared files and the package are."""
     out = run(["git", "-C", str(cwd), "status", "--porcelain", "-uno", "--", "quest_ai_runner", "evaluation/components"],
               capture_output=True, text=True).stdout.splitlines()
-    return [line[3:] for line in out if not line.endswith(".md") and "__pycache__" not in line
-            and not line.endswith("evaluation/components/results.csv") and not line[3:].startswith("evaluation/traces")]
+    found = [line[3:] for line in out if not line.endswith(".md") and "__pycache__" not in line
+             and not line.endswith("evaluation/components/results.csv") and not line[3:].startswith("evaluation/traces")]
+    if components is None:
+        return found
+    prefix = "evaluation/components/"
+    return [f for f in found if not f.startswith(prefix) or "/" not in f[len(prefix):] or f[len(prefix):].split("/")[0] in components]
 
 
 def last_cost(component, impl, results=REPO / "evaluation" / "components" / "results.csv"):
@@ -141,7 +146,7 @@ def main(argv=None, run=subprocess.run):
     if args.plan:
         print(f"API estimate ${estimate:.4f}; cap ${args.api_usd_cap}")
         return 0
-    dirty = [] if args.allow_dirty else dirty_paths(run)
+    dirty = [] if args.allow_dirty else dirty_paths(run, components={a["component"] for a in manifest["arms"]} | {manifest["ablation"]["component"]})
     if dirty:
         print("refused: uncommitted changes under the measured code would make every recorded row stale at birth:\n  " + "\n  ".join(dirty[:20]))
         return 3
