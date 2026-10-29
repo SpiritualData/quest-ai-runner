@@ -4,8 +4,8 @@ Per case: ``ok``, ``class`` (nudge or restraint), ``level`` (quest, goal or rep)
 ``awkward`` (a restraint case that got a pointer, or any pointer the grader finds forced, nagging or ahead of the answer), ``problems``
 (checks by code) and ``note``.
 
-Checks by code run first and a reply that fails one is not sent to the grader: a dash, a reply over the word limit, a figure the case does not
-hold (a nudge must be grounded, never invented), a nudge that does not name a real milestone and a real reading of the case, a nudge in the first
+Checks by code run first and a reply that fails one is not sent to the grader: a dash, a reply over the word limit, a figure in a pointing sentence that the case does
+not hold (a nudge must be grounded, never invented), a nudge that does not name a real milestone and a real reading of the case, a nudge in the first
 sentence ahead of the answer (unless the request asks what to do next), and, in a restraint case, any mention of the milestone or the reading.
 Then one grader call (``claude_judge``): does it respond to what the person said, is a pointer present, at which level, is every fact in it from
 the context, and is it awkward.
@@ -53,6 +53,21 @@ def first_sentence(reply):
     return re.split(r"(?<=[.!?])\s", reply.strip(), maxsplit=1)[0]
 
 
+def sentences(reply):
+    return [part for part in re.split(r"(?<=[.!?])\s+", reply.strip()) if part]
+
+
+def nudge_sentences(case, reply):
+    """The sentences that point at the goal: those naming a milestone or a reading of the case, or speaking of a milestone or target.
+    A figure in one of them must be the case's; a figure elsewhere in the reply (a fact about the world) is the grader's to judge."""
+    found = []
+    for sentence in sentences(reply):
+        milestone, reading = named(sentence, case)
+        if milestone or reading or re.search(r"\b(?:milestone|target)\b", sentence, re.I):
+            found.append(sentence)
+    return found
+
+
 def problems_by_code(case, reply):
     found = []
     if not reply:
@@ -62,7 +77,7 @@ def problems_by_code(case, reply):
     if len(reply.split()) > arms.MAX_WORDS:
         found.append(f"{len(reply.split())} words")
     held = " ".join([arms.context_text(case), *case.get("recent", []), case["message"], case["plain_answer"]])
-    invented = sorted(numbers(reply) - numbers(held))
+    invented = sorted(n for sentence in nudge_sentences(case, reply) for n in numbers(sentence) - numbers(held))
     if invented:
         found.append("figure not in the case: " + ",".join(invented))
     milestone, reading = named(reply, case)
@@ -72,8 +87,7 @@ def problems_by_code(case, reply):
         if not reading:
             found.append("names no real reading")
         if not case.get("answer_may_name_milestone"):
-            lead_milestone, lead_reading = named(first_sentence(reply), case)
-            if lead_milestone or lead_reading:
+            if named(first_sentence(reply), case)[0]:
                 found.append("nudge ahead of the answer")
     elif milestone or reading:
         found.append("nudge where none belongs")

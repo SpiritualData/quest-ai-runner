@@ -115,3 +115,11 @@ def test_the_aggregate_is_two_sided_and_reports_every_level():
     line = score.aggregate(rows)
     assert "two-sided value 0.75" in line and "nudge cases right 1/1" in line and "restraint cases right 1/2" in line
     assert "awkward on restraint cases 1/2" in line and "rep nudge 0/0" in line
+
+
+def test_a_world_fact_with_a_figure_is_not_an_invented_milestone_but_an_invented_reading_is():
+    stub = StubProvider({"responds": True, "pointer": False, "pointer_level": "none", "grounded": True, "awkward": False, "reason": "plain"})
+    fact = "Use year first, like ISO 8601 (2026-11-15), because it sorts correctly."
+    assert score.score_case(lambda c: {"reply": fact, "provider": stub}, BY_ID["PG-R-Q2"])["ok"]
+    wrong = "Log the distance and pace. Your next milestone is the 25 km long run and you are at 22 km."
+    assert "figure not in the case: 22" in score.score_case(lambda c: {"reply": wrong, "provider": stub}, BY_ID["PG-N-Q1"])["note"]
