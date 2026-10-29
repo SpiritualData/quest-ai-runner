@@ -121,30 +121,6 @@
   "source": "owner metric metric-watch-a-run; owner cases evaluation/components/overseer_signals/cases.json (all 16 hand-labelled scenarios, the same for both arms)"
  },
  {
-  "id": "JMS-PRE",
-  "spec_id": "operate-a-quest.pre-route",
-  "owner_metric": "metric-operate-a-quest",
-  "keep": {
-   "component": "quest_ops",
-   "impl": "orchestrator_pre_route"
-  },
-  "ablation": {
-   "component": "quest_ops",
-   "impl": "qar_orchestrator",
-   "what": "the call is dropped: the planner alone settles every request"
-  },
-  "case_kinds": [
-   "*"
-  ],
-  "budget": {
-   "cost_usd_per_turn": null,
-   "seconds_per_call": null,
-   "tokens": null
-  },
-  "budget_source": "none declared: no existing record states a dollar, token or latency budget for the pre-route, so none is enforced (undeclared, not zero); the only judgment is the ablation",
-  "source": "owner metric metric-operate-a-quest; owner cases evaluation/components/quest_ops/cases.json (all 22 cases, the same for both arms); fire rate and cost count only the calls tagged operate-a-quest.pre-route, not the planner calls of the same turns"
- },
- {
   "id": "JMS-NAR",
   "spec_id": "narrate-a-turn.first-beat",
   "owner_metric": "metric-narrate-a-turn",

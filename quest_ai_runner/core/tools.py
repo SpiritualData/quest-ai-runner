@@ -145,12 +145,6 @@ class ToolSpec:
     # words selected, so it never takes one of their places; a chat turn still never sees it when it is
     # also ``on_request_only``.
     standing_deep: bool = False
-    # A plain, reversible create, change or find that the pre-route (``core/pre_route.py``) may call
-    # on a sure reading of the user's message, without the planner. Only for a tool whose every
-    # argument the message itself can supply: never a destructive, outward or confirm-gated tool,
-    # never one that must merge into a value only the planner's context shows, and never one that
-    # needs an id from a read. False (the default) always goes through the planner.
-    direct: bool = False
     # A tool that reads the specification records of the repository the run works in. It exists only in a process
     # that can find that repository (an ``esoi.toml`` above its working folder, or ``QAR_SPEC_ROOT``), and a worker's
     # shell is a new process that may start somewhere else, so ``render_deep_block`` hands such a tool's command the root.
@@ -268,9 +262,6 @@ class ToolRegistry:
     def names(self) -> List[str]:
         return list(self._specs)
 
-    def direct_names(self) -> List[str]:
-        """Tools a sure pre-route may call without the planner (``ToolSpec.direct``)."""
-        return [n for n, spec in self._specs.items() if spec.direct]
 
     def __len__(self) -> int:
         return len(self._specs)

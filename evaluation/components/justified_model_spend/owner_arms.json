@@ -113,14 +113,6 @@
    "min_calls": 1
   },
   {
-   "component": "quest_ops",
-   "impl": "orchestrator_pre_route",
-   "tier": "subscription",
-   "max_calls": 300,
-   "args": [],
-   "min_calls": 1
-  },
-  {
    "component": "narrate_a_turn",
    "impl": "model_beat",
    "tier": "subscription",

@@ -52,8 +52,8 @@
      "run": {"full": "esoi run write_through_mcp --impl allowlist_writer --record"}},
     {"arm": "write_files/bounded_writer", "share": 0.16, "proxy": "the file writer stays inside its root and keeps a backup (scratch tree), not whether turns write only what was asked",
      "run": {"full": "esoi run write_files --impl bounded_writer --record"}},
-    {"arm": "quest_ops/orchestrator_pre_route", "share": 0.5, "paid": true,
-     "run": {"full": "esoi run quest_ops --impl orchestrator_pre_route --max-calls 400 --record"}}]}},
+    {"arm": "quest_ops/qar_orchestrator", "share": 0.5, "paid": true,
+     "run": {"full": "esoi run quest_ops --impl qar_orchestrator --max-calls 400 --record"}}]}},
  {"id": "QME4", "kind": "scope", "area": "Data kept in scope",
   "args": {"rule": "pass_rate", "what": "nothing from another user, team or quest reaches a prompt or store", "full_same_as_cheap": true,
    "cheap": [

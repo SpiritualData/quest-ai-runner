@@ -7,10 +7,8 @@ solutions or frameworks is writing another implementation, never changing the ha
 ```
 PY=.venv/bin/python3        # from the quest-ai-runner repo root
 esoi run classification --impl qar_planner      # selected per solutions.csv
-esoi run classification --impl single_prompt    # alternative
 esoi run classification --impl keyword_rules    # zero-call floor
 esoi run quest_ops --impl qar_orchestrator      # selected per solutions.csv
-esoi run quest_ops --impl direct_tool_call      # alternative
 esoi run context_selection --impl hybrid_union    # selected per solutions.csv, zero model calls
 esoi run context_selection --impl blind_grep           # zero-model floor
 esoi run context_selection --impl vector_bge_small     # local embedder, offline, ~90 s

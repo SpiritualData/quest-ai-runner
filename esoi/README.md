@@ -131,7 +131,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `QS1` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | QM1 | QAR overall: QS1's sub-metrics weighted by its ideals, with floor and ceiling;Passing chat turns per dollar;Delegated tasks meeting their standard;Exact and consented changes;Data kept in scope;Engine reuse;Measured coverage |
 | `route-a-message` | Cost-aware message router | evaluation/components/classification/impls/qar_planner.py | Routing correctness over the classification cases |
 | `answer-a-turn` | Grounded chat turn handler | evaluation/components/chat_quality/impls/dev_quest_chat.py | Judge pass rate over the chat quality cases |
-| `operate-a-quest` | Quest change executor | pre_route | Final quest state against the request over the quest operation cases |
+| `operate-a-quest` | Quest change executor | evaluation/components/quest_ops/impls/qar_orchestrator.py | Final quest state against the request over the quest operation cases |
 | `gather-evidence` | Multi-source evidence retriever | composite | Retrieval recall of the right document over handbook questions |
 | `search-the-web` | Bounded web research | web_research | Right-passage rate and search spend over public factual questions |
 | `call-a-model` | Tiered model provider layer | multi_provider | Provider routing, fallback, retry and cost correctness |
@@ -213,15 +213,11 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `QS1:QM3` | Agent framework with Quest glue |  |  |
 | `QS1:QM4` | Deep runner only |  |  |
 | `route-a-message:qar_planner` | Full planner decision | evaluation/components/classification/impls/qar_planner.py |  |
-| `route-a-message:pre_route_then_planner` | Cheap pre-route in front of the planner | evaluation/components/classification/impls/pre_route_then_planner.py |  |
-| `route-a-message:single_prompt` | Unchecked single-prompt router | evaluation/components/classification/impls/single_prompt.py |  |
 | `route-a-message:keyword_rules` | Keyword rules floor | evaluation/components/classification/impls/keyword_rules.py |  |
 | `answer-a-turn:dev_quest_chat` | Live chat on a disposable world | evaluation/components/chat_quality/impls/dev_quest_chat.py |  |
 | `answer-a-turn:reference_replies` | Offline metric validity check | evaluation/components/chat_quality/impls/reference_replies.py |  |
 | `operate-a-quest:qar_orchestrator` | Planner-only orchestration | evaluation/components/quest_ops/impls/qar_orchestrator.py |  |
-| `operate-a-quest:orchestrator_pre_route` | Brain with a settling pre-route | evaluation/components/quest_ops/impls/orchestrator_pre_route.py |  |
 | `operate-a-quest:direct_tool_call` | Direct tool-call ablation | evaluation/components/quest_ops/impls/direct_tool_call.py |  |
-| `operate-a-quest:pre_route` | Pre-route stage | quest_ai_runner/core/pre_route.py |  |
 | `gather-evidence:files` | Local file tree reader | quest_ai_runner/adapters/files_adapter.py |  |
 | `gather-evidence:cached_db` | Cached live-database reader | quest_ai_runner/adapters/cached_db_adapter.py |  |
 | `gather-evidence:composite` | Parallel multi-source composite | quest_ai_runner/adapters/composite_retrieval_adapter.py |  |
@@ -368,7 +364,6 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | quest_ai_runner/runner/autopilot_gates.py |  |
 | `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py |  |
 | `evolve-by-metric:structure-library` | Apply the evolvable-structure library | and a runtime one because implementations are declared with its decorators; a rule or format change in the library needs a migration here; offline arms only unless a paid arm is run by decision. |  |
-| `operate-a-quest:orchestrator` | Planner alone | quest_ai_runner/core/pre_route.py |  |
 | `search-the-web:brave` | Brave search backend | quest_ai_runner/adapters/web_search_backends.py |  |
 | `search-the-web:gemini` | Gemini grounded search backend | quest_ai_runner/adapters/web_search_backends.py |  |
 | `search-the-web:provider` | Provider-native search backend | quest_ai_runner/adapters/web_search_backends.py |  |
@@ -489,7 +484,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-qar-overall`, QAR overall: QS1's sub-metrics weighted by its ideals, with floor and ceiling: `esoi run qar_overall --impl recorded_rows`
 - `metric-route-a-message`, Routing correctness over the classification cases: `esoi run classification --impl qar_planner`
 - `metric-answer-a-turn`, Judge pass rate over the chat quality cases: `esoi run chat_quality --impl dev_quest_chat`
-- `metric-operate-a-quest`, Final quest state against the request over the quest operation cases: `esoi run quest_ops --impl orchestrator_pre_route`
+- `metric-operate-a-quest`, Final quest state against the request over the quest operation cases: `esoi run quest_ops --impl qar_orchestrator`
 - `metric-gather-evidence`, Retrieval recall of the right document over handbook questions: `esoi run retrieval --impl composite; esoi run retrieval_sources --impl files_adapter`
 - `metric-search-the-web`, Right-passage rate and search spend over public factual questions: `esoi run web_search_live --impl web_research; esoi run web_search --impl fallback_chain`
 - `metric-call-a-model`, Provider routing, fallback, retry and cost correctness: `esoi run model_providers --impl multi_provider`

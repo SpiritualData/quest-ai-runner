@@ -16,8 +16,7 @@ def build(meter, abbreviate=None):
     flag = ABBREVIATE if abbreviate is None else abbreviate
 
     def run_request(case, world):
-        orch = common.build_offline_orchestrator(meter, registry=WORLD.registry, planner_tier=tier,
-                                                 selections={"operate-a-quest": "orchestrator"})
+        orch = common.build_offline_orchestrator(meter, registry=WORLD.registry, planner_tier=tier)
         orch.cfg.planner_abbreviate_repeat_context = flag
         seen = {"steps": 0}
         original = orch._plan

@@ -19,8 +19,7 @@ def build(meter):
         if case["kind"] == "terminal":
             return drive.run_terminal(case, lambda: ack_provider)
         world = drive.new_world(case)
-        orch = common.build_offline_orchestrator(meter, registry=world.registry, planner_tier=tier,
-                                                 selections={"operate-a-quest": "orchestrator"})
+        orch = common.build_offline_orchestrator(meter, registry=world.registry, planner_tier=tier)
         orch.web = world.web
         return drive.run_with(case, world, orch)
     return turn

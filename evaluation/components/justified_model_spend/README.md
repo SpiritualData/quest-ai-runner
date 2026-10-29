@@ -37,7 +37,7 @@ Why each is still unmeasured (none has an owner arm that runs the shipped prompt
 - `judge-a-decision.intent-directive`, `.mode-release`, `.landed-work-denial`: the owner `judges` arm runs them under a scripted provider only; no live labelled cases yet.
 - `feed-context-sources.*`, `ground-in-intent.*`, `replay-known-operations.fill-args`, `search-cards-and-specs.pool-judge`, `select-context.*`, `select-a-rep.explicit-ask`: the owner components score the surrounding rule or a whole chat turn (`intent_grounding`, `feed_context_sources`, `select_a_rep`), not the one call, and have no ablation with the call dropped.
 
-The planner and the answer prompt are not registered prompt specs; the planner is measured only as the ablation of `operate-a-quest.pre-route` (`quest_ops/qar_orchestrator`).
+The planner and the answer prompt are not registered prompt specs; the planner is the only route since the pre-route call was removed (2026-10-29).
 
 Listed by `score.unmeasured()` and in the QME8 note, never guessed. A prompt is added only with a labelled owner arm whose no-call ablation can be
 run on the same cases; the planner and the answer prompt are not registered prompt specs yet (the baseline of unmigrated call sites in

@@ -1,4 +1,4 @@
-"""ABLATION of orchestrator_pre_route: the direct tool path ALONE. ONE model call picks the tool calls as JSON from the catalog's own schemas, and
+"""RIVAL of qar_orchestrator (the planner alone): a direct tool path ALONE. ONE model call picks the tool calls as JSON from the catalog's own schemas, and
 the harness-owned registry executes them. No planner, no answer step, so it cannot read, answer or start a deep run: the upper bound on what the
 direct path can do for a plain quest edit, not a replacement for the brain."""
 import json

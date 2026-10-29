@@ -217,13 +217,6 @@
    "model_beat": "quest_ai_runner.core.orchestrator_turn"
   }
  },
- "operate-a-quest": {
-  "default": "pre_route",
-  "modules": {
-   "orchestrator": "quest_ai_runner.core.pre_route",
-   "pre_route": "quest_ai_runner.core.pre_route"
-  }
- },
  "operate-from-a-terminal": {
   "default": "qar_main",
   "modules": {

@@ -836,9 +836,6 @@ def build_orchestrator(
         tools=resolve_tool_registry(cfg),
         web=cfg.web_research,
         recipes=cfg.recipe_store or build_recipe_store_from_env(os.environ),
-        # Which first look fronts the planner: the selected operate-a-quest implementation (or
-        # ``cfg.selections["operate-a-quest"]``); "orchestrator" turns the pre-route off.
-        pre_router_cls=resolve("operate-a-quest", overrides=cfg.selections),
         # How much the code adds around a deep goal: the selected iterate-by-spec implementation (or
         # ``cfg.selections["iterate-by-spec"]``); the default measures the metric before and after the work,
         # and ``generic-doctrine`` (the standing instructions alone) is the off switch.

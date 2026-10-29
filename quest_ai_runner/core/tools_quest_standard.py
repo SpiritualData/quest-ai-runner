@@ -317,7 +317,6 @@ def add_measurable_outcome_spec(env: Mapping[str, str], client_factory=None) -> 
 
     return ToolSpec(
         name="add_quest_measurable_outcome",
-        direct=True,
         handler=handler,
         description=_with_standard(
             "Add one measurable outcome to a quest's checklist, leaving the existing items as "
@@ -375,7 +374,6 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
 
     return ToolSpec(
         name="create_quest_goal",
-        direct=True,
         handler=handler,
         description=_with_standard(
             "Create one goal on a quest's plan for one period (day, week, month, quarter or "
@@ -443,7 +441,6 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
 
     return ToolSpec(
         name="add_quest_strategy",
-        direct=True,
         handler=handler,
         description=_with_standard("Add one strategy (a candidate solution) to a quest.", "strategy"),
         when_to_use="The user asked to add a strategy or approach to their quest. " + _NEVER_CODE,
@@ -519,7 +516,6 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
 
     return ToolSpec(
         name="create_quest_habit",
-        direct=True,
         handler=handler,
         description=_with_standard("Create one recurring habit on a quest, under one of its "
                                    "strategies.", "habit"),
