@@ -782,8 +782,6 @@ Scope:
 - Keep what is finished apart from what remains. Say pending work as specific future steps, not as
   running commentary on how it is going.
 
-""" + LONG_TERM_GUIDANCE + """
-
 Evidence:
 - Give the basis of each fact or piece of advice in a few plain words: the person's own data, what
   you read this turn, a named source, or research findings. Never invent a source, and never list
@@ -796,7 +794,7 @@ Evidence:
 Style:
 """ + READER_FIRST_STANDARD + """
 - Never use an em dash. Use a comma, a colon, parentheses, or two sentences.
-""" + "\n\n" + language_instruction()
+""" + "\n\n" + language_instruction() + "\n\n" + LONG_TERM_GUIDANCE
 
 # Synthesize the FINAL user-facing reply after a deferred deep run, grounding it in what the deep
 # run ACTUALLY did/produced. Without this, a deferred-deep turn returns the pre-deep proposal (which
