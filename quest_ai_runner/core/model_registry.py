@@ -35,6 +35,23 @@ LEGACY_TIER_ALIASES = {
     "opus": "quality",
 }
 
+# Family rules, in order: the first pattern that matches a lower-case model id names its family. DATA, not branches: a new family
+# is one more entry. (Lookaheads make a pattern order-independent: "claude and haiku" in any position.)
+FAMILY_RULES = tuple((name, re.compile(rx)) for name, rx in (
+    ("claude-haiku", r"(?=.*claude)(?=.*haiku)"),
+    ("claude-opus", r"(?=.*claude)(?=.*opus)"),
+    ("claude-sonnet", r"(?=.*claude)(?=.*sonnet)"),
+    ("claude-other", r"claude"),
+    ("gemini-1.5", r"(?=.*gemini)(?=.*(1\.5|1-5))"),
+    ("gemini-3", r"(?=.*gemini)(?=.*3)"),
+    ("gemini-2.0", r"gemini"),
+    ("gpt-4o", r"gpt-4o"),
+    ("o-series", r"\bo[134]\b"),
+))
+# Ids never auto-bucketed into a tier: a deployment opts in by pinning QAR_MODEL_<TIER>, so registering such a provider
+# (today DeepSeek) cannot change an existing lane's tiers.
+EXCLUDED_FROM_TIERS = re.compile(r"^deepseek")
+
 # Downgrade order (expensive -> cheap), used when a tier's resolved model exhausts its
 # quota/rate limit: stepping down to a cheaper tier keeps the caller answered instead of
 # erroring out, since backoff alone does not fix a per-model DAILY quota. See
@@ -162,31 +179,11 @@ def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> 
     families = {}  # family -> [model, model, ...]
     # DeepSeek ids are never auto-bucketed into a tier: a deployment opts in by pinning
     # QAR_MODEL_<TIER>, so registering the DeepSeek provider cannot change an existing lane's tiers.
-    models = [m for m in models if not m.lower().startswith("deepseek")]
+    models = [m for m in models if not EXCLUDED_FROM_TIERS.search(m.lower())]
     for m in models:
-        # Infer family from model name (exact patterns depend on provider)
-        if "claude" in m.lower():
-            if "haiku" in m.lower():
-                families.setdefault("claude-haiku", []).append(m)
-            elif "opus" in m.lower():
-                families.setdefault("claude-opus", []).append(m)
-            elif "sonnet" in m.lower():
-                families.setdefault("claude-sonnet", []).append(m)
-            else:
-                families.setdefault("claude-other", []).append(m)
-        elif "gemini" in m.lower():
-            if "1.5" in m or "1-5" in m:
-                families.setdefault("gemini-1.5", []).append(m)
-            elif "3" in m:
-                families.setdefault("gemini-3", []).append(m)
-            else:
-                families.setdefault("gemini-2.0", []).append(m)
-        elif "gpt-4o" in m.lower():
-            families.setdefault("gpt-4o", []).append(m)
-        elif re.search(r"\bo[134]\b", m.lower()):
-            families.setdefault("o-series", []).append(m)
-        else:
-            families.setdefault("other", []).append(m)
+        low = m.lower()
+        family = next((name for name, rx in FAMILY_RULES if rx.search(low)), "other")
+        families.setdefault(family, []).append(m)
 
     # Map families to tiers; take the NEWEST model of each family (highest version numbers, not the
     # order the provider listed them in).

@@ -198,6 +198,11 @@ def stop_process_group(proc: "subprocess.Popen", grace_seconds: float = DEFAULT_
     return out, err, "killed"
 
 
+# Which model ids the Claude Code worker can run: the ids and bedrock ids that name Claude or Anthropic, and the bare tier
+# aliases Claude Code accepts. A pattern constant (data), not a branch on a vendor name.
+CLAUDE_CODE_MODEL_PATTERN = re.compile(r"claude|anthropic|^(opus|sonnet|haiku|fable)")
+
+
 def _is_claude_model(model: str) -> bool:
     """Whether ``model`` is a Claude model the Claude Code worker can actually run.
 
@@ -205,13 +210,7 @@ def _is_claude_model(model: str) -> bool:
     ``gemini-3.5-flash``, ``gpt-4o``) must NOT be passed as ``--model`` or the worker errors and
     does nothing. Accepts Claude ids/aliases (``claude-...``, bare ``opus``/``sonnet``/``haiku``/
     ``fable``, ``us.anthropic.claude-...`` bedrock ids); rejects everything else."""
-    m = (model or "").strip().lower()
-    if not m:
-        return False
-    if "claude" in m or "anthropic" in m:
-        return True
-    # Bare Claude tier aliases Claude Code accepts.
-    return any(m == alias or m.startswith(alias) for alias in ("opus", "sonnet", "haiku", "fable"))
+    return bool(CLAUDE_CODE_MODEL_PATTERN.search((model or "").strip().lower()))
 
 
 # The model translator: ``str -> Optional[str]`` mapping a model id to the value ``claude --model``
