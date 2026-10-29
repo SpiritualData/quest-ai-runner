@@ -41,7 +41,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_BOOTSTRAP_MAX_FILES` | Stop the bootstrap walk after this many files (unset = no limit). | `adapters/context_bootstrap_support.py` | - |
 | `QAR_BOOTSTRAP_TIER` | Model tier used for bootstrap topic extraction (default balanced). | `cli_context.py` | - |
 | `QAR_BOOTSTRAP_WORKERS` | Parallel bootstrap workers; overrides QAR_MAX_PARALLEL for bootstrap only. | `adapters/context_bootstrap_support.py` | - |
-| `QAR_CALL_LOG_PATH` |  | `usage.py` | - |
+| `QAR_CALL_LOG_PATH` | Path of the JSON-lines call log where the runner persists every model call it makes, tagged with its prompt spec id (default: next to the usage file); production.py reads it to report average and maximum seconds, tokens and dollars per call. Read in quest_ai_runner/usage.py. | `usage.py` | - |
 | `QAR_CARDS_BACKEND` |  | `config_assembler.py` | `docs/context-card-stores.md` |
 | `QAR_CARDS_COLLECTION` | Qdrant collection the cards live in (default quest_ai_cards). | `config_context_index.py` | - |
 | `QAR_CARDS_SCOPE` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
