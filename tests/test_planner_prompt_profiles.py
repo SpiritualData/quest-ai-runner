@@ -410,4 +410,4 @@ def test_both_profiles_say_that_outside_world_work_nothing_can_do_is_not_queued(
     to a deep run instead of an honest "I cannot place orders"."""
     from quest_ai_runner.core.planner_prompt import PLANNER_PROFILES
     for name, prompt in PLANNER_PROFILES.items():
-        assert "Never queue work that cannot be done" in prompt, name
+        assert "Never queue work that cannot be done" in " ".join(prompt.split()), name
