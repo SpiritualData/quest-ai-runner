@@ -3,9 +3,9 @@ cap-deep-claude,agent_harness,Deep work through Claude Code,Claude Code CLI,code
 cap-deep-acp,agent_harness,Deep work through any ACP agent,Agent Client Protocol,config,quest_ai_runner/adapters/acp_deep_runner_config.py
 cap-mcp-read,tools_mcp,Read through any MCP server,MCP Python SDK,config,quest_ai_runner/config_file.py
 cap-mcp-write,tools_mcp,Write through any allowlisted MCP server tool,MCP Python SDK,config,quest_ai_runner/config_file.py
-cap-search-serper,web_search,Search with Serper,Serper,code,quest_ai_runner/adapters/web_search_backends.py
-cap-search-brave,web_search,Search with Brave,Brave Search API,code,quest_ai_runner/adapters/web_search_backends.py
-cap-search-tavily,web_search,Search with Tavily,Tavily,code,quest_ai_runner/adapters/web_search_backends.py
+cap-search-serper,web_search,Search with Serper,Serper (data entry),config,quest_ai_runner/adapters/web_search_apis.py
+cap-search-brave,web_search,Search with Brave,Brave Search API (data entry),config,quest_ai_runner/adapters/web_search_apis.py
+cap-search-tavily,web_search,Search with Tavily,Tavily (data entry),config,quest_ai_runner/adapters/web_search_apis.py
 cap-search-searxng,web_search,Search with SearXNG,SearXNG,code,quest_ai_runner/adapters/web_search_backends.py
 cap-search-gemini,web_search,Search with Gemini grounding,Gemini grounding,code,quest_ai_runner/adapters/web_search_backends.py
 cap-world-notion,world,Read Notion,none,code,quest_ai_runner/adapters/notion_adapter.py
@@ -21,3 +21,4 @@ cap-memory-cards,memory,Durable cards,none (own card store),code,quest_ai_runner
 cap-evals-esoi,evals,Component evals selected by metric,esoi,code,evaluation/components
 cap-world-mcp,world,Any source that has an MCP server,MCP servers,config,quest_ai_runner/config_file.py
 cap-model-openai-compatible,model_providers,"Any OpenAI-compatible endpoint (LiteLLM, vLLM, Ollama)",OPENAI_BASE_URL,config,quest_ai_runner/adapters/openai_provider.py
+cap-search-any-json-api,web_search,Any hosted JSON search API described in a file,QAR_WEB_SEARCH_APIS_FILE,config,quest_ai_runner/adapters/web_search_apis.py

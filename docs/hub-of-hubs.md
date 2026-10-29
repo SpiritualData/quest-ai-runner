@@ -17,12 +17,17 @@ when a hub gains a capability, a lane gains it by editing a configuration file.
   token_env = "DOCS_TOKEN"        # the name of an environment variable, never the token itself
   allowed_tools = ["search"]
   ```
+  Official remote servers exist for Google Drive (`https://drivemcp.googleapis.com/mcp/v1`) and Google Chat
+  (`https://chatmcp.googleapis.com/mcp/v1`), both listed as preview and needing OAuth, and Notion points users to its remote
+  server (sources: Google's Workspace MCP guides and Notion's `makenotion/notion-mcp-server` page, read on 2026-10-29 through
+  third-party directories). None is wired in a lane yet, so none counts in the metric.
 - **Add a deep-work agent.** Any agent that speaks the Agent Client Protocol runs the deep work when `QAR_ACP_AGENT_COMMAND`
   names it (see [the ACP runner](acp-deep-runner.md)).
 - **Add a model vendor's ids.** `register_model_prefix("vendor", "provider-name")` in `core/model_family.py` routes a model id
   family to a registered provider. It is data, not a branch.
-- **Add a search backend.** Register a class that has a `from_env(env)` method under the `search-the-web` solution and set
-  `QAR_WEB_SEARCH_BACKEND` to its name. The library's own selection function needs no edit.
+- **Add a search backend.** A hosted search API that answers JSON is a data entry (endpoint, key variable, request, result
+  fields) in the JSON file named by `QAR_WEB_SEARCH_APIS_FILE`; Serper, Brave and Tavily ship that way. Then set
+  `QAR_WEB_SEARCH_BACKEND` to its name. See [Web search](web-search.md).
 
 Where this is not yet true (a new world source still needs an adapter, a new vendor still needs a provider class) the status
 table below says so, and `esoi/hubs.csv` holds the recommendation for closing the gap.
@@ -52,7 +57,7 @@ Generated from `esoi/hubs.csv`; edit the CSV and run `python3 evaluation/compone
 |---|---|---|---|---|---|
 | agent_harness | Claude Code CLI, Agent Client Protocol agents (claude-agent-acp) | OpenCode; Goose; OpenHands; Codex CLI | code for the default claude -p runner; config for any ACP agent (QAR_ACP_AGENT_COMMAND) | 2026-10-29 | fresh |
 | tools_mcp | Model Context Protocol Python SDK | Official MCP Registry; PulseMCP subregistry; GitHub MCP directory | config: [[mcp_servers]] in the lane file (see hub_capabilities.csv) | 2026-10-29 | fresh |
-| web_search | SearXNG, Serper, Brave Search API, Tavily, Gemini Google Search grounding | Firecrawl; Crawl4AI; Exa; self-hosted SearXNG with MCP | code per backend (one class each); selected by QAR_WEB_SEARCH_BACKEND | 2026-10-29 | fresh |
+| web_search | SearXNG, Serper, Brave Search API, Tavily, Gemini Google Search grounding | Firecrawl; Crawl4AI; Exa; self-hosted SearXNG with MCP | config for hosted JSON APIs (a data entry each, QAR_WEB_SEARCH_APIS_FILE); code for SearXNG, Gemini grounding and provider-native search | 2026-10-29 | fresh |
 | world | none yet | MCP servers via the official registry; Activepieces; n8n; Composio; Playwright MCP; browser-use | code per source today (one adapter each); MCP servers by config where a server exists | 2026-10-29 | fresh |
 | context_assembly | bm25s, Qdrant and fastembed | Haystack; LlamaIndex; LightRAG | code per store (BM25 store, Qdrant store, own hybrid assembler) | 2026-10-29 | fresh |
 | science | none yet | OpenAlex API; Semantic Scholar API; PaperQA2; community scholarly MCP servers | none today; candidates reach QAR as MCP servers by config | 2026-10-29 | fresh |
@@ -64,9 +69,9 @@ Generated from `esoi/hubs.csv`; edit the CSV and run `python3 evaluation/compone
 Metric `hub_of_hubs` (recomputed by `render_docs.py`, from the registry and a static scan of the code):
 
 - coverage (areas with a hub or a recorded decision): 1.00
-- integration by configuration (capabilities needing no code per integration): 0.23
+- integration by configuration (capabilities needing no code per integration): 0.39
 - research freshness: share of areas researched within 90 days 1.00; stale: none (days since each date: `esoi run hub_of_hubs --impl registry_scan`)
 - code: areas with one seam 0.80, selectable by metric 0.70, vendor branches in core 0
-- score: 0.765
+- score: 0.806
 
 <!-- hub-table:end -->
