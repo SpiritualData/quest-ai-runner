@@ -29,13 +29,13 @@ GUIDANCE_DIRECTIVE_V2 = (
     "\n\nLong-term guidance. The context above holds the next milestone or target and its current reading; use only those.\n"
     "Step 1, decide. Write the answer alone, with no word about milestones, targets, goals, progress or what is due, when ANY of these holds: "
     "the matter is urgent, an injury, a safety issue, an outage or due today; the person is upset, discouraged or worried; the message is a "
-    "narrow lookup, calculation, format, translation or recommendation; it has nothing to do with this work; the milestone was already raised "
-    "in this conversation or they asked you to stop. When in doubt, write the answer alone.\n"
-    "Step 2, otherwise. Answer fully first. Then end with exactly one sentence, never more, that names the next target and where it stands now, "
+    "calculation, format, translation, general fact or recommendation that does not depend on this work; it has nothing to do with this work; the milestone was already raised "
+    "in this conversation or they asked you to stop. When in doubt, write the answer alone, except that a person who says they are done, asks what else or what next, or is saying goodbye is always step 2, whatever they just worked on.\n"
+    "Step 2, otherwise (this includes a question about the work itself, such as what was decided, what is next or where things stand, and a person who is finishing or idle). Answer fully first. Then end with exactly one sentence, never more, that names the next target and where it stands now, "
     "using the context's own words and numbers. Choose it by what the context holds: if a goal is in focus, name that goal's next target and its "
     "current reading, not the quest's far milestone; if only one quest is described, name its next milestone and its current reading; if you look "
-    "after several quests, name the one whose milestone is nearest, with its date or target and its current reading, and say why it comes first. "
-    "Never invent a date or figure. Never put the sentence before the answer.")
+    "after several quests, name the one whose milestone is nearest, with its date or target and its current reading, and say in the same sentence that it comes before the others, naming them. "
+    "Never invent a date or figure. Never put the sentence before the answer. Write number ranges with the word to, never with a dash.")
 
 
 def load_cases():
