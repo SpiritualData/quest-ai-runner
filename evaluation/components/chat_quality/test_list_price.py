@@ -36,3 +36,9 @@ def test_pricing_knows_the_provider_of_a_model_by_name():
     assert pricing.provider_for_model("gpt-4o") == "openai"
     assert pricing.provider_for_model("haiku") == "anthropic"
     assert pricing.get_output_cost_per_mtok("gemini", "gemini-3.1-flash-lite") == 1.50
+
+
+def test_gemini_3_6_flash_is_priced_at_its_cited_rate():
+    list_price = load_list_price()
+    # $0.75 in, $3.75 out per 1M (https://ai.google.dev/gemini-api/docs/pricing, read 2026-10-29)
+    assert list_price(["gemini-3.6-flash"], 1_000_000, 1_000_000) == pytest.approx(4.50)

@@ -68,12 +68,16 @@ GOOGLE_PRICING = {
     # Gemini 3.1 Flash-Lite, paid tier standard, text input. Source: https://ai.google.dev/gemini-api/docs/pricing
     # (read 2026-10-29: $0.25 in, $1.50 out per 1M tokens, output includes thinking tokens)
     "gemini-3.1-flash-lite": 0.25,
+    # Gemini 3.6 Flash, paid tier standard, text input. Source: https://ai.google.dev/gemini-api/docs/pricing
+    # (read 2026-10-29: $0.75 in, $3.75 out per 1M tokens through 2026-12-31, then $1.50 / $7.50)
+    "gemini-3.6-flash": 0.75,
 }
 
 # Pricing per 1M OUTPUT tokens (USD), where the output rate is not the family ratio times the input rate.
 GOOGLE_OUTPUT_PRICING = {
     # Source: https://ai.google.dev/gemini-api/docs/pricing (read 2026-10-29)
     "gemini-3.1-flash-lite": 1.50,
+    "gemini-3.6-flash": 3.75,
 }
 
 # Output tokens cost this many input tokens when a model has no output rate listed (Anthropic's ratio).
