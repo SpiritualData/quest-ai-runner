@@ -169,3 +169,14 @@ def test_the_client_sends_the_goal_fields_the_backend_accepts():
     assert sent[1][2]["new_goal"] == {"title": "T"}
     assert sent[2] == ("PUT", "/api/planning/goals/g1/assign",
                        {"assigned_to_user_id": "u1", "reason": "r", "next_step": "n"})
+
+
+def test_a_request_to_save_something_on_the_quest_offers_the_note_tool():
+    """Found by evaluation/components/end_to_end: "Save this on my fitness quest: ..." offered five goal and
+    experiment tools and not add_quest_note, so the planner had no tool to write the note and went to a deep run."""
+    from quest_ai_runner.core.tools import build_tool_registry
+    registry = build_tool_registry({"QUEST_BASE_URL": "http://quest.invalid", "QUEST_API_KEY": "k"})
+    for message in ("Save this on my fitness quest: my physio cleared easy cycling from Monday.",
+                    "Remember that the plumber can only come on Thursdays.",
+                    "Jot down that the wax shipment slipped."):
+        assert "add_quest_note" in [spec.name for spec in registry.select(message)], message

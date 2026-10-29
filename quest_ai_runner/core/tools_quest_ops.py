@@ -471,15 +471,17 @@ def add_quest_note_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec
         name="add_quest_note",
         handler=handler,
         description="Add a note to the quest's thread, written as the AI (never as the person).",
-        when_to_use=("Where an outcome stands when its progress write was refused, a finding the "
-                     "person should see on the quest, or a hand-off to the next run."),
+        when_to_use=("The person asks you to save, remember or jot something on the quest; where an outcome "
+                     "stands when its progress write was refused, a finding the person should see on the "
+                     "quest, or a hand-off to the next run."),
         when_not_to_use=("A request someone made (record_ask), something you need from them "
                          "(create_decision), or a result (that is your result)."),
         parameters={"type": "object", "required": ["text"], "properties": {
             "quest_id": QUEST_ID_PARAM,
             "text": {"type": "string", "description": "The note, in plain words."}}},
         mutates=True, workflow_step=False, origin="standard",
-        keywords=("note", "notes", "thread", "write", "record", "finding", "hand", "off"),
+        keywords=("note", "notes", "thread", "write", "record", "finding", "hand", "off", "save", "remember",
+                  "jot"),
         context_args={"quest_id": "quest_id"})
 
 
