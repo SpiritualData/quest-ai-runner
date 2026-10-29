@@ -133,8 +133,9 @@ _FILE_SCALAR_FIELDS = {
 
 
 # Special-cased NESTED tables: the TOML value is itself a table and becomes a specific dataclass
-# (``PersonaResolverConfig``) rather than being assigned to the field as-is.
-_FILE_SPECIAL_FIELDS = {"personas"}
+# (``PersonaResolverConfig``) rather than being assigned to the field as-is. ``mcp_servers`` is an array of tables, one per MCP
+# server (``[[mcp_servers]]``), each becoming an ``MCPServerSpec``: a lane gains a tool hub by configuration alone.
+_FILE_SPECIAL_FIELDS = {"personas", "mcp_servers"}
 
 
 @dataclass

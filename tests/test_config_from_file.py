@@ -268,3 +268,21 @@ def test_config_from_env_file_supplies_team_ids_when_the_env_var_is_unset(tmp_pa
     monkeypatch.delenv("QUEST_TEAM_IDS", raising=False)
     cfg = cli._config_from_env(config_path=str(path))
     assert cfg.team_ids == ["from_file"]
+
+
+def test_mcp_servers_array_of_tables_builds_specs_with_no_code(tmp_path, monkeypatch):
+    path = _write(tmp_path, '[[mcp_servers]]\nalias = "docs"\ntransport = "http"\nurl = "http://hub.invalid/mcp"\n'
+                            'token_env = "HUB_TOKEN"\nallowed_tools = ["search"]\n'
+                            '[[mcp_servers]]\nalias = "local"\ntransport = "stdio"\ncommand = "hub-server"\n')
+    monkeypatch.setenv("HUB_TOKEN", "t0k")
+    cfg = RunnerConfig.from_file(path)
+    assert [s.alias for s in cfg.mcp_servers] == ["docs", "local"]
+    assert cfg.mcp_servers[0].allowed_tools == ["search"]
+    assert cfg.mcp_servers[0].token_provider() == "t0k"
+    assert cfg.mcp_servers[1].command == "hub-server"
+
+
+def test_mcp_servers_rejects_a_field_the_spec_does_not_have(tmp_path):
+    path = _write(tmp_path, '[[mcp_servers]]\nalias = "x"\ntransport = "http"\nbogus = 1\n')
+    with pytest.raises(ConfigFileError, match="bogus"):
+        RunnerConfig.from_file(path)

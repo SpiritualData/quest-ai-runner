@@ -41,6 +41,7 @@ def load_runner_config_file(cls: Type[Any], path: Union[str, "os.PathLike[str]"]
 
     data = dict(data)
     personas_table = data.pop("personas", None)
+    servers_tables = data.pop("mcp_servers", None)
 
     all_field_names = {f.name for f in dataclasses.fields(cls)}
     not_file_expressible = all_field_names - scalar_fields - special_fields
@@ -61,6 +62,8 @@ def load_runner_config_file(cls: Type[Any], path: Union[str, "os.PathLike[str]"]
         )
 
     kwargs: Dict[str, Any] = dict(data)
+    if servers_tables is not None:
+        kwargs["mcp_servers"] = mcp_server_specs(servers_tables, p)
     if personas_table is not None:
         if not isinstance(personas_table, dict):
             raise ConfigFileError(f"config file {p}: [personas] must be a table")
@@ -82,3 +85,28 @@ def load_runner_config_file(cls: Type[Any], path: Union[str, "os.PathLike[str]"]
         return cls(**kwargs)
     except TypeError as e:
         raise ConfigFileError(f"config file {p} could not build a RunnerConfig: {e}") from e
+
+
+def mcp_server_specs(tables: Any, path: Any) -> list:
+    """``[[mcp_servers]]`` -> ``MCPServerSpec`` list. A table holds the spec's plain-data fields; ``token_env`` names an
+    environment variable that holds the bearer token for an http server (the token itself never sits in the file)."""
+    from .adapters.mcp_client import MCPServerSpec
+
+    if not isinstance(tables, list) or not all(isinstance(t, dict) for t in tables):
+        raise ConfigFileError(f"config file {path}: mcp_servers must be an array of tables ([[mcp_servers]])")
+    allowed = {f.name for f in dataclasses.fields(MCPServerSpec)} - {"token_provider"} | {"token_env"}
+    specs = []
+    for table in tables:
+        unknown = set(table) - allowed
+        if unknown:
+            raise ConfigFileError(f"config file {path}: [[mcp_servers]] has key(s) that are not MCPServerSpec fields: "
+                                  f"{', '.join(sorted(unknown))}")
+        fields = {k: v for k, v in table.items() if k != "token_env"}
+        if table.get("token_env"):
+            env_name = str(table["token_env"])
+            fields["token_provider"] = lambda name=env_name: os.environ.get(name) or None
+        try:
+            specs.append(MCPServerSpec(**fields))
+        except TypeError as e:
+            raise ConfigFileError(f"config file {path}: [[mcp_servers]] entry is invalid ({e})") from e
+    return specs
