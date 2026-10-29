@@ -2,12 +2,15 @@
 ``aggregate`` reports declines carried, items that crossed a scope they should not have, and known-gap cases failing."""
 
 
+LEVELS = ("quest", "goal", "rep", "intent")
+
+
 def score_case(fn, case):
     prompt = fn(case).get("prompt", "")
     missing = [w for w in case.get("want", []) if w not in prompt]
     leaked = [a for a in case.get("avoid", []) if a in prompt]
     ok = not missing and not leaked
-    return dict(ok=ok, got=case.get("area"), wanted=len(case.get("want", [])), carried=len(case.get("want", [])) - len(missing),
+    return dict(ok=ok, level=case.get("level", "quest"), got=case.get("area"), wanted=len(case.get("want", [])), carried=len(case.get("want", [])) - len(missing),
                 leaked=len(leaked), known_gap=bool(case.get("known_gap")),
                 note="ok" if ok else "; ".join([f"not carried {m!r}" for m in missing] + [f"leaked {a!r}" for a in leaked]))
 
@@ -17,5 +20,9 @@ def aggregate(rows):
     carried = sum(r.get("carried", 0) for r in rows)
     leaked = sum(r.get("leaked", 0) for r in rows)
     gaps = sum(1 for r in rows if r.get("known_gap") and not r.get("ok"))
+    levels = "; ".join(
+        f"{lv} {sum(1 for r in rows if r.get('level') == lv and r.get('ok'))}/{sum(1 for r in rows if r.get('level') == lv)}"
+        for lv in LEVELS)
     return (f"earlier items carried to the next request {carried}/{wanted}; items that crossed a scope they should not "
-            f"{leaked}; known-gap cases failing {gaps}; time added before the reply 0; model calls 0")
+            f"{leaked}; known-gap cases failing {gaps}; cases passed by intent level (quest, goal, rep, intent): {levels}; "
+            f"time added before the reply 0; model calls 0")

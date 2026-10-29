@@ -57,3 +57,13 @@ def test_admit_to_the_mind_counts_an_out_of_scope_item_as_admitted():
     assert admit_score.score_case(live, by_id["ADM-01"])["ok"]
     assert not admit_score.score_case(live, by_id["ADM-03"])["ok"]
     assert not admit_score.score_case(floor, by_id["ADM-01"])["ok"]
+
+
+def test_hold_the_long_view_reports_every_intent_level_and_each_level_has_cases():
+    found = cases("hold_the_long_view")
+    for level in view_score.LEVELS:
+        assert sum(1 for c in found if c.get("level") == level) >= 1
+    live = common.load_impl("separate_stores", "hold_the_long_view")(METER)
+    rows = [view_score.score_case(live, c) for c in found]
+    line = view_score.aggregate(rows)
+    assert "quest" in line and "goal 2/2" in line and "rep 2/2" in line

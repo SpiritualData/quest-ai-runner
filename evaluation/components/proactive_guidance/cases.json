@@ -1,0 +1,630 @@
+[
+ {
+  "id": "PG-N-Q1",
+  "class": "nudge",
+  "kind": "related_done",
+  "level": "quest",
+  "expected_level": "quest",
+  "context": [
+   "Where this sits: Health intent, then the quest Run a marathon",
+   "Quest outcome: Run a marathon",
+   "Next milestone: complete a 25 km long run by 15 November",
+   "Metric: longest run so far 21 km, target 42 km"
+  ],
+  "recent": [],
+  "message": "I just got back from my long run and felt good. Anything I should log?",
+  "plain_answer": "Log the distance, your pace and how your legs felt. That makes next week's plan easier to set.",
+  "milestone_keys": [
+   "25 km long run"
+  ],
+  "metric_values": [
+   "21 km"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-Q2",
+  "class": "nudge",
+  "kind": "closing",
+  "level": "quest",
+  "expected_level": "quest",
+  "context": [
+   "Where this sits: Research intent, then the quest Finish the thesis draft",
+   "Quest outcome: Finish the thesis draft",
+   "Next milestone: send chapter 3 to the committee by 20 November",
+   "Metric: pages drafted 74 of 120"
+  ],
+  "recent": [],
+  "message": "Thanks, that is all I needed today.",
+  "plain_answer": "You're welcome.",
+  "milestone_keys": [
+   "chapter 3"
+  ],
+  "metric_values": [
+   "74 of 120"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-Q3",
+  "class": "nudge",
+  "kind": "related_lookup",
+  "level": "quest",
+  "expected_level": "quest",
+  "context": [
+   "Where this sits: Business intent, then the quest Reach 50 paying customers",
+   "Quest outcome: Reach 50 paying customers",
+   "Next milestone: onboard customer number 30 by the end of November",
+   "Metric: paying customers 24 of 50",
+   "Decision note: keep the monthly plan at its current price and test an annual option"
+  ],
+  "recent": [],
+  "message": "What did I decide about the pricing page last week?",
+  "plain_answer": "You decided to keep the monthly plan at its current price and to test an annual option.",
+  "milestone_keys": [
+   "customer number 30"
+  ],
+  "metric_values": [
+   "24 of 50"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-Q4",
+  "class": "nudge",
+  "kind": "idle_open",
+  "level": "quest",
+  "expected_level": "quest",
+  "context": [
+   "Where this sits: Learning intent, then the quest Hold a 10 minute conversation in Spanish",
+   "Quest outcome: Hold a 10 minute conversation in Spanish",
+   "Next milestone: pass the B1 mock test by 30 November",
+   "Metric: mock test score 61 percent, target 75 percent"
+  ],
+  "recent": [],
+  "message": "I've done my daily lesson and I'm free for a bit. What would be a good use of 20 minutes?",
+  "plain_answer": "Try a speaking drill: record yourself describing your day for two minutes, then play it back and note three mistakes.",
+  "milestone_keys": [
+   "B1 mock test"
+  ],
+  "metric_values": [
+   "61 percent"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-G1",
+  "class": "nudge",
+  "kind": "related_done",
+  "level": "goal",
+  "expected_level": "goal",
+  "context": [
+   "Where this sits: Health intent, quest Run a marathon, goal Three runs this week",
+   "Quest outcome: Run a marathon",
+   "Goal in focus: three runs this week (weekly goal)",
+   "Next target on this goal: the third run by Sunday",
+   "Metric: runs this week 2 of 3",
+   "Quest milestone further out: 25 km long run by 15 November"
+  ],
+  "recent": [],
+  "message": "I did my second run this morning and my legs are a bit sore.",
+  "plain_answer": "A little soreness after a second run is normal. Stretch, drink water and keep tomorrow easy.",
+  "milestone_keys": [
+   "third run"
+  ],
+  "metric_values": [
+   "2 of 3"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-G2",
+  "class": "nudge",
+  "kind": "related_stuck",
+  "level": "goal",
+  "expected_level": "goal",
+  "context": [
+   "Where this sits: Research intent, quest Finish the thesis draft, goal Write 500 words a day",
+   "Quest outcome: Finish the thesis draft",
+   "Goal in focus: write 500 words a day",
+   "Next target on this goal: reach 500 words today",
+   "Metric: words today 320 of 500",
+   "Quest milestone further out: send chapter 3 to the committee by 20 November"
+  ],
+  "recent": [],
+  "message": "I'm stuck on how to start section 2.3.",
+  "plain_answer": "Start with the one claim the section must prove, write it as a single sentence, then list the evidence under it.",
+  "milestone_keys": [
+   "500 words"
+  ],
+  "metric_values": [
+   "320 of 500"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-G3",
+  "class": "nudge",
+  "kind": "related_next",
+  "level": "goal",
+  "expected_level": "goal",
+  "context": [
+   "Where this sits: Business intent, quest Reach 50 paying customers, goal Email 10 prospects this week",
+   "Quest outcome: Reach 50 paying customers",
+   "Goal in focus: email 10 prospects this week",
+   "Next target on this goal: the four prospects not yet emailed (the cafe, two florists, the gym)",
+   "Metric: prospects emailed 6 of 10"
+  ],
+  "recent": [],
+  "message": "I just sent the follow-up to the bakery. What is next on my list?",
+  "plain_answer": "Next on your list are the cafe, the two florists and the gym.",
+  "milestone_keys": [
+   "10 prospects"
+  ],
+  "metric_values": [
+   "6 of 10"
+  ],
+  "answer_may_name_milestone": true,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-G4",
+  "class": "nudge",
+  "kind": "closing",
+  "level": "goal",
+  "expected_level": "goal",
+  "context": [
+   "Where this sits: Learning intent, quest Finish the data course, goal Complete lesson 4 by Friday",
+   "Quest outcome: Finish the data course",
+   "Goal in focus: complete lesson 4 by Friday",
+   "Next target on this goal: the last two sections of lesson 4",
+   "Metric: lesson 4 sections done 3 of 5"
+  ],
+  "recent": [],
+  "message": "That's it for today, thanks.",
+  "plain_answer": "Good work today. See you next time.",
+  "milestone_keys": [
+   "lesson 4"
+  ],
+  "metric_values": [
+   "3 of 5"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-R1",
+  "class": "nudge",
+  "kind": "asks_priorities",
+  "level": "rep",
+  "expected_level": "rep",
+  "context": [
+   "Where this sits: You are the health representative for three quests under the Health intent",
+   "Quest A, Run a marathon: next milestone a 25 km long run by 15 November; longest run 21 km",
+   "Quest B, Sleep routine: next milestone lights out by 22:30 for seven nights; 3 of 7 nights so far",
+   "Quest C, Cook at home: next milestone plan three dinners for next week; 1 of 3 planned"
+  ],
+  "recent": [],
+  "message": "What should I look at this week?",
+  "plain_answer": "This week the long run for the marathon and the sleep routine both have dates close by, and the dinner plan for next week is still open.",
+  "milestone_keys": [
+   "25 km long run",
+   "lights out by 22:30",
+   "plan three dinners"
+  ],
+  "metric_values": [
+   "21 km",
+   "3 of 7",
+   "1 of 3"
+  ],
+  "answer_may_name_milestone": true,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-R2",
+  "class": "nudge",
+  "kind": "closing",
+  "level": "rep",
+  "expected_level": "rep",
+  "context": [
+   "Where this sits: You are the launch representative for three quests under the Product intent",
+   "Quest A, Ship the beta: next milestone invite 20 beta users by 12 November; 11 of 20 invited",
+   "Quest B, Hire a designer: next milestone interview three candidates by 18 November; 1 of 3 interviewed",
+   "Quest C, Write the docs: next milestone publish the setup guide by 25 November; draft at 60 percent"
+  ],
+  "recent": [],
+  "message": "Thanks, that's all for today.",
+  "plain_answer": "You're welcome.",
+  "milestone_keys": [
+   "invite 20 beta users",
+   "interview three candidates",
+   "setup guide"
+  ],
+  "metric_values": [
+   "11 of 20",
+   "1 of 3",
+   "60 percent"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-R3",
+  "class": "nudge",
+  "kind": "idle_open",
+  "level": "rep",
+  "expected_level": "rep",
+  "context": [
+   "Where this sits: You are the writing representative for three quests under the Creative intent",
+   "Quest A, Finish the novel: next milestone finish chapter 12 by 10 November; chapter 11 done",
+   "Quest B, Weekly newsletter: next milestone send issue 8 on Friday; draft 40 percent",
+   "Quest C, Learn watercolor: next milestone paint one study a day for seven days; day 2 of 7"
+  ],
+  "recent": [],
+  "message": "I finished the invoice review you asked for. Anything else?",
+  "plain_answer": "Nothing else is waiting on you from me right now. The invoice review is complete.",
+  "milestone_keys": [
+   "chapter 12",
+   "issue 8",
+   "paint one study a day"
+  ],
+  "metric_values": [
+   "chapter 11",
+   "40 percent",
+   "day 2 of 7"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-N-R4",
+  "class": "nudge",
+  "kind": "related_lookup",
+  "level": "rep",
+  "expected_level": "rep",
+  "context": [
+   "Where this sits: You are the operations representative for three quests under the Company intent",
+   "Quest A, Weekly team rhythm: next milestone hold the first Tuesday and Thursday standups this week; agreed meeting days are Tuesday and Thursday mornings",
+   "Quest B, Close the quarter: next milestone file the expense report by 30 November; 14 of 22 receipts matched",
+   "Quest C, Update the handbook: next milestone review section 3 by 6 December; 2 of 5 sections reviewed"
+  ],
+  "recent": [],
+  "message": "Can you remind me what the team agreed about meeting days?",
+  "plain_answer": "The team agreed on Tuesday and Thursday mornings.",
+  "milestone_keys": [
+   "file the expense report",
+   "review section 3",
+   "standups"
+  ],
+  "metric_values": [
+   "14 of 22",
+   "2 of 5"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-Q1",
+  "class": "restraint",
+  "kind": "urgent",
+  "level": "quest",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Business intent, then the quest Reach 50 paying customers",
+   "Quest outcome: Reach 50 paying customers",
+   "Next milestone: onboard customer number 30 by the end of November",
+   "Metric: paying customers 24 of 50"
+  ],
+  "recent": [],
+  "message": "My payment page is down and customers cannot check out right now. What do I check first?",
+  "plain_answer": "Check your payment provider's status page, then the most recent deploy, then your API keys.",
+  "milestone_keys": [
+   "customer number 30",
+   "paying customers"
+  ],
+  "metric_values": [
+   "24 of 50"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-Q2",
+  "class": "restraint",
+  "kind": "narrow",
+  "level": "quest",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Research intent, then the quest Finish the thesis draft",
+   "Quest outcome: Finish the thesis draft",
+   "Next milestone: send chapter 3 to the committee by 20 November",
+   "Metric: pages drafted 74 of 120"
+  ],
+  "recent": [],
+  "message": "In my spreadsheet should dates be day first or month first?",
+  "plain_answer": "Use year, month, day, like 2026-11-15. It sorts correctly and cannot be misread.",
+  "milestone_keys": [
+   "chapter 3",
+   "pages drafted"
+  ],
+  "metric_values": [
+   "74 of 120"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-Q3",
+  "class": "restraint",
+  "kind": "emotional",
+  "level": "quest",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Creative intent, then the quest Publish my novel",
+   "Quest outcome: Publish my novel",
+   "Next milestone: send 5 more submissions by 30 November",
+   "Metric: submissions sent 9, rejections 3"
+  ],
+  "recent": [],
+  "message": "I just got my third rejection and I feel like quitting.",
+  "plain_answer": "Three rejections in a row hurt, and wanting to stop after that makes sense. You do not have to decide anything today.",
+  "milestone_keys": [
+   "5 more submissions",
+   "submissions sent"
+  ],
+  "metric_values": [
+   "rejections 3",
+   "sent 9"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-Q4",
+  "class": "restraint",
+  "kind": "repeated",
+  "level": "quest",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Learning intent, then the quest Hold a 10 minute conversation in Spanish",
+   "Quest outcome: Hold a 10 minute conversation in Spanish",
+   "Next milestone: pass the B1 mock test by 30 November",
+   "Metric: mock test score 61 percent, target 75 percent"
+  ],
+  "recent": [
+   "Assistant: Your next step is the B1 mock test on 30 November, and you are at 61 percent.",
+   "Person: Yes I know, I will get to it later. Just help me with this email first."
+  ],
+  "message": "Can you fix the typo in my first line? 'Dear Sam, hope your well.'",
+  "plain_answer": "The line should read: Dear Sam, hope you're well.",
+  "milestone_keys": [
+   "B1 mock test",
+   "mock test score"
+  ],
+  "metric_values": [
+   "61 percent"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-G1",
+  "class": "restraint",
+  "kind": "urgent",
+  "level": "goal",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Health intent, quest Run a marathon, goal Three runs this week",
+   "Quest outcome: Run a marathon",
+   "Goal in focus: three runs this week",
+   "Next target on this goal: the third run by Sunday",
+   "Metric: runs this week 2 of 3"
+  ],
+  "recent": [],
+  "message": "My knee just gave out on the run and it hurts to put weight on it. What do I do?",
+  "plain_answer": "Stop and rest, ice it, keep weight off it, and get it checked if the pain stays or it swells.",
+  "milestone_keys": [
+   "third run",
+   "three runs"
+  ],
+  "metric_values": [
+   "2 of 3"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-G2",
+  "class": "restraint",
+  "kind": "narrow",
+  "level": "goal",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Research intent, quest Finish the thesis draft, goal Write 500 words a day",
+   "Quest outcome: Finish the thesis draft",
+   "Goal in focus: write 500 words a day",
+   "Next target on this goal: reach 500 words today",
+   "Metric: words today 320 of 500"
+  ],
+  "recent": [],
+  "message": "Roughly how many words is three double spaced pages?",
+  "plain_answer": "About 750 words.",
+  "milestone_keys": [
+   "500 words",
+   "words today"
+  ],
+  "metric_values": [
+   "320 of 500"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-G3",
+  "class": "restraint",
+  "kind": "unrelated",
+  "level": "goal",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Health intent, quest Run a marathon, goal Three runs this week",
+   "Quest outcome: Run a marathon",
+   "Goal in focus: three runs this week",
+   "Next target on this goal: the third run by Sunday",
+   "Metric: runs this week 2 of 3"
+  ],
+  "recent": [],
+  "message": "Can you recommend a good book for a long flight?",
+  "plain_answer": "Try The Martian: it is fast, funny and easy to put down and pick up again.",
+  "milestone_keys": [
+   "third run",
+   "three runs"
+  ],
+  "metric_values": [
+   "2 of 3"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-G4",
+  "class": "restraint",
+  "kind": "repeated",
+  "level": "goal",
+  "expected_level": null,
+  "context": [
+   "Where this sits: Business intent, quest Reach 50 paying customers, goal Email 10 prospects this week",
+   "Quest outcome: Reach 50 paying customers",
+   "Goal in focus: email 10 prospects this week",
+   "Next target on this goal: four prospects not yet emailed",
+   "Metric: prospects emailed 6 of 10"
+  ],
+  "recent": [
+   "Person: Please stop reminding me about the weekly prospect target, I know where I stand."
+  ],
+  "message": "How do I convert kilometres to miles?",
+  "plain_answer": "Multiply the kilometres by 0.62. For example, 10 km is about 6.2 miles.",
+  "milestone_keys": [
+   "10 prospects",
+   "prospects emailed"
+  ],
+  "metric_values": [
+   "6 of 10"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-R1",
+  "class": "restraint",
+  "kind": "unrelated",
+  "level": "rep",
+  "expected_level": null,
+  "context": [
+   "Where this sits: You are the health representative for three quests under the Health intent",
+   "Quest A, Run a marathon: next milestone a 25 km long run by 15 November; longest run 21 km",
+   "Quest B, Sleep routine: next milestone lights out by 22:30 for seven nights; 3 of 7 nights so far",
+   "Quest C, Cook at home: next milestone plan three dinners for next week; 1 of 3 planned"
+  ],
+  "recent": [],
+  "message": "Can you translate 'see you tomorrow' into French?",
+  "plain_answer": "In French that is: à demain.",
+  "milestone_keys": [
+   "25 km long run",
+   "lights out",
+   "plan three dinners"
+  ],
+  "metric_values": [
+   "21 km",
+   "3 of 7",
+   "1 of 3"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-R2",
+  "class": "restraint",
+  "kind": "narrow",
+  "level": "rep",
+  "expected_level": null,
+  "context": [
+   "Where this sits: You are the operations representative for three quests under the Company intent",
+   "Quest A, Weekly team rhythm: next milestone hold the first Tuesday and Thursday standups; the Tuesday call is at 15:00 Pacific",
+   "Quest B, Close the quarter: next milestone file the expense report by 30 November; 14 of 22 receipts matched",
+   "Quest C, Update the handbook: next milestone review section 3 by 6 December; 2 of 5 sections reviewed"
+  ],
+  "recent": [],
+  "message": "What time is the Tuesday call, and in which time zone?",
+  "plain_answer": "The Tuesday call is at 15:00 Pacific.",
+  "milestone_keys": [
+   "file the expense report",
+   "review section 3"
+  ],
+  "metric_values": [
+   "14 of 22",
+   "2 of 5"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-R3",
+  "class": "restraint",
+  "kind": "emotional",
+  "level": "rep",
+  "expected_level": null,
+  "context": [
+   "Where this sits: You are the writing representative for three quests under the Creative intent",
+   "Quest A, Finish the novel: next milestone finish chapter 12 by 10 November; chapter 11 done",
+   "Quest B, Weekly newsletter: next milestone send issue 8 on Friday; draft 40 percent",
+   "Quest C, Learn watercolor: next milestone paint one study a day for seven days; day 2 of 7"
+  ],
+  "recent": [],
+  "message": "My dad is in the hospital and I cannot focus on anything this week.",
+  "plain_answer": "I am sorry, that sounds frightening. Nothing here has to move this week. I can hold everything until you are ready.",
+  "milestone_keys": [
+   "chapter 12",
+   "issue 8",
+   "paint one study a day"
+  ],
+  "metric_values": [
+   "chapter 11",
+   "40 percent",
+   "day 2 of 7"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ },
+ {
+  "id": "PG-R-R4",
+  "class": "restraint",
+  "kind": "urgent",
+  "level": "rep",
+  "expected_level": null,
+  "context": [
+   "Where this sits: You are the launch representative for three quests under the Product intent",
+   "Quest A, Ship the beta: next milestone invite 20 beta users by 12 November; 11 of 20 invited",
+   "Quest B, Run the launch event: the event is tomorrow; backup venues on the shortlist are the loft and the hall",
+   "Quest C, Write the docs: next milestone publish the setup guide by 25 November; draft at 60 percent"
+  ],
+  "recent": [],
+  "message": "The venue just cancelled our event tomorrow. I need three alternatives in the next hour.",
+  "plain_answer": "Call the loft and the hall from your shortlist first, then ask the venue for a referral, and send one message to attendees as soon as you have a place.",
+  "milestone_keys": [
+   "invite 20 beta users",
+   "setup guide"
+  ],
+  "metric_values": [
+   "11 of 20",
+   "60 percent"
+  ],
+  "answer_may_name_milestone": false,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+ }
+]

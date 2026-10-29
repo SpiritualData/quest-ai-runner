@@ -12,7 +12,8 @@
   ],
   "want": [
    "create four new quests"
-  ]
+  ],
+  "level": "quest"
  },
  {
   "id": "HLV-02",
@@ -33,7 +34,8 @@
   "want": [
    "send the donor email",
    "archive the old goals"
-  ]
+  ],
+  "level": "quest"
  },
  {
   "id": "HLV-03",
@@ -48,7 +50,8 @@
   ],
   "avoid": [
    "rename the weekly goal"
-  ]
+  ],
+  "level": "quest"
  },
  {
   "id": "HLV-04",
@@ -63,7 +66,8 @@
   ],
   "avoid": [
    "merge the two plans"
-  ]
+  ],
+  "level": "quest"
  },
  {
   "id": "HLV-05",
@@ -86,7 +90,8 @@
   ],
   "avoid": [
    "publish the notes"
-  ]
+  ],
+  "level": "quest"
  },
  {
   "id": "HLV-06",
@@ -157,7 +162,8 @@
   "want": [
    "proposal number 12"
   ],
-  "note": "the cap keeps the first ten declines, so the newest are dropped (a real failure today)"
+  "note": "the cap keeps the first ten declines, so the newest are dropped (a real failure today)",
+  "level": "quest"
  },
  {
   "id": "HLV-07",
@@ -172,7 +178,8 @@
   ],
   "want": [
    "split the goal in two"
-  ]
+  ],
+  "level": "quest"
  },
  {
   "id": "HLV-08",
@@ -186,7 +193,8 @@
   ],
   "avoid": [
    "ALREADY DECLINED"
-  ]
+  ],
+  "level": "quest"
  },
  {
   "id": "HLV-09",
@@ -195,7 +203,8 @@
   "escalations": [],
   "avoid": [
    "ALREADY DECLINED"
-  ]
+  ],
+  "level": "quest"
  },
  {
   "id": "HLV-10",
@@ -212,7 +221,8 @@
   "want": [
    "send the donor email"
   ],
-  "note": "the library carries what the host hands it; keeping a view across quests is the host's store today"
+  "note": "the library carries what the host hands it; keeping a view across quests is the host's store today",
+  "level": "rep"
  },
  {
   "id": "HLV-11",
@@ -230,6 +240,87 @@
    "cancel the retreat"
   ],
   "known_gap": true,
-  "note": "the library does not filter by quest or intent branch; the host must"
+  "note": "the library does not filter by quest or intent branch; the host must",
+  "level": "intent"
+ },
+ {
+  "id": "HLV-12",
+  "level": "goal",
+  "area": "goal_decline_holds_on_the_goal",
+  "message": "what should I do on the weekly writing goal?",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "raise the weekly writing goal to 1000 words a day",
+    "quest_id": "quest_thesis",
+    "goal": "Write 500 words a day"
+   }
+  ],
+  "want": [
+   "raise the weekly writing goal to 1000 words a day"
+  ],
+  "note": "a decline made on one goal reaches the next request on that goal, because the host hands it over"
+ },
+ {
+  "id": "HLV-13",
+  "level": "goal",
+  "area": "goal_accept_is_not_a_decline",
+  "message": "what should I do on the weekly writing goal?",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "approved",
+    "summary": "move the writing hour to the morning",
+    "quest_id": "quest_thesis",
+    "goal": "Write 500 words a day"
+   }
+  ],
+  "avoid": [
+   "move the writing hour to the morning"
+  ]
+ },
+ {
+  "id": "HLV-14",
+  "level": "rep",
+  "area": "portfolio_declines_from_two_assigned_quests_both_hold",
+  "message": "what is next across my quests?",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "drop the sleep routine quest",
+    "quest_id": "quest_sleep"
+   },
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "merge the cooking quest into the marathon quest",
+    "quest_id": "quest_cooking"
+   }
+  ],
+  "want": [
+   "drop the sleep routine quest",
+   "merge the cooking quest into the marathon quest"
+  ],
+  "note": "a representative's decline on each of its assigned quests holds on a request that spans them, because the host hands both over"
+ },
+ {
+  "id": "HLV-15",
+  "level": "intent",
+  "area": "ancestor_intent_decline_reaches_the_child_quest",
+  "message": "draft a plan for the new quest",
+  "escalations": [
+   {
+    "kind": "human",
+    "outcome": "refused",
+    "summary": "commit to a second marathon this year",
+    "quest_id": "intent_health"
+   }
+  ],
+  "want": [
+   "commit to a second marathon this year"
+  ],
+  "note": "a decline recorded at the parent intent is carried to a request in a child quest, because the host hands it over; deciding which declines belong to which ancestor is the host's store"
  }
 ]
