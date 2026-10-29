@@ -26,6 +26,18 @@ and `sk-ant-...` in prose, `/home/user/` and `/home/<name>/`, addresses at `exam
 placeholder domains, role mailboxes such as `security@`, a 40-hex commit id, a key header over a stub
 body, and filler ids of repeated digits.
 
+## Evaluation data in the repository
+
+The evaluation folder (cases, datasets, recorded results, trackers) is committed here on purpose: it is how anyone
+sees what each part of QAR was measured on. It stays small, because everyone who clones the repository downloads it.
+
+- Keep each tracked evaluation file under about 500 KB and the tracked evaluation folder under about 10 MB. Larger
+  material (raw traces, bulk datasets, rendered images, transcripts) lives outside the repository and is regenerated
+  or fetched by a script that the folder documents.
+- Cases and rows are written, labelled or rewritten data, never real user content, real transcripts or real ids. A
+  real production shape is rewritten into placeholders first.
+- The results log and the tracker files are tracked. Scratch output of a run goes in the gitignored `scratch/` folder.
+
 ## What it cannot do
 
 It reads the working files unless `--history` is given. A secret that was ever committed must be rotated;
