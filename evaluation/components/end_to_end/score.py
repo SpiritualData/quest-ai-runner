@@ -1,0 +1,91 @@
+"""Score one end-to-end turn by the WORLD afterwards and the reply, never by a model judge (scoring costs no model call).
+
+A case's ``expect`` may state:
+  no_writes          nothing in the world changed (any mutating tool call fails the case)
+  writes             required changes, each {"tool", "args_contain": {arg: substring}, "quest_id"}; each must land exactly once,
+                     and a write the case did not ask for fails it
+  route_in           the turn's one route (``interface.py``) is among these
+  web_min            at least this many web queries
+  reply_has          a list of groups; each group is a list of alternatives, one of which must appear (case-insensitive)
+  reply_lacks_regex  patterns the reply must not match
+  min_reply_chars    a blank or one-word reply fails
+  terminal           for a terminal case: {"exit", "contract"} of the printed acknowledgement
+``aggregate`` reads the whole run: share correct overall and per kind, unrequested writes, and model calls per case."""
+import re
+
+from assist_a_terminal_session import score as terminal_score
+
+
+def reply_problems(reply, expect):
+    problems = []
+    low = reply.lower()
+    if len(reply.strip()) < expect.get("min_reply_chars", 1):
+        problems.append(f"reply too short ({len(reply.strip())} chars)")
+    for group in expect.get("reply_has", []):
+        if not any(alt.lower() in low for alt in group):
+            problems.append(f"reply lacks any of {group}")
+    for pattern in expect.get("reply_lacks_regex", []):
+        if re.search(pattern, reply, re.I):
+            problems.append(f"reply matches {pattern!r}")
+    return problems
+
+
+def write_problems(writes, expect):
+    problems, used = [], set()
+    if expect.get("no_writes") and writes:
+        problems.append(f"wrote {[w['tool'] for w in writes]} but nothing was asked to change")
+    for want in expect.get("writes", []):
+        hit = None
+        for i, w in enumerate(writes):
+            if i in used or w["tool"] != want["tool"]:
+                continue
+            if all(sub.lower() in str(w["args"].get(k, "")).lower() for k, sub in want.get("args_contain", {}).items()):
+                hit = i
+                break
+        if hit is None:
+            problems.append(f"no {want['tool']} with {want.get('args_contain', {})}")
+            continue
+        used.add(hit)
+        if want.get("quest_id") and writes[hit]["quest_id"] != want["quest_id"]:
+            problems.append(f"{want['tool']} landed on {writes[hit]['quest_id']}, labelled {want['quest_id']}")
+    extra = [w["tool"] for i, w in enumerate(writes) if i not in used]
+    if extra and not expect.get("no_writes"):
+        problems.append(f"unrequested writes: {extra}")
+    return problems
+
+
+def score_case(fn, case):
+    got, expect, kind = fn(case), case["expect"], case["kind"]
+    if kind == "terminal":
+        want, out = expect["terminal"], got["terminal"]
+        problems = []
+        if out["exit"] != want["exit"]:
+            problems.append(f"exit {out['exit']}, labelled {want['exit']}")
+        if want.get("contract"):
+            problems += terminal_score.contract_problems(out["stdout"])
+        return dict(ok=not problems, got=out["stdout"][:60], want="ack", kind=kind, unrequested=0,
+                    note="ok" if not problems else "; ".join(problems))
+    problems = write_problems(got["writes"], expect) + reply_problems(got["reply"], expect)
+    if expect.get("route_in") and got["route"] not in expect["route_in"]:
+        problems.append(f"route {got['route']}, labelled {expect['route_in']}")
+    if len(got["web"]) < expect.get("web_min", 0):
+        problems.append(f"{len(got['web'])} web queries, labelled at least {expect['web_min']}")
+    allowed = {w["tool"] for w in expect.get("writes", [])}
+    unrequested = sum(1 for w in got["writes"] if w["tool"] not in allowed)
+    return dict(ok=not problems, got=f"{got['route']}:{','.join(w['tool'] for w in got['writes']) or 'no writes'}",
+                want=",".join(expect.get("route_in", [])), kind=kind, unrequested=unrequested,
+                note="ok" if not problems else "; ".join(problems), reply=got["reply"][:300])
+
+
+def aggregate(rows):
+    n = len(rows) or 1
+    ok = sum(1 for r in rows if r.get("ok"))
+    by_kind = {}
+    for r in rows:
+        k = by_kind.setdefault(r.get("kind", "?"), [0, 0])
+        k[0] += 1
+        k[1] += 1 if r.get("ok") else 0
+    parts = ", ".join(f"{k} {v[1]}/{v[0]}" for k, v in sorted(by_kind.items()))
+    calls = sum(r.get("calls", 0) for r in rows)
+    return (f"value {ok}/{n} turns right ({parts}); unrequested writes {sum(r.get('unrequested', 0) for r in rows)}; "
+            f"cost {calls / n:.1f} model calls per turn")

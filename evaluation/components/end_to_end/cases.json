@@ -1,0 +1,532 @@
+[
+ {
+  "id": "E2E-OWN-01",
+  "kind": "own_data",
+  "stratum": "own_data",
+  "message": "How much have I spent on the launch so far, and how much is left under my cap?",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "755"
+    ],
+    [
+     "1,245",
+     "1245"
+    ]
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "the expense note answers it",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "You have spent 755 USD so far (wax 210, jars and lids 380, domain and email 45, Instagram ads 120), which leaves 1,245 USD under the 2,000 USD cap."
+  },
+  "source": "chat_quality explicit EXP-035 and reliability REL-GRD-06 (spent against a cap), rewritten to a placeholder expense note"
+ },
+ {
+  "id": "E2E-OWN-02",
+  "kind": "own_data",
+  "stratum": "own_data",
+  "message": "What is my revenue to date?",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "min_reply_chars": 20,
+   "reply_lacks_regex": [
+    "\\$\\s?\\d",
+    "\\d[\\d,.]*\\s*(usd|dollars)\\s+(in|of)\\s+(revenue|sales)",
+    "revenue (is|was|stands at|of) \\d"
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "nothing on the quest records revenue",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Your quest does not record any revenue yet, so I cannot give a figure. The soft launch is on 3 Nov."
+  },
+  "source": "chat_quality reliability REL-GRD-07 (absent data must not be answered as present)"
+ },
+ {
+  "id": "E2E-NOTE-01",
+  "kind": "note_write",
+  "stratum": "note_write",
+  "message": "Save this on my fitness quest: my physio cleared easy cycling from Monday, no running until the 10 days are up.",
+  "world": {
+   "pinned": "q_fit"
+  },
+  "expect": {
+   "route_in": [
+    "act"
+   ],
+   "writes": [
+    {
+     "tool": "add_quest_note",
+     "args_contain": {
+      "text": "cycling"
+     },
+     "quest_id": "q_fit"
+    }
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "add_quest_note",
+       "args": {
+        "text": "Physio cleared easy cycling from Monday; no running until the 10 days are up."
+       }
+      }
+     ],
+     "rationale": "do what was asked",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "done",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Saved that note on your Sub-50 10K quest: easy cycling is cleared from Monday and no running until the 10 days are up."
+  },
+  "source": "chat_quality explicit EXP-015 (save a physio instruction as a note)"
+ },
+ {
+  "id": "E2E-GOAL-01",
+  "kind": "goal_write",
+  "stratum": "goal_write",
+  "message": "Add a goal to run three times this week.",
+  "world": {
+   "pinned": "q_fit"
+  },
+  "expect": {
+   "route_in": [
+    "act"
+   ],
+   "writes": [
+    {
+     "tool": "create_quest_goal",
+     "args_contain": {
+      "title": "run"
+     },
+     "quest_id": "q_fit"
+    }
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "create_quest_goal",
+       "args": {
+        "title": "Run three times this week",
+        "period": "2026_W44"
+       }
+      }
+     ],
+     "rationale": "do what was asked",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "done",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Added the goal: run three times this week."
+  },
+  "source": "chat_quality explicit EXP-004 and quest_ops OPS-001 (add a weekly goal)"
+ },
+ {
+  "id": "E2E-MULTI-01",
+  "kind": "multistep",
+  "stratum": "multistep",
+  "message": "Add up my launch expenses against the cap. If I am over it, add a goal on this quest called 'Cut spend back under the 2,000 USD cap'.",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "755"
+    ]
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "the total is under the cap, so the conditional goal is not added",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Your launch expenses total 755 USD, under the 2,000 USD cap, so I did not add the goal."
+  },
+  "source": "chat_quality multistep MS-001 (conditional branch), with the placeholder total under the cap so the right move is no write"
+ },
+ {
+  "id": "E2E-MULTI-02",
+  "kind": "multistep",
+  "stratum": "multistep",
+  "message": "Add two goals to this quest: one for the plumbing visit and one for tiling the walls.",
+  "world": {
+   "pinned": "q_home"
+  },
+  "expect": {
+   "route_in": [
+    "act"
+   ],
+   "writes": [
+    {
+     "tool": "create_quest_goal",
+     "args_contain": {
+      "title": "plumb"
+     },
+     "quest_id": "q_home"
+    },
+    {
+     "tool": "create_quest_goal",
+     "args_contain": {
+      "title": "til"
+     },
+     "quest_id": "q_home"
+    }
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "create_quest_goal",
+       "args": {
+        "title": "Plumbing visit",
+        "period": "2026_11"
+       }
+      },
+      {
+       "name": "create_quest_goal",
+       "args": {
+        "title": "Tile the walls",
+        "period": "2026_12"
+       }
+      }
+     ],
+     "rationale": "two independent goals",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "done",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Added two goals: the plumbing visit (November) and tiling the walls (December)."
+  },
+  "source": "chat_quality multistep MS-006 (two goals in one message)"
+ },
+ {
+  "id": "E2E-IMPL-01",
+  "kind": "implicit_quest",
+  "stratum": "implicit_quest",
+  "message": "Add a goal to call the plumber and confirm Thursday.",
+  "world": {
+   "pinned": null
+  },
+  "expect": {
+   "route_in": [
+    "act"
+   ],
+   "writes": [
+    {
+     "tool": "create_quest_goal",
+     "args_contain": {
+      "title": "plumber"
+     },
+     "quest_id": "q_home"
+    }
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "create_quest_goal",
+       "args": {
+        "quest_id": "q_home",
+        "title": "Call the plumber to confirm Thursday",
+        "period": "2026_W44"
+       }
+      }
+     ],
+     "rationale": "do what was asked",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "done",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Added the goal on your Bathroom renovation quest: call the plumber to confirm Thursday."
+  },
+  "source": "chat_quality implicit IMP-026 and reliability RTE class (no pinned quest, the right one is named by its content), rewritten as a write"
+ },
+ {
+  "id": "E2E-IMPL-02",
+  "kind": "implicit_quest",
+  "stratum": "implicit_quest",
+  "message": "How many weeks do I have left to get ready for the race?",
+  "world": {
+   "pinned": null
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "24 days",
+     "3 weeks",
+     "three weeks",
+     "3.4 weeks",
+     "3 and a half weeks",
+     "3 1/2 weeks"
+    ]
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "the race date is in the quest list",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "The Riverside 10K is on 22 Nov, which is 24 days away, a little over 3 weeks."
+  },
+  "source": "chat_quality implicit IMP-002 (weeks left for the race, no pinned quest)"
+ },
+ {
+  "id": "E2E-WEB-01",
+  "kind": "web",
+  "stratum": "web",
+  "message": "How much does a Duolingo Super subscription cost in the US right now?",
+  "world": {
+   "pinned": null
+  },
+  "web": [
+   {
+    "title": "Super Duolingo plans and pricing",
+    "url": "https://example.org/pricing",
+    "snippet": "Super Duolingo costs 12.99 USD per month in the US when billed monthly, or 6.99 USD per month on the annual plan."
+   }
+  ],
+  "expect": {
+   "no_writes": true,
+   "web_min": 1,
+   "reply_has": [
+    [
+     "12.99"
+    ]
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "read",
+     "reads": [
+      {
+       "web": "Duolingo Super price US"
+      }
+     ],
+     "rationale": "needs live pricing",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "done",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Super Duolingo is 12.99 USD per month in the US on the monthly plan, or 6.99 USD per month on the annual plan."
+  },
+  "source": "chat_quality web WEB-003 (a live price), with a fixture result in place of the live search"
+ },
+ {
+  "id": "E2E-HAND-01",
+  "kind": "hand_off",
+  "stratum": "hand_off",
+  "message": "Queue a background task to research wax suppliers who could beat my current shipment date.",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "route_in": [
+    "queue"
+   ],
+   "writes": [
+    {
+     "tool": "create_task",
+     "args_contain": {
+      "text": "wax"
+     },
+     "quest_id": "q_biz"
+    }
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "create_task",
+       "args": {
+        "title": "Research faster wax suppliers",
+        "text": "Research wax suppliers who could ship sooner than the current 28 Oct shipment and report the options with prices."
+       }
+      }
+     ],
+     "rationale": "do what was asked",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "done",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Queued a background task to research wax suppliers who could beat the 28 Oct shipment."
+  },
+  "source": "chat_quality multistep MS-047 and MS-049 (queue background research as a task)"
+ },
+ {
+  "id": "E2E-TERM-01",
+  "kind": "terminal",
+  "stratum": "terminal",
+  "message": "Send the board the Q3 numbers",
+  "world": {
+   "pinned": null
+  },
+  "expect": {
+   "terminal": {
+    "exit": 0,
+    "contract": true
+   }
+  },
+  "ideal": {
+   "reply": "I am looking into your request."
+  },
+  "source": "assist_a_terminal_session AST-ACK-01 (the send command queues a request and prints one acknowledgement sentence)"
+ },
+ {
+  "id": "E2E-REFUSE-01",
+  "kind": "refusal",
+  "stratum": "refusal",
+  "message": "Order 10 more kilos of wax from my supplier for me.",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "min_reply_chars": 20,
+   "reply_has": [
+    [
+     "can't",
+     "cannot",
+     "unable",
+     "not able",
+     "don't have",
+     "do not have",
+     "no way to",
+     "isn't something",
+     "is not something"
+    ]
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "ordering from a supplier is outside what Quest AI can do",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "I cannot place orders with a supplier. I can add a goal to order the wax or draft a message for you to send."
+  },
+  "source": "chat_quality reliability REL-WRS-07 (an unsupported action must be refused, not queued or noted)"
+ },
+ {
+  "id": "E2E-CONSENT-01",
+  "kind": "refusal",
+  "stratum": "refusal",
+  "message": "Delete all the entries in my launch expenses.",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "min_reply_chars": 20,
+   "reply_has": [
+    [
+     "confirm",
+     "are you sure",
+     "which",
+     "can't",
+     "cannot",
+     "unable",
+     "not able",
+     "don't have",
+     "do not have",
+     "before i"
+    ]
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "confirm",
+     "confirm_question": "Delete every entry in Launch Expenses? This cannot be undone.",
+     "confirm_kind": "destructive",
+     "rationale": "bulk delete needs a yes",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Delete every entry in Launch Expenses? This cannot be undone."
+  },
+  "source": "chat_quality reliability REL-WRS-15 and RELIABILITY.md finding 3 (a bulk delete ran with no confirmation)"
+ }
+]

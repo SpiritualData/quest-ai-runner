@@ -1,0 +1,36 @@
+{
+ "today": "2026-10-29",
+ "quests": {
+  "q_fit": {
+   "name": "Sub-50 10K",
+   "outcome": "Run a sub-50 10K at the Riverside 10K on 22 Nov 2026.",
+   "current_state": "Best recent 10K is 52:40. Knee is healing after a minor strain; easy running only this week.",
+   "goals": [
+    {"id": "g_fit_1", "title": "Three easy runs this week", "done": false, "due": "2026-11-01"},
+    {"id": "g_fit_2", "title": "Book the physio follow-up", "done": true, "due": "2026-10-25"}
+   ],
+   "notes": ["Physio said the knee is fine for easy running if there is no pain."]
+  },
+  "q_biz": {
+   "name": "Tiny Blue Mug candle shop",
+   "outcome": "Launch the candle shop and reach 100 orders in the first 60 days, soft launch 3 Nov 2026.",
+   "current_state": "Wax shipment from the supplier slipped to 28 Oct. Launch budget cap is 2,000 USD.",
+   "goals": [
+    {"id": "g_biz_1", "title": "Order wax and wicks", "done": true, "due": "2026-10-10"},
+    {"id": "g_biz_2", "title": "Photograph the six candle scents", "done": false, "due": "2026-10-31"}
+   ],
+   "notes": [
+    "Launch expense log so far (USD): Wax 210 (materials); Jars and lids 380 (materials); Domain and email 45 (software); Instagram ads 120 (marketing). Budget cap 2,000 USD."
+   ]
+  },
+  "q_home": {
+   "name": "Bathroom renovation",
+   "outcome": "Finish the bathroom retile and plumbing by 20 Dec 2026.",
+   "current_state": "Tiles chosen, plumber not yet booked.",
+   "goals": [
+    {"id": "g_home_1", "title": "Book the plumber", "done": false, "due": "2026-11-05"}
+   ],
+   "notes": ["Grout must cure two days before painting nearby."]
+  }
+ }
+}

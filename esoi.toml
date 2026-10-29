@@ -42,6 +42,14 @@ weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
 cost_per_case_usd = 0.001
 seconds_per_case = 2
 
+# The whole-path check (metric-answer-end-to-end): a turn goes through the real orchestrator on the Claude Code subscription, so its
+# dollar price is declared as zero; a person waits about a minute for a chat reply that reads, acts and answers, so a turn is worth
+# a minute.
+[balance.end_to_end]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.05
+seconds_per_case = 60
+
 # The task replay (metric-iterate-by-spec): a replayed task goes through a real deep run on the Claude Code subscription, so it costs no API
 # dollars (its price is declared as zero); the wait a person gives a delegated task is minutes, so a task is worth three minutes.
 [balance.task_replay]
