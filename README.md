@@ -19,6 +19,31 @@ Those specifics are **config + adapters the consumer supplies** via
 > Built and used in production by [Spiritual Data](https://spiritualdata.org); released as open
 > source for any team running Quest AI tasks.
 
+## QAR as a mind
+
+```mermaid
+flowchart TB
+  HM["Higher mind<br/>AI rep, intent hierarchy<br/>hold-the-long-view, select-a-rep<br/>runner/personas.py"]
+  WI["World in<br/>chat, queued tasks<br/>runner/poller.py"]
+  SUB["Subconscious + Intuition<br/>admit-to-the-mind<br/>core/card_filter.py"]
+  MIND["Mind<br/>keep-a-working-stream<br/>core/orchestrator.py"]
+  SCI["Science<br/>know-the-world<br/>adapters/web_research.py"]
+  CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/spec_slice.py"]
+  OV["Overseer<br/>risk check<br/>watch-a-run<br/>core/overseer.py"]
+  BODY["Body<br/>acts inside Quest<br/>act-as-the-body<br/>runner/quest_client.py"]
+  WO["World out<br/>acts outside Quest<br/>act-in-the-world<br/>adapters/acp_deep_runner.py"]
+  WI --> SUB --> MIND --> CT --> OV
+  OV --> BODY
+  OV --> WO
+  MIND <--> SCI
+  CT -. "regression: retry" .-> MIND
+  HM -. "rep and intents" .-> SUB
+  HM -. "rep and intents" .-> MIND
+```
+A request flows from the world through the Subconscious, Mind and Critical thinking (which enforces ESOI on every request), then the Overseer's risk check, and the Body or World acts. The Higher mind (the AI rep and its intents) sits above. Each box names its real solution and module.
+
+The outside tools QAR builds on, and which part uses each, are in [QAR as a hub of hubs](docs/anatomy.md#b-qar-as-a-hub-of-hubs). The parts table is in [docs/anatomy.md](docs/anatomy.md).
+
 ## What Quest is, and where this fits
 
 [**Quest**](https://quest.spiritualdata.org) is a goal app for the goals that actually take a
