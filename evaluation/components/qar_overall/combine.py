@@ -10,7 +10,11 @@ measure it in two tiers:
 
 Each arm is normalised to 0..1 by its sub-metric's ``rule`` (``RULES``) from its latest recorded row in that tier, and
 counts only when that row is current (``current``): a row with no commit, recorded on uncommitted code, on other cases, or
-older than a committed change to the measured code is stale, and a stale or missing arm is unmeasured. Humility: an
+older than a committed change to the code that arm depends on is stale (see ``dependency_patterns``: the paths
+declared in ``esoi/components.csv`` for the solution, its implementations' files, its own evaluation folder and the shared
+evaluation helpers; an arm that declares nothing keeps today's rule, any measured code. To confirm: from Joshua. The esoi
+library's own ``esoi check --strict`` (S20 rival rows) still uses the repository-wide rule, so it can flag a row this reading
+counts), and a stale or missing arm is unmeasured. Humility: an
 unmeasured arm is never a pass. Every score is reported three ways, the floor first (unmeasured counted 0) beside the
 measured share of the weight, then the headline (measured weight only, renormalised) and the ceiling (unmeasured counted 1).
 
@@ -20,6 +24,7 @@ serves keeps its weight unmeasured. QME6 and QME7 are read from the structure it
 solutions whose selected arm has a current row that no rival beats.
 """
 import datetime
+import fnmatch
 import json
 import subprocess
 from functools import lru_cache
@@ -102,6 +107,46 @@ def whole_set(component):
         return 0
 
 
+SHARED_EVALUATION_DIR = "evaluation/components"   # its top-level files (common.py, claude_judge.py, live_arm.py): every arm runs through them
+
+
+@lru_cache(maxsize=None)
+def dependency_patterns(component):
+    """The path patterns a row of ``component`` depends on, or None to fall back to "any measured code" (today's rule).
+
+    Declared from the records, never guessed: the paths of every component in ``components.csv`` that lists a solution this
+    component measures, the ``filepath`` of those solutions' implementations, the component's own folder under
+    ``evaluation/components/`` and the shared top-level helpers there. A solution that no components.csv row lists declares
+    nothing, so its rows keep the conservative rule (a change to any measured code makes them stale)."""
+    reg = load_registry(CONFIG)
+    mine = {r["solution_id"] for r in reg.solutions if component in measured_components(r.get("metric_command", ""))}
+    if not mine:
+        return None
+    patterns = []
+    for r in reg.components:
+        if mine & set(ids(r.get("solutions", ""))):
+            patterns += [p.strip() for p in r.get("path", "").split(";") if p.strip()]
+    if not patterns:
+        return None
+    for r in reg.implementations:
+        if r.get("solution_id") in mine:
+            patterns += [p.strip() for p in r.get("filepath", "").split(";") if p.strip()]
+    return patterns + [f"evaluation/components/{component}/*"]
+
+
+def measured_components(command):
+    """The evaluation components a metric command runs (``esoi run <component> --impl ...``, several joined by ``;``)."""
+    return {part.split()[2] for part in command.split(";") if part.strip().startswith("esoi run ") and len(part.split()) > 2}
+
+
+def depends_on(patterns, path):
+    """Whether a changed ``path`` matches a declared pattern (a glob, or a folder that contains it)."""
+    folder, _, name = path.rpartition("/")
+    if folder == SHARED_EVALUATION_DIR and name.endswith(".py") and not name.startswith("test_"):
+        return True
+    return any(fnmatch.fnmatch(path, p) or path.startswith(p.rstrip("*/") + "/") for p in patterns)
+
+
 def current(component, row):
     """Why ``row`` does not count, or "" when it is current (the rule of ``esoi check --strict``, against HEAD)."""
     if row is None:
@@ -116,6 +161,9 @@ def current(component, row):
     changed = committed_changes(sha)
     if changed is None:
         return f"its commit {sha} is not known here"
+    depends = dependency_patterns(component)
+    if depends is not None:
+        changed = [path for path in changed if depends_on(depends, path)]
     if changed:
         return f"stale, code changed since {sha}"
     return ""

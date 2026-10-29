@@ -118,3 +118,40 @@ def test_report_leads_with_the_floor_and_names_what_the_headline_leaves_out(fixt
     quick = next(line for line in text.splitlines() if line.startswith("QUICK"))
     assert quick.index("FLOOR") < quick.index("measured") < quick.index("headline") < quick.index("ceiling")
     assert "The headline leaves out S1 Half measured (0.250 of its weight 0.500)." in text
+
+
+# ---------------------------------------------------------------- freshness follows the declared dependencies
+
+@pytest.fixture
+def fresh_row_changes(monkeypatch):
+    """A row that is otherwise current; ``changes`` is what commits since its sha touched."""
+    state = {"files": []}
+    monkeypatch.setattr(combine, "cases_now", lambda comp: "c")
+    monkeypatch.setattr(combine, "committed_changes", lambda sha: state["files"])
+    return state
+
+
+def test_a_change_to_an_unrelated_component_leaves_the_row_current(fresh_row_changes):
+    fresh_row_changes["files"] = ["evaluation/components/narrate_a_turn/score.py", "quest_ai_runner/core/reply_guards.py",
+                                  "evaluation/components/test_something.py"]
+    assert combine.dependency_patterns("staleness") is not None
+    assert combine.current("staleness", row(6, 6, sha="abc1234")) == ""
+
+
+def test_a_change_to_a_declared_dependency_makes_the_row_stale(fresh_row_changes):
+    patterns = combine.dependency_patterns("staleness")
+    own = [p for p in patterns if p.startswith("quest_ai_runner/") and "*" not in p][:1] or ["evaluation/components/staleness/score.py"]
+    for changed in (own[0], "evaluation/components/staleness/impls/new.py", "evaluation/components/common.py"):
+        fresh_row_changes["files"] = [changed]
+        assert combine.current("staleness", row(6, 6, sha="abc1234")).startswith("stale"), changed
+
+
+def test_a_component_that_declares_nothing_keeps_the_conservative_rule(fresh_row_changes, monkeypatch):
+    monkeypatch.setattr(combine, "dependency_patterns", lambda comp: None)
+    fresh_row_changes["files"] = ["evaluation/components/narrate_a_turn/score.py"]
+    assert combine.current("staleness", row(6, 6, sha="abc1234")).startswith("stale")
+
+
+def test_the_dependency_patterns_name_no_whole_tree_for_a_single_solution_component():
+    patterns = combine.dependency_patterns("staleness")
+    assert "evaluation/components/staleness/*" in patterns and "quest_ai_runner/*" not in patterns

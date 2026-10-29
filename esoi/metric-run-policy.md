@@ -56,6 +56,9 @@ approved.
 - **Stale when:** the row has no `git_sha` or `cases_sha`; the case files changed (hash differs); it was recorded on uncommitted code
   (`-dirty`); the measured code or the arm's files changed since its commit (`esoi check --strict`); or the model, its price or
   the provider's behavior changed. The first four are checked by the tool; the last needs the scheduled re-measurement below.
+  - Pending Joshua's confirmation: `qar_overall` (QME6, QME7) counts a row as stale only when a commit since it touches code that arm
+    declares it depends on (`esoi/components.csv`, the implementations' files, its own evaluation folder, the shared helpers);
+    an arm that declares nothing keeps the repository-wide rule, and `esoi check --strict` still applies the repository-wide rule.
 - **Re-measure when models or prices change:** when a model alias or price table changes (for example a new tier default or a
   price correction), re-run the selected arm and its nearest rival at the 10-case stage, then 30 if the verdict is not WIN.
   - Pending Joshua's decision: a quarterly re-measure of the selected arms of the live components. Proposed default: no
