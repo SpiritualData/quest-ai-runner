@@ -3,7 +3,7 @@
  "cases_sha": "1e26ef32",
  "component": "overseer_signals",
  "defaulted_tags": 0,
- "git_sha": "37624ff",
+ "git_sha": "8813412",
  "impl": "no_overseer",
  "label": "eval-trace",
  "summary": {

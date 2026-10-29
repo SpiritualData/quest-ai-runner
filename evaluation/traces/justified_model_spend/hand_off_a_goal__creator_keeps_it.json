@@ -3,7 +3,7 @@
  "cases_sha": "11f278b8",
  "component": "hand_off_a_goal",
  "defaulted_tags": 0,
- "git_sha": "30fdee9-dirty",
+ "git_sha": "8813412",
  "impl": "creator_keeps_it",
  "label": "eval-trace",
  "summary": {

@@ -1,0 +1,98 @@
+{
+ "calls": [],
+ "cases_sha": "5a83064b",
+ "component": "judge_live_decisions",
+ "defaulted_tags": 0,
+ "git_sha": "8813412",
+ "impl": "no_call_floor",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 12,
+  "cli_reported_cost_usd": 0.0,
+  "component": "judge_live_decisions",
+  "dev": "5/12",
+  "heldout": "0/0",
+  "impl": "no_call_floor",
+  "model": null,
+  "model_calls": 0,
+  "passed": 5,
+  "sample": "",
+  "seconds": 0.0,
+  "tokens_in": 0,
+  "tokens_out": 0
+ },
+ "turns": [
+  {
+   "calls": 0,
+   "id": "JLD-01",
+   "kind": "quest_rank",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "JLD-02",
+   "kind": "quest_rank",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "JLD-03",
+   "kind": "quest_rank",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "JLD-04",
+   "kind": "quest_rank",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "JLD-05",
+   "kind": "quest_rank",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "JLD-06",
+   "kind": "quest_rank",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "JLD-07",
+   "kind": "reach",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "JLD-08",
+   "kind": "reach",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "JLD-09",
+   "kind": "reach",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "JLD-10",
+   "kind": "reach",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "JLD-11",
+   "kind": "reach",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "JLD-12",
+   "kind": "reach",
+   "ok": true
+  }
+ ]
+}

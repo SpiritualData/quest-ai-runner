@@ -1,18 +1,18 @@
 {
  "calls": [
   {
-   "cost_usd": 4.51e-05,
+   "cost_usd": 4.55e-05,
    "critical_path": true,
-   "seconds": 3.0064165420044446,
+   "seconds": 2.842769565002527,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 319,
-   "tokens_out": 33,
+   "tokens_out": 34,
    "turn": 1
   },
   {
    "cost_usd": 4.6200000000000005e-05,
    "critical_path": true,
-   "seconds": 0.9305738900002325,
+   "seconds": 1.0485025469970424,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 318,
    "tokens_out": 36,
@@ -21,25 +21,25 @@
   {
    "cost_usd": 4.5900000000000004e-05,
    "critical_path": true,
-   "seconds": 0.8179305410012603,
+   "seconds": 0.9986240479920525,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 319,
    "tokens_out": 35,
    "turn": 3
   },
   {
-   "cost_usd": 4.51e-05,
+   "cost_usd": 4.71e-05,
    "critical_path": true,
-   "seconds": 0.970128062996082,
+   "seconds": 1.0194545459817164,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 319,
-   "tokens_out": 33,
+   "tokens_out": 38,
    "turn": 4
   },
   {
    "cost_usd": 4.5400000000000006e-05,
    "critical_path": true,
-   "seconds": 0.8645074939995538,
+   "seconds": 0.9033122989931144,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 322,
    "tokens_out": 33,
@@ -48,71 +48,71 @@
   {
    "cost_usd": 4.53e-05,
    "critical_path": true,
-   "seconds": 0.837432564003393,
+   "seconds": 1.0559250629739836,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 321,
    "tokens_out": 33,
    "turn": 6
   },
   {
-   "cost_usd": 4.71e-05,
+   "cost_usd": 4.7900000000000006e-05,
    "critical_path": true,
-   "seconds": 0.5610513590072514,
+   "seconds": 1.2432959870202467,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 319,
-   "tokens_out": 38,
+   "tokens_out": 40,
    "turn": 7
   },
   {
-   "cost_usd": 5e-05,
+   "cost_usd": 4.880000000000001e-05,
    "critical_path": true,
-   "seconds": 0.7898544679919723,
+   "seconds": 0.8311090740025975,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 332,
-   "tokens_out": 42,
+   "tokens_out": 39,
    "turn": 8
   },
   {
-   "cost_usd": 4.380000000000001e-05,
+   "cost_usd": 4.78e-05,
    "critical_path": true,
-   "seconds": 0.700424706999911,
+   "seconds": 0.8861862320045475,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 322,
-   "tokens_out": 29,
+   "tokens_out": 39,
    "turn": 9
   },
   {
    "cost_usd": 5.3200000000000006e-05,
    "critical_path": true,
-   "seconds": 0.6827984350093175,
+   "seconds": 1.0731985910097137,
    "spec_id": "hand-off-a-goal.assignee",
    "tokens_in": 372,
    "tokens_out": 40,
    "turn": 10
   },
   {
-   "cost_usd": 5.4099999999999994e-05,
-   "critical_path": true,
-   "seconds": 0.9012653139943723,
-   "spec_id": "hand-off-a-goal.assignee",
-   "tokens_in": 369,
-   "tokens_out": 43,
-   "turn": 11
-  },
-  {
    "cost_usd": 5.3700000000000004e-05,
    "critical_path": true,
-   "seconds": 0.723970097998972,
+   "seconds": 0.9172342399833724,
    "spec_id": "hand-off-a-goal.assignee",
    "tokens_in": 369,
    "tokens_out": 42,
+   "turn": 11
+  },
+  {
+   "cost_usd": 5.45e-05,
+   "critical_path": true,
+   "seconds": 0.7734144779969938,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 369,
+   "tokens_out": 44,
    "turn": 12
   }
  ],
  "cases_sha": "11f278b8",
  "component": "hand_off_a_goal",
  "defaulted_tags": 0,
- "git_sha": "ec840dc",
+ "git_sha": "8813412",
  "impl": "model_judge_fast",
  "label": "eval-trace",
  "summary": {
@@ -126,9 +126,9 @@
   "model_calls": 12,
   "passed": 6,
   "sample": "",
-  "seconds": 11.8,
+  "seconds": 13.6,
   "tokens_in": 4001,
-  "tokens_out": 437
+  "tokens_out": 453
  },
  "turns": [
   {

@@ -1,36 +1,36 @@
 {
  "calls": [
   {
-   "cost_usd": 6.45e-05,
+   "cost_usd": 6.010000000000001e-05,
    "critical_path": true,
-   "seconds": 3.025298352993559,
+   "seconds": 2.933991920988774,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 217,
-   "tokens_out": 107,
+   "tokens_out": 96,
    "turn": 1
   },
   {
-   "cost_usd": 6.02e-05,
+   "cost_usd": 5.860000000000001e-05,
    "critical_path": true,
-   "seconds": 1.0597534389962675,
+   "seconds": 1.0339344480016734,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 194,
-   "tokens_out": 102,
+   "tokens_out": 98,
    "turn": 2
   },
   {
-   "cost_usd": 5.8800000000000006e-05,
+   "cost_usd": 5.72e-05,
    "critical_path": true,
-   "seconds": 0.8972392310097348,
+   "seconds": 0.8896479630202521,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 192,
-   "tokens_out": 99,
+   "tokens_out": 95,
    "turn": 3
   },
   {
    "cost_usd": 3.7800000000000004e-05,
    "critical_path": true,
-   "seconds": 0.9127683380065719,
+   "seconds": 0.7950183550128713,
    "spec_id": "label-context-cards.categorize-files",
    "tokens_in": 186,
    "tokens_out": 48,
@@ -40,7 +40,7 @@
  "cases_sha": "418162fd",
  "component": "label_context_cards",
  "defaulted_tags": 0,
- "git_sha": "d6777cc",
+ "git_sha": "8813412",
  "impl": "fast_model_labels_fast",
  "label": "eval-trace",
  "summary": {
@@ -54,9 +54,9 @@
   "model_calls": 4,
   "passed": 2,
   "sample": "",
-  "seconds": 5.9,
+  "seconds": 5.7,
   "tokens_in": 789,
-  "tokens_out": 356
+  "tokens_out": 337
  },
  "turns": [
   {

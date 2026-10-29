@@ -1,0 +1,207 @@
+{
+ "calls": [
+  {
+   "cost_usd": 0.0002795,
+   "critical_path": true,
+   "seconds": 3.5764314889966045,
+   "spec_id": "judge-a-decision.quest-ranking",
+   "tokens_in": 1296,
+   "tokens_out": 41,
+   "turn": 1
+  },
+  {
+   "cost_usd": 0.0002791,
+   "critical_path": true,
+   "seconds": 1.772230545990169,
+   "spec_id": "judge-a-decision.quest-ranking",
+   "tokens_in": 1294,
+   "tokens_out": 41,
+   "turn": 2
+  },
+  {
+   "cost_usd": 6.515000000000004e-05,
+   "critical_path": true,
+   "seconds": 3.1537185730121564,
+   "spec_id": "judge-a-decision.quest-ranking",
+   "tokens_in": 1297,
+   "tokens_out": 104,
+   "turn": 3
+  },
+  {
+   "cost_usd": 0.0002789,
+   "critical_path": true,
+   "seconds": 1.8081319860066287,
+   "spec_id": "judge-a-decision.quest-ranking",
+   "tokens_in": 1293,
+   "tokens_out": 41,
+   "turn": 4
+  },
+  {
+   "cost_usd": 8.208e-05,
+   "critical_path": true,
+   "seconds": 1.960676426999271,
+   "spec_id": "judge-a-decision.quest-ranking",
+   "tokens_in": 1290,
+   "tokens_out": 138,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.0003805,
+   "critical_path": true,
+   "seconds": 4.933681441005319,
+   "spec_id": "judge-a-decision.quest-ranking",
+   "tokens_in": 1331,
+   "tokens_out": 229,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.00027840000000000005,
+   "critical_path": true,
+   "seconds": 2.2032882350031286,
+   "spec_id": "act-in-the-world.reach-judge",
+   "tokens_in": 1363,
+   "tokens_out": 12,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.0002844,
+   "critical_path": true,
+   "seconds": 1.735905545996502,
+   "spec_id": "act-in-the-world.reach-judge",
+   "tokens_in": 1363,
+   "tokens_out": 24,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.00028279999999999994,
+   "critical_path": true,
+   "seconds": 1.6858387989923358,
+   "spec_id": "act-in-the-world.reach-judge",
+   "tokens_in": 1370,
+   "tokens_out": 18,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.00028169999999999975,
+   "critical_path": true,
+   "seconds": 1.8236693279759493,
+   "spec_id": "act-in-the-world.reach-judge",
+   "tokens_in": 1367,
+   "tokens_out": 17,
+   "turn": 10
+  },
+  {
+   "cost_usd": 2.283000000000016e-05,
+   "critical_path": true,
+   "seconds": 2.350761591020273,
+   "spec_id": "act-in-the-world.reach-judge",
+   "tokens_in": 1365,
+   "tokens_out": 18,
+   "turn": 11
+  },
+  {
+   "cost_usd": 0.00027740000000000013,
+   "critical_path": true,
+   "seconds": 3.518833584006643,
+   "spec_id": "act-in-the-world.reach-judge",
+   "tokens_in": 1358,
+   "tokens_out": 12,
+   "turn": 12
+  }
+ ],
+ "cases_sha": "5a83064b",
+ "component": "judge_live_decisions",
+ "defaulted_tags": 0,
+ "git_sha": "8813412",
+ "impl": "live_judges",
+ "label": "eval-trace",
+ "summary": {
+  "cases": 12,
+  "cli_reported_cost_usd": 0.0028,
+  "component": "judge_live_decisions",
+  "dev": "12/12",
+  "heldout": "0/0",
+  "impl": "live_judges",
+  "model": "claude-code-subscription",
+  "model_calls": 12,
+  "passed": 12,
+  "sample": "",
+  "seconds": 30.5,
+  "tokens_in": 15987,
+  "tokens_out": 695
+ },
+ "turns": [
+  {
+   "calls": 1,
+   "id": "JLD-01",
+   "kind": "quest_rank",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-02",
+   "kind": "quest_rank",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-03",
+   "kind": "quest_rank",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-04",
+   "kind": "quest_rank",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-05",
+   "kind": "quest_rank",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-06",
+   "kind": "quest_rank",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-07",
+   "kind": "reach",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-08",
+   "kind": "reach",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-09",
+   "kind": "reach",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-10",
+   "kind": "reach",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-11",
+   "kind": "reach",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "JLD-12",
+   "kind": "reach",
+   "ok": true
+  }
+ ]
+}

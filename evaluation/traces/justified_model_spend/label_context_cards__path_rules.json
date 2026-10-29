@@ -3,7 +3,7 @@
  "cases_sha": "418162fd",
  "component": "label_context_cards",
  "defaulted_tags": 0,
- "git_sha": "ec840dc",
+ "git_sha": "8813412",
  "impl": "path_rules",
  "label": "eval-trace",
  "summary": {
