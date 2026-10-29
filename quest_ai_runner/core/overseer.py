@@ -127,6 +127,13 @@ Choose EXACTLY ONE signal via the tool:
     information, an explanation or an opinion ("how would I add X?", "should we refactor Y?"): an
     interrogative opener (how/what/why/is/are/would/could/should we/do you/does it) asking ABOUT the
     work is a question even if it names an action, and the user wants an answer, not the change made.
+    RECORDS IN HAND COME FIRST: never escalate_deep while the stored facts decide whether the act can
+    go ahead as asked. A plan that is still reading before it books, schedules, sends or arranges
+    something is deliberate, because the person's own records (when someone is available, an
+    earlier decision, a stated limit) may rule the act out; proceed. When OPERATIONS THIS TURN or the
+    DRAFT ANSWER show such a fact and the draft says the act cannot or should not go ahead as asked
+    and offers the nearest option that works, that draft is the complete response: proceed. Escalate
+    only when the reads found nothing that blocks or reshapes the act.
   - "escalate_human": a genuine HUMAN-ONLY fork, not routine automatable work: an identity question,
     an irreversible or authorization-requiring action (an outward payment, a real-world commitment,
     deleting something unrecoverable), or a genuine ambiguity only the user/owner can resolve (a
@@ -143,11 +150,12 @@ Choose EXACTLY ONE signal via the tool:
 
 Rules:
   - Redirect or stop the run only when the drift or waste is obvious, EXCEPT a mismatch between an
-    action REQUEST and a read-and-answer plan: that is a clear escalate_deep, not a proceed.
+    action REQUEST and a read-and-answer plan that has nothing left to learn from the person's
+    records: that is a clear escalate_deep, not a proceed.
   - If a DRAFT ANSWER is shown for an action request: a draft that only recommends, describes, or
     promises the work ("I would recommend", "I can go ahead and", "you could") has NOT done it:
-    escalate_deep. A draft that plainly reports what was already done, or fully answers a pure
-    question, is fine.
+    escalate_deep. A draft that plainly reports what was already done, fully answers a pure
+    question, or declines the act on a stored fact (see RECORDS IN HAND COME FIRST), is fine.
   - If a DRAFT ANSWER is shown and the REQUEST was a QUESTION, check: is the thing asked for actually
     IN the draft? Redirect (hint: answer the question that was asked) when it (a) SUBSTITUTES AN
     OFFER for the answer (a sentence of generality then a proposal to create, track or look into

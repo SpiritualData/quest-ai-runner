@@ -96,6 +96,11 @@ class PlanDecision:
     deferred_deep: Optional[Dict[str, Any]] = None  # {"goal": "...", "brief": "...", "rationale": "..."}
     # Explicit signal: this answer contains work that needs execution (instead of regex guessing)
     answer_contains_work_to_execute: bool = False  # Set True if answer describes work the AI should do
+    # The planner chose "answer" for a message that asks it to ACT because what it read shows the act
+    # cannot or should not go ahead as asked (a stored constraint, a conflict); the reply says so and
+    # gives the nearest option that works. That reply IS the complete response, so the escalation nets
+    # that turn an answer to an "act" message into a deep run must not fire on it.
+    act_declined: bool = False
     # User clarification/input needed: when action="clarify"
     clarification: Optional[Dict[str, Any]] = None  # {"question": "...", "options": [...], "allow_free_input": bool}
     # EXPLICIT execution-mode signal the planner detected in the user's message (LLM judgment on

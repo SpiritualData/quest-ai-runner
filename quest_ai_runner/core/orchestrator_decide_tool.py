@@ -242,6 +242,9 @@ DECIDE_TOOL: Dict[str, Any] = {
             # What the CURRENT message asks of the assistant (see USER_INTENTS). No description:
             # the rubric at the top of both planner profiles states it, so neither pays twice.
             "user_intent": {"type": "string", "enum": list(USER_INTENTS)},
+            # Whether an "answer" to an "act" message declines the act on the records read. The
+            # rubric at the top of both planner profiles states it; optional, absent means false.
+            "act_declined": {"type": "boolean"},
             # The reads this decision still owes: what the planner itself says it has NOT yet
             # opened. Honored structurally by the loop (see ``PlanDecision.pending_read``). The
             # rubric at the top of both planner profiles states it, so the schema stays bare.

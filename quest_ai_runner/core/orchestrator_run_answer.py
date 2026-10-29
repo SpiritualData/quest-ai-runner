@@ -468,8 +468,12 @@ class RunAnswerMixin:
         # ``user_intent == "hold_off"`` verdict on a typed message (``nets_intent``), never a
         # keyword reading: those messages carry change verbs, and the keyword net that preceded
         # this escalated them most reliably of all.
+        # An answer that DECLINES the act on the records it read (``act_declined``: a stored
+        # constraint or conflict, with the nearest option that works) is the complete response, not
+        # a proposal to execute, so none of the nets below may turn it into a deep run.
         if (not rs.should_defer_deep and not rs.brainstorm_active
                 and nets_intent != USER_INTENT_HOLD_OFF
+                and not rs.plan.act_declined
                 and (self._has_deep_execution_capability()
                      or self._has_deferred_queue_capability())):
             # Primary: trust planner's explicit flag

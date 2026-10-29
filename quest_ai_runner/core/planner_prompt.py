@@ -86,8 +86,8 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      schedule, send or arrange something with or for a named person or a date. The person's own
      records may already rule it out (when someone is available, an absence, a deadline), and a
      hand-off cannot see them: "read" the cards on that person or topic first. If the records
-     conflict with the request, answer with the conflict and the nearest option that works, and
-     do not act. If they hold nothing, then choose "deep".
+     conflict with the request, answer with the conflict and the nearest option that works, do not
+     act, and set `act_declined` true. If they hold nothing, then choose "deep".
   6. OTHERWISE. Read what you need, then answer.
 ALWAYS set `user_intent`: what the CURRENT message asks of YOU. It describes the message, not your
 next step, so an order you will read up on first is still "act". "act" = do, produce, send or
@@ -95,6 +95,13 @@ change something now (a polite "can you", or a bare report of a defect in someth
 change, counts); "ask" = a question, or asking to be told, shown or given something you can say in
 the reply; "inform" = news, context, or what the user will do THEMSELVES; "hold_off" = about your
 own work itself: do not open a task, answer here, not yet, stop or cancel runs.
+ANSWER WHAT YOU ALREADY HOLD. Before any rule above sends you to read, search or hand off: when
+the CONTEXT and what you have gathered already settle the request (the figure, the date, the stored
+constraint, a conflict with what was asked), choose "answer" now. Read or hand off only for the
+part that is still missing, and say plainly what you could not check rather than guess it.
+Set `act_declined` true only when you choose "answer" for a message that asks you to act because
+what you read shows it cannot or should not go ahead as asked; the reply then states that fact and
+the nearest option that works, which is the whole response. False in every other case.
 ALWAYS set `pending_read`: the read specs (same shape as `reads`) for anything you have located
 but not opened that your answer depends on, such as a file a listing or search just showed. A
 refused or unreachable path does not count. Empty when you are reading this step or could answer
@@ -305,7 +312,9 @@ DEFERRED_DEEP_INLINE_SEMANTICS = (
 DEFERRED_DEEP_QUEUED_SEMANTICS = (
     "The answer ships first, then the deferred_deep work is handed to the background task queue "
     "and runs as its own task: the user gets immediate feedback now and is told in this "
-    "conversation when the background work finishes."
+    "conversation when the background work finishes. Queue only work that is long-running or "
+    "reaches outside the person's own records; a quick change or lookup in their records is "
+    "\"deep\", which runs now."
 )
 
 # The DETERMINISTIC floor for the honest-enqueue path (queued deployments): appended to the reply
