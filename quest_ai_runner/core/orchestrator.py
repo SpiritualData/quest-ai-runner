@@ -52,6 +52,7 @@ from .tools import ToolRegistry
 
 from .recipes import RecipeStore
 from .link_guard import LinkGuard
+from .model_family import provider_name_for_model
 from .model_registry import ModelRegistry
 
 # Log labels for where a deep-worker ladder came from (see Orchestrator.log_deep_ladder).
@@ -366,33 +367,14 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         if not model:
             return self.provider
 
-        model_lower = model.lower()
         providers = getattr(self.registry, "_providers", {}) or {}
-
-        # Auto-detect based on model prefix (all model names start with provider family)
-        if model_lower.startswith("claude"):
-            # Anthropic Claude models: claude-opus-*, claude-sonnet-*, claude-haiku-*, etc.
-            if "anthropic" in providers:
-                log.debug(f"Routing claude model '{model}' to Anthropic provider")
-                return providers["anthropic"]
-        elif model_lower.startswith("gemini") or model.startswith("models/"):
-            # Gemini models: gemini-3.5-*, gemini-1.5-*, or models/* (Gemini API convention)
-            if "gemini" in providers:
-                log.debug(f"Routing Gemini model '{model}' to Gemini provider")
-                return providers["gemini"]
-            else:
-                log.warning(f"Gemini model '{model}' requested but Gemini provider not registered. Available: {list(providers.keys())}")
-        elif model_lower.startswith("gpt"):
-            # OpenAI models: gpt-4o, gpt-4-turbo, etc.
-            if "openai" in providers:
-                log.debug(f"Routing GPT model '{model}' to OpenAI provider")
-                return providers["openai"]
-        elif model_lower.startswith("deepseek"):
-            if "deepseek" in providers:
-                log.debug(f"Routing DeepSeek model '{model}' to DeepSeek provider")
-                return providers["deepseek"]
-            log.warning(f"DeepSeek model '{model}' requested but DeepSeek provider not registered "
-                        f"(set DEEPSEEK_API_KEY). Available: {list(providers.keys())}")
+        wanted = provider_name_for_model(model)
+        if wanted and wanted in providers:
+            log.debug(f"Routing model '{model}' to the {wanted} provider")
+            return providers[wanted]
+        if wanted:
+            log.debug(f"Model '{model}' names the {wanted} provider, which is not registered. "
+                      f"Available: {list(providers.keys())}")
 
         # Fallback to primary provider
         log.debug(f"Model '{model}' falling back to primary provider ({type(self.provider).__name__})")

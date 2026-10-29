@@ -24,6 +24,7 @@ from ..core.adapters import (
     answer_with_reasoning,
     plan_with_step,
 )
+from ..core.model_family import provider_name_for_model
 from ..usage import active_spec
 
 _log = logging.getLogger("quest-ai-runner.multi-provider")
@@ -179,25 +180,10 @@ class MultiProvider(ModelProvider):
         if not model:
             return self.primary
 
-        model_lower = model.lower()
-
-        # Auto-detect based on model prefix
-        if model_lower.startswith("claude"):
-            if "anthropic" in self.providers:
-                _log.debug(f"Routing Claude model '{model}' to Anthropic provider")
-                return self.providers["anthropic"]
-        elif model_lower.startswith("gemini") or model.startswith("models/"):
-            if "gemini" in self.providers:
-                _log.debug(f"Routing Gemini model '{model}' to Gemini provider")
-                return self.providers["gemini"]
-        elif model_lower.startswith("gpt"):
-            if "openai" in self.providers:
-                _log.debug(f"Routing GPT model '{model}' to OpenAI provider")
-                return self.providers["openai"]
-        elif model_lower.startswith("deepseek"):
-            if "deepseek" in self.providers:
-                _log.debug(f"Routing DeepSeek model '{model}' to DeepSeek provider")
-                return self.providers["deepseek"]
+        wanted = provider_name_for_model(model, self.providers)
+        if wanted:
+            _log.debug(f"Routing model '{model}' to the {wanted} provider")
+            return self.providers[wanted]
 
         # Fallback to primary provider
         _log.debug(f"Model '{model}' routing to primary provider ({type(self.primary).__name__})")

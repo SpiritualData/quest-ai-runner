@@ -8,9 +8,35 @@ ships: the newest live id of that family is used. Anything containing a digit (`
 from __future__ import annotations
 
 import re
-from typing import Iterable, List, Optional, Tuple
+from typing import Collection, Dict, Iterable, List, Optional, Tuple
 
 VENDOR_PREFIXES = ("claude", "gemini", "gpt")
+
+# Which registered provider serves a model id, by the id's lower-case prefix. This is DATA, not a branch: a new vendor is one
+# entry here (``register_model_prefix``, or a line in this table), and no routing code changes. The first matching prefix
+# decides; when its provider is not registered the caller falls back to its primary provider.
+MODEL_PREFIX_PROVIDERS: Dict[str, str] = {
+    "claude": "anthropic",
+    "gemini": "gemini",
+    "models/": "gemini",     # Gemini API convention
+    "gpt": "openai",
+    "deepseek": "deepseek",
+}
+
+
+def register_model_prefix(prefix: str, provider_name: str) -> None:
+    """Route model ids starting with ``prefix`` to the provider registered under ``provider_name``."""
+    MODEL_PREFIX_PROVIDERS[(prefix or "").strip().lower()] = provider_name
+
+
+def provider_name_for_model(model: str, available: Optional[Collection[str]] = None) -> Optional[str]:
+    """The provider name the first matching prefix names, or None. With ``available``, None also when that provider is
+    not among them (the caller then uses its primary provider)."""
+    low = (model or "").lower()
+    for prefix, name in MODEL_PREFIX_PROVIDERS.items():
+        if low.startswith(prefix):
+            return name if available is None or name in available else None
+    return None
 # Suffixes that mark a build of the same family rather than a different family.
 NOISE_TOKENS = {"preview", "latest", "exp", "experimental"}
 
