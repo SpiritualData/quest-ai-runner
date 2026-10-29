@@ -1,75 +1,129 @@
 {
  "calls": [
   {
-   "cost_usd": 9.070000000000002e-05,
+   "cost_usd": 0.0001373,
    "critical_path": true,
-   "seconds": 2.5376649870013352,
+   "seconds": 2.8572294159966987,
    "spec_id": "draft-a-metric.value",
-   "tokens_in": 519,
-   "tokens_out": 97,
+   "tokens_in": 625,
+   "tokens_out": 187,
    "turn": 1
   },
   {
-   "cost_usd": 8.310000000000001e-05,
+   "cost_usd": 0.00010690000000000001,
    "critical_path": true,
-   "seconds": 0.879467153979931,
+   "seconds": 0.9707180460100062,
    "spec_id": "draft-a-metric.value",
-   "tokens_in": 439,
-   "tokens_out": 98,
+   "tokens_in": 545,
+   "tokens_out": 131,
    "turn": 2
   },
   {
-   "cost_usd": 7.47e-05,
+   "cost_usd": 0.0001297,
    "critical_path": true,
-   "seconds": 1.2439958280010615,
+   "seconds": 1.161519245011732,
    "spec_id": "draft-a-metric.value",
-   "tokens_in": 403,
-   "tokens_out": 86,
+   "tokens_in": 509,
+   "tokens_out": 197,
    "turn": 3
   },
   {
-   "cost_usd": 0.00010709999999999999,
+   "cost_usd": 0.00011690000000000001,
    "critical_path": true,
-   "seconds": 1.2698557050025556,
+   "seconds": 1.0102743280003779,
    "spec_id": "draft-a-metric.value",
-   "tokens_in": 403,
-   "tokens_out": 167,
+   "tokens_in": 509,
+   "tokens_out": 165,
    "turn": 4
+  },
+  {
+   "cost_usd": 0.00010880000000000002,
+   "critical_path": true,
+   "seconds": 0.9999465290165972,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 540,
+   "tokens_out": 137,
+   "turn": 5
+  },
+  {
+   "cost_usd": 0.00012090000000000001,
+   "critical_path": true,
+   "seconds": 1.408400865009753,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 557,
+   "tokens_out": 163,
+   "turn": 6
+  },
+  {
+   "cost_usd": 0.0001241,
+   "critical_path": true,
+   "seconds": 1.1309848790115211,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 533,
+   "tokens_out": 177,
+   "turn": 7
+  },
+  {
+   "cost_usd": 0.0001117,
+   "critical_path": true,
+   "seconds": 0.9042485370009672,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 541,
+   "tokens_out": 144,
+   "turn": 8
+  },
+  {
+   "cost_usd": 0.00013120000000000002,
+   "critical_path": true,
+   "seconds": 1.0140630879905075,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 544,
+   "tokens_out": 192,
+   "turn": 9
+  },
+  {
+   "cost_usd": 0.0001425,
+   "critical_path": true,
+   "seconds": 1.4431202900013886,
+   "spec_id": "draft-a-metric.value",
+   "tokens_in": 541,
+   "tokens_out": 221,
+   "turn": 10
   }
  ],
- "cases_sha": "f1c1dec2",
+ "cases_sha": "b64ac4bc",
  "component": "draft_a_metric",
  "defaulted_tags": 0,
- "git_sha": "56b559e",
+ "git_sha": "8ce3092",
  "impl": "capped_model_draft_fast",
  "label": "eval-trace",
  "summary": {
-  "cases": 4,
+  "cases": 10,
   "cli_reported_cost_usd": 0.0,
   "component": "draft_a_metric",
-  "dev": "2/4",
+  "dev": "9/10",
   "heldout": "0/0",
   "impl": "capped_model_draft_fast",
   "model": "gemini-3.1-flash-lite",
-  "model_calls": 4,
-  "passed": 2,
+  "model_calls": 10,
+  "passed": 9,
   "sample": "",
-  "seconds": 5.9,
-  "tokens_in": 1764,
-  "tokens_out": 448
+  "seconds": 12.9,
+  "tokens_in": 5444,
+  "tokens_out": 1714
  },
  "turns": [
   {
    "calls": 1,
    "id": "DAM-01",
    "kind": "propose",
-   "ok": false
+   "ok": true
   },
   {
    "calls": 1,
    "id": "DAM-02",
    "kind": "propose",
-   "ok": false
+   "ok": true
   },
   {
    "calls": 1,
@@ -82,6 +136,42 @@
    "id": "DAM-04",
    "kind": "thin",
    "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "DAM-05",
+   "kind": "propose",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "DAM-06",
+   "kind": "propose",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "DAM-07",
+   "kind": "propose",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "DAM-08",
+   "kind": "propose",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "DAM-09",
+   "kind": "thin",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "DAM-10",
+   "kind": "thin",
+   "ok": false
   }
  ]
 }

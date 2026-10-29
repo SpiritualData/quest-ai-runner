@@ -1,25 +1,25 @@
 {
  "calls": [],
- "cases_sha": "495b478a",
+ "cases_sha": "882af363",
  "component": "assist_a_terminal_session",
  "defaulted_tags": 0,
- "git_sha": "56b559e",
+ "git_sha": "8ce3092",
  "impl": "rules_only",
  "label": "eval-trace",
  "summary": {
-  "accuracy": 1.0,
-  "balanced": 1.0,
-  "cases": 10,
+  "accuracy": 0.5385,
+  "balanced": 0.6769,
+  "cases": 26,
   "cli_reported_cost_usd": 0.0,
   "component": "assist_a_terminal_session",
   "cost_per_case": 0.0,
-  "dev": "10/10",
+  "dev": "14/26",
   "heldout": "0/0",
   "impl": "rules_only",
   "model": null,
   "model_calls": 0,
-  "passed": 10,
-  "sample": "only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01",
+  "passed": 14,
+  "sample": "only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01,AST-JDG-02,AST-JDG-03,AST-JDG-04,AST-JDG-05,AST-JDG-06,AST-JDG-07,AST-JDG-08,AST-JDG-09,AST-CLS-07,AST-CLS-08,AST-CLS-09,AST-CLS-10,AST-CLS-11,AST-CLS-12,AST-CLS-13,AST-CLS-14",
   "seconds": 0.0,
   "seconds_per_case": 0.0,
   "tokens_in": 0,
@@ -85,6 +85,102 @@
    "id": "AST-GATE-01",
    "kind": "gate",
    "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "AST-JDG-02",
+   "kind": "judge",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-JDG-03",
+   "kind": "judge",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-JDG-04",
+   "kind": "judge",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-JDG-05",
+   "kind": "judge",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "AST-JDG-06",
+   "kind": "judge",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "AST-JDG-07",
+   "kind": "judge",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "AST-JDG-08",
+   "kind": "judge",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-JDG-09",
+   "kind": "judge",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-CLS-07",
+   "kind": "classify",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-CLS-08",
+   "kind": "classify",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-CLS-09",
+   "kind": "classify",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-CLS-10",
+   "kind": "classify",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-CLS-11",
+   "kind": "classify",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-CLS-12",
+   "kind": "classify",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "AST-CLS-13",
+   "kind": "classify",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "AST-CLS-14",
+   "kind": "classify",
+   "ok": false
   }
  ]
 }

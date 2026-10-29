@@ -1,134 +1,188 @@
 {
  "calls": [
   {
-   "cost_usd": 4.94e-05,
+   "cost_usd": 4.86e-05,
    "critical_path": true,
-   "seconds": 2.3672313090064563,
+   "seconds": 2.962770954007283,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 350,
-   "tokens_out": 36,
+   "tokens_out": 34,
    "turn": 1
   },
   {
-   "cost_usd": 4.5400000000000006e-05,
+   "cost_usd": 4.5e-05,
    "critical_path": true,
-   "seconds": 0.9924301730061416,
+   "seconds": 0.853430532006314,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 318,
-   "tokens_out": 34,
+   "tokens_out": 33,
    "turn": 2
   },
   {
-   "cost_usd": 5.0400000000000005e-05,
+   "cost_usd": 4.92e-05,
    "critical_path": true,
-   "seconds": 1.110244456998771,
+   "seconds": 1.1349015940213576,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 352,
-   "tokens_out": 38,
+   "tokens_out": 35,
    "turn": 3
   },
   {
    "cost_usd": 5.7300000000000004e-05,
    "critical_path": true,
-   "seconds": 0.7023958759964444,
+   "seconds": 0.6084724009851925,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 421,
    "tokens_out": 38,
    "turn": 4
   },
   {
-   "cost_usd": 5.3899999999999996e-05,
+   "cost_usd": 5.23e-05,
    "critical_path": true,
-   "seconds": 1.140004268992925,
+   "seconds": 0.6201206299883779,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 395,
-   "tokens_out": 36,
+   "tokens_out": 32,
    "turn": 5
   },
   {
    "cost_usd": 4.53e-05,
    "critical_path": true,
-   "seconds": 0.48556487998575903,
+   "seconds": 1.0062233659846243,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 321,
    "tokens_out": 33,
    "turn": 6
   },
   {
-   "cost_usd": 4.39e-05,
+   "cost_usd": 4.630000000000001e-05,
    "critical_path": true,
-   "seconds": 0.6382921870099381,
+   "seconds": 0.6930546800140291,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 319,
-   "tokens_out": 30,
+   "tokens_out": 36,
    "turn": 7
   },
   {
-   "cost_usd": 5.1200000000000004e-05,
+   "cost_usd": 5.0799999999999995e-05,
    "critical_path": true,
-   "seconds": 0.7391829999978654,
+   "seconds": 0.8508658609935082,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 360,
-   "tokens_out": 38,
+   "tokens_out": 37,
    "turn": 8
   },
   {
-   "cost_usd": 4.3400000000000005e-05,
+   "cost_usd": 4.380000000000001e-05,
    "critical_path": true,
-   "seconds": 0.6676650779845659,
+   "seconds": 0.8455908960022498,
    "spec_id": "hand-off-a-goal.doability",
    "tokens_in": 322,
-   "tokens_out": 28,
+   "tokens_out": 29,
    "turn": 9
   },
   {
-   "cost_usd": 5.2e-05,
+   "cost_usd": 5.3200000000000006e-05,
    "critical_path": true,
-   "seconds": 0.7686973170202691,
+   "seconds": 1.1552605709875934,
    "spec_id": "hand-off-a-goal.assignee",
    "tokens_in": 372,
-   "tokens_out": 37,
+   "tokens_out": 40,
    "turn": 10
   },
   {
-   "cost_usd": 5.3700000000000004e-05,
+   "cost_usd": 5.4099999999999994e-05,
    "critical_path": true,
-   "seconds": 0.6736140120192431,
+   "seconds": 0.9389312459970824,
    "spec_id": "hand-off-a-goal.assignee",
    "tokens_in": 369,
-   "tokens_out": 42,
+   "tokens_out": 43,
    "turn": 11
   },
   {
    "cost_usd": 5.45e-05,
    "critical_path": true,
-   "seconds": 0.8865819130151067,
+   "seconds": 1.0786337660101708,
    "spec_id": "hand-off-a-goal.assignee",
    "tokens_in": 369,
    "tokens_out": 44,
    "turn": 12
+  },
+  {
+   "cost_usd": 5.5400000000000005e-05,
+   "critical_path": true,
+   "seconds": 0.6227606119937263,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 394,
+   "tokens_out": 40,
+   "turn": 13
+  },
+  {
+   "cost_usd": 5.38e-05,
+   "critical_path": true,
+   "seconds": 1.3668851619877387,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 390,
+   "tokens_out": 37,
+   "turn": 14
+  },
+  {
+   "cost_usd": 5.46e-05,
+   "critical_path": true,
+   "seconds": 0.9939262580010109,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 390,
+   "tokens_out": 39,
+   "turn": 15
+  },
+  {
+   "cost_usd": 5.9800000000000003e-05,
+   "critical_path": true,
+   "seconds": 0.8974325220042374,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 418,
+   "tokens_out": 45,
+   "turn": 16
+  },
+  {
+   "cost_usd": 5.450000000000001e-05,
+   "critical_path": true,
+   "seconds": 1.0633307670068461,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 393,
+   "tokens_out": 38,
+   "turn": 17
+  },
+  {
+   "cost_usd": 6.0700000000000005e-05,
+   "critical_path": true,
+   "seconds": 0.8228206409839913,
+   "spec_id": "hand-off-a-goal.assignee",
+   "tokens_in": 399,
+   "tokens_out": 52,
+   "turn": 18
   }
  ],
- "cases_sha": "d224f01e",
+ "cases_sha": "255c446b",
  "component": "hand_off_a_goal",
  "defaulted_tags": 0,
- "git_sha": "56b559e",
+ "git_sha": "8ce3092",
  "impl": "model_judge_fast",
  "label": "eval-trace",
  "summary": {
-  "cases": 12,
+  "cases": 18,
   "cli_reported_cost_usd": 0.0,
   "component": "hand_off_a_goal",
-  "dev": "10/12",
+  "dev": "16/18",
   "heldout": "0/0",
   "impl": "model_judge_fast",
   "model": "gemini-3.1-flash-lite",
-  "model_calls": 12,
-  "passed": 10,
+  "model_calls": 18,
+  "passed": 16,
   "sample": "",
-  "seconds": 11.2,
-  "tokens_in": 4268,
-  "tokens_out": 434
+  "seconds": 18.5,
+  "tokens_in": 6652,
+  "tokens_out": 685
  },
  "turns": [
   {
@@ -202,6 +256,42 @@
    "id": "HOG-AS-03",
    "kind": "assignee",
    "ok": false
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-04",
+   "kind": "assignee",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-05",
+   "kind": "assignee",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-06",
+   "kind": "assignee",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-07",
+   "kind": "assignee",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-08",
+   "kind": "assignee",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "HOG-AS-09",
+   "kind": "assignee",
+   "ok": true
   }
  ]
 }

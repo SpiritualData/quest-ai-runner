@@ -1,62 +1,125 @@
 {
  "calls": [
   {
-   "cost_usd": 6.050000000000001e-05,
+   "cost_usd": 5.97e-05,
    "critical_path": true,
-   "seconds": 2.5977260890067555,
+   "seconds": 2.6100819460116327,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 217,
-   "tokens_out": 97,
+   "tokens_out": 95,
    "turn": 1
   },
   {
-   "cost_usd": 5.4600000000000006e-05,
+   "cost_usd": 5.660000000000001e-05,
    "critical_path": true,
-   "seconds": 1.149373841995839,
+   "seconds": 0.8311880620021839,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 194,
-   "tokens_out": 88,
+   "tokens_out": 93,
    "turn": 2
   },
   {
-   "cost_usd": 5.760000000000001e-05,
+   "cost_usd": 5.800000000000001e-05,
    "critical_path": true,
-   "seconds": 1.0049979540053755,
+   "seconds": 1.5442799089942127,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 192,
-   "tokens_out": 96,
+   "tokens_out": 97,
    "turn": 3
   },
   {
    "cost_usd": 3.7800000000000004e-05,
    "critical_path": true,
-   "seconds": 0.9888382359931711,
+   "seconds": 0.9890390619984828,
    "spec_id": "label-context-cards.categorize-files",
    "tokens_in": 186,
    "tokens_out": 48,
    "turn": 4
+  },
+  {
+   "cost_usd": 3.55e-05,
+   "critical_path": true,
+   "seconds": 0.6464477810077369,
+   "spec_id": "label-context-cards.categorize-files",
+   "tokens_in": 183,
+   "tokens_out": 43,
+   "turn": 5
+  },
+  {
+   "cost_usd": 3.54e-05,
+   "critical_path": true,
+   "seconds": 0.9743440409947652,
+   "spec_id": "label-context-cards.categorize-files",
+   "tokens_in": 182,
+   "tokens_out": 43,
+   "turn": 6
+  },
+  {
+   "cost_usd": 3.35e-05,
+   "critical_path": true,
+   "seconds": 0.6409286370035261,
+   "spec_id": "label-context-cards.categorize-files",
+   "tokens_in": 179,
+   "tokens_out": 39,
+   "turn": 7
+  },
+  {
+   "cost_usd": 3.5799999999999996e-05,
+   "critical_path": true,
+   "seconds": 1.222472168999957,
+   "spec_id": "label-context-cards.categorize-files",
+   "tokens_in": 186,
+   "tokens_out": 43,
+   "turn": 8
+  },
+  {
+   "cost_usd": 3.6400000000000004e-05,
+   "critical_path": true,
+   "seconds": 0.5906770919973496,
+   "spec_id": "label-context-cards.categorize-files",
+   "tokens_in": 200,
+   "tokens_out": 41,
+   "turn": 9
+  },
+  {
+   "cost_usd": 3.32e-05,
+   "critical_path": true,
+   "seconds": 0.5533380049746484,
+   "spec_id": "label-context-cards.categorize-files",
+   "tokens_in": 180,
+   "tokens_out": 38,
+   "turn": 10
+  },
+  {
+   "cost_usd": 3.21e-05,
+   "critical_path": true,
+   "seconds": 1.1381077739933971,
+   "spec_id": "label-context-cards.categorize-files",
+   "tokens_in": 173,
+   "tokens_out": 37,
+   "turn": 11
   }
  ],
- "cases_sha": "418162fd",
+ "cases_sha": "3d0f3720",
  "component": "label_context_cards",
  "defaulted_tags": 0,
- "git_sha": "56b559e",
+ "git_sha": "8ce3092",
  "impl": "fast_model_labels_fast",
  "label": "eval-trace",
  "summary": {
-  "cases": 4,
+  "cases": 11,
   "cli_reported_cost_usd": 0.0,
   "component": "label_context_cards",
-  "dev": "3/4",
+  "dev": "10/11",
   "heldout": "0/0",
   "impl": "fast_model_labels_fast",
   "model": "gemini-3.1-flash-lite",
-  "model_calls": 4,
-  "passed": 3,
+  "model_calls": 11,
+  "passed": 10,
   "sample": "",
-  "seconds": 5.8,
-  "tokens_in": 789,
-  "tokens_out": 329
+  "seconds": 11.8,
+  "tokens_in": 2072,
+  "tokens_out": 617
  },
  "turns": [
   {
@@ -80,6 +143,48 @@
   {
    "calls": 1,
    "id": "LCC-PLC-01",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "LCC-PLC-02",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "LCC-PLC-03",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "LCC-PLC-04",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "LCC-PLC-05",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "LCC-PLC-06",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "LCC-PLC-07",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 1,
+   "id": "LCC-PLC-08",
    "kind": "place",
    "ok": true
   }

@@ -1,21 +1,21 @@
 {
  "calls": [],
- "cases_sha": "d224f01e",
+ "cases_sha": "255c446b",
  "component": "hand_off_a_goal",
  "defaulted_tags": 0,
- "git_sha": "56b559e",
+ "git_sha": "8ce3092",
  "impl": "creator_keeps_it",
  "label": "eval-trace",
  "summary": {
-  "cases": 12,
+  "cases": 18,
   "cli_reported_cost_usd": 0.0,
   "component": "hand_off_a_goal",
-  "dev": "5/12",
+  "dev": "6/18",
   "heldout": "0/0",
   "impl": "creator_keeps_it",
   "model": null,
   "model_calls": 0,
-  "passed": 5,
+  "passed": 6,
   "sample": "",
   "seconds": 0.0,
   "tokens_in": 0,
@@ -91,6 +91,42 @@
   {
    "calls": 0,
    "id": "HOG-AS-03",
+   "kind": "assignee",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "HOG-AS-04",
+   "kind": "assignee",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "HOG-AS-05",
+   "kind": "assignee",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "HOG-AS-06",
+   "kind": "assignee",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "HOG-AS-07",
+   "kind": "assignee",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "HOG-AS-08",
+   "kind": "assignee",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "HOG-AS-09",
    "kind": "assignee",
    "ok": false
   }

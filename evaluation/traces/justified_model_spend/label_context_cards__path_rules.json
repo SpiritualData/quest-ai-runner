@@ -1,21 +1,21 @@
 {
  "calls": [],
- "cases_sha": "418162fd",
+ "cases_sha": "3d0f3720",
  "component": "label_context_cards",
  "defaulted_tags": 0,
- "git_sha": "56b559e",
+ "git_sha": "8ce3092",
  "impl": "path_rules",
  "label": "eval-trace",
  "summary": {
-  "cases": 4,
+  "cases": 11,
   "cli_reported_cost_usd": 0.0,
   "component": "label_context_cards",
-  "dev": "2/4",
+  "dev": "5/11",
   "heldout": "0/0",
   "impl": "path_rules",
   "model": null,
   "model_calls": 0,
-  "passed": 2,
+  "passed": 5,
   "sample": "",
   "seconds": 0.0,
   "tokens_in": 0,
@@ -45,6 +45,48 @@
    "id": "LCC-PLC-01",
    "kind": "place",
    "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "LCC-PLC-02",
+   "kind": "place",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "LCC-PLC-03",
+   "kind": "place",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "LCC-PLC-04",
+   "kind": "place",
+   "ok": false
+  },
+  {
+   "calls": 0,
+   "id": "LCC-PLC-05",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "LCC-PLC-06",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "LCC-PLC-07",
+   "kind": "place",
+   "ok": true
+  },
+  {
+   "calls": 0,
+   "id": "LCC-PLC-08",
+   "kind": "place",
+   "ok": false
   }
  ]
 }

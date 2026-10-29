@@ -3383,3 +3383,11 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,proactive_guidance,guided_v2,24,20,20/24,0/0,46,103374,14264,0.169,201.3,e90f546,b27633e9,claude-haiku,,,
 2026-10-29,proactive_guidance,no_nudge,24,12,12/24,0/0,12,15279,1092,0.072,45.0,034009b,b27633e9,grader-only,,,
 2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,4.6,0764621,a9f86c1a,none,,,
+2026-10-29,assist_a_terminal_session,rules_only,26,14,14/26,0/0,0,0,0,0.0,0.0,8ce3092,882af363,none,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01,AST-JDG-02,AST-JDG-03,AST-JDG-04,AST-JDG-05,AST-JDG-06,AST-JDG-07,AST-JDG-08,AST-JDG-09,AST-CLS-07,AST-CLS-08,AST-CLS-09,AST-CLS-10,AST-CLS-11,AST-CLS-12,AST-CLS-13,AST-CLS-14",0.6769
+2026-10-29,hand_off_a_goal,creator_keeps_it,18,6,6/18,0/0,0,0,0,0.0,0.0,8ce3092,255c446b,none,,,
+2026-10-29,draft_a_metric,ask_owner,10,4,4/10,0/0,0,0,0,0.0,0.0,8ce3092,b64ac4bc,none,,,
+2026-10-29,label_context_cards,path_rules,11,5,5/11,0/0,0,0,0,0.0,0.0,8ce3092,3d0f3720,none,,,
+2026-10-29,assist_a_terminal_session,fast_model_helpers_live,26,25,25/26,0/0,26,5365,1138,0.000992,21.5,8ce3092,882af363,gemini-3.1-flash-lite,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01,AST-JDG-02,AST-JDG-03,AST-JDG-04,AST-JDG-05,AST-JDG-06,AST-JDG-07,AST-JDG-08,AST-JDG-09,AST-CLS-07,AST-CLS-08,AST-CLS-09,AST-CLS-10,AST-CLS-11,AST-CLS-12,AST-CLS-13,AST-CLS-14",0.9053
+2026-10-29,hand_off_a_goal,model_judge_fast,18,16,16/18,0/0,18,6652,685,0.000939,18.5,8ce3092,255c446b,gemini-3.1-flash-lite,,,
+2026-10-29,draft_a_metric,capped_model_draft_fast,10,9,9/10,0/0,10,5444,1714,0.00123,12.9,8ce3092,b64ac4bc,gemini-3.1-flash-lite,,,
+2026-10-29,label_context_cards,fast_model_labels_fast,11,10,10/11,0/0,11,2072,617,0.000454,11.8,8ce3092,3d0f3720,gemini-3.1-flash-lite,,,
