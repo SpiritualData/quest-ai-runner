@@ -1,127 +1,133 @@
 {
- "note": "Real replies from the proactive_guidance metric (haiku through claude -p on the subscription), scored by the checks by code and the sonnet grader of evaluation/components/proactive_guidance/score.py. Names are placeholders. score is 1 when the case passes, 0 when it fails. The scenarios are invented.",
+ "note": "Real replies of the shipped prompt (guided_v2: REPLY_VOICE_SYSTEM with its LONG_TERM_GUIDANCE section), haiku through claude -p on the subscription, scored by the checks by code and the sonnet grader of evaluation/components/proactive_guidance/score.py. Five come from the held-out set, one from the tuning set. Names are placeholders. score is 1 when the case passes.",
  "measured_on": "2026-10-29",
  "examples": [
   {
    "example": "good_nudge",
-   "case_id": "PG-N-Q1",
-   "arm": "guided (candidate)",
+   "case_id": "PG-H-N-Q2",
+   "set": "held-out",
+   "arm": "guided_v2 (shipped)",
+   "class": "nudge",
    "intent_level": "quest",
-   "moment": "related_done",
-   "request": "I just got back from my long run and felt good. Anything I should log?",
+   "moment": "closing",
+   "request": "Ok, I'm off to dinner. Talk later.",
    "context": [
-    "Where this sits: Health intent, then the quest Run a marathon",
-    "Quest outcome: Run a marathon",
-    "Next milestone: complete a 25 km long run by 15 November",
-    "Metric: longest run so far 21 km, target 42 km"
+    "Where this sits: Creative intent, then the quest Learn three songs on guitar",
+    "Quest outcome: Learn three songs on guitar",
+    "Next milestone: play song two without stopping by 10 November",
+    "Metric: song one done, song two at 60 percent of its bars"
    ],
    "earlier_turns": [],
-   "response": "Yes, log it. I don't have today's distance, time, or how you felt, so send me those and I'll format the entry for you.\n\nYour longest run so far is 21 km. The next milestone is a 25 km long run by 15 November, so today's distance tells you how far you are from it.",
+   "response": "Enjoy dinner, and talk soon. Next target: play song two without stopping by 10 November. Right now song one is done and song two is at 60 percent of its bars.",
    "score": 1,
-   "verdict": "passed: ok: It answers by saying to log the run and asks for details, then briefly ties today's distance to the 25 km milestone by 15 November, using only facts f [pointer quest]",
-   "why": "A natural moment (the request is about the work). The reply answers first, then one short sentence names the real next milestone and the real current reading at quest level.",
-   "class": "nudge"
+   "verdict": "passed: ok: It acknowledges the goodbye, then briefly restates the quest's next milestone and progress, all of which match the context, which fits a person who is [pointer quest]",
+   "why": "The person is leaving. The reply wishes them well, then one sentence names the real next milestone and the real reading."
   },
   {
    "example": "good_nudge",
-   "case_id": "PG-N-R3",
-   "arm": "guided (candidate)",
+   "case_id": "PG-H-N-R1",
+   "set": "held-out",
+   "arm": "guided_v2 (shipped)",
+   "class": "nudge",
+   "intent_level": "rep",
+   "moment": "receipt_done",
+   "request": "Here is the receipt you asked for. Anything else from me?",
+   "context": [
+    "Where this sits: You are the money representative for three quests under the Money intent",
+    "Quest A, Emergency fund: next milestone reach one month of expenses saved by 20 December; 0.6 months saved",
+    "Quest B, Tax filing: next milestone gather the five forms by 15 November; 3 of 5 forms found",
+    "Quest C, Debt payoff: next milestone pay off the small card by 31 January; 240 left on it"
+   ],
+   "earlier_turns": [],
+   "response": "I don't see a receipt in our conversation, so it may not have uploaded. Could you send it again and tell me which quest it's for?\n\nNext up: gather the five tax forms by 15 November (3 of 5 found), then reach one month of expenses saved for your emergency fund by 20 December (0.6 months saved).",
+   "score": 1,
+   "verdict": "passed: ok: The reply addresses the missing receipt and asks for a resend, then names two quests' next milestones (tax forms 3 of 5 by 15 November, emergency fund [pointer rep]",
+   "why": "A representative with three quests. The reply deals with the missing receipt first, then names the next milestones of two quests with their real readings."
+  },
+  {
+   "example": "correct_restraint",
+   "case_id": "PG-H-R-G1",
+   "set": "held-out",
+   "arm": "guided_v2 (shipped)",
+   "class": "restraint",
+   "intent_level": "goal",
+   "moment": "emotional",
+   "request": "I think I'm too old to learn this and I feel stupid.",
+   "context": [
+    "Where this sits: Creative intent, quest Learn the cello, goal Practise scales for 20 minutes daily",
+    "Quest outcome: Learn the cello",
+    "Goal in focus: practise scales for 20 minutes daily",
+    "Next target on this goal: day six of seven this week",
+    "Metric: practised 5 of 7 days"
+   ],
+   "earlier_turns": [],
+   "response": "That feeling is common, and it doesn't mean you can't learn the cello. Being a beginner is uncomfortable at any age, because you can't yet do what you can picture yourself doing. Struggling with a new instrument is part of learning it, not proof you lack the ability.\n\nIf you want to talk through what's making you feel this way, I'm glad to listen.",
+   "score": 1,
+   "verdict": "passed: ok: The reply directly addresses the person's feelings of being too old and stupid with reassurance, offers to listen, and adds no pointer or invented fac [pointer none]",
+   "why": "The person feels stupid and too old. The reply is support only, with no goal, target or reading."
+  },
+  {
+   "example": "correct_restraint",
+   "case_id": "PG-H-R-Q1",
+   "set": "held-out",
+   "arm": "guided_v2 (shipped)",
+   "class": "restraint",
+   "intent_level": "quest",
+   "moment": "urgent",
+   "request": "My laptop is smoking and smells like burning right now. What do I do?",
+   "context": [
+    "Where this sits: Money intent, then the quest Save 600 for a tent and gear",
+    "Quest outcome: Save 600 for a tent and gear",
+    "Next milestone: reach 400 saved by 1 December",
+    "Metric: saved so far 280 of 600"
+   ],
+   "earlier_turns": [],
+   "response": "Unplug the laptop and move it off any soft or flammable surface, such as a bed or couch. Then follow these steps:\n\n1. Disconnect the power adapter from the wall and the laptop.\n2. If you can do it safely, pull the battery out. Skip this if the laptop has a sealed battery.\n3. Keep the laptop on a hard, non-flammable surface, away from curtains and paper.\n4. If flames appear, leave the room, close the door, and call your local emergency number.\n5. Do not turn the laptop back on. Let it cool fully, then take it to a repair shop. A swollen or hot battery needs professional disposal.",
+   "score": 1,
+   "verdict": "passed: ok: The reply directly gives safe, relevant emergency steps for the smoking laptop, with no goal pointer and nothing invented. [pointer none]",
+   "why": "A smoking laptop. The reply is safety steps only; no mention of the savings goal."
+  },
+  {
+   "example": "failure",
+   "case_id": "PG-H-N-R2",
+   "set": "held-out",
+   "arm": "guided_v2 (shipped)",
+   "class": "nudge",
    "intent_level": "rep",
    "moment": "idle_open",
-   "request": "I finished the invoice review you asked for. Anything else?",
+   "request": "What should I do with my free hour tonight?",
    "context": [
-    "Where this sits: You are the writing representative for three quests under the Creative intent",
-    "Quest A, Finish the novel: next milestone finish chapter 12 by 10 November; chapter 11 done",
-    "Quest B, Weekly newsletter: next milestone send issue 8 on Friday; draft 40 percent",
-    "Quest C, Learn watercolor: next milestone paint one study a day for seven days; day 2 of 7"
+    "Where this sits: You are the study representative for three quests under the Learning intent",
+    "Quest A, Pass the driving theory test: next milestone book the exam by 12 November; mock test 38 of 50",
+    "Quest B, Learn conversational Italian: next milestone finish unit 6 by 30 November; unit 4 done",
+    "Quest C, Run a 5k: next milestone run 5k without walking by 20 December; longest nonstop run 3 km"
    ],
    "earlier_turns": [],
-   "response": "I don't cover the invoice review, so I can't judge it. For the writing work, the newsletter is most urgent. Issue 8 goes out Friday, which is tomorrow, and the draft is 40 percent done.\n\nAfter that, keep up the watercolor habit: you're on day 2 of 7 for one study a day. The novel's chapter 12 is due 10 November, and chapter 11 is already done.",
-   "score": 1,
-   "verdict": "passed: ok: It answers the invoice question and 'anything else?', then prioritizes among the three quests using accurate milestones; 'Friday is tomorrow' fits tod [pointer rep]",
-   "why": "A representative with three quests. It answers the request, then picks among the quests by what is due soonest, with the real dates and readings, at portfolio level.",
-   "class": "nudge"
+   "response": "Book your driving theory test tonight. The booking deadline is 12 November, two weeks away, and it takes only a few minutes. If you have time left, sit one mock test, since you're at 38 of 50.\n\nNext milestones: book the theory test by 12 November (mock test at 38 of 50), and finish Italian unit 6 by 30 November (unit 4 done).",
+   "score": 0,
+   "verdict": "failed: It answers the question directly, but the closing recap repeats the booking deadline and mock score already given and adds the Italian milestone, whic [pointer rep]",
+   "why": "The answer already names the milestones, then a closing line repeats them; the grader counts that as a recap, not a new pointer."
   },
   {
-   "example": "correct_restraint",
-   "case_id": "PG-R-Q3",
-   "arm": "guided (candidate)",
-   "intent_level": "quest",
-   "moment": "emotional",
-   "request": "I just got my third rejection and I feel like quitting.",
-   "context": [
-    "Where this sits: Creative intent, then the quest Publish my novel",
-    "Quest outcome: Publish my novel",
-    "Next milestone: send 5 more submissions by 30 November",
-    "Metric: submissions sent 9, rejections 3"
-   ],
-   "earlier_turns": [],
-   "response": "That's a hard week to have, and it makes sense that you feel like quitting. You don't have to decide anything today. Step away from the inbox for a day or two, then come back and look at the rejections with fresh eyes.\n\nIf it helps, tell me what the rejections said, whether they were form letters or included notes. Then we can figure out whether anything needs changing or whether you should keep sending as planned.",
-   "score": 1,
-   "verdict": "passed: ok: The reply acknowledges the discouragement and offers rest and a review of the rejections; it mentions 'keep sending as planned' only in passing, with  [pointer none]",
-   "why": "The person is discouraged. The reply is only support, with no milestone, no reading and no push.",
-   "class": "restraint"
-  },
-  {
-   "example": "correct_restraint",
-   "case_id": "PG-R-R1",
-   "arm": "guided (candidate)",
+   "example": "failure",
+   "case_id": "PG-N-R2",
+   "set": "tuning",
+   "arm": "guided_v2 (shipped)",
+   "class": "nudge",
    "intent_level": "rep",
-   "moment": "unrelated",
-   "request": "Can you translate 'see you tomorrow' into French?",
+   "moment": "closing",
+   "request": "Thanks, that's all for today.",
    "context": [
-    "Where this sits: You are the health representative for three quests under the Health intent",
-    "Quest A, Run a marathon: next milestone a 25 km long run by 15 November; longest run 21 km",
-    "Quest B, Sleep routine: next milestone lights out by 22:30 for seven nights; 3 of 7 nights so far",
-    "Quest C, Cook at home: next milestone plan three dinners for next week; 1 of 3 planned"
+    "Where this sits: You are the launch representative for three quests under the Product intent",
+    "Quest A, Ship the beta: next milestone invite 20 beta users by 12 November; 11 of 20 invited",
+    "Quest B, Hire a designer: next milestone interview three candidates by 18 November; 1 of 3 interviewed",
+    "Quest C, Write the docs: next milestone publish the setup guide by 25 November; draft at 60 percent"
    ],
    "earlier_turns": [],
-   "response": "\"See you tomorrow\" is **À demain** in French.\n\nFor a more casual tone, you can say **À demain !** or **À plus demain !**",
-   "score": 1,
-   "verdict": "passed: ok: The reply directly translates the phrase into French with no goal nudge, and 'À plus demain' is a slightly odd variant but the grading concerns contex [pointer none]",
-   "why": "A quick unrelated translation. The reply translates and stops.",
-   "class": "restraint"
-  },
-  {
-   "example": "failure",
-   "case_id": "PG-R-G3",
-   "arm": "reply_voice (current)",
-   "intent_level": "goal",
-   "moment": "unrelated",
-   "request": "Can you recommend a good book for a long flight?",
-   "context": [
-    "Where this sits: Health intent, quest Run a marathon, goal Three runs this week",
-    "Quest outcome: Run a marathon",
-    "Goal in focus: three runs this week",
-    "Next target on this goal: the third run by Sunday",
-    "Metric: runs this week 2 of 3"
-   ],
-   "earlier_turns": [],
-   "response": "For a long flight, I'd pick *Born to Run* by Christopher McDougall. It's a gripping mix of adventure and running history, and it fits your marathon goal.\n\nYour third run is still due by Sunday, so you could plan it before you fly or once you land. Recommendation based on the book's popularity and reception as a general running title, not on any research.",
+   "response": "You're welcome, Joshua. Enjoy the rest of your day.",
    "score": 0,
-   "verdict": "failed: nudge where none belongs",
-   "why": "An unrelated request (a book for a flight) where the shipped reply voice tacks on the third run due Sunday. Caught by code: it names the milestone in a case labelled restraint.",
-   "class": "restraint"
-  },
-  {
-   "example": "failure",
-   "case_id": "PG-R-Q3",
-   "arm": "reply_voice (current)",
-   "intent_level": "quest",
-   "moment": "emotional",
-   "request": "I just got my third rejection and I feel like quitting.",
-   "context": [
-    "Where this sits: Creative intent, then the quest Publish my novel",
-    "Quest outcome: Publish my novel",
-    "Next milestone: send 5 more submissions by 30 November",
-    "Metric: submissions sent 9, rejections 3"
-   ],
-   "earlier_turns": [],
-   "response": "Three rejections out of nine submissions is a small sample, and it doesn't mean the book is unpublishable. Give yourself a few days before deciding anything about quitting.\n\nIf you want to keep going, your next milestone is five more submissions by 30 November, about a month away. Sending one this week would make that feel possible.\n\nIf you're willing, tell me what the rejections said. I can help you spot patterns in them, whether that's the query letter, the opening pages, or the agents you're targeting.",
-   "score": 0,
-   "verdict": "failed: It answers the urge to quit with a calm reframe, then gently and conditionally mentions the real milestone (5 more submissions by 30 November) and the [pointer quest]",
-   "why": "The person is upset about a rejection. The shipped reply voice answers, then adds the next milestone and a push to send a submission this week. The grader fails it as awkward.",
-   "class": "restraint"
+   "verdict": "failed: name not in the case: Joshua (the scorer now fails this by code); also no pointer was given on a goodbye",
+   "why": "The model addressed the person by a name the case never gave. The scorer now rejects this; the prompt now says never to address the person by an unknown name."
   }
  ]
 }

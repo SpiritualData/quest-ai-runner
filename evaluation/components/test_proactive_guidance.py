@@ -158,3 +158,9 @@ def test_a_reply_that_names_a_person_the_case_does_not_hold_fails_by_code():
     case = BY_ID["PG-N-R2"]
     assert "name not in the case: Sam" in " ".join(score.problems_by_code(case, "You're welcome, Sam. Enjoy the rest of your day."))
     assert not [p for p in score.problems_by_code(case, "You're welcome, Thursday. Enjoy.") if p.startswith("name not")]
+
+
+def test_the_numbers_of_a_numbered_list_are_not_a_reading():
+    reply = "Call your bank now.\n1. Freeze the card.\n2. Change the password.\n3. Ask for a record.\n5. Watch your statements."
+    case = json.loads((HERE / "proactive_guidance" / "heldout_cases.json").read_text())[-1]
+    assert score.problems_by_code(case, reply) == []

@@ -1,0 +1,44 @@
+{
+ "spec_id": "reply-voice.long-term-guidance",
+ "registered_as_prompt_spec": false,
+ "note": "LONG_TERM_GUIDANCE is a section of REPLY_VOICE_SYSTEM, not a separate prompt spec, so it is not in justified_model_spend/cases.json; this file is its audit entry. Measured 2026-10-29 with claude -p (haiku), six cases, the shipped prompt with and without the section, same message.",
+ "section": {
+  "words": 392,
+  "characters": 2169
+ },
+ "added_input_tokens_per_reply": {
+  "avg": 623.0,
+  "max": 623,
+  "min": 623
+ },
+ "cache": {
+  "without_section": {
+   "cache_creation": 616,
+   "cache_read": 1781
+  },
+  "with_section": {
+   "cache_creation": 616,
+   "cache_read": 2404
+  },
+  "reading": "The section sits in the cached prefix: the creation tokens are unchanged and all 623 added tokens were read from cache, so on a warm session they are billed at the cache-read rate."
+ },
+ "added_output_tokens_per_reply": {
+  "avg": 86.2,
+  "values": [
+   263,
+   416,
+   137,
+   -32,
+   -227,
+   -40
+  ],
+  "reading": "Noisy (n=6, from minus 227 to plus 416): replies that add the pointer sentence are longer, replies that hold back are shorter."
+ },
+ "dollars_per_reply": {
+  "input_price_per_mtok_haiku": 0.8,
+  "uncached": 0.000498,
+  "cache_read_at_a_tenth": 4.98e-05,
+  "output": "Not priced: the output price is not in quest_ai_runner/pricing.py, so the output change is reported in tokens only."
+ },
+ "verdict": "Justified at the measured size: about 623 input tokens a reply, about half a thousandth of a dollar uncached and about a twentieth of that cached, for a section that moves the two-sided value from 0.42 to 0.50 up to 0.79 on the tuning set and 0.83 to 0.92 on the held-out set. Flag: it is on every chat reply, including the many that need no pointer; if a cheap pre-check can tell those apart, the section could be added only where it matters."
+}

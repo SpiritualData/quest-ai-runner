@@ -44,7 +44,11 @@ def reads(reply_numbers, value):
     return bool(need) and need <= reply_numbers
 
 
+LIST_MARKER = re.compile(r"^\s*\d+[.)]\s+", re.M)
+
+
 def named(reply, case):
+    reply = LIST_MARKER.sub("", reply)   # the 1. 2. 3. of a numbered list are not readings
     toks, nums = tokens(reply), numbers(reply)
     return (any(names(toks, k) for k in case["milestone_keys"]), any(reads(nums, v) for v in case["metric_values"]))
 

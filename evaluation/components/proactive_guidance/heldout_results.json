@@ -1,0 +1,65 @@
+{
+ "note": "Held-out set (heldout_cases.json, 12 cases written after the tuning set was frozen, before reading any reply of the candidate prompt). Run once per arm on 2026-10-29, unrecorded in results.csv (a scratch driver over the same scorer). guided_v2 first scored 0.83 (10/12); a numbered-list false positive in the scorer then failed PG-H-R-R2 and was fixed (list markers are not readings), and that one reply was re-graded: 0.92 (11/12). Both are given.",
+ "tuning_set_guided_v2": 0.79,
+ "arms": {
+  "guided_v2": {
+   "value": 0.92,
+   "nudge": "5/6",
+   "restraint": "6/6",
+   "by_level": {
+    "quest": {
+     "nudge": "2/2",
+     "restraint": "2/2"
+    },
+    "goal": {
+     "nudge": "2/2",
+     "restraint": "2/2"
+    },
+    "rep": {
+     "nudge": "1/2",
+     "restraint": "2/2"
+    }
+   },
+   "before_scorer_fix": 0.83
+  },
+  "reply_voice_prior": {
+   "value": 0.25,
+   "nudge": "2/6",
+   "restraint": "1/6",
+   "by_level": {
+    "quest": {
+     "nudge": "1/2",
+     "restraint": "1/2"
+    },
+    "goal": {
+     "nudge": "0/2",
+     "restraint": "0/2"
+    },
+    "rep": {
+     "nudge": "1/2",
+     "restraint": "0/2"
+    }
+   }
+  },
+  "no_nudge_floor": {
+   "value": 0.5,
+   "nudge": "0/6",
+   "restraint": "6/6",
+   "by_level": {
+    "quest": {
+     "nudge": "0/2",
+     "restraint": "2/2"
+    },
+    "goal": {
+     "nudge": "0/2",
+     "restraint": "2/2"
+    },
+    "rep": {
+     "nudge": "0/2",
+     "restraint": "2/2"
+    }
+   }
+  }
+ },
+ "verdict": "Held-out is not below the tuning set (0.83 raw, 0.92 after the fix, against 0.79), so selected stays guided_v2."
+}
