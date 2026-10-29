@@ -1,0 +1,187 @@
+{
+ "note": "Order matters: no-call floors first, subscription arms, API arms last, then the ablation arm. 'tier' is offline (no model call), subscription (claude -p, no API dollars) or api (a paid fast-tier call, needs --api). est_usd is a per-arm price estimate the API budget check adds up before the first call.",
+ "ablation": {
+  "component": "justified_model_spend",
+  "impl": "spec_registry_ablation"
+ },
+ "arms": [
+  {
+   "component": "assist_a_terminal_session",
+   "impl": "rules_only",
+   "tier": "offline",
+   "max_calls": 0,
+   "args": [
+    "--only",
+    "AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01"
+   ]
+  },
+  {
+   "component": "spec_selection",
+   "impl": "lexical_vector",
+   "tier": "offline",
+   "max_calls": 0,
+   "args": []
+  },
+  {
+   "component": "overseer_signals",
+   "impl": "no_overseer",
+   "tier": "offline",
+   "max_calls": 0,
+   "args": []
+  },
+  {
+   "component": "hand_off_a_goal",
+   "impl": "creator_keeps_it",
+   "tier": "offline",
+   "max_calls": 0,
+   "args": []
+  },
+  {
+   "component": "draft_a_metric",
+   "impl": "ask_owner",
+   "tier": "offline",
+   "max_calls": 0,
+   "args": []
+  },
+  {
+   "component": "label_context_cards",
+   "impl": "path_rules",
+   "tier": "offline",
+   "max_calls": 0,
+   "args": []
+  },
+  {
+   "component": "judge_live_decisions",
+   "impl": "no_call_floor",
+   "tier": "offline",
+   "max_calls": 0,
+   "args": []
+  },
+  {
+   "component": "narrate_a_turn",
+   "impl": "no_beat",
+   "tier": "offline",
+   "max_calls": 0,
+   "args": []
+  },
+  {
+   "component": "explain_an_answer",
+   "impl": "trace_template",
+   "tier": "subscription",
+   "max_calls": 40,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "describe_an_attachment",
+   "impl": "skip_images",
+   "tier": "subscription",
+   "max_calls": 40,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "spec_selection",
+   "impl": "lexical_vector_gated",
+   "tier": "subscription",
+   "max_calls": 120,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "overseer_signals",
+   "impl": "live_model",
+   "tier": "subscription",
+   "max_calls": 40,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "quest_ops",
+   "impl": "qar_orchestrator",
+   "tier": "subscription",
+   "max_calls": 300,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "quest_ops",
+   "impl": "orchestrator_pre_route",
+   "tier": "subscription",
+   "max_calls": 300,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "narrate_a_turn",
+   "impl": "model_beat",
+   "tier": "subscription",
+   "max_calls": 40,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "explain_an_answer",
+   "impl": "model_explanation",
+   "tier": "subscription",
+   "max_calls": 60,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "describe_an_attachment",
+   "impl": "vision_description",
+   "tier": "subscription",
+   "max_calls": 60,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "judge_live_decisions",
+   "impl": "live_judges",
+   "tier": "subscription",
+   "max_calls": 30,
+   "args": [],
+   "min_calls": 1
+  },
+  {
+   "component": "assist_a_terminal_session",
+   "impl": "fast_model_helpers_live",
+   "tier": "api",
+   "max_calls": 30,
+   "args": [
+    "--only",
+    "AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01"
+   ],
+   "min_calls": 1,
+   "est_usd": 0.002
+  },
+  {
+   "component": "hand_off_a_goal",
+   "impl": "model_judge_fast",
+   "tier": "api",
+   "max_calls": 30,
+   "args": [],
+   "min_calls": 1,
+   "est_usd": 0.003
+  },
+  {
+   "component": "draft_a_metric",
+   "impl": "capped_model_draft_fast",
+   "tier": "api",
+   "max_calls": 20,
+   "args": [],
+   "min_calls": 1,
+   "est_usd": 0.002
+  },
+  {
+   "component": "label_context_cards",
+   "impl": "fast_model_labels_fast",
+   "tier": "api",
+   "max_calls": 20,
+   "args": [],
+   "min_calls": 1,
+   "est_usd": 0.002
+  }
+ ]
+}

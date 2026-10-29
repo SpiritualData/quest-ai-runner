@@ -16,6 +16,9 @@ Env vars:
                             Set to a positive integer to enable. Set to 0 or "off" to disable.
   QAR_DAILY_USAGE_PATH    — JSON file for persisting today's count across restarts
                             (default: ./qar_daily_usage.json; gitignored by this repo).
+  QAR_CALL_LOG_PATH       — JSON-lines file with one line per model call (time, prompt spec id, tokens, dollars, seconds),
+                            the production record that ``summarize_call_log`` reads (default: the usage file's name with
+                            ``_calls.jsonl``; "off" disables it). Rotated to ``.1`` past ``CALL_LOG_MAX_BYTES``.
 """
 from __future__ import annotations
 
@@ -106,6 +109,71 @@ class SpendLog:
         return out
 
 
+CALL_LOG_MAX_BYTES = 5_000_000
+
+
+class CallLog:
+    """Append-only JSON-lines record of every model call, tagged with the prompt spec id, so a metric can read production
+    per-call seconds, tokens and dollars after the process is gone. Thread-safe; a write failure is logged, never raised."""
+
+    def __init__(self, path: Optional[str], max_bytes: int = CALL_LOG_MAX_BYTES) -> None:
+        self.path = Path(path) if path else None
+        self.max_bytes = max_bytes
+        self._lock = threading.Lock()
+
+    def append(self, spec_id: str, tokens_in: int, tokens_out: int, cost_usd: float, seconds: float, now: Optional[float] = None) -> None:
+        if self.path is None:
+            return
+        import time
+        line = json.dumps({"ts": round(time.time() if now is None else now, 3), "spec_id": spec_id or UNTAGGED,
+                           "tokens_in": int(tokens_in), "tokens_out": int(tokens_out),
+                           "cost_usd": round(float(cost_usd), 8), "seconds": round(float(seconds), 3)}, sort_keys=True)
+        try:
+            with self._lock:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                if self.path.exists() and self.path.stat().st_size > self.max_bytes:
+                    os.replace(self.path, self.path.with_name(self.path.name + ".1"))
+                with open(self.path, "a", encoding="utf-8") as handle:
+                    handle.write(line + "\n")
+        except OSError as e:
+            log.warning("could not append to the call log: %s", e)
+
+
+def read_call_log(path) -> list:
+    """The call records in a call log file (and its rotated ``.1`` file, older first) as dicts; unreadable lines are skipped."""
+    records: list = []
+    for file in (Path(str(path) + ".1"), Path(path)):
+        try:
+            lines = file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and "spec_id" in row:
+                records.append(row)
+    return records
+
+
+def summarize_call_log(path, spec_id: Optional[str] = None) -> dict:
+    """``{spec_id: {"calls", "seconds": {"avg","max"}, "tokens_in": {...}, "tokens_out": {...}, "cost_usd": {...}}}`` from a call log;
+    ``spec_id`` narrows it to one prompt. An empty dict means the log holds no such call (nothing is guessed)."""
+    out: dict = {}
+    rows = read_call_log(path)
+    for sid in sorted({r["spec_id"] for r in rows}):
+        if spec_id and sid != spec_id:
+            continue
+        mine = [r for r in rows if r["spec_id"] == sid]
+
+        def stat(field: str) -> dict:
+            values = [float(r.get(field) or 0) for r in mine]
+            return {"avg": sum(values) / len(values), "max": max(values)}
+        out[sid] = {"calls": len(mine), **{f: stat(f) for f in ("seconds", "tokens_in", "tokens_out", "cost_usd")}}
+    return out
+
+
 @dataclass
 class DailyUsageLimits:
     """Daily token budget. ``None`` = disabled (no cap enforced)."""
@@ -147,7 +215,8 @@ class DailyUsageTracker:
     the correct total. At midnight UTC the counter resets automatically on the next check.
     """
 
-    def __init__(self, path: Optional[str] = None, limits: Optional[DailyUsageLimits] = None):
+    def __init__(self, path: Optional[str] = None, limits: Optional[DailyUsageLimits] = None,
+                 call_log_path: Optional[str] = None):
         self._path = Path(path) if path else None
         self._limits = limits or DailyUsageLimits()
         self._lock = threading.Lock()
@@ -155,6 +224,7 @@ class DailyUsageTracker:
         self._tokens_in: int = 0
         self._tokens_out: int = 0
         self.spend_log = SpendLog()
+        self.call_log = CallLog(call_log_path)
         self._load()
 
         if self._limits.enabled():
@@ -170,7 +240,12 @@ class DailyUsageTracker:
         env = env or os.environ
         path = (env.get("QAR_DAILY_USAGE_PATH") or "").strip() or "./qar_daily_usage.json"
         limits = DailyUsageLimits.from_env(env)
-        return cls(path=path, limits=limits)
+        raw = (env.get("QAR_CALL_LOG_PATH") or "").strip()
+        if raw.lower() == "off":
+            log_path = None
+        else:
+            log_path = raw or str(Path(path).with_suffix("")) + "_calls.jsonl"
+        return cls(path=path, limits=limits, call_log_path=log_path)
 
     @staticmethod
     def _today() -> str:
@@ -226,6 +301,7 @@ class DailyUsageTracker:
                seconds: float = 0.0) -> None:
         """Add tokens from one LLM call to today's running total, and keep the call in ``spend_log`` tagged ``spec_id``."""
         self.spend_log.record(spec_id or UNTAGGED, tokens_in, tokens_out, cost_usd, seconds)
+        self.call_log.append(spec_id or UNTAGGED, tokens_in, tokens_out, cost_usd, seconds)
         with self._lock:
             self._reset_if_new_day()
             self._tokens_in += max(0, tokens_in)

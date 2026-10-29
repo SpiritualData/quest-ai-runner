@@ -1,7 +1,7 @@
 """Run an owner arm once under per-call recording, and keep the trace (paid when the arm is paid; run only by decision).
 
 ``python3 evaluation/components/justified_model_spend/measure.py <component> <impl> [--only IDS] [--sample N]
-[--max-calls N] [--record]`` drives the owner component's own arm through esoi's ``run_component`` (so the row it records
+[--max-calls N] [--min-calls N] [--record]`` drives the owner component's own arm through esoi's ``run_component`` (so the row it records
 in the results log is the ordinary one), with the call meter replaced by one that also writes every model call into a
 ``usage.SpendLog`` tagged with the prompt spec id that wrote its prompt (``PromptSpec.render`` sets the tag; a call whose
 tag did not survive a worker thread is tagged with the prompt the case kind belongs to and counted as ``defaulted``).
@@ -68,8 +68,16 @@ class SpendMeter(harness.CallMeter):
         return super().wrap(provider, methods)
 
 
-def measure(component, impl, argv, kind_spec):
-    """Run ``component``/``impl`` with recording; returns the trace dict and writes it to ``evaluation/traces/justified_model_spend/``."""
+class ZeroCallRun(RuntimeError):
+    """A paid arm made fewer model calls than ``--min-calls``: nothing is recorded (a 0-call run proves nothing)."""
+
+
+def measure(component, impl, argv, kind_spec, min_calls=0):
+    """Run ``component``/``impl`` with recording; returns the trace dict and writes it to ``evaluation/traces/justified_model_spend/``.
+    ``--record`` in ``argv`` is held back until the run is checked against ``min_calls``: a paid arm that made fewer
+    calls records neither its row nor its trace and raises ``ZeroCallRun``."""
+    record = "--record" in argv
+    argv = [a for a in argv if a != "--record"]
     score = importlib.import_module(f"{component}.score")
     spend = usage.SpendLog()
     SpendMeter.spend, SpendMeter.kind_spec, SpendMeter.defaulted = spend, kind_spec, 0
@@ -86,6 +94,10 @@ def measure(component, impl, argv, kind_spec):
     lines = []
     with mock.patch.object(harness, "CallMeter", SpendMeter):
         summary, rows = harness.run_component(component, scorer, ["--impl", impl, *argv], common.CONFIG, say=lambda s: (lines.append(s), print(s)))
+    if min_calls and summary.get("model_calls", 0) < min_calls:
+        raise ZeroCallRun(f"{component}/{impl} made {summary.get('model_calls', 0)} model calls, fewer than --min-calls {min_calls}: not recorded")
+    if record:
+        harness.record_result(summary, common.CONFIG)
     trace = {"label": "eval-trace", "component": component, "impl": impl, "summary": summary, "turns": turn_rows,
              "calls": [vars(r) for r in spend.records], "defaulted_tags": SpendMeter.defaulted,
              "git_sha": summary.get("git_sha") or harness.current_sha(common.CONFIG), "cases_sha": harness.cases_digest(component, common.CONFIG.root / common.CONFIG.evaluation_dir)}
@@ -98,11 +110,16 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("component")
     ap.add_argument("impl")
+    ap.add_argument("--min-calls", type=int, default=0, help="refuse to record (row or trace) when the run made fewer model calls")
     known, rest = ap.parse_known_args()
     kinds = {"assist_a_terminal_session": {"ack": "assist-a-terminal-session.ack", "classify": "assist-a-terminal-session.ask-classify",
                                            "gate": "assist-a-terminal-session.ask-classify", "judge": "assist-a-terminal-session.goal-judge"},
              "spec_selection": {"*": "spec-selection.batch-judge"}, "overseer_signals": {"*": "watch-a-run.overseer"},
              "hand_off_a_goal": {"assignee": "hand-off-a-goal.assignee", "doability": "hand-off-a-goal.doability"},
              "draft_a_metric": {"*": "draft-a-metric.value"},
+             "judge_live_decisions": {"quest_rank": "judge-a-decision.quest-ranking", "reach": "act-in-the-world.reach-judge"},
              "label_context_cards": {"retrieve": "label-context-cards.metadata", "place": "label-context-cards.categorize-files"}}
-    measure(known.component, known.impl, rest, kinds.get(known.component, {}))
+    try:
+        measure(known.component, known.impl, rest, kinds.get(known.component, {}), known.min_calls)
+    except ZeroCallRun as stop:
+        sys.exit(str(stop))

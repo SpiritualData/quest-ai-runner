@@ -1,0 +1,325 @@
+[
+ {
+  "id": "JLD-01",
+  "kind": "quest_rank",
+  "area": "quest-ranking",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due next Friday"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan, week 3 of 8"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": "raised beds to build"
+    }
+   ],
+   "home": "q1"
+  },
+  "expect": {
+   "eq": {
+    "chosen": [
+     "q2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "JLD-02",
+  "kind": "quest_rank",
+  "area": "quest-ranking",
+  "args": {
+   "items": [
+    {
+     "text": "what is left on the draft",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due next Friday"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan, week 3 of 8"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": "raised beds to build"
+    }
+   ],
+   "home": "q2"
+  },
+  "expect": {
+   "eq": {
+    "chosen": [
+     "q1"
+    ]
+   }
+  }
+ },
+ {
+  "id": "JLD-03",
+  "kind": "quest_rank",
+  "area": "quest-ranking",
+  "args": {
+   "items": [
+    {
+     "text": "when do I start on the raised beds",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due next Friday"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan, week 3 of 8"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": "raised beds to build"
+    }
+   ],
+   "home": "q1"
+  },
+  "expect": {
+   "eq": {
+    "chosen": [
+     "q3"
+    ]
+   }
+  }
+ },
+ {
+  "id": "JLD-04",
+  "kind": "quest_rank",
+  "area": "quest-ranking",
+  "args": {
+   "items": [
+    {
+     "text": "when is the draft due",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due next Friday"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan, week 3 of 8"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": "raised beds to build"
+    }
+   ],
+   "home": "q1"
+  },
+  "expect": {
+   "eq": {
+    "chosen": [
+     "q1"
+    ]
+   }
+  }
+ },
+ {
+  "id": "JLD-05",
+  "kind": "quest_rank",
+  "area": "quest-ranking",
+  "args": {
+   "items": [
+    {
+     "text": "what is the capital of Peru",
+     "previous": ""
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due next Friday"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan, week 3 of 8"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": "raised beds to build"
+    }
+   ],
+   "home": null
+  },
+  "expect": {
+   "eq": {
+    "chosen": [
+     null
+    ]
+   }
+  }
+ },
+ {
+  "id": "JLD-06",
+  "kind": "quest_rank",
+  "area": "quest-ranking",
+  "args": {
+   "items": [
+    {
+     "text": "how is my 5K plan going",
+     "previous": ""
+    },
+    {
+     "text": "and what is next for it",
+     "previous": "how is my 5K plan going"
+    }
+   ],
+   "quests": [
+    {
+     "quest_id": "q1",
+     "title": "Grant writing",
+     "state": "draft due next Friday"
+    },
+    {
+     "quest_id": "q2",
+     "title": "Running",
+     "state": "5K plan, week 3 of 8"
+    },
+    {
+     "quest_id": "q3",
+     "title": "Garden",
+     "state": "raised beds to build"
+    }
+   ],
+   "home": "q1"
+  },
+  "expect": {
+   "eq": {
+    "chosen": [
+     "q2",
+     "q2"
+    ]
+   }
+  }
+ },
+ {
+  "id": "JLD-07",
+  "kind": "reach",
+  "area": "reach-judge",
+  "args": {
+   "message": "Which goals are still open on the grant quest?",
+   "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
+  },
+  "expect": {
+   "eq": {
+    "reach": "inside",
+    "covered": false
+   }
+  }
+ },
+ {
+  "id": "JLD-08",
+  "kind": "reach",
+  "area": "reach-judge",
+  "args": {
+   "message": "How much disk is free on the dev server right now?",
+   "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
+  },
+  "expect": {
+   "eq": {
+    "reach": "outside",
+    "covered": true
+   }
+  }
+ },
+ {
+  "id": "JLD-09",
+  "kind": "reach",
+  "area": "reach-judge",
+  "args": {
+   "message": "What is in the Q3 tab of the finance spreadsheet?",
+   "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
+  },
+  "expect": {
+   "eq": {
+    "reach": "outside",
+    "covered": false
+   }
+  }
+ },
+ {
+  "id": "JLD-10",
+  "kind": "reach",
+  "area": "reach-judge",
+  "args": {
+   "message": "What will the weather be in Lisbon tomorrow?",
+   "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
+  },
+  "expect": {
+   "eq": {
+    "reach": "world",
+    "covered": false
+   }
+  }
+ },
+ {
+  "id": "JLD-11",
+  "kind": "reach",
+  "area": "reach-judge",
+  "args": {
+   "message": "Remind me to restart the dev server on Friday.",
+   "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
+  },
+  "expect": {
+   "eq": {
+    "reach": "inside",
+    "covered": false
+   }
+  }
+ },
+ {
+  "id": "JLD-12",
+  "kind": "reach",
+  "area": "reach-judge",
+  "args": {
+   "message": "What is the team working on this week?",
+   "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
+  },
+  "expect": {
+   "eq": {
+    "reach": "inside",
+    "covered": false
+   }
+  }
+ }
+]

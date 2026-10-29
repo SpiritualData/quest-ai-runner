@@ -335,5 +335,53 @@
   },
   "budget_source": "none declared: the metric record states the bound in words only, so no dollar, token or latency budget is enforced (undeclared, not zero); the only judgment is the ablation",
   "source": "owner metric metric-label-context-cards; owner case evaluation/components/label_context_cards/cases.json (the one placement case from tests/test_context_card_update.py, the same for both arms), measured through a host generate adapter because the shipped wiring places nothing with a real provider; fire rate and cost count only the calls tagged label-context-cards.categorize-files"
+ },
+ {
+  "id": "JMS-QRK",
+  "spec_id": "judge-a-decision.quest-ranking",
+  "owner_metric": "metric-judge-a-decision",
+  "keep": {
+   "component": "judge_live_decisions",
+   "impl": "live_judges"
+  },
+  "ablation": {
+   "component": "judge_live_decisions",
+   "impl": "no_call_floor",
+   "what": "the call is dropped: the quest ranker's own fallback, the home quest or none"
+  },
+  "case_kinds": [
+   "quest_rank"
+  ],
+  "budget": {
+   "cost_usd_per_turn": null,
+   "seconds_per_call": 8.0,
+   "tokens": null
+  },
+  "budget_source": "quest_ai_runner/core/runtime_settings.py quest_judge_timeout_seconds (8.0s): the turn uses the home quest when the judge is slower. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
+  "source": "owner metric metric-judge-a-decision (its live arm judge_live_decisions/live_judges); owner cases evaluation/components/judge_live_decisions/cases.json (the quest_rank cases, the same for both arms); the calls are on the Claude Code subscription at the cheapest tier, not the deployment's configured tier"
+ },
+ {
+  "id": "JMS-RCH",
+  "spec_id": "act-in-the-world.reach-judge",
+  "owner_metric": "metric-act-in-the-world",
+  "keep": {
+   "component": "judge_live_decisions",
+   "impl": "live_judges"
+  },
+  "ablation": {
+   "component": "judge_live_decisions",
+   "impl": "no_call_floor",
+   "what": "the call is dropped: no verdict is stamped and the planner plans as for a request inside the readable sources"
+  },
+  "case_kinds": [
+   "reach"
+  ],
+  "budget": {
+   "cost_usd_per_turn": null,
+   "seconds_per_call": 20.0,
+   "tokens": null
+  },
+  "budget_source": "quest_ai_runner/core/orchestrator_types.py planner_reach_judge_timeout_seconds (20.0s): planning proceeds without a verdict after that. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
+  "source": "owner metric metric-act-in-the-world (its live arm judge_live_decisions/live_judges); owner cases evaluation/components/judge_live_decisions/cases.json (the reach cases, the same for both arms); the calls are on the Claude Code subscription at the cheapest tier, not the deployment's configured tier"
  }
 ]

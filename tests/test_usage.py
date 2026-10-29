@@ -373,3 +373,47 @@ def test_the_tag_is_per_context_so_concurrent_turns_do_not_mix():
         seen["inner"] = active_spec()
     contextvars.copy_context().run(worker)
     assert seen["inner"] == "inner" and active_spec() == "outer"
+
+
+# ---------------------------------------------------------------------------
+# The persisted per-call record (production seconds per prompt spec)
+# ---------------------------------------------------------------------------
+
+def test_every_recorded_call_persists_with_its_spec_tag_and_seconds(tmp_path):
+    from quest_ai_runner.usage import summarize_call_log
+    tracker = DailyUsageTracker(path=str(tmp_path / "u.json"), call_log_path=str(tmp_path / "calls.jsonl"))
+    tracker.record(100, 20, spec_id="watch-a-run.overseer", seconds=1.5)
+    tracker.record(120, 30, spec_id="watch-a-run.overseer", seconds=3.5)
+    tracker.record(10, 5, spec_id="narrate-a-turn.first-beat", seconds=0.5)
+    tracker.record(1, 1)
+    got = summarize_call_log(tmp_path / "calls.jsonl")
+    assert got["watch-a-run.overseer"]["calls"] == 2
+    assert got["watch-a-run.overseer"]["seconds"] == {"avg": 2.5, "max": 3.5}
+    assert got["watch-a-run.overseer"]["tokens_in"]["max"] == 120
+    assert "(untagged)" in got and summarize_call_log(tmp_path / "calls.jsonl", "nothing") == {}
+
+
+def test_a_new_process_reads_what_an_earlier_one_wrote(tmp_path):
+    from quest_ai_runner.usage import summarize_call_log
+    DailyUsageTracker(path=str(tmp_path / "u.json"), call_log_path=str(tmp_path / "c.jsonl")).record(5, 5, spec_id="a.b", seconds=2.0)
+    DailyUsageTracker(path=str(tmp_path / "u.json"), call_log_path=str(tmp_path / "c.jsonl")).record(5, 5, spec_id="a.b", seconds=4.0)
+    assert summarize_call_log(tmp_path / "c.jsonl", "a.b")["a.b"]["seconds"]["max"] == 4.0
+
+
+def test_the_call_log_default_path_follows_the_usage_file_and_can_be_switched_off(tmp_path):
+    on = DailyUsageTracker.from_env({"QAR_DAILY_USAGE_PATH": str(tmp_path / "usage.json")})
+    assert str(on.call_log.path) == str(tmp_path / "usage_calls.jsonl")
+    off = DailyUsageTracker.from_env({"QAR_DAILY_USAGE_PATH": str(tmp_path / "usage.json"), "QAR_CALL_LOG_PATH": "off"})
+    off.record(1, 1, spec_id="x.y", seconds=1.0)
+    assert off.call_log.path is None and not (tmp_path / "usage_calls.jsonl").exists()
+
+
+def test_the_call_log_rotates_and_skips_a_corrupt_line(tmp_path):
+    from quest_ai_runner.usage import CallLog, read_call_log
+    path = tmp_path / "c.jsonl"
+    small = CallLog(str(path), max_bytes=200)
+    for i in range(6):
+        small.append("a.b", i, i, 0.0, 1.0)
+    with open(path, "a") as handle:
+        handle.write("{not json\n")
+    assert (tmp_path / "c.jsonl.1").exists() and len(read_call_log(path)) >= 3
