@@ -1,3 +1,4 @@
+import os
 import json
 CASES = []
 CLAIM = "The reply states what was changed and matches the database diff; it claims nothing that was not executed"
@@ -381,7 +382,7 @@ assert len(HOLD) == 20 and set(HOLD) <= set(ids)
 for c in CASES:
     if c.get("precheck") == {}: c.pop("precheck")
     if "forbid_writes" not in c: pass
-base = "/home/joshua/hq/stories/spiritual_data/product/launch_code/quest-ai-runner/evaluation/components/chat_quality/datasets/"
+base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "datasets") + os.sep
 json.dump(CASES, open(base + "reliability.json", "w"), indent=1, ensure_ascii=False)
 json.dump({"holdout": HOLD, "note": "20 cases kept unseen until the end of the triage so fixes are not fitted to the test"}, open(base + "_reliability_holdout.json", "w"), indent=1)
 print("wrote", len(CASES))
