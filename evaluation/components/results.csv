@@ -3125,3 +3125,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,end_to_end,rules_only,13,6,6/13,0/0,0,0,0,0.0,0.1,4bd0a20,489a4a26,none,,,0.6231
 2026-10-29,end_to_end,qar_live,13,12,12/13,0/0,94,720715,27149,0.5981,314.4,4bd0a20,489a4a26,claude-code-subscription,,,0.7477
 2026-10-29,qar_overall,recorded_rows,9,4,4/9,0/0,0,0,0,0.0,3.6,4bd0a20,a9f86c1a,none,,,
+2026-10-29,hub_of_hubs,registry_scan,80,64,64/80,0/0,0,0,0,0.0,0.0,96a6f06,bc172b4a,none,,,
