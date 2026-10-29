@@ -106,6 +106,7 @@ _DAILY_LIMIT_FALLBACK_MESSAGE = (
 
 
 @implementation("search-the-web", "web_research")
+@implementation("know-the-world", "web_with_support_check")
 class WebResearchAdapter:
     """Snippet-first web search + focus-scored page fetch, for the orchestrator's planner.
 
