@@ -3509,3 +3509,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,know_the_world,memory_only,9,0,0/9,0/0,0,0,0,0.0,0.0,853e312,98a1ca7d,none,,,
 2026-10-29,core_ml_tasks,labelled_rows,11,4,4/11,0/0,0,0,0,0.0,0.0,853e312,a90d8fcc,none,,,
 2026-10-29,core_ml_tasks,none_mapped,11,3,3/11,0/0,0,0,0,0.0,0.0,853e312,a90d8fcc,none,,,
+2026-10-29,verify_offline,collect_by_file,29,29,29/29,0/0,0,0,0,0.0,58.6,3c6baea,8995c77b,none,,,
+2026-10-29,hub_of_hubs,registry_scan,80,64,64/80,0/0,0,0,0,0.0,0.0,3c6baea,bc172b4a,none,,,
