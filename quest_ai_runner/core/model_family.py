@@ -29,6 +29,16 @@ def register_model_prefix(prefix: str, provider_name: str) -> None:
     MODEL_PREFIX_PROVIDERS[(prefix or "").strip().lower()] = provider_name
 
 
+def route_extra_model_prefixes(provider_name: str, env) -> List[str]:
+    """Route extra model-id prefixes to ``provider_name`` from ``QAR_<PROVIDER>_MODEL_PREFIXES`` (comma separated), so the ids of
+    an OpenAI-compatible endpoint (``llama``, ``qwen``) reach the provider that serves it. Returns the prefixes added."""
+    raw = (env.get(f"QAR_{provider_name.upper()}_MODEL_PREFIXES") or "").strip()
+    added = [p.strip().lower() for p in raw.split(",") if p.strip()]
+    for prefix in added:
+        register_model_prefix(prefix, provider_name)
+    return added
+
+
 def provider_name_for_model(model: str, available: Optional[Collection[str]] = None) -> Optional[str]:
     """The provider name the first matching prefix names, or None. With ``available``, None also when that provider is
     not among them (the caller then uses its primary provider)."""

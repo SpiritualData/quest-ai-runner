@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from .core.model_family import route_extra_model_prefixes
 from .config_retrieval import _retrieval_has_web_search, build_registry, fold_into_retrieval
 from .config_resolvers import register_deepseek
 from .config_support import _log
@@ -35,6 +36,7 @@ def wire_providers(cfg: Any) -> None:
     try:
         all_providers["openai"] = OpenAIProvider()
         _log.debug("Registered OpenAI provider")
+        route_extra_model_prefixes("openai", os.environ)
     except Exception as e:  # noqa: BLE001
         _log.debug(f"OpenAI provider unavailable: {type(e).__name__}")
     # DeepSeek is opt-in: registered ONLY when its key is set, and never auto-bucketed into a tier

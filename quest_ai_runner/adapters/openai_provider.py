@@ -31,7 +31,11 @@ class OpenAIProvider(ModelProviderBase):
                  base_url: Optional[str] = None):
         super().__init__()
         self._api_key = api_key or os.getenv(self.key_env_name)
-        self._base_url = base_url
+        # OPENAI_BASE_URL points this provider at any OpenAI-compatible endpoint (a LiteLLM proxy, vLLM, Ollama, a gateway), so such a
+        # hub is a configuration change; a subclass that passes its own base_url keeps it.
+        env_url = os.getenv("OPENAI_BASE_URL") if self.key_env_name == "OPENAI_API_KEY" else None
+        self._base_url = base_url or env_url
+        self._keyless_ok = bool(env_url) and not base_url        # a self-hosted endpoint named by the environment
         self.cache_seconds = cache_seconds
         self._client = None
         self._models_cache: Optional[List[str]] = None
@@ -49,9 +53,10 @@ class OpenAIProvider(ModelProviderBase):
                     "openai is not installed. "
                     "Install it with: pip install openai"
                 )
-            if not self._api_key:
+            if not self._api_key and not self._keyless_ok:
                 raise RuntimeError(f"{self.key_env_name} is not configured")
-            kwargs: Dict[str, Any] = {"api_key": self._api_key}
+            # A self-hosted OpenAI-compatible endpoint often takes no key; the SDK still needs a non-empty string.
+            kwargs: Dict[str, Any] = {"api_key": self._api_key or "not-needed"}
             if self._base_url:
                 kwargs["base_url"] = self._base_url
             self._client = OpenAI(**kwargs)
