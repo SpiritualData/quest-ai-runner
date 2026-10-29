@@ -1,9 +1,9 @@
 {
  "calls": [],
- "cases_sha": "11f278b8",
+ "cases_sha": "d224f01e",
  "component": "hand_off_a_goal",
  "defaulted_tags": 0,
- "git_sha": "8813412",
+ "git_sha": "56b559e",
  "impl": "creator_keeps_it",
  "label": "eval-trace",
  "summary": {

@@ -1,46 +1,46 @@
 {
  "calls": [
   {
-   "cost_usd": 8.470000000000001e-05,
+   "cost_usd": 9.070000000000002e-05,
    "critical_path": true,
-   "seconds": 2.7581259139988106,
+   "seconds": 2.5376649870013352,
    "spec_id": "draft-a-metric.value",
    "tokens_in": 519,
-   "tokens_out": 82,
+   "tokens_out": 97,
    "turn": 1
   },
   {
-   "cost_usd": 8.15e-05,
+   "cost_usd": 8.310000000000001e-05,
    "critical_path": true,
-   "seconds": 1.3453300799883436,
+   "seconds": 0.879467153979931,
    "spec_id": "draft-a-metric.value",
    "tokens_in": 439,
-   "tokens_out": 94,
+   "tokens_out": 98,
    "turn": 2
   },
   {
-   "cost_usd": 8.11e-05,
+   "cost_usd": 7.47e-05,
    "critical_path": true,
-   "seconds": 0.919443874998251,
+   "seconds": 1.2439958280010615,
    "spec_id": "draft-a-metric.value",
    "tokens_in": 403,
-   "tokens_out": 102,
+   "tokens_out": 86,
    "turn": 3
   },
   {
-   "cost_usd": 0.00011190000000000001,
+   "cost_usd": 0.00010709999999999999,
    "critical_path": true,
-   "seconds": 1.1888031539856456,
+   "seconds": 1.2698557050025556,
    "spec_id": "draft-a-metric.value",
    "tokens_in": 403,
-   "tokens_out": 179,
+   "tokens_out": 167,
    "turn": 4
   }
  ],
  "cases_sha": "f1c1dec2",
  "component": "draft_a_metric",
  "defaulted_tags": 0,
- "git_sha": "8813412",
+ "git_sha": "56b559e",
  "impl": "capped_model_draft_fast",
  "label": "eval-trace",
  "summary": {
@@ -54,9 +54,9 @@
   "model_calls": 4,
   "passed": 2,
   "sample": "",
-  "seconds": 6.2,
+  "seconds": 5.9,
   "tokens_in": 1764,
-  "tokens_out": 457
+  "tokens_out": 448
  },
  "turns": [
   {

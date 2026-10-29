@@ -1,36 +1,36 @@
 {
  "calls": [
   {
-   "cost_usd": 6.010000000000001e-05,
+   "cost_usd": 6.050000000000001e-05,
    "critical_path": true,
-   "seconds": 2.933991920988774,
+   "seconds": 2.5977260890067555,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 217,
-   "tokens_out": 96,
+   "tokens_out": 97,
    "turn": 1
   },
   {
-   "cost_usd": 5.860000000000001e-05,
+   "cost_usd": 5.4600000000000006e-05,
    "critical_path": true,
-   "seconds": 1.0339344480016734,
+   "seconds": 1.149373841995839,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 194,
-   "tokens_out": 98,
+   "tokens_out": 88,
    "turn": 2
   },
   {
-   "cost_usd": 5.72e-05,
+   "cost_usd": 5.760000000000001e-05,
    "critical_path": true,
-   "seconds": 0.8896479630202521,
+   "seconds": 1.0049979540053755,
    "spec_id": "label-context-cards.metadata",
    "tokens_in": 192,
-   "tokens_out": 95,
+   "tokens_out": 96,
    "turn": 3
   },
   {
    "cost_usd": 3.7800000000000004e-05,
    "critical_path": true,
-   "seconds": 0.7950183550128713,
+   "seconds": 0.9888382359931711,
    "spec_id": "label-context-cards.categorize-files",
    "tokens_in": 186,
    "tokens_out": 48,
@@ -40,23 +40,23 @@
  "cases_sha": "418162fd",
  "component": "label_context_cards",
  "defaulted_tags": 0,
- "git_sha": "8813412",
+ "git_sha": "56b559e",
  "impl": "fast_model_labels_fast",
  "label": "eval-trace",
  "summary": {
   "cases": 4,
   "cli_reported_cost_usd": 0.0,
   "component": "label_context_cards",
-  "dev": "2/4",
+  "dev": "3/4",
   "heldout": "0/0",
   "impl": "fast_model_labels_fast",
   "model": "gemini-3.1-flash-lite",
   "model_calls": 4,
-  "passed": 2,
+  "passed": 3,
   "sample": "",
-  "seconds": 5.7,
+  "seconds": 5.8,
   "tokens_in": 789,
-  "tokens_out": 337
+  "tokens_out": 329
  },
  "turns": [
   {
@@ -69,7 +69,7 @@
    "calls": 1,
    "id": "LCC-RET-02",
    "kind": "retrieve",
-   "ok": false
+   "ok": true
   },
   {
    "calls": 1,

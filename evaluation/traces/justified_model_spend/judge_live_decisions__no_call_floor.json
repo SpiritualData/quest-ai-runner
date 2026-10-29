@@ -3,7 +3,7 @@
  "cases_sha": "5a83064b",
  "component": "judge_live_decisions",
  "defaulted_tags": 0,
- "git_sha": "8813412",
+ "git_sha": "56b559e",
  "impl": "no_call_floor",
  "label": "eval-trace",
  "summary": {
