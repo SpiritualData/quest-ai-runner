@@ -148,9 +148,9 @@
   }
  },
  "guide-toward-the-long-term-goal": {
-  "default": "reply_voice",
+  "default": "guided_v2",
   "modules": {
-   "reply_voice": "quest_ai_runner.core.auxiliary_prompts"
+   "guided_v2": "quest_ai_runner.core.auxiliary_prompts"
   }
  },
  "hand-off-a-goal": {
