@@ -77,13 +77,21 @@ def evals():
 
 
 def mcp_source():
-    """World sources and scholarly sources arrive as MCP servers: the probe is the lane-file path, shared with tools_mcp."""
+    """Science sources arrive as MCP servers: the probe is the lane-file path, shared with tools_mcp."""
     return tools_mcp()
+
+
+def world_hub():
+    """The world is ONE connection to an aggregator: the shipped preset loads as exactly one MCP server, no per-app entry."""
+    from quest_ai_runner.config import RunnerConfig
+    cfg = RunnerConfig.from_file(HERE.parents[2] / "examples" / "lane-world-hub.toml")
+    ok = [s.alias for s in cfg.mcp_servers] == ["world-hub"] and cfg.mcp_servers[0].transport == "http"
+    return ok, "one aggregator entry in examples/lane-world-hub.toml, no per-app entries"
 
 
 PROBES = {"web_search": web_search, "model_providers": model_providers, "tools_mcp": tools_mcp,
           "agent_harness": agent_harness, "context_assembly": context_assembly, "evals": evals,
-          "world": mcp_source, "science": mcp_source}
+          "world": world_hub, "science": mcp_source}
 
 
 def run(area):

@@ -99,6 +99,20 @@
  },
  {
   "id": "HUB-008",
+  "area": "agent_harness",
+  "kind": "no_reinvented",
+  "description": "agent_harness: no_reinvented",
+  "args": {
+   "area": "agent_harness"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-009",
   "area": "tools_mcp",
   "kind": "registered",
   "description": "tools_mcp: registered",
@@ -112,7 +126,7 @@
   }
  },
  {
-  "id": "HUB-009",
+  "id": "HUB-010",
   "area": "tools_mcp",
   "kind": "by_config",
   "description": "tools_mcp: by_config",
@@ -126,7 +140,7 @@
   }
  },
  {
-  "id": "HUB-010",
+  "id": "HUB-011",
   "area": "tools_mcp",
   "kind": "fresh",
   "description": "tools_mcp: fresh",
@@ -140,7 +154,7 @@
   }
  },
  {
-  "id": "HUB-011",
+  "id": "HUB-012",
   "area": "tools_mcp",
   "kind": "seam",
   "description": "tools_mcp: seam",
@@ -154,7 +168,7 @@
   }
  },
  {
-  "id": "HUB-012",
+  "id": "HUB-013",
   "area": "tools_mcp",
   "kind": "selectable",
   "description": "tools_mcp: selectable",
@@ -168,7 +182,7 @@
   }
  },
  {
-  "id": "HUB-013",
+  "id": "HUB-014",
   "area": "tools_mcp",
   "kind": "core_clean",
   "description": "tools_mcp: core_clean",
@@ -182,7 +196,7 @@
   }
  },
  {
-  "id": "HUB-014",
+  "id": "HUB-015",
   "area": "tools_mcp",
   "kind": "fake_hub",
   "description": "tools_mcp: fake_hub",
@@ -196,7 +210,21 @@
   }
  },
  {
-  "id": "HUB-015",
+  "id": "HUB-016",
+  "area": "tools_mcp",
+  "kind": "no_reinvented",
+  "description": "tools_mcp: no_reinvented",
+  "args": {
+   "area": "tools_mcp"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-017",
   "area": "web_search",
   "kind": "registered",
   "description": "web_search: registered",
@@ -210,7 +238,7 @@
   }
  },
  {
-  "id": "HUB-016",
+  "id": "HUB-018",
   "area": "web_search",
   "kind": "by_config",
   "description": "web_search: by_config",
@@ -224,7 +252,7 @@
   }
  },
  {
-  "id": "HUB-017",
+  "id": "HUB-019",
   "area": "web_search",
   "kind": "fresh",
   "description": "web_search: fresh",
@@ -238,7 +266,7 @@
   }
  },
  {
-  "id": "HUB-018",
+  "id": "HUB-020",
   "area": "web_search",
   "kind": "seam",
   "description": "web_search: seam",
@@ -252,7 +280,7 @@
   }
  },
  {
-  "id": "HUB-019",
+  "id": "HUB-021",
   "area": "web_search",
   "kind": "selectable",
   "description": "web_search: selectable",
@@ -266,7 +294,7 @@
   }
  },
  {
-  "id": "HUB-020",
+  "id": "HUB-022",
   "area": "web_search",
   "kind": "core_clean",
   "description": "web_search: core_clean",
@@ -280,7 +308,7 @@
   }
  },
  {
-  "id": "HUB-021",
+  "id": "HUB-023",
   "area": "web_search",
   "kind": "fake_hub",
   "description": "web_search: fake_hub",
@@ -294,7 +322,21 @@
   }
  },
  {
-  "id": "HUB-022",
+  "id": "HUB-024",
+  "area": "web_search",
+  "kind": "no_reinvented",
+  "description": "web_search: no_reinvented",
+  "args": {
+   "area": "web_search"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-025",
   "area": "world",
   "kind": "registered",
   "description": "world: registered",
@@ -308,7 +350,7 @@
   }
  },
  {
-  "id": "HUB-023",
+  "id": "HUB-026",
   "area": "world",
   "kind": "by_config",
   "description": "world: by_config",
@@ -322,7 +364,7 @@
   }
  },
  {
-  "id": "HUB-024",
+  "id": "HUB-027",
   "area": "world",
   "kind": "fresh",
   "description": "world: fresh",
@@ -336,7 +378,7 @@
   }
  },
  {
-  "id": "HUB-025",
+  "id": "HUB-028",
   "area": "world",
   "kind": "seam",
   "description": "world: seam",
@@ -350,7 +392,7 @@
   }
  },
  {
-  "id": "HUB-026",
+  "id": "HUB-029",
   "area": "world",
   "kind": "selectable",
   "description": "world: selectable",
@@ -364,7 +406,7 @@
   }
  },
  {
-  "id": "HUB-027",
+  "id": "HUB-030",
   "area": "world",
   "kind": "core_clean",
   "description": "world: core_clean",
@@ -378,7 +420,7 @@
   }
  },
  {
-  "id": "HUB-028",
+  "id": "HUB-031",
   "area": "world",
   "kind": "fake_hub",
   "description": "world: fake_hub",
@@ -392,7 +434,21 @@
   }
  },
  {
-  "id": "HUB-029",
+  "id": "HUB-032",
+  "area": "world",
+  "kind": "no_reinvented",
+  "description": "world: no_reinvented",
+  "args": {
+   "area": "world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-033",
   "area": "context_assembly",
   "kind": "registered",
   "description": "context_assembly: registered",
@@ -406,7 +462,7 @@
   }
  },
  {
-  "id": "HUB-030",
+  "id": "HUB-034",
   "area": "context_assembly",
   "kind": "by_config",
   "description": "context_assembly: by_config",
@@ -420,7 +476,7 @@
   }
  },
  {
-  "id": "HUB-031",
+  "id": "HUB-035",
   "area": "context_assembly",
   "kind": "fresh",
   "description": "context_assembly: fresh",
@@ -434,7 +490,7 @@
   }
  },
  {
-  "id": "HUB-032",
+  "id": "HUB-036",
   "area": "context_assembly",
   "kind": "seam",
   "description": "context_assembly: seam",
@@ -448,7 +504,7 @@
   }
  },
  {
-  "id": "HUB-033",
+  "id": "HUB-037",
   "area": "context_assembly",
   "kind": "selectable",
   "description": "context_assembly: selectable",
@@ -462,7 +518,7 @@
   }
  },
  {
-  "id": "HUB-034",
+  "id": "HUB-038",
   "area": "context_assembly",
   "kind": "core_clean",
   "description": "context_assembly: core_clean",
@@ -476,7 +532,7 @@
   }
  },
  {
-  "id": "HUB-035",
+  "id": "HUB-039",
   "area": "context_assembly",
   "kind": "fake_hub",
   "description": "context_assembly: fake_hub",
@@ -490,7 +546,21 @@
   }
  },
  {
-  "id": "HUB-036",
+  "id": "HUB-040",
+  "area": "context_assembly",
+  "kind": "no_reinvented",
+  "description": "context_assembly: no_reinvented",
+  "args": {
+   "area": "context_assembly"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-041",
   "area": "science",
   "kind": "registered",
   "description": "science: registered",
@@ -504,7 +574,7 @@
   }
  },
  {
-  "id": "HUB-037",
+  "id": "HUB-042",
   "area": "science",
   "kind": "by_config",
   "description": "science: by_config",
@@ -518,7 +588,7 @@
   }
  },
  {
-  "id": "HUB-038",
+  "id": "HUB-043",
   "area": "science",
   "kind": "fresh",
   "description": "science: fresh",
@@ -532,7 +602,7 @@
   }
  },
  {
-  "id": "HUB-039",
+  "id": "HUB-044",
   "area": "science",
   "kind": "seam",
   "description": "science: seam",
@@ -546,7 +616,7 @@
   }
  },
  {
-  "id": "HUB-040",
+  "id": "HUB-045",
   "area": "science",
   "kind": "selectable",
   "description": "science: selectable",
@@ -560,7 +630,7 @@
   }
  },
  {
-  "id": "HUB-041",
+  "id": "HUB-046",
   "area": "science",
   "kind": "core_clean",
   "description": "science: core_clean",
@@ -574,7 +644,7 @@
   }
  },
  {
-  "id": "HUB-042",
+  "id": "HUB-047",
   "area": "science",
   "kind": "fake_hub",
   "description": "science: fake_hub",
@@ -588,7 +658,21 @@
   }
  },
  {
-  "id": "HUB-043",
+  "id": "HUB-048",
+  "area": "science",
+  "kind": "no_reinvented",
+  "description": "science: no_reinvented",
+  "args": {
+   "area": "science"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-049",
   "area": "model_providers",
   "kind": "registered",
   "description": "model_providers: registered",
@@ -602,7 +686,7 @@
   }
  },
  {
-  "id": "HUB-044",
+  "id": "HUB-050",
   "area": "model_providers",
   "kind": "by_config",
   "description": "model_providers: by_config",
@@ -616,7 +700,7 @@
   }
  },
  {
-  "id": "HUB-045",
+  "id": "HUB-051",
   "area": "model_providers",
   "kind": "fresh",
   "description": "model_providers: fresh",
@@ -630,7 +714,7 @@
   }
  },
  {
-  "id": "HUB-046",
+  "id": "HUB-052",
   "area": "model_providers",
   "kind": "seam",
   "description": "model_providers: seam",
@@ -644,7 +728,7 @@
   }
  },
  {
-  "id": "HUB-047",
+  "id": "HUB-053",
   "area": "model_providers",
   "kind": "selectable",
   "description": "model_providers: selectable",
@@ -658,7 +742,7 @@
   }
  },
  {
-  "id": "HUB-048",
+  "id": "HUB-054",
   "area": "model_providers",
   "kind": "core_clean",
   "description": "model_providers: core_clean",
@@ -672,7 +756,7 @@
   }
  },
  {
-  "id": "HUB-049",
+  "id": "HUB-055",
   "area": "model_providers",
   "kind": "fake_hub",
   "description": "model_providers: fake_hub",
@@ -686,7 +770,21 @@
   }
  },
  {
-  "id": "HUB-050",
+  "id": "HUB-056",
+  "area": "model_providers",
+  "kind": "no_reinvented",
+  "description": "model_providers: no_reinvented",
+  "args": {
+   "area": "model_providers"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-057",
   "area": "memory",
   "kind": "registered",
   "description": "memory: registered",
@@ -700,7 +798,7 @@
   }
  },
  {
-  "id": "HUB-051",
+  "id": "HUB-058",
   "area": "memory",
   "kind": "by_config",
   "description": "memory: by_config",
@@ -714,7 +812,7 @@
   }
  },
  {
-  "id": "HUB-052",
+  "id": "HUB-059",
   "area": "memory",
   "kind": "fresh",
   "description": "memory: fresh",
@@ -728,7 +826,7 @@
   }
  },
  {
-  "id": "HUB-053",
+  "id": "HUB-060",
   "area": "memory",
   "kind": "seam",
   "description": "memory: seam",
@@ -742,7 +840,7 @@
   }
  },
  {
-  "id": "HUB-054",
+  "id": "HUB-061",
   "area": "memory",
   "kind": "selectable",
   "description": "memory: selectable",
@@ -756,7 +854,7 @@
   }
  },
  {
-  "id": "HUB-055",
+  "id": "HUB-062",
   "area": "memory",
   "kind": "core_clean",
   "description": "memory: core_clean",
@@ -770,7 +868,7 @@
   }
  },
  {
-  "id": "HUB-056",
+  "id": "HUB-063",
   "area": "memory",
   "kind": "fake_hub",
   "description": "memory: fake_hub",
@@ -784,7 +882,21 @@
   }
  },
  {
-  "id": "HUB-057",
+  "id": "HUB-064",
+  "area": "memory",
+  "kind": "no_reinvented",
+  "description": "memory: no_reinvented",
+  "args": {
+   "area": "memory"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-065",
   "area": "evals",
   "kind": "registered",
   "description": "evals: registered",
@@ -798,7 +910,7 @@
   }
  },
  {
-  "id": "HUB-058",
+  "id": "HUB-066",
   "area": "evals",
   "kind": "by_config",
   "description": "evals: by_config",
@@ -812,7 +924,7 @@
   }
  },
  {
-  "id": "HUB-059",
+  "id": "HUB-067",
   "area": "evals",
   "kind": "fresh",
   "description": "evals: fresh",
@@ -826,7 +938,7 @@
   }
  },
  {
-  "id": "HUB-060",
+  "id": "HUB-068",
   "area": "evals",
   "kind": "seam",
   "description": "evals: seam",
@@ -840,7 +952,7 @@
   }
  },
  {
-  "id": "HUB-061",
+  "id": "HUB-069",
   "area": "evals",
   "kind": "selectable",
   "description": "evals: selectable",
@@ -854,7 +966,7 @@
   }
  },
  {
-  "id": "HUB-062",
+  "id": "HUB-070",
   "area": "evals",
   "kind": "core_clean",
   "description": "evals: core_clean",
@@ -868,7 +980,7 @@
   }
  },
  {
-  "id": "HUB-063",
+  "id": "HUB-071",
   "area": "evals",
   "kind": "fake_hub",
   "description": "evals: fake_hub",
@@ -882,7 +994,21 @@
   }
  },
  {
-  "id": "HUB-064",
+  "id": "HUB-072",
+  "area": "evals",
+  "kind": "no_reinvented",
+  "description": "evals: no_reinvented",
+  "args": {
+   "area": "evals"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-073",
   "area": "voice",
   "kind": "registered",
   "description": "voice: registered",
@@ -896,7 +1022,7 @@
   }
  },
  {
-  "id": "HUB-065",
+  "id": "HUB-074",
   "area": "voice",
   "kind": "by_config",
   "description": "voice: by_config",
@@ -910,7 +1036,7 @@
   }
  },
  {
-  "id": "HUB-066",
+  "id": "HUB-075",
   "area": "voice",
   "kind": "fresh",
   "description": "voice: fresh",
@@ -924,7 +1050,7 @@
   }
  },
  {
-  "id": "HUB-067",
+  "id": "HUB-076",
   "area": "voice",
   "kind": "seam",
   "description": "voice: seam",
@@ -938,7 +1064,7 @@
   }
  },
  {
-  "id": "HUB-068",
+  "id": "HUB-077",
   "area": "voice",
   "kind": "selectable",
   "description": "voice: selectable",
@@ -952,7 +1078,7 @@
   }
  },
  {
-  "id": "HUB-069",
+  "id": "HUB-078",
   "area": "voice",
   "kind": "core_clean",
   "description": "voice: core_clean",
@@ -966,10 +1092,24 @@
   }
  },
  {
-  "id": "HUB-070",
+  "id": "HUB-079",
   "area": "voice",
   "kind": "fake_hub",
   "description": "voice: fake_hub",
+  "args": {
+   "area": "voice"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-080",
+  "area": "voice",
+  "kind": "no_reinvented",
+  "description": "voice: no_reinvented",
   "args": {
    "area": "voice"
   },

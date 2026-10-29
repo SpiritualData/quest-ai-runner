@@ -1,24 +1,10 @@
-capability_id,area,capability,hub,connect,evidence_path
-cap-deep-claude,agent_harness,Deep work through Claude Code,Claude Code CLI,code,quest_ai_runner/core/goal_runner.py
-cap-deep-acp,agent_harness,Deep work through any ACP agent,Agent Client Protocol,config,quest_ai_runner/adapters/acp_deep_runner_config.py
-cap-mcp-read,tools_mcp,Read through any MCP server,MCP Python SDK,config,quest_ai_runner/config_file.py
-cap-mcp-write,tools_mcp,Write through any allowlisted MCP server tool,MCP Python SDK,config,quest_ai_runner/config_file.py
-cap-search-serper,web_search,Search with Serper,Serper (data entry),config,quest_ai_runner/adapters/web_search_apis.py
-cap-search-brave,web_search,Search with Brave,Brave Search API (data entry),config,quest_ai_runner/adapters/web_search_apis.py
-cap-search-tavily,web_search,Search with Tavily,Tavily (data entry),config,quest_ai_runner/adapters/web_search_apis.py
-cap-search-searxng,web_search,Search with SearXNG,SearXNG,code,quest_ai_runner/adapters/web_search_backends.py
-cap-search-gemini,web_search,Search with Gemini grounding,Gemini grounding,code,quest_ai_runner/adapters/web_search_backends.py
-cap-world-notion,world,Read Notion,none,code,quest_ai_runner/adapters/notion_adapter.py
-cap-world-drive,world,Read Google Drive,none,code,quest_ai_runner/adapters/google_drive_adapter.py
-cap-world-chat,world,Read Google Chat,none,code,quest_ai_runner/adapters/google_chat_adapter.py
-cap-ctx-bm25,context_assembly,Keyword index,bm25s,code,quest_ai_runner/adapters/bm25_content_store.py
-cap-ctx-qdrant,context_assembly,Vector index,Qdrant and fastembed,code,quest_ai_runner/adapters/qdrant_vector_store.py
-cap-model-anthropic,model_providers,Call Anthropic models,Anthropic SDK,code,quest_ai_runner/adapters/anthropic_provider.py
-cap-model-gemini,model_providers,Call Gemini models,Google GenAI SDK,code,quest_ai_runner/adapters/gemini_provider.py
-cap-model-openai,model_providers,Call OpenAI models,OpenAI SDK,code,quest_ai_runner/adapters/openai_provider.py
-cap-model-deepseek,model_providers,Call DeepSeek models,OpenAI SDK,code,quest_ai_runner/adapters/deepseek_provider.py
-cap-memory-cards,memory,Durable cards,none (own card store),code,quest_ai_runner/adapters/file_context_store.py
-cap-evals-esoi,evals,Component evals selected by metric,esoi,code,evaluation/components
-cap-world-mcp,world,Any source that has an MCP server,MCP servers,config,quest_ai_runner/config_file.py
-cap-model-openai-compatible,model_providers,"Any OpenAI-compatible endpoint (LiteLLM, vLLM, Ollama)",OPENAI_BASE_URL,config,quest_ai_runner/adapters/openai_provider.py
-cap-search-any-json-api,web_search,Any hosted JSON search API described in a file,QAR_WEB_SEARCH_APIS_FILE,config,quest_ai_runner/adapters/web_search_apis.py
+capability_id,area,capability,hub,connect,wired,evidence_path
+hubcon-acp,agent_harness,Every agent that speaks the Agent Client Protocol,Agent Client Protocol agents,config,yes,quest_ai_runner/adapters/acp_deep_runner_config.py
+hubcon-claude-code,agent_harness,The Claude Code harness (one hand-wired connection),Claude Code CLI,code,yes,quest_ai_runner/core/goal_runner.py
+hubcon-mcp,tools_mcp,Every tool and resource any MCP server exposes,Model Context Protocol servers,config,yes,quest_ai_runner/config_file.py
+hubcon-searxng,web_search,Every search engine SearXNG federates,SearXNG,code,yes,quest_ai_runner/adapters/web_search_backends.py
+hubcon-world-aggregator,world,"Every app an integration aggregator exposes as MCP tools (preset shipped, no lane connects it yet)",Activepieces (recommended first connection),config,no,examples/lane-world-hub.toml
+hubcon-bm25,context_assembly,Keyword index through bm25s,bm25s,code,yes,quest_ai_runner/adapters/bm25_content_store.py
+hubcon-qdrant,context_assembly,Vector index through Qdrant and fastembed,Qdrant and fastembed,code,yes,quest_ai_runner/adapters/qdrant_vector_store.py
+hubcon-openai-compatible,model_providers,"Every model an OpenAI-compatible gateway routes (LiteLLM, vLLM, Ollama)",OPENAI_BASE_URL,config,yes,quest_ai_runner/adapters/openai_provider.py
+hubcon-esoi,evals,Component evals selected by metric,esoi,code,yes,evaluation/components

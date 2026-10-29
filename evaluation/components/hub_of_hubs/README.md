@@ -11,9 +11,11 @@ python3 evaluation/components/hub_of_hubs/render_docs.py    # rewrite the genera
 .venv/bin/python3 -m pytest evaluation/components/test_hub_of_hubs.py
 ```
 
-Numbers: coverage; integration-by-config share; research age per area (max and mean, bar 90 days); code structure (one seam per
+Files: `hub_capabilities.csv` lists hub CONNECTIONS (a class gained through one hub, counted once; `wired` no does not count),
+`hub_integrations.csv` lists single-service integrations QAR hand-wires and which hub covers them (a waiver needs a reason).
+Numbers: coverage; integration-by-config share; no reinvented integration; research age per area (max and mean, bar 90 days); code structure (one seam per
 area, selectable by metric, vendor branches in `quest_ai_runner/core`, a fake hub accepted by configuration). The stated scan
-rule is in `scan.py`. Add an area by adding a row, its findings and the seven cases (the test names what is missing).
+rule is in `scan.py`. Add an area by adding a row, its findings and the eight cases (the test names what is missing).
 
 ## Autopilot backlog item (instruction text for the daily pass)
 
@@ -26,7 +28,8 @@ Hub research, once per day, at most one area, no paid model calls (the Claude Co
    could incorporate by configuration and for alternatives to compare as an implementation arm.
 3. Replace that area's rows in `esoi/hub_findings.csv` (2 to 4 candidates, license, role, one line, evidence URL, today's date;
    say when a license is unconfirmed) and set `last_researched`, `researched_by` and `recommendation` in `esoi/hubs.csv`.
-   Update `esoi/hub_capabilities.csv` if a capability now arrives by configuration. Never invent adoption: a hub is "builds_on"
+   Update `esoi/hub_capabilities.csv` (a hub connection, never a single service) and `esoi/hub_integrations.csv` (retire a row when
+   its adapter is removed in favour of a hub). Never invent adoption: a hub is "builds_on"
    only if the code uses it today.
 4. Run `python3 evaluation/components/hub_of_hubs/render_docs.py` (rewrites the table in `docs/hub-of-hubs.md` in place), the
    component test, and `esoi hygiene`. No names, ids, emails or machine paths in anything committed; no em dashes.

@@ -13,7 +13,7 @@ from hub_of_hubs.impls import registry_scan  # noqa: E402
 from hub_of_hubs.broken import vendor_grep  # noqa: E402
 from hub_of_hubs.score import score_case  # noqa: E402
 
-KINDS = ("registered", "by_config", "fresh", "seam", "selectable", "core_clean", "fake_hub")
+KINDS = ("registered", "by_config", "fresh", "seam", "selectable", "core_clean", "fake_hub", "no_reinvented")
 
 
 def test_the_generated_doc_is_current():
@@ -52,7 +52,11 @@ def test_registry_cites_real_paths_and_real_solutions():
             assert (registry.REPO / path).exists(), path
     for cap in registry.read("hub_capabilities.csv"):
         assert (registry.REPO / cap["evidence_path"]).exists(), cap["capability_id"]
-        assert cap["connect"] in ("config", "code")
+        assert cap["connect"] in ("config", "code") and cap["wired"] in ("yes", "no")
+    for item in registry.read("hub_integrations.csv"):
+        assert (registry.REPO / item["path"]).exists(), item["integration"]
+        assert item["status"] in ("violation", "waived")
+        assert item["status"] == "violation" or item["waiver_reason"].strip(), "a waiver names its reason"
 
 
 def test_freshness_ages_with_the_calendar(monkeypatch):
@@ -75,7 +79,7 @@ def test_metric_arithmetic_on_a_planted_registry():
     assert (m["coverage"], m["config_share"], m["fresh_share"]) == (0.5, 0.25, 0.5)
     assert (m["days_max"], m["days_mean"]) == (110, 60)
     assert m["code"] == pytest.approx((0.5 + 0.5 + 0.5) / 3)
-    assert m["score"] == pytest.approx((0.5 + 0.25 + 0.5 + 0.5) / 4)
+    assert m["score"] == pytest.approx((0.5 + 0.25 + 0.5 + 0.5 + 1.0) / 5)      # nothing reinvented in the planted registry
 
 
 def test_scan_counts_branches_not_tables(tmp_path):
@@ -103,3 +107,34 @@ def test_the_live_implementation_beats_the_baseline():
     live, floor = passed(registry_scan.build), passed(vendor_grep.build)
     assert live > floor
     assert floor < len(cases) / 2
+
+
+def test_a_capability_is_a_hub_connection_not_a_service():
+    """One row per class gained through one hub; a single named service is an integration, never a capability."""
+    named = ("serper", "brave", "tavily", "notion", "drive", "chat", "anthropic", "gemini", "deepseek")
+    for cap in registry.read("hub_capabilities.csv"):
+        assert not any(n in cap["capability"].lower() for n in named), cap["capability_id"]
+
+
+def test_a_prepared_connection_is_not_counted():
+    facts, caps = registry.all_facts()
+    assert all(c["wired"] == "yes" for c in caps)
+    world = next(f for f in facts if f["area"] == "world")
+    assert world["capabilities"] == 0 and not world["config_ok"]
+
+
+def test_reinvented_integrations_are_counted_unless_waived():
+    integrations = [dict(area="a", integration="x", covered_by="Hub", status="violation"),
+                    dict(area="a", integration="y", covered_by="Hub", status="waived"),
+                    dict(area="a", integration="z", covered_by="", status="violation"),
+                    dict(area="b", integration="w", covered_by="Hub", status="violation")]
+    assert [i["integration"] for i in registry.reinvented_of("a", integrations)] == ["x"]
+    facts, _ = registry.all_facts()
+    assert {f["area"] for f in facts if f["reinvented"]} == {"world", "model_providers"}
+
+
+def test_the_world_is_one_aggregator_connection_with_no_per_app_entry():
+    text = (registry.REPO / "examples" / "lane-world-hub.toml").read_text()
+    assert text.count("[[mcp_servers]]") == 1
+    assert "token_env" in text and "Bearer" not in text
+    assert probes.run("world")["holds"]

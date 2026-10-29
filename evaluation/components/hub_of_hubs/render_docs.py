@@ -26,17 +26,19 @@ def block():
     m = registry.metrics(facts, caps)
     by_area = {f["area"]: f for f in facts}
     lines = [BEGIN, "",
-             "| Area | Built on today | Candidates | Connect | Researched | Freshness |", "|---|---|---|---|---|---|"]
+             "| Area | Built on today | Candidates | Connect | Hand-wired where a hub covers it | Researched | Freshness |", "|---|---|---|---|---|---|---|"]
     for h in hubs:
         f = by_area[h["area"]]
         lines.append(f"| {h['area']} | {names(h['current_hubs'])} | {'; '.join(registry.split(h['candidate_hubs']))} | "
-                     f"{h['connect']} | {h['last_researched']} | {'fresh' if f['fresh'] else 'STALE'} |")
+                     f"{h['connect']} | {', '.join(f['reinvented']) or 'none'} | {h['last_researched']} | {'fresh' if f['fresh'] else 'STALE'} |")
     stale = [f["area"] for f in facts if not f["fresh"]]
     lines += ["", "Metric `hub_of_hubs` (recomputed by `render_docs.py`, from the registry and a static scan of the code):", "",
               f"- coverage (areas with a hub or a recorded decision): {m['coverage']:.2f}",
-              f"- integration by configuration (capabilities needing no code per integration): {m['config_share']:.2f}",
+              f"- integration by configuration (share of wired hub connections that need no code): {m['config_share']:.2f}",
               f"- research freshness: share of areas researched within {registry.STALENESS_DAYS} days {m['fresh_share']:.2f}; "
               f"stale: {', '.join(stale) or 'none'} (days since each date: `esoi run hub_of_hubs --impl registry_scan`)",
+              f"- reinvented integrations (single services QAR hand-wires that a hub covers, no waiver): {m['reinvented']} "
+              f"({m['waived']} more waived with a reason); areas free of them {m['reinvented_free_share']:.2f}",
               f"- code: areas with one seam {m['seam_share']:.2f}, selectable by metric {m['selectable_share']:.2f}, "
               f"vendor branches in core {m['vendor_branches']}",
               f"- score: {m['score']:.3f}", "", END]

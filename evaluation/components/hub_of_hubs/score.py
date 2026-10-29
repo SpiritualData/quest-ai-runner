@@ -12,7 +12,8 @@ def reason(out, kind):
             "by_config": f"{out.get('by_config')} of {out.get('capabilities')} capabilities by configuration",
             "fresh": f"researched {out.get('days')} days ago",
             "seam": "no declared implementation behind the area's solution",
-            "selectable": "the seam solution has no authoritative metric or fewer than two implementations"}.get(kind, "")
+            "selectable": "the seam solution has no authoritative metric or fewer than two implementations",
+            "no_reinvented": f"hand-wired where a hub covers it: {', '.join(out.get('reinvented') or [])}"}.get(kind, "")
 
 
 def score_case(fn, case):
@@ -38,8 +39,9 @@ def aggregate(rows):
     per_kind = ", ".join(f"{k} {d}/{t}" for k, (d, t) in sorted(kinds.items()))
     return (f"checks passed {sum(1 for r in rows if r.get('ok'))}/{len(rows)} ({per_kind}); registry reading "
             f"(the same for every implementation): score {m['score']:.3f} = mean(coverage {m['coverage']:.2f}, "
-            f"integration-by-config {m['config_share']:.2f}, freshness {m['fresh_share']:.2f}, code structure "
+            f"integration-by-config {m['config_share']:.2f}, no reinvented integration {m['reinvented_free_share']:.2f}, freshness {m['fresh_share']:.2f}, code structure "
             f"{m['code']:.2f}); research age max {m['days_max']} mean {m['days_mean']:.1f} days (bar "
             f"{registry.STALENESS_DAYS}), stale areas {stale or 'none'}; code: one seam {m['seam_share']:.2f}, "
             f"selectable by metric {m['selectable_share']:.2f}, core free of vendor branches {m['clean_share']:.2f} "
-            f"({m['vendor_branches']} branches)")
+            f"({m['vendor_branches']} branches); hand-wired integrations a hub covers {m['reinvented']} "
+            f"({m['waived']} more waived with a reason)")

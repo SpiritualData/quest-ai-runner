@@ -15,6 +15,8 @@ with ``args {area}`` and all returning ``{holds, ...detail}``:
                ``esoi select --promote`` can choose between them
   core_clean   no vendor-specific branch of the area's vendors in ``quest_ai_runner/core`` (static scan, ``scan.py``)
   fake_hub     a fake hub registered through the area's own configuration entry works with zero core edits
+  no_reinvented  no single-service integration is hand-wired where a registered hub covers it, unless waived with a reason
+               (``esoi/hub_integrations.csv``); a capability is a hub connection (a class), never one service
 
 ``aggregate`` prints the three metric values (coverage, integration-by-config share, research freshness: max and mean
 days) and the code-structure values, and the combined score. An implementation module in ``impls/`` exposes

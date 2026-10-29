@@ -14,8 +14,9 @@ def build(meter):  # noqa: ARG001
         if kind == "fake_hub":
             return probes.run(args["area"])
         holds = {"registered": fact["registered"], "by_config": fact["config_ok"], "fresh": fact["fresh"],
-                 "seam": fact["seam"], "selectable": fact["selectable"], "core_clean": not fact["vendor_branches"]}[kind]
+                 "seam": fact["seam"], "selectable": fact["selectable"], "core_clean": not fact["vendor_branches"],
+                 "no_reinvented": not fact["reinvented"]}[kind]
         return {"holds": holds, "days": fact["days"], "status": fact["status"], "capabilities": fact["capabilities"],
                 "by_config": fact["by_config"], "declared": fact["declared"],
-                "vendor_branches": len(fact["vendor_branches"]), "first": (fact["vendor_branches"] or [""])[0]}
+                "vendor_branches": len(fact["vendor_branches"]), "first": (fact["vendor_branches"] or [""])[0], "reinvented": fact["reinvented"], "waived": fact["waived"]}
     return measure

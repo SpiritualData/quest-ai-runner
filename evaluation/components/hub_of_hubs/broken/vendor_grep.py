@@ -15,5 +15,5 @@ def build(meter):  # noqa: ARG001
     def measure(kind, args):
         hub = hubs[args["area"]]
         named = any(re.search(re.escape(t), source, re.I) for t in registry.split(hub["vendor_terms"]))
-        return {"holds": named if kind in ("registered", "seam", "core_clean") else False}
+        return {"holds": named if kind in ("registered", "seam", "core_clean", "no_reinvented") else False}
     return measure

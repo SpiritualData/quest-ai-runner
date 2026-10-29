@@ -44,7 +44,15 @@ def split(cell):
 
 
 def capabilities_of(area, capabilities):
-    return [c for c in capabilities if c["area"] == area]
+    """The hub CONNECTIONS of an area that are really wired: one row is one class of things gained through one hub (every tool
+    an MCP server exposes, every engine SearXNG federates), never one row per single service. A connection that is only
+    prepared (``wired`` no) does not count: what could merely be added later is not a capability."""
+    return [c for c in capabilities if c["area"] == area and c.get("wired", "yes") == "yes"]
+
+
+def reinvented_of(area, integrations):
+    """Single-service integrations QAR hand-wires where a registered hub already covers them and no waiver gives a reason."""
+    return [i for i in integrations if i["area"] == area and i["covered_by"].strip() and i["status"] != "waived"]
 
 
 def solution_facts(solution_id):
@@ -66,7 +74,7 @@ def declared_names(solution_id, names_of=None):
         return []
 
 
-def area_facts(row, findings, capabilities, vendor_branches, names_of=None):
+def area_facts(row, findings, capabilities, vendor_branches, names_of=None, integrations=()):
     """Every per-area fact the cases and the documentation read."""
     days = days_since(row["last_researched"])
     caps = capabilities_of(row["area"], capabilities)
@@ -83,6 +91,8 @@ def area_facts(row, findings, capabilities, vendor_branches, names_of=None):
         seam=bool(names), declared=len(names),
         selectable=any(metric and count >= 2 and known for metric, count, known in records),
         vendor_branches=vendor_branches.get(row["area"], []),
+        reinvented=[i["integration"] for i in reinvented_of(row["area"], integrations)],
+        waived=sum(1 for i in integrations if i["area"] == row["area"] and i["status"] == "waived"),
     )
 
 
@@ -93,8 +103,9 @@ def vendor_branches_by_area(hubs):
 
 def all_facts(names_of=None):
     hubs, findings, caps = read("hubs.csv"), read("hub_findings.csv"), read("hub_capabilities.csv")
+    integrations = read("hub_integrations.csv")
     branches = vendor_branches_by_area(hubs)
-    return [area_facts(h, findings, caps, branches, names_of) for h in hubs], caps
+    return [area_facts(h, findings, caps, branches, names_of, integrations) for h in hubs], [c for c in caps if c.get("wired", "yes") == "yes"]
 
 
 def metrics(facts, caps, fake_hubs_pass=None):
@@ -107,10 +118,13 @@ def metrics(facts, caps, fake_hubs_pass=None):
     seam_share = sum(1 for f in facts if f["seam"]) / n
     selectable_share = sum(1 for f in facts if f["selectable"]) / n
     clean_share = sum(1 for f in facts if not f["vendor_branches"]) / n
+    reinvented_free_share = sum(1 for f in facts if not f.get("reinvented")) / n
     code = (seam_share + selectable_share + clean_share) / 3
     out = dict(coverage=coverage, config_share=config_share, fresh_share=fresh_share,
                days_max=max(days) if days else None, days_mean=(sum(days) / len(days)) if days else None,
                seam_share=seam_share, selectable_share=selectable_share, clean_share=clean_share,
-               vendor_branches=sum(len(f["vendor_branches"]) for f in facts), code=code)
-    out["score"] = (coverage + config_share + fresh_share + code) / 4
+               vendor_branches=sum(len(f["vendor_branches"]) for f in facts), code=code,
+               reinvented=sum(len(f.get("reinvented", [])) for f in facts), waived=sum(f.get("waived", 0) for f in facts),
+               reinvented_free_share=reinvented_free_share)
+    out["score"] = (coverage + config_share + fresh_share + code + reinvented_free_share) / 5
     return out
