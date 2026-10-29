@@ -8,15 +8,13 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-220 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+217 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` |  | `adapters/acp_deep_runner.py`, `adapters/anthropic_provider.py`, `adapters/claude_cli_provider.py` +5 | `.env.example`, `docs/acp-deep-runner.md`, `docs/deployment.md` +3 |
 | `ANTHROPIC_AUTH_TOKEN` |  | `adapters/acp_deep_runner.py`, `adapters/claude_cli_provider.py`, `core/goal_runner.py` | `docs/acp-deep-runner.md` |
-| `BRAVE_API_KEY` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
-| `BRAVE_SEARCH_API_KEY` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
 | `CLAUDE_CONFIG_DIR` | Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir. | `adapters/claude_live_models.py`, `config_core_settings.py` | - |
 | `DEEPSEEK_API_KEY` |  | `config_resolvers.py` | `docs/adapters.md` |
 | `DEEPSEEK_BASE_URL` |  | `adapters/deepseek_provider.py` | `docs/adapters.md` |
@@ -210,6 +208,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_PAGE_TTL_SECONDS` |  | `adapters/web_research.py` | `docs/web-search.md` |
+| `QAR_WEB_SEARCH_APIS_FILE` | Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py. | `adapters/web_search_backends.py` | `docs/hub-of-hubs.md`, `docs/web-search.md` |
 | `QAR_WEB_SEARCH_BACKEND` |  | `adapters/web_search_backends.py` | `docs/hub-of-hubs.md`, `docs/web-search.md` |
 | `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `adapters/web_research.py` | `docs/web-search.md` |
 | `QAR_WEB_SEARCH_MODEL` |  | `adapters/web_research.py`, `adapters/web_search_backends.py` | `docs/web-search.md` |
@@ -224,12 +223,10 @@ the docs and `.env.example` that describe what it does.
 | `QUEST_TEAM_ID` |  | `bootstrap_email.py`, `cli_config.py`, `cli_quest.py` +3 | `.env.example`, `docs/a-lane-is-a-config-file.md`, `docs/chat.md` +4 |
 | `QUEST_TEAM_IDS` |  | `cli_config.py`, `interactive_session_quests.py` | `.env.example`, `docs/chat.md`, `docs/deployment.md` +1 |
 | `SEARXNG_URL` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
-| `SERPER_API_KEY` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
-| `TAVILY_API_KEY` |  | `adapters/web_search_backends.py` | `docs/web-search.md` |
 | `VOYAGE_EMBEDDING_SIZE` | Vector size of the Voyage embedder (default 1024). | `config_assembler.py`, `config_context_index.py` | - |
 | `VOYAGE_MODEL` |  | `adapters/qdrant_embedders.py` | `docs/vector-context.md` |
 | `VTE_VERSION` | Set by VTE terminals; the terminal UI reads it to pick key handling. Never set by hand. | `textual_ui_widgets.py` | - |
-| `WEB_SEARCH_API_KEY` |  | `adapters/web_search_adapter.py`, `adapters/web_search_backends.py` | `.env.example`, `docs/web-search.md` |
+| `WEB_SEARCH_API_KEY` |  | `adapters/web_search_adapter.py` | `.env.example`, `docs/web-search.md` |
 | `WEB_SEARCH_ENABLED` |  | `adapters/web_search_backends.py`, `config_orchestrator.py` | `.env.example`, `docs/web-search.md` |
 | `WEB_SEARCH_MAX_RESULTS` |  | `config_orchestrator.py` | `.env.example`, `docs/web-search.md` |
 | `WEB_SEARCH_TIER` |  | `config_orchestrator.py` | `.env.example` |

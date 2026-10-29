@@ -73,3 +73,4 @@ QAR_METRIC_ARM_TIMEOUT_SECONDS,"Longest one reading of a metric may take before 
 QAR_TOOL_RUN_ID,"This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command."
 OPENAI_BASE_URL,"Base URL of an OpenAI-compatible endpoint (a LiteLLM proxy, vLLM, Ollama or a gateway) the OpenAI provider calls instead of the OpenAI service; no key is needed for a self-hosted one. Pair with QAR_OPENAI_MODEL_PREFIXES so its model ids route to this provider."
 QAR_OPENAI_MODEL_PREFIXES,"Comma separated model-id prefixes (for example llama,qwen) routed to the OpenAI provider, so the ids an OpenAI-compatible endpoint serves reach it."
+QAR_WEB_SEARCH_APIS_FILE,"Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py."

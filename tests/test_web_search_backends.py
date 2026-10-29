@@ -490,3 +490,54 @@ def test_a_registered_backend_is_selected_by_name_with_no_branch_in_the_module()
         entry = runtime.entry_for("search-the-web", None, "quest_ai_runner")
         entry.implementations.pop("newhub", None)
         entry.replaced.discard("newhub")
+
+
+# ---------------------------------------------------------------------------
+# Search APIs described as data (web_search_apis.py): one generic backend, no class per provider
+# ---------------------------------------------------------------------------
+
+def test_shipped_hosted_apis_are_data_entries_run_by_one_backend():
+    from quest_ai_runner.adapters.web_search_backends import ConfiguredJsonBackend
+    for cls in (SerperBackend, BraveBackend, TavilyBackend):
+        assert issubclass(cls, ConfiguredJsonBackend) and cls.spec["name"] in ("serper", "brave", "tavily")
+
+
+def test_a_search_api_described_in_a_file_is_selected_with_no_code(tmp_path):
+    import json
+    from esoi import runtime
+    from quest_ai_runner.adapters.web_search_backends import select_search_backend
+    spec = [{"name": "acmesearch", "method": "GET", "url": "https://search.invalid/v2", "key_env": ["ACME_KEY"],
+             "headers": {"Authorization": "Token {key}"}, "send": "params",
+             "payload": {"term": "{query}", "limit": "{max_results}"}, "results_path": "data.items",
+             "fields": {"title": ["name"], "url": ["href"], "snippet": ["summary", "text"], "date": []},
+             "strip_tags": ["snippet"], "answer_paths": ["data.best"]}]
+    path = tmp_path / "apis.json"
+    path.write_text(json.dumps(spec))
+    seen = {}
+
+    def fake_http(method, url, **kwargs):
+        seen.update(method=method, url=url, **kwargs)
+        return FakeResponse(200, {"data": {"best": "forty-two", "items": [
+            {"name": "N", "href": "https://x.invalid", "summary": "", "text": "<i>body</i>"}]}})
+
+    try:
+        env = {"QAR_WEB_SEARCH_APIS_FILE": str(path), "QAR_WEB_SEARCH_BACKEND": "acmesearch", "ACME_KEY": "k1"}
+        backend = select_search_backend(env)
+        backend.http = fake_http
+        got = backend.search("meaning", max_results=3)
+    finally:
+        entry = runtime.entry_for("search-the-web", None, "quest_ai_runner")
+        entry.implementations.pop("acmesearch", None)
+        entry.replaced.discard("acmesearch")
+    assert seen["method"] == "GET" and seen["params"] == {"term": "meaning", "limit": 3}
+    assert seen["headers"] == {"Authorization": "Token k1"}
+    assert (got.hits[0].title, got.hits[0].url, got.hits[0].snippet, got.answer) == ("N", "https://x.invalid", "body", "forty-two")
+
+
+def test_a_bad_apis_file_registers_nothing_and_does_not_raise(tmp_path):
+    from quest_ai_runner.adapters.web_search_backends import register_file_specs
+    path = tmp_path / "apis.json"
+    path.write_text("not json")
+    assert register_file_specs({"QAR_WEB_SEARCH_APIS_FILE": str(path)}) == []
+    path.write_text('[{"name": "half"}]')
+    assert register_file_specs({"QAR_WEB_SEARCH_APIS_FILE": str(path)}) == []

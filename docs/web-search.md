@@ -227,3 +227,11 @@ web_research = WebResearchAdapter(MyBackend())
 
 Wrap it with other backends in a `FallbackSearchBackend([...])` for automatic fallback chaining,
 the same way `select_search_backend`'s "auto" mode does.
+
+## Adding a search API by configuration
+
+A hosted search API that returns JSON needs no class. Describe it in a JSON list and point `QAR_WEB_SEARCH_APIS_FILE` at the
+file; each entry names the endpoint, the environment variable that holds the key, what to send, where the results are in the
+reply and which fields are the title, link, snippet and date (the field list is in `quest_ai_runner/adapters/web_search_apis.py`,
+where Serper, Brave and Tavily are written the same way). Then `QAR_WEB_SEARCH_BACKEND=<name>` selects it, or it joins the
+automatic fallback chain after the built-in ones when its key is set.

@@ -35,6 +35,7 @@ import httpx
 
 from esoi import implementation
 from ..core.resolve import resolve
+from .web_search_apis import SPECS
 
 logger = logging.getLogger("quest-ai-runner.web-search-backends")
 
@@ -114,148 +115,112 @@ def _strip_tags(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 1. Serper (Google SERP proxy)
+# 1-3. Hosted JSON search APIs, described as data (web_search_apis.py) and run by one generic backend
 # ---------------------------------------------------------------------------
+
+
+def dotted(data: Any, path: str) -> Any:
+    """``a.b`` -> ``data["a"]["b"]``, treating a missing or empty step as an empty mapping."""
+    for step in path.split("."):
+        data = (data or {}).get(step) if isinstance(data, dict) else None
+    return data
+
+
+def fill(value: Any, key: str, query: str, max_results: int) -> Any:
+    """Replace ``{query}``, ``{max_results}`` (an integer) and ``{key}`` in a payload or header value."""
+    if value == "{query}":
+        return query
+    if value == "{max_results}":
+        return max_results
+    if isinstance(value, str):
+        return value.replace("{key}", key)
+    return value
+
+
+class ConfiguredJsonBackend:
+    """Searches any JSON search API from a description (see ``web_search_apis.py``). Behaviour matches the hand-written
+    Serper, Brave and Tavily backends this replaced: same request, same hit fields, same errors."""
+    spec: Dict[str, Any] = {}
+
+    def __init__(self, api_key: str, http: HttpCallable = _default_http) -> None:
+        self.api_key = api_key
+        self.http = http
+        self.name = self.spec["name"]
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str]) -> Optional["ConfiguredJsonBackend"]:
+        key = next((env[n] for n in cls.spec.get("key_env", []) if env.get(n)), "")
+        return cls(key) if key else None
+
+    def search(self, query: str, *, max_results: int = 5) -> SearchResponse:
+        spec, name = self.spec, self.spec["name"]
+        payload = {k: fill(v, self.api_key, query, max_results) for k, v in spec.get("payload", {}).items()}
+        headers = {k: fill(v, self.api_key, query, max_results) for k, v in spec.get("headers", {}).items()}
+        try:
+            resp = self.http(spec["method"], spec["url"], headers=headers,
+                             **{"json" if spec.get("send") == "json" else "params": payload})
+        except SearchBackendError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise SearchBackendError(f"{name}: request failed: {exc}") from exc
+        _raise_for_status(resp, name)
+        data = _json(resp, name)
+
+        def field_of(item: Dict[str, Any], label: str) -> str:
+            text = next((item.get(k) for k in spec["fields"].get(label, []) if item.get(k)), "") or ""
+            return _strip_tags(text) if label in spec.get("strip_tags", []) else text
+
+        hits = [SearchHit(title=field_of(item, "title"), url=field_of(item, "url"), snippet=field_of(item, "snippet"),
+                          date=field_of(item, "date"))
+                for item in (dotted(data, spec["results_path"]) or [])[:max_results]]
+        answer = next((dotted(data, p) for p in spec.get("answer_paths", []) if dotted(data, p)), "") or ""
+        if not hits and not answer:
+            raise SearchBackendError(f"{name}: no results for {query!r}")
+        return SearchResponse(hits=hits, answer=answer, queries_issued=[query])
+
+
+def backend_class_for(spec: Dict[str, Any]) -> type:
+    """A backend class bound to one description."""
+    return type(f"{spec['name'].title()}Backend", (ConfiguredJsonBackend,), {"spec": spec})
 
 
 @implementation("search-the-web", "serper")
-class SerperBackend:
-    name = "serper"
-
-    def __init__(self, api_key: str, http: HttpCallable = _default_http) -> None:
-        self.api_key = api_key
-        self.http = http
-
-    def search(self, query: str, *, max_results: int = 5) -> SearchResponse:
-        try:
-            resp = self.http(
-                "POST",
-                "https://google.serper.dev/search",
-                headers={"X-API-KEY": self.api_key, "Content-Type": "application/json"},
-                json={"q": query, "num": max_results},
-            )
-        except SearchBackendError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            raise SearchBackendError(f"serper: request failed: {exc}") from exc
-        _raise_for_status(resp, "serper")
-        data = _json(resp, "serper")
-
-        hits = [
-            SearchHit(
-                title=item.get("title", "") or "",
-                url=item.get("link", "") or "",
-                snippet=item.get("snippet", "") or "",
-                date=item.get("date", "") or "",
-            )
-            for item in (data.get("organic") or [])[:max_results]
-        ]
-
-        answer = ""
-        answer_box = data.get("answerBox") or {}
-        if answer_box:
-            answer = answer_box.get("answer") or answer_box.get("snippet") or ""
-        if not answer:
-            kg = data.get("knowledgeGraph") or {}
-            answer = kg.get("description", "") or ""
-
-        if not hits and not answer:
-            raise SearchBackendError(f"serper: no results for {query!r}")
-        return SearchResponse(hits=hits, answer=answer, queries_issued=[query])
-
-
-# ---------------------------------------------------------------------------
-# 2. Brave Search API
-# ---------------------------------------------------------------------------
+class SerperBackend(ConfiguredJsonBackend):
+    spec = next(x for x in SPECS if x["name"] == "serper")
 
 
 @implementation("search-the-web", "brave")
-class BraveBackend:
-    name = "brave"
-
-    def __init__(self, api_key: str, http: HttpCallable = _default_http) -> None:
-        self.api_key = api_key
-        self.http = http
-
-    def search(self, query: str, *, max_results: int = 5) -> SearchResponse:
-        try:
-            resp = self.http(
-                "GET",
-                "https://api.search.brave.com/res/v1/web/search",
-                headers={"X-Subscription-Token": self.api_key, "Accept": "application/json"},
-                params={"q": query, "count": max_results},
-            )
-        except SearchBackendError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            raise SearchBackendError(f"brave: request failed: {exc}") from exc
-        _raise_for_status(resp, "brave")
-        data = _json(resp, "brave")
-
-        web = data.get("web") or {}
-        hits = [
-            SearchHit(
-                title=item.get("title", "") or "",
-                url=item.get("url", "") or "",
-                snippet=_strip_tags(item.get("description", "") or ""),
-                date=item.get("age") or item.get("page_age") or "",
-            )
-            for item in (web.get("results") or [])[:max_results]
-        ]
-        if not hits:
-            raise SearchBackendError(f"brave: no results for {query!r}")
-        return SearchResponse(hits=hits, answer="", queries_issued=[query])
-
-
-# ---------------------------------------------------------------------------
-# 3. Tavily
-# ---------------------------------------------------------------------------
+class BraveBackend(ConfiguredJsonBackend):
+    spec = next(x for x in SPECS if x["name"] == "brave")
 
 
 @implementation("search-the-web", "tavily")
-class TavilyBackend:
-    name = "tavily"
+class TavilyBackend(ConfiguredJsonBackend):
+    spec = next(x for x in SPECS if x["name"] == "tavily")
 
-    def __init__(self, api_key: str, http: HttpCallable = _default_http) -> None:
-        self.api_key = api_key
-        self.http = http
 
-    def search(self, query: str, *, max_results: int = 5) -> SearchResponse:
-        try:
-            resp = self.http(
-                "POST",
-                "https://api.tavily.com/search",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "query": query,
-                    "max_results": max_results,
-                    "search_depth": "basic",
-                    "include_answer": True,
-                },
-            )
-        except SearchBackendError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            raise SearchBackendError(f"tavily: request failed: {exc}") from exc
-        _raise_for_status(resp, "tavily")
-        data = _json(resp, "tavily")
-
-        hits = [
-            SearchHit(
-                title=item.get("title", "") or "",
-                url=item.get("url", "") or "",
-                snippet=item.get("content", "") or "",
-                date=item.get("published_date", "") or "",
-            )
-            for item in (data.get("results") or [])[:max_results]
-        ]
-        answer = data.get("answer", "") or ""
-        if not hits and not answer:
-            raise SearchBackendError(f"tavily: no results for {query!r}")
-        return SearchResponse(hits=hits, answer=answer, queries_issued=[query])
+def register_file_specs(env: Mapping[str, str]) -> List[str]:
+    """Register the search APIs a deployment describes in the JSON file named by ``QAR_WEB_SEARCH_APIS_FILE``; returns their
+    names. A bad file logs and registers nothing: web search never fails the turn."""
+    path = (env.get("QAR_WEB_SEARCH_APIS_FILE") or "").strip()
+    if not path:
+        return []
+    import json
+    from esoi import runtime
+    names: List[str] = []
+    try:
+        with open(os.path.expanduser(path), encoding="utf-8") as handle:
+            entries = json.load(handle)
+        for spec in entries:
+            name = str(spec["name"]).strip().lower()
+            for required in ("method", "url", "results_path", "fields"):
+                spec[required]
+            spec["name"] = name
+            runtime.register("search-the-web", name, backend_class_for(spec), scope="quest_ai_runner", replace=True)
+            names.append(name)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("QAR_WEB_SEARCH_APIS_FILE %s not used: %s", path, exc)
+    return names
 
 
 # ---------------------------------------------------------------------------
@@ -634,15 +599,6 @@ def select_search_backend(
         """The keyword arguments a backend is built with from this environment, or None when its
         key/config is missing (then the backend is unavailable). Which class a name means is the
         selection's (``core/resolve.py``), not decided here."""
-        if name == "serper":
-            key = env.get("SERPER_API_KEY", "")
-            return {"api_key": key} if key else None
-        if name == "brave":
-            key = env.get("BRAVE_SEARCH_API_KEY", "") or env.get("BRAVE_API_KEY", "")
-            return {"api_key": key} if key else None
-        if name == "tavily":
-            key = env.get("TAVILY_API_KEY", "") or env.get("WEB_SEARCH_API_KEY", "")
-            return {"api_key": key} if key else None
         if name == "searxng":
             base_url = env.get("SEARXNG_URL", "")
             return {"base_url": base_url} if base_url else None
@@ -661,25 +617,20 @@ def select_search_backend(
             return {"provider": provider, "model": provider_model}
         return None
 
-    shipped = ("serper", "brave", "tavily", "searxng", "gemini", "provider")
+    extra_names = register_file_specs(env)
 
     def build(name: str) -> Optional[Any]:
-        if name not in shipped:
-            # A backend added by registration builds itself from the environment (``from_env``), so a new hub needs no
-            # branch in this function: the branches in ``constructor_args`` are only for the backends this module ships.
-            try:
-                from_env = getattr(resolve("search-the-web", name), "from_env", None)
-            except ValueError:
-                return None
-            return from_env(env) if callable(from_env) else None
-        args = constructor_args(name)
-        if args is None:
-            return None
         try:
             backend_cls = resolve("search-the-web", name)
         except ValueError:
             return None
-        return backend_cls(**args)
+        # A backend that describes how to build itself from the environment (``from_env``: the data-described JSON APIs and
+        # any backend a deployment registers) needs no branch here; ``constructor_args`` serves the few that do not.
+        from_env = getattr(backend_cls, "from_env", None)
+        if callable(from_env):
+            return from_env(env)
+        args = constructor_args(name)
+        return backend_cls(**args) if args is not None else None
 
     explicit = (env.get("QAR_WEB_SEARCH_BACKEND", "") or "").strip().lower()
     if explicit:
@@ -691,7 +642,7 @@ def select_search_backend(
             )
         return backend
 
-    order = ["serper", "brave", "tavily", "searxng", "gemini", "provider"]
+    order = ["serper", "brave", "tavily", "searxng", "gemini", "provider", *extra_names]
     available = [b for b in (build(name) for name in order) if b is not None]
     if not available:
         return None
