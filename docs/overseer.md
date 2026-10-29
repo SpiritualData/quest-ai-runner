@@ -2,6 +2,8 @@
 
 ## The idea
 
+The engine (the digest builder, the five signals, the safe-default parse) lives in the hub package as the `overseer` implementation of its `watch-for-risk` seat (`hubofhubs.risk`). `core/overseer.py` keeps the prompt (`OVERSEER_PROMPT`, the consent rules and their wording) and its prompt spec, assembles the seat once at import through `hubofhubs.assemble` with that prompt passed in as data (`render`), and keeps `build_digest`, `oversee`, `OverseerSignal` and `OVERSEE_TOOL` at their old import path. The call site, `core/orchestrator_oversee.py`, is unchanged.
+
 A high-quality model, reading and writing very few tokens, watches the run the way a person's
 awareness watches their own body walk: almost always silent, occasionally sending one small signal
 that causes a large downstream course correction. That is cheaper and more reliable than either

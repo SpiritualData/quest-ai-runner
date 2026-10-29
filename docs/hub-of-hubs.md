@@ -41,6 +41,7 @@ long-lived provider tokens: a lane receives a token through the environment vari
   `qar-card-repository` (a hub `CardStore` over QAR's `CardRepository`, `adapters/hub_card_store.py`). The model call and the
   web search backend are external seats that QAR passes in `provided`. For dev and tests a sibling checkout beside this
   repository works instead of an install (pytest `pythonpath`; the `hub_of_hubs` component also puts it on the path).
+- **Seats moved.** `watch-for-risk`: the overseer engine is `hubofhubs.risk` (`overseer`); QAR passes its prompt as data and assembles the seat in `core/overseer.py`. Not yet measured after the move: the paid pass owns `metric-watch-a-run` (`overseer_signals`, `judges` and the live arms).
 - **Ports.** For this pass `core/adapters.py` stays the import path of QAR's ports; the Protocols that need no Quest knowledge
   are moving into the hub seat by seat, with `core/adapters.py` re-exporting the hub names, and the importers are rewritten as
   each seat moves (`CHANGELOG.md`).
