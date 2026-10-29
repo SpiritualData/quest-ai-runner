@@ -163,7 +163,8 @@ class PassesMixin:
             for row in (self.client.list_quests(team_id=team or None) or []):
                 quest_id = str(row.get("quest_id") or row.get("id") or "")
                 if quest_id and quest_id not in snapshot:
-                    snapshot[quest_id] = {"team_id": team or self.cfg.team_id}
+                    snapshot[quest_id] = {"team_id": team or self.cfg.team_id,
+                                          "archived": bool(row.get("archived"))}
         opted_in = 0
         for quest_id, entry in list(snapshot.items()):
             try:
@@ -179,6 +180,11 @@ class PassesMixin:
             autopilot_cfg = state.get("autopilot") or {}
             instructions = str(autopilot_cfg.get("instructions") or "").strip()
             mode = str(autopilot_cfg.get("mode") or "off")
+            if state.get("archived") or entry.get("archived"):
+                # An archived quest gets no pass whatever its stored config says (the backend also
+                # turns the mode off on archive). It stays in the snapshot as "off" rather than
+                # being dropped, so the existing off-mode path retires a pass it still has.
+                mode = "off"
             # A quest that names no run time of its own runs at the lane's default hour. The
             # default is applied HERE, once, which is what keeps there being ONE kind of pass:
             # every opted-in quest has a run time, so every one gets its own series. Branching on

@@ -54,6 +54,12 @@ class GatesMixin:
             state = self._quest_state(only_quest_id)
             autopilot_cfg = (state.get("autopilot") or {}) if state else {}
             mode = str(autopilot_cfg.get("mode") or "off")
+            if state and state.get("archived"):
+                # Defense in depth: the backend turns the mode off on archive, but an archived
+                # quest never gets a pass whatever its stored config says.
+                log.info("autopilot: quest %s is archived -- no pass; it should be retired",
+                         only_quest_id)
+                return []
             if mode not in ("suggest", "act", "reactive"):
                 log.info("autopilot: quest %s mode=%r -- no longer opted in; this pass should be "
                         "retired", only_quest_id, mode)
@@ -76,7 +82,13 @@ class GatesMixin:
                     rows_by_quest[quest_id] = row
         eligible = []
         for quest_id, row in rows_by_quest.items():
+            if row.get("archived"):
+                log.info("autopilot: quest %s is archived -- skipping", quest_id)
+                continue
             state = self._quest_state(quest_id)
+            if state and state.get("archived"):
+                log.info("autopilot: quest %s is archived -- skipping", quest_id)
+                continue
             autopilot_cfg = (state.get("autopilot") or {}) if state else {}
             mode = str(autopilot_cfg.get("mode") or "off")
             if mode not in ("suggest", "act", "reactive"):
