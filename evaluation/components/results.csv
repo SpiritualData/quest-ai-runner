@@ -3085,3 +3085,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-28,justified_model_spend,spec_registry_ablation,14,0,0/14,0/0,0,0,0,0.0,0.2,8c11e66,4daf9f8a,none,,,
 2026-10-28,justified_model_spend,spec_registry,14,14,14/14,0/0,0,0,0,0.0,0.1,8c11e66,4daf9f8a,none,,,
 2026-10-28,qar_overall,recorded_rows,8,3,3/8,0/0,0,0,0,0.0,2.2,8c11e66,06c7c199,none,,,
+2026-10-29,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.3,804cfe8,ae7e2b22,none,,,
+2026-10-29,chat_quality,dev_quest_chat,3,1,1/3,0/0,55,301455,10169,0.2818,154.3,804cfe8,8c27caa9,claude-haiku-5-5,,"only:IMP-028,REL-MUL-07,WEB-001",
