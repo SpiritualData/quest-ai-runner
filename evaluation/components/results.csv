@@ -3394,3 +3394,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,justified_model_spend,spec_registry_ablation,16,11,11/16,0/0,0,0,0,0.0,1.0,0c26c03,62d2673a,none,,,
 2026-10-29,spec_selection,lexical_vector,76,56,35/50,21/26,0,0,0,0.0,0.5,0c26c03,0a2ef76a,none,,,0.8157
 2026-10-29,spec_selection,lexical_vector_gated,76,70,46/50,24/26,48,123866,12237,0.0309,148.7,0c26c03,0a2ef76a,unknown,,,0.9032
+2026-10-29,justified_model_spend,spec_registry_ablation,16,12,12/16,0/0,0,0,0,0.0,1.0,2445511,62d2673a,none,,,
