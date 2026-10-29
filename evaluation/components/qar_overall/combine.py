@@ -26,6 +26,7 @@ solutions whose selected arm has a current row that no rival beats.
 import datetime
 import fnmatch
 import json
+import re
 import subprocess
 from functools import lru_cache
 from pathlib import Path
@@ -128,10 +129,45 @@ def dependency_patterns(component):
             patterns += [p.strip() for p in r.get("path", "").split(";") if p.strip()]
     if not patterns:
         return None
+    patterns = narrow_evaluation_tree(patterns, component)
     for r in reg.implementations:
         if r.get("solution_id") in mine:
             patterns += [p.strip() for p in r.get("filepath", "").split(";") if p.strip()]
     return patterns + [f"evaluation/components/{component}/*"]
+
+
+WHOLE_EVALUATION_TREE = SHARED_EVALUATION_DIR + "/**"
+
+
+def sibling_imports(component):
+    """The sibling component folders ``component`` imports (``from x import`` / ``import x``, followed transitively), read from
+    the source: the folders its arm really runs through, as opposed to every folder that sits beside it."""
+    root = Path(CONFIG.root) / SHARED_EVALUATION_DIR
+    siblings = {p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("__")} if root.is_dir() else set()
+    seen, todo = set(), [component]
+    while todo:
+        folder = todo.pop()
+        if folder in seen:
+            continue
+        seen.add(folder)
+        for source in (root / folder).rglob("*.py") if (root / folder).is_dir() else ():
+            if source.name.startswith("test_"):
+                continue
+            for match in re.finditer(r"^\s*(?:from|import)\s+([A-Za-z_]\w*)", source.read_text(errors="replace"), re.M):
+                if match.group(1) in siblings:
+                    todo.append(match.group(1))
+    return seen
+
+
+def narrow_evaluation_tree(patterns, component):
+    """Replace the whole-tree pattern (``eval-components`` covers ``evaluation/components/**``) by what ``component`` truly
+    depends on: its own folder and the sibling folders it imports. The top-level shared helpers stay covered by
+    ``depends_on``. A NEW sibling folder no arm imports therefore leaves unrelated rows current; a change to shared code,
+    the arm's own folder or a folder it imports still makes them stale."""
+    if WHOLE_EVALUATION_TREE not in patterns:
+        return patterns
+    narrowed = [p for p in patterns if p != WHOLE_EVALUATION_TREE]
+    return narrowed + [f"{SHARED_EVALUATION_DIR}/{folder}/*" for folder in sorted(sibling_imports(component))]
 
 
 def measured_components(command):

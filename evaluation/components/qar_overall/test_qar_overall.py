@@ -155,3 +155,19 @@ def test_a_component_that_declares_nothing_keeps_the_conservative_rule(fresh_row
 def test_the_dependency_patterns_name_no_whole_tree_for_a_single_solution_component():
     patterns = combine.dependency_patterns("staleness")
     assert "evaluation/components/staleness/*" in patterns and "quest_ai_runner/*" not in patterns
+
+
+def test_a_new_sibling_component_leaves_end_to_end_current_but_shared_and_own_code_stale(fresh_row_changes):
+    """The ``eval-components`` row covers the whole tree, yet an arm depends only on shared helpers, its own folder and the
+    sibling folders it imports: a brand-new component folder must not stale it."""
+    patterns = combine.dependency_patterns("end_to_end")
+    assert "evaluation/components/**" not in patterns
+    assert "evaluation/components/assist_a_terminal_session/*" in patterns   # a sibling it imports
+    old = row(13, 13, sha="abc1234")
+    fresh_row_changes["files"] = ["evaluation/components/brand_new_component/score.py",
+                                  "evaluation/components/brand_new_component/impls/x.py"]
+    assert combine.current("end_to_end", old) == ""
+    for changed in ("evaluation/components/common.py", "evaluation/components/end_to_end/drive.py",
+                    "evaluation/components/assist_a_terminal_session/score.py"):
+        fresh_row_changes["files"] = [changed]
+        assert combine.current("end_to_end", old).startswith("stale"), changed
