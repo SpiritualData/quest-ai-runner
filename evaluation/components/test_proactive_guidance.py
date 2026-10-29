@@ -146,3 +146,9 @@ def test_hand_labelled_replies_classify_correctly_by_code():
     ]
     for case_id, reply, good in hand:
         assert (score.problems_by_code(BY_ID[case_id], reply) == []) is good, (case_id, reply[:60])
+
+
+def test_a_true_remainder_is_not_an_invented_figure():
+    reply = "Watch the expense report: 8 of 22 receipts still need matching before 30 November, and the standups are at 0 of 2."
+    assert "figure not in the case" not in " ".join(score.problems_by_code(BY_ID["PG-N-R4"], reply))
+    assert "figure not in the case: 99" in " ".join(score.problems_by_code(BY_ID["PG-N-R4"], reply.replace("8 of 22", "99 of 22")))

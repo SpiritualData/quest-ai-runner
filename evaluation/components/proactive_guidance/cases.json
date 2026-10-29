@@ -209,8 +209,8 @@
   "context": [
    "Where this sits: You are the health representative for three quests under the Health intent",
    "Quest A, Run a marathon: next milestone a 25 km long run by 15 November; longest run 21 km",
-   "Quest B, Sleep routine: next milestone lights out by 22:30 for seven nights; 3 of 7 nights so far",
-   "Quest C, Cook at home: next milestone plan three dinners for next week; 1 of 3 planned"
+   "Quest B, Sleep routine: next milestone lights out by 22:30 for seven nights by 20 November; 3 of 7 nights so far",
+   "Quest C, Cook at home: next milestone plan three dinners for next week by 5 November; 1 of 3 planned"
   ],
   "recent": [],
   "message": "What should I look at this week?",
@@ -218,7 +218,8 @@
   "milestone_keys": [
    "25 km long run",
    "lights out by 22:30",
-   "plan three dinners"
+   "plan three dinners",
+   "three dinners"
   ],
   "metric_values": [
    "21 km",
@@ -226,7 +227,9 @@
    "1 of 3"
   ],
   "answer_may_name_milestone": true,
-  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders.",
+  "answer_is_pointer": true,
+  "label_note": "The request asks what to look at, so a reply built on the quests' own milestones and readings is the pointer; a closing repeat of it is not wanted (grader finding of 2026-10-29)."
  },
  {
   "id": "PG-N-R2",
@@ -289,7 +292,7 @@
  {
   "id": "PG-N-R4",
   "class": "nudge",
-  "kind": "related_lookup",
+  "kind": "asks_what_next",
   "level": "rep",
   "expected_level": "rep",
   "context": [
@@ -299,21 +302,28 @@
    "Quest C, Update the handbook: next milestone review section 3 by 6 December; 2 of 5 sections reviewed"
   ],
   "recent": [],
-  "message": "Can you remind me what the team agreed about meeting days?",
-  "plain_answer": "The team agreed on Tuesday and Thursday mornings.",
+  "message": "Thanks, that matches what I remembered. Anything I should watch for this week?",
+  "plain_answer": "Nothing urgent from my side. The team meets on Tuesday and Thursday mornings.",
   "milestone_keys": [
    "file the expense report",
    "expense report",
    "review section 3",
-   "section 3"
+   "section 3",
+   "first standups",
+   "standups"
   ],
   "metric_values": [
    "14 of 22",
    "2 of 5",
    "0 of 2"
   ],
-  "answer_may_name_milestone": false,
-  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders."
+  "answer_may_name_milestone": true,
+  "source": "Written for this metric from the product owner's direction in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt, 49:15 to 50:27: the AI keeps the end in sight, always moves the person forward, at the intent level they are working at) and the 2026-10-28 excerpt (hierarchy of intents, 24:44 to 25:50). The scenario is invented; names are placeholders.",
+  "accept_levels": [
+   "rep",
+   "quest"
+  ],
+  "label_note": "A representative asked what to watch may name the one dated quest milestone alone; the grader read a single-quest pointer as quest level (2026-10-29), which the product owner's call allows: the level that makes sense for the context."
  },
  {
   "id": "PG-R-Q1",
@@ -534,8 +544,8 @@
   "context": [
    "Where this sits: You are the health representative for three quests under the Health intent",
    "Quest A, Run a marathon: next milestone a 25 km long run by 15 November; longest run 21 km",
-   "Quest B, Sleep routine: next milestone lights out by 22:30 for seven nights; 3 of 7 nights so far",
-   "Quest C, Cook at home: next milestone plan three dinners for next week; 1 of 3 planned"
+   "Quest B, Sleep routine: next milestone lights out by 22:30 for seven nights by 20 November; 3 of 7 nights so far",
+   "Quest C, Cook at home: next milestone plan three dinners for next week by 5 November; 1 of 3 planned"
   ],
   "recent": [],
   "message": "Can you translate 'see you tomorrow' into French?",

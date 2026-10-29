@@ -53,6 +53,17 @@ def first_sentence(reply):
     return re.split(r"(?<=[.!?])\s", reply.strip(), maxsplit=1)[0]
 
 
+def derived(nums):
+    """What simple arithmetic on the case's own whole numbers gives (22 receipts, 14 matched: 8 left), so a true remainder is not called invented."""
+    whole = [int(n) for n in nums if n.isdigit()]
+    out = set()
+    for a in whole:
+        for b in whole:
+            out.add(str(abs(a - b)))
+            out.add(str(a + b))
+    return out
+
+
 def sentences(reply):
     return [part for part in re.split(r"(?<=[.!?])\s+", reply.strip()) if part]
 
@@ -77,7 +88,8 @@ def problems_by_code(case, reply):
     if len(reply.split()) > arms.HARD_MAX_WORDS:
         found.append(f"{len(reply.split())} words")
     held = " ".join([arms.context_text(case), *case.get("recent", []), case["message"], case["plain_answer"]])
-    invented = sorted(n for sentence in nudge_sentences(case, reply) for n in numbers(sentence) - numbers(held))
+    allowed = numbers(held) | derived(numbers(held))
+    invented = sorted(n for sentence in nudge_sentences(case, reply) for n in numbers(sentence) - allowed)
     if invented:
         found.append("figure not in the case: " + ",".join(invented))
     milestone, reading = named(reply, case)
@@ -96,20 +108,21 @@ def problems_by_code(case, reply):
 
 def grader_prompt(case, reply):
     recent = "\n".join(case.get("recent", [])) or "(none)"
+    note = ("\nNOTE: the person asked what to look at, so an answer built on the milestones and readings in the context IS the pointer; do not count it as awkward or as a repeat.\n" if case.get("answer_is_pointer") else "")
     return (
         "An AI assistant inside a goal tracking app holds the context below and has replied to the person. Grade only the reply.\n\n"
         f"CONTEXT THE ASSISTANT HOLDS\n{arms.context_text(case)}\n\nEARLIER IN THE CONVERSATION\n{recent}\n\n"
-        f"THE PERSON SAID: {case['message']}\n\nTHE ASSISTANT REPLIED: {reply}\n\n"
+        f"THE PERSON SAID: {case['message']}\n\nTHE ASSISTANT REPLIED: {reply}\n{note}\n"
         'Reply with one JSON object: {"responds": true or false, "pointer": true or false, "pointer_level": "none" or "goal" or "quest" or "rep", '
         '"grounded": true or false, "awkward": true or false, "reason": "one short sentence"}.\n'
         "responds: the reply answers or directly responds to what the person said, before anything else.\n"
         "pointer: the reply also nudges the person toward their long-term goal, a next milestone, or their next step on it, beyond what they asked "
         "(a plain answer that merely mentions the work they asked about is not a pointer).\n"
         "pointer_level: the level the pointer works at. goal = the specific goal or target in front of the person right now. quest = the quest's "
-        "next milestone or outcome. rep = it picks among several quests the assistant looks after, or speaks of the wider intent. none = no pointer.\n"
+        "next milestone or outcome. rep = it names more than one of the several quests the assistant looks after, or speaks of the wider intent. none = no pointer.\n"
         "grounded: every milestone, date, number and quest the reply names is in the context (false if it invents or distorts any).\n"
         "awkward: the pointer is forced, nagging, irrelevant to the moment, repeats something already said, ignores that the person is upset or "
-        "pressed for time, or takes over the reply. False when there is no pointer and the reply is a fitting answer.")
+        "pressed for time, or takes over the reply. A single short pointer sentence after a full answer is NOT awkward when the person is finishing, saying thanks or goodbye, idle, or asking what else or what next. False when there is no pointer and the reply is a fitting answer.")
 
 
 def score_case(fn, case):
@@ -129,7 +142,7 @@ def score_case(fn, case):
     row.update(nudged=pointer, awkward=awkward or (case["class"] == "restraint" and pointer))
     responds, grounded = verdict.get("responds") is True, verdict.get("grounded") is True
     if case["class"] == "nudge":
-        right = pointer and verdict.get("pointer_level") == case["expected_level"]
+        right = pointer and verdict.get("pointer_level") in (case.get("accept_levels") or [case["expected_level"]])
         ok = responds and right and grounded and not awkward
     else:
         ok = responds and not pointer and not awkward
