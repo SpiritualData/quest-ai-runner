@@ -109,9 +109,9 @@
    }
   ],
   "label": {
-   "ai_can_do": true
+   "ai_can_do": false
   },
-  "source": "quest-backend/tests/test_audit_goal_assignments.py test_research_goal_goes_to_ai_rep_of_owner_when_unassigned: the audit classifies this goal hand_to_ai (research is AI work in its AI_VERBS and in the doability prompt); the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's"
+  "source": "quest-backend/tests/test_audit_goal_assignments.py test_research_goal_goes_to_ai_rep_of_owner_when_unassigned: the audit classifies this goal hand_to_ai (research is AI work in its AI_VERBS and in the doability prompt); the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's; relabelled to false (decision teamdec_f95b130faacd, approved): the doability prompt counts only what an AI can do with text, files and data it can read, and current public prices with source links need live web access the judge is not given, so it cannot finish the goal on its own"
  },
  {
   "id": "HOG-DO-04",
@@ -299,9 +299,9 @@
    }
   ],
   "label": {
-   "ai_can_do": true
+   "ai_can_do": false
   },
-  "source": "quest_ai_runner/runner/goal_handoff.py ASSIGNEE_PROMPT: the prompt's own worked example of a goal an AI can do itself (research, audits, documentation) and so ai_can_do true; the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's"
+  "source": "quest_ai_runner/runner/goal_handoff.py ASSIGNEE_PROMPT: the prompt's own worked example of a goal an AI can do itself (research, audits, documentation) and so ai_can_do true; the goal's details and the quest's outcome were added so the goal is not too vague by the doability prompt's own sufficiency rule (a bare title with no context is answered false), the label stays the source's; relabelled to false (decision teamdec_f95b130faacd, approved): the doability prompt counts only what an AI can do with text, files and data it can read, and reading live Wikipedia pages and choosing the top three misapplications needs live web access and an editorial choice the judge is not given; the assignee prompt's worked example is an example for that prompt, not a doability label"
  },
  {
   "id": "HOG-DO-09",
