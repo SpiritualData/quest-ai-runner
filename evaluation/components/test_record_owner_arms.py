@@ -59,7 +59,7 @@ def test_a_dirty_tree_is_refused_before_anything_runs():
     def run(cmd, **kw):
         calls.append(cmd)
         return SimpleNamespace(returncode=0, stdout=" M quest_ai_runner/core/x.py\n M evaluation/traces/a.json\n M evaluation/components/results.csv\n M notes.md\n")
-    assert rec.main([], run=run) == 3 and len(calls) == 1 and calls[0][0] == "git" and "-uno" in calls[0]
+    assert rec.main(["--in-place"], run=run) == 3 and len(calls) == 1 and calls[0][0] == "git" and "-uno" in calls[0]
 
 
 def test_the_pass_stops_at_the_first_failing_arm():
@@ -100,3 +100,24 @@ def test_the_pass_waits_for_the_tree_to_become_clean():
     assert rec.wait_until_clean(run, 300, sleep=slept.append, interval=30) == [] and slept == [30, 30]
     assert rec.wait_until_clean(lambda c, **k: SimpleNamespace(returncode=0, stdout=" M quest_ai_runner/a.py\n"), 60,
                                 sleep=lambda s: None, interval=30) == ["quest_ai_runner/a.py"]
+
+
+def test_a_snapshot_pass_rebases_paths_but_not_the_interpreter():
+    cmd = rec.arm_command(MANIFEST["arms"][0])
+    moved = rec.rebase(cmd, "/tmp/snap")
+    assert moved[2] == rec.PYTHON and moved[3].startswith("/tmp/snap/") and str(rec.REPO) not in " ".join(moved[3:])
+
+
+def test_sync_copies_new_rows_and_traces_back_once(tmp_path, monkeypatch):
+    repo, snap = tmp_path / "repo", tmp_path / "snap"
+    for base in (repo, snap):
+        (base / "evaluation/components").mkdir(parents=True)
+        (base / "evaluation/components/results.csv").write_text("date,component\n2026-10-29,a\n")
+    monkeypatch.setattr(rec, "REPO", repo)
+    sync = rec.Sync(snap)
+    (snap / "evaluation/components/results.csv").write_text("date,component\n2026-10-29,a\n2026-10-29,b\n")
+    (snap / "evaluation/traces/justified_model_spend").mkdir(parents=True)
+    (snap / "evaluation/traces/justified_model_spend/b__x.json").write_text("{}")
+    assert sync.copy() == 1 and sync.copy() == 0
+    assert (repo / "evaluation/components/results.csv").read_text().endswith("2026-10-29,a\n2026-10-29,b\n")
+    assert (repo / "evaluation/traces/justified_model_spend/b__x.json").read_text() == "{}"

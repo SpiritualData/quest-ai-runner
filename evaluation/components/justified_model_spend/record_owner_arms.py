@@ -1,7 +1,7 @@
 """Re-record every owner arm of the prompts in ``cases.json`` and then the ablation arm, in order, in one command.
 
 ``python3 evaluation/components/justified_model_spend/record_owner_arms.py [--plan] [--api --api-usd-cap 0.05] [--tier offline|subscription|api]
-[--only component/impl ...] [--allow-dirty]``
+[--only component/impl ...] [--in-place [--wait-clean SECONDS | --allow-dirty]]``
 
 Why one command: an owner row goes stale the moment code under ``code_paths`` changes after its commit, so ``QME8`` (the share of
 average spend that is justified) reads 0.0 until every owner arm and the ablation arm are recorded again at one clean commit. This
@@ -11,14 +11,17 @@ paid API arms (only with ``--api``, inside ``--api-usd-cap`` dollars), then ``es
 
 Each arm goes through ``measure.py`` (which records the row and the per-call trace together). A paid arm that made no model call
 records nothing and stops the pass (``--min-calls``), so a 0-call run never becomes a row. A pass stops at the first failing arm.
-The pass refuses to start with uncommitted changes under ``code_paths`` (a row recorded on a dirty tree is stale at birth) unless
-``--allow-dirty``. ``--plan`` prints the commands and runs nothing. Tracker rebuilds are separate (``esoi tracker build``)."""
+By default the pass runs in a detached snapshot of HEAD (a temporary ``git worktree``), so rows carry the commit with no ``-dirty`` however
+many edits other agents have waiting in the shared working copy; after every command the new results rows and traces are copied back
+here and the snapshot is removed at the end. ``--in-place`` runs in this working copy instead and refuses a tree with uncommitted measured
+code (a row recorded on a dirty tree is stale at birth) unless ``--allow-dirty``. ``--plan`` prints the commands and runs nothing. Tracker rebuilds are separate (``esoi tracker build``)."""
 import argparse
 import csv
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -75,18 +78,13 @@ def api_estimate(manifest, api=False, tiers=None, only=None):
     return sum(a.get("est_usd", 0.0) for a in select_arms(manifest, tiers, only, api) if a["tier"] == "api")
 
 
-def dirty_paths(run=subprocess.run, cwd=REPO, components=None):
-    """Uncommitted edits to tracked measured code (``quest_ai_runner`` and ``evaluation/components``; prose, the results log and traces
-    excluded: recording writes them). Untracked files are not counted: a row is stale when committed code changed, not when a new file waits.
-    With ``components``, an edit inside another component's folder (another agent's work) is not counted; shared files and the package are."""
+def dirty_paths(run=subprocess.run, cwd=REPO):
+    """Uncommitted edits to tracked measured code (``quest_ai_runner`` and ``evaluation/components``; prose and the results log excluded:
+    recording writes it). Untracked files are not counted: a row is stale when committed code changed, not when a new file waits."""
     out = run(["git", "-C", str(cwd), "status", "--porcelain", "-uno", "--", "quest_ai_runner", "evaluation/components"],
               capture_output=True, text=True).stdout.splitlines()
-    found = [line[3:] for line in out if not line.endswith(".md") and "__pycache__" not in line
-             and not line.endswith("evaluation/components/results.csv") and not line[3:].startswith("evaluation/traces")]
-    if components is None:
-        return found
-    prefix = "evaluation/components/"
-    return [f for f in found if not f.startswith(prefix) or "/" not in f[len(prefix):] or f[len(prefix):].split("/")[0] in components]
+    return [line[3:] for line in out if not line.endswith(".md") and "__pycache__" not in line
+            and not line.endswith("evaluation/components/results.csv") and not line[3:].startswith("evaluation/traces")]
 
 
 def wait_until_clean(run, seconds, sleep=time.sleep, interval=30):
@@ -110,13 +108,68 @@ def last_cost(component, impl, results=REPO / "evaluation" / "components" / "res
         return 0.0
 
 
-def run_pass(manifest, plan, *, api_cap, run=subprocess.run, cost_of=last_cost, say=print):
-    """Run ``plan`` in order; returns 0 or the failing command's exit code. Stops when a paid API arm takes the spend over ``api_cap``."""
+def rebase(cmd, root):
+    """``cmd`` with every path under the repository moved under ``root`` (the snapshot a pass runs in)."""
+    return [a if a == PYTHON else a.replace(str(REPO), str(root)) for a in cmd]
+
+
+def add_snapshot(run=subprocess.run):
+    """A detached checkout of HEAD in a temporary folder: clean by construction, so rows recorded there carry the commit with no
+    ``-dirty`` however many other edits are waiting in the shared working copy. Returns its path."""
+    root = tempfile.mkdtemp(prefix="qar-jms-")
+    done = run(["git", "-C", str(REPO), "worktree", "add", "--detach", root, "HEAD"], capture_output=True, text=True)
+    if done.returncode != 0:
+        raise RuntimeError(f"could not check out HEAD: {done.stderr}")
+    return root
+
+
+def remove_snapshot(root, run=subprocess.run):
+    run(["git", "-C", str(REPO), "worktree", "remove", "--force", str(root)], capture_output=True, text=True)
+
+
+class Sync:
+    """Copies what recording wrote in the snapshot back into the repository: new rows of the results log (appended, once each) and the
+    per-call traces. ``copy`` after every command, so a stopped pass still leaves the rows it finished."""
+
+    def __init__(self, root):
+        self.root = Path(root)
+        self.results = Path("evaluation/components/results.csv")
+        self.traces = Path("evaluation/traces/justified_model_spend")
+        self.seen = len(self.lines(self.root / self.results))
+
+    @staticmethod
+    def lines(path):
+        try:
+            return path.read_text(encoding="utf-8").splitlines(keepends=True)
+        except OSError:
+            return []
+
+    def copy(self):
+        fresh = self.lines(self.root / self.results)[self.seen:]
+        if fresh:
+            with open(REPO / self.results, "a", encoding="utf-8", newline="") as handle:
+                handle.writelines(line if line.endswith("\n") else line + "\n" for line in fresh)
+            self.seen += len(fresh)
+        source = self.root / self.traces
+        if source.is_dir():
+            (REPO / self.traces).mkdir(parents=True, exist_ok=True)
+            for file in source.glob("*.json"):
+                target = REPO / self.traces / file.name
+                if not target.exists() or target.read_bytes() != file.read_bytes():
+                    target.write_bytes(file.read_bytes())
+        return len(fresh)
+
+
+def run_pass(manifest, plan, *, api_cap, run=subprocess.run, cost_of=last_cost, say=print, root=REPO, after=None):
+    """Run ``plan`` in order inside ``root``; returns 0 or the failing command's exit code. ``after()`` runs after every command (the sync
+    back from a snapshot). Stops when a paid API arm takes the spend over ``api_cap``."""
     spent = 0.0
     paid = {f"{a['component']}/{a['impl']}": a["tier"] == "api" for a in manifest["arms"]}
     for label, cmd in plan:
         say(f"== {label}")
-        done = run(cmd, env=env_with_esoi())
+        done = run(rebase(cmd, root), env=env_with_esoi(root), cwd=str(root))
+        if after:
+            after()
         if done.returncode != 0:
             say(f"STOPPED: {label} exited {done.returncode}; nothing after it was run")
             return done.returncode or 1
@@ -130,9 +183,9 @@ def run_pass(manifest, plan, *, api_cap, run=subprocess.run, cost_of=last_cost, 
     return 0
 
 
-def env_with_esoi():
+def env_with_esoi(root=REPO):
     env = dict(os.environ)
-    parts = [str(HERE.parent), str(REPO)]
+    parts = [str(Path(root) / "evaluation" / "components"), str(root)]
     if SIBLING_ESOI.is_dir():
         parts.append(str(SIBLING_ESOI))
     env["PYTHONPATH"] = os.pathsep.join(parts + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
@@ -146,8 +199,9 @@ def main(argv=None, run=subprocess.run):
     ap.add_argument("--api-usd-cap", type=float, default=0.05, help="stop when the API arms have cost more than this (dollars)")
     ap.add_argument("--tier", action="append", choices=TIER_ORDER, help="only these tiers (the ablation arm is then skipped)")
     ap.add_argument("--only", action="append", metavar="COMPONENT/IMPL", help="only these arms (the ablation arm is then skipped)")
-    ap.add_argument("--wait-clean", type=int, default=0, metavar="SECONDS", help="wait up to this long for other edits to the measured code to be committed")
-    ap.add_argument("--allow-dirty", action="store_true", help="run on a tree with uncommitted measured code")
+    ap.add_argument("--in-place", action="store_true", help="run in this working copy instead of a clean snapshot of HEAD (needs a clean tree)")
+    ap.add_argument("--wait-clean", type=int, default=0, metavar="SECONDS", help="--in-place: wait this long for other edits to be committed")
+    ap.add_argument("--allow-dirty", action="store_true", help="--in-place: run on a tree with uncommitted measured code")
     args = ap.parse_args(argv)
     manifest = load_manifest()
     plan = build_plan(manifest, args.tier, args.only, args.api)
@@ -160,6 +214,16 @@ def main(argv=None, run=subprocess.run):
     if args.plan:
         print(f"API estimate ${estimate:.4f}; cap ${args.api_usd_cap}")
         return 0
+    if not args.in_place:
+        root = add_snapshot(run)
+        say_root = f"snapshot of HEAD at {root}"
+        print(say_root)
+        sync = Sync(root)
+        try:
+            return run_pass(manifest, plan, api_cap=args.api_usd_cap, run=run, root=root, after=sync.copy)
+        finally:
+            sync.copy()
+            remove_snapshot(root, run)
     dirty = [] if args.allow_dirty else wait_until_clean(run, args.wait_clean)
     if dirty:
         print("refused: uncommitted changes under the measured code would make every recorded row stale at birth:\n  " + "\n  ".join(dirty[:20]))
