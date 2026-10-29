@@ -3164,3 +3164,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,proactive_guidance,no_nudge,24,12,12/24,0/0,12,15279,1124,0.0128,55.8,c39a840,b27633e9,grader-only,,,
 2026-10-29,proactive_guidance,proactive_guidance.broken.nudge_every_time:build,24,0,0/24,0/0,0,0,0,0.0,0.0,c39a840,b27633e9,none,,,
 2026-10-29,proactive_guidance,guided_v2,24,19,19/24,0/0,47,104121,14904,0.169,198.3,c39a840,b27633e9,claude-haiku,,,
+2026-10-29,hub_of_hubs,registry_scan,80,64,64/80,0/0,0,0,0,0.0,0.0,ce6d3fe,bc172b4a,none,,,
