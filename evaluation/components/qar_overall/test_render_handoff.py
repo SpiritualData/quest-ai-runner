@@ -31,7 +31,7 @@ CONTENT = {"decisions": [{"decision": "D1", "answer": "A1", "whose": "joshua"}, 
 def test_renders_all_sections_without_dashes():
     page = rh.render(fixture(), CONTENT)
     for text in ("Overall QAR metric", "Every part", "End to end", "Proactive guidance", "Prompt spend audit", "Hub of hubs",
-                 "Decisions", "Unfinished work", "Generated 2026-10-29 10:00 UTC from commit abc1234"):
+                 "Decided", "Unfinished work", "Generated 2026-10-29 10:00 UTC from commit abc1234"):
         assert text in page
     assert "—" not in page and "–" not in page
 
@@ -49,3 +49,13 @@ def test_stale_banner_only_when_stale():
 def test_runs_on_the_real_records():
     page = rh.render(rh.collect(), CONTENT)
     assert "Sub-metrics" in page and "QME9" in page and "—" not in page
+
+
+def test_open_decisions_come_first_and_are_not_repeated_below():
+    content = dict(CONTENT)
+    content["decisions"] = [{"decision": "Waiting thing", "answer": "Open. Asked of the owner.", "whose": "Payal"},
+                            {"decision": "Done thing", "answer": "Answered: yes", "whose": "Payal"}]
+    page = rh.render(fixture(), content)
+    assert page.index("Open decisions") < page.index("Overall QAR metric")
+    assert page.count("Waiting thing") == 1 and page.index("Waiting thing") < page.index("Decided")
+    assert page.index("Done thing") > page.index("Decided")

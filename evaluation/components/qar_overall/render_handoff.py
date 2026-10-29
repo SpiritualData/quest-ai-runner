@@ -409,13 +409,27 @@ def section_hubs(data):
     return "<h2>Hub of hubs</h2>" + head + table(["Area", "Status", "Hubs", "Candidates", "Researched"], rows)
 
 
-def section_decisions(content):
-    rows = []
+def is_open(decision):
+    return str(decision.get("answer", "")).lstrip().lower().startswith("open")
+
+
+def decision_row(d):
     label = {"joshua": ("Your answer", "ok"), "/joshua": ("/joshua", ""), "metric": ("metric", "")}
-    for d in content.get("decisions", []):
-        text, kind = label.get(str(d.get("whose", "")).lower(), (d.get("whose", ""), ""))
-        rows.append([esc(d["decision"]), esc(d["answer"]), tag(text, kind)])
-    return "<h2>Decisions</h2>" + table(["Decision", "Answer", "Whose"], rows, "no decisions recorded")
+    text, kind = label.get(str(d.get("whose", "")).lower(), (d.get("whose", ""), ""))
+    return [esc(d["decision"]), esc(d["answer"]), tag(text, kind)]
+
+
+def section_open_decisions(content):
+    """The decisions still waiting for an answer, at the top of the page so nobody scrolls for them."""
+    rows = [decision_row(d) for d in content.get("decisions", []) if is_open(d)]
+    if not rows:
+        return ""
+    return '<h2>Open decisions</h2><div class="card">' + table(["Decision", "Recommendation and default", "Whose"], rows) + "</div>"
+
+
+def section_decisions(content):
+    rows = [decision_row(d) for d in content.get("decisions", []) if not is_open(d)]
+    return "<h2>Decided</h2>" + table(["Decision", "Answer", "Whose"], rows, "no decisions recorded")
 
 
 def section_unfinished(content):
@@ -441,7 +455,7 @@ def render(data, content):
     audience = content.get("audience", "")
     sub = " ".join(x for x in [f"For {audience}." if audience else "",
                                "Every number comes from recorded rows at the latest commit of the Quest AI Runner."] if x)
-    parts = [f"<h1>{esc(title)}</h1>", f'<p class="sub">{esc(sub)}</p>', section_banner(data)]
+    parts = [f"<h1>{esc(title)}</h1>", f'<p class="sub">{esc(sub)}</p>', section_open_decisions(content), section_banner(data)]
     if content.get("summary"):
         parts.append(f"<p>{esc(content['summary'])}</p>")
     parts += [section_cards(data), section_submetrics(data)]
