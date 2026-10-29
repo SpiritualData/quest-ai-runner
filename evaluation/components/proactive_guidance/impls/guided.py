@@ -4,8 +4,8 @@ component (``arms.GUIDANCE_DIRECTIVE``) until a measured win moves it into the r
 ``reply_voice``, on the subscription."""
 PAID = True
 from proactive_guidance import arms
-from quest_ai_runner.core.auxiliary_prompts import REPLY_VOICE_SYSTEM
+from quest_ai_runner.core.auxiliary_prompts import LONG_TERM_GUIDANCE, REPLY_VOICE_SYSTEM
 
 
 def build(meter):
-    return arms.live_reply(meter, REPLY_VOICE_SYSTEM, directive=arms.GUIDANCE_DIRECTIVE)
+    return arms.live_reply(meter, REPLY_VOICE_SYSTEM.replace(LONG_TERM_GUIDANCE, ""), directive=arms.GUIDANCE_DIRECTIVE)
