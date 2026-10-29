@@ -3625,3 +3625,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,hub_of_hubs,hub_of_hubs.broken.vendor_grep:build,80,28,28/80,0/0,0,0,0,0.0,5.5,3a54e54,bc172b4a,none,,,
 2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,4.6,8e15dad,a9f86c1a,none,,,
 2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,5.4,29e6195,a9f86c1a,none,,,
+2026-10-29,chat_quality,dev_quest_chat,10,4,4/10,0/0,174,1017914,13324,0.2745,366.9,c2ec609,8c27caa9,gemini-3.1-flash-lite,,sample:10,
+2026-10-29,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,4.6,c2ec609,a9f86c1a,none,,,
