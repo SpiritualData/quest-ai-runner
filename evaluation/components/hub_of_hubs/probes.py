@@ -63,8 +63,27 @@ def agent_harness():
     return got == "fakehub-acp-agent", "QAR_ACP_AGENT_COMMAND names any ACP agent"
 
 
+def context_assembly():
+    from quest_ai_runner.core.resolve import resolve
+    with registered("index-by-meaning", "fakehub", "hub_of_hubs.fake_hub:FakeVectorStore"):
+        got = resolve("index-by-meaning", overrides={"index-by-meaning": "fakehub"})
+    return got.__name__ == "FakeVectorStore", "chosen by cfg.selections for index-by-meaning"
+
+
+def evals():
+    from esoi import harness
+    got = harness.load_impl("hub_of_hubs.fake_hub:build", "hub_of_hubs")
+    return got(None)("registered", {})["holds"], "an evaluation arm named as module:function (esoi run --impl)"
+
+
+def mcp_source():
+    """World sources and scholarly sources arrive as MCP servers: the probe is the lane-file path, shared with tools_mcp."""
+    return tools_mcp()
+
+
 PROBES = {"web_search": web_search, "model_providers": model_providers, "tools_mcp": tools_mcp,
-          "agent_harness": agent_harness}
+          "agent_harness": agent_harness, "context_assembly": context_assembly, "evals": evals,
+          "world": mcp_source, "science": mcp_source}
 
 
 def run(area):

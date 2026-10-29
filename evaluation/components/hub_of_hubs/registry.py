@@ -48,7 +48,7 @@ def capabilities_of(area, capabilities):
 
 
 def solution_facts(solution_id):
-    """(authoritative metric id, implementation count) for a solution, from the records."""
+    """(authoritative metric id, implementation count, known) for a solution, from the records."""
     solutions = {r["solution_id"]: r for r in read("solutions.csv")}
     count = sum(1 for r in read("implementations.csv") if r["solution_id"] == solution_id)
     row = solutions.get(solution_id)
@@ -71,8 +71,9 @@ def area_facts(row, findings, capabilities, vendor_branches, names_of=None):
     days = days_since(row["last_researched"])
     caps = capabilities_of(row["area"], capabilities)
     config = [c for c in caps if c["connect"] == "config"]
-    metric, implementations, known = solution_facts(row["seam_solution_id"]) if row["seam_solution_id"] else ("", 0, False)
-    names = declared_names(row["seam_solution_id"], names_of) if row["seam_solution_id"] else []
+    seams = split(row["seam_solution_id"])         # an area may have several seats: the area holds if any seat does
+    records = [solution_facts(sid) for sid in seams]
+    names = [n for sid in seams for n in declared_names(sid, names_of)]
     recorded = any(f["finding_id"] == row["finding_id"] for f in findings)
     return dict(
         area=row["area"], days=days, status=row["status"], capabilities=len(caps), by_config=len(config),
@@ -80,7 +81,7 @@ def area_facts(row, findings, capabilities, vendor_branches, names_of=None):
         fresh=days is not None and days <= STALENESS_DAYS,
         config_ok=bool(caps) and len(config) / len(caps) >= CONFIG_SHARE_BAR,
         seam=bool(names), declared=len(names),
-        selectable=bool(metric) and implementations >= 2 and known,
+        selectable=any(metric and count >= 2 and known for metric, count, known in records),
         vendor_branches=vendor_branches.get(row["area"], []),
     )
 

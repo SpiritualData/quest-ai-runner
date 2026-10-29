@@ -46,8 +46,8 @@ def test_each_area_has_a_dated_finding_with_two_to_four_candidates():
 def test_registry_cites_real_paths_and_real_solutions():
     solutions = {r["solution_id"] for r in registry.read("solutions.csv")}
     for row in registry.read("hubs.csv"):
-        if row["seam_solution_id"]:
-            assert row["seam_solution_id"] in solutions, row["area"]
+        for seam in registry.split(row["seam_solution_id"]):
+            assert seam in solutions, row["area"]
         for path in registry.split(row["code_paths"]):
             assert (registry.REPO / path).exists(), path
     for cap in registry.read("hub_capabilities.csv"):
@@ -88,9 +88,10 @@ def test_scan_counts_branches_not_tables(tmp_path):
 
 
 def test_a_fake_hub_needs_configuration_and_no_core_edit():
-    for area in ("web_search", "model_providers", "tools_mcp", "agent_harness"):
+    for area in ("web_search", "model_providers", "tools_mcp", "agent_harness", "context_assembly", "evals", "world", "science"):
         assert probes.run(area)["holds"], area
     assert not probes.run("voice")["holds"]                                  # unprobed is not proven
+    assert not probes.run("memory")["holds"]
 
 
 def test_the_live_implementation_beats_the_baseline():

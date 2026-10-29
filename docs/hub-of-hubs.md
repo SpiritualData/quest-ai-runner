@@ -64,9 +64,9 @@ Generated from `esoi/hubs.csv`; edit the CSV and run `python3 evaluation/compone
 Metric `hub_of_hubs` (recomputed by `render_docs.py`, from the registry and a static scan of the code):
 
 - coverage (areas with a hub or a recorded decision): 1.00
-- integration by configuration (capabilities needing no code per integration): 0.15
+- integration by configuration (capabilities needing no code per integration): 0.23
 - research freshness: share of areas researched within 90 days 1.00; stale: none (days since each date: `esoi run hub_of_hubs --impl registry_scan`)
-- code: areas with one seam 0.80, selectable by metric 0.00, vendor branches in core 6
-- score: 0.679
+- code: areas with one seam 0.80, selectable by metric 0.70, vendor branches in core 0
+- score: 0.765
 
 <!-- hub-table:end -->

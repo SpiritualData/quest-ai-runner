@@ -19,3 +19,5 @@ cap-model-openai,model_providers,Call OpenAI models,OpenAI SDK,code,quest_ai_run
 cap-model-deepseek,model_providers,Call DeepSeek models,OpenAI SDK,code,quest_ai_runner/adapters/deepseek_provider.py
 cap-memory-cards,memory,Durable cards,none (own card store),code,quest_ai_runner/adapters/file_context_store.py
 cap-evals-esoi,evals,Component evals selected by metric,esoi,code,evaluation/components
+cap-world-mcp,world,Any source that has an MCP server,MCP servers,config,quest_ai_runner/config_file.py
+cap-model-openai-compatible,model_providers,"Any OpenAI-compatible endpoint (LiteLLM, vLLM, Ollama)",OPENAI_BASE_URL,config,quest_ai_runner/adapters/openai_provider.py
