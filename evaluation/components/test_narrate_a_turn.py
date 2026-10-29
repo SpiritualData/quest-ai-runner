@@ -100,3 +100,9 @@ def test_the_aggregate_reports_value_time_and_cost():
     rows = [dict(ok=True, kind="specific", beat_seconds=3.0, calls=2), dict(ok=False, kind="repeat", quiet=True, calls=1, late=True, beat_seconds=7.0)]
     text = score.aggregate(rows)
     assert "value 1/2" in text and "later than 5s 1" in text and "1.50 model calls per case" in text
+
+
+def test_the_first_beat_prompt_asks_for_an_i_sentence_and_no_invented_date():
+    from quest_ai_runner.core.orchestrator_turn import NARRATE_BEAT_SPEC
+    text = NARRATE_BEAT_SPEC.template
+    assert "starts with I" in text and "today's date" in text

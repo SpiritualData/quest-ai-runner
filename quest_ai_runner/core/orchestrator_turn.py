@@ -525,7 +525,9 @@ class Narrator:
 NARRATE_BEAT_SPEC = register(PromptSpec(
     id="narrate-a-turn.first-beat", solution="narrate-a-turn", metric="metric-narrate-a-turn",
     tier="caller", cache_layer="tail", inputs=("context", "moment"),
-    template=("{context}What just happened: {moment}\n\nIn one short first-person sentence, say "
-              "what you are about to do or what you noticed (or reply with an empty string if "
-              "nothing fresh is worth saying)."),
+    template=("{context}What just happened: {moment}\n\nIn one short first-person sentence that "
+              "starts with I (I'll, I'm, I found), say, in 20 words or fewer, what you are about to do or "
+              "what you noticed, naming something specific from the message. "
+              "Do not state today's date, a day count or any figure the person did not give. "
+              "Reply with an empty string if nothing fresh is worth saying."),
 ))
