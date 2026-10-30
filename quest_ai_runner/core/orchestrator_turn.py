@@ -280,6 +280,8 @@ class _Emitter:
                 self.mode = Mode.BACKGROUND
         except Exception:  # noqa: BLE001
             pass
+# How much of the user's message the first beat sees (it is one short sentence, so a long message costs little).
+_NARRATION_MESSAGE_CHARS = 3000
 
 
 # Cap on how many prior-turn narration lines a consumer's ``prior_narration`` can carry into a
@@ -421,7 +423,11 @@ class Narrator:
         """
         if not self.enabled:
             return
-        moment = f"the user just sent a new message: {(user_message or '')[:300]}"
+        # The whole message when it is a normal one; a longer one is cut WITH a marker, because an unmarked cut
+        # ends mid-sentence and the one-line ack then tells the user their message was cut off.
+        from .planner_context import cap_section
+        moment = ("the user just sent a new message: "
+                  f"{cap_section(user_message or '', _NARRATION_MESSAGE_CHARS, keep='head')}")
         try:
             self._executor = ThreadPoolExecutor(max_workers=1)
             self._first_future = self._executor.submit(self._gen_and_say, moment)

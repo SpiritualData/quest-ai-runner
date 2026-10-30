@@ -6,7 +6,7 @@ STEP_REPLY, so a failed (or refused) beat was recorded as a failed reply and a l
 as failed. These tests pin: own step, no emission on failure (detected via the step outcome, not
 the stand-in text), and a prompt that does not ask the model to reveal its thinking.
 """
-from quest_ai_runner.core.adapters import STEP_NARRATION, STEP_REPLY
+from hubofhubs.ports.model import STEP_NARRATION, STEP_REPLY
 from quest_ai_runner.core.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
 
 STAND_IN = "Sorry, something went wrong on my side."
@@ -66,3 +66,36 @@ def test_narration_prompt_does_not_ask_to_reveal_thinking():
     run_first_beat(Spy())
     text = seen[0].lower()
     assert "your thinking" not in text and "think out loud" not in text
+
+
+def seen_by_the_model(message):
+    """What the first beat's model call is shown of ``message``."""
+    shown = []
+
+    class Provider(RecordingProvider):
+        def answer(self, messages, *, model, step=None, system=None):
+            shown.append(" ".join(str(m.get("content", m)) if isinstance(m, dict) else str(m) for m in messages))
+            return super().answer(messages, model=model, step=step, system=system)
+
+    events = []
+
+    class Sink:
+        def update(self, ev, mode):
+            events.append(ev)
+
+    narrator = Narrator(provider=Provider(fail=False), model="m", emit=_Emitter(Sink(), Mode.LIVE, lambda m: None),
+                        enabled=True)
+    narrator.begin(message)
+    narrator._first_future.result(timeout=5.0)
+    return shown[0]
+
+
+def test_a_long_message_reaches_the_first_beat_whole_so_it_never_reads_as_cut_off():
+    message = ("I spoke to my fellow student and he reminded me of the importance of simplifying. " * 8
+               + "Ask me questions as needed.")
+    assert len(message) > 300 and message in seen_by_the_model(message)
+
+
+def test_a_message_too_long_even_for_that_is_cut_with_a_marker():
+    shown = seen_by_the_model("word " * 2000)
+    assert "[truncated" in shown

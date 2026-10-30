@@ -43,7 +43,7 @@ from .adapters import (
     plan_with_step,
 )
 from .card_filter import _extract_json
-from .planner_context import _is_discovery_obs, _render_gathered
+from .planner_context import _is_discovery_obs, _render_gathered, cap_section
 from .prompt_layers import compose_layers, language_instruction
 from .prompt_specs import render_prompt
 from .quest_judge import select_quest
@@ -424,7 +424,7 @@ class JudgesMixin:
         record = render_record_for_prompt(trace)
         prompt = render_prompt(
             "explain-an-answer.how-i-got-this",
-            user_message=(trace.user_message or "")[:2000],
+            user_message=cap_section(trace.user_message or "", 2000, keep="head"),
             goal_condition=(trace.goal_condition or trace.user_message or "")[:1000],
             answer=(trace.answer or "")[:4000],
             record=record[:4000],
@@ -646,7 +646,7 @@ class JudgesMixin:
         if not model:
             return False, "release judge unavailable (no model); holding the latch"
         prompt = render_prompt("judge-a-decision.mode-release", 
-            message=message[:1000],
+            message=cap_section(message, 1000, keep="head"),
             transcript=(transcript or "").strip()[:1500] or "(no prior turns)",
         )
 
