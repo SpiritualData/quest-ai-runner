@@ -30,7 +30,7 @@ from quest_ai_runner.config import (
     derive_capabilities,
     resolve_deep_runner_ladder,
 )
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.goal_runner import SubprocessGoalRunner
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, PlanDecision

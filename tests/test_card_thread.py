@@ -15,7 +15,7 @@ What these tests pin, in the order the design demands it:
 """
 import pytest
 
-from quest_ai_runner.core.adapters import PlanDecision
+from quest_ai_runner.core.adapters_values import PlanDecision
 from quest_ai_runner.core.context_doctrine import CARD_THREAD_GATE
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.card_thread import (
@@ -245,7 +245,7 @@ class _StubAssembler:
         self.meta_seen: dict = {}
 
     def assemble(self, task_text, *, meta=None):
-        from quest_ai_runner.core.adapters import AssembledContext
+        from hubofhubs.ports.context import AssembledContext
         self.calls += 1
         self.meta_seen = dict(meta or {})
         return AssembledContext(context_view="## cards\n(the assembled cards)",

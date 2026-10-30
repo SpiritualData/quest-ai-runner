@@ -31,7 +31,7 @@ from quest_ai_runner.adapters.google_link_reader import (
 )
 from quest_ai_runner.adapters.private_link_web import PrivateLinkWebResearch
 from quest_ai_runner.adapters.remote_files_adapter import RemoteFilesAdapter
-from quest_ai_runner.core.adapters import Observation
+from quest_ai_runner.core.adapters_values import Observation
 
 DOC = "docAAAAAAAAAA1"
 SHEET = "sheetBBBBBBB2"

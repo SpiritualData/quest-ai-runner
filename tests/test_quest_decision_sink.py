@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import Escalation
+from quest_ai_runner.core.adapters_values import Escalation
 from quest_ai_runner.runner.quest_client import QuestClient, QuestDecisionSink
 
 

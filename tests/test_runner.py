@@ -2,7 +2,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorResult
 from quest_ai_runner.runner.executor import TaskExecutor
@@ -2055,3 +2055,33 @@ def test_failed_run_posts_into_chat_before_reporting_failed():
     out = ex.execute({"id": "t_order_4", "text": "do the thing", "conv_id": "qaconv_order"})
     assert out.status == "failed"
     assert _closing_order(client.timeline) == [("post", "failed"), ("report", "failed")]
+
+
+def test_monitor_says_which_model_the_worker_runs_on_once_while_it_runs(tmp_path, monkeypatch):
+    """The exact model id is in the worker's first message; the person is told then, not only after the run."""
+    import json as _json
+    import threading as _threading
+    import time as _time
+    from quest_ai_runner.core import goal_runner as gr
+    from quest_ai_runner.core.adapters_events import EVENT_STATUS
+
+    project_dir = tmp_path / ".claude" / "projects" / "proj"
+    project_dir.mkdir(parents=True)
+    monkeypatch.setattr(gr, "_find_claude_project_dir", lambda working_dir: project_dir)
+    session_id = "33333333-3333-3333-3333-333333333333"
+    events = []
+    stop_event = _threading.Event()
+    thread = _threading.Thread(
+        target=gr._monitor_claude_session, args=(str(tmp_path), events.append, stop_event),
+        kwargs={"poll_interval": 0.02, "session_id": session_id, "forced_run_id": "run1",
+                "heartbeat_interval": 100.0}, daemon=True)
+    thread.start()
+    with open(project_dir / f"{session_id}.jsonl", "a") as f:
+        for text in ("first step", "second step"):
+            f.write(_json.dumps({"type": "assistant",
+                                 "message": {"model": "claude-opus-5-5", "content": text}}) + "\n")
+    _time.sleep(0.3)
+    stop_event.set()
+    thread.join(timeout=2)
+    said = [e for e in events if e.type == EVENT_STATUS and "deep_run_model_live" in (e.data or {})]
+    assert [e.text for e in said] == ["Running on claude-opus-5-5"]

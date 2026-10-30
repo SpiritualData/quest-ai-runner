@@ -1,11 +1,7 @@
 """The quest-data ladder guard: a change to the person's own Quest data must never land on a rung
 that can only edit files, and prefers the governed-operations rung over the full agent.
 """
-from quest_ai_runner.core.adapters import (
-    WRITE_SURFACE_AGENT,
-    WRITE_SURFACE_FILES,
-    WRITE_SURFACE_OPERATIONS,
-)
+from quest_ai_runner.core.adapters_values import WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS
 from quest_ai_runner.core.orchestrator import (
     QUEST_DATA_WRITE_SURFACE_INSTRUCTION,
     OrchestratorConfig,

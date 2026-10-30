@@ -8,7 +8,7 @@ No network and no API key — same offline approach as the runner tests.
 import importlib
 
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
-from quest_ai_runner.core.adapters import Escalation
+from quest_ai_runner.core.adapters_values import Escalation
 
 from .conftest import StubEscalation, StubRetrieval
 

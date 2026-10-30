@@ -9,7 +9,7 @@ the real ``ToolRegistry.invoke``, exactly as the deep worker's shell command doe
 """
 import tempfile
 
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.orchestrator import OrchestratorResult, PlanDecision
 from quest_ai_runner.core.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
 from quest_ai_runner.core.tools_failure_ledger import (

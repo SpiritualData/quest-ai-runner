@@ -17,13 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from quest_ai_runner.core.adapters import (
-    AssembledContext,
-    ContextAssembler,
-    VectorHit,
-    VectorStore,
-    VectorStoreBase,
-)
+from hubofhubs.ports.context import AssembledContext, ContextAssembler, VectorHit, VectorStore
+from quest_ai_runner.core.adapters_bases import VectorStoreBase
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
 from quest_ai_runner.adapters import vector_context_assembler as vca
 from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler

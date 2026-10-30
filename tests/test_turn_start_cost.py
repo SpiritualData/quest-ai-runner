@@ -133,7 +133,7 @@ def test_conversation_scan_skips_library_dirs_but_finds_real_ones(tmp_path):
 
 
 def test_reasoning_hint_reaches_only_providers_that_take_it():
-    from quest_ai_runner.core.adapters import answer_with_reasoning
+    from hubofhubs.ports.model import answer_with_reasoning
 
     class Old:
         def answer(self, messages, *, model, system=None):

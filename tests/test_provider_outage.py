@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from quest_ai_runner.core import provider_outage
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 
 OVERLOADED = "Error code: 529 - overloaded_error: Overloaded"

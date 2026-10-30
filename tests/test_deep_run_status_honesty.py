@@ -27,7 +27,8 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from quest_ai_runner.core import usage_limit
-from quest_ai_runner.core.adapters import DeepResult, runner_uses_deep_model
+from quest_ai_runner.core.adapters_values import DeepResult
+from quest_ai_runner.core.adapters_bases import runner_uses_deep_model
 from quest_ai_runner.core.goal_runner import (
     SubprocessConfig,
     SubprocessGoalRunner,

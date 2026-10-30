@@ -33,7 +33,7 @@ from quest_ai_runner.adapters.reference_resolver import (
     build_resolver_registry,
     _render_unresolved,
 )
-from quest_ai_runner.core.adapters import AssembledContext
+from hubofhubs.ports.context import AssembledContext
 
 
 # ---------------------------------------------------------------------------

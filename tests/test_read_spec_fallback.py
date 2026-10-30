@@ -1,5 +1,5 @@
 """A read spec naming a file and a search falls back to the file when the search half errors."""
-from quest_ai_runner.core.adapters import Observation
+from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.orchestrator_reads import ReadsMixin
 
 

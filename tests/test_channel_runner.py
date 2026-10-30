@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.core.adapters import InboundBatch, InboundMessage, OutboundReply, SendResult
+from quest_ai_runner.core.adapters_channels import InboundBatch, InboundMessage, OutboundReply, SendResult
 from quest_ai_runner.runner.channel_runner import ChannelRunner
 from quest_ai_runner.runner.channel_session import ChannelSink
 

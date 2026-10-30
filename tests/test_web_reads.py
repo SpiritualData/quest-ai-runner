@@ -18,7 +18,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from quest_ai_runner.adapters import ProviderWebSearchAdapter, CompositeRetrievalAdapter
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
-from quest_ai_runner.core.adapters import Observation, StreamSink
+from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.answer_explanation import TurnTrace
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (

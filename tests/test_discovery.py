@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 from quest_ai_runner.adapters import FilesAdapter
-from quest_ai_runner.core.adapters import Observation
+from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator
 

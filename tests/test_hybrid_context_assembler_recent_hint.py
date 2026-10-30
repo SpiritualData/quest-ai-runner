@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.adapters.card_content_render import render_block_lines
 from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
-from quest_ai_runner.core.adapters import AssembledContext
+from hubofhubs.ports.context import AssembledContext
 
 
 class _FixedAssembler:

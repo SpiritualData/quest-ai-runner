@@ -14,7 +14,8 @@ EVENT_CONTEXT, EVENT_STATUS, narration EVENT_PARTIAL), and REPLY_VOICE_SYSTEM is
 """
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.adapters import EVENT_UNDERSTANDING, ProgressEvent
+from quest_ai_runner.core.adapters_events import EVENT_UNDERSTANDING
+from quest_ai_runner.core.adapters_values import ProgressEvent
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     REPLY_VOICE_SYSTEM,

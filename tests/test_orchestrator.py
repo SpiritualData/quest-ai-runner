@@ -127,7 +127,7 @@ def test_fan_out_reply_carries_only_one_ask_when_two_subgoals_both_park():
     # question twice plus an extra, unrequested goal proposal. However the two subtasks happen to
     # race, the AGGREGATED reply must carry exactly ONE ask (the first subtask, by order), never
     # both -- this is checked at aggregation, not by timing.
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
@@ -152,7 +152,7 @@ def test_fan_out_stops_a_sibling_before_it_ever_starts_once_one_parks():
     # With a single worker the thread pool runs subtasks strictly one at a time, so this proves
     # the STRUCTURAL stop (fanout_parked), not just the aggregation filter above: sibling "B" is
     # never even handed to the runner once "A" has parked.
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
@@ -173,7 +173,7 @@ def test_fan_out_names_a_sibling_stopped_before_it_ran_as_not_done_yet():
     # Review finding (2026-10-07): a sibling stopped before its first attempt (because another
     # subgoal parked first) left an empty result that the aggregation silently filtered out, so the
     # reply read as if that part were handled. It must be NAMED as not done yet, by its own goal.
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     from quest_ai_runner.core.orchestrator import (CONTINUE_AFTER_DECISION_NOTE,
                                                    NOT_STARTED_AFTER_DECISION_NOTE)
     provider = StubProvider(decisions=[
@@ -204,7 +204,7 @@ def test_fan_out_reports_what_landed_as_well_as_the_one_ask():
     # reply must carry what happened FIRST, then the single ask, then the continuation sentence.
     # ``max_parallel=1`` makes the order deterministic: the landed subtask runs and finishes before
     # the parking one is dispatched at all.
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     from quest_ai_runner.core.orchestrator import (CONTINUE_AFTER_DECISION_NOTE,
                                                    unconfirmed_no_change_text)
     provider = StubProvider(decisions=[
@@ -231,7 +231,7 @@ def test_fan_out_reports_what_landed_as_well_as_the_one_ask():
 def test_fan_out_drops_only_the_extra_asks_not_the_finished_work():
     # Three subtasks: one landed, two parked. Exactly one ask survives (the first parked, by
     # subtask order) and the landed one is still reported.
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}, {"goal": "C", "brief": "c"}],
@@ -275,7 +275,7 @@ class IsSubgoalCapturingDeepRunner:
         self.calls: List[Dict[str, Any]] = []
 
     def run_goal(self, *, goal, brief, model=None, max_turns=None, is_subgoal=None):
-        from quest_ai_runner.core.adapters import DeepResult
+        from quest_ai_runner.core.adapters_values import DeepResult
         self.calls.append({"goal": goal, "is_subgoal": is_subgoal})
         return DeepResult(met=True, output=f"did {goal}")
 
@@ -716,7 +716,7 @@ class _TokenDeepRunner:
         self._tokens = tokens
 
     def run_goal(self, *, goal, brief, model=None, max_turns=None):
-        from quest_ai_runner.core.adapters import DeepResult
+        from quest_ai_runner.core.adapters_values import DeepResult
         self.calls.append({"goal": goal, "brief": brief, "model": model})
         return DeepResult(met=True, output="attempted", tokens=self._tokens)
 
@@ -750,7 +750,7 @@ class _RunIdCapturingDeepRunner:
         self.calls: List[Dict[str, Any]] = []
 
     def run_goal(self, *, goal, brief, model=None, max_turns=None, run_id=None):
-        from quest_ai_runner.core.adapters import DeepResult
+        from quest_ai_runner.core.adapters_values import DeepResult
         self.calls.append({"goal": goal, "brief": brief, "model": model, "run_id": run_id})
         return DeepResult(met=self._met, output=self._output)
 
@@ -1618,7 +1618,7 @@ class _SlowRetrieval:
         self.files = files
 
     def read_section(self, rel_path, *, start_line=None, end_line=None, heading=None, max_bytes=None):
-        from quest_ai_runner.core.adapters import Observation
+        from quest_ai_runner.core.adapters_values import Observation
         if rel_path == "slow.md":
             self._time.sleep(self.delay)
         if rel_path not in self.files:
@@ -1626,11 +1626,11 @@ class _SlowRetrieval:
         return Observation(kind="read", rel_path=rel_path, locator="head", text=self.files[rel_path])
 
     def grep(self, pattern, *, scope=None, max_hits=None):
-        from quest_ai_runner.core.adapters import Observation
+        from quest_ai_runner.core.adapters_values import Observation
         return Observation(kind="grep", pattern=pattern, hits=[])
 
     def query(self, spec):
-        from quest_ai_runner.core.adapters import Observation
+        from quest_ai_runner.core.adapters_values import Observation
         return Observation(kind="error", error="query unsupported in stub")
 
 
@@ -1670,7 +1670,7 @@ class _FlakyOnceRetrieval:
         self.calls: Dict[str, int] = {}
 
     def read_section(self, rel_path, *, start_line=None, end_line=None, heading=None, max_bytes=None):
-        from quest_ai_runner.core.adapters import Observation
+        from quest_ai_runner.core.adapters_values import Observation
         n = self.calls[rel_path] = self.calls.get(rel_path, 0) + 1
         if rel_path == "flaky.md" and n == 1:
             self._time.sleep(self.delay)
@@ -1679,11 +1679,11 @@ class _FlakyOnceRetrieval:
         return Observation(kind="read", rel_path=rel_path, locator="head", text=self.files[rel_path])
 
     def grep(self, pattern, *, scope=None, max_hits=None):
-        from quest_ai_runner.core.adapters import Observation
+        from quest_ai_runner.core.adapters_values import Observation
         return Observation(kind="grep", pattern=pattern, hits=[])
 
     def query(self, spec):
-        from quest_ai_runner.core.adapters import Observation
+        from quest_ai_runner.core.adapters_values import Observation
         return Observation(kind="error", error="query unsupported in stub")
 
 
@@ -1727,7 +1727,7 @@ def test_context_assembly_timeout_is_loud_and_recoverable(monkeypatch, caplog):
     import logging
     import time as time_module
 
-    from quest_ai_runner.core.adapters import AssembledContext
+    from hubofhubs.ports.context import AssembledContext
     from quest_ai_runner.core.orchestrator import EVENT_CONTEXT
 
     monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "0.05")
@@ -1776,7 +1776,7 @@ def test_context_assembly_partial_result_is_used_and_loud(monkeypatch, caplog):
     # "assembly_partial" marker on EVENT_CONTEXT.
     import logging
 
-    from quest_ai_runner.core.adapters import AssembledContext
+    from hubofhubs.ports.context import AssembledContext
     from quest_ai_runner.core.orchestrator import EVENT_CONTEXT
 
     class PartialAssembler:
@@ -1813,7 +1813,7 @@ def test_context_assembly_meta_carries_soft_deadline(monkeypatch):
     # deadline-aware assembler can return best-effort partials in time.
     import time as time_module
 
-    from quest_ai_runner.core.adapters import AssembledContext
+    from hubofhubs.ports.context import AssembledContext
 
     seen_meta: dict = {}
 
@@ -1845,7 +1845,7 @@ def test_partial_turn_start_not_cached_midloop_read_recovers_full():
     # as the query's completed cached result: a later mid-loop {"cards": <same query>} read
     # falls through to a fresh, deadline-free assemble and recovers the FULL fuse (the
     # late-recovery contract a registered partial would displace).
-    from quest_ai_runner.core.adapters import AssembledContext
+    from hubofhubs.ports.context import AssembledContext
 
     class PartialThenFullAssembler:
         def __init__(self):
@@ -1889,7 +1889,7 @@ def test_empty_partial_assembly_is_not_reported_as_used(caplog):
     # The degradation still stays loud under its own truthful name.
     import logging
 
-    from quest_ai_runner.core.adapters import AssembledContext
+    from hubofhubs.ports.context import AssembledContext
     from quest_ai_runner.core.orchestrator import EVENT_CONTEXT
 
     class EmptyPartialAssembler:
@@ -2178,7 +2178,7 @@ def test_deferred_deep_that_failed_and_changed_nothing_is_never_written_up_as_do
     already DID the work" synthesis and could read as done. Only a result whose structured fields
     say its work landed may feed that synthesis; this one is reported in its own words through
     ``unconfirmed_no_change_text``, and no regeneration rewrites it."""
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     from quest_ai_runner.core.orchestrator import UNCONFIRMED_NO_CHANGE_LEAD
     failed_text = "The goal could not be added: the quest was not found."
     provider = StubProvider(
@@ -2200,7 +2200,7 @@ def test_deferred_deep_that_failed_and_changed_nothing_is_never_written_up_as_do
 def test_deferred_deep_unverified_with_no_observed_effect_is_reported_in_its_own_words():
     """A run that records its observations, was not verified met, and observed nothing has no
     receipt of any effect: it is reported verbatim, never written up as done."""
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     text = "I looked for the goal but found nothing to change."
     provider = StubProvider(
         decisions=[{"action": "answer", "rationale": "answer then make the change",
@@ -2224,7 +2224,7 @@ def test_deferred_deep_exhausted_ask_with_real_observations_is_reported_verbatim
     correctly, the goal's QUEST was ambiguous, the runner asked "which quest should this go on?",
     and the old code folded that into the synthesis prompt, which fabricated "I have queued the
     creation of a tempo-run goal for that day" -- nothing was queued, parked, or written."""
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     ask_text = ("Your tempo pace is 5:12/km. Which quest should this go on?\n\n"
                 "1. Run a sub-50-minute 10K\n2. Run a marathon barefoot")
     provider = StubProvider(
@@ -2256,7 +2256,7 @@ def test_deferred_deep_exhausted_partial_write_with_receipt_is_still_landed_work
     structural difference from the test above is ``has_write_receipt=True``: this must restore the
     normal "landed work" handling (folded into the synthesis), exactly as a plain ``met=True``
     result gets below."""
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     partial_text = (
         "Part of this change went through before the rest ran into a problem: added the goal "
         "'Hold the open day on Sunday 8 Nov'. The rest did not run, and I am not trying it again "
@@ -2280,7 +2280,7 @@ def test_deferred_deep_exhausted_partial_write_with_receipt_is_still_landed_work
 
 
 def test_deferred_deep_that_landed_is_still_written_up_as_before():
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     provider = StubProvider(
         decisions=[{"action": "answer", "rationale": "answer then make the change",
                     "deferred_deep": {"goal": "Add the goal"}}],

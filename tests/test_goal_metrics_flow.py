@@ -20,7 +20,8 @@ import pytest
 from esoi import scaffold
 
 from quest_ai_runner.config import build_orchestrator
-from quest_ai_runner.core.adapters import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, DeepResult, Mode
+from quest_ai_runner.core.adapters_events import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, Mode
+from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core import spec_slice
 from quest_ai_runner.core.goal_iteration import DoctrineOnly, SliceAndWriteback, SliceOnly
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF

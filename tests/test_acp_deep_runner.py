@@ -28,7 +28,9 @@ import pytest
 
 from quest_ai_runner.adapters import acp_deep_runner as acp
 from quest_ai_runner.adapters import acp_deep_runner_config as acp_config
-from quest_ai_runner.core.adapters import DeepRunner, EVENT_EXEC, Escalation
+from quest_ai_runner.core.adapters_deep import DeepRunner
+from quest_ai_runner.core.adapters_events import EVENT_EXEC
+from quest_ai_runner.core.adapters_values import Escalation
 from quest_ai_runner.core.goal_runner import SubprocessGoalRunner
 from quest_ai_runner.core.guard import classify_exec_phase
 from quest_ai_runner.core.inbox import InMemoryInbox

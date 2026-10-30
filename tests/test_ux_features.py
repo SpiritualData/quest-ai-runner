@@ -24,15 +24,10 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.core.adapters import (
-    AssembledContext,
-    EVENT_PARTIAL,
-    EVENT_STATUS,
-    ContextAssembler,
-    ProgressEvent,
-    StreamSink,
-    Mode,
-)
+from hubofhubs.ports.context import AssembledContext, ContextAssembler
+from quest_ai_runner.core.adapters_events import EVENT_PARTIAL, EVENT_STATUS, Mode
+from quest_ai_runner.core.adapters_values import ProgressEvent
+from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 from quest_ai_runner.adapters.file_context_store import FileContextStore
@@ -160,7 +155,7 @@ class TestInstantAck:
 
         # The first beat is emitted as EVENT_PARTIAL with data={"narration": True} so consumers
         # render it as a live (non-persisted) assistant line / spoken on voice, not a spinner tick.
-        from quest_ai_runner.core.adapters import EVENT_PARTIAL
+        from quest_ai_runner.core.adapters_events import EVENT_PARTIAL
         narration_events = [e for e in events if e["type"] == EVENT_PARTIAL
                             and isinstance(e.get("data"), dict) and e["data"].get("narration")]
         assert narration_events, (
@@ -193,7 +188,7 @@ class TestInstantAck:
         """Approach B: on a read step, the planner's (conversational) rationale is relayed as the
         narration beat, and the plan/replan event carries NO duplicate text (so a consumer won't
         show the line twice). Zero extra LLM call: the beat IS the planner's rationale."""
-        from quest_ai_runner.core.adapters import EVENT_PLAN, EVENT_REPLAN
+        from quest_ai_runner.core.adapters_events import EVENT_PLAN, EVENT_REPLAN
         beat = "I'm pulling up your quest history so we can see where things break down."
         cfg = OrchestratorConfig(narrate=True)
         # read -> answer. The read step's rationale is the conversational beat.

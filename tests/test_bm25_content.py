@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quest_ai_runner.core.adapters import AssembledContext
+from hubofhubs.ports.context import AssembledContext
 
 
 # ---------------------------------------------------------------------------

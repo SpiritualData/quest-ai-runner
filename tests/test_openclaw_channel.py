@@ -28,7 +28,7 @@ import pytest
 
 from quest_ai_runner.adapters.mcp_client import MCPToolResult
 from quest_ai_runner.adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
-from quest_ai_runner.core.adapters import OutboundReply
+from quest_ai_runner.core.adapters_channels import OutboundReply
 
 
 @dataclass

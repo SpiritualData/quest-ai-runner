@@ -198,7 +198,7 @@ def test_skeleton_ignores_payload_words_so_free_text_requests_still_match():
 
 # --------------------------------------------------------------------------- deep recipes
 
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 
 
 class RecordingDeepRunner:

@@ -22,8 +22,13 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 
-from quest_ai_runner.core.adapters import (
-    DeepResult, EVENT_CONTEXT, EVENT_EXEC, EVENT_PLAN, EVENT_STATUS, EVENT_UNDERSTANDING, ProgressEvent,
+from quest_ai_runner.core.adapters_values import DeepResult, ProgressEvent
+from quest_ai_runner.core.adapters_events import (
+    EVENT_CONTEXT,
+    EVENT_EXEC,
+    EVENT_PLAN,
+    EVENT_STATUS,
+    EVENT_UNDERSTANDING,
 )
 from quest_ai_runner.core.inbox import InMemoryInbox
 from quest_ai_runner.core.orchestrator import OrchestratorResult

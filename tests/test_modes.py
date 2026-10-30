@@ -10,7 +10,7 @@ These tests pin the contract quest-backend and the cockpit import:
     sink, NOT the live one.
   * run_stream yields events then the terminal OrchestratorResult.
 """
-from quest_ai_runner.core.adapters import (
+from quest_ai_runner.core.adapters_events import (
     EVENT_DECISION,
     EVENT_DONE,
     EVENT_MILESTONE,
@@ -21,10 +21,9 @@ from quest_ai_runner.core.adapters import (
     EVENT_STATUS,
     SURFACING_EVENTS,
     Mode,
-    MilestoneSink,
-    ProgressEvent,
-    StreamSink,
 )
+from quest_ai_runner.core.adapters_sinks import MilestoneSink, StreamSink
+from quest_ai_runner.core.adapters_values import ProgressEvent
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
 
@@ -246,7 +245,8 @@ def test_run_stream_yields_events_then_result():
 
 # --- deep-run EXECUTION-lifecycle streaming (emit) ------------------------------
 
-from quest_ai_runner.core.adapters import EVENT_EXEC, DeepResult  # noqa: E402
+from quest_ai_runner.core.adapters_events import EVENT_EXEC  # noqa: E402
+from quest_ai_runner.core.adapters_values import DeepResult  # noqa: E402
 
 
 class EmitDeepRunner:

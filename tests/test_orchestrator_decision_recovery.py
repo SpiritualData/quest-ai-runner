@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, FrozenSet, List
 
-from quest_ai_runner.core.adapters import Escalation
+from quest_ai_runner.core.adapters_values import Escalation
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 

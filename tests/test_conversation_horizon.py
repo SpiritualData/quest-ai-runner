@@ -25,7 +25,7 @@ from quest_ai_runner.adapters.conversation_format import (
     truncate_transcript_middle,
 )
 from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
-from quest_ai_runner.core.adapters import Observation
+from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator
 from quest_ai_runner.runner.executor import CONV_CONTEXT_MAX_BYTES, TaskExecutor

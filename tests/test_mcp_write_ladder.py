@@ -24,7 +24,7 @@ from quest_ai_runner.adapters.mcp_client import MCPServerSpec
 from quest_ai_runner.adapters.mcp_write_adapter import MCPWriteAdapter
 from quest_ai_runner.adapters.mcp_write_runner import MCPOperationRunner
 from quest_ai_runner.config import RunnerConfig, build_orchestrator, resolve_mcp_write_runners
-from quest_ai_runner.core.adapters import WriteResult
+from quest_ai_runner.core.adapters_deep import WriteResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, PlanDecision
 

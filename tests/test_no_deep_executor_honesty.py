@@ -27,13 +27,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from quest_ai_runner.core.adapters import (
-    EVENT_INTENT,
-    EVENT_RESULT,
-    SURFACING_EVENTS,
-    Mode,
-    StreamSink,
-)
+from quest_ai_runner.core.adapters_events import EVENT_INTENT, EVENT_RESULT, SURFACING_EVENTS, Mode
+from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     NO_DEEP_EXECUTOR_TEXT,

@@ -35,7 +35,7 @@ from quest_ai_runner.adapters.fast_edit_runner import FastEditRunner
 from quest_ai_runner.adapters.files_writer import FilesWriter
 from quest_ai_runner.adapters.mcp_write_runner import MCPOperationRunner
 from quest_ai_runner.core import goal_runner_stream
-from quest_ai_runner.core.adapters import WriteResult
+from quest_ai_runner.core.adapters_deep import WriteResult
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.goal_runner_stream import StreamJsonGoalRunner

@@ -2,7 +2,7 @@
 import pytest
 from quest_ai_runner.core.turn_context_store import TurnContextStore
 from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
-from quest_ai_runner.core.adapters import AssembledContext
+from hubofhubs.ports.context import AssembledContext
 
 
 # ---------------------------------------------------------------------------

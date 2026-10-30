@@ -12,11 +12,8 @@ already executed (no double mutation).
 """
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import (
-    EVENT_EXEC,
-    DeepResult,
-    ProgressEvent,
-)
+from quest_ai_runner.core.adapters_events import EVENT_EXEC
+from quest_ai_runner.core.adapters_values import DeepResult, ProgressEvent
 from quest_ai_runner.core.guard import (
     ExecutionFact,
     ExecutionRecord,

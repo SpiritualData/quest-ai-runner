@@ -299,7 +299,7 @@ def test_a_claude_too_old_to_report_an_interrupt_runs_one_shot(tmp_path, monkeyp
 
     def fake_once(self, **kwargs):
         called.update(kwargs)
-        from quest_ai_runner.core.adapters import DeepResult
+        from quest_ai_runner.core.adapters_values import DeepResult
         return DeepResult(met=True, output="one-shot")
 
     monkeypatch.setattr(SubprocessGoalRunner, "run_goal_once", fake_once)

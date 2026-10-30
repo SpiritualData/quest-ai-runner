@@ -13,7 +13,7 @@ import time
 import pytest
 
 from quest_ai_runner.core import spec_slice
-from quest_ai_runner.core.adapters import Mode
+from quest_ai_runner.core.adapters_events import Mode
 from quest_ai_runner.core.goal_iteration import SliceAndWriteback
 from quest_ai_runner.core.orchestrator import PlanDecision
 from quest_ai_runner.core.orchestrator_turn import _Emitter

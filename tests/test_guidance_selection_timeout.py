@@ -20,7 +20,8 @@ import threading
 import time
 from typing import List, Optional
 
-from quest_ai_runner.core.adapters import GuidanceCard, GuidanceProviderBase
+from quest_ai_runner.core.adapters_guidance import GuidanceCard
+from quest_ai_runner.core.adapters_bases import GuidanceProviderBase
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator
 

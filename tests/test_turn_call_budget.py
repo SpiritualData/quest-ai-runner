@@ -20,7 +20,7 @@ latency is four real generations, not a payload or retry problem.
 """
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.adapters import AssembledContext
+from hubofhubs.ports.context import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 

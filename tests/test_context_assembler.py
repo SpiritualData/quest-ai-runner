@@ -15,7 +15,7 @@ from quest_ai_runner.adapters.file_context_store import (
     _card_slug,
     _tokenize,
 )
-from quest_ai_runner.core.adapters import AssembledContext, ContextAssembler
+from hubofhubs.ports.context import AssembledContext, ContextAssembler
 from quest_ai_runner.core.context_doctrine import (
     DEEP_CONTEXT_DOCTRINE,
     MODEL_TIER_GATE,
@@ -906,7 +906,7 @@ class TestWriteBackCapturesGatheredFiles:
     def test_record_pins_files_the_brain_read(self):
         """After a run, the card pins the rel_paths the brain actually read this turn (from the
         gathered reads/greps), so staleness has something to invalidate. This is the loop closing."""
-        from quest_ai_runner.core.adapters import Observation
+        from quest_ai_runner.core.adapters_values import Observation
         from quest_ai_runner.core.model_registry import ModelRegistry
 
         recorded = {}

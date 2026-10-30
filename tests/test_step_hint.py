@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.adapters.multi_provider import MultiProvider
-from quest_ai_runner.core.adapters import STEP_PLAN, STEP_REPLY, STEP_VERIFY
+from hubofhubs.ports.model import STEP_PLAN, STEP_REPLY, STEP_VERIFY
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator
 

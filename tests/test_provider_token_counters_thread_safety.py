@@ -17,7 +17,8 @@ import time
 
 from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
 from quest_ai_runner.adapters.multi_provider import MultiProvider
-from quest_ai_runner.core.adapters import ModelProviderBase, ScopedThreadPoolExecutor
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor
+from quest_ai_runner.core.adapters_bases import ModelProviderBase
 
 
 class CountingProvider(ModelProviderBase):

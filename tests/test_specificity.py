@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import VectorHit, VectorStoreBase
+from hubofhubs.ports.context import VectorHit
+from quest_ai_runner.core.adapters_bases import VectorStoreBase
 from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
 from quest_ai_runner.adapters import specificity as sp
 

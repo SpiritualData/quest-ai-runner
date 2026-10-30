@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import DeepResult, PlanDecision
+from quest_ai_runner.core.adapters_values import DeepResult, PlanDecision
 from quest_ai_runner.core.deep_model_selection import (
     normalize_difficulty,
     select_deep_start,

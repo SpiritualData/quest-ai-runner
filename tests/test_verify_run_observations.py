@@ -30,7 +30,7 @@ All offline: no network, no API key.
 import re
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.orchestrator import (
     OrchestratorConfig,
     VERIFY_RUN_OBSERVATIONS_NOTE,

@@ -642,7 +642,7 @@ def deep_turn(runner, message="show me my docs"):
 
 
 def test_an_in_process_runners_invented_link_is_stripped_and_cannot_vouch_for_itself():
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
 
     from .test_deep_run_status_honesty import ScriptedRunner
 
@@ -658,7 +658,7 @@ def test_an_in_process_runners_invented_link_is_stripped_and_cannot_vouch_for_it
 
 
 def test_a_real_claude_code_workers_output_keeps_its_exemption():
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
 
     from .test_deep_run_status_honesty import ScriptedRunner
 
@@ -671,7 +671,7 @@ def test_a_real_claude_code_workers_output_keeps_its_exemption():
 def test_link_evidence_excludes_model_written_deep_output_but_keeps_what_it_read():
     from types import SimpleNamespace
 
-    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.adapters_values import DeepResult
     from quest_ai_runner.core.orchestrator_judges import JudgesMixin
 
     res = SimpleNamespace(deep_results=[

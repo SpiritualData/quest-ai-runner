@@ -25,7 +25,7 @@ from quest_ai_runner.adapters.card_content_render import (
     tokenize,
 )
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision
 

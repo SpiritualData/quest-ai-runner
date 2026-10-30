@@ -382,7 +382,7 @@ def test_composite_query_reports_an_adapter_refusal_beside_other_results():
     """Found live 2026-10-06: one adapter refused a malformed query with a correcting message,
     another returned loose search hits, and only the hits reached the planner, which then sent
     the same query fourteen times. The refusal must travel with the results."""
-    from quest_ai_runner.core.adapters import Observation
+    from quest_ai_runner.core.adapters_values import Observation
 
     class Refuses:
         def query(self, spec):
@@ -400,7 +400,7 @@ def test_composite_query_reports_an_adapter_refusal_beside_other_results():
 
 
 def test_composite_query_all_refusals_is_still_an_error():
-    from quest_ai_runner.core.adapters import Observation
+    from quest_ai_runner.core.adapters_values import Observation
 
     class Refuses:
         def query(self, spec):

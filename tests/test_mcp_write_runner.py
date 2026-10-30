@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from quest_ai_runner.adapters.mcp_write_runner import MCPOperationConfig, MCPOperationRunner
-from quest_ai_runner.core.adapters import WriteResult
+from quest_ai_runner.core.adapters_deep import WriteResult
 
 
 class ScriptedPlanProvider:
