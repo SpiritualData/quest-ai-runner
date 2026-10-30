@@ -229,6 +229,20 @@ def grounding_context_layer(context_view: str) -> str:
     ])
 
 
+def tool_receipts_that_ran(gathered: List[Dict[str, Any]]) -> List[str]:
+    """Names of the tools whose receipt in ``gathered`` says they SUCCEEDED this turn (``run_tool_calls`` writes the receipt as
+    structured data: locator ``tool:<name>``, text ``TOOL <name> SUCCEEDED ...`` or the already-succeeded note)."""
+    names: List[str] = []
+    for obs in gathered or []:
+        locator = str(obs.get("locator") or "") if isinstance(obs, dict) else ""
+        if not locator.startswith("tool:"):
+            continue
+        name, text = locator[len("tool:"):], str(obs.get("text") or "")
+        if (text.startswith(f"TOOL {name} SUCCEEDED") or text.startswith(f"TOOL {name}: ALREADY SUCCEEDED")) and name not in names:
+            names.append(name)
+    return names
+
+
 def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
     """The L3 volatile tail for an answer: the gathered content read this turn + the closing rules.
 
@@ -272,6 +286,15 @@ def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
         "change, say plainly that it has not been made yet and describe exactly what should be "
         "done; the system will execute it."
     )
+    done = tool_receipts_that_ran(content_gathered)
+    if done:
+        # The block above is true of the answer step itself. A tool the system already ran this turn is not "a change
+        # attempted before": its receipt is in the content, and a reply that denies it sends the person to repeat it.
+        parts.append(
+            "EXCEPTION to the rule above: the TOOL lines above marked SUCCEEDED (" + ", ".join(done) + ") were run by "
+            "the system in this very turn, before this reply. What they did IS done: report it as done, in the past "
+            "tense, exactly as its receipt states, and never tell the person to do it themselves or to check whether it "
+            "happened. The rule above still applies to every change that has no SUCCEEDED line.")
     parts.append(
         "Now write the reply itself, and nothing but the reply: no restatement of what they asked, "
         "no account of your reasoning or of what you are about to do, no mention of the material "

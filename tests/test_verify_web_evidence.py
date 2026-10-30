@@ -207,3 +207,16 @@ def test_answer_tail_has_the_web_citation_carveout_when_web_evidence_present():
 def test_answer_tail_web_citation_note_absent_with_no_gathered():
     assert "LIVE WEB result" not in grounding_answer_tail([], partial=False)
     assert "LIVE WEB result" not in grounding_answer_tail(None, partial=False)
+
+
+# (d) grounding_answer_tail: a tool that ran this turn is not "a change attempted before"
+
+def test_the_abilities_rule_makes_an_exception_for_tools_that_succeeded_this_turn():
+    ran = [{"kind": "query", "locator": "tool:create_quest_goal", "text": "TOOL create_quest_goal SUCCEEDED (args {}):\nok"}]
+    tail = grounding_answer_tail(ran, partial=False)
+    assert "ABOUT YOUR OWN ABILITIES" in tail and "EXCEPTION to the rule above" in tail and "(create_quest_goal)" in tail
+    again = [{"kind": "query", "locator": "tool:add_quest_note", "text": "TOOL add_quest_note: ALREADY SUCCEEDED earlier this turn"}]
+    assert "(add_quest_note)" in grounding_answer_tail(again, partial=False)
+    failed = [{"kind": "query", "locator": "tool:create_quest_goal", "text": "TOOL create_quest_goal FAILED (args {}):\nno"}]
+    for gathered in (failed, [], None, [{"kind": "read", "locator": "web", "text": "TOOL create_quest_goal SUCCEEDED"}]):
+        assert "EXCEPTION to the rule above" not in grounding_answer_tail(gathered, partial=False)
