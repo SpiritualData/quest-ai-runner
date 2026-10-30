@@ -239,7 +239,8 @@ class WorkMixin:
                 kwargs.pop("assigned_to_user_id")
                 assignee = None
                 created = create_goal(title, **kwargs) or {}
-            goal_id = created.get("id") if isinstance(created, dict) else None
+            # The client returns a typed WriteResult (its id is the created goal's); a plain payload carries it as "id".
+            goal_id = getattr(created, "id", "") or (created.get("id") if isinstance(created, dict) else None)
             if goal_id and assignee and ai_can_do:
                 self._hand_to_rep(quest_id, goal_id, assignee)
             return goal_id

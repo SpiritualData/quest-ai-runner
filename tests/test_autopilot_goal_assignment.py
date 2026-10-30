@@ -5,6 +5,7 @@ import json
 from quest_ai_runner.runner.autopilot import AutopilotPass
 from quest_ai_runner.runner.goal_handoff import choose_assignee, run_goal_handoff
 from quest_ai_runner.runner.quest_client import QuestApiError
+from quest_ai_runner.runner.quest_client_support import WriteResult
 
 from .test_autopilot import FakeAutopilotClient, _now, _quest
 
@@ -32,7 +33,8 @@ class AssignClient(FakeAutopilotClient):
         if assigned_to_user_id and self.refuse_assignee:
             raise QuestApiError("400 not a member")
         self.created_goals.append({"title": title, "assigned_to_user_id": assigned_to_user_id})
-        return {"id": f"goal_{len(self.created_goals)}"}
+        # What the real client returns: a typed result, not a dict.
+        return WriteResult.from_payload({"id": f"goal_{len(self.created_goals)}"}, 201)
 
     def set_goal_ai_handling(self, goal_id, handling, *, rep_id=None, decided_by="rep"):
         self.handoffs.append((goal_id, handling, rep_id, decided_by))
@@ -240,3 +242,13 @@ def test_handoff_stamps_me_once_when_the_verdict_is_unreadable():
     out = run_goal_handoff(c, lambda prompt: "not json at all", payload, team_id="team1")
     assert out == [{"goal_id": "g1", "handling": "me"}]
     assert c.handoffs == [("g1", "me", "rep_bob", "rep")]
+
+
+def test_the_id_of_a_goal_created_through_the_real_client_result_reaches_the_hand_over():
+    """The client returns a WriteResult, never a dict: the goal's id is read from it, so the rep is handed the goal it was made for."""
+    c = AssignClient(quests=[_quest("q1", mode="act")], members=[ALICE, BOB],
+                     reps=[{"rep_id": "rep_bob", "owner_user_id": "u_bob"}])
+    created = c.create_goal("t", period="2026-W44")
+    assert isinstance(created, WriteResult) and not isinstance(created, dict)
+    assert _create(c, _judge({"assignee": "u_bob", "ai_can_do": True})) == "goal_2"
+    assert c.handoffs == [("goal_2", "rep", "rep_bob", "rep")]

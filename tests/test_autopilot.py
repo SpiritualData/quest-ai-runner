@@ -35,6 +35,7 @@ from quest_ai_runner.runner.autopilot_periods import cadence_due
 # The client's OWN period formats, so the fake below accepts exactly what the real one accepts
 # instead of a shape invented here (the five quest-backend's period_utils parses).
 from quest_ai_runner.runner.quest_client import _PERIOD_RE
+from quest_ai_runner.runner.quest_client_support import WriteResult
 
 NOW = datetime(2026, 7, 12, 9, 0, 0, tzinfo=timezone.utc)  # a Sunday
 MONDAY = datetime(2026, 7, 13, 9, 0, 0, tzinfo=timezone.utc)
@@ -1227,7 +1228,7 @@ class StrictGoalClient(FakeAutopilotClient):
         assert _PERIOD_RE.match(period), f"the real client rejects period {period!r}"
         self.created_goals.append({"title": title, "period": period, "quest_id": quest_id,
                                    "description": description, "ai_help": ai_help})
-        return {"id": f"goal_{len(self.created_goals)}"}
+        return WriteResult.from_payload({"id": f"goal_{len(self.created_goals)}"}, 201)   # the real client's typed result
 
 
 def test_an_act_mode_proposal_creates_the_real_goal_with_the_right_arguments():
