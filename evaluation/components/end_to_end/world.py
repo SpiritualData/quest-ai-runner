@@ -21,7 +21,7 @@ class FakeWeb:
     """The ``WebResearch`` port over a fixture: every query gets the case's canned results, every page fetch fails."""
 
     def __init__(self, results):
-        self.results, self.queries = results or [], []
+        self.results, self.queries, self.trace = results or [], [], []
 
     @property
     def backend_name(self):
@@ -33,6 +33,8 @@ class FakeWeb:
     def search(self, queries, *, max_results=None, fresh=False):  # noqa: ARG002
         asked = [queries] if isinstance(queries, str) else list(queries)
         self.queries += asked
+        first = self.results[0] if self.results else {}
+        self.trace.append({"kind": "web", "query": asked[0], "out": f"{first.get('title', '')}: {first.get('snippet', '')}"[:300]})
         lines = [f'WEB RESULTS for "{asked[0]}":']
         hits = []
         for i, hit in enumerate(self.results, 1):
@@ -45,12 +47,27 @@ class FakeWeb:
         return Observation(kind="error", rel_path=url, error="page fetch is not available in this evaluation")
 
 
+DOCS_MODE_RULES = (
+    "You are in documentation mode: the person asks about the product itself. Answer only from the documentation excerpts "
+    "below and name the page you took each fact from. If the excerpts do not cover what was asked, say you are not sure and "
+    "that the support team can confirm; never invent a feature, a plan name or a price. You cannot read or change the "
+    "person's own quests here. Do not use em dashes.")
+
+
 class World:
-    def __init__(self, pinned=None, web=None):
+    """``docs`` names the documentation excerpts of ``world.json`` shown to the planner; ``docs_only`` makes the view the
+    documentation-only chat a free plan gets (no quests, only the excerpts). ``trace`` is the ordered log of what the
+    tools and the web did, kept so a transcript can show the steps; nothing reads it for scoring."""
+
+    def __init__(self, pinned=None, web=None, docs=None, docs_only=False):
         self.quests = copy.deepcopy(SPEC["quests"])
         self.today = SPEC["today"]
         self.pinned = pinned
+        self.docs = [dict(SPEC["docs"][d], id=d) for d in docs or []]
+        self.docs_only = docs_only
+        self.trace = []
         self.web = FakeWeb(web)
+        self.web.trace = self.trace
         self.writes, self.reads = [], []
         self.registry = self.build_registry()
 
@@ -76,24 +93,35 @@ class World:
                 return ToolResult(ok=False, text="No quest was named, so nothing was changed." + NO_QUEST_HINT)
             if mutates:
                 self.writes.append({"tool": name, "args": {k: v for k, v in args.items() if k != "quest_id"}, "quest_id": qid})
+                self.trace.append({"kind": "write", "tool": name, "args": args, "quest_id": qid})
                 return f"ok: {name}"
             self.reads.append({"tool": name, "args": args})
-            quest = self.quests.get(qid or "")
-            if name == "list_quest_notes" and quest:
-                return "\n".join(f"- {n}" for n in quest["notes"]) or "no notes"
-            if name == "list_quest_goals" and quest:
-                return "\n".join(f"{g['id']}: {g['title']} [{'done' if g['done'] else 'open'}] due {g['due']}" for g in quest["goals"]) or "no goals"
-            if name == "find_quest":
-                words = str(args.get("query") or args.get("text") or "").lower().split()
-                rows = [f"{k}: {q['name']} - {q['outcome']}" for k, q in self.quests.items()
-                        if not words or any(w in (q["name"] + " " + q["outcome"]).lower() for w in words)]
-                return "\n".join(rows) or "no quest matches"
-            return f"{name}: nothing to show in this evaluation"
+            text = self.read(name, args, qid)
+            self.trace.append({"kind": "read", "tool": name, "args": args, "quest_id": qid, "out": text[:300]})
+            return text
         return handle
+
+    def read(self, name, args, qid):
+        quest = self.quests.get(qid or "")
+        if name == "list_quest_notes" and quest:
+            return "\n".join(f"- {n}" for n in quest["notes"]) or "no notes"
+        if name == "list_quest_goals" and quest:
+            return "\n".join(f"{g['id']}: {g['title']} [{'done' if g['done'] else 'open'}] due {g['due']}" for g in quest["goals"]) or "no goals"
+        if name == "find_quest":
+            words = str(args.get("query") or args.get("text") or "").lower().split()
+            rows = [f"{k}: {q['name']} - {q['outcome']}" for k, q in self.quests.items()
+                    if not words or any(w in (q["name"] + " " + q["outcome"]).lower() for w in words)]
+            return "\n".join(rows) or "no quest matches"
+        return f"{name}: nothing to show in this evaluation"
 
     # ---- the record a host passes as context_view
     def context_view(self):
         lines = [f"Today is {self.today}."]
+        if self.docs_only:
+            lines.append(DOCS_MODE_RULES)
+            for d in self.docs:
+                lines += ["", f"Documentation excerpt, page {d['source']} ({d['title']}):", d["text"]]
+            return "\n".join(lines)
         if self.pinned:
             q = self.quests[self.pinned]
             lines += [f"This conversation is about the quest {q['name']} (id {self.pinned}).", f"Outcome: {q['outcome']}",
@@ -103,4 +131,6 @@ class World:
         else:
             lines.append("No quest is pinned to this conversation. The person's quests (ask or look one up before acting on it):")
             lines += [f"- {k}: {q['name']}. Outcome: {q['outcome']}" for k, q in self.quests.items()]
+        for d in self.docs:
+            lines += ["", f"Documentation excerpt, page {d['source']} ({d['title']}):", d["text"]]
         return "\n".join(lines)

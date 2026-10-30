@@ -10,9 +10,14 @@ A case's ``expect`` may state:
   route_in           the turn's one route (``interface.py``) is among these
   web_min            at least this many web queries
   reply_has          a list of groups; each group is a list of alternatives, one of which must appear (case-insensitive)
+  reply_has_n        {"n": k, "groups": [group, ...]}: at least k of the groups are matched (a reply that ties k features to the ask)
   reply_lacks_regex  patterns the reply must not match
+  question           true: the reply asks the person something (contains a question mark)
+  max_reply_chars    a reply longer than this is a feature dump, not an answer
   min_reply_chars    a blank or one-word reply fails
   terminal           for a terminal case: {"exit", "contract"} of the printed acknowledgement
+A case may also carry a top-level ``quality_rubric`` (3 to 5 yes/no items for a judge, ``rubric.py``); this module never reads it, so scoring
+stays free.
 ``aggregate`` reads the whole run: share correct overall and per kind, unrequested writes, and model calls per case."""
 import re
 
@@ -27,6 +32,15 @@ def reply_problems(reply, expect):
     for group in expect.get("reply_has", []):
         if not any(alt.lower() in low for alt in group):
             problems.append(f"reply lacks any of {group}")
+    spec = expect.get("reply_has_n")
+    if spec:
+        hit = sum(1 for group in spec["groups"] if any(alt.lower() in low for alt in group))
+        if hit < spec["n"]:
+            problems.append(f"reply covers {hit} of the needed {spec['n']} points")
+    if expect.get("question") and "?" not in reply:
+        problems.append("reply asks no question")
+    if expect.get("max_reply_chars") and len(reply.strip()) > expect["max_reply_chars"]:
+        problems.append(f"reply too long ({len(reply.strip())} chars)")
     for pattern in expect.get("reply_lacks_regex", []):
         if re.search(pattern, reply, re.I):
             problems.append(f"reply matches {pattern!r}")
@@ -58,7 +72,13 @@ def write_problems(writes, expect):
 
 
 def score_case(fn, case):
-    got, expect, kind = fn(case), case["expect"], case["kind"]
+    return judge(fn(case), case)
+
+
+def judge(got, case):
+    """The verdict on one finished turn (``got`` is what the turn function returned). Split from ``score_case`` so a
+    transcript can state the verdict of the turn it records without running the turn again."""
+    expect, kind = case["expect"], case["kind"]
     if kind == "terminal":
         want, out = expect["terminal"], got["terminal"]
         problems = []

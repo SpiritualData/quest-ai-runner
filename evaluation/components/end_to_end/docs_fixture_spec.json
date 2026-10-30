@@ -1,0 +1,461 @@
+{
+ "what_is_quest": {
+  "path": "getting-started/index.md",
+  "title": "What Quest is",
+  "parts": [
+   {
+    "start": "Quest helps you set a transformative goal",
+    "end": "This page explains who Quest is for"
+   },
+   {
+    "start": "## What you can do with it",
+    "end": "## Explore before you sign up"
+   }
+  ]
+ },
+ "plans_table": {
+  "path": "reference/plans.md",
+  "title": "Plans and pricing: at a glance",
+  "parts": [
+   {
+    "start": "Quest has a useful free plan",
+    "end": "## Free"
+   }
+  ]
+ },
+ "plans_free": {
+  "path": "reference/plans.md",
+  "title": "Plans and pricing: the Free plan",
+  "parts": [
+   {
+    "start": "## Free",
+    "end": "For each of those you never used"
+   }
+  ]
+ },
+ "plans_trial": {
+  "path": "reference/plans.md",
+  "title": "Plans and pricing: the 31 day trial",
+  "parts": [
+   {
+    "start": "## The 31 day trial",
+    "end": "**Before it ends.**"
+   }
+  ]
+ },
+ "plans_quest_ai": {
+  "path": "reference/plans.md",
+  "title": "Plans and pricing: Quest AI",
+  "parts": [
+   {
+    "start": "## Quest AI",
+    "end": "This is the plan for someone"
+   }
+  ]
+ },
+ "share_howto": {
+  "path": "how-to/goals-and-plans.md",
+  "title": "How-to: share one goal",
+  "parts": [
+   {
+    "start": "## I want to share one goal",
+    "end": "## I want to mark a goal done"
+   }
+  ]
+ },
+ "share_guide": {
+  "path": "guide/quests-and-plans.md",
+  "title": "Quests and plans: sharing a quest",
+  "parts": [
+   {
+    "start": "## Sharing a quest",
+    "end": "You can also connect a quest to a [mentor]"
+   }
+  ]
+ },
+ "habit_howto": {
+  "path": "how-to/goals-and-plans.md",
+  "title": "How-to: add a recurring action",
+  "parts": [
+   {
+    "start": "## I want to add a recurring action",
+    "end": "## I want Quest to tell me"
+   }
+  ]
+ },
+ "calendar_howto": {
+  "path": "how-to/goals-and-plans.md",
+  "title": "How-to: Quest and your calendar",
+  "parts": [
+   {
+    "start": "## I want Quest to know about my real calendar",
+    "end": "## I want to start a quest from a ready-made"
+   }
+  ]
+ },
+ "quest_ai_recording": {
+  "path": "guide/quest-ai.md",
+  "title": "Quest AI: recording things as you go",
+  "parts": [
+   {
+    "start": "### Recording things as you go",
+    "end": "- \"Start the timer"
+   }
+  ]
+ },
+ "first_quest_intro": {
+  "path": "getting-started/your-first-quest.md",
+  "title": "Create your first quest: before you start",
+  "parts": [
+   {
+    "start": "# Create your first quest",
+    "end": "## Moving between the five steps"
+   }
+  ]
+ },
+ "first_quest_context": {
+  "path": "getting-started/your-first-quest.md",
+  "title": "Create your first quest: step 2, context",
+  "parts": [
+   {
+    "start": "### Measurable outcomes (Metrics)",
+    "end": "## Step 3"
+   }
+  ]
+ },
+ "core_quest": {
+  "path": "getting-started/core-concepts.md",
+  "title": "Core concepts: quest and its specification",
+  "parts": [
+   {
+    "start": "## Quest",
+    "end": "## Perspectives"
+   }
+  ]
+ },
+ "reflection": {
+  "path": "guide/productivity.md",
+  "title": "Productivity workflow: daily reflection",
+  "parts": [
+   {
+    "start": "## Daily reflection",
+    "end": "### 1. What happened"
+   },
+   {
+    "start": "- **How did yesterday go?**"
+   },
+   {
+    "start": "- **What's your plan?**"
+   }
+  ]
+ },
+ "period_reviews": {
+  "path": "guide/productivity.md",
+  "title": "Productivity workflow: period reviews",
+  "parts": [
+   {
+    "start": "A period review is a longer reflection"
+   },
+   {
+    "start": "- See your stats"
+   },
+   {
+    "start": "- Reflect on how it went."
+   },
+   {
+    "start": "- Go through what you did not finish"
+   },
+   {
+    "start": "- Get suggested goals"
+   },
+   {
+    "start": "### Trajectory",
+    "end": "## Hand work to your assistant"
+   }
+  ]
+ },
+ "collections": {
+  "path": "data-collections/index.md",
+  "title": "Data Collections: what they are",
+  "parts": [
+   {
+    "start": "# Data Collections",
+    "end": "## Field types"
+   },
+   {
+    "start": "## Collections and quests",
+    "end": "## Related"
+   }
+  ]
+ },
+ "habit_tracking_types": {
+  "path": "guide/quests-and-plans.md",
+  "title": "Quests and plans: habits and tracking types",
+  "parts": [
+   {
+    "start": "### Habits",
+    "end": "A habit can be **timed** instead"
+   }
+  ]
+ },
+ "life_design": {
+  "path": "guide/life-design.md",
+  "title": "Life design",
+  "parts": [
+   {
+    "start": "# Life design",
+    "end": "## The questions"
+   }
+  ]
+ },
+ "esoi_brief": {
+  "path": "esoi/index.md",
+  "title": "Quest and ESOI: in brief",
+  "parts": [
+   {
+    "start": "Quest is designed with a framework called",
+    "end": "| Record"
+   }
+  ]
+ },
+ "experiments_intro": {
+  "path": "guide/experiments.md",
+  "title": "Experiments",
+  "parts": [
+   {
+    "start": "# Experiments",
+    "end": "## Your quest's own question"
+   },
+   {
+    "start": "There are two ways to answer a question",
+    "end": "## Experiments the AI suggests"
+   }
+  ]
+ },
+ "mentee_find": {
+  "path": "guide/mentors.md",
+  "title": "Mentors: finding a mentor",
+  "parts": [
+   {
+    "start": "# Mentors",
+    "end": "### Paying a mentor"
+   }
+  ]
+ },
+ "mentee_pay": {
+  "path": "guide/mentors.md",
+  "title": "Mentors: paying a mentor",
+  "parts": [
+   {
+    "start": "### Paying a mentor",
+    "end": "## Working with a mentor"
+   }
+  ]
+ },
+ "mentee_working": {
+  "path": "guide/mentors.md",
+  "title": "Mentors: working with a mentor",
+  "parts": [
+   {
+    "start": "## Working with a mentor",
+    "end": "## Becoming a mentor"
+   }
+  ]
+ },
+ "mentor_become": {
+  "path": "guide/mentors.md",
+  "title": "Mentors: becoming a mentor",
+  "parts": [
+   {
+    "start": "## Becoming a mentor",
+    "end": "### Inviting your own clients"
+   }
+  ]
+ },
+ "account_profile": {
+  "path": "account/index.md",
+  "title": "Account settings: profile, appearance and time",
+  "parts": [
+   {
+    "start": "Manage your profile, privacy"
+   },
+   {
+    "start": "## Profile",
+    "end": "## Language"
+   }
+  ]
+ },
+ "account_language": {
+  "path": "account/index.md",
+  "title": "Account settings: language",
+  "parts": [
+   {
+    "start": "## Language",
+    "end": "## Notifications"
+   }
+  ]
+ },
+ "account_notifications": {
+  "path": "account/index.md",
+  "title": "Account settings: notifications",
+  "parts": [
+   {
+    "start": "## Notifications",
+    "end": "## Privacy"
+   }
+  ]
+ },
+ "calendar_google": {
+  "path": "guide/calendar-sync.md",
+  "title": "Calendar Sync: connect Google Calendar",
+  "parts": [
+   {
+    "start": "# Calendar Sync",
+    "end": "Device calendars are a phone feature"
+   },
+   {
+    "start": "## Connect Google Calendar",
+    "end": "After connecting, your Google calendars appear"
+   },
+   {
+    "start": "After connecting, your Google calendars appear"
+   }
+  ]
+ },
+ "calendar_where": {
+  "path": "guide/calendar-sync.md",
+  "title": "Calendar Sync: where your events show up",
+  "parts": [
+   {
+    "start": "## Where your events show up",
+    "end": "They look different on purpose."
+   }
+  ]
+ },
+ "account_delete": {
+  "path": "account/delete-account.md",
+  "title": "Delete your account",
+  "parts": [
+   {
+    "start": "## How to Delete Your Account",
+    "end": "### Step 5"
+   },
+   {
+    "start": "- All your data will be permanently removed within 30 days"
+   }
+  ]
+ },
+ "exporting": {
+  "path": "reference/developers.md",
+  "title": "Your data and the API: exporting",
+  "parts": [
+   {
+    "start": "## Exporting",
+    "end": "## The Quest API"
+   }
+  ]
+ },
+ "quest_ai_intro": {
+  "path": "guide/quest-ai.md",
+  "title": "Quest AI: what you can ask",
+  "parts": [
+   {
+    "start": "# Quest AI",
+    "end": "### Recording things as you go"
+   }
+  ]
+ },
+ "quest_ai_web": {
+  "path": "guide/quest-ai.md",
+  "title": "Quest AI: current information from the web",
+  "parts": [
+   {
+    "start": "## Current information from the web",
+    "end": "## How it backs up what it says"
+   }
+  ]
+ },
+ "quest_ai_now_later": {
+  "path": "guide/quest-ai.md",
+  "title": "Quest AI: doing work now, or later",
+  "parts": [
+   {
+    "start": "## Doing work now, or later",
+    "end": "## Tap a checklist item"
+   }
+  ]
+ },
+ "ai_tasks_intro": {
+  "path": "guide/ai-tasks.md",
+  "title": "AI Tasks: what they are",
+  "parts": [
+   {
+    "start": "# AI Tasks",
+    "end": "## Find your AI Tasks"
+   }
+  ]
+ },
+ "ai_tasks_types": {
+  "path": "guide/ai-tasks.md",
+  "title": "AI Tasks: the Type filter",
+  "parts": [
+   {
+    "start": "- **Type:**"
+   }
+  ]
+ },
+ "ai_tasks_followup": {
+  "path": "guide/ai-tasks.md",
+  "title": "AI Tasks: follow-up work",
+  "parts": [
+   {
+    "start": "**Follow-up work stays on the plan.**"
+   }
+  ]
+ },
+ "workflows_intro": {
+  "path": "guide/workflows.md",
+  "title": "Workflows: what they are and how to start one",
+  "parts": [
+   {
+    "start": "# Workflows",
+    "end": "## Choose what you see"
+   },
+   {
+    "start": "Tap **New workflow**"
+   },
+   {
+    "start": "- **Describe it and let AI draft it**"
+   }
+  ]
+ },
+ "ai_reps_intro": {
+  "path": "guide/ai-representatives.md",
+  "title": "AI representatives",
+  "parts": [
+   {
+    "start": "# AI representatives",
+    "end": "## Adding and managing your reps"
+   },
+   {
+    "start": "- **Create another rep**"
+   },
+   {
+    "start": "- **Edit how a rep acts.**"
+   }
+  ]
+ },
+ "science_intro": {
+  "path": "guide/science.md",
+  "title": "Science",
+  "parts": [
+   {
+    "start": "# Science",
+    "end": "## Direct"
+   },
+   {
+    "start": "Direct finds matching papers"
+   }
+  ]
+ }
+}

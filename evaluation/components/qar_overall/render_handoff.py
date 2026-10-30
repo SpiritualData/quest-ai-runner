@@ -19,7 +19,9 @@ conceptual part's solution, metric and latest recorded row with its currency, th
 (``esoi/hubs.csv``) and the freshness of every row. Content keys (all optional): ``title``, ``audience``, ``written``,
 ``summary``, ``next``, ``cards`` (title, body), ``decisions`` (decision, answer, whose: joshua, /joshua or metric),
 ``unfinished`` (item, state), ``notes`` (list of lines), ``pass_log`` (date, summary), ``links`` (label, url),
-``breakdowns`` (end_to_end, proactive_level, proactive_class: row_date, parts as ``{label: [passed, cases]}``), ``page``.
+``breakdowns`` (end_to_end, proactive_level, proactive_class: row_date, parts as ``{label: [passed, cases]}``),
+``examples`` (representative turns written by ``add_examples.py`` from saved end_to_end transcripts: id, group, side, shows, request,
+context, steps, result, ok, quality, source; shown after the numbers and the open decisions), ``page``.
 The text never contains an em dash: every dash is replaced on output."""
 import argparse
 import csv
@@ -219,7 +221,7 @@ CSS = """:root{--bg:#fafaf7;--fg:#1c1c1a;--mut:#66665f;--card:#fff;--line:#e3e3d
 @media (prefers-color-scheme:dark){:root{--bg:#161614;--fg:#ecece6;--mut:#a3a39a;--card:#1f1f1c;--line:#34342f;--ok:#5cc58a;--warn:#e0a24a;--bad:#f08178}}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
 main{max-width:820px;margin:0 auto;padding:24px 16px 64px}
-h1{font-size:1.5rem;margin:0 0 4px}h2{font-size:1.1rem;margin:28px 0 8px}
+h1{font-size:1.5rem;margin:0 0 4px}h2{font-size:1.1rem;margin:28px 0 8px}h3{font-size:1rem;margin:18px 0 4px}
 .sub{color:var(--mut);margin:0 0 16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:10px 0}
 .big{display:flex;gap:12px;flex-wrap:wrap}.big div{flex:1 1 130px}
@@ -243,6 +245,21 @@ def esc(value):
 def clean(text):
     """No em or en dash may reach a reader: each becomes a comma."""
     return re.sub(r"\s*[—–]\s*", ", ", text)
+
+
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+URL = re.compile(r"(?:https?://|www\.)[^\s\"'<>)]+", re.I)
+ABS_PATH = re.compile(r"(?<![\w.:/-])/(?:home|Users|root|tmp|var|etc|opt|mnt|srv|usr|data|media)/[^\s\"'<>)]*")
+IDS = re.compile(r"\b[0-9a-f]{24}\b|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\b[0-9a-f]{16,}\b"
+                 r"|\b(?:qsk|sk|pk|tok|key)[_-][A-Za-z0-9_-]{6,}|\b[A-Za-z]{1,6}_[0-9a-f]{8,}\b", re.I)
+
+
+def scrub(text):
+    """No email, link host, absolute path or id-looking string may reach the page: each becomes a bracketed word."""
+    text = EMAIL.sub("[email]", "" if text is None else str(text))
+    text = URL.sub("[link]", text)
+    text = ABS_PATH.sub("[path]", text)
+    return IDS.sub("[id]", text)
 
 
 def num(value, places=2):
@@ -330,6 +347,47 @@ def part_status(p):
     if p["state"] == "stale":
         return tag("stale", "warn")
     return tag("not built", "bad")
+
+
+EXAMPLE_GROUPS = ["Adding a goal", "Using context the person did not mention", "Multi-step operations", "Deep run hand-off",
+                  "Questions about Quest", "Settings and account", "Refusals and consent"]
+
+
+def example_html(e):
+    """One example, compact: the request, what it found unprompted, the steps, what it did or said, pass or fail with the case id."""
+    ok = e.get("ok")
+    quality = e.get("quality") or {}
+    out = [f'<div class="ex"><p>{tag(e.get("id", ""))} {tag("pass" if ok else "fail", "ok" if ok else "bad")}'
+           + (f' {tag(scrub(e["side"]))}' if e.get("side") else "")
+           + (f' {tag("quality " + str(quality["passed"]) + "/" + str(quality["total"]))}' if quality.get("total") else "")
+           + (f' <span class="l">{esc(scrub(e["shows"]))}</span>' if e.get("shows") else "") + "</p>",
+           f"<p><b>Asked:</b> {esc(scrub(e.get('request', '')))}</p>"]
+    found = e.get("context") or []
+    if found:
+        items = "; ".join(esc(scrub(c.get("label", ""))) + (": " + esc(scrub(c["text"])) if c.get("text") else "") for c in found)
+        out.append(f"<p><b>Found, not mentioned in the request:</b> {items}</p>")
+    steps = e.get("steps") or []
+    if steps:
+        out.append("<p><b>Steps:</b> " + " &rarr; ".join(esc(scrub(x)) for x in steps) + "</p>")
+    if e.get("result"):
+        out.append(f"<p><b>{esc(scrub(e.get('result_label', 'Result')))}:</b> {esc(scrub(e['result']))}</p>")
+    if e.get("source"):
+        out.append(f'<p class="l">Source: {esc(scrub(e["source"]))}</p>')
+    return "".join(out) + "</div>"
+
+
+def section_examples(content):
+    """Representative real turns, grouped by what they show. Empty (no section at all) when the content file has none."""
+    exs = [e for e in content.get("examples", []) if isinstance(e, dict)]
+    if not exs:
+        return ""
+    order = EXAMPLE_GROUPS + [g for g in dict.fromkeys(e.get("group", "Other") for e in exs) if g not in EXAMPLE_GROUPS]
+    out = "<h2>How it handled real inputs</h2>"
+    for group in order:
+        rows = [e for e in exs if e.get("group", "Other") == group]
+        if rows:
+            out += f"<h3>{esc(scrub(group))}</h3>" + "".join(example_html(e) for e in rows)
+    return out
 
 
 def section_parts(data):
@@ -461,6 +519,7 @@ def render(data, content):
     parts += [section_cards(data), section_submetrics(data)]
     if content.get("next"):
         parts.append(f"<p><b>Next to raise it:</b> {esc(content['next'])}</p>")
+    parts.append(section_examples(content))
     parts += [section_parts(data), section_e2e(data, content), section_proactive(data, content), section_prompts(data),
               section_hubs(data), section_decisions(content), section_unfinished(content), section_extras(content)]
     links = content.get("links", [])

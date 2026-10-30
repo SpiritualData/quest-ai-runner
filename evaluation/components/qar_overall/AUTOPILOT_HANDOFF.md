@@ -19,6 +19,15 @@ At the END of every pass, after re-recording and `esoi tracker build`:
 5. Run `render_handoff.py --check`. It exits 1 when the page is older than the latest committed results row; fix and re-run.
 6. Mention the page refresh in the goal update.
 
+## Representative examples (the final pass of a staged run)
+
+1. Run the end_to_end live arm with `QAR_E2E_TRANSCRIPTS=<scratch dir>` set (staged ladder, `--max-calls` always); never commit that directory.
+2. Optional quality grade (subscription, one call per case): `.venv/bin/python evaluation/components/end_to_end/rubric.py <scratch dir> --max-calls N`.
+3. Pick cases in a selection JSON kept beside the content file: `[{"case": "E2E-GOAL-01", "shows": "one line"}, ...]`.
+4. `.venv/bin/python evaluation/components/qar_overall/add_examples.py --content $QAR_HANDOFF_CONTENT --transcripts <scratch dir> --select <selection.json>`.
+5. Render, then `render_handoff.py --check`. Refresh the documentation excerpts first when quest-docs changed: `refresh_docs_fixture.py --docs <checkout>`.
+6. The section shows only what the scratch directory holds; it never reads the repository's recorded rows for examples.
+
 Never put names, ids, real paths or the content file in this repository. No em dashes in any text added to the content file.
 
 When a decision resolves with a bare "approve" and no note, treat it as accepting the recommendation, apply exactly that, and record

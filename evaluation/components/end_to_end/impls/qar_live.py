@@ -2,13 +2,14 @@
 planner, the real tool catalogue on the world of ``world.json``, the fixture web), and the real ``send`` command with a real
 model. PAID in subscription calls: it spends Claude Code subscription time through ``claude -p``, no API dollars. Stay on the
 staged ladder of esoi/metric-run-policy.md and always pass ``--max-calls``. ``QAR_EVAL_MODEL`` picks the planner tier (default
-haiku)."""
+haiku). ``QAR_E2E_TRANSCRIPTS=<directory>`` also saves one small JSON transcript per case there (``end_to_end/transcript.py``);
+unset (the default), the turn runs exactly as before."""
 PAID = True
 import os
 
 import common
 import live_arm
-from end_to_end import drive
+from end_to_end import drive, transcript
 
 
 def build(meter):
@@ -21,5 +22,8 @@ def build(meter):
         world = drive.new_world(case)
         orch = common.build_offline_orchestrator(meter, registry=world.registry, planner_tier=tier)
         orch.web = world.web
-        return drive.run_with(case, world, orch)
+        where = transcript.target_dir()
+        if where is None:
+            return drive.run_with(case, world, orch)
+        return transcript.record_turn(case, world, orch, meter, lambda: drive.run_with(case, world, orch), where)
     return turn
