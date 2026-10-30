@@ -140,6 +140,27 @@ def test_failing_replay_takes_the_normal_path():
     assert res.exit_reason != "recipe"
 
 
+def test_a_recipe_write_with_an_unknown_outcome_is_answered_with_a_receipt_and_never_sent_again():
+    """The fast path sent the write and got no answer, so it may have happened. Taking the normal path would send it again;
+    the recipe answers with an OUTCOME UNKNOWN receipt instead, and the model is asked for nothing more."""
+    store = learned_store()
+    calls = []
+
+    def handler(args, ctx):
+        calls.append(dict(args))
+        return ToolResult(ok=False, status="unknown", text="the request was sent and not answered")
+    tools = ToolRegistry([ToolSpec(
+        name="complete_habit", description="Mark a habit done today.", handler=handler, when_to_use="mark a habit done",
+        when_not_to_use="reading habits", mutates=True, keywords=("habit", "done"),
+        parameters={"type": "object", "required": ["habit"], "properties": {"habit": {"type": "string"}}})])
+    provider = StubProvider(decisions=[{"applies": True, "args": {"habit": "yoga"}}, {"action": "tool", "rationale": "again", "tool_calls": [
+        {"name": "complete_habit", "args": {"habit": "yoga"}}]}])
+    res = make_orch(provider, tools, store).run("mark my yoga habit done", quest_id="q1")
+    assert res.exit_reason == "recipe" and calls == [{"habit": "yoga"}]
+    assert res.text.startswith("OUTCOME UNKNOWN") and "Do not repeat" in res.text
+    assert not res.execution_record.any_success and res.execution_record.facts[0].failed
+
+
 def test_exact_repeat_of_a_read_only_recipe_needs_no_model_call():
     store = RecipeStore()
     store.learn("list my habits for today", "complete_habit", {"habit": "all"}, scope_tags=["quest:q1"])

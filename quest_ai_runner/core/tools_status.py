@@ -85,3 +85,21 @@ def write_status_of(result: Any) -> ToolStatus:
     """The status of what a client write returned: a typed result carries it, a plain payload is classified."""
     status = as_status(getattr(result, "status", None))
     return status if status is not None else classify_payload(result)
+
+
+#: The phase an execution fact carries when its write was taken by Quest and waits for a person. Such a fact is neither
+#: succeeded nor failed: the work was done, the person's yes is what is outstanding.
+HELD_PHASE = ToolStatus.HELD.value
+
+
+def fact_is_held(fact: Any) -> bool:
+    """Whether an execution fact is a write held for approval (read from its phases, never from its text)."""
+    return HELD_PHASE in (getattr(fact, "phases", None) or [])
+
+
+def record_worked(record: Any) -> bool:
+    """Whether the turn's execution record shows work was done: a change landed, or a write was raised for a person's
+    approval. A turn whose only action is a held draft or proposal did its work, so it is never stamped "nothing done"."""
+    if record is None:
+        return False
+    return bool(getattr(record, "any_success", False)) or any(fact_is_held(f) for f in getattr(record, "facts", None) or [])

@@ -38,6 +38,13 @@ def test_an_answer_that_only_talked_is_nothing_done():
     assert data == {"outcome": "nothing_done"}
 
 
+def test_a_write_held_for_approval_is_work_done():
+    """A requested draft or proposal that Quest took and holds for a person did its work: it is not stamped nothing_done."""
+    record = ExecutionRecord(facts=[ExecutionFact(goal="tool propose_value: raised for approval", phases=["tool_call", "held"])])
+    _, data = run(OrchestratorResult(kind="answer", text="Proposed; waiting for you.", execution_record=record))
+    assert data == {"outcome": "done"}
+
+
 def test_a_failed_mutating_call_is_not_work_done():
     record = ExecutionRecord(facts=[ExecutionFact(goal="tool send_message", failed=True)])
     _, data = run(OrchestratorResult(kind="answer", text="It failed.", execution_record=record))

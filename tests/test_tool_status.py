@@ -25,7 +25,7 @@ from quest_ai_runner.core.tools_quest_standard import (
     file_email_draft_spec,
     quest_field_tool_spec,
 )
-from quest_ai_runner.core.tools_status import ToolStatus, classify_payload, write_status_of
+from quest_ai_runner.core.tools_status import ToolStatus, classify_payload, record_worked, write_status_of
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -124,10 +124,47 @@ def test_the_receipt_names_the_status_and_carries_it_as_data(status, word):
     assert record.facts[0].succeeded is (status in (ToolStatus.APPLIED, ToolStatus.NOOP))
 
 
-def test_a_held_write_is_never_recorded_as_a_success_nor_left_open_to_re_execution():
+def test_a_held_write_is_neither_a_success_nor_a_failure_and_counts_as_work_done():
+    """The request was made and a person's yes is outstanding: not succeeded, not failed (a failure stamps the run
+    "nothing done" and tells a deep run its command broke), phase held, and the run is still recorded as having worked."""
     _, record, _ = run_one(ToolResult(ok=True, text="waiting", status=ToolStatus.HELD))
     fact = record.facts[0]
-    assert fact.succeeded is False and fact.failed is True and "HELD" in (fact.error or "")
+    assert fact.succeeded is False and fact.failed is False and fact.phases[-1] == "held" and not fact.error
+    assert not record.any_success and not record.any_failure and record_worked(record)
+
+
+def test_a_failed_or_refused_write_is_not_work_done():
+    for status in (ToolStatus.FAILED, ToolStatus.REFUSED, ToolStatus.UNKNOWN):
+        _, record, _ = run_one(ToolResult(ok=False, text="no", status=status))
+        assert record.facts[0].failed is True and not record_worked(record)
+
+
+def test_a_mutating_call_with_an_unknown_outcome_is_never_repeated_in_the_turn():
+    """It was sent and not answered, so it MAY have happened: a re-plan that proposes the identical call does not send it again."""
+    runs = []
+    spec = ToolSpec(name="do_it", description="d", mutates=True,
+                    handler=lambda args, ctx: runs.append(1) or ToolResult(ok=False, text="timed out", status=ToolStatus.UNKNOWN))
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=StubProvider([]),
+                        registry=ModelRegistry(StubProvider([])), tools=ToolRegistry([spec]))
+    gathered, sigs = [], {}
+    for _ in range(3):
+        orch.run_tool_calls([{"name": "do_it", "args": {"a": 1}}], gathered=gathered, exec_record=ExecutionRecord(),
+                            tool_ok_signatures=sigs, emit=Silent(), steps=1, ctx=ToolContext())
+    assert len(runs) == 1
+    assert [g["tool_status"] for g in gathered] == ["unknown"] * 3 and "OUTCOME UNKNOWN" in gathered[2]["text"]
+
+
+def test_a_read_with_a_failed_or_unknown_result_may_be_run_again():
+    runs = []
+    spec = ToolSpec(name="look", description="d", mutates=False,
+                    handler=lambda args, ctx: runs.append(1) or ToolResult(ok=False, text="slow", status=ToolStatus.UNKNOWN))
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=StubProvider([]),
+                        registry=ModelRegistry(StubProvider([])), tools=ToolRegistry([spec]))
+    sigs = {}
+    for _ in range(2):
+        orch.run_tool_calls([{"name": "look", "args": {}}], gathered=[], exec_record=ExecutionRecord(),
+                            tool_ok_signatures=sigs, emit=Silent(), steps=1, ctx=ToolContext())
+    assert len(runs) == 2
 
 
 def test_an_identical_call_that_was_held_or_unchanged_is_not_run_again():

@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .runtime_settings import process_environment
-from .tools_status import ToolStatus, as_status
+from .tools_status import RECEIPT_WORDS, ToolStatus, as_status
 from .prompt_specs import declare, render_prompt
 from hubofhubs.recall.scope_tags import as_tag_list, scope_tags_allow
 
@@ -484,17 +484,25 @@ class RecipeRunner:
                 if not isinstance(args, dict) or not args:
                     return None
             result = self.tools.invoke(recipe.tool, args, ctx)
-            if result.status not in (ToolStatus.APPLIED, ToolStatus.NOOP, ToolStatus.HELD):
+            unknown_write = result.status is ToolStatus.UNKNOWN and spec.mutates
+            if result.status not in (ToolStatus.APPLIED, ToolStatus.NOOP, ToolStatus.HELD) and not unknown_write:
                 log.info("Recipe %s did not take effect (%s: %s); taking the normal path", recipe.id,
                          result.status.value, result.text[:160])
                 return None
+            text = result.text
             if result.status is ToolStatus.HELD:
                 # Settled: the write is waiting for a person. Answer with that receipt, never run the plan again.
                 log.info("Recipe %s is held for approval; answering with its receipt", recipe.id)
+            elif unknown_write:
+                # Settled: the request was sent and may have been applied. The normal path would send it again, so the
+                # fast path answers with a receipt that says the outcome is unknown and to check before repeating.
+                log.warning("Recipe %s: the write's outcome is unknown; answering with its receipt, not retrying", recipe.id)
+                text = (f"{RECEIPT_WORDS[ToolStatus.UNKNOWN]}: {result.text}\nIt may or may not have happened. "
+                        f"Do not repeat it until the current state has been checked.")
             else:
                 self.store.mark_used(recipe, request)
             return RecipeOutcome(recipe_id=recipe.id, tool=recipe.tool, args=args,
-                                 text=result.text, ok=result.ok, mutates=bool(spec.mutates),
+                                 text=text, ok=result.ok, mutates=bool(spec.mutates),
                                  llm_calls=llm_calls, seconds=time.monotonic() - started,
                                  status=result.status)
         except Exception as e:  # noqa: BLE001 -- a recipe must never break a turn

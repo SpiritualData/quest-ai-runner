@@ -24,6 +24,7 @@ from .orchestrator_text import _strip_future_context, unconfirmed_no_change_text
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
 from .planner_prompt import NOT_QUEUED_NOTE
+from .tools_status import fact_is_held
 
 
 class RunCloseMixin:
@@ -404,6 +405,7 @@ class RunCloseMixin:
                                        and exec_record is not None
                                        and not exec_record.any_success
                                        and not exec_record.any_failure
+                                       and not any(fact_is_held(f) for f in exec_record.facts)
                                        and _remediations < max(0, self.cfg.max_remediations))
                         if can_execute:
                             _remediations += 1

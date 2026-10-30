@@ -14,7 +14,7 @@ from hubofhubs.ports.deep import ProgressEvent
 from .adapters_values import Observation
 from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
 from .tools import ToolContext
-from .tools_status import DONE_STATUSES, RECEIPT_WORDS, ToolStatus, as_status
+from .tools_status import DONE_STATUSES, RECEIPT_WORDS, SETTLED_STATUSES, ToolStatus, as_status
 from .planner_context import _is_discovery_spec
 from .orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from .orchestrator_constants import log
@@ -431,9 +431,10 @@ class ReadsMixin:
             ok = status is ToolStatus.APPLIED
             done = status in DONE_STATUSES
             text = result.text if result is not None else "no tools configured"
-            if status in (ToolStatus.APPLIED, ToolStatus.NOOP, ToolStatus.HELD):
-                # Settled: a held write is already an ask for a person, and a no-op already holds. Running either again
-                # only raises a second ask or changes nothing.
+            if status in SETTLED_STATUSES and (status is not ToolStatus.UNKNOWN or spec is None or spec.mutates):
+                # Settled: a held write is already an ask for a person, a no-op already holds, and a mutating call whose
+                # outcome is unknown MAY have happened, so a re-plan never repeats it (the answer says to check first).
+                # Running any of them again only raises a second ask, a duplicate, or changes nothing.
                 if isinstance(tool_ok_signatures, dict):
                     tool_ok_signatures[sig] = status
                 else:
@@ -446,14 +447,17 @@ class ReadsMixin:
             gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": status.value,
                              "text": f"TOOL {name} {RECEIPT_WORDS[status]} "
                                      f"(args {json.dumps(args, default=str)[:(ACTING_TOOL_ARGS_CHARS if (spec is None or spec.mutates) else 600)]}):\n{text}"})
+            held = status is ToolStatus.HELD
             if spec is None or spec.mutates:
+                # A held write is neither succeeded nor failed: the request was made and a person's yes is outstanding.
                 exec_record.facts.append(ExecutionFact(
-                    goal=f"tool {name}: {text[:200]}" if done else f"tool {name}",
-                    succeeded=done, failed=not done,
-                    error=None if done else f"{RECEIPT_WORDS[status]}: {text[:280]}",
+                    goal=(f"tool {name}: {text[:200]}" if done else
+                          f"tool {name}: raised for approval, not yet done" if held else f"tool {name}"),
+                    succeeded=done, failed=not (done or held),
+                    error=None if (done or held) else f"{RECEIPT_WORDS[status]}: {text[:280]}",
                     phases=["tool_call", "done" if done else status.value]))
             emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps,
                                     text=f"tool {name}: {text[:200]}",
-                                    data={"phase": "done" if done else "failed", "tool": name,
+                                    data={"phase": "done" if done else "held" if held else "failed", "tool": name,
                                           "status": status.value}))
             log.info("tool %s %s: %s", name, status.value, text[:200])

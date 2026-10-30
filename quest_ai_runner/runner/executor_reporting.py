@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..core.orchestrator import OrchestratorResult, _strip_future_context
+from ..core.tools_status import record_worked
 from hubofhubs.ports.deep import ProgressEvent
 from .context_updates import parse_manifest, parse_usage_notes, render_receipt, strip_usage_block
 from .executor_support import (
@@ -180,7 +181,7 @@ class ReportingMixin:
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
             record = getattr(result, "execution_record", None)
-            worked = bool(record is not None and record.any_success)
+            worked = record_worked(record)
             self.dispatch_done(task_id, done_text, "done" if worked else "nothing_done",
                                session_id=session_id, **done_metrics)
             return ExecutionOutcome(task_id, "done", done_text)
