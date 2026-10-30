@@ -5,6 +5,7 @@ Pure rendering helpers and the small prompt heads they use (tools, web, links), 
 decides what to do with the answer stays in the orchestrator. ``orchestrator`` re-exports every name
 here, so existing imports keep working.
 """
+import re
 from typing import Any, Dict, List, Optional
 
 from .link_detect import MAX_LISTED_LINKS, links_in_message
@@ -146,6 +147,27 @@ def planner_web_block(web: Any) -> str:
         return ""
     return PLANNER_WEB_HEAD.format(describe=_web_describe_safe(web))
 
+# An adapter that clipped a read to its size limit ends the text with a "[truncated]" marker (every
+# adapter in this library does; the spelling varies by a dot or an ellipsis). The marker is DATA the adapter wrote, not
+# words the model wrote, so reading it is structural. Without a note beside it, the rows after the clip are simply
+# absent, and a cheap model reads absence as "no such record" (a clipped list of the person's records, answered as
+# "nothing recorded").
+_CUT_MARKER = re.compile(r"\[(?:\.\.\.)?\s*truncated\]\s*$")
+CUT_READ_NOTE = (
+    "[THIS READ WAS CUT at its size limit: what follows the cut was not shown. A fact missing above is NOT "
+    "evidence that it does not exist. Read again narrowed (a filter, a time range, only the fields you need) "
+    "before you say anything is absent.]")
+
+
+def read_was_cut(obs: Any) -> bool:
+    """True when ``obs`` is a read whose text its adapter clipped at a size limit. Never raises."""
+    try:
+        return (isinstance(obs, dict) and obs.get("kind") in ("read", "query")
+                and bool(_CUT_MARKER.search(str(obs.get("text") or ""))))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _is_discovery_spec(spec: Any) -> bool:
     """True if a read spec only DISCOVERS capabilities/sources (a menu), not real content."""
     return isinstance(spec, dict) and any(spec.get(k) for k in _DISCOVERY_SPEC_KEYS)
@@ -207,7 +229,8 @@ def _render_gathered(gathered: List[Dict[str, Any]], planner_view: bool = False)
                 body = str(obs.get("text", ""))
                 if planner_view:
                     body = _planner_web_page_text(obs, body)
-                parts.append(f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]:\n{body}")
+                parts.append(f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]:\n{body}"
+                             + (f"\n{CUT_READ_NOTE}" if read_was_cut(obs) else ""))
         elif kind == "error":
             parts.append(f"(gather error: {obs.get('error')})")
     return "\n\n".join(parts)
@@ -235,7 +258,7 @@ def _summarize_observation(obs: Dict[str, Any]) -> str:
     if kind in ("read", "query"):
         loc = obs.get("locator", "")
         head = f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]".strip()
-        return f"{head}: {_oneline(obs.get('text', ''))}"
+        return f"{head}: {_oneline(obs.get('text', ''))}" + (" [CUT: not all of it was shown]" if read_was_cut(obs) else "")
     if kind == "error":
         return f"(gather error: {obs.get('error')})"
     return _oneline(kind)

@@ -784,8 +784,8 @@ THE ACTIONS:
         topic, person or piece of work, as opposed to a file in the corpus
     Read again whenever you cannot yet NAME the file or trace the path you would rely on. Stop when
     a pass adds no new load-bearing fact, and answer or escalate the model tier instead of looping.
-    Never pass a machine, server or repository NAME as a `scope` or `rel_path`: it is not a source.
-    Only a file source's alias (`<alias>:<path>`) is, when the CONTEXT lists one (rule 2).
+    grep reaches files only. The person's records (notes, decisions, goals, entries) are read through
+    list_sources / list_operations: after two empty searches change the KIND of read.
   - "answer": you have enough real content, or it is chit-chat. A capability or discovery LISTING
     is not content: it says only what you could call, and neither is a list of file names:
     read the file. Never answer that you will open something; open it. Use "answer" to INFORM. Describing a change
