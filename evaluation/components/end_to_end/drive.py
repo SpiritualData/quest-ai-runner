@@ -21,6 +21,14 @@ class IdealPlanner(ScriptedProvider):
         return self.reply
 
 
+def handed_off(result):
+    """True when the planner asked for deep work in an answer turn (answer + deferred hand-off) that nothing executed: the
+    execution record holds a fact that neither succeeded nor failed (no deep runner stands in the offline world; a deployment's
+    runner would queue it). A structured fact of the run, never a reading of the reply."""
+    facts = getattr(getattr(result, "execution_record", None), "facts", None) or []
+    return any(not f.succeeded and not f.failed for f in facts)
+
+
 def fold(case, world, result):
     """The record of a finished turn: reply, writes, reads, web queries and the one route it took."""
     kind = getattr(result, "kind", "answer")
@@ -30,7 +38,7 @@ def fold(case, world, result):
         tags.add("confirm")
     if exit_reason == "clarify":
         tags.add("clarify")
-    if kind == "deep":
+    if kind == "deep" or handed_off(result):
         tags.add("deep")
     if any(w["tool"] == "create_task" for w in world.writes):
         tags.add("queue")

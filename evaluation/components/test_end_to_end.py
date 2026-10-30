@@ -414,3 +414,21 @@ def test_a_transcript_step_carries_a_deep_hand_off_and_cuts_long_text():
 def test_the_live_arm_reads_the_flag_and_nothing_else_changes():
     src = (HERE / "end_to_end" / "impls" / "qar_live.py").read_text()
     assert "transcript.target_dir()" in src and "return drive.run_with(case, world, orch)" in src
+
+
+def test_an_answer_with_a_planner_hand_off_that_nothing_executed_is_a_deep_route_and_the_transcript_keeps_the_whole_reply(tmp_path):
+    import scripted_brain
+    from end_to_end import drive, transcript
+    case = BY_ID["E2E-SEQ-01"]
+    w = drive.new_world(case)
+    meter = common.CallMeter(max_calls=100)
+    decisions = [{"action": "answer", "rationale": "over the line", "model_tier": "haiku",
+                  "deferred_deep": {"goal": "Research cheaper jar suppliers", "brief": "Find cheaper jars and lids"}}]
+    provider = meter.wrap(drive.IdealPlanner(decisions, "Your launch expenses total 755 USD, over 700. " + "More. " * 200))
+    orch = scripted_brain.build_brain(provider, tools=w.registry, web=w.web)
+    got = transcript.record_turn(case, w, orch, meter, lambda: drive.run_with(case, w, orch), tmp_path)
+    assert got["route"] == "deep" and not got["writes"] and score.judge(got, case)["ok"]
+    rec = json.loads((tmp_path / "E2E-SEQ-01.json").read_text())
+    assert rec["reply_full"] == got["reply"] and len(rec["reply"]) < len(rec["reply_full"])
+    plain = drive.fold(BY_ID["E2E-GOAL-01"], drive.new_world(BY_ID["E2E-GOAL-01"]), type("R", (), {"kind": "answer", "text": "ok"})())
+    assert plain["route"] == "answer"

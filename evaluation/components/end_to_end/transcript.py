@@ -8,7 +8,7 @@ turn that already ran. It makes no model call, changes no argument or result, an
 A record holds: ``request``; ``steps`` (the planner's action and reason, then what that step read, searched or wrote); ``handoff``
 (the goal and brief of a deep hand-off); ``context_used`` (stored records or documentation the person did NOT mention that the
 turn drew on, inferred from where a write landed and from words the reply or the writes share with a record, so it is a hint
-and says so); ``reply``; ``verdict``; ``calls`` and ``cost_usd``. Long text is cut to a few hundred characters."""
+and says so); ``reply`` (cut) and ``reply_full`` (whole, what the rubric grades); ``verdict``; ``calls`` and ``cost_usd``. Long text is cut to a few hundred characters."""
 import functools
 import json
 import os
@@ -175,7 +175,7 @@ def build(case, world, got, decisions, calls, cost_usd):
         writes=[{"tool": w["tool"], "args": short_args(w["args"]), "quest": (world.quests.get(w["quest_id"]) or {}).get("name")}
                 for w in got.get("writes", [])],
         web=[cut(q, 160) for q in got.get("web", [])], route=got.get("route", ""),
-        reply=cut(got.get("reply", ""), 700), verdict=dict(ok=bool(verdict["ok"]), note=cut(verdict.get("note", ""), 240)),
+        reply=cut(got.get("reply", ""), 700), reply_full=str(got.get("reply", "")), verdict=dict(ok=bool(verdict["ok"]), note=cut(verdict.get("note", ""), 240)),
         calls=calls, cost_usd=round(cost_usd, 6))
 
 

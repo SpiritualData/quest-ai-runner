@@ -97,7 +97,7 @@ def example_of(record, chosen):
     elif handoff:
         label, result = "Handed off", f"goal {safe(handoff.get('goal'), 140)}; brief {safe(handoff.get('brief'), 160)}"
     else:
-        label, result = "Reply", safe(record.get("reply"))
+        label, result = "Reply", safe(record.get("reply_full") or record.get("reply"))
     example = dict(id=record["case"], group=group_of(record, chosen), shows=safe(chosen.get("shows"), 160), request=safe(record.get("request"), 300),
                    context=context_items(record), steps=[step_text(s) for s in record.get("steps", [])][:6], result=result, result_label=label,
                    ok=bool(record.get("verdict", {}).get("ok")), source=safe(source_of(record), 200))
