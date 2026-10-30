@@ -70,6 +70,16 @@ def test_unknown_names_fail_loudly_with_the_choices():
         resolve("not-a-solution")
 
 
+def test_an_unknown_solution_with_a_name_lists_the_solutions_that_can_be_chosen():
+    """A typo in the solution id is the likelier typo: the error says what exists instead of 'choices: none'."""
+    for call in (lambda: resolve("not-a-solution", "x"), lambda: chosen_name("not-a-solution", "x"),
+                 lambda: resolve("not-a-solution", overrides={"not-a-solution": "x"})):
+        with pytest.raises(ValueError, match=r"unknown solution 'not-a-solution'.*call-a-model.*run-deep-work"):
+            call()
+    with pytest.raises(ValueError, match="choices: .*anthropic"):
+        resolve("call-a-model", "nope")
+
+
 def test_a_config_class_comes_with_runners_that_take_one():
     assert dataclasses.is_dataclass(resolve_config("run-deep-work", "acp"))
     assert dataclasses.is_dataclass(resolve_config("run-deep-work", "subprocess"))

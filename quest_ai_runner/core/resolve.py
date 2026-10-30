@@ -39,9 +39,27 @@ def asked_name(solution_id: str, name: Optional[str], overrides: Optional[Mappin
     return name or (overrides or {}).get(solution_id) or None
 
 
+def explain_unknown_solution(solution_id: str, error: ValueError) -> ValueError:
+    """``error`` unchanged when the solution exists. For a solution id nothing declares, esoi says ``choices: none``; say instead which
+    solutions can be chosen (its own message for a call with no name lists them), so a typo in the id points at the right one."""
+    if runtime.names(solution_id, scope=SCOPE) or "choices: none" not in str(error):
+        return error
+    try:
+        runtime.choose(solution_id, scope=SCOPE)
+    except runtime.SelectionError as listing:
+        text = str(listing)
+        marker = "solutions that have implementations: "
+        if marker in text:
+            return runtime.SelectionError(f"unknown solution {solution_id!r}; {marker}{text.split(marker, 1)[1]}")
+    return error
+
+
 def default_name(solution_id: str) -> str:
     """The implementation used when nothing asks for another."""
-    return runtime.choose(solution_id, scope=SCOPE).name
+    try:
+        return runtime.choose(solution_id, scope=SCOPE).name
+    except ValueError as error:
+        raise explain_unknown_solution(solution_id, error) from error
 
 
 def names(solution_id: str) -> List[str]:
@@ -51,12 +69,18 @@ def names(solution_id: str) -> List[str]:
 
 def chosen_name(solution_id: str, name: Optional[str] = None, overrides: Optional[Mapping[str, str]] = None) -> str:
     """The implementation name that ``resolve`` would use (explicit, then override, then default)."""
-    return runtime.choose(solution_id, asked_name(solution_id, name, overrides), scope=SCOPE).name
+    try:
+        return runtime.choose(solution_id, asked_name(solution_id, name, overrides), scope=SCOPE).name
+    except ValueError as error:
+        raise explain_unknown_solution(solution_id, error) from error
 
 
 def resolve(solution_id: str, name: Optional[str] = None, *, overrides: Optional[Mapping[str, str]] = None) -> Any:
     """The class or factory for the chosen implementation of ``solution_id`` (not an instance)."""
-    return runtime.resolve(solution_id, asked_name(solution_id, name, overrides), scope=SCOPE)
+    try:
+        return runtime.resolve(solution_id, asked_name(solution_id, name, overrides), scope=SCOPE)
+    except ValueError as error:
+        raise explain_unknown_solution(solution_id, error) from error
 
 
 def resolve_config(solution_id: str, name: Optional[str] = None, *, overrides: Optional[Mapping[str, str]] = None) -> Any:
