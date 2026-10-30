@@ -228,6 +228,8 @@ def test_every_operation_is_complete_and_named_after_the_client_method_it_wraps(
         assert not spec.workflow_step, "ledger and progress operations are not workflow steps"
         if name in ("record_ask", "update_ask"):
             continue  # the asks client methods are added by the asks work; the tool checks for them
+        if name == "find_quest":
+            continue  # a read that composes list_teams and list_quests; it wraps no single client method
         assert hasattr(QuestClient, name), f"{name} should match a QuestClient method"
 
 
