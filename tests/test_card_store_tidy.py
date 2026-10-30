@@ -247,7 +247,10 @@ def test_due_over_the_limit_or_on_ids_that_prove_copies():
     assert tidy.due({**clean, f"{SD}--{PRODUCT}--x": card("x")}, 5)[0] == tidy.PROVABLE_REASONS
 
 
-def backend_store(tmp_path, repo, **kwargs) -> FileContextStore:
+def backend_store(tmp_path, repo, folders: int = 20, **kwargs) -> FileContextStore:
+    for number in range(folders):                       # a corpus with room for its topic cards
+        (tmp_path / f"area{number}").mkdir(exist_ok=True)
+        (tmp_path / f"area{number}" / "note.md").write_text("x", encoding="utf-8")
     store = FileContextStore(str(tmp_path / "cards"), repo_root=str(tmp_path), auto_bootstrap=False,
                              card_repository=repo, mount_mode="copy", self_heal=True, **kwargs)
     review(tmp_path / "cards")
@@ -558,3 +561,13 @@ def test_a_compounded_card_with_a_truncated_id_is_not_rekeyed(tmp_path):
     stuck = "root-a-111111--root-b-222222--root-a-111111--" + "x" * 150
     repo = backend_with([card(stuck, ["z/one.md"])])
     assert not plan_for(repo, tmp_path).entries
+
+
+def test_a_store_with_more_topic_cards_than_folders_takes_the_second_step_without_being_over_its_limit(tmp_path):
+    # More topic cards than the few folders the corpus (and the store's own files inside it) can have.
+    repo = backend_with([card(name, ["docs/a.md"], keywords=[name]) for name in
+                         ("billing", "invoices", "sign-in", "reports", "audits", "payroll", "tax", "budgets")])
+    store = backend_store(tmp_path, repo, folders=1, max_cards=1000, tidy_mode="apply")
+    assert store.over_folder_budget(store._own_cards())
+    assert store.tidy_store() == 7
+    assert len(repo.load_all()) == 1

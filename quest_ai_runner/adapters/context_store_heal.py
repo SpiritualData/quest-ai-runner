@@ -112,14 +112,19 @@ class HealMixin:
             cards = self._own_cards()
             limit = self.limit_guard.limit
             reasons, why = tidy.due(cards, limit)
+            over_folders = self.over_folder_budget(cards)
+            if over_folders and not reasons:
+                reasons, why = tidy.DEFAULT_REASONS, "its topic cards outnumber the folders of its corpus"
             if not reasons or (tidy.is_local_folder(repo) and reasons == tidy.PROVABLE_REASONS):
                 return 0
             own_store_id = self.own_store_id()
             plan = tidy.plan_store(cards, cards_dir=self._cards_dir, reasons=reasons, own_store_id=own_store_id,
                                    repo=repo)
             plan.why = why
-            if limit > 0 and len(cards) - len(plan.entries) > limit:
-                # Still over the owner's limit after the plan: the second step joins same-file topics too.
+            if (limit > 0 and len(cards) - len(plan.entries) > limit) or over_folders:
+                # Still over the owner's limit after the plan, or holding more topic cards than the corpus has
+                # folders (a store that is neither embedded nor synced until it is tidied): the second step joins
+                # same-file topics too.
                 plan = tidy.with_second_step(cards, plan, cards_dir=self._cards_dir, own_store_id=own_store_id,
                                              repo=repo)
             if not plan.entries:
@@ -192,6 +197,17 @@ class HealMixin:
             return
         _log.warning("%s The plan is in %s.", message, target)
         self.say(message, notify)
+
+    def over_folder_budget(self, cards) -> bool:
+        """Whether ``cards`` hold more topic cards than the corpus has folders (see ``inflated``). Never raises."""
+        try:
+            root = self._effective_root()
+            if not root or not Path(root).is_dir():
+                return False
+            return hygiene.inflation_check(self._cards_dir, Path(root), cards).over
+        except Exception:  # noqa: BLE001
+            _log.debug("context index: folder budget check failed", exc_info=True)
+            return False
 
     def inflated(self) -> bool:
         """Whether the store holds more topic cards than its corpus has folders (checked once).
