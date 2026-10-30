@@ -239,8 +239,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `call-a-model:single_provider` | Single flat provider floor | evaluation/components/model_providers/impls/single_provider.py |  |
 | `run-deep-work:subprocess` | Subprocess goal runner | quest_ai_runner/core/goal_runner.py |  |
 | `run-deep-work:acp` | Agent-protocol deep runner | quest_ai_runner/adapters/acp_deep_runner.py |  |
-| `run-deep-work:fast_edit` | One-call fast file editor | quest_ai_runner/adapters/fast_edit_runner.py |  |
-| `run-deep-work:mcp_write` | One-call MCP operation runner | quest_ai_runner/adapters/mcp_write_runner.py |  |
+| `run-deep-work:fast_edit` | One-call fast file editor | quest_ai_runner/config_resolvers.py |  |
+| `run-deep-work:mcp_write` | One-call MCP operation runner | quest_ai_runner/config_resolvers.py |  |
 | `run-deep-work:subprocess_runner` | Subprocess runner scenarios | evaluation/components/deep_runner/impls/subprocess_runner.py |  |
 | `run-deep-work:acp_runner` | Agent-protocol runner scenarios | evaluation/components/deep_runner/impls/acp_runner.py |  |
 | `run-deep-work:goal_contract` | Goal contract rules check | evaluation/components/deep_run/impls/goal_contract.py |  |
@@ -317,7 +317,6 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `judge-esoi-behavior:model_judge` | Rubric-based model judge | evaluation/components/esoi_judge/impls/model_judge.py |  |
 | `judge-esoi-behavior:regex_only` | Regex-check floor | evaluation/components/esoi_judge/impls/regex_only.py |  |
 | `expose-the-public-api:__init__` | Package root with front doors | quest_ai_runner/__init__.py |  |
-| `expose-the-public-api:aider_editblock` | Vendored edit-block parser | quest_ai_runner/vendor/aider_editblock.py |  |
 | `expose-the-public-api:async_bridge` | Long-lived background loop bridge | quest_ai_runner/core/async_bridge.py |  |
 | `expose-the-public-api:live_surface` | Live package-surface driver | evaluation/components/expose_the_public_api/impls/live_surface.py |  |
 | `learn-by-example:minimal_lane` | Minimal lane example | examples/minimal_lane.py |  |

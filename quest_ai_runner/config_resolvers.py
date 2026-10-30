@@ -7,6 +7,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any, List
 
+from esoi import implementation
+
 from .core.model_registry import ModelRegistry
 from .providers import make_provider
 from .config_support import _AUTO_DEEP_RUNNER, _log
@@ -133,6 +135,7 @@ def resolve_rep_sync_resolver(cfg: RunnerConfig, *, quest_client: Any = None):
     )
 
 
+@implementation("run-deep-work", "fast_edit")
 def resolve_fast_edit_runner(cfg: RunnerConfig):
     """Build the in-process fast editor, or return None. OFF unless a ``file_writer`` is wired.
 
@@ -148,7 +151,7 @@ def resolve_fast_edit_runner(cfg: RunnerConfig):
     if writer is None or cfg.model_provider is None:
         return None
     try:
-        from .adapters.fast_edit_runner import FastEditRunner
+        from hubofhubs.act.fast_edit import FastEditRunner
 
         # ``cfg.model_provider`` is the MultiProvider-wrapped provider by the time this is called
         # from build_orchestrator (the wrap happens in place, earlier in that function), so the
@@ -164,6 +167,7 @@ def resolve_fast_edit_runner(cfg: RunnerConfig):
         return None
 
 
+@implementation("run-deep-work", "mcp_write")
 def resolve_mcp_write_runners(cfg: RunnerConfig) -> List[Any]:
     """Build one ``MCPOperationRunner`` per configured ``MCPServerSpec`` that has non-empty
     ``writable_tools``, or ``[]``. OFF unless a spec's ``writable_tools`` is wired.
@@ -185,7 +189,7 @@ def resolve_mcp_write_runners(cfg: RunnerConfig) -> List[Any]:
     runners: List[Any] = []
     try:
         from .adapters.mcp_write_adapter import MCPWriteAdapter
-        from .adapters.mcp_write_runner import MCPOperationRunner
+        from hubofhubs.act.mcp_operations import MCPOperationRunner
 
         registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
         for spec in cfg.mcp_servers:

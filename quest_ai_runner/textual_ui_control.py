@@ -1,6 +1,6 @@
 """Steer, stop and pause a running deep worker from the terminal.
 
-``TerminalRunControl`` is the terminal's ``core.run_control.RunControl`` for ONE turn. A deep worker
+``TerminalRunControl`` is the terminal's ``hubofhubs.ports.control.RunControl`` for ONE turn. A deep worker
 that holds a live session (the stream-json runner) asks it, a few times a second, for new messages
 and for a stop or a pause; a worker that does not name a ``control`` keyword (the one-shot
 subprocess runner) is never handed it, so for that worker nothing here runs and a queued message
@@ -22,7 +22,7 @@ from typing import Callable, Dict, Iterable, List, Optional
 
 from rich.text import Text
 
-from .core.run_control import ControlMessage, RunControl
+from hubofhubs.ports.control import ControlMessage, RunControl
 from .textual_ui_helpers import indented_line, person_line, plural, working_notes_in
 
 # How often a live worker looks for a typed message. Short, because a person is waiting at the

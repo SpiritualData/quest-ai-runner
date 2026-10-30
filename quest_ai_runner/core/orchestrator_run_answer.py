@@ -9,8 +9,9 @@ from types import SimpleNamespace
 from typing import Optional
 
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from .adapters_events import EVENT_INTENT, EVENT_STATUS, EVENT_TOKENS, Mode
-from .adapters_values import PlanDecision, ProgressEvent
+from hubofhubs.ports.events import EVENT_INTENT, EVENT_STATUS, EVENT_TOKENS, Mode
+from hubofhubs.ports.deep import ProgressEvent
+from .adapters_values import PlanDecision
 from .context_doctrine import CARD_LIFECYCLE_GATE
 from .orchestrator_constants import log
 from .orchestrator_decide_tool import (

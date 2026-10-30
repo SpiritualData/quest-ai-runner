@@ -30,23 +30,81 @@ from typing import Any, Dict, List, Optional
 import pytest
 from esoi import scaffold
 
+from hubofhubs.act.fast_edit import FastEditRunner
+from hubofhubs.act.mcp_operations import MCPOperationRunner
+from hubofhubs.ports.deep import WriteResult
 from quest_ai_runner.adapters import acp_deep_runner as acp
-from quest_ai_runner.adapters.fast_edit_runner import FastEditRunner
 from quest_ai_runner.adapters.files_writer import FilesWriter
-from quest_ai_runner.adapters.mcp_write_runner import MCPOperationRunner
 from quest_ai_runner.core import goal_runner_stream
-from quest_ai_runner.core.adapters_deep import WriteResult
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.goal_runner_stream import StreamJsonGoalRunner
+from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import PlanDecision
 from quest_ai_runner.core.tools import ToolContext, build_tool_registry
 
 from .conftest import StubProvider
 from .test_acp_deep_runner import FakeConn, config as acp_config, install_fake_connection
 from .test_fast_edit_ladder import _orch
-from .test_fast_edit_runner import SHORT_DOC, ScriptedProvider
-from .test_mcp_write_runner import CATALOG, FakeWriter, ScriptedPlanProvider
+
+SHORT_DOC = """# Project notes
+
+Status: paused pending review.
+
+Owner: the platform team.
+"""
+
+
+class ScriptedProvider:
+    """A ModelProvider whose ``answer`` replays scripted replies."""
+
+    def __init__(self, replies: List[str]):
+        self.replies = list(replies)
+
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+        raise AssertionError("the fast edit path must not call plan()")
+
+    def answer(self, messages, *, model, system=None, layers=None) -> str:
+        return self.replies.pop(0) if self.replies else ""
+
+    def list_models(self) -> List[str]:
+        return ["claude-sonnet-4-6", "claude-opus-4-8"]
+
+
+class ScriptedPlanProvider:
+    """A ModelProvider whose ``plan`` replays scripted decisions."""
+
+    def __init__(self, decisions: List[Dict[str, Any]]):
+        self.decisions = list(decisions)
+
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+        return self.decisions.pop(0)
+
+    def answer(self, messages, *, model, system=None, layers=None) -> str:
+        raise AssertionError("the mcp operation runner must not call answer()")
+
+    def list_models(self) -> List[str]:
+        return ["claude-sonnet-4-6", "claude-opus-4-8"]
+
+
+class FakeWriter:
+    """An OperationWriter double: a scripted catalog and a scripted write result."""
+
+    def __init__(self, catalog: Optional[List[Dict[str, Any]]] = None, result: Optional[WriteResult] = None):
+        self.catalog = catalog or []
+        self.result = result or WriteResult(ok=True, rel_path="srv:op")
+
+    def list_writable_operations(self) -> List[Dict[str, Any]]:
+        return list(self.catalog)
+
+    def write_operation(self, name: str, args: Dict[str, Any]) -> WriteResult:
+        return self.result
+
+
+CATALOG = [{
+    "name": "srv:comment", "description": "Post a comment",
+    "input_schema": {"type": "object", "properties": {"body": {"type": "string"}}},
+}]
 
 REQUEST = "make the greeting function greet a person by name in the standard form"
 GOAL = REQUEST + " in docs/notes.md"
@@ -242,10 +300,14 @@ def build_ladder(kind: str, world: ScriptedWorld, work_dir: Path, monkeypatch) -
         (corpus / "docs").mkdir(parents=True, exist_ok=True)
         (corpus / "docs" / "notes.md").write_text(SHORT_DOC)
         reply = "docs/notes.md\n```\n" + SHORT_DOC.replace("paused pending review", "active") + "```\n"
-        first = FastEditRunner(provider=ScriptedProvider([reply]), writer=FilesWriter(str(corpus)))
+        edit_provider = ScriptedProvider([reply])
+        first = FastEditRunner(provider=edit_provider, registry=ModelRegistry(edit_provider),
+                               writer=FilesWriter(str(corpus)))
     else:
+        plan_provider = ScriptedPlanProvider([{"operation": "srv:comment", "args": {"body": "hi"}}])
         first = MCPOperationRunner(
-            provider=ScriptedPlanProvider([{"operation": "srv:comment", "args": {"body": "hi"}}]),
+            provider=plan_provider,
+            registry=ModelRegistry(plan_provider),
             writer=FakeWriter(catalog=CATALOG, result=WriteResult(ok=True, rel_path="srv:comment")))
     return [first, behind]
 

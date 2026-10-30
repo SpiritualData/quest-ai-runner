@@ -12,11 +12,12 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from .adapters_events import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
-from .adapters_values import PlanDecision, ProgressEvent
+from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
+from hubofhubs.ports.deep import ProgressEvent
+from .adapters_values import PlanDecision
 from hubofhubs.recall.card_thread import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
 from .context_doctrine import CACHED_HINT_GATE
-from .guard import ExecutionRecord
+from hubofhubs.act.execution_record import ExecutionRecord
 from .orchestrator_capabilities import (
     context_assembly_timeout_seconds,
     guidance_selection_timeout_seconds,

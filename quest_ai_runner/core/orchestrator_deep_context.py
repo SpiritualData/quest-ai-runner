@@ -16,7 +16,7 @@ from .recent_context import (
     render_recent_cards,
 )
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from .adapters_bases import runner_uses_deep_model
+from hubofhubs.ports.deep import runner_uses_deep_model
 from .orchestrator_capabilities import (
     context_assembly_timeout_seconds,
     record_context_assembly_timeout,

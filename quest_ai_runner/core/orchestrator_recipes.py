@@ -8,9 +8,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .recipes import DEEP_PREFIX, RECIPE_ARGS_TOOL, RecipeRunner
 from hubofhubs.ports.model import STEP_JUDGE, plan_with_step
-from .adapters_events import EVENT_DONE, EVENT_EXEC, EVENT_RESULT
-from .adapters_values import PlanDecision, ProgressEvent
-from .guard import ExecutionFact, ExecutionRecord
+from hubofhubs.ports.events import EVENT_DONE, EVENT_EXEC, EVENT_RESULT
+from hubofhubs.ports.deep import ProgressEvent
+from .adapters_values import PlanDecision
+from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
 from .tools import ToolContext
 from .recent_context import quest_scope_key
 from .orchestrator_turn import _Emitter

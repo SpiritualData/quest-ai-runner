@@ -6,7 +6,7 @@ Quest, any database, or any org — only the four adapter interfaces.
 """
 from hubofhubs.ports.context import ConversationContext, ConversationStore
 from hubofhubs.ports.model import ModelProvider
-from .adapters_events import (
+from hubofhubs.ports.events import (
     EVENT_CARD_THREAD,
     EVENT_DECISION,
     EVENT_DONE,
@@ -25,24 +25,28 @@ from .adapters_events import (
     SURFACING_EVENTS,
     Mode,
 )
-from .adapters_values import (
+from hubofhubs.ports.deep import (
     FUTURE_CONTEXT_VIA_FIELD,
     FUTURE_CONTEXT_VIA_OUTPUT,
     WRITE_SURFACE_AGENT,
     WRITE_SURFACE_FILES,
     WRITE_SURFACE_OPERATIONS,
     DeepResult,
+    DeepRunner,
+    DeepRunnerBase,
+    ProgressEvent,
+    ProgressSink,
+    ProgressSinkBase,
+)
+from .adapters_values import (
     Escalation,
     Observation,
     PlanDecision,
-    ProgressEvent,
 )
-from .adapters_deep import DeepRunner, EscalationSink, ProgressSink
+from .adapters_deep import EscalationSink
 from .adapters_bases import (
-    DeepRunnerBase,
     EscalationSinkBase,
     ModelProviderBase,
-    ProgressSinkBase,
     RetrievalAdapterBase,
 )
 from .adapters_sinks import FanoutSink, MilestoneSink, StreamSink
@@ -85,7 +89,7 @@ from .orchestrator import (
     planner_prompt_defaults,
     render_planner_prompt,
 )
-from .guard import (
+from hubofhubs.act.execution_record import (
     ExecutionFact,
     ExecutionRecord,
     classify_exec_phase,

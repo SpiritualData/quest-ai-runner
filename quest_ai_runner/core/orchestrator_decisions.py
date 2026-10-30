@@ -9,7 +9,8 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 
-from .adapters_values import PlanDecision, WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS
+from hubofhubs.ports.deep import WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS
+from .adapters_values import PlanDecision
 from .auxiliary_prompts import QUEST_DATA_WRITE_SURFACE_INSTRUCTION
 from .model_registry import TIERS
 from .deep_model_selection import normalize_difficulty

@@ -13,14 +13,20 @@ from .auxiliary_prompts import (
     SELF_INITIATED_READ_ONLY_INSTRUCTION,
 )
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from .adapters_values import DeepResult, FUTURE_CONTEXT_VIA_FIELD, PlanDecision, ProgressEvent
-from .adapters_events import EVENT_EXEC, EVENT_MILESTONE, EVENT_STATUS
-from .adapters_bases import runner_starts_background_work, runner_uses_deep_model
+from hubofhubs.ports.deep import (
+    DeepResult,
+    FUTURE_CONTEXT_VIA_FIELD,
+    ProgressEvent,
+    runner_starts_background_work,
+    runner_uses_deep_model,
+)
+from hubofhubs.ports.events import EVENT_EXEC, EVENT_MILESTONE, EVENT_STATUS
+from .adapters_values import PlanDecision
 from .deep_model_selection import start_status_text
 from .goal_metrics import GoalMetrics, run_hint, working_dir_of
 from . import launch_failure, usage_limit
 from .goal_runner import cli_safe_model
-from .guard import ExecutionFact, ExecutionRecord, classify_exec_phase
+from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord, classify_exec_phase
 from .planner_context import _is_discovery_obs, _render_gathered
 from .orchestrator_decisions import _truncate_goal, apply_quest_data_ladder_guard
 from .orchestrator_decide_tool import DEFERRED_RUNNER_KEY
@@ -53,7 +59,7 @@ from .orchestrator_text import (
 )
 from .orchestrator_turn import TurnCardCache, _Emitter
 from .requester import requester_from_meta
-from .tools_failure_ledger import (
+from hubofhubs.act.tool_ledger import (
     STUCK_OUTPUT_ALIKE, STUCK_REASON_ALIKE, ToolOutcome, alike, changed_something,
     describe_failure, repeated_failure, unrecovered_failures)
 from .orchestrator_types import OrchestratorResult
@@ -86,7 +92,7 @@ class DeepRunMixin:
         # each have their own focus and assemble for themselves. None = every goal assembles for
         # itself, as before. Either way the assembly is bounded (``bounded_goal_assembly``).
         # ``run_control``: the ``RunControl`` of THIS run (steer, stop, pause; see
-        # ``core/run_control.py``). It is handed to a worker that declares a ``control`` keyword, and
+        # ``hubofhubs.ports.control``). It is handed to a worker that declares a ``control`` keyword, and
         # only on a single-goal run: the subgoals of a fan-out run concurrently, and one control
         # handed to several workers could deliver one message to the wrong one. None = today's
         # behaviour, byte-for-byte.
@@ -670,7 +676,7 @@ class DeepRunMixin:
             verified_not_met = False
             # Verdicts so far that named a tool failure no retry can fix (``tool_failure`` blocker).
             tool_failure_verdicts = 0
-            # The runner's own record of what each tool call answered (``core/tools_failure_ledger``),
+            # The runner's own record of what each tool call answered (``hubofhubs.act.tool_ledger``),
             # read per attempt so a tool that keeps failing is recognised without the verifier's
             # label: ``prior_failures`` are the previous attempt's unrecovered failures, ``prior_gap``
             # its (verdict reason, output) when it fell short.

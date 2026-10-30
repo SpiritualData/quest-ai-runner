@@ -7,8 +7,8 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional
 
 from esoi import implementation
-from .adapters_values import ProgressEvent
-from .adapters_events import (
+from hubofhubs.ports.deep import ProgressEvent, ProgressSink, ProgressSinkBase
+from hubofhubs.ports.events import (
     EVENT_CONTEXT,
     EVENT_DECISION,
     EVENT_DONE,
@@ -19,8 +19,6 @@ from .adapters_events import (
     Mode,
     SURFACING_EVENTS,
 )
-from .adapters_deep import ProgressSink
-from .adapters_bases import ProgressSinkBase
 
 
 # ---------------------------------------------------------------------------

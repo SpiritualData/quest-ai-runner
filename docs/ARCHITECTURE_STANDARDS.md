@@ -45,7 +45,7 @@ The authoritative, checked inventory is `esoi/components.csv` (rendered in
 | `core/model_registry.py` | tier → live top-model id (via a `ModelProvider`) |
 | `core/goal_runner.py` | the `/goal --max-turns` contract (`GoalRunner`, `SubprocessGoalRunner`) |
 | `core/card_filter.py` | LLM card selection + `_extract_json()` fence-stripping helper |
-| `core/guard.py`, `core/inbox.py` | per-turn `ExecutionRecord` (claim honesty is judged in the goal verification); mid-run `InputInbox` |
+| `hubofhubs.act.execution_record`, `core/inbox.py` | per-turn `ExecutionRecord` (claim honesty is judged in the goal verification); mid-run `InputInbox` |
 | `adapters/files_adapter.py` | reference `RetrievalAdapter` over a configured file root |
 | `adapters/cached_db_adapter.py` | reference `RetrievalAdapter` over a live DB with a short-TTL cache |
 | `providers.py` | builds the hub's provider arms (`hubofhubs.models`: Anthropic, Gemini, OpenAI, DeepSeek) and its router from the environment |
@@ -143,7 +143,7 @@ result = provider.answer([{"role": "user", "content": prompt}], model=model)
 `Mode` only selects which `ProgressSink` is wired, and **the sink, never the orchestrator, decides
 what surfaces**. `Mode.LIVE` → `StreamSink` forwards every event; `Mode.BACKGROUND` → `MilestoneSink`
 drops planning/reading/status chatter and forwards only `SURFACING_EVENTS` (result, decision,
-milestone, context, done, tokens). A new event gets an `EVENT_*` constant in `core/adapters_events.py` and a
+milestone, context, done, tokens). A new event gets an `EVENT_*` constant in `hubofhubs/ports/events.py` (the hub's ports) and a
 deliberate choice: in `SURFACING_EVENTS` (always shown) or LIVE-only texture (like `EVENT_EXEC`).
 Never branch the orchestrator on mode for visibility: that policy lives in the sink, once.
 

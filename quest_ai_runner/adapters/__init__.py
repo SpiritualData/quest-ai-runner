@@ -5,17 +5,15 @@ needs into a ``RunnerConfig``. This package is the public import path for them
 (``from quest_ai_runner.adapters import FilesAdapter, CompositeRetrievalAdapter``). Each class says what it is in its own
 module docstring, and ``esoi/COMPONENTS.md`` lists them by role: retrieval (files, remote files, cached DB, Claude
 sessions, Google Chat and Drive, Notion, Quest, MCP, web research), model providers (Anthropic, Gemini, OpenAI, DeepSeek,
-Claude CLI), context assemblers and card stores (file, BM25, vector, hybrid, Qdrant, Quest API), deep runners
-(fast edit, ACP, MCP operation) and the file writer. Optional extras (``bm25``, ``qdrant``) are
+Claude CLI), context assemblers and card stores (file, BM25, vector, hybrid, Qdrant, Quest API), the ACP deep runner
+and the file writer. The fast-edit and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). Optional extras (``bm25``, ``qdrant``) are
 imported behind a guard, so a name whose extra is missing is ``None``.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
 """
 from .acp_deep_runner import AcpConfig, AcpDeepRunner
-from .mcp_client import MCPClient, MCPServerSpec
 from .mcp_retrieval_adapter import MCPRetrievalAdapter
-from .mcp_write_runner import MCPOperationRunner
 from .cached_db_adapter import CachedDbAdapter
 from .provider_web_search_adapter import ProviderWebSearchAdapter
 from hubofhubs.websearch.cache import WebCache, normalize_query
@@ -39,7 +37,6 @@ from hubofhubs.recall.card_repository import (
     card_embed_text,
 )
 from .file_context_store import FileContextStore
-from .fast_edit_runner import FastEditConfig, FastEditRunner
 from .files_adapter import FilesAdapter
 from .remote_files_adapter import RemoteFilesAdapter
 from .private_link_web import PrivateLinkWebResearch

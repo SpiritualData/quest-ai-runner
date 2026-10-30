@@ -1,6 +1,6 @@
 area,seam_solution_id,vendor_terms,code_paths
 agent_harness,run-deep-work,claude-agent-acp;codex;opencode;goose;openhands,quest_ai_runner/core/goal_runner.py;quest_ai_runner/adapters/acp_deep_runner_config.py
-tools_mcp,write-through-mcp,,quest_ai_runner/adapters/mcp_client.py;quest_ai_runner/config_file.py
+tools_mcp,write-through-mcp,,quest_ai_runner/config_file.py
 web_search,search-the-web,serper;brave;tavily;searxng,quest_ai_runner/adapters/web_search_backends.py
 world,gather-evidence,notion;google_chat;openclaw,quest_ai_runner/adapters/notion_adapter.py;quest_ai_runner/adapters/google_drive_adapter.py;quest_ai_runner/adapters/google_chat_adapter.py
 context_assembly,select-context;index-by-meaning,qdrant;bm25;fastembed,quest_ai_runner/adapters/bm25_content_store.py;quest_ai_runner/adapters/qdrant_vector_store.py;quest_ai_runner/adapters/hybrid_context_assembler.py

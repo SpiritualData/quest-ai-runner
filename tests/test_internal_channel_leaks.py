@@ -20,8 +20,8 @@ carry GOAL_CONDITION_SYSTEM; and nothing leaving on EVENT_CONTEXT may quote the 
 """
 from typing import Any, List
 
-from quest_ai_runner.core.adapters_events import EVENT_CONTEXT, EVENT_UNDERSTANDING
-from quest_ai_runner.core.adapters_values import ProgressEvent
+from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_UNDERSTANDING
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.auxiliary_prompts import GOAL_CONDITION_SYSTEM
 from quest_ai_runner.core.orchestrator import (

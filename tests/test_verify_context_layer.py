@@ -27,7 +27,7 @@ All offline: no network, no API key.
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.ports.context import AssembledContext
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     Orchestrator,

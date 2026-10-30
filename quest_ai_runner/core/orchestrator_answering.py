@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .guard import ExecutionRecord
+from hubofhubs.act.execution_record import ExecutionRecord
 from hubofhubs.ports.model import STEP_REPLY, answer_with_reasoning
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .adapters_values import PlanDecision

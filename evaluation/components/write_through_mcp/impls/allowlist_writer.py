@@ -1,6 +1,6 @@
 """CURRENT: the production ``MCPWriteAdapter`` (``adapters/mcp_write_adapter.py``) with a fake MCP client
 injected at the process edge. Zero model calls, zero network."""
-from quest_ai_runner.adapters.mcp_client import MCPServerSpec
+from hubofhubs.act.mcp_client import MCPServerSpec
 from quest_ai_runner.adapters.mcp_write_adapter import MCPWriteAdapter
 from write_through_mcp.fake_mcp import FakeMCPClient
 

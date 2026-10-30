@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..core.orchestrator import OrchestratorResult, _strip_future_context
-from ..core.adapters_values import ProgressEvent
+from hubofhubs.ports.deep import ProgressEvent
 from .context_updates import parse_manifest, parse_usage_notes, render_receipt, strip_usage_block
 from .executor_support import (
     ExecutionOutcome,

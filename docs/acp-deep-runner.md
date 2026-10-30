@@ -7,7 +7,7 @@ session, instead of shelling out to `claude -p` once and parsing the JSON it pri
 
 **This is additive.** `SubprocessGoalRunner` is unchanged and remains the default. Nothing switches
 to ACP unless a consumer explicitly wires it. The brain cannot tell the two apart: both satisfy
-`core.adapters_deep.DeepRunner`, with the same `run_goal` signature, the same `DeepResult`, the same
+`hubofhubs.ports.deep.DeepRunner`, with the same `run_goal` signature, the same `DeepResult`, the same
 `EVENT_EXEC` progress stream, and the same human-fork behaviour.
 
 ## Why it exists: mid-turn steering
@@ -142,7 +142,7 @@ texture, so every existing consumer renders this unchanged.
 | `usage_update` | n/a | accounted as cost on the result, not shown |
 | `user_message_chunk`, `available_commands_update`, `config_option_update`, `session_info_update` | n/a | dropped (our own echo, and startup chatter) |
 
-A tool finishing deliberately does **not** use the phase strings `core/guard.py` treats as terminal
+A tool finishing deliberately does **not** use the phase strings `hubofhubs.act.execution_record` treats as terminal
 (`done` / `completed` / `failed`): a completed `Read` is not a completed subgoal, and reusing those
 would let one tool call mark the whole deep task succeeded. Only the run's own final tick is
 terminal (`done` or `error`).

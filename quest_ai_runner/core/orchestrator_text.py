@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from .adapters_values import DeepResult, FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
+from hubofhubs.ports.deep import DeepResult, FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
 from .auxiliary_prompts import FUTURE_CONTEXT_DELIMITER
 
 

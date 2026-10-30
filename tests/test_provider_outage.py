@@ -20,7 +20,7 @@ import pytest
 
 from hubofhubs.models import outage as provider_outage
 from quest_ai_runner.runner import executor_pauses
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 
 OVERLOADED = "Error code: 529 - overloaded_error: Overloaded"

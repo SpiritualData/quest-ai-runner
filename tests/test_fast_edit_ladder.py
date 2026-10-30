@@ -22,7 +22,8 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.adapters.fast_edit_runner import FastEditRunner
+from hubofhubs.act.fast_edit import FastEditRunner
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.adapters.files_writer import FilesWriter
 from quest_ai_runner.config import (
     RunnerConfig,
@@ -30,7 +31,6 @@ from quest_ai_runner.config import (
     derive_capabilities,
     resolve_deep_runner_ladder,
 )
-from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.goal_runner import SubprocessGoalRunner
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, PlanDecision

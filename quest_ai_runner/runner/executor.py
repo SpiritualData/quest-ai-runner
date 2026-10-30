@@ -29,10 +29,10 @@ from typing import Any, Callable, Dict, List, Optional
 from hubofhubs.models import outage as provider_outage
 
 from ..core import usage_limit
-from ..core.adapters_events import Mode
+from hubofhubs.ports.events import Mode
 from ..core.orchestrator import Orchestrator, OrchestratorResult
 from ..core.requester import requester_from_task
-from ..core.run_control import ControlMessage, RunControl
+from hubofhubs.ports.control import ControlMessage, RunControl
 from ..core.work_model import WorkModelUnavailable, apply_work_model, default_effective, is_tier_word
 
 from .executor_contracts import (

@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Un
 
 
 from hubofhubs.ports.model import ModelProvider
-from .core.adapters_deep import EscalationSink, FileWriter
+from hubofhubs.ports.deep import FileWriter
+from .core.adapters_deep import EscalationSink
 from .core.adapters_guidance import GuidanceProvider
 from .core.adapters_retrieval import RetrievalAdapter
 # Bootstrap algorithm version + meta reader. file_context_store imports only from .core and
@@ -28,8 +29,8 @@ from .core.adapters_retrieval import RetrievalAdapter
 # MCPServerSpec is a plain dataclass with no dependency on .core or .config, so this top-level
 # import (needed for the RunnerConfig.mcp_servers field type) carries no circular-import risk,
 # same discipline as the file_context_store import above. It does NOT require the optional [mcp]
-# package -- mcp_client.py only imports that lazily, inside its own connection seam.
-from .adapters.mcp_client import MCPServerSpec
+# package -- hubofhubs.act.mcp_client only imports that lazily, inside its own connection seam.
+from hubofhubs.act.mcp_client import MCPServerSpec
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .core.resolve import resolve
 from .core.runtime_settings import CoreSettings
@@ -195,7 +196,7 @@ class RunnerConfig:
     # --- adapters (consumer chooses which) ---
     retrieval: Optional[RetrievalAdapter] = None     # FilesAdapter / CachedDbAdapter / a composite
     # Generic MCP (Model Context Protocol) servers to fold into the retrieval stack -- READ-ONLY
-    # foundation phase (see adapters/mcp_client.py + adapters/mcp_retrieval_adapter.py). Each spec
+    # foundation phase (see hubofhubs.act.mcp_client + adapters/mcp_retrieval_adapter.py). Each spec
     # becomes its own namespaced MCPRetrievalAdapter, folded into cfg.retrieval via
     # CompositeRetrievalAdapter by build_orchestrator -- the same fold-in mechanism the native web
     # search adapter uses, not a parallel one. Needs the optional [mcp] extra only if this list is

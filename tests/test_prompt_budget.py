@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from quest_ai_runner.core import goal_runner, goal_runner_session, prompt_budget
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.goal_runner import (SubprocessConfig, SubprocessGoalRunner,
                                               compose_goal_prompt)
 from quest_ai_runner.core.model_registry import ModelRegistry

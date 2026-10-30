@@ -16,7 +16,7 @@ existing retry behaviour, which the last test pins. Fully offline.
 """
 from __future__ import annotations
 
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 

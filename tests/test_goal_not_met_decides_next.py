@@ -6,7 +6,7 @@ The verifier returns a ``blocker`` in the same call it already makes (no extra L
 and asks the one question. Both the task modal and chat tasks end in ``TaskExecutor._report``.
 """
 from quest_ai_runner.core import orchestrator as o
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorResult, PlanDecision
 from quest_ai_runner.runner.executor import TaskExecutor

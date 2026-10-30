@@ -90,7 +90,7 @@ def load_runner_config_file(cls: Type[Any], path: Union[str, "os.PathLike[str]"]
 def mcp_server_specs(tables: Any, path: Any) -> list:
     """``[[mcp_servers]]`` -> ``MCPServerSpec`` list. A table holds the spec's plain-data fields; ``token_env`` names an
     environment variable that holds the bearer token for an http server (the token itself never sits in the file)."""
-    from .adapters.mcp_client import MCPServerSpec
+    from hubofhubs.act.mcp_client import MCPServerSpec
 
     if not isinstance(tables, list) or not all(isinstance(t, dict) for t in tables):
         raise ConfigFileError(f"config file {path}: mcp_servers must be an array of tables ([[mcp_servers]])")

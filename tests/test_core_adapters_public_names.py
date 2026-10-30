@@ -5,16 +5,14 @@ import pytest
 
 PUBLIC_NAMES = {
     "hubofhubs.ports.context": ["AssembledContext", "ConversationContext", "ConversationStore"],
-    "quest_ai_runner.core.adapters_bases": [
-        "DeepRunnerBase", "EscalationSinkBase", "GuidanceProviderBase", "ModelProviderBase", "RetrievalAdapterBase",
-        "runner_starts_background_work", "runner_uses_deep_model",
+    "hubofhubs.ports.deep": [
+        "DeepResult", "DeepRunnerBase", "FUTURE_CONTEXT_VIA_FIELD", "FUTURE_CONTEXT_VIA_OUTPUT", "ProgressEvent",
+        "WRITE_SURFACE_OPERATIONS", "runner_starts_background_work", "runner_uses_deep_model",
     ],
-    "quest_ai_runner.core.adapters_events": ["EVENT_EXEC"],
+    "hubofhubs.ports.events": ["EVENT_EXEC"],
+    "quest_ai_runner.core.adapters_bases": ["EscalationSinkBase", "GuidanceProviderBase", "ModelProviderBase", "RetrievalAdapterBase"],
     "quest_ai_runner.core.adapters_guidance": ["GuidanceCard"],
-    "quest_ai_runner.core.adapters_values": [
-        "DeepResult", "Escalation", "FUTURE_CONTEXT_VIA_FIELD", "FUTURE_CONTEXT_VIA_OUTPUT", "Observation", "ProgressEvent",
-        "WRITE_SURFACE_OPERATIONS",
-    ],
+    "quest_ai_runner.core.adapters_values": ["Escalation", "Observation"],
 }
 
 

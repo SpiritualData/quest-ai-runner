@@ -45,8 +45,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from esoi import implementation
 
 from . import usage_limit
-from .adapters_values import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent
-from .adapters_events import EVENT_EXEC
+from hubofhubs.ports.deep import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent
+from hubofhubs.ports.events import EVENT_EXEC
 from .goal_runner import SubprocessGoalRunner
 from .goal_runner_contract import (
     BALANCED_CLI_MODEL,
@@ -73,7 +73,7 @@ from .goal_runner_session import (
     session_file_size,
     worker_output_is_thin,
 )
-from .run_control import RunControl
+from hubofhubs.ports.control import RunControl
 
 # The first Claude Code release whose stream-json session answers an ``interrupt`` control request
 # with a receipt. Older releases are handed to the one-shot runner.
@@ -423,7 +423,7 @@ class StreamJsonGoalRunner(SubprocessGoalRunner):
 
     Built from the same ``SubprocessConfig`` as the one-shot runner (working directory, binary,
     tools, timeouts, grace for a stop). The extra per-call argument is ``control``, a
-    ``core.run_control.RunControl``; without one the run is the same single prompt, only over a
+    ``hubofhubs.ports.control.RunControl``; without one the run is the same single prompt, only over a
     session that is closed when the model finishes."""
 
     config_class = SubprocessConfig

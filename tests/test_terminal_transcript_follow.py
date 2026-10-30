@@ -21,7 +21,7 @@ from types import SimpleNamespace
 
 from rich.text import Text
 
-from quest_ai_runner.core.adapters_events import EVENT_CONTEXT
+from hubofhubs.ports.events import EVENT_CONTEXT
 from quest_ai_runner.textual_ui import QuestAITerminal
 
 SIZE = (80, 24)

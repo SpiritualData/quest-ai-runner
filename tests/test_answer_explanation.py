@@ -22,8 +22,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from quest_ai_runner.core.adapters_events import EVENT_DONE, EVENT_EXPLANATION, EVENT_RESULT
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
+from hubofhubs.ports.events import EVENT_DONE, EVENT_EXPLANATION, EVENT_RESULT
 from quest_ai_runner.core.answer_explanation import (
     EXPLAIN_PROMPT,
     EXPLANATION_VERSION,

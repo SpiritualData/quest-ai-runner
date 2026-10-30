@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from .adapters_values import LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED
+from hubofhubs.ports.deep import LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED
 
 # The words every runner starts the error of a worker that never started with (``DeepResult.error``).
 LAUNCH_FAILED_PREFIX = "The deep worker could not start"

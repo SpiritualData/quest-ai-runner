@@ -5,7 +5,7 @@ typed in at a terminal." Neither covers a **live conversation over a messaging a
 texting the assistant on their phone and expecting a reply in the same chat. This is that lane:
 a generic `core.adapters_channels.ChannelTransport` interface plus a `runner.channel_runner.ChannelRunner`
 loop, with a reference transport, `adapters.openclaw_channel.OpenClawChannel`, wrapping the
-generic `adapters.mcp_client.MCPClient` to talk to [OpenClaw](https://github.com/openclaw/openclaw)
+generic `hubofhubs.act.mcp_client.MCPClient` to talk to [OpenClaw](https://github.com/openclaw/openclaw)
 (MIT) over MCP.
 
 **This document is two things:**

@@ -1,7 +1,7 @@
 """The fake MCP client for the talk_over_a_channel component: the process edge, nothing else."""
 import json
 
-from quest_ai_runner.adapters.mcp_client import MCPToolResult
+from hubofhubs.act.mcp_client import MCPToolResult
 
 ALLOWED = {"events_wait", "messages_send", "attachments_fetch"}
 

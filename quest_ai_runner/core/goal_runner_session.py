@@ -11,8 +11,8 @@ import time
 from typing import Callable, Dict, List, Optional, Set
 from pathlib import Path
 
-from .adapters_events import EVENT_EXEC, EVENT_STATUS
-from .adapters_values import ProgressEvent
+from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.ports.events import EVENT_EXEC, EVENT_STATUS
 from .runtime_settings import core_settings
 from .goal_runner_contract import DEFAULT_MONITOR_HEARTBEAT_SECONDS, _log
 

@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 
 from .deep_model_selection import DEFAULT_DIFFICULTY_MODELS
 from .planner_prompt import DEFAULT_PLANNER_PROMPT_PROFILE
-from .adapters_values import DeepResult
-from .guard import ExecutionRecord
+from hubofhubs.ports.deep import DeepResult
+from hubofhubs.act.execution_record import ExecutionRecord
 from .orchestrator_constants import (
     AUTO_FOLLOWUP_MAX_RUNS,
     AUTO_FOLLOWUP_TOKEN_BUDGET,

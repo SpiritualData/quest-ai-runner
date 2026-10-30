@@ -5,7 +5,7 @@ Mirrors ``test_fast_edit_ladder.py``'s two claims, for the MCP-write rung:
 1. OPT-IN. A consumer that configures an ``MCPServerSpec`` with no ``writable_tools`` gets no MCP
    write capability anywhere. Write access appears only when a spec's ``writable_tools`` is set.
 
-2. THE GATE. ``MCPWriteAdapter.write_operation`` is investigated (see ``mcp_write_runner.py``'s
+2. THE GATE. ``MCPWriteAdapter.write_operation`` is investigated (see ``hubofhubs.act.mcp_operations``'s
    module docstring) to have exactly ONE reachable caller in this library:
    ``MCPOperationRunner.run_goal``, which itself is reachable ONLY through the orchestrator's
    deep-runner ladder -- i.e. only once the planner has already decided ``action: "deep"``. This
@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.adapters.mcp_client import MCPServerSpec
+from hubofhubs.act.mcp_client import MCPServerSpec
+from hubofhubs.act.mcp_operations import MCPOperationRunner
+from hubofhubs.ports.deep import WriteResult
 from quest_ai_runner.adapters.mcp_write_adapter import MCPWriteAdapter
-from quest_ai_runner.adapters.mcp_write_runner import MCPOperationRunner
 from quest_ai_runner.config import RunnerConfig, build_orchestrator, resolve_mcp_write_runners
-from quest_ai_runner.core.adapters_deep import WriteResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, PlanDecision
 
@@ -114,7 +114,8 @@ def test_plain_answer_turn_never_reaches_write_operation():
     """THE critical proof: driving the REAL orchestrator loop through a plain answer (no 'deep')
     must never call write_operation, even with a write-capable runner sitting in the ladder."""
     writer = FakeWriter()
-    write_runner = MCPOperationRunner(provider=StubProvider([]), writer=writer)
+    runner_provider = StubProvider([])
+    write_runner = MCPOperationRunner(provider=runner_provider, registry=ModelRegistry(runner_provider), writer=writer)
     provider = StubProvider(decisions=[
         {"action": "answer", "model_tier": "sonnet", "rationale": "just answer"},
     ])
@@ -129,7 +130,8 @@ def test_plain_answer_turn_never_reaches_write_operation():
 
 def test_plain_read_turn_never_reaches_write_operation():
     writer = FakeWriter()
-    write_runner = MCPOperationRunner(provider=StubProvider([]), writer=writer)
+    runner_provider = StubProvider([])
+    write_runner = MCPOperationRunner(provider=runner_provider, registry=ModelRegistry(runner_provider), writer=writer)
     provider = StubProvider(decisions=[
         {"action": "read", "reads": [{"rel_path": "README.md"}], "model_tier": "sonnet",
          "rationale": "need the doc"},
@@ -149,8 +151,10 @@ def test_positive_control_deep_action_does_reach_the_write_runner():
     OWN structured "deep" decision) -- proving the ladder genuinely CAN execute a write when the
     real gate is taken, so the negative results above are not just a broken/unreachable runner."""
     writer = FakeWriter()
+    runner_provider = StubProvider([{"operation": "srv:comment", "args": {"body": "hi"}}])
     write_runner = MCPOperationRunner(
-        provider=StubProvider([{"operation": "srv:comment", "args": {"body": "hi"}}]),
+        provider=runner_provider,
+        registry=ModelRegistry(runner_provider),
         writer=writer,
     )
     provider = StubProvider([])

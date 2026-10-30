@@ -11,8 +11,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional
 
-from .adapters_events import Mode
-from .adapters_deep import ProgressSink
+from hubofhubs.ports.events import Mode
+from hubofhubs.ports.deep import ProgressSink
 from .orchestrator_run_answer import RunAnswerMixin
 from .orchestrator_run_begin import RunBeginMixin
 from .orchestrator_run_close import RunCloseMixin
@@ -154,7 +154,7 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
                             Best effort by contract: a runner that cannot resume ignores it, and a
                             session the worker no longer holds degrades to a cold start rather than
                             failing the run. Absent/None means exactly today's behavior.
-        * ``run_control``  -- optional ``core.run_control.RunControl`` for THIS run: the channel a
+        * ``run_control``  -- optional ``hubofhubs.ports.control.RunControl`` for THIS run: the channel a
                             deep worker uses to take steering messages, and to be stopped or
                             paused, while it works. Handed only to a worker that declares a
                             ``control`` keyword and only on a single-goal run. Absent/None means
@@ -262,7 +262,7 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
 
         ``model_hint`` and ``context_meta`` are forwarded to ``run`` unchanged — see ``run`` for
         semantics. So are ``resume_session_id`` and ``run_control`` (the control channel of this
-        run, see ``core/run_control.py``): a live consumer such as the terminal steers, stops
+        run, see ``hubofhubs.ports.control``): a live consumer such as the terminal steers, stops
         and pauses a running deep worker through them. So is ``deep_goal``, which sends the turn
         straight to a deep run (the terminal's ``/resume``). All default to None, which is today's
         behaviour.

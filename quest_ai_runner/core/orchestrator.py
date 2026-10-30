@@ -31,10 +31,11 @@ from typing import Any, Callable, Dict, List, Optional
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.ports.context import ContextAssembler, ConversationStore
 from hubofhubs.ports.model import ModelProvider
-from .adapters_events import EVENT_CONTEXT, EVENT_PARTIAL, Mode
-from .adapters_deep import DeepRunner, EscalationSink
+from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_PARTIAL, Mode
+from hubofhubs.ports.deep import DeepRunner, ProgressEvent
+from .adapters_deep import EscalationSink
 from .adapters_guidance import GuidanceProvider
-from .adapters_values import PlanDecision, ProgressEvent
+from .adapters_values import PlanDecision
 from .adapters_retrieval import RetrievalAdapter
 from .anticipation import Anticipator
 from .inbox import InputInbox

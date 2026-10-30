@@ -32,7 +32,7 @@ optional wall-clock cap.
 
 ## The control channel
 
-`core/run_control.py` defines `RunControl`, handed to one call of `run_goal(..., control=...)`:
+`hubofhubs.ports.control` defines `RunControl`, handed to one call of `run_goal(..., control=...)`:
 
 | Field | Meaning |
 |---|---|

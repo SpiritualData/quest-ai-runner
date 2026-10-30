@@ -10,8 +10,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from .adapters_events import EVENT_OVERSEER
-from .adapters_values import Escalation, PlanDecision, ProgressEvent
+from hubofhubs.ports.events import EVENT_OVERSEER
+from hubofhubs.ports.deep import ProgressEvent
+from .adapters_values import Escalation, PlanDecision
 from .overseer import OverseerSignal, build_digest, oversee
 from .planner_context import _summarize_observation
 from .orchestrator_turn import _Emitter

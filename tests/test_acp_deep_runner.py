@@ -28,11 +28,11 @@ import pytest
 
 from quest_ai_runner.adapters import acp_deep_runner as acp
 from quest_ai_runner.adapters import acp_deep_runner_config as acp_config
-from quest_ai_runner.core.adapters_deep import DeepRunner
-from quest_ai_runner.core.adapters_events import EVENT_EXEC
+from hubofhubs.ports.deep import DeepRunner
+from hubofhubs.ports.events import EVENT_EXEC
 from quest_ai_runner.core.adapters_values import Escalation
 from quest_ai_runner.core.goal_runner import SubprocessGoalRunner
-from quest_ai_runner.core.guard import classify_exec_phase
+from hubofhubs.act.execution_record import classify_exec_phase
 from quest_ai_runner.core.inbox import InMemoryInbox
 
 
@@ -246,7 +246,7 @@ def test_tool_lifecycle_statuses_map_to_tool_phases(status, phase):
 
 
 def test_a_finished_tool_is_not_a_finished_subgoal():
-    """core/guard.py classifies EVENT_EXEC phases; "completed"/"failed" would mark the whole deep
+    """hubofhubs.act.execution_record classifies EVENT_EXEC phases; "completed"/"failed" would mark the whole deep
     task succeeded/failed off ONE tool call. The tool phases must stay non-terminal, and only the
     run's own final tick may be terminal."""
     assert classify_exec_phase(acp.PHASE_TOOL_RESULT) is None

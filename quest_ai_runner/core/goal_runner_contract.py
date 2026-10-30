@@ -13,8 +13,7 @@ import signal
 from typing import Any, Callable, List, Optional, Tuple
 from dataclasses import dataclass
 
-from .adapters_values import DeepResult
-from .adapters_deep import DeepRunner
+from hubofhubs.ports.deep import DeepResult, DeepRunner
 from .runtime_settings import DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS as _DEFAULT_REVIEW_INTERVAL, core_settings
 
 

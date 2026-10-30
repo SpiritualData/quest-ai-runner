@@ -573,9 +573,9 @@
   "id": "API-039",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.vendor.aider_editblock.apply_edit is public",
+  "description": "hubofhubs.act.editblock.apply_edit is public",
   "args": {
-   "module": "quest_ai_runner.vendor.aider_editblock",
+   "module": "hubofhubs.act.editblock",
    "name": "apply_edit"
   },
   "expect": {
@@ -588,9 +588,9 @@
   "id": "API-040",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.vendor.aider_editblock.find_original_update_blocks is public",
+  "description": "hubofhubs.act.editblock.find_original_update_blocks is public",
   "args": {
-   "module": "quest_ai_runner.vendor.aider_editblock",
+   "module": "hubofhubs.act.editblock",
    "name": "find_original_update_blocks"
   },
   "expect": {
@@ -603,9 +603,9 @@
   "id": "API-041",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.vendor.aider_editblock.find_whole_file_blocks is public",
+  "description": "hubofhubs.act.editblock.find_whole_file_blocks is public",
   "args": {
-   "module": "quest_ai_runner.vendor.aider_editblock",
+   "module": "hubofhubs.act.editblock",
    "name": "find_whole_file_blocks"
   },
   "expect": {
@@ -1347,9 +1347,9 @@
   "id": "API-090",
   "area": "offline_import",
   "kind": "offline_import",
-  "description": "quest_ai_runner.vendor.aider_editblock imports with every socket call refusing",
+  "description": "hubofhubs.act.editblock imports with every socket call refusing",
   "args": {
-   "module": "quest_ai_runner.vendor.aider_editblock"
+   "module": "hubofhubs.act.editblock"
   },
   "expect": {
    "eq": {

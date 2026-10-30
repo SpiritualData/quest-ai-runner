@@ -61,8 +61,10 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
+from hubofhubs.act.mcp_client import MCPClient, MCPServerSpec, MCPToolResult
+
 from ..core.adapters_channels import ChannelTransportBase, InboundBatch, InboundMessage, OutboundReply, SendResult
-from .mcp_client import MCPClient, MCPServerSpec, MCPToolResult
+from ..core.runtime_settings import process_environment
 
 _log = logging.getLogger("quest-ai-runner.openclaw-channel")
 
@@ -141,7 +143,7 @@ class OpenClawChannel(ChannelTransportBase):
         # Dependency-injected for tests (see tests/test_openclaw_channel.py): a caller may hand in
         # any object satisfying MCPClient's public surface (call_tool/close). Production callers
         # omit ``client`` and get a real one built from ``config``.
-        self._client = client if client is not None else MCPClient(self._build_spec(config))
+        self._client = client if client is not None else MCPClient(self._build_spec(config), search_path=process_environment().get("PATH"))
 
     @staticmethod
     def _build_spec(config: OpenClawChannelConfig) -> MCPServerSpec:

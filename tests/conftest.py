@@ -10,7 +10,8 @@ from typing import Any, Dict, List
 import pytest
 
 from quest_ai_runner.config import shutdown_background_index
-from quest_ai_runner.core.adapters_values import DeepResult, Escalation, Observation
+from hubofhubs.ports.deep import DeepResult
+from quest_ai_runner.core.adapters_values import Escalation, Observation
 
 
 @pytest.fixture(autouse=True)

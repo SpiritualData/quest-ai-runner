@@ -51,8 +51,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
 from ..core.requester import apply_requester_env
-from ..core.adapters_values import DeepResult, ProgressEvent
-from ..core.adapters_bases import DeepRunnerBase
+from hubofhubs.ports.deep import DeepResult, DeepRunnerBase, ProgressEvent
 from ..core.goal_runner import (
     compose_goal_prompt,
     DEFAULT_MONITOR_HEARTBEAT_SECONDS,

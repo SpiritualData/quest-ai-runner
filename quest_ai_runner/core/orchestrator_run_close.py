@@ -9,8 +9,9 @@ from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
 from .auxiliary_prompts import SUPPORT_REWRITE_STEER
-from .adapters_events import EVENT_INTENT, EVENT_MILESTONE, Mode
-from .adapters_values import PlanDecision, ProgressEvent
+from hubofhubs.ports.events import EVENT_INTENT, EVENT_MILESTONE, Mode
+from hubofhubs.ports.deep import ProgressEvent
+from .adapters_values import PlanDecision
 from .orchestrator_constants import log, result_landed_work
 from .orchestrator_decide_tool import (
     DEFERRED_RUNNER_KEY,

@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator
 from quest_ai_runner.runner.executor import TaskExecutor

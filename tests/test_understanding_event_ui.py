@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List
 
-from quest_ai_runner.core.adapters_events import EVENT_DECISION, EVENT_UNDERSTANDING
+from hubofhubs.ports.events import EVENT_DECISION, EVENT_UNDERSTANDING
 from quest_ai_runner.interactive_session import _DeepRunTracker
 from quest_ai_runner.textual_ui import QuestAITerminal
 

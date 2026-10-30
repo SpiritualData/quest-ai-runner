@@ -339,7 +339,7 @@ class TurnMixin:
             # A terminal phase means this deep task is finished: persist its full
             # output to the scrollback transcript now, so it stays readable after
             # the live deep widgets are gone. Each task leaves a permanent record.
-            from .core.guard import classify_exec_phase
+            from hubofhubs.act.execution_record import classify_exec_phase
             outcome = classify_exec_phase(data.get("phase") if isinstance(data, dict) else None)
             if outcome is not None:
                 self._deep.set_run_status(run_id, "done" if outcome == "success" else "error")

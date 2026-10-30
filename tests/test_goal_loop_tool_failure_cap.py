@@ -6,7 +6,7 @@ fresh worker sessions, each judged "not met" and each on a stronger model, until
 The verifier is scripted (an LLM call); the goal loop and the report are the real ones.
 """
 from quest_ai_runner.core import orchestrator as o
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.orchestrator import PlanDecision
 from quest_ai_runner.runner.executor import TaskExecutor
 from quest_ai_runner.core.orchestrator import OrchestratorResult

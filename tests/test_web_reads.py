@@ -22,12 +22,12 @@ from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.answer_explanation import TurnTrace
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.adapters_events import EVENT_READ
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, decide_tool_for, normalize_decision
 from quest_ai_runner.core.planner_context import _DISCOVERY_SPEC_KEYS, _is_discovery_spec, planner_web_block
 from quest_ai_runner.core.orchestrator_capabilities import describe_read_spec
 from quest_ai_runner.core.reach_judge import verdict_block, WORLD_LINE, WORLD_LINE_WEB
 from hubofhubs.critique.sufficiency import READ_SPEC_KEYS
+from hubofhubs.ports.events import EVENT_READ
 
 from .conftest import StubEscalation, StubProvider, StubRetrieval
 

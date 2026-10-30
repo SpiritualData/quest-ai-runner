@@ -16,7 +16,7 @@ These are the LITERAL published schemas (not reconstructed placeholders), curren
 MCP server's Developer Preview at the time this file was written. If Google revises the published
 schemas later, this fixture may drift from the live server -- it is not re-verified against a real
 connection (this test suite is fully offline by design; see the module docstrings on
-``mcp_client.py`` / ``mcp_retrieval_adapter.py``).
+``hubofhubs.act.mcp_client`` / ``mcp_retrieval_adapter.py``).
 
 READ/WRITE SEPARATION: of the 8 published tools, ``create_file`` and ``copy_file`` are MUTATING
 (create / duplicate a Drive file) and must NEVER be treated as read-only. This file proves that
@@ -35,7 +35,7 @@ from typing import Any, Dict
 
 import pytest
 
-from quest_ai_runner.adapters.mcp_client import MCPToolResult
+from hubofhubs.act.mcp_client import MCPToolResult
 from quest_ai_runner.adapters.mcp_retrieval_adapter import MCPRetrievalAdapter
 from tests.test_mcp_retrieval_adapter import FakeMCPClient, make_adapter, tool
 

@@ -24,8 +24,8 @@ from types import SimpleNamespace
 import pytest
 
 from quest_ai_runner.core import launch_failure, usage_limit
-from quest_ai_runner.core.adapters_values import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED
-from quest_ai_runner.core.adapters_events import EVENT_DECISION, EVENT_EXEC, EVENT_MILESTONE
+from hubofhubs.ports.deep import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED
+from hubofhubs.ports.events import EVENT_DECISION, EVENT_EXEC, EVENT_MILESTONE
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 from quest_ai_runner import textual_ui_outcome as outcome
 from quest_ai_runner import textual_ui_turn

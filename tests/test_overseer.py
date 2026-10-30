@@ -17,9 +17,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters_events import EVENT_OVERSEER, EVENT_PLAN, Mode
+from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.ports.events import EVENT_OVERSEER, EVENT_PLAN, Mode
 from quest_ai_runner.core.adapters_sinks import MilestoneSink
-from quest_ai_runner.core.adapters_values import ProgressEvent
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, _oversee_worth_a_look
 from quest_ai_runner.core.planner_context import _prior_escalation_lines, _recent_conversation_turns

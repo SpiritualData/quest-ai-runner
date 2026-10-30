@@ -128,7 +128,7 @@ shape: see the stub providers in `tests/conftest.py` and `examples/e2e_demo.py`.
 Runs deep, goal-driven work to a checkable done-standard.
 
 ```python
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 
 class MyDeepRunner:
     def run_goal(self, *, goal, brief, model=None, max_turns=None) -> DeepResult:

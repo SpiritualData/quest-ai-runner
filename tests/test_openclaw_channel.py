@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.adapters.mcp_client import MCPToolResult
+from hubofhubs.act.mcp_client import MCPToolResult
 from quest_ai_runner.adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from quest_ai_runner.core.adapters_channels import OutboundReply
 

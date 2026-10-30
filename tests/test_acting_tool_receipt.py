@@ -2,7 +2,7 @@
 from quest_ai_runner.core.orchestrator import Orchestrator
 from quest_ai_runner.core.orchestrator_reads import ACTING_TOOL_ARGS_CHARS
 from quest_ai_runner.core.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
-from quest_ai_runner.core.guard import ExecutionRecord
+from hubofhubs.act.execution_record import ExecutionRecord
 
 from .conftest import StubProvider, StubRetrieval
 from quest_ai_runner.core.model_registry import ModelRegistry

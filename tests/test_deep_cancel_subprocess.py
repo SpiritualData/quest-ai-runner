@@ -24,8 +24,8 @@ from typing import List, Optional
 import pytest
 
 from quest_ai_runner.core import goal_runner_contract
-from quest_ai_runner.core.adapters_values import DeepResult, ProgressEvent
-from quest_ai_runner.core.adapters_events import EVENT_EXEC
+from hubofhubs.ports.deep import DeepResult, ProgressEvent
+from hubofhubs.ports.events import EVENT_EXEC
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.goal_runner_contract import kill_process_group
 from quest_ai_runner.core.model_registry import ModelRegistry

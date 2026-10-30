@@ -89,7 +89,7 @@ def test_verdict_carries_the_flag_and_shows_what_was_read():
 
     provider.plan = plan  # type: ignore[assignment]
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider))
-    from quest_ai_runner.core.guard import ExecutionRecord
+    from hubofhubs.act.execution_record import ExecutionRecord
     gathered = [{"kind": "read", "locator": "notes/sleep.md", "text": "Sleep log: 6 hours a night."}]
     verdict, error = orch._verify_goal(
         "answer", "how do I sleep?", "You sleep 6 hours.", exec_record=ExecutionRecord(),

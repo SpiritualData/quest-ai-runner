@@ -1,5 +1,5 @@
 """The fake MCP client for the write_through_mcp component: the process edge, nothing else."""
-from quest_ai_runner.adapters.mcp_client import MCPToolResult
+from hubofhubs.act.mcp_client import MCPToolResult
 
 
 class FakeMCPClient:

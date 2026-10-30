@@ -14,9 +14,8 @@ from .prompt_specs import PromptSpec, register, render_prompt
 
 from hubofhubs.ports.model import STEP_NARRATION, answer_with_reasoning
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from .adapters_events import EVENT_PARTIAL, EVENT_STATUS, Mode
-from .adapters_values import ProgressEvent
-from .adapters_deep import ProgressSink
+from hubofhubs.ports.events import EVENT_PARTIAL, EVENT_STATUS, Mode
+from hubofhubs.ports.deep import ProgressEvent, ProgressSink
 
 
 class TurnCardCache:

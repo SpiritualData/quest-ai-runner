@@ -19,8 +19,8 @@ import json
 from hubofhubs.recall.conversation_format import compact_message
 from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
 from hubofhubs.ports.context import ConversationContext
-from quest_ai_runner.core.adapters_events import EVENT_UNDERSTANDING, Mode
-from quest_ai_runner.core.adapters_values import ProgressEvent
+from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.ports.events import EVENT_UNDERSTANDING, Mode
 from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator

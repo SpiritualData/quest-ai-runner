@@ -45,7 +45,7 @@ EFFORT_CONFIG_ID = "effort"
 ACP_MODEL_FAMILIES = ("opus", "sonnet", "haiku", "fable")
 
 # EVENT_EXEC ``phase`` values this runner emits. Deliberately distinct from the terminal phases
-# core/guard.py classifies ("done"/"completed"/"failed"/...): a TOOL finishing is not the SUBGOAL
+# hubofhubs.act.execution_record classifies ("done"/"completed"/"failed"/...): a TOOL finishing is not the SUBGOAL
 # finishing, and reusing those strings would let one completed Read mark the whole deep task
 # succeeded. Only the run's own final tick uses a terminal phase.
 PHASE_MESSAGE = "message"

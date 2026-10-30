@@ -5,8 +5,6 @@ adapters/context_card_dedup.py::_dedup_cluster_llm
 adapters/context_card_extraction.py::_discover_areas
 adapters/context_card_extraction.py::_extract_topic_cards
 adapters/context_folder_review.py::_review_folder_batch
-adapters/fast_edit_runner.py::FastEditRunner.run_goal
-adapters/mcp_write_runner.py::MCPOperationRunner.run_goal
 adapters/vector_context_assembler.py::VectorContextAssembler._generate_queries
 adapters/vector_context_assembler.py::VectorContextAssembler._llm_review
 adapters/vector_context_assembler.py::VectorContextAssembler._record_inner

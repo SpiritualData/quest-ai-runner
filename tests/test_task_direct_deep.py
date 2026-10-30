@@ -10,8 +10,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters_values import DeepResult
-from quest_ai_runner.core.adapters_events import Mode
+from hubofhubs.ports.deep import DeepResult
+from hubofhubs.ports.events import Mode
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 from quest_ai_runner.runner.executor_followup import FollowUpMixin

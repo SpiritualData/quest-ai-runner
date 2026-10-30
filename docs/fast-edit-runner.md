@@ -203,7 +203,8 @@ override a choice someone already made explicitly:
 ## Configuration
 
 ```python
-from quest_ai_runner.adapters import FastEditConfig, FastEditRunner, FilesWriter
+from hubofhubs.act.fast_edit import FastEditConfig, FastEditRunner
+from quest_ai_runner.adapters import FilesWriter
 
 FilesWriter(
     root,
@@ -229,17 +230,18 @@ When the orchestrator pins a model for the attempt (the deep model ladder), that
 
 To wire a non-default config, construct the runner yourself and put it in the ladder via
 `RunnerConfig.deep_runner` plus your own composition, or subclass/replace
-`config.resolve_fast_edit_runner`.
+`config.resolve_fast_edit_runner`. The runner itself is the hub's (`hubofhubs.act.fast_edit`, registered there as
+the `act-in-the-world` arm `fast_edit`); QAR keeps the wiring that hands it a writer and a tier resolver.
 
 ---
 
 ## Vendored code and attribution
 
-The SEARCH/REPLACE parsing and matching in `quest_ai_runner/vendor/aider_editblock.py` is a
+The SEARCH/REPLACE parsing and matching in `hubofhubs/act/editblock.py` (the hub repository) is a
 **modified copy** of code from [Aider](https://github.com/Aider-AI/aider), Apache-2.0, taken from
 `aider/coders/editblock_coder.py` and `aider/coders/wholefile_coder.py` at commit `5dc9490b`
-(2026-05-22) and vendored on 2026-08-13. quest-ai-runner is also Apache-2.0, so there is no license
-conflict; the attribution is recorded in this repo's `NOTICE` and in that file's header, which also
+(2026-05-22) and vendored on 2026-08-13 and moved to the hub on 2026-10-30. The hub is also Apache-2.0, so there is no license
+conflict; the attribution is recorded in the hub's `NOTICE` and in that file's header, which also
 lists every modification (Apache-2.0 §4(b)).
 
 It is vendored rather than depended on because Aider has never published that layer as a package,
@@ -259,7 +261,7 @@ whole-file parser ported from `WholeFileCoder.get_edits`.
 ## Tests
 
 - `tests/test_file_write_containment.py`: the security boundary, one case per way out of the root.
-- `tests/test_fast_edit_runner.py`: both wire formats, the indent near-miss, a genuine no-match
+- `tests/test_act_fast_edit.py` (hub repository): both wire formats, the indent near-miss, a genuine no-match
   that must leave the file byte-for-byte unchanged, the allow-list, and declining.
 - `tests/test_fast_edit_ladder.py`: the opt-in wiring and escalation driven through the real
   goal loop.

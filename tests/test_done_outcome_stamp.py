@@ -2,7 +2,7 @@
 the run made a successful mutating call (or a deep goal was verified met) and ``nothing_done`` for an
 answer that only talked. Quest Workflows reads it so a step is not recorded done on a reply like
 "I can send it if you'd like"."""
-from quest_ai_runner.core.guard import ExecutionFact, ExecutionRecord
+from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
 from quest_ai_runner.core.orchestrator_types import OrchestratorResult
 from quest_ai_runner.runner.executor import TaskExecutor
 

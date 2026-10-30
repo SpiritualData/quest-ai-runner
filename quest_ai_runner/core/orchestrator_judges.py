@@ -16,7 +16,7 @@ from .answer_explanation import (
     metric_rule,
     render_record_for_prompt,
 )
-from .guard import ExecutionRecord
+from hubofhubs.act.execution_record import ExecutionRecord
 from .runtime_settings import core_settings
 from .auxiliary_prompts import (
     LANDED_WORK_DENIAL_TOOL,

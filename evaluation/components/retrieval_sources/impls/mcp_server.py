@@ -6,8 +6,8 @@ call, resource read, truncation), not a retrieval algorithm."""
 import contextlib
 import re
 
-from quest_ai_runner.adapters import mcp_client
-from quest_ai_runner.adapters.mcp_client import MCPServerSpec
+from hubofhubs.act import mcp_client
+from hubofhubs.act.mcp_client import MCPServerSpec
 from quest_ai_runner.adapters.mcp_retrieval_adapter import MCPRetrievalAdapter
 
 from retrieval import policy

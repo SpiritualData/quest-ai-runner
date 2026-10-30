@@ -100,7 +100,6 @@
   "default": "live_surface",
   "modules": {
    "__init__": "quest_ai_runner",
-   "aider_editblock": "quest_ai_runner.vendor.aider_editblock",
    "async_bridge": "quest_ai_runner.core.async_bridge"
   }
  },
@@ -274,8 +273,8 @@
   "default": "subprocess",
   "modules": {
    "acp": "quest_ai_runner.adapters.acp_deep_runner",
-   "fast_edit": "quest_ai_runner.adapters.fast_edit_runner",
-   "mcp_write": "quest_ai_runner.adapters.mcp_write_runner",
+   "fast_edit": "quest_ai_runner.config_resolvers",
+   "mcp_write": "quest_ai_runner.config_resolvers",
    "stream_json": "quest_ai_runner.core.goal_runner_stream",
    "subprocess": "quest_ai_runner.core.goal_runner"
   }

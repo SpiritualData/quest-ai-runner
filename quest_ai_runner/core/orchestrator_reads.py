@@ -9,9 +9,10 @@ from typing import Any, Callable, Dict, List, Optional
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from .adapters_events import EVENT_CONTEXT, EVENT_EXEC
-from .adapters_values import Observation, ProgressEvent
-from .guard import ExecutionFact, ExecutionRecord
+from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_EXEC
+from hubofhubs.ports.deep import ProgressEvent
+from .adapters_values import Observation
+from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
 from .tools import ToolContext
 from .planner_context import _is_discovery_spec
 from .orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event

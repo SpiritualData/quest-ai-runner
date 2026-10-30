@@ -15,7 +15,7 @@ The capability detection is exercised generically: the fake store exposes ``upda
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.ports.context import AssembledContext
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.auxiliary_prompts import DEEP_FUTURE_CONTEXT_INSTRUCTION
 from quest_ai_runner.core.orchestrator_constants import DEFAULT_CARD_MERGE_SIMILARITY
@@ -569,7 +569,7 @@ def test_normalize_card_edits_rejects_junk():
 
 import ast
 
-from quest_ai_runner.core.adapters_values import FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
+from hubofhubs.ports.deep import FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
 from quest_ai_runner.core.orchestrator import (
     DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION,
     _deep_future_context,

@@ -123,7 +123,7 @@ def test_a_users_own_request_may_still_reach_the_queue_through_an_escalation():
 
 
 def test_an_empty_escalation_that_filed_a_decision_still_reports_itself():
-    from quest_ai_runner.core.adapters_values import DeepResult
+    from hubofhubs.ports.deep import DeepResult
     from quest_ai_runner.core.orchestrator_decide_tool import own_escalation_adds_nothing
 
     class Res:
@@ -133,7 +133,7 @@ def test_an_empty_escalation_that_filed_a_decision_still_reports_itself():
     Res.deep_results = [DeepResult(met=False, output="")]
     assert own_escalation_adds_nothing(Res()) is True
 
-    from quest_ai_runner.core.guard import ExecutionFact
+    from hubofhubs.act.execution_record import ExecutionFact
 
     class Record:
         facts = [ExecutionFact(goal="old")]

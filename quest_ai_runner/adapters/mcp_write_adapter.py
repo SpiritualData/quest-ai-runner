@@ -39,9 +39,10 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters_bases import OperationWriterBase
-from ..core.adapters_deep import WriteResult
-from .mcp_client import MCPClient, MCPServerSpec
+from hubofhubs.act.mcp_client import MCPClient, MCPServerSpec
+from hubofhubs.ports.deep import OperationWriterBase, WriteResult
+
+from ..core.runtime_settings import process_environment
 
 _log = logging.getLogger("quest-ai-runner.mcp_write_adapter")
 
@@ -85,7 +86,7 @@ class MCPWriteAdapter(OperationWriterBase):
         )
         self._timeout_s = float(timeout_s) if timeout_s is not None else float(spec.timeout_s or 30.0)
         # Injectable for tests; defaults to a real client wired to ``spec``.
-        self._client = client if client is not None else MCPClient(spec)
+        self._client = client if client is not None else MCPClient(spec, search_path=process_environment().get("PATH"))
 
     @property
     def alias(self) -> str:

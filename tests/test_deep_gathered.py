@@ -1,7 +1,7 @@
 """Tests that ``gathered`` is forwarded into ``context_preamble`` for the deep runner."""
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters_values import DeepResult
+from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 

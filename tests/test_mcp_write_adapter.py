@@ -25,9 +25,9 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.adapters.mcp_client import MCPServerSpec, MCPToolResult
+from hubofhubs.act.mcp_client import MCPServerSpec, MCPToolResult
+from hubofhubs.ports.deep import OperationWriter, WriteResult
 from quest_ai_runner.adapters.mcp_write_adapter import MCPWriteAdapter
-from quest_ai_runner.core.adapters_deep import OperationWriter, WriteResult
 
 
 # ---------------------------------------------------------------------------------------------
