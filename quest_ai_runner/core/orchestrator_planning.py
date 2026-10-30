@@ -21,6 +21,8 @@ from .planner_cascade import (
 )
 from .planner_doctrine import SITUATIONAL_PROFILE, planner_situation, situational_template
 from .planner_prompt import (
+    DEEP_FAN_OUT_CONCURRENT,
+    DEEP_FAN_OUT_STAGED,
     DEFERRED_DEEP_INLINE_SEMANTICS,
     DEFERRED_DEEP_QUEUED_SEMANTICS,
     MODEL_TIER_BLOCK,
@@ -160,6 +162,10 @@ class PlanningMixin:
                 tools_offered=self.tools is not None, reach=(reach or {}).get("reach"),
                 asks_change=(reach or {}).get("asks_change"),
                 has_material=bool((context_view or "").strip() or gathered), turn_facts=turn_facts)).text
+        if getattr(self.cfg, "staged_plans", False):
+            # The body says each entry is "a concurrent run"; with staged plans on an entry may be a
+            # sequence (the schema field explains how), so the body must not contradict it.
+            planner_template = planner_template.replace(DEEP_FAN_OUT_CONCURRENT, DEEP_FAN_OUT_STAGED)
         # MODEL TIER DISCIPLINE is only worth its tokens when some wired deep runner actually runs
         # against the ladder it describes (see ``model_tier_doctrine_applies``); otherwise it is
         # dead weight on every planner call (Quest's in-process chat runners never touch it).

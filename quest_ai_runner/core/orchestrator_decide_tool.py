@@ -494,7 +494,15 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
         required = tool["input_schema"].setdefault("required", [])
         if "card_thread" not in required:
             required.append("card_thread")
-    return compact_decide_schema(tool) if compact else tool
+    if not compact:
+        return tool
+    compacted = compact_decide_schema(tool)
+    if staged_plans:
+        # The staged field is the one place the planner learns that an entry may be a sequence and what
+        # run_when means, so its description survives the compact schema (and only when the feature is on).
+        compacted["input_schema"]["properties"]["deep_subtasks"]["description"] = (
+            STAGED_DEEP_SUBTASKS_FIELD["description"])
+    return compacted
 
 
 #: Fields whose description survives the compact schema. Measured 2026-10-06 on the dev half

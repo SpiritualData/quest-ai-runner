@@ -480,6 +480,12 @@ DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtask
 
 """
 
+#: The sentence of ``DEEP_FAN_OUT`` that says every entry is a concurrent run, and what it says instead when
+#: ``OrchestratorConfig.staged_plans`` lets an entry be a sequence. Swapped in only then, so a deployment with
+#: staged plans off pays the same tokens it always did.
+DEEP_FAN_OUT_CONCURRENT = "-- each a concurrent run."
+DEEP_FAN_OUT_STAGED = "-- each a concurrent run, unless it is a LIST: a sequence of steps run in order."
+
 TAIL_FRAME = """\
 {mode_signal_block}{card_thread_block}{rationale_instruction}
 

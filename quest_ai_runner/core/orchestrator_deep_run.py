@@ -30,7 +30,10 @@ from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord, class
 from .planner_context import _is_discovery_obs, _render_gathered
 from .orchestrator_decisions import _truncate_goal, apply_quest_data_ladder_guard
 from .orchestrator_decide_tool import DEFERRED_RUNNER_KEY
-from .orchestrator_staged_plan import count_tasks, is_staged, plan_stages, tasks_in
+from .adapters_deep import StagedPlanRunner
+from .orchestrator_staged_plan import (
+    count_tasks, is_staged, split_plan, step_allows, tasks_flat, tasks_in,
+)
 from .orchestrator_constants import (
     CONTINUE_AFTER_DECISION_NOTE,
     DEEP_CONTINUATION_TURN_MULTIPLIER_CAP,
@@ -69,34 +72,95 @@ from .orchestrator_types import OrchestratorResult
 class DeepRunMixin:
     """Running a deep goal: attempts, continuation, verification and result."""
 
+    def _staged_hand_off_runner(self, flat: List[Dict[str, Any]], plans: List[Any], plan: PlanDecision,
+                                user_message: str, runner_override: Optional[Any]) -> Optional[Any]:
+        """The runner a staged plan is offered to: the one a SINGLE task of it would run on.
+
+        A pinned ``runner_override`` is the caller's own choice. Otherwise the runner is resolved the
+        way ``run_one`` resolves it: the consumer's classifier (when wired) names a runner from the
+        message, the goal and the brief, else the default ladder's last rung. The reserved queue key
+        is never classifier-selectable, so it is not chosen here either. Only a runner satisfying the
+        ``StagedPlanRunner`` port counts; any other (an inline runner that edits quest data in
+        process, say) leaves the plan to the ordinary in-process run, which honours ``run_when``.
+        """
+        if runner_override is not None:
+            return runner_override if isinstance(runner_override, StagedPlanRunner) else None
+        first = (flat or [t for p in plans for stage in p for t in stage])[:1]
+        goal = ((first[0].get("goal") if first else None) or plan.goal or user_message or "").strip()
+        brief = ((first[0].get("brief") if first else None) or goal).strip()
+        chosen: Optional[Any] = None
+        if self.deep_runners and self.deep_runner_classifier is not None:
+            try:
+                key = self.deep_runner_classifier(user_message, goal, brief)
+            except Exception as e:  # noqa: BLE001 -- the classifier failing must never block a run
+                log.warning(f"deep_runner_classifier failed ({e}); the staged plan runs in process")
+                return None
+            if key == DEFERRED_RUNNER_KEY or key not in self.deep_runners:
+                return None
+            chosen = self.deep_runners[key]
+        elif self.deep_runner_ladder:
+            chosen = self.deep_runner_ladder[-1]
+        return chosen if isinstance(chosen, StagedPlanRunner) else None
+
     def _hand_off_staged_plan(self, subtasks: List[Any], plan: PlanDecision, user_message: str,
                               runner_override: Optional[Any], self_initiated: bool,
                               user_ordered: bool) -> Optional[OrchestratorResult]:
-        """Offer a staged plan (core/orchestrator_staged_plan.py) to the runner that can realise it as real stages.
+        """Offer a staged plan (core/orchestrator_staged_plan.py) to a runner that can realise it as real stages.
 
-        The runner is the pinned ``runner_override`` or the consumer's queue runner
-        (``deep_runners[DEFERRED_RUNNER_KEY]``), and only counts if it offers ``run_staged_plan(goal=,
-        stages=)``. None means "run it in process as usual": no such runner, a self-initiated escalation
-        the user did not order (the ordinary path declines those), or the runner handed the plan back.
-        A runner that raises ends the turn with that failure rather than running a half-created plan twice.
+        One plan per top-level SEQUENCE (independent sequences never share a stage), each offered as
+        ``run_staged_plan(goal=, stages=)``; the top-level tasks that stand alone go to the same runner
+        as ordinary goals. The runner is the one a single task would run on (``_staged_hand_off_runner``)
+        and must satisfy ``StagedPlanRunner``; the quest-data brief guard is applied to every task as it
+        is for a single deliberate-choice task. None means "run it in process as usual": no such runner,
+        a self-initiated escalation the user did not order, or the runner handed the FIRST plan back
+        before anything was started. A runner that raises, or hands back a later plan, yields a failed
+        result for it rather than running a half-made plan twice.
         """
-        runner = runner_override if runner_override is not None else self.deep_runners.get(DEFERRED_RUNNER_KEY)
-        offer = getattr(runner, "run_staged_plan", None)
-        if not callable(offer):
+        flat, plans = split_plan(subtasks)
+        runner = self._staged_hand_off_runner(flat, plans, plan, user_message, runner_override)
+        if runner is None or not plans:
             return None
         if self_initiated and not user_ordered and runner_starts_background_work(runner):
             return None
-        stages = plan_stages(subtasks)
-        goal = (plan.goal or "").strip() or user_message
-        goals = [(t.get("goal") or "").strip() or user_message for stage in stages for t in stage]
-        try:
-            res = offer(goal=goal, stages=stages)
-        except Exception as e:  # noqa: BLE001 -- surfaced as a failed hand-off, never re-run in process
-            log.error(f"staged plan hand-off failed: {e}")
-            res = DeepResult(met=False, error=f"{type(e).__name__}: {e}")
-        if res is None:
-            return None
-        return OrchestratorResult(kind="deep", deep_results=[res], goals=goals, rationale=plan.rationale)
+        quest_data = getattr(plan, "deep_target", None) == "quest_data"
+
+        def guarded(brief: Optional[str], goal: str) -> str:
+            text = (brief or "").strip() or goal
+            if quest_data:
+                _ladder, text = apply_quest_data_ladder_guard([runner], text, deliberate_choice=True)
+            return text
+
+        goal_of = lambda t: (t.get("goal") or "").strip() or user_message  # noqa: E731
+        overall = (plan.goal or "").strip() or user_message
+        results: List[DeepResult] = []
+        goals: List[str] = []
+        for number, stages in enumerate(plans):
+            offered = [[{"goal": goal_of(t), "brief": guarded(t.get("brief"), goal_of(t)),
+                         "run_when": t.get("run_when") or "always"} for t in stage] for stage in stages]
+            try:
+                res = runner.run_staged_plan(goal=overall, stages=offered)
+            except Exception as e:  # noqa: BLE001 -- surfaced as a failed hand-off, never re-run in process
+                log.error(f"staged plan hand-off failed: {e}")
+                res = DeepResult(met=False, error=f"{type(e).__name__}: {e}")
+            if res is None:
+                if number == 0:
+                    return None  # nothing was started: the in-process run takes the whole plan
+                res = DeepResult(met=False, error="the runner did not take this part of the plan")
+            results.append(res)
+            goals.extend(goal_of(t) for stage in stages for t in stage)
+        run_goal = getattr(runner, "run_goal", None)
+        for task in flat:
+            goal = goal_of(task)
+            goals.append(goal)
+            if not callable(run_goal):
+                results.append(DeepResult(met=False, error="the runner cannot run a single goal"))
+                continue
+            try:
+                results.append(run_goal(goal=goal, brief=guarded(task.get("brief"), goal)))
+            except Exception as e:  # noqa: BLE001
+                log.error(f"hand-off of a standalone task of a staged plan failed: {e}")
+                results.append(DeepResult(met=False, error=f"{type(e).__name__}: {e}"))
+        return OrchestratorResult(kind="deep", deep_results=results, goals=goals, rationale=plan.rationale)
 
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
                   emit: Optional[_Emitter] = None,
@@ -167,7 +231,7 @@ class DeepRunMixin:
         if cancel_check():
             _cancelled_goals = [
                 (st.get("goal") or "").strip() or user_message
-                for st in (plan.deep_subtasks or [{"goal": plan.goal}])
+                for st in tasks_flat(plan.deep_subtasks or [{"goal": plan.goal}])
             ]
             return OrchestratorResult(kind="cancelled", goals=_cancelled_goals,
                                       rationale=plan.rationale, exit_reason="cancelled")
@@ -197,7 +261,7 @@ class DeepRunMixin:
             # queued deferred hand-off pinning DEFERRED_RUNNER_KEY), so it bypasses this gate:
             # otherwise a consumer that wires ONLY the queue runner would find the deferred path
             # unreachable and the work would silently never be handed off.
-            goals = [(st.get("goal") or "").strip() or user_message for st in subtasks]
+            goals = [(st.get("goal") or "").strip() or user_message for st in tasks_flat(subtasks)]
             # Record each goal as REQUESTED-but-not-executed (neither success nor failure) so the
             # guard knows a re-run is the SAFE remediation here (nothing actually mutated).
             if exec_record is not None:
@@ -1136,22 +1200,41 @@ class DeepRunMixin:
         all_results: List[Optional[DeepResult]] = []
         all_goals: List[str] = []
 
-        def run_sequential_group(group: List[Dict[str, Any]], group_index: int = 0) -> List[Optional[DeepResult]]:
-            """Run tasks in a group sequentially, returning results in order."""
-            results = []
-            for task_num, task in enumerate(group, 1):
-                if isinstance(task, list):
-                    # A step of tasks that run together (staged plans, core/orchestrator_staged_plan.py).
-                    step = [t for t in tasks_in(task)]
-                    with ThreadPoolExecutor(max_workers=min(self.cfg.max_parallel, len(step))) as step_pool:
-                        futs = [step_pool.submit(run_one, t, f"{group_index}.{task_num}.{n}")
-                                for n, t in enumerate(step, 1)]
-                        results.extend(f.result() for f in futs)
-                    all_goals.extend((t.get("goal") or "").strip() or user_message for t in step)
+        def run_sequential_group(group: List[Any], group_index: int = 0) -> List[Optional[DeepResult]]:
+            """Run the steps of a group one after another, returning results in order.
+
+            A step is a task or a list of tasks run together. A task whose ``run_when`` is not met by
+            the step before it (the last step that ran something) is not run, so the two branches of
+            a condition never both run; a skipped task is told to the person, not silently dropped.
+            """
+            results: List[Optional[DeepResult]] = []
+            previous: Optional[List[Optional[DeepResult]]] = None
+            for task_num, step in enumerate(group, 1):
+                if previous is not None and cancel_check():
+                    break
+                tasks = tasks_in(step) if isinstance(step, list) else [step]
+                to_run = []
+                for t in tasks:
+                    if step_allows(t.get("run_when"), previous):
+                        to_run.append(t)
+                    else:
+                        skipped = (t.get("goal") or "").strip() or user_message
+                        log.info(f"staged plan: not running {skipped!r}: its run_when {t.get('run_when')!r} "
+                                 "is not met by the step before it")
+                        if emit is not None:
+                            emit.status(sentence(f"Skipping a step whose condition was not met: {ellipsize(skipped, 60)}"))
+                if not to_run:
                     continue
-                res = run_one(task, task_index=f"{group_index}.{task_num}")
-                results.append(res)
-                all_goals.append((task.get("goal") or "").strip() or user_message)
+                if len(to_run) == 1:
+                    step_results = [run_one(to_run[0], task_index=f"{group_index}.{task_num}")]
+                else:
+                    with ThreadPoolExecutor(max_workers=min(self.cfg.max_parallel, len(to_run))) as step_pool:
+                        futs = [step_pool.submit(run_one, t, f"{group_index}.{task_num}.{n}")
+                                for n, t in enumerate(to_run, 1)]
+                        step_results = [f.result() for f in futs]
+                results.extend(step_results)
+                previous = step_results
+                all_goals.extend((t.get("goal") or "").strip() or user_message for t in to_run)
             return results
 
         # If only flat tasks (no groups), run all in parallel
