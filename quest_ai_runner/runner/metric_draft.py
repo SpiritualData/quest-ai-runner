@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from hubofhubs.ports.model import STEP_SUMMARIZE, plan_with_step
 from ..core.prompt_specs import PromptSpec, register, render_prompt
 from ..core.tools import ToolContext
+from ..core.tools_status import ACCEPTED_STATUSES
 from ..core.tools_metric_values import get_metric_card_spec, propose_metric_value_spec
 
 SOURCE = "metric_values"
@@ -137,7 +138,7 @@ class MetricDraft:
             "collection_id": collection, "values": draft["values"], "evidence": draft["evidence"],
             "confidence": draft.get("confidence") or "medium", "confidence_reason": draft.get("confidence_reason") or "",
             "could_not_see": draft.get("could_not_see") or "", "period_start": (card.get("period") or {}).get("start")}, ctx)
-        if not sent.ok:
+        if sent.status not in ACCEPTED_STATUSES:
             return {"status": "failed", "text": sent.text}
         decision = (sent.data or {}).get("decisionId") if isinstance(sent.data, dict) else None
         return {"status": "proposed", "text": f"Proposed a value for the person to confirm ({decision}).", "decision_id": decision}

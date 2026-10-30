@@ -31,6 +31,14 @@ class ToolStatus(str, Enum):
 #: Statuses whose end state holds.
 DONE_STATUSES = frozenset({ToolStatus.APPLIED, ToolStatus.NOOP})
 
+#: Statuses where the request reached Quest and was taken (nothing to retry, nothing went wrong): the end state holds, or
+#: it is held for a person. A caller that only asks "was my request accepted?" tests this, so a held proposal is not a failure.
+ACCEPTED_STATUSES = frozenset({ToolStatus.APPLIED, ToolStatus.NOOP, ToolStatus.HELD})
+
+#: Statuses whose write must never be sent again by the runner on its own: it was applied, was already so, is waiting
+#: for a person, or MAY have happened (sent, no answer).
+SETTLED_STATUSES = frozenset({ToolStatus.APPLIED, ToolStatus.NOOP, ToolStatus.HELD, ToolStatus.UNKNOWN})
+
 #: The word a receipt line carries for each status (the first word after ``TOOL <name>``).
 RECEIPT_WORDS = {
     ToolStatus.APPLIED: "SUCCEEDED",
