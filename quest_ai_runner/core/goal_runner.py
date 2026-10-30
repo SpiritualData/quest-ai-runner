@@ -224,7 +224,7 @@ class SubprocessGoalRunner(DeepRunner):
                                      working_dir=working_dir, resume_session_id=resume_session_id,
                                      requester_user_id=requester_user_id,
                                      cancel_check=cancel_check)
-        except Exception as e:  # noqa: BLE001 — the DeepRunner port never raises (hubofhubs.ports.deep)
+        except Exception as e:  # noqa: BLE001 -- the DeepRunner port never raises (hubofhubs.ports.deep)
             _log.error("deep worker failed unexpectedly: %s: %s", type(e).__name__, e, exc_info=True)
             return DeepResult(met=False, error=f"The deep worker failed unexpectedly: {type(e).__name__}: {e}")
         if res.resolved_model is None and res.session_id:
