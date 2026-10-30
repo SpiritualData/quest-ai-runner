@@ -29,7 +29,7 @@ from ..core.vector_scopes import CARD_SEED_SCOPE
 from hubofhubs.recall import card_origin
 from hubofhubs.recall import card_store_identity as ident
 from hubofhubs.recall.card_repository import FilesystemCardRepository
-from .card_store_merge import item_id
+from hubofhubs.recall.card_store_merge import item_id
 from .quest_api_card_repository import BULK_MAX_CARDS, runner_env_id, strip_server_owned
 
 REASON_IMPORTED = "namespaced copy-import: the source store uploads them"

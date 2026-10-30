@@ -426,9 +426,9 @@ def _resolve_context_assembler_base(
             query_model = registry.resolve_tier("fast")
             # MOUNT MODE: the card arm may only see points of the stores this lane actually reads
             # (its own plus its readable mounts). The vector server answers anyone who can reach
-            # it, so this payload filter is the fence; see adapters/card_store_mounts.py.
+            # it, so this payload filter is the fence; see adapters/card_store_fence.py.
             if getattr(keyword, "mounts_enabled", False):
-                from .adapters.card_store_mounts import StoreFencedVectorStore
+                from .adapters.card_store_fence import StoreFencedVectorStore
                 vector_store = StoreFencedVectorStore(
                     vector_store, keyword,
                     vector_space=(os.getenv("QAR_VECTOR_SPACE") or "").strip())

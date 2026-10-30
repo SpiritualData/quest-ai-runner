@@ -13,12 +13,13 @@ from typing import Optional
 from hubofhubs.recall.card_limit import parse_max_cards
 from hubofhubs.recall.context_bootstrap_support import bootstrap_workers as hub_bootstrap_workers
 from hubofhubs.recall.context_bootstrap_support import flag_enabled, optional_positive_int
+from hubofhubs.recall.card_store_mounts import parse_mount_mode
 from hubofhubs.recall.context_card_ceilings import _MAX_CARDS_PER_FOLDER_DEFAULT, positive_int
 
 from .walk_settings import STORE_DIR_NAME, skip_dirs_from_env
 
 __all__ = [
-    "ENV_MAX_CARDS", "STORE_DIR_NAME", "bootstrap_max_cards", "bootstrap_max_files", "bootstrap_workers", "folder_review_enabled",
+    "ENV_MAX_CARDS", "STORE_DIR_NAME", "bootstrap_max_cards", "card_mount_mode", "bootstrap_max_files", "bootstrap_workers", "folder_review_enabled",
     "max_cards_from_env", "max_cards_per_folder", "prune_dead_cards", "skip_dirs_from_env", "skip_nested_repos",
 ]
 
@@ -28,6 +29,11 @@ ENV_MAX_CARDS = "QAR_MAX_CARDS"
 def max_cards_from_env(env: Optional[dict] = None) -> int:
     """The configured card limit: ``QAR_MAX_CARDS``, else 1,000. ``0`` means no limit. Never raises."""
     return parse_max_cards((os.environ if env is None else env).get(ENV_MAX_CARDS), ENV_MAX_CARDS)
+
+
+def card_mount_mode(env: Optional[dict] = None) -> str:
+    """``QAR_CARD_MOUNT``: ``mount`` (read allowed stores in place) or ``copy`` (the legacy copy-import; the default)."""
+    return parse_mount_mode((os.environ if env is None else env).get("QAR_CARD_MOUNT"))
 
 
 def bootstrap_workers() -> int:

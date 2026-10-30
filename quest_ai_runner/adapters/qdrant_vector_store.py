@@ -105,6 +105,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from esoi import implementation
 from hubofhubs.ports.context import VectorHit
+from hubofhubs.recall.card_store_merge import PointMove
 from ..core.adapters_bases import VectorStoreBase
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from .qdrant_embedders import embed_batch_size, embed_max_chars, FASTEMBED_EMBEDDER_ID
@@ -125,15 +126,6 @@ _SCOPE_KEY = "_scope"
 # embedding its own copy. Points without it (task associations, points not yet tagged) are
 # store-agnostic and stay visible to every search.
 _STORE_KEY = "store_id"
-
-
-@dataclass(frozen=True)
-class PointMove:
-    """One card point to relabel for a store merge (see ``relabel_points``)."""
-    old_item_id: str
-    new_item_id: str
-    store_id: str
-    paths: Tuple[str, ...]
 
 
 def _scope_hash(scope: Optional[Dict[str, Any]]) -> Optional[str]:

@@ -150,7 +150,8 @@ import re
 
 import pytest
 
-from quest_ai_runner.adapters import card_store_mounts as mounts
+from hubofhubs.recall import card_store_mounts as mounts
+from quest_ai_runner.adapters import card_store_migrate as migrate
 from quest_ai_runner.adapters import context_risk_gate as gate_mod
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from tests.test_card_store_mounts import card, make_owner, reader_store
@@ -325,8 +326,8 @@ def test_discovery_does_not_enter_a_turned_away_folder(tmp_path, monkeypatch):
     cards = tmp_path / "cards_elsewhere"
     gate = gate_mod.folder_gate(tmp_path, set(), None, None, cards)
     assert "backups" in gate.blocked
-    assert mounts.discover_nested_stores(tmp_path, cards, set(), gate) == []
-    assert len(mounts.discover_nested_stores(tmp_path, cards, set())) == len(DATES)
+    assert mounts.discover_nested_stores(tmp_path, cards, set(), gate, store_dir_name=".quest-context") == []
+    assert len(mounts.discover_nested_stores(tmp_path, cards, set(), store_dir_name=".quest-context")) == len(DATES)
     assert _store(tmp_path)._discover_nested_card_dirs(tmp_path, set(), gate) == []
 
 
@@ -335,7 +336,7 @@ def test_migrate_imports_report_names_the_blocked_folder_and_writes_nothing(tmp_
     _series_corpus(tmp_path)
     cards = make_owner(tmp_path, [card("own", ["live/real.py", "live/real2.py"])])
     before = sorted(p.name for p in cards.iterdir())
-    plan = mounts.plan_migrate_imports(str(cards), str(tmp_path))
+    plan = migrate.plan_migrate_imports(str(cards), str(tmp_path))
     assert [d for d, _ in plan.risk_blocked] == ["backups"]
     assert plan.mounts == [] and "RISK, NOT READ backups" in plan.render()
     assert sorted(p.name for p in cards.iterdir()) == before

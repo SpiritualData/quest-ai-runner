@@ -18,8 +18,10 @@ pytest.importorskip("qdrant_client")
 
 from quest_ai_runner import store_cli  # noqa: E402
 from hubofhubs.recall import card_store_identity as ident  # noqa: E402
+from hubofhubs.recall import card_store_merge as hub_merge  # noqa: E402
 from quest_ai_runner.adapters import card_store_merge as merge  # noqa: E402
-from quest_ai_runner.adapters import card_store_mounts as mounts  # noqa: E402
+from hubofhubs.recall import card_store_mounts as mounts
+from quest_ai_runner.adapters import card_store_fence as fence  # noqa: E402
 from quest_ai_runner.adapters import card_store_vectors as vectors  # noqa: E402
 from hubofhubs.recall.card_repository import FilesystemCardRepository  # noqa: E402
 from quest_ai_runner.adapters.file_context_store import FileContextStore  # noqa: E402
@@ -182,7 +184,7 @@ class TestMergeCards:
         sid = ident.store_id_of(str(narrow))
         plan = merge.plan_merge(str(narrow), str(wide))
         assert plan.count("renamed") == 1 and "collision alpha: renamed" in plan.render()
-        renamed = merge.renamed_id("alpha", sid)
+        renamed = hub_merge.renamed_id("alpha", sid)
         merge.apply_merge(str(narrow), str(wide))
         cards = cards_in(wide)
         assert cards["alpha"]["summary"] == "wide alpha", "the wide card is never overwritten"
@@ -211,11 +213,11 @@ class TestMergeCards:
         meta = ident.read_meta(str(narrow))
         assert meta["merged_into"]["store_id"] == wide_sid and meta["store_id"]
         assert ident.is_merged(str(narrow))
-        assert mounts.claims_subtree(top / "sub") is False
-        assert mounts.claims_subtree(top) is True
+        assert mounts.claims_subtree(top / "sub", ".quest-context") is False
+        assert mounts.claims_subtree(top, ".quest-context") is True
         # a reader above both sees the wide store only
         reader_root = top.parent
-        found = mounts.discover_nested_stores(reader_root, reader_root / ".quest-context", set())
+        found = mounts.discover_nested_stores(reader_root, reader_root / ".quest-context", set(), store_dir_name=".quest-context")
         assert found == [top]
         assert ident.check_readable(str(narrow)).allowed is False
         again = merge.apply_merge(str(narrow), str(wide), prune_source_after=True)
@@ -497,7 +499,7 @@ class RemoteSetup:
         self.opened: List[Any] = []
         self.reader = reader_store(self.wide)
         self.reader.bootstrap(root=str(self.wide))
-        self.fenced = mounts.StoreFencedVectorStore(self.private, self.reader, reader_factory=self.factory)
+        self.fenced = fence.StoreFencedVectorStore(self.private, self.reader, reader_factory=self.factory)
 
     def factory(self, location, prefix):
         self.opened.append((location, prefix))
@@ -541,7 +543,7 @@ class TestRemoteMountVectors:
         own_card = card("mine", ["m.py"], summary="my own billing notes")
         FilesystemCardRepository(str(s.wide / ".quest-context")).write("mine", own_card)
         s.reader = reader_store(s.wide)
-        s.fenced = mounts.StoreFencedVectorStore(s.private, s.reader, reader_factory=s.factory)
+        s.fenced = fence.StoreFencedVectorStore(s.private, s.reader, reader_factory=s.factory)
         assert seed(s.private, s.reader) == 1
         hits = s.fenced.search("alpha billing", top_k=5)
         assert len(hits) == 3

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Set
 from pathlib import Path
 
 from hubofhubs.recall import card_origin
-from .card_store_mounts import MODE_MOUNT
+from hubofhubs.recall.card_store_mounts import MODE_MOUNT
 from hubofhubs.recall.background_pacing import Pacer
 from hubofhubs.recall.card_content_render import tokenize as _tokenize
 from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames

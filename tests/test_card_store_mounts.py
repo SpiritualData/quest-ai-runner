@@ -24,7 +24,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from hubofhubs.recall import card_store_identity as ident
-from quest_ai_runner.adapters import card_store_mounts as mounts
+from quest_ai_runner.adapters import card_store_fence as fence
+from quest_ai_runner.adapters import card_store_migrate as migrate
 from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore, _write_bootstrap_meta
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
@@ -399,7 +400,7 @@ class TestMigrateImports:
     def test_dry_run_reports_and_writes_nothing(self, tmp_path):
         wide, owner_dir, copies = self._copy_mode_reader_with_copies(tmp_path)
         before = snapshot(wide / ".quest-context")
-        plan = mounts.plan_migrate_imports(str(wide / ".quest-context"), None)
+        plan = migrate.plan_migrate_imports(str(wide / ".quest-context"), None)
         assert plan.copies == copies and len(plan.mounts) == 1 and not plan.problems
         assert plan.orphan_point_ids == [f"card:{plan.own_store_id}:{copies[0]}"]
         assert "dry run" in plan.render()
@@ -407,8 +408,8 @@ class TestMigrateImports:
 
     def test_apply_turns_copies_into_a_mount_without_losing_the_card(self, tmp_path):
         wide, owner_dir, copies = self._copy_mode_reader_with_copies(tmp_path)
-        plan = mounts.plan_migrate_imports(str(wide / ".quest-context"), None)
-        done = mounts.apply_migrate_imports(plan)
+        plan = migrate.plan_migrate_imports(str(wide / ".quest-context"), None)
+        done = migrate.apply_migrate_imports(plan)
         assert done.applied
         assert not (wide / ".quest-context" / f"{copies[0]}.json").exists()
         meta = ident.read_meta(str(wide / ".quest-context"))
@@ -424,7 +425,7 @@ class TestMigrateImports:
         wide, owner_dir, copies = self._copy_mode_reader_with_copies(tmp_path)
         os.chmod(owner_dir, 0o000)
         try:
-            plan = mounts.plan_migrate_imports(str(wide / ".quest-context"), None)
+            plan = migrate.plan_migrate_imports(str(wide / ".quest-context"), None)
             assert plan.copies == [] and [c for c, _ in plan.kept_copies] == copies
             assert plan.refused
         finally:
@@ -515,7 +516,7 @@ class TestVectorMounting:
 
         sid = ident.store_id_of(str(shared / "proj" / ".quest-context"))
         for reader, expected_path in ((above, "proj/sub/a.py"), (inside, "a.py")):
-            hits = mounts.StoreFencedVectorStore(store, reader).search("alpha billing", top_k=5)
+            hits = fence.StoreFencedVectorStore(store, reader).search("alpha billing", top_k=5)
             assert {h.id for h in hits} == {f"card:{sid}:alpha", f"card:{sid}:beta"}
             alpha = next(h for h in hits if h.id.endswith(":alpha"))
             assert alpha.payload["paths"] == [expected_path], "paths are rebased at read time"
@@ -531,7 +532,7 @@ class TestVectorMounting:
         wide = tmp_path / "w"
         reader = reader_store(wide)
         reader.bootstrap(root=str(wide))
-        fenced = mounts.StoreFencedVectorStore(store, reader)
+        fenced = fence.StoreFencedVectorStore(store, reader)
         found = fenced.search("secret card visible card", top_k=10)
         texts = " ".join(h.text for h in found)
         assert "visible" in texts and "secret" not in texts
@@ -548,7 +549,7 @@ class TestVectorMounting:
         store.sync([legacy_item], scope=CARD_SEED_SCOPE)
         reader = reader_store(wide)
         reader.bootstrap(root=str(wide))
-        fenced = mounts.StoreFencedVectorStore(store, reader)
+        fenced = fence.StoreFencedVectorStore(store, reader)
         assert not [h for h in fenced.search("orphan legacy text", top_k=5) if "orphan" in h.id]
 
     def test_sync_stamps_an_existing_point_with_its_store_without_re_embedding(self, tmp_path, qdrant):
@@ -578,7 +579,7 @@ class TestVectorMounting:
                              auto_bootstrap=False, mount_mode="mount")
         b = FileContextStore(str(lane_b / ".quest-context"), repo_root=str(lane_b),
                              auto_bootstrap=False, mount_mode="mount")
-        fa, fb = mounts.StoreFencedVectorStore(store, a), mounts.StoreFencedVectorStore(store, b)
+        fa, fb = fence.StoreFencedVectorStore(store, a), fence.StoreFencedVectorStore(store, b)
         fa.upsert([{"id": "assoc:quarterly", "text": "quarterly budget review task",
                     "payload": {"task": "quarterly budget review", "paths": ["a.py"]}}])
         # an association written before the fence existed: no store id on it
@@ -588,7 +589,7 @@ class TestVectorMounting:
         assert fb.search("quarterly budget review task", top_k=10) == [], \
             "another lane's task memory is not served through a shared server"
         assert not [h for h in fb.search("legacy budget review task", top_k=10) if h.id == "assoc:legacy"]
-        opted_in = mounts.StoreFencedVectorStore(store, b, include_unattributed=True)
+        opted_in = fence.StoreFencedVectorStore(store, b, include_unattributed=True)
         assert "assoc:legacy" in {h.id for h in opted_in.search("legacy budget review task", top_k=10)}
 
     def test_a_reader_cannot_write_vector_items_for_a_mounted_store(self, tmp_path, qdrant):
@@ -598,7 +599,7 @@ class TestVectorMounting:
         reader = reader_store(wide)
         reader.bootstrap(root=str(wide))
         sid = ident.store_id_of(str(wide / "proj" / ".quest-context"))
-        fenced = mounts.StoreFencedVectorStore(store, reader)
+        fenced = fence.StoreFencedVectorStore(store, reader)
         forged = {"id": f"card:{sid}:forged", "text": "forged", "payload": {"store_id": sid},
                   "fingerprint": "x"}
         assert fenced.sync([forged], scope=CARD_SEED_SCOPE) == 0
@@ -626,10 +627,10 @@ class TestVectorMounting:
                                   auto_bootstrap=False, mount_mode="copy")
         copier.bootstrap(root=str(wide))
         assert seed(store, copier) == 1, "the old behaviour embedded the copy"
-        plan = mounts.plan_migrate_imports(str(wide / ".quest-context"), None, vector_store=store)
+        plan = migrate.plan_migrate_imports(str(wide / ".quest-context"), None, vector_store=store)
         assert plan.orphans_checked and len(plan.orphan_point_ids) == 1
         assert point_count(store) == 1, "a dry run deletes nothing"
-        done = mounts.apply_migrate_imports(plan, prune_points=True, vector_store=store)
+        done = migrate.apply_migrate_imports(plan, prune_points=True, vector_store=store)
         assert done.pruned_points == 1 and point_count(store) == 0
 
 

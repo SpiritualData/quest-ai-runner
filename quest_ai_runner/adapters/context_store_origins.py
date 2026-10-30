@@ -12,7 +12,7 @@ from pathlib import Path
 from hubofhubs.recall.card_store_lock import StoreLock
 
 NOT_PREPARED = object()      # ``_store_write`` was not told which cold cards may move out: it looks
-from .card_store_mounts import MODE_MOUNT, Mount
+from hubofhubs.recall.card_store_mounts import MODE_MOUNT, Mount
 from hubofhubs.recall.card_store_identity import ORIGIN_FIELD, read_meta as read_store_meta, writer_origins
 from hubofhubs.recall.context_bootstrap_support import _card_file_paths
 

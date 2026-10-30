@@ -144,7 +144,7 @@ and, after a merge, `merged_from` (on the wide store) or `merged_into` (on the s
 only the bootstrap keys and carries these through; it never moves a recorded root.
 
 **Mount instead of copy.** With `QAR_CARD_MOUNT=mount` a corpus that contains (or sits inside) other
-stores reads them in place and read-only (`card_store_mounts.py`):
+stores reads them in place and read-only (`hubofhubs.recall.card_store_mounts`):
 
 - A mounted card appears as `"<store_id>:<card_id>"`. Its paths are resolved against the two real
   roots at read time (`rebase_path`), so an ancestor's `lane/a.py` is the reader's `a.py`, and a path

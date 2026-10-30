@@ -225,7 +225,7 @@ def vector_location_from_args(args):
 def run(argv: List[str]) -> int:
     args = build_parser().parse_args(argv[1:])
     from hubofhubs.recall import card_store_identity as ident
-    from .adapters import card_store_mounts as mounts
+    from .adapters import card_store_migrate as mounts
 
     if args.op == "upload":
         return run_upload(args)

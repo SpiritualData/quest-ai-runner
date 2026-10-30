@@ -60,7 +60,8 @@ from hubofhubs.recall.card_content_render import (
 from hubofhubs.recall import card_limit as card_limit_policy
 from hubofhubs.recall.card_repository import CardRepository, FilesystemCardRepository
 from .card_limit_report import announce_full
-from .card_store_mounts import MODE_MOUNT, Mount, MountedCardRepository, mount_mode_from_env
+from hubofhubs.recall.card_store_mounts import MODE_MOUNT, Mount, MountedCardRepository
+from .card_store_settings import card_mount_mode
 
 from hubofhubs.recall.context_bootstrap_support import (
     _BOOTSTRAP_META_FILE,
@@ -209,13 +210,13 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         self._injected_repo: bool = card_repository is not None
         self._origin_cache: Optional[Tuple[str, Set[str]]] = None
         self._repo_root = Path(repo_root).resolve() if repo_root else None
-        # STORE MOUNTING (see card_store_mounts). In ``mount`` mode a corpus reads the bootstrapped
+        # STORE MOUNTING (see hubofhubs.recall.card_store_mounts). In ``mount`` mode a corpus reads the bootstrapped
         # stores around it IN PLACE and read-only, instead of copying their cards under new ids.
         # ``copy`` (the default, QAR_CARD_MOUNT) is the legacy copy-import, so a deployment changes
         # nothing until it opts in. ``_own_repo`` is the only thing this store ever writes to;
         # ``_repo`` additionally serves the mounted views (and refuses writes addressed to them).
         self._own_repo: CardRepository = self._repo
-        self._mount_mode = (mount_mode or mount_mode_from_env()).strip().lower()
+        self._mount_mode = (mount_mode or card_mount_mode()).strip().lower()
         mount_unavailable = False
         if self._mount_mode == MODE_MOUNT and card_repository is not None:
             # Expected under the Quest card backend (cards are remote, there is nothing to mount):

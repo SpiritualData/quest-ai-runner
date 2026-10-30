@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
 from hubofhubs.recall.card_repository import FilesystemCardRepository
-from .card_store_mounts import MODE_MOUNT, resolve_mounts
+from hubofhubs.recall.card_store_mounts import MODE_MOUNT, resolve_mounts
 from hubofhubs.recall.card_content_render import MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_CHARS
 from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames, skip_subtrees
 from .card_store_settings import STORE_DIR_NAME, max_cards_per_folder
@@ -800,7 +800,7 @@ class BootstrapMixin:
         # mounted, and the walk below is handed the very same decision.
         skip_dirs = effective_skip_dirs(walk_root)
         gate = folder_gate(walk_root, skip_dirs, provider, model, self._cards_dir)
-        outcome = resolve_mounts(str(self._cards_dir), walk_root, skip_dirs, gate=gate)
+        outcome = resolve_mounts(str(self._cards_dir), walk_root, skip_dirs, gate=gate, store_dir_name=STORE_DIR_NAME)
         if not self._dry_run and outcome.mounts and not read_store_meta(str(self._cards_dir)):
             # A corpus that mounts stores is itself a store with an identity, even before it has a
             # card of its own: record it, so its mounts (and its own cards, later) have a home.
