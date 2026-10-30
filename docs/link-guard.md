@@ -4,7 +4,7 @@ A model writes a URL that reads perfectly and does not exist. That is not a rare
 language models do when a plausible address is easier to produce than a real one. The cost lands on
 the reader, who taps it, gets nothing, and then stops trusting the links that *were* real.
 
-The link guard (`quest_ai_runner/core/link_guard.py`) closes that. Every terminal reply is scanned
+The link guard (`hubofhubs.critique.link_guard`, in the hub) closes that. Every terminal reply is scanned
 before it is emitted, and no link that could not be verified reaches the reader.
 
 ## Where it runs
@@ -138,7 +138,7 @@ Two environment variables (both read in `cli.py`'s `_config_from_env`, both also
   HTTP status proves nothing there.
 - **`trusted_hosts`**: accepted without a network call. Every entry is a promise nobody re-checks,
   so keep it short (slow, rate-limited, or HEAD-hostile hosts you know are good).
-- **`allowed_schemes`**: in-app pseudo-schemes your renderer handles itself. Never fetched.
+- **`allowed_schemes`**: in-app pseudo-schemes your renderer handles itself. Never fetched. The hub allows none by default; QAR passes `app-task` as the default for a policy file that names none (`core/orchestrator_judges.py`), and a policy built in code lists its own.
 - **`rewrites`**: `(regex, replacement)` pairs applied BEFORE judging. This is how a known-wrong
   address the model keeps writing becomes the right one instead of merely being deleted.
 

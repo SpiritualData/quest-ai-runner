@@ -8,7 +8,7 @@ here, so existing imports keep working.
 import re
 from typing import Any, Dict, List, Optional
 
-from .link_detect import MAX_LISTED_LINKS, links_in_message
+from hubofhubs.critique.link_detect import MAX_LISTED_LINKS, links_in_message
 from .planner_prompt import DECLINED_PROPOSALS_NOTE
 
 
@@ -74,7 +74,7 @@ PLANNER_WEB_HEAD = (
 
 # The ONE rule for a link the user pasted. Three older rules disagreed (a bare link is a statement
 # to acknowledge; read a pasted URL; never admit a link is unreachable), so the outcome depended on
-# the model's mood. The links are found by ``core/link_detect`` (a regex, not the model) and listed
+# the model's mood. The links are found by ``hubofhubs.critique.link_detect`` (a regex, not the model) and listed
 # here; the older rules point at this block. Failure reasons come from
 # ``hubofhubs.websearch.link_access`` as ``LINK NOT READ [reason]`` errors, each carrying the sentence to
 # tell the user. No em dashes: this text steers user-facing replies.

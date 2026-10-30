@@ -26,7 +26,7 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Dict, Iterable, List, Optional
 
-from .jsonl_ledger import KeyedJsonlFiles, default_directory  # noqa: F401  (age re-exported)
+from hubofhubs.critique.jsonl_ledger import KeyedJsonlFiles, default_directory  # noqa: F401  (age re-exported)
 
 log = logging.getLogger("quest-ai-runner.tool_ledger")
 

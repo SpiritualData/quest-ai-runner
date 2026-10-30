@@ -662,7 +662,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     _explain_tier = (os.getenv("QAR_EXPLAIN_TIER") or "").strip().lower()
     if _explain_tier:
         cfg.orchestrator.explain_tier = _explain_tier
-    # QAR_LINK_GUARD / QAR_LINK_POLICY_FILE: the link guard (see core/link_guard.py) -- ON by
+    # QAR_LINK_GUARD / QAR_LINK_POLICY_FILE: the link guard (see hubofhubs.critique.link_guard) -- ON by
     # default, because a fabricated URL that reads perfectly is worse than no URL at all. "0"
     # turns it off. QAR_LINK_POLICY_FILE names the JSON that says what "verified" means for this
     # host app (its route table or a routes_file pointing at a generated one, its own origins,

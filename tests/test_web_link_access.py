@@ -27,7 +27,6 @@ from hubofhubs.websearch.fetch import (
 )
 from quest_ai_runner.adapters.web_research import WebResearchAdapter
 from quest_ai_runner.core import orchestrator as orch
-from quest_ai_runner.core.link_detect import describe_link, extract_urls
 
 ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
 
@@ -461,37 +460,6 @@ def test_unsupported_content_type_error_still_surfaces_its_own_message():
 
     obs = adapter(fetcher).fetch("https://example.com/doc.bin")
     assert "deep run" in obs.error and obs.error.startswith("LINK NOT READ [unsupported_type]")
-
-
-# ---------------------------------------------------------------------------
-# Deterministic URL detection and the one links rule
-# ---------------------------------------------------------------------------
-
-
-def test_extract_urls_handles_prose_markdown_and_duplicates():
-    msg = (f"Please read https://docs.google.com/document/d/{ID}/edit, and also "
-           "(https://example.org/a.pdf). See [the site](https://example.org/x?y=1). "
-           "https://example.org/a.pdf again. Wiki: https://en.wikipedia.org/wiki/Foo_(bar).")
-    assert extract_urls(msg) == [
-        f"https://docs.google.com/document/d/{ID}/edit",
-        "https://example.org/a.pdf",
-        "https://example.org/x?y=1",
-        "https://en.wikipedia.org/wiki/Foo_(bar)",
-    ]
-
-
-def test_extract_urls_none_and_junk():
-    assert extract_urls("") == [] and extract_urls(None) == [] and extract_urls("no links here") == []
-    assert extract_urls("see http:// nothing") == []
-
-
-def test_describe_link():
-    assert describe_link(f"https://docs.google.com/spreadsheets/d/{ID}/edit") == "Google Sheet"
-    assert describe_link(f"https://docs.google.com/document/d/{ID}/edit") == "Google Doc"
-    assert describe_link(f"https://docs.google.com/presentation/d/{ID}/edit") == "Google Slides"
-    assert describe_link(f"https://drive.google.com/file/d/{ID}/view") == "Google Drive file"
-    assert describe_link("https://x.org/a.PDF") == "PDF"
-    assert describe_link("https://x.org/") == "web page"
 
 
 def test_links_block_lists_the_links_for_the_planner():

@@ -85,7 +85,7 @@ from hubofhubs.recall.card_content_render import (
     tokenize as _tokenize,
 )
 from hubofhubs.recall.reference_resolver import build_resolver_registry
-from .specificity import SpecificityResult, rerank_factor, score_candidates
+from hubofhubs.critique.specificity import SpecificityResult, rerank_factor, score_candidates
 
 # Type alias for a seed source callable: returns a list of items suitable for
 # ``VectorStore.sync()`` (each has id/text/payload/fingerprint keys). It takes no arguments, or an

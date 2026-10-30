@@ -2,7 +2,8 @@
 ``oversee`` is called for real (prompt, tool schema, parsing, degrade-to-proceed), the reach judge's
 ``normalize_verdict`` / ``verdict_block``, the quest judge's ``rank_quests`` and the sufficiency gate's
 ``collect_abridged_items`` / ``unfetched_abridged`` are the live functions. Zero model calls."""
-from quest_ai_runner.core import overseer, quest_judge, reach_judge, sufficiency
+from hubofhubs.critique import sufficiency
+from quest_ai_runner.core import overseer, quest_judge, reach_judge
 
 
 class ScriptedProvider:

@@ -130,7 +130,7 @@ class RunLoopMixin:
                 # stream so any consumer waiting on EVENT_DONE is not left hanging.
                 emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=rs.steps))
                 return res
-            # --- LINK GUARD (core/link_guard.py) ----------------------------------------------
+            # --- LINK GUARD (hubofhubs.critique.link_guard) ----------------------------------------------
             # THE LAST THING THAT TOUCHES THE WORDS, and deliberately so: it runs before the
             # context write-back and before EVENT_RESULT, so what the reader sees, what a consumer
             # persists, and what the assembler learns from are all the SAME sanitized text. Every

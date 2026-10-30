@@ -13,13 +13,6 @@ from hubofhubs.ports.context import AssembledContext
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.sufficiency import (
-    AbridgedTurnState,
-    collect_abridged_items,
-    render_abridged_notice,
-    spec_covers,
-    unfetched_abridged,
-)
 
 from .conftest import StubProvider
 
@@ -94,51 +87,7 @@ def _orch(provider, retrieval, assembler, **kw):
     return Orchestrator(retrieval=retrieval, provider=provider,
                         registry=ModelRegistry(provider), context_assembler=assembler, **kw)
 
-
-# --- the unit pieces -------------------------------------------------------------------------
-
-def test_collects_only_items_that_declare_a_usable_fetch():
-    plain = {"id": "c2", "items": [{"id": "i", "type": "note", "locator": {"text": "just a fact"}}]}
-    junk = {"id": "c3", "items": [{"id": "i", "type": "note",
-                                   "locator": {"text": "x", "full_ref": {"nonsense": 1}}}]}
-    items = collect_abridged_items([_abridged_card(), plain, junk])
-    assert len(items) == 1
-    assert items[0].fetch == FETCH_SPEC
-    assert items[0].chars == len(SUMMARY)
-    assert items[0].card_id == "card_gaps"
-
-
-def test_same_source_on_two_cards_forces_one_read():
-    a, b = _abridged_card(), _abridged_card()
-    b["id"] = "card_other"
-    assert len(collect_abridged_items([a, b])) == 1
-
-
-def test_notice_names_the_fetch_and_forbids_asking_permission():
-    notice = render_abridged_notice(collect_abridged_items([_abridged_card()]))
-    assert "goal_context" in notice
-    assert "SUMMARY" in notice
-    assert "do NOT ask the user" in notice
-    assert render_abridged_notice([]) == ""
-
-
-def test_spec_coverage_matches_the_nested_and_flat_shapes():
-    flat = {"kind": "goal_context", "goal_id": "g1", "quest_id": "q1", "include_notes": True}
-    assert spec_covers(flat, FETCH_SPEC)                      # adapters see the flattened shape
-    assert spec_covers({**flat, "limit": 20}, FETCH_SPEC)     # extra filters still cover it
-    assert not spec_covers({"kind": "goal_context", "goal_id": "OTHER"}, FETCH_SPEC)
-    assert not spec_covers({"rel_path": "README.md"}, FETCH_SPEC)
-
-
-def test_unfetched_is_computed_from_reads_that_actually_ran():
-    items = collect_abridged_items([_abridged_card()])
-    assert unfetched_abridged(items, []) == items
-    assert unfetched_abridged(items, [FETCH_SPEC]) == []
-    state = AbridgedTurnState(items=items)
-    assert state.should_force_read() == items
-    state.record_reads([FETCH_SPEC])
-    assert state.should_force_read() == []
-
+# --- the note resolver (the unit tests of the gate live in the hub: tests/test_critique_sufficiency.py) ---
 
 def test_note_resolver_marks_an_abridged_note_and_leaves_a_plain_one_alone():
     r = NoteResolver()

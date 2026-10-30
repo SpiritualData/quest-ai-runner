@@ -30,7 +30,7 @@ from .auxiliary_prompts import (
     VERIFY_RUN_OBSERVATIONS_NOTE,
     VERIFY_WEB_EVIDENCE_NOTE,
 )
-from .link_guard import LinkGuard, build_link_guard, evidence_text
+from hubofhubs.critique.link_guard import LinkGuard, build_link_guard, evidence_text
 from hubofhubs.ports.model import STEP_JUDGE, STEP_SUMMARIZE, STEP_VERIFY, plan_with_step
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .card_filter import _extract_json
@@ -46,6 +46,9 @@ from .orchestrator_decisions import (
     verify_output_view,
 )
 from .orchestrator_constants import log
+
+# The in-app link scheme a policy file gets when it names none (the hub's link guard allows no scheme by default).
+IN_APP_LINK_SCHEMES = ("app-task",)
 from .orchestrator_capabilities import (
     intent_judge_timeout_seconds,
     mode_release_timeout_seconds,
@@ -316,7 +319,7 @@ class JudgesMixin:
         return None, last_error
 
     def resolve_link_guard(self) -> Optional[LinkGuard]:
-        """The LINK GUARD for this orchestrator, built once and kept (see core/link_guard.py).
+        """The LINK GUARD for this orchestrator, built once and kept (see hubofhubs.critique.link_guard).
 
         Built lazily so an orchestrator that never answers never reads a policy file, and cached on
         the instance so the guard's verdict cache survives across turns: a poller that answers a
@@ -328,7 +331,8 @@ class JudgesMixin:
                 self.link_guard_instance = build_link_guard(
                     self.cfg.link_policy_file or core_settings().link_policy_file,
                     enabled=self.cfg.link_guard,
-                    policy=getattr(self.cfg, "link_policy", None))
+                    policy=getattr(self.cfg, "link_policy", None),
+                    default_schemes=IN_APP_LINK_SCHEMES)   # a policy file that names none keeps the scheme the app has always had
             except Exception as e:  # noqa: BLE001 -- a bad policy must not break every turn
                 log.warning("Link guard could not be built: %s: %s", type(e).__name__, e)
                 self.link_guard_instance = None

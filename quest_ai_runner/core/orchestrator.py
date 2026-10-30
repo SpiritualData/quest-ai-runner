@@ -42,7 +42,7 @@ from .resolve import resolve
 from .tools import ToolRegistry
 
 from .recipes import RecipeStore
-from .link_guard import LinkGuard
+from hubofhubs.critique.link_guard import LinkGuard
 from hubofhubs.models.family import provider_name_for_model
 from .model_registry import ModelRegistry
 
@@ -226,7 +226,7 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         self.guidance = guidance
         # The LINK GUARD, built once on first use and then kept for the life of this orchestrator
         # so its verdict cache survives across turns: a long-lived poller checks a given URL once
-        # an hour, not once a reply. See resolve_link_guard() and core/link_guard.py.
+        # an hour, not once a reply. See resolve_link_guard() and hubofhubs.critique.link_guard.
         self.link_guard_instance: Optional[LinkGuard] = None
         self.link_guard_built = False
         # Optional storage-agnostic CONVERSATION STORE (the User Input Understanding step). When

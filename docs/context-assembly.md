@@ -317,7 +317,7 @@ should go and get the rest. Two things had gone wrong, and only one of them was 
 summary and full content **rendered identically** in the context view, so nothing told it which was
 which; and nothing checked the plan it returned.
 
-Both are closed in `quest_ai_runner/core/sufficiency.py`, keyed on data the item declares about
+Both are closed in `hubofhubs.critique.sufficiency` (the hub), keyed on data the item declares about
 itself, never on words the model wrote (hard rule #3). A content item whose stored text is an
 abridged stand-in says so on its locator, and names the read spec that fetches the real thing:
 

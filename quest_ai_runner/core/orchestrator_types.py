@@ -220,7 +220,7 @@ class OrchestratorConfig:
     # "I don't have material on that, which file should I look in?"). Only applies when a deep
     # execution path is wired. The in-loop ``need_more_context`` escalation still comes first.
     deep_before_giving_up: bool = True
-    # STRUCTURAL SUFFICIENCY GATE (see core/sufficiency.py). The prose SUFFICIENCY gate in the
+    # STRUCTURAL SUFFICIENCY GATE (see hubofhubs.critique.sufficiency). The prose SUFFICIENCY gate in the
     # planner prompt is an instruction the model may simply not follow: a real turn answered from a
     # card item that held only a short synthesized SUMMARY of a note, and spent its reply telling
     # the user it had "only the header" and asking whether to go and fetch the rest. When on, a plan
@@ -458,7 +458,7 @@ class OrchestratorConfig:
     # The tier the explanation call resolves to. This is a summary of a turn that already happened,
     # not a gate on its outcome (that is verify_tier), so it gets the cheap tier.
     explain_tier: str = "fast"
-    # LINK GUARD (see core/link_guard.py): every terminal reply is scanned and no link the guard
+    # LINK GUARD (see hubofhubs.critique.link_guard): every terminal reply is scanned and no link the guard
     # could not verify reaches the reader. A model writes plausible, wrong URLs; a reader who taps
     # one and lands nowhere stops trusting the real links too. ON by default because sending a
     # fabricated address is worse than sending none. Env: QAR_LINK_GUARD ("0"/"false" disables).
@@ -469,7 +469,7 @@ class OrchestratorConfig:
     # paths have nothing to be checked against, so they come back unverified and are stripped.
     # Env: QAR_LINK_POLICY_FILE.
     link_policy_file: str = ""
-    # The same thing built in code: a ``core.link_guard.LinkPolicy``. Wins over ``link_policy_file``
+    # The same thing built in code: a ``hubofhubs.critique.link_guard.LinkPolicy``. Wins over ``link_policy_file``
     # when both are set, so a consumer that derives its routes and origins at runtime does not have
     # to write a temporary file.
     link_policy: Optional[Any] = None
@@ -548,7 +548,7 @@ class OrchestratorResult:
     # returned result without having to observe the event stream. None whenever the feature is off
     # or the turn was judged not worth explaining.
     explanation: Optional[Dict[str, Any]] = None
-    # One entry per link the LINK GUARD judged in this turn's reply (see core/link_guard.py):
+    # One entry per link the LINK GUARD judged in this turn's reply (see hubofhubs.critique.link_guard):
     # {"url", "verdict": "ok"|"dead"|"unknown", "reason", "replaced_with"}. Empty when the guard is
     # off or the reply carried no links. This is the record of WHY a link was kept or stripped, so
     # a stripped link is auditable rather than a silent edit.

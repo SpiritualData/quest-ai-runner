@@ -31,7 +31,7 @@ from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
 
-from .jsonl_ledger import KeyedJsonlFiles, default_directory
+from hubofhubs.critique.jsonl_ledger import KeyedJsonlFiles, default_directory
 
 SOURCE_MEASURED = "measured"
 SOURCE_RECORDED = "recorded"

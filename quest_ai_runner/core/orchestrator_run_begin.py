@@ -40,7 +40,7 @@ from .recent_context import (
     quest_scope_key,
     render_recent_cards,
 )
-from .sufficiency import AbridgedTurnState, collect_abridged_items, render_abridged_notice
+from hubofhubs.critique.sufficiency import AbridgedTurnState, collect_abridged_items, render_abridged_notice
 
 
 class RunBeginMixin:
@@ -881,7 +881,7 @@ class RunBeginMixin:
         # --- STRUCTURAL SUFFICIENCY GATE: which of this turn's context is only a SUMMARY ---------
         # A content item whose locator declares ``full_ref`` is saying, structurally, "the text
         # stored on the card is an abridged stand-in, the real source is fetched with THIS read
-        # spec". Two things ride on that (see core/sufficiency.py): the planner is TOLD which items
+        # spec". Two things ride on that (see hubofhubs.critique.sufficiency): the planner is TOLD which items
         # are summaries and how to open them (they render identically to full content otherwise, so
         # it had no way to know), and the loop refuses to let an "answer" terminate while one of
         # those fetches has not run. Empty and inert for every item that declares nothing.
