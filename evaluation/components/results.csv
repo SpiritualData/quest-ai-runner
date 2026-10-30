@@ -3852,3 +3852,11 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,classification,keyword_rules,3,3,2/2,1/1,0,0,0,0.0,0.0,c3fadc9,231318c2,none,,sample:3,
 2026-10-30,prompt_size,live,3,3,3/3,0/0,0,0,0,0.0,0.1,c3fadc9,c46aeb4b,none,,sample:3,
 2026-10-30,prompt_size,situational,3,3,3/3,0/0,0,0,0,0.0,0.1,c3fadc9,c46aeb4b,none,,sample:3,
+2026-10-30,judge_live_decisions,live_judges,12,12,12/12,0/0,12,16527,637,0.0036,32.1,b2c5bb2,5a83064b,claude-code-subscription,,,
+2026-10-30,explain_an_answer,trace_template,10,8,8/10,0/0,10,11148,1017,0.0547,58.1,b2c5bb2,0fadbfec,grader-only,,,0.7542
+2026-10-30,describe_an_attachment,skip_images,10,2,2/10,0/0,10,7307,944,0.0019,28.7,b2c5bb2,e57ae993,claude-haiku,,,0.3963
+2026-10-30,spec_selection,lexical_vector_gated,76,72,49/50,23/26,48,123866,12232,0.0309,163.8,b2c5bb2,0a2ef76a,unknown,,,0.9186
+2026-10-30,overseer_signals,live_model,16,16,16/16,0/0,16,57025,3302,0.0131,60.1,b2c5bb2,5d29c4ef,unknown,,,
+2026-10-30,narrate_a_turn,model_beat,13,13,13/13,0/0,26,25212,2121,0.0572,91.4,b2c5bb2,df729105,claude-haiku,,,0.835
+2026-10-30,explain_an_answer,model_explanation,10,10,10/10,0/0,20,36987,4494,0.0781,77.3,b2c5bb2,0fadbfec,claude-haiku,,,0.8574
+2026-10-30,describe_an_attachment,vision_description,10,10,10/10,0/0,20,18673,3231,0.0053,55.2,b2c5bb2,e57ae993,claude-haiku,,,0.9154
