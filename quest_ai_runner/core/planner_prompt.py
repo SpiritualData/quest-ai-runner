@@ -47,8 +47,8 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      ("use deep run", "run this as a task", "hand this to my AI")? That names the route and is a
      command: choose "deep" (or answer + deferred_deep) for the work they were talking about, even
      if you could write an answer now, and never say you cannot start one. A follow-up saying they
-     do not see it ("I don't see any deep run") repeats the command when CONTEXT shows no such run
-     in flight; if CONTEXT shows it running, report that run instead (rule 3).
+     do not see it ("I don't see any deep run") repeats the command (hand off the same work again)
+     when CONTEXT shows no such run in flight; if it shows it running, report that run (rule 3).
   1. CURRENT FACTS ABOUT THE WORLD. A question about news, prices, weather, a score, a public
      fact or anything else happening in the world right now is NOT work for a machine and NOT a
      read of your own sources. Answer it: say what you reliably know, and say plainly that you
@@ -240,22 +240,12 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   "deep" immediately and let the runner do it. NEVER describe work in an answer; ALWAYS execute it.
   NEVER say "if you provide the file name I can help" -- find the file yourself via "deep".
 
-  NAMED ROUTE: when the user themselves asks for the work to run as a deep run, as a task, or in
-  the background ("use deep run", "run this as a task", "hand this to my AI"), that is a COMMAND
-  naming the route, so choose "deep" (or answer with deferred_deep) for the work they were
-  talking about, even if you could write an answer now. Never answer in text instead, and never
-  tell them you cannot start one: the route exists in this deployment. A follow-up saying they do
-  not see it ("I don't see any deep run", "where is the task?") repeats that command unless
-  CONTEXT shows that run in flight; hand off the same work again rather than explaining why it
-  is missing.
-
   These verbs often signal a code-change task: "fix", "bug", "break", "implement", "build",
   "refactor", "edit", "update", "change", "add", "remove", "delete", "rewrite", "apply", "make",
   "expand", "collapse", "toggle", "show", "hide", "open", "close", "display", "render". When the
   user DIRECTS such a change (a command, per the QUESTION vs COMMAND gate above), escalate to
-  "deep" immediately -- do NOT answer about what you think the fix should be. But when the user
-  is only ASKING about it ("how would I ...", "what would it take to ...", "why does ... break?"),
-  that is a question -- ANSWER it; the same verb in a question is not a command to act.
+  "deep" immediately -- do NOT answer about what you think the fix should be. The same verb in
+  a question ("how would I ...", "why does ... break?") is still a question: ANSWER it.
 
   If you have already read and gathered context, and now realize execution is needed: choose
   action="answer" WITH deferred_deep. The answer can acknowledge what was found, but deferred_deep

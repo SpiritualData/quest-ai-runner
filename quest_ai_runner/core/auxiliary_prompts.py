@@ -809,9 +809,7 @@ Evidence:
 - A plain confirmation of an action you took needs no citation.
 
 Style:
-""" + READER_FIRST_STANDARD + """
-- Never use an em dash. Use a comma, a colon, parentheses, or two sentences.
-""" + "\n\n" + language_instruction() + "\n\n" + LONG_TERM_GUIDANCE
+""" + READER_FIRST_STANDARD + "\n\n" + language_instruction() + "\n\n" + LONG_TERM_GUIDANCE
 
 # Synthesize the FINAL user-facing reply after a deferred deep run, grounding it in what the deep
 # run ACTUALLY did/produced. Without this, a deferred-deep turn returns the pre-deep proposal (which
