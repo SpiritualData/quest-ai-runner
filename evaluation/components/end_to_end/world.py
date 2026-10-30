@@ -13,6 +13,7 @@ import common
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.tools import ToolResult
 from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT
+from end_to_end.docs_mode_rules import DOCS_MODE_RULES
 
 SPEC = json.loads((Path(__file__).resolve().parent / "world.json").read_text(encoding="utf-8"))
 SCIENCE_WORKS = json.loads((Path(__file__).resolve().parent / "science_works.json").read_text(encoding="utf-8"))["works"]
@@ -80,13 +81,6 @@ class FakeWeb:
 
     def fetch(self, url, *, focus=None, fresh=False, full=False, part=None):  # noqa: ARG002
         return Observation(kind="error", rel_path=url, error="page fetch is not available in this evaluation")
-
-
-DOCS_MODE_RULES = (
-    "You are in documentation mode: the person asks about the product itself. Answer only from the documentation excerpts "
-    "below and name the page you took each fact from. If the excerpts do not cover what was asked, say you are not sure and "
-    "that the support team can confirm; never invent a feature, a plan name or a price. You cannot read or change the "
-    "person's own quests here. Do not use em dashes.")
 
 
 class World:
@@ -171,8 +165,9 @@ class World:
         lines = [f"Today is {self.today}."]
         if self.docs_only:
             lines.append(DOCS_MODE_RULES)
+            lines.append("Documentation excerpts already read for you (the only source on this plan):")
             for d in self.docs:
-                lines += ["", f"Documentation excerpt, page {d['source']} ({d['title']}):", d["text"]]
+                lines += ["", f"Documentation excerpt ({d['title']}):", d["text"]]
             return "\n".join(lines)
         if self.pinned:
             q = self.quests[self.pinned]
@@ -184,5 +179,5 @@ class World:
             lines.append("No quest is pinned to this conversation. The person's quests (ask or look one up before acting on it):")
             lines += [f"- {k}: {q['name']}. Outcome: {q['outcome']}" for k, q in self.quests.items()]
         for d in self.docs:
-            lines += ["", f"Documentation excerpt, page {d['source']} ({d['title']}):", d["text"]]
+            lines += ["", f"Documentation excerpt ({d['title']}):", d["text"]]
         return "\n".join(lines)

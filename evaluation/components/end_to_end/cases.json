@@ -2805,7 +2805,7 @@
   "quality_rubric": [
    "Answers the sharing question with the documented steps",
    "Says the other quests stay private",
-   "Cites where in the documentation it comes from",
+   "Names no documentation page path or file name",
    "Invents no sharing feature",
    "Uses plain words and no jargon the person did not use"
   ],
@@ -2817,7 +2817,7 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "Invite your physio to that single quest by email. Your other quests stay private, and you can stop sharing at any time. Source: how-to/goals-and-plans.md, the entry on sharing one goal, and guide/quests-and-plans.md, Sharing a quest."
+   "reply": "Invite your physio to that single quest by email. Your other quests stay private, and you can stop sharing at any time."
   },
   "source": "the product owner: questions about Quest matter for the subscription funnel; a docs lookup inside an ordinary chat on a quest (the Docs lookup task type), built from verbatim excerpts of how-to/goals-and-plans.md and guide/quests-and-plans.md; no write may happen"
  },

@@ -447,3 +447,74 @@ def test_a_reply_that_denies_a_change_the_turn_made_fails_even_when_the_facts_ar
         assert "denies a change" in score.score_case(lambda c: got, case)["note"], denial
     held = dict(base, route="deep", reply="I can't add it yet.")
     assert "denies" not in score.judge(held, BY_ID["E2E-SEQ-01"])["note"]
+
+
+# ---- the documentation-mode rules the world shows are the backend's own words
+
+BACKEND_RULES_FILE = ("app", "prompts", "quest_ai_prompts.py")
+RULE_NAMES = {"QUEST_QUESTION_STANDARD": "QUEST_QUESTION_STANDARD", "_DOCS_ONLY_ADDENDUM": "DOCS_ONLY_ADDENDUM",
+              "DOCS_ONLY_SUBSCRIBE_MARKER": "DOCS_ONLY_SUBSCRIBE_MARKER", "_DOCS_ONLY_SUBSCRIBE_CTA": "DOCS_ONLY_SUBSCRIBE_CTA"}
+
+
+def backend_rules_file():
+    """The backend's prompts file when it can be found: ``QUEST_BACKEND_DIR``, else the sibling checkout next to this repository."""
+    import os
+    root = os.environ.get("QUEST_BACKEND_DIR")
+    base = Path(root) if root else HERE.parents[1].parent / "quest-backend"
+    found = base.joinpath(*BACKEND_RULES_FILE)
+    return found if found.is_file() else None
+
+
+def literal_values(source, names):
+    """The string values of the named module-level assignments, read from the source text without importing it (the backend is
+    never imported). Handles string constants, ``+``, names already read and f-strings over them."""
+    import ast
+    tree = ast.parse(source)
+    known = {}
+
+    def value(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.Name):
+            return known[node.id]
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            return value(node.left) + value(node.right)
+        if isinstance(node, ast.JoinedStr):
+            return "".join(value(v) for v in node.values)
+        if isinstance(node, ast.FormattedValue):
+            return value(node.value)
+        raise ValueError(type(node).__name__)
+
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            try:
+                known[node.targets[0].id] = value(node.value)
+            except (ValueError, KeyError):
+                continue
+    return {n: known[n] for n in names}
+
+
+def test_docs_mode_rules_match_the_backend():
+    import pytest
+    from end_to_end import docs_mode_rules
+    found = backend_rules_file()
+    if found is None:
+        pytest.skip("no Quest backend checkout found: set QUEST_BACKEND_DIR to one, or place it beside this repository as quest-backend, to check the documentation-mode rules for drift")
+    theirs = literal_values(found.read_text(encoding="utf-8"), list(RULE_NAMES))
+    for backend_name, ours in RULE_NAMES.items():
+        assert getattr(docs_mode_rules, ours) == theirs[backend_name], f"{ours} has drifted from the backend's {backend_name}: copy it again and update the commit in docs_mode_rules.py"
+
+
+def test_literal_values_reads_concatenation_names_and_fstrings():
+    got = literal_values('A = ("x" "y")\nM = "[[m]]"\nB = (\n "p"\n + A\n)\nC = (f"{M} z")\nD = unknown()\n', ["A", "B", "C"])
+    assert got == {"A": "xy", "B": "pxy", "C": "[[m]] z"}
+
+
+def test_the_docs_only_view_carries_the_backend_standard_and_asks_for_no_page_names():
+    from end_to_end import docs_mode_rules
+    case = next(c for c in CASES if c["world"].get("docs_only"))
+    view = world.World(docs=case["world"]["docs"], docs_only=True).context_view()
+    assert docs_mode_rules.QUEST_QUESTION_STANDARD in view and docs_mode_rules.DOCS_ONLY_SUBSCRIBE_CTA in view
+    assert "No page paths." in view and "name the page" not in view.lower()
+    assert not any(d["source"] in view for d in world.World(docs=case["world"]["docs"]).docs)   # the page path is kept for the transcript, not shown to the model
+    assert not re.search(r"[—–]", docs_mode_rules.DOCS_MODE_RULES)
