@@ -1,7 +1,7 @@
 """Tests for web_page_extract -- SSRF guard, HTML extraction, passage selection. Offline."""
 from __future__ import annotations
 
-from quest_ai_runner.adapters.web_page_extract import (
+from hubofhubs.websearch.page_extract import (
     check_url_is_safe,
     estimate_tokens,
     extract_main_text,

@@ -8,24 +8,24 @@ from typing import Dict, List
 
 import pytest
 
-from quest_ai_runner.adapters import web_link_access as wla
+from hubofhubs.websearch import link_access as wla
 from hubofhubs.websearch import fetch as wr_fetch
 from hubofhubs.websearch import research as wr
-from quest_ai_runner.adapters.web_cache import WebCache
-from quest_ai_runner.adapters.web_link_access import (
+from hubofhubs.websearch.cache import WebCache
+from hubofhubs.websearch.link_access import (
     ALL_REASONS,
     REASON_MESSAGES,
     extract_pdf_text,
     link_not_read_error,
     rewrite_for_export,
 )
-from quest_ai_runner.adapters.web_research import (
+from hubofhubs.websearch.fetch import (
     FetchedPage,
     PageFetchError,
     UnsupportedContentTypeError,
-    WebResearchAdapter,
     default_page_fetcher,
 )
+from quest_ai_runner.adapters.web_research import WebResearchAdapter
 from quest_ai_runner.core import orchestrator as orch
 from quest_ai_runner.core.link_detect import describe_link, extract_urls
 

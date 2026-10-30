@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from quest_ai_runner.adapters.web_query_spec import coerce_web_query
+from hubofhubs.websearch.query_spec import coerce_web_query
 
 
 def coerce_web_query_text(spec):

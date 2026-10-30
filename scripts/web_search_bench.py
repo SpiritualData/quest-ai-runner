@@ -169,7 +169,7 @@ def run_benchmark(
     fresh: bool = False,
 ) -> BenchReport:
     """Run ``adapter.search()`` once per item (sequentially, or across ``parallel`` threads)."""
-    from quest_ai_runner.adapters.web_page_extract import estimate_tokens
+    from hubofhubs.websearch.page_extract import estimate_tokens
 
     if not items:
         return BenchReport()

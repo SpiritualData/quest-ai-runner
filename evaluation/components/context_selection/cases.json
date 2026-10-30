@@ -159,23 +159,10 @@
   "target": "quest_ai_runner/runner/quest_client_decisions.py"
  },
  {
-  "id": "CTX-027",
-  "area": "symptom",
-  "task": "Search hits from different web providers are cached on disk with an LRU, where?",
-  "target": "quest_ai_runner/adapters/web_cache.py",
-  "heldout": true
- },
- {
   "id": "CTX-028",
   "area": "symptom",
   "task": "Pasted Google Docs links should be read without a search; where is that reader?",
   "target": "quest_ai_runner/adapters/google_link_reader.py"
- },
- {
-  "id": "CTX-029",
-  "area": "symptom",
-  "task": "Page text is extracted for focus passages and private IPs are refused, where is that done?",
-  "target": "quest_ai_runner/adapters/web_page_extract.py"
  },
  {
   "id": "CTX-030",

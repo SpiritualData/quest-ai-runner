@@ -38,7 +38,7 @@ dependencies = [
     # the runner's local clock when a zone can't be resolved either way (see local_time.py), so a
     # missing database is a warning, never a crash.
     "tzdata>=2024.1",
-    # Reads PDF links a user pastes (adapters/web_link_access.extract_pdf_text). Core, not an extra:
+    # Reads PDF links a user pastes (hubofhubs.websearch.link_access.extract_pdf_text). Core, not an extra:
     # a deployed image installs only the core list, and without it every PDF link fails.
     "pypdf>=4.0",
     # Word and Excel text for attachments and for `serve-files` reads (core/attachments.py loads

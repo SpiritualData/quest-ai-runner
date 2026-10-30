@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import time
 
-from quest_ai_runner.adapters.web_cache import WebCache, normalize_query
+from hubofhubs.websearch.cache import WebCache, normalize_query
 
 
 # ---------------------------------------------------------------------------

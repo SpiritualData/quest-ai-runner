@@ -9,7 +9,7 @@ from typing import Any, Dict, FrozenSet, List, Optional
 
 from hubofhubs.ports.retrieval import RetrievalAdapterBase  # noqa: F401  (moved to the hub; same class, old import path)
 
-from .adapters_scope import ThreadLocalCounter
+from hubofhubs.ports.scope import ThreadLocalCounter
 from .adapters_values import (
     DeepResult,
     Escalation,
@@ -18,7 +18,7 @@ from .adapters_values import (
     ProgressEvent,
     WRITE_SURFACE_AGENT,
 )
-from .adapters_context import AssembledContext
+from hubofhubs.ports.context import AssembledContext
 from .adapters_deep import WriteResult
 from .adapters_events import Mode
 

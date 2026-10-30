@@ -17,7 +17,7 @@ from context_selection.embedder import embedder
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
 from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
-from quest_ai_runner.core.adapters_context import VectorHit
+from hubofhubs.ports.context import VectorHit
 
 ARM_CARDS = 3
 

@@ -3,7 +3,7 @@
 The adapter and its helpers moved to the hub package (``hubofhubs.websearch.research``, ``.fetch``, ``.limiter``); the hub
 reads no environment, so what stays here is QAR's: the ``search-the-web`` / ``know-the-world`` implementation rows, the
 ``QAR_WEB_*`` tuning names, and the Gemini ``url_context`` fallback for pages that resist direct extraction. Names the old
-module defined or re-exported stay importable from here (CHANGELOG).
+module defined or re-exported now import from ``hubofhubs.websearch`` directly (CHANGELOG).
 """
 from __future__ import annotations
 
@@ -13,31 +13,6 @@ from typing import Any, Callable, Mapping, Optional
 
 from esoi import implementation
 from hubofhubs.websearch import research as hub_research
-from hubofhubs.websearch.fetch import (  # noqa: F401
-    FETCH_TIMEOUT,
-    HARD_FAILURE_REASONS,
-    MAX_PAGE_BYTES,
-    MAX_PDF_BYTES,
-    MAX_REDIRECTS,
-    TEXT_CONTENT_PREFIXES,
-    UNREADABLE_PREFIXES,
-    USER_AGENT,
-    FetchedPage,
-    PageFetchError,
-    UnsupportedContentTypeError,
-    canonicalize_url,
-    charset_from_content_type,
-    collapse_ws,
-    decode_page,
-    default_page_fetcher,
-    sniff_meta_charset,
-    status_failure,
-    trim_chars,
-)
-from hubofhubs.websearch.limiter import LOCK_POLL_INTERVAL_SECONDS, LOCK_TIMEOUT_SECONDS, DailyLimiter  # noqa: F401
-from hubofhubs.websearch.page_extract import check_url_is_safe, estimate_tokens  # noqa: F401
-from hubofhubs.websearch.research import paginate_text  # noqa: F401
-
 from .web_search_backends import gemini_api_key_from_env, select_search_backend
 
 logger = logging.getLogger("quest-ai-runner.web-research")

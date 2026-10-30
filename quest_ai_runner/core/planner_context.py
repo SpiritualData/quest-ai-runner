@@ -75,7 +75,7 @@ PLANNER_WEB_HEAD = (
 # to acknowledge; read a pasted URL; never admit a link is unreachable), so the outcome depended on
 # the model's mood. The links are found by ``core/link_detect`` (a regex, not the model) and listed
 # here; the older rules point at this block. Failure reasons come from
-# ``adapters/web_link_access`` as ``LINK NOT READ [reason]`` errors, each carrying the sentence to
+# ``hubofhubs.websearch.link_access`` as ``LINK NOT READ [reason]`` errors, each carrying the sentence to
 # tell the user. No em dashes: this text steers user-facing replies.
 PLANNER_LINKS_HEAD = (
     "--- LINKS IN THIS MESSAGE (found by the system, not guessed) ---\n"
@@ -105,7 +105,7 @@ PLANNER_LINKS_NO_READER = (
     "one sentence that you cannot open links here and ask the user to paste the text.\n"
 )
 
-#: Marker that ``adapters/web_link_access.link_not_read_error`` puts at the start of an unreadable
+#: Marker that ``hubofhubs.websearch.link_access.link_not_read_error`` puts at the start of an unreadable
 #: link's error. A string contract between the two, covered by tests.
 LINK_NOT_READ_MARKER = "LINK NOT READ ["
 

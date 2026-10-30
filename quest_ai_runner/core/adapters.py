@@ -60,7 +60,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, runtime_checkable
 import abc
 
-from .adapters_scope import (  # noqa: F401
+from hubofhubs.ports.scope import (  # noqa: F401
     ScopedCounter,
     ScopedThreadPoolExecutor,
     ThreadLocalCounter,
@@ -110,7 +110,7 @@ from .adapters_retrieval import (  # noqa: F401
     RetrievalAdapter,
     WebResearch,
 )
-from .adapters_model import (  # noqa: F401
+from hubofhubs.ports.model import (  # noqa: F401
     ModelProvider,
     STEP_JUDGE,
     STEP_PLAN,
@@ -133,7 +133,7 @@ from .adapters_deep import (  # noqa: F401
     ProgressSink,
     WriteResult,
 )
-from .adapters_context import (  # noqa: F401
+from hubofhubs.ports.context import (  # noqa: F401
     AssembledContext,
     ContextAssembler,
     ConversationContext,

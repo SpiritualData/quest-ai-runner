@@ -493,7 +493,7 @@ def test_a_registered_backend_is_selected_by_name_with_no_branch_in_the_module()
 
 
 # ---------------------------------------------------------------------------
-# Search APIs described as data (web_search_apis.py): one generic backend, no class per provider
+# Search APIs described as data (hubofhubs.websearch.apis): one generic backend, no class per provider
 # ---------------------------------------------------------------------------
 
 def test_shipped_hosted_apis_are_data_entries_run_by_one_backend():

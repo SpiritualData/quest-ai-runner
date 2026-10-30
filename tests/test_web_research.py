@@ -9,15 +9,11 @@ from typing import Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.adapters.web_cache import WebCache
-from quest_ai_runner.adapters.web_research import (
-    UnsupportedContentTypeError,
-    WebResearchAdapter,
-    DailyLimiter,
-    build_web_research_from_env,
-    canonicalize_url,
-    estimate_tokens,
-)
+from hubofhubs.websearch.cache import WebCache
+from hubofhubs.websearch.fetch import UnsupportedContentTypeError, canonicalize_url
+from hubofhubs.websearch.limiter import DailyLimiter
+from hubofhubs.websearch.page_extract import estimate_tokens
+from quest_ai_runner.adapters.web_research import WebResearchAdapter, build_web_research_from_env
 from quest_ai_runner.adapters.web_search_backends import SearchBackendError, SearchHit, SearchResponse
 
 
@@ -496,7 +492,7 @@ def test_default_fetcher_refuses_a_redirect_into_a_private_address(monkeypatch):
     """follow_redirects=True would have walked straight past check_url_is_safe: the guard only
     ever saw the URL the planner asked for, so a public URL that 302s to localhost or a cloud
     metadata endpoint was fetched anyway."""
-    from quest_ai_runner.adapters.web_research import PageFetchError, default_page_fetcher
+    from hubofhubs.websearch.fetch import PageFetchError, default_page_fetcher
 
     script = {
         "https://public.example/go": _FakeStream(
@@ -512,7 +508,7 @@ def test_default_fetcher_refuses_a_redirect_into_a_private_address(monkeypatch):
 
 
 def test_default_fetcher_follows_a_safe_relative_redirect(monkeypatch):
-    from quest_ai_runner.adapters.web_research import default_page_fetcher
+    from hubofhubs.websearch.fetch import default_page_fetcher
 
     script = {
         "https://public.example/a": _FakeStream(301, {"location": "/b"}),
@@ -528,7 +524,7 @@ def test_default_fetcher_follows_a_safe_relative_redirect(monkeypatch):
 
 
 def test_default_fetcher_stops_after_too_many_redirects(monkeypatch):
-    from quest_ai_runner.adapters.web_research import PageFetchError, default_page_fetcher
+    from hubofhubs.websearch.fetch import PageFetchError, default_page_fetcher
 
     url = "https://public.example/loop"
     script = {url: _FakeStream(302, {"location": url})}
@@ -541,7 +537,7 @@ def test_default_fetcher_stops_after_too_many_redirects(monkeypatch):
 def test_default_fetcher_decodes_the_declared_charset_not_assumed_utf8(monkeypatch):
     """A windows-1252 page decoded as UTF-8 turns every accented character into U+FFFD, which
     then poisons the focus scoring as well as the text the model reads."""
-    from quest_ai_runner.adapters.web_research import default_page_fetcher
+    from hubofhubs.websearch.fetch import default_page_fetcher
 
     body = "<html><body><p>café résumé naïve</p></body></html>".encode("windows-1252")
     script = {
@@ -556,7 +552,7 @@ def test_default_fetcher_decodes_the_declared_charset_not_assumed_utf8(monkeypat
 
 
 def test_default_fetcher_sniffs_a_meta_charset_when_the_header_omits_one(monkeypatch):
-    from quest_ai_runner.adapters.web_research import default_page_fetcher
+    from hubofhubs.websearch.fetch import default_page_fetcher
 
     body = (
         "<html><head><meta charset='iso-8859-1'></head><body><p>naïve</p></body></html>"

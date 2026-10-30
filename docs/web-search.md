@@ -108,7 +108,7 @@ grounded prompts/month free, then ~$14/1k.
 
 ## Cache
 
-`WebCache` (`adapters/web_cache.py`) is a thread-safe in-memory LRU with an optional on-disk tier
+`WebCache` (`hubofhubs.websearch.cache`) is a thread-safe in-memory LRU with an optional on-disk tier
 (one JSON file per key, atomic writes, pruned by age once the disk tier grows past
 `max_disk_entries`). Search results and fetched page text are cached separately:
 
@@ -180,7 +180,7 @@ grounded calls.
 
 ## Extracting pages: built-in vs. `trafilatura`
 
-`extract_main_text` (`adapters/web_page_extract.py`) tries `trafilatura` first if it happens to
+`extract_main_text` (`hubofhubs.websearch.page_extract`) tries `trafilatura` first if it happens to
 be installed (it is an OPTIONAL dependency, never required), falling back to a small stdlib
 `html.parser`-based extractor that drops `script`/`style`/`nav`/`header`/`footer`/`aside`/`form`/
 `iframe` and anything whose `class`/`id` looks like navigation/ads/cookie-banner/etc., and
@@ -231,6 +231,6 @@ the same way `select_search_backend`'s "auto" mode does.
 
 A hosted search API that returns JSON needs no class. Describe it in a JSON list and point `QAR_WEB_SEARCH_APIS_FILE` at the
 file; each entry names the endpoint, the environment variable that holds the key, what to send, where the results are in the
-reply and which fields are the title, link, snippet and date (the field list is in `quest_ai_runner/adapters/web_search_apis.py`,
+reply and which fields are the title, link, snippet and date (the field list is in `hubofhubs/websearch/apis.py`,
 where Serper, Brave and Tavily are written the same way). Then `QAR_WEB_SEARCH_BACKEND=<name>` selects it, or it joins the
 automatic fallback chain after the built-in ones when its key is set.

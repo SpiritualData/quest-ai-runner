@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .files_redaction import redact
-from .web_link_access import (
+from hubofhubs.websearch.link_access import (
     REASON_NOT_FOUND,
     REASON_NOT_SHARED,
     REASON_TOO_LARGE,
@@ -63,7 +63,7 @@ from .web_link_access import (
 
 log = logging.getLogger("quest-ai-runner.google_link_reader")
 
-#: Reasons only this module speaks (the others come from ``web_link_access``).
+#: Reasons only this module speaks (the others come from ``hubofhubs.websearch.link_access``).
 REASON_UNAVAILABLE = "unavailable"          # this server cannot read Google links at all
 REASON_NOT_ALLOWED = "not_allowed"          # the request is refused by policy (no usable user)
 
@@ -162,7 +162,7 @@ def parse_google_link(url: str) -> Optional[GoogleRef]:
 
 
 class GoogleReadError(Exception):
-    """A link could not be read. ``reason`` is one of the ``web_link_access`` reasons or
+    """A link could not be read. ``reason`` is one of the ``hubofhubs.websearch.link_access`` reasons or
     ``REASON_UNAVAILABLE`` / ``REASON_NOT_ALLOWED``; ``message`` is the sentence the person is told."""
 
     def __init__(self, reason: str, message: str, detail: str = "") -> None:
@@ -606,8 +606,8 @@ class GoogleLinkReader:
 
     def shape(self, doc: LinkText, *, full: bool, part: Optional[int], focus: Optional[str]) -> Dict[str, Any]:
         """Redact, then return the focused passages or one part of the whole text."""
-        from .web_page_extract import select_passages, split_passages
-        from .web_research import paginate_text
+        from hubofhubs.websearch.page_extract import select_passages, split_passages
+        from hubofhubs.websearch.research import paginate_text
         text = redact(doc.text)
         answer: Dict[str, Any] = {"ok": True, "title": doc.title, "kind": doc.kind, "truncated": doc.cut}
         try:

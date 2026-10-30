@@ -122,8 +122,8 @@ from .anthropic_provider import AnthropicProvider
 from .quest_context_adapter import QuestContextAdapter, build_quest_resolvers
 from .cached_db_adapter import CachedDbAdapter
 from .provider_web_search_adapter import ProviderWebSearchAdapter
-from .web_cache import WebCache, normalize_query
-from .web_page_extract import check_url_is_safe, extract_main_text, select_passages, split_passages
+from hubofhubs.websearch.cache import WebCache, normalize_query
+from hubofhubs.websearch.page_extract import check_url_is_safe, extract_main_text, select_passages, split_passages
 from .web_search_backends import (
     BraveBackend,
     FallbackSearchBackend,
