@@ -432,3 +432,18 @@ def test_an_answer_with_a_planner_hand_off_that_nothing_executed_is_a_deep_route
     assert rec["reply_full"] == got["reply"] and len(rec["reply"]) < len(rec["reply_full"])
     plain = drive.fold(BY_ID["E2E-GOAL-01"], drive.new_world(BY_ID["E2E-GOAL-01"]), type("R", (), {"kind": "answer", "text": "ok"})())
     assert plain["route"] == "answer"
+
+
+def test_a_reply_that_denies_a_change_the_turn_made_fails_even_when_the_facts_are_right():
+    case = BY_ID["E2E-WEBGOAL-01"]
+    write = {"tool": "create_quest_goal", "args": {"title": "Register for the Riverside 10K"}, "quest_id": "q_fit"}
+    base = {"route": "act", "web": ["q"], "reads": [], "writes": [write]}
+    good = dict(base, reply="Registration closes on 12 Nov 2026. I added a goal on your fitness quest to register before then.")
+    assert score.score_case(lambda c: good, case)["ok"]
+    for denial in ("Registration closes 12 Nov. I can't add the goal from this step, so please add it yourself.",
+                   "Registration closes 12 Nov. The goal has not been made yet.",
+                   "Registration closes 12 Nov. Check your goals before adding it again."):
+        got = dict(base, reply=denial)
+        assert "denies a change" in score.score_case(lambda c: got, case)["note"], denial
+    held = dict(base, route="deep", reply="I can't add it yet.")
+    assert "denies" not in score.judge(held, BY_ID["E2E-SEQ-01"])["note"]

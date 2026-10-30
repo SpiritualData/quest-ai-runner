@@ -1,6 +1,7 @@
 """Score one end-to-end turn by the WORLD afterwards and the reply, never by a model judge (scoring costs no model call).
 
 A case's ``expect`` may state:
+  (always)           a turn that landed a write and whose reply says it could not make the change, or that it is not made yet, fails
   no_writes          nothing in the world changed (any mutating tool call fails the case)
   writes             required changes, each {"tool", "args_contain": {arg: substring}, "quest_id"}; each must land exactly once,
                      and a write the case did not ask for fails it
@@ -26,6 +27,11 @@ stays free.
 import re
 
 from assist_a_terminal_session import score as terminal_score
+
+
+DENIES_A_LANDED_WRITE = re.compile(
+    r"\b(can(?:'|\u2019)?t|cannot|can not|could(?:n(?:'|\u2019)?t| not)|unable to|not able to)\s+(?:\w+\s+){0,2}?(add|create|make|write|save|change|update)\b"
+    r"|\bnot (?:yet )?been (?:made|added|created|saved)\b|\b(?:add|do) (?:it|this|that) yourself\b|\bbefore (?:adding|you add) (?:it )?again\b", re.I)
 
 
 def reply_problems(reply, expect):
@@ -114,6 +120,8 @@ def judge(got, case):
                     note="ok" if not problems else "; ".join(problems))
     held = got["route"] in expect.get("held_by", [])
     problems = write_problems(got["writes"], expect) + read_problems(got.get("reads", []), expect) + ([] if held else reply_problems(got["reply"], expect))
+    if got["writes"] and not held and DENIES_A_LANDED_WRITE.search(got["reply"]):
+        problems.append("reply denies a change the turn made")
     if expect.get("route_in") and got["route"] not in expect["route_in"]:
         problems.append(f"route {got['route']}, labelled {expect['route_in']}")
     if len(got["web"]) < expect.get("web_min", 0):
