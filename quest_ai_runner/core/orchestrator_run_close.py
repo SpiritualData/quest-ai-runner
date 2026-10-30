@@ -21,6 +21,7 @@ from .orchestrator_decisions import _truncate_goal, user_ordered_work
 from .orchestrator_events import grounding_context_layer
 from .orchestrator_text import _strip_future_context, unconfirmed_no_change_text
 from .orchestrator_types import OrchestratorResult
+from .planner_context import gathered_content
 from .planner_prompt import NOT_QUEUED_NOTE
 
 
@@ -226,9 +227,20 @@ class RunCloseMixin:
                     if emit is not None:
                         emit.status("Parked on an approval card, waiting for your answer…")
                     _parked_text = (_parked.output or "").strip()
+                    # What the person asked to be TOLD survives the park. A request that reads
+                    # something and then changes something has two halves; the answer written
+                    # before the change (grounded in this turn's reads) is the first half, and
+                    # dropping it left the person with only an approval prompt that never said
+                    # what the read found (a stored injury, never surfaced). It is kept only
+                    # when the turn really read something, so a bare "I'll do it" announcement is
+                    # still replaced by the ask. Pre-work text, never a done claim: the answer
+                    # step cannot claim a change.
+                    _findings = ((rs.text or "").strip()
+                                 if gathered_content(gathered) and _parked_text not in (rs.text or "")
+                                 else "")
                     # What happened first (a sibling that did not land, in its own words), then
                     # the one ask.
-                    reply_parts = [p for p in (unconfirmed_text, _parked_text) if p]
+                    reply_parts = [p for p in (_findings, unconfirmed_text, _parked_text) if p]
                     if reply_parts:
                         rs.text = "\n\n".join(reply_parts)
                     rs._decision_parked = True

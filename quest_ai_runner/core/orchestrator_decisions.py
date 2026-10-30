@@ -62,8 +62,8 @@ def clean_read_specs(raw: Any, cfg: OrchestratorConfig, *, tools_enabled: bool =
 
 
 #: How many facts, and how many characters of each, a planner's ``facts_read`` keeps.
-MAX_FACTS_READ = 8
-MAX_FACT_CHARS = 240
+MAX_FACTS_READ = 6
+MAX_FACT_CHARS = 200
 FACTS_BRIEF_HEAD = "FACTS FOUND IN THIS TURN'S READS (the work must respect every one):"
 FACTS_ANSWER_HEAD = "--- FACTS FOUND IN WHAT WAS READ (state those that bear on the question) ---"
 
