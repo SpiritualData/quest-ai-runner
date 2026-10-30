@@ -11,11 +11,16 @@ Retry policy (bounded, exponential backoff with jitter, ``Retry-After`` honoured
   ``auto`` (the default) turns it on only if the backend says it honours the key (``capabilities`` on ``GET
   /api/health`` lists ``idempotency-key``). A backend that ignores the header would create a second record for every
   retry, so with no evidence the retry stays off and the write is attempted once.
+* A read has a TOTAL deadline (``QAR_QUEST_READ_DEADLINE_SECONDS``, default 45, under the 60 s a tool call is allowed): no
+  retry starts once the time since the first attempt would pass it, and each attempt's own timeout is capped to what is left.
+* The capability probe runs once per process per backend (module-level cache under a lock, failures cached for a short
+  time), is never retried, waits at most ``PROBE_TIMEOUT_SECONDS`` and logs once, so building a client per tool call costs
+  one health request per process, not one per write.
 * A ``Retry-After`` longer than ``retry_max_delay`` is reported to the caller (``QuestApiError.retry_after``), not waited out.
 
 Settings (environment, read when the client is built; a constructor argument wins): ``QAR_QUEST_TIMEOUT_SECONDS``
 (default 30), ``QAR_QUEST_READ_RETRIES`` (default 2, at most 5), ``QAR_QUEST_WRITE_RETRY`` (``auto``, ``on``, ``off``) and
-``QAR_QUEST_RETRY_MAX_DELAY_SECONDS`` (default 30).
+``QAR_QUEST_RETRY_MAX_DELAY_SECONDS`` (default 30) and ``QAR_QUEST_READ_DEADLINE_SECONDS`` (default 45).
 """
 from __future__ import annotations
 
@@ -46,12 +51,18 @@ QAR_QUEST_TIMEOUT_ENV_VAR = "QAR_QUEST_TIMEOUT_SECONDS"
 QAR_QUEST_READ_RETRIES_ENV_VAR = "QAR_QUEST_READ_RETRIES"
 QAR_QUEST_WRITE_RETRY_ENV_VAR = "QAR_QUEST_WRITE_RETRY"
 QAR_QUEST_RETRY_MAX_DELAY_ENV_VAR = "QAR_QUEST_RETRY_MAX_DELAY_SECONDS"
+QAR_QUEST_READ_DEADLINE_ENV_VAR = "QAR_QUEST_READ_DEADLINE_SECONDS"
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_READ_RETRIES = 2
 MAX_RETRIES = 5
 DEFAULT_WRITE_RETRIES = 2
 DEFAULT_RETRY_MAX_DELAY_SECONDS = 30.0
+#: The most time one read (all its attempts and pauses) may take; under the 60 s a tool call is allowed.
+DEFAULT_READ_DEADLINE_SECONDS = 45.0
+#: The longest the capability probe may block a write, and how long a failed probe is remembered before it is tried again.
+PROBE_TIMEOUT_SECONDS = 5.0
+PROBE_FAILURE_TTL_SECONDS = 300.0
 BACKOFF_BASE_SECONDS = 0.5
 WRITE_RETRY_MODES = ("auto", "on", "off")
 IDEMPOTENCY_HEADER = "Idempotency-Key"
@@ -116,6 +127,27 @@ def parse_capabilities(payload: Any) -> FrozenSet[str]:
     return frozenset()
 
 
+class ProbeCache:
+    """What each backend said about itself, once per process. A client is built for every tool call, so the answer lives
+    here, not on the client: the first write to a backend probes it (under the lock, so concurrent writes wait for one
+    probe), every later one reads the cache. A failed probe is remembered for ``PROBE_FAILURE_TTL_SECONDS`` and then tried
+    again, so a backend that was briefly down does not keep write retry off until the process restarts."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.found: Dict[str, "tuple[FrozenSet[str], float]"] = {}    # base_url -> (capabilities, expires_at; 0 = never)
+        self.logged: set = set()
+
+    def clear(self) -> None:
+        with self.lock:
+            self.found.clear()
+            self.logged.clear()
+
+
+#: The process-wide cache (tests clear it with ``PROBE_CACHE.clear()``).
+PROBE_CACHE = ProbeCache()
+
+
 class ExchangeState(threading.local):
     """Per-thread facts about the request in flight: the idempotency key a write is sending, the HTTP status of the
     last answer, and whether the capability probe is running. Thread-local so concurrent tool calls never share a key."""
@@ -132,7 +164,7 @@ class TransportMixin:
 
     def init_transport(self, *, timeout: Optional[float], read_retries: Optional[int],
                        write_retry: Optional[str], retry_max_delay: Optional[float],
-                       env: Optional[Mapping[str, str]] = None) -> None:
+                       read_deadline: Optional[float] = None, env: Optional[Mapping[str, str]] = None) -> None:
         env = os.environ if env is None else env
         self.timeout = float(timeout) if timeout else env_number(
             env, QAR_QUEST_TIMEOUT_ENV_VAR, DEFAULT_TIMEOUT_SECONDS, minimum=0.1, maximum=3600)
@@ -141,6 +173,8 @@ class TransportMixin:
         self.write_retries = DEFAULT_WRITE_RETRIES
         self.retry_max_delay = float(retry_max_delay) if retry_max_delay else env_number(
             env, QAR_QUEST_RETRY_MAX_DELAY_ENV_VAR, DEFAULT_RETRY_MAX_DELAY_SECONDS, minimum=0.0, maximum=3600)
+        self.read_deadline = float(read_deadline) if read_deadline else env_number(
+            env, QAR_QUEST_READ_DEADLINE_ENV_VAR, DEFAULT_READ_DEADLINE_SECONDS, minimum=1.0, maximum=3600)
         mode = str(write_retry or env.get(QAR_QUEST_WRITE_RETRY_ENV_VAR) or "auto").strip().lower()
         if mode not in WRITE_RETRY_MODES:
             log.warning("%s=%r is not one of %s; using auto", QAR_QUEST_WRITE_RETRY_ENV_VAR, mode,
@@ -151,6 +185,7 @@ class TransportMixin:
         # Seams for tests: the pause between attempts, and the jitter source.
         self.sleep = time.sleep
         self.jitter = random.uniform
+        self.clock = time.monotonic
 
     @property
     def exchange_state(self) -> ExchangeState:
@@ -163,28 +198,42 @@ class TransportMixin:
     # --- capability probe ---------------------------------------------------------------------
 
     def backend_capabilities(self) -> FrozenSet[str]:
-        """What the backend says it supports, read once from ``GET /api/health`` and cached.
+        """What the backend says it supports, read from ``GET /api/health`` once per process and cached per base URL.
 
         Quest's health route is public and read-only. A backend that lists no ``capabilities``, answers with an error or
-        does not answer at all is treated as supporting nothing optional: the client logs that once and leaves
-        write retry off. It is never an error, so an older or newer backend keeps working."""
+        does not answer at all is treated as supporting nothing optional: that is logged once per process and write retry
+        stays off. The probe waits at most ``PROBE_TIMEOUT_SECONDS`` and is never an error, so an older or newer backend
+        keeps working."""
         if self.__dict__.get("capabilities") is not None:
             return self.capabilities
-        state = self.exchange_state
-        saved = (state.write_key, state.last_status, state.probing)
-        state.write_key, state.probing = None, True
-        reason = ""
-        try:
-            found = parse_capabilities(self._request("GET", HEALTH_PATH))
-        except (QuestApiError, QuestNotConfigured) as e:
-            found, reason = frozenset(), f" (the health check failed: {e})"
-        finally:
-            state.write_key, state.last_status, state.probing = saved
+        cache = PROBE_CACHE
+        with cache.lock:
+            hit = cache.found.get(self.base_url)
+            if hit is not None and (hit[1] == 0 or self.clock() < hit[1]):
+                self.capabilities = hit[0]
+                return hit[0]
+            found, reason = self.probe_health()
+            cache.found[self.base_url] = (found, 0.0 if found else self.clock() + PROBE_FAILURE_TTL_SECONDS)
+            first = self.base_url not in cache.logged
+            cache.logged.add(self.base_url)
         self.capabilities = found
-        if IDEMPOTENCY_CAPABILITY not in found:
+        if IDEMPOTENCY_CAPABILITY not in found and first:
             log.info("Quest backend does not advertise idempotent writes%s; write retry is off, so a failed write is "
                      "attempted once. Set %s=on to retry anyway.", reason, QAR_QUEST_WRITE_RETRY_ENV_VAR)
         return found
+
+    def probe_health(self) -> "tuple[FrozenSet[str], str]":
+        """One health read with a short timeout; never raises. Returns the capabilities and, on failure, why."""
+        state = self.exchange_state
+        saved = (state.write_key, state.last_status, state.last_headers, state.probing)
+        state.write_key, state.probing = None, True
+        try:
+            payload = self._request("GET", HEALTH_PATH, timeout_override=min(self.timeout, PROBE_TIMEOUT_SECONDS))
+            return parse_capabilities(payload), ""
+        except (QuestApiError, QuestNotConfigured) as e:
+            return frozenset(), f" (the health check failed: {e})"
+        finally:
+            state.write_key, state.last_status, state.last_headers, state.probing = saved
 
     def write_retry_enabled(self) -> bool:
         """Whether a write that carries an Idempotency-Key may be retried (see the module doc)."""
@@ -259,13 +308,20 @@ class TransportMixin:
         state = self.exchange_state
         key = state.write_key
         retries = self.retries_for(method, key, timeout_override)
+        deadline = self.clock() + self.read_deadline if (method == "GET" and not timeout_override) else None
         attempt = 0
         while True:
+            timeout = timeout_override or self.timeout
+            if deadline is not None:
+                timeout = max(0.5, min(timeout, deadline - self.clock()))     # an attempt never outlives the deadline
             try:
-                status, payload = self.attempt(method, path, params=params, body=body,
-                                               timeout=timeout_override or self.timeout, key=key)
+                status, payload = self.attempt(method, path, params=params, body=body, timeout=timeout, key=key)
             except QuestApiError as e:
                 wait = self.backoff(attempt, e) if (e.transient and attempt < retries) else None
+                if wait is not None and deadline is not None and self.clock() + wait >= deadline:
+                    log.info("Quest API %s %s: the %.0fs read deadline would pass before retry %d; giving up", method, path,
+                             self.read_deadline, attempt + 1)
+                    wait = None
                 if wait is None:
                     raise
                 log.info("Quest API %s %s failed (%s); retry %d of %d in %.1fs", method, path,

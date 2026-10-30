@@ -108,7 +108,8 @@ class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, Quests
                  env_id: Optional[str] = None,
                  read_retries: Optional[int] = None,
                  write_retry: Optional[str] = None,
-                 retry_max_delay: Optional[float] = None):
+                 retry_max_delay: Optional[float] = None,
+                 read_deadline: Optional[float] = None):
         self.base_url = (base_url or "").rstrip("/")
         self.api_key = api_key or ""
         self.team_id = team_id or ""
@@ -117,7 +118,7 @@ class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, Quests
         self.env_id = env_id or ""
         # Timeout, retry and write-retry settings: an argument wins, else QAR_QUEST_* from the environment.
         self.init_transport(timeout=timeout, read_retries=read_retries, write_retry=write_retry,
-                            retry_max_delay=retry_max_delay)
+                            retry_max_delay=retry_max_delay, read_deadline=read_deadline)
         # {role name -> user id} for ``create_decision(assignee="...")``. WHO a decision goes to is
         # deployment policy, not client logic: one deployment routes money to an owner and errands
         # to an operator, another has a single approver. Naming the roles in config (RunnerConfig.

@@ -30,11 +30,11 @@ profile and context entries) returns a `WriteResult` or raises `QuestWriteError`
 | `status` | Meaning | Returned or raised |
 |---|---|---|
 | `applied` | the change was made | returned |
-| `held` | Quest took it but it waits for a person's approval (HTTP 202, `applied: false`, `pending_approval`, `pending`); nothing changed yet. `id` is the ask that holds it | returned |
-| `noop` | it already existed or already held (`already_existed`, `duplicate`) | returned |
-| `refused` | Quest said no (a 4xx other than 429): not allowed, invalid, a conflict. The message is Quest's reason | raised |
-| `failed` | it did not happen: a 429 (`retry_after` is set), a 5xx, or Quest could not be reached (nothing was sent) | raised |
-| `unknown` | the request was sent and no answer came back (a read timeout, a reset after sending): it MAY have been applied. Look before trying again | raised |
+| `held` | Quest took it and it waits for a person's approval: HTTP 202, `applied: false`, `pending_approval` or `pending`, WITH a `decision_id` (the ask a person resolves; it is the result's `id`). Nothing changed yet. The same answer with no decision id has nobody to wait for, so it is `refused` | returned |
+| `noop` | it already existed or already held: `already_existed` or `duplicate` in the body, or, for a created goal whose body does not say, the `X-Goal-Already-Existed: true` header (the body wins) | returned |
+| `refused` | Quest said no (a 4xx other than 429, and not the in-progress 409 below): not allowed, invalid, a conflict, a key reused with a different body (422). A 202 with no decision id is a refusal too. The message is Quest's reason | raised |
+| `failed` | it did not happen: a 429 or a 503 (`retry_after` is set when Quest sent one), a 409 `idempotency_in_progress` that never cleared, or Quest could not be reached (nothing was sent) | raised |
+| `unknown` | the request was sent and no answer came back (a read timeout, a reset after sending), or a write was answered 500, 502 or 504 (a gateway can time out while the backend commits): it MAY have been applied. Look before trying again. The runner never repeats such a call on its own: a re-plan skips it and a saved recipe answers with an `OUTCOME UNKNOWN` receipt | raised |
 
 A `WriteResult` carries `status`, `id`, `detail` (Quest's own words) and `data` (the raw answer), and reads like the answer it wraps
 (`get`, `[]`, `in`, `==`). `QuestWriteError` subclasses `QuestApiError`, so an existing `except QuestApiError` still catches it, and carries
@@ -56,6 +56,8 @@ Two kinds of call keep a different rule, on purpose:
 * A GET is retried up to `QAR_QUEST_READ_RETRIES` times (default 2, at most 5) on a transport error, a 429 or a 5xx, waiting 0.5 s, 1 s, 2 s ... capped at
   `QAR_QUEST_RETRY_MAX_DELAY_SECONDS` (default 30), with jitter. A 4xx other than 429 is a final answer and is never retried. `Retry-After` (seconds or an HTTP
   date) is honoured; one longer than the cap is reported on the error (`retry_after`) instead of waited out. The long-poll wait channel and the capability probe are never retried.
+* A read also has a TOTAL deadline, `QAR_QUEST_READ_DEADLINE_SECONDS` (default 45, under the 60 s a tool call is allowed): no retry starts once it would pass the
+  deadline, and each attempt's own timeout is cut to what is left, so three slow attempts cannot add up to 90 s.
 * Goal, note and ask creation (`POST /api/planning/goals`, `POST /api/quests/{id}/notes`, `POST /api/teams/{team}/decisions`) send an
   `Idempotency-Key` header: a fresh UUID per logical call, reused by every attempt of that call (pass `idempotency_key=` to choose it). A server that honours the key
   must return the first result for a repeat of the same key instead of creating a second record.
@@ -63,13 +65,17 @@ Two kinds of call keep a different rule, on purpose:
   backend lists `idempotency-key` under `capabilities` (see below); `on` forces it; `off` forbids it. A backend that ignores the header would make a second record
   per retry, so with no evidence of support a write is attempted once and a timeout is reported as `unknown`. Email sends, task creation and every other write carry no key and are
   never retried.
+* A 409 whose body says `code: "idempotency_in_progress"` (it also carries `Retry-After`) means the first request with this key is still running: it is transient,
+  retried with the same key honouring `Retry-After` (and a `failed` write if it never clears). Any other 409, such as a question the person already answered, is a
+  refusal and is never retried; so is a 422 for a key reused with a different body.
 * The request timeout is `QAR_QUEST_TIMEOUT_SECONDS` (default 30).
 
 ### Version skew: the capability probe
 
-On the first write that carries a key (under `auto`), the client reads `GET /api/health` once, caches the answer and looks for a `capabilities` list
+On the first write that carries a key (under `auto`) in a process, the client reads `GET /api/health` (at most 5 seconds), caches the answer per base URL for the whole
+process (a client is built for every tool call, so the cache is not on the client; a failed probe is retried after five minutes) and looks for a `capabilities` list
 (at the top of the body or inside `data`). It reads nothing else from the server about its version. A backend that lists none, answers an error or does not
-answer is treated as supporting nothing optional: the client logs one line at INFO ("does not advertise idempotent writes; write retry is off") and carries on. It is never an error.
+answer is treated as supporting nothing optional: the client logs one line at INFO, once per process ("does not advertise idempotent writes; write retry is off"), and carries on. It is never an error.
 A backend advertises support by adding `"idempotency-key"` to that list.
 
 ## Endpoints

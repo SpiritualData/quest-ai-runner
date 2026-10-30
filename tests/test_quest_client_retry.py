@@ -274,3 +274,98 @@ def test_the_probe_is_never_retried_so_it_cannot_stall_a_write(monkeypatch):
 def test_capabilities_are_read_from_either_envelope(monkeypatch):
     client, _ = make_client([(200, {"capabilities": ["idempotency-key", "x"]})], monkeypatch)
     assert client.backend_capabilities() == frozenset({"idempotency-key", "x"})
+
+
+# --- one probe per process, with a short timeout -----------------------------------------------------
+
+def test_many_clients_probe_a_backend_once_per_process(monkeypatch):
+    """A client is built for every tool call, so the answer is cached per base URL for the process, not per client."""
+    first, transport = make_client([ADVERTISES, (201, {"id": "g1"})], monkeypatch)
+    first.create_goal("Run", period="2026-08-18", quest_id="q1")
+    for _ in range(5):
+        later, _unused = make_client([(201, {"id": "g1"})], monkeypatch)
+        later.base_url = first.base_url
+        import urllib.request
+        monkeypatch.setattr(urllib.request, "urlopen", transport)
+        later.create_goal("Walk", period="2026-08-18", quest_id="q1")
+    health = [r for r in transport.requests if r[1] == "/api/health"]
+    assert len(health) == 1 and len(transport.requests) == 7
+
+
+def test_the_probe_logs_once_per_process_even_across_clients(monkeypatch, caplog):
+    with caplog.at_level(logging.INFO, logger="quest-ai-runner.quest_client"):
+        for _ in range(4):
+            client, _unused = make_client([SILENT], monkeypatch)
+            client.backend_capabilities()
+    assert len([r for r in caplog.records if "write retry" in r.getMessage()]) == 1
+
+
+def test_the_probe_waits_at_most_five_seconds_however_long_the_timeout_is(monkeypatch):
+    client, transport = make_client([ADVERTISES], monkeypatch, timeout=30)
+    client.backend_capabilities()
+    assert transport.requests[0][1] == "/api/health" and transport.requests[0][4] == 5.0
+    short, transport = make_client([ADVERTISES], monkeypatch, timeout=2)
+    from quest_ai_runner.runner.quest_client_transport import PROBE_CACHE
+    PROBE_CACHE.clear()
+    short.backend_capabilities()
+    assert transport.requests[0][4] == 2
+
+
+def test_a_failed_probe_is_cached_for_a_while_then_tried_again(monkeypatch):
+    client, transport = make_client([(503, {}), ADVERTISES], monkeypatch)
+    now = [1000.0]
+    client.clock = lambda: now[0]
+    assert client.backend_capabilities() == frozenset()
+    other, _unused = make_client([ADVERTISES], monkeypatch)
+    other.base_url, other.clock = client.base_url, client.clock
+    assert other.backend_capabilities() == frozenset()                       # remembered: no second request
+    now[0] += 301
+    third, _unused = make_client([ADVERTISES], monkeypatch)
+    third.base_url, third.clock = client.base_url, client.clock
+    assert third.backend_capabilities() == frozenset({"idempotency-key"})
+
+
+# --- a total deadline on a read ------------------------------------------------------------------------
+
+def timed_client(monkeypatch, steps, **settings):
+    """A client whose clock advances by the pause of every sleep and by the timeout every attempt burns."""
+    import urllib.request
+    client, transport = make_client(steps, monkeypatch, **settings)
+    now = [0.0]
+    client.clock = lambda: now[0]
+    client.sleep = lambda seconds: now.__setitem__(0, now[0] + seconds)
+    real = urllib.request.urlopen
+
+    def attempt(req, timeout=None):
+        now[0] += timeout or 0
+        return real(req, timeout=timeout)
+
+    monkeypatch.setattr(urllib.request, "urlopen", attempt)
+    return client, transport, now
+
+
+def test_a_read_that_keeps_timing_out_stops_at_its_deadline_not_after_three_full_timeouts(monkeypatch):
+    client, transport, now = timed_client(monkeypatch, [TimeoutError("read timed out")], read_deadline=45)
+    with pytest.raises(QuestApiError):
+        client._request("GET", "/api/x")
+    assert now[0] <= 45.0 + 0.5
+    assert len(transport.requests) == 2                           # not three attempts of 30 s
+    assert transport.requests[1][4] < 30                          # the second attempt is cut to what was left
+
+
+def test_the_read_deadline_is_a_setting(monkeypatch):
+    monkeypatch.setenv("QAR_QUEST_READ_DEADLINE_SECONDS", "200")
+    client, transport, now = timed_client(monkeypatch, [TimeoutError("read timed out")])
+    with pytest.raises(QuestApiError):
+        client._request("GET", "/api/x")
+    assert len(transport.requests) == 3 and client.read_deadline == 200
+
+
+def test_the_default_read_deadline_is_under_the_tool_timeout(monkeypatch):
+    client, _unused = make_client([OK], monkeypatch)
+    assert client.read_deadline == 45.0 < 60.0
+
+
+def test_the_deadline_does_not_cut_a_read_that_answers_in_time(monkeypatch):
+    client, transport, now = timed_client(monkeypatch, [(503, {}), OK], read_deadline=45)
+    assert client._request("GET", "/api/x") == {"ok": True} and len(transport.requests) == 2

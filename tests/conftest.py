@@ -32,6 +32,15 @@ def hermetic_qar_environment(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def quest_capability_cache_starts_empty():
+    """The Quest client remembers what a backend said about itself for the whole process; no test inherits another's answer."""
+    from quest_ai_runner.runner.quest_client_transport import PROBE_CACHE
+    PROBE_CACHE.clear()
+    yield
+    PROBE_CACHE.clear()
+
+
+@pytest.fixture(autouse=True)
 def chat_log_stays_in_a_temp_file(monkeypatch, tmp_path, hermetic_qar_environment):
     """A test that mounts the terminal app never writes the real per-user chat log."""
     monkeypatch.setenv("QAR_CHAT_LOG_FILE", str(tmp_path / "chat.log"))
