@@ -8,7 +8,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from .core.model_registry import ModelRegistry
-from .core.adapters import RetrievalAdapter
+from .core.adapters_retrieval import RetrievalAdapter
 from .config_resolvers import resolve_deep_runner, resolve_deep_runner_ladder
 
 if TYPE_CHECKING:

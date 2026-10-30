@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from escalate_to_a_human.fake_quest import FakeQuest, summarize
-from quest_ai_runner.core.adapters import Escalation
+from quest_ai_runner.core.adapters_values import Escalation
 from quest_ai_runner.runner.quest_client import QuestDecisionSink
 
 

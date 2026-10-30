@@ -2,7 +2,7 @@
 stand in for the network and the model only; every decision between them is made by live runner code."""
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.core.adapters import DeepResult, Escalation, Observation
+from quest_ai_runner.core.adapters_values import DeepResult, Escalation, Observation
 
 
 def iso(moment):

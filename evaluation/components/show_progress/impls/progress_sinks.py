@@ -1,7 +1,9 @@
 """CURRENT: the production sinks (``core/adapters_sinks.py``): ``StreamSink`` for LIVE, ``MilestoneSink``
 for BACKGROUND (every callback wired, as the runner's executor does) and ``FanoutSink`` for the
 LIVE-to-BACKGROUND handoff. Zero model calls, zero network."""
-from quest_ai_runner.core.adapters import FanoutSink, MilestoneSink, Mode, ProgressEvent, StreamSink
+from quest_ai_runner.core.adapters_sinks import FanoutSink, MilestoneSink, StreamSink
+from quest_ai_runner.core.adapters_events import Mode
+from quest_ai_runner.core.adapters_values import ProgressEvent
 
 
 def make_sinks(shown, broken):

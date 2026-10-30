@@ -45,14 +45,9 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..core.adapters import (
-    EVENT_DECISION,
-    EVENT_MILESTONE,
-    EVENT_RESULT,
-    ChannelTransport,
-    ConversationContext,
-    OutboundReply,
-)
+from hubofhubs.ports.context import ConversationContext
+from ..core.adapters_events import EVENT_DECISION, EVENT_MILESTONE, EVENT_RESULT
+from ..core.adapters_channels import ChannelTransport, OutboundReply
 from ..adapters.conversation_session_store import ChatSessionStore
 
 log = logging.getLogger("quest-ai-runner.channel_session")

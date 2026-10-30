@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 import common
-from quest_ai_runner.core.adapters import Observation
+from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.tools import ToolResult
 from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT
 

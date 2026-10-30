@@ -14,7 +14,7 @@ from .adapters import (
     CompositeRetrievalAdapter,
     FilesAdapter,
 )
-from .core.adapters import ModelProvider
+from hubofhubs.ports.model import ModelProvider
 from .core.prompt_specs import PromptSpec, register, render_prompt
 from .core.resolve import resolve
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig

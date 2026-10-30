@@ -44,10 +44,20 @@ class TurnMixin:
 
     def _types(self) -> dict:
         if self._ev is None:
-            from .core.adapters import (
-                EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN,
-                EVENT_PARTIAL, EVENT_EXEC, EVENT_INTENT, EVENT_RESULT, EVENT_DECISION,
-                EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING,
+            from .core.adapters_events import (
+                EVENT_CONTEXT,
+                EVENT_STATUS,
+                EVENT_PLAN,
+                EVENT_READ,
+                EVENT_REPLAN,
+                EVENT_PARTIAL,
+                EVENT_EXEC,
+                EVENT_INTENT,
+                EVENT_RESULT,
+                EVENT_DECISION,
+                EVENT_MILESTONE,
+                EVENT_DONE,
+                EVENT_UNDERSTANDING,
             )
             self._ev = dict(
                 context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN,
@@ -249,6 +259,10 @@ class TurnMixin:
             # tier and the model), said after the run: here the turn's closing line names the model, once.
             if isinstance(data, dict) and "deep_run_model" in data:
                 return
+            if (isinstance(data, dict) and "deep_run_model_live" in data) or text.startswith("Starting"):
+                # Which model the work starts on, and the exact one it then reports, kept in the transcript while
+                # it runs: the status bar is overwritten by the next beat and the closing line comes only after.
+                self._tlog.write(indented_line(f"  ▸ {text.rstrip('…')}", "dim"))
             self._activity.set_status(text or "Thinking…")
 
         elif t == ev["plan"]:

@@ -19,13 +19,10 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Un
 
 
 
-from .core.adapters import (
-    EscalationSink,
-    FileWriter,
-    GuidanceProvider,
-    ModelProvider,
-    RetrievalAdapter,
-)
+from hubofhubs.ports.model import ModelProvider
+from .core.adapters_deep import EscalationSink, FileWriter
+from .core.adapters_guidance import GuidanceProvider
+from .core.adapters_retrieval import RetrievalAdapter
 # Bootstrap algorithm version + meta reader. file_context_store imports only from .core and
 # ._walk (never from .config), so this top-level import carries no circular-import risk.
 # MCPServerSpec is a plain dataclass with no dependency on .core or .config, so this top-level

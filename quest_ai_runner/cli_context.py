@@ -35,7 +35,7 @@ def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
     sending the task -- but the failure is not invisible.
     """
     from .adapters.file_context_store import FileContextStore
-    from .core.adapters import AssembledContext
+    from hubofhubs.ports.context import AssembledContext
 
     log = logging.getLogger("quest-ai-runner")
 

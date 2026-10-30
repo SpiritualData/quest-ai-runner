@@ -71,7 +71,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Sequence
 
 from esoi import implementation
-from ..core.adapters import Escalation, EscalationSinkBase
+from ..core.adapters_values import Escalation
+from ..core.adapters_bases import EscalationSinkBase
 
 from .quest_client_support import (
     GOAL_UPDATE_FANOUT_CAP,

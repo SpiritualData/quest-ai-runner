@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from quest_ai_runner.core import goal_runner_contract as grc
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig

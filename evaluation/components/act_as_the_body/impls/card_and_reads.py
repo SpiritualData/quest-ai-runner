@@ -2,7 +2,7 @@
 read action (a read already run this turn is not run again, a tool step resets that record), changes go through the
 registry's declared operations (an identical successful call is not run twice). Zero model calls (scripted planner)."""
 import common  # noqa: F401
-from quest_ai_runner.core.adapters import Observation
+from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.tools import ToolRegistry, ToolResult, ToolSpec
 from scripted_brain import ScriptedProvider, build_brain
 

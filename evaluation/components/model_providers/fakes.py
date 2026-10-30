@@ -1,5 +1,5 @@
 """Fake providers shared by the model-provider solutions. Nothing here touches a network or a model."""
-from quest_ai_runner.core.adapters import ModelProviderBase
+from quest_ai_runner.core.adapters_bases import ModelProviderBase
 
 
 class Named(ModelProviderBase):

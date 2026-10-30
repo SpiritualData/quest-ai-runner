@@ -423,7 +423,7 @@ from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsA
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import (ConfigFileError, RunnerConfig, apply_config_environment, apply_file_defaults,
                      load_quest_client, parse_decision_assignees, resolve_config_objects)
-from .core.adapters import ModelProvider
+from hubofhubs.ports.model import ModelProvider
 from .pricing import estimate_bootstrap_cost, get_provider_and_model
 from .runner.channel_runner import ChannelRunner
 from .runner.poller import Poller
