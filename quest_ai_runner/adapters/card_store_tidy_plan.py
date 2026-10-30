@@ -324,6 +324,42 @@ def plan_cards(
             survivors.append((str(card.get("id") or key), key))
             for rel in files:
                 holders_by_path.setdefault(rel, set()).add(len(survivors) - 1)
+        def rekey_apart(key: str, card: Dict[str, Any]) -> None:
+            """Take a compounded card that cannot be joined onto another out of its stuck id: re-key it to its one-hop id
+            (that id plus six characters of its own when a different topic holds it), or drop it when its one-hop twin
+            was retired earlier. Notes why when it can do neither."""
+            clean = rekey_target(str(card.get("id") or key))
+            if not clean or card_origin.card_id_problem(clean):
+                note_skip("compounded card kept: its only copy in this store")
+                return
+            if quarantined(clean):
+                # Its one-hop twin was moved out of the index on purpose earlier: this copy only brings it back
+                # under an id every writer refuses, so it goes the same way (unless something was added to it).
+                if is_protected(card):
+                    note_skip(f"compounded card kept: {is_protected(card)}")
+                    return
+                record(key, card, "compounded",
+                       f"{pending[key]}; its one-hop twin {clean} was retired from the index earlier")
+                return
+            twin = claimed_rekeys.get(clean)
+            if twin is not None and set(card_paths(twin)) == set(card_paths(card)) \
+                    and str(twin.get("name") or "") == str(card.get("name") or ""):
+                # The same card again: it joins the one that takes the id, on the next pass, once that exists.
+                note_skip("compounded card kept: its only copy in this store")
+                return
+            if clean in cards or clean in claimed_rekeys or clean in pending:
+                # A different topic already holds that id (or another card of this run takes it): keep this one
+                # apart under the same id plus six characters of its own, instead of leaving it stuck.
+                clean = f"{clean}-{hashlib.sha1(key.encode('utf-8', 'replace')).hexdigest()[:6]}"
+                if (len(clean) > card_origin.MAX_ID_CHARS or clean in cards or clean in claimed_rekeys
+                        or card_origin.card_id_problem(clean)):
+                    note_skip("compounded card kept: its only copy in this store")
+                    return
+            claimed_rekeys[clean] = card
+            record(key, card, "compounded",
+                   f"{pending[key]}; the only copy, so it is re-keyed to {clean} (the card moves whole)",
+                   becomes=clean)
+
         for key, card in items:
             if key in decided or key not in pending:
                 continue
@@ -335,37 +371,7 @@ def plan_cards(
                 if not matches:
                     break
             if files and not matches:
-                clean = rekey_target(str(card.get("id") or key))
-                if not clean or card_origin.card_id_problem(clean):
-                    note_skip("compounded card kept: its only copy in this store")
-                    continue
-                if quarantined(clean):
-                    # Its one-hop twin was moved out of the index on purpose earlier: this copy only brings it back
-                    # under an id every writer refuses, so it goes the same way (unless something was added to it).
-                    if is_protected(card):
-                        note_skip(f"compounded card kept: {is_protected(card)}")
-                        continue
-                    record(key, card, "compounded",
-                           f"{pending[key]}; its one-hop twin {clean} was retired from the index earlier")
-                    continue
-                twin = claimed_rekeys.get(clean)
-                if twin is not None and set(card_paths(twin)) == set(card_paths(card)) \
-                        and str(twin.get("name") or "") == str(card.get("name") or ""):
-                    # The same card again: it joins the one that takes the id, on the next pass, once that exists.
-                    note_skip("compounded card kept: its only copy in this store")
-                    continue
-                if clean in cards or clean in claimed_rekeys or clean in pending:
-                    # A different topic already holds that id (or another card of this run takes it): keep this one
-                    # apart under the same id plus six characters of its own, instead of leaving it stuck.
-                    clean = f"{clean}-{hashlib.sha1(key.encode('utf-8', 'replace')).hexdigest()[:6]}"
-                    if (len(clean) > card_origin.MAX_ID_CHARS or clean in cards or clean in claimed_rekeys
-                            or card_origin.card_id_problem(clean)):
-                        note_skip("compounded card kept: its only copy in this store")
-                        continue
-                claimed_rekeys[clean] = card
-                record(key, card, "compounded",
-                       f"{pending[key]}; the only copy, so it is re-keyed to {clean} (the card moves whole)",
-                       becomes=clean)
+                rekey_apart(key, card)
                 continue
             detail = pending[key]
             extra: Dict[str, Any] = {}
@@ -378,7 +384,8 @@ def plan_cards(
                     survivor = cards.get(survivor_key)
                     merged, why = fold_card(card, survivor) if survivor is not None else (None, "it is gone")
                     if merged is None:
-                        note_skip(f"compounded card kept: {protection}, and it cannot join {survivor_id}: {why}")
+                        # It is a topic of its own that cannot join the card it resembles: keep it, under a clean id.
+                        rekey_apart(key, card)
                         continue
                     detail += f"; what it holds ({protection}) joins that card first"
                     extra["joins"] = survivor_key

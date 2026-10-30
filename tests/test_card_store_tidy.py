@@ -606,3 +606,12 @@ def test_a_second_compounded_sole_copy_with_a_distinct_topic_is_rekeyed_apart_an
     assert by_key[one]["becomes"] == "root-a-111111--idealism"
     assert by_key[two]["becomes"].startswith("root-a-111111--idealism-") and by_key[two]["becomes"] != by_key[one]["becomes"]
     assert three in by_key and "becomes" not in by_key[three] and "keeper" not in by_key[three]
+
+
+def test_a_used_compounded_card_that_cannot_join_the_card_it_resembles_is_rekeyed_apart(tmp_path):
+    review(tmp_path)
+    stuck = "root-a-111111--root-b-222222--root-a-111111--brief"
+    repo = backend_with([card("root-a-111111--idealism", ["a/one.md"], name="Autopilot Quest and Goals"),
+                         card(stuck, ["a/one.md"], name="Autopilot Daily Brief System", usage_count=2)])
+    entry = {e["key"]: e for e in plan_for(repo, tmp_path).entries}[stuck]
+    assert entry["becomes"] == "root-a-111111--brief"
