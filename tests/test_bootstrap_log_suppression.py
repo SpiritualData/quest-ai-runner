@@ -97,3 +97,20 @@ def test_info_records_are_actually_filtered_end_to_end(caplog):
         assert any("stage 1 returned no areas" in m for m in messages)
     finally:
         _reset_loggers()
+
+
+def test_the_hub_recall_loggers_are_kept_out_of_the_transcript_too():
+    """The folder review, per-folder ceilings and mount logs moved to ``hubofhubs.recall.*``; a child logger obeys the root's level."""
+    _reset_loggers()
+    root = logging.getLogger()
+    before = root.level
+    root.setLevel(logging.INFO)            # the chat transcript's handler sits on the root logger at INFO
+    try:
+        _suppress_background_bootstrap_logs(verbose=False)
+        for module in ("context_folder_review", "context_card_ceilings", "card_store_mounts", "context_bootstrap_support"):
+            assert not logging.getLogger(f"hubofhubs.recall.{module}").isEnabledFor(logging.INFO), module
+        assert logging.getLogger("hubofhubs.recall.card_limit").isEnabledFor(logging.WARNING)
+    finally:
+        root.setLevel(before)
+        _reset_loggers()
+        logging.getLogger("hubofhubs.recall").setLevel(logging.NOTSET)
