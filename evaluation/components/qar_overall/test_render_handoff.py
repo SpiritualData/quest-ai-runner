@@ -175,3 +175,12 @@ def test_add_examples_names_a_case_with_no_transcript_and_keeps_the_content_file
     except SystemExit as stop:
         assert "E2E-NOPE-01" in str(stop)
     assert json.loads(content.read_text())["examples"] == [{"id": "keep"}]
+
+
+def test_a_partial_run_row_is_labelled():
+    data = fixture()
+    data["e2e"]["sample"] = "only:E2E-QUEST-12"
+    data["parts"][0]["sample"] = "only:E2E-QUEST-12"
+    page = rh.render(data, CONTENT)
+    assert page.count("partial run") >= 2
+    assert "partial run" not in rh.render(fixture(), CONTENT)

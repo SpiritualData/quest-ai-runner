@@ -75,7 +75,7 @@ def row_facts(log, component, impl):
     why = combine.current(component, row)
     return dict(component=component, impl=impl, state="stale" if why else "measured", why=why, date=row.get("date", ""),
                 passed=int(combine.num(row, "passed")), cases=int(combine.num(row, "cases")), sha=row.get("git_sha", ""),
-                cost=row.get("cost_usd", ""), model=row.get("model", ""))
+                cost=row.get("cost_usd", ""), model=row.get("model", ""), sample=row.get("sample", "") or "")
 
 
 def part_facts(reg, log):
@@ -394,6 +394,7 @@ def section_parts(data):
     rows = []
     for p in data["parts"]:
         latest = f"{p['passed']}/{p['cases']}" + (f" on {esc(p['date'])}" if p.get("date") else "") if p["cases"] else "-"
+        latest += " (a partial run)" if p.get("sample") else ""
         why = f' <span class="l">{esc(re.sub("^stale, ", "", p["why"]))}</span>' if p["state"] != "measured" and p.get("why") else ""
         rows.append([esc(p["part"]), esc(p["solution"]), esc(p["metric"] or "-"), latest, part_status(p) + why])
     return ("<h2>Every part: metric and status</h2>"
@@ -407,6 +408,7 @@ def section_e2e(data, content):
     for kind, n in sorted(e["kinds"].items()):
         rows.append([esc(kind), str(n), split_cell(bd, kind, e.get("date"), "-")])
     head = f"{e['passed']}/{e['cases']} turns pass" if e["cases"] else "no run recorded"
+    head += " (the latest row is a partial run of named cases, not the full set; the split below covers every case run in the staged pass)" if e.get("sample") else ""
     note = "" if bd else '<p class="sub">The per-kind split is not in the results log; the daily pass stores it with --record.</p>'
     return (f'<h2>End to end</h2><p>{esc(head)}{" on " + esc(e["date"]) if e.get("date") else ""} {part_status(e)}</p>'
             + table(["Kind", "Cases", "Passed"], rows) + note)

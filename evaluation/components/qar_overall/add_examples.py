@@ -39,7 +39,7 @@ def safe(text, limit=CUT):
 
 
 def args_text(args):
-    return ", ".join(f"{k}={safe(v, 70)!r}" if isinstance(v, str) else f"{k}={v}" for k, v in list((args or {}).items())[:3])
+    return ", ".join(f"{k}={safe(v, 70)!r}" if isinstance(v, str) else f"{k}={v}" for k, v in [(k, v) for k, v in (args or {}).items() if k != "quest_id"][:3])
 
 
 def step_text(step):
