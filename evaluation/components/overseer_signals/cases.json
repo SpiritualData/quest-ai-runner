@@ -533,7 +533,7 @@
    "operations": [
     "[grep] 'RetrievalAdapter' in quest_ai_runner/ -> 12 hits across 6 files",
     "[read] adapters/files_adapter.py -> FilesAdapter(RetrievalAdapter)",
-    "[read] adapters/web_search_adapter.py -> WebSearchAdapter(RetrievalAdapter)",
+    "[read] adapters/provider_web_search_adapter.py -> ProviderWebSearchAdapter(RetrievalAdapter)",
     "[read] adapters/composite_retrieval_adapter.py -> CompositeRetrievalAdapter"
    ],
    "operations_total": 4,
@@ -542,7 +542,7 @@
    "elapsed_seconds": 560,
    "gathered_chars": 48000,
    "consecutive_reads": 4,
-   "draft_answer": "FilesAdapter, WebSearchAdapter, CompositeRetrievalAdapter, ClaudeConversationsAdapter and the Quest adapter implement it.",
+   "draft_answer": "FilesAdapter, ProviderWebSearchAdapter, CompositeRetrievalAdapter, ClaudeConversationsAdapter and the Quest adapter implement it.",
    "max_steps": 6,
    "max_elapsed_seconds": 600.0,
    "max_gathered_chars": 60000

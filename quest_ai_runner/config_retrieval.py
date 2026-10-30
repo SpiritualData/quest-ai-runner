@@ -82,19 +82,18 @@ def apply_file_defaults(cfg: RunnerConfig, file_cfg: Optional[RunnerConfig]) -> 
 
 
 def _retrieval_has_web_search(retrieval) -> bool:
-    """True if a web-search adapter (Tavily or provider-native) is already in the stack."""
+    """True if a provider-native web-search adapter is already in the stack."""
     if retrieval is None:
         return False
     try:
-        from .adapters.web_search_adapter import WebSearchAdapter as _WSA
         from .adapters.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
         from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
     except Exception:  # noqa: BLE001
         return False
-    if isinstance(retrieval, (_WSA, _PWSA)):
+    if isinstance(retrieval, _PWSA):
         return True
     if isinstance(retrieval, _CRA):
-        return any(isinstance(a, (_WSA, _PWSA)) for a in getattr(retrieval, "adapters", []))
+        return any(isinstance(a, _PWSA) for a in getattr(retrieval, "adapters", []))
     return False
 
 
@@ -140,8 +139,7 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
 
     # web: a WebResearch adapter is wired directly (cfg.web_research, the fast/cheap path), OR
     # the deep-runner browses via Claude Code's WebSearch/WebFetch (reads off the actual tool
-    # gating), OR a legacy WebSearchAdapter/ProviderWebSearchAdapter is wired into the retrieval
-    # stack. All honest: we detect what the config actually provides.
+    # gating), OR a ProviderWebSearchAdapter is wired into the retrieval stack. All honest: we detect what the config actually provides.
     web = cfg.web_research is not None
     if not web and deep is not None:
         sub_cfg = getattr(deep, "cfg", None)
@@ -153,19 +151,14 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
                 web = False
 
     # If no deep-runner web capability, check the retrieval stack for a web-search adapter:
-    # a Tavily WebSearchAdapter (needs its key) OR a provider-native ProviderWebSearchAdapter.
+    # a provider-native ProviderWebSearchAdapter.
     if not web and retrieval is not None:
         try:
-            from .adapters.web_search_adapter import WebSearchAdapter as _WSA
             from .adapters.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
             from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
 
             def _is_web(a) -> bool:
-                if isinstance(a, _WSA):
-                    return bool(getattr(a, "_api_key", ""))
-                if isinstance(a, _PWSA):
-                    return True
-                return False
+                return isinstance(a, _PWSA)
 
             if isinstance(retrieval, _CRA):
                 web = any(_is_web(a) for a in getattr(retrieval, "adapters", []))

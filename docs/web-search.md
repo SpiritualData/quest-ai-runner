@@ -15,14 +15,13 @@ It is a small, deliberately asymmetric two-method surface, not a general `Retrie
 
 Neither method ever raises. Every failure comes back as `Observation(kind="error", error=...)`.
 
-## Relationship to `WebSearchAdapter` / `ProviderWebSearchAdapter`
+## Relationship to `ProviderWebSearchAdapter`
 
-This repo also ships two older, simpler web-search `RetrievalAdapter`s: `WebSearchAdapter`
-(Tavily) and `ProviderWebSearchAdapter` (the model provider's own native web search -- Claude's
-`web_search` tool or Gemini grounding -- reusing the LLM key, no separate search key). Both still
-work if a consumer wires them, but `build_orchestrator` no longer reaches for them first: the
-`WebSearchAdapter` (Tavily) fold-in was removed from `cli.py` (Tavily is now a backend here), and
-the `ProviderWebSearchAdapter` fold-in into `CompositeRetrievalAdapter` is only a FALLBACK for the
+This repo also ships an older, simpler web-search `RetrievalAdapter`, `ProviderWebSearchAdapter`
+(the model provider's own native web search -- Claude's `web_search` tool or Gemini grounding --
+reusing the LLM key, no separate search key). It still works if a consumer wires it, but
+`build_orchestrator` no longer reaches for it first (the old Tavily `WebSearchAdapter` was
+removed; Tavily is a backend here): the `ProviderWebSearchAdapter` fold-in into `CompositeRetrievalAdapter` is only a FALLBACK for the
 case where no `WebResearchAdapter` could be built, so no deployment loses web capability.
 
 `WebResearchAdapter` is a separate, newer surface purpose-built for the planner's dedicated
@@ -85,7 +84,7 @@ selection order/logic):
 |---|---|---|
 | Serper | `SERPER_API_KEY` | Google SERP proxy; fastest, cheapest dedicated option. |
 | Brave Search API | `BRAVE_SEARCH_API_KEY` or `BRAVE_API_KEY` | Has a $5/month free credit. |
-| Tavily | `TAVILY_API_KEY` (or legacy `WEB_SEARCH_API_KEY`) | Also used by `WebSearchAdapter`. |
+| Tavily | `TAVILY_API_KEY` (or legacy `WEB_SEARCH_API_KEY`) | |
 | SearXNG | `SEARXNG_URL` | Self-hosted; no per-call API cost. |
 | Gemini grounding | `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `GOOGLE_AI_API_KEY` | Key-free beyond an LLM key you already have. |
 | Provider-native | (needs `provider=` + `QAR_WEB_SEARCH_PROVIDER_MODEL`) | Wraps any `ModelProvider.web_search()` (e.g. `AnthropicProvider`). |

@@ -20,7 +20,6 @@ from quest_ai_runner.adapters.files_adapter import FilesAdapter
 from quest_ai_runner.adapters.google_chat_adapter import GoogleChatAdapter
 from quest_ai_runner.adapters.provider_web_search_adapter import ProviderWebSearchAdapter
 from quest_ai_runner.adapters.reference_resolver import collect_reference_resolvers
-from quest_ai_runner.adapters.web_search_adapter import WebSearchAdapter
 
 
 def test_resolvable_adapters_advertise_a_reference_type():
@@ -34,13 +33,12 @@ def test_non_resolvable_adapters_are_none_via_base_default(tmp_path):
     # RetrievalAdapterBase default (reference_type = None) WITHOUT any adapter-specific code.
     # `adapter.reference_type is not None` is therefore the structural "does it support it?" check
     # -- no isinstance-against-a-second-protocol, no reading call chains.
-    assert WebSearchAdapter(api_key=None).reference_type is None
     assert ProviderWebSearchAdapter(None, model="m").reference_type is None
     assert FilesAdapter(str(tmp_path)).reference_type is None
 
     # The default methods are inert (never raise, resolve to nothing) so a caller can treat any
     # RetrievalAdapter uniformly.
-    web = WebSearchAdapter(api_key=None)
+    web = ProviderWebSearchAdapter(None, model="m")
     assert web.make_locator("x") == {}
     assert web.resolve_reference({"anything": 1}) is None
 
@@ -63,7 +61,7 @@ def test_collect_reference_resolvers_discovers_only_resolvable_adapters(tmp_path
     claude = ClaudeConversationsAdapter(sessions_dir="/does/not/exist")
     gchat = GoogleChatAdapter()
     files = FilesAdapter(str(tmp_path))
-    web = WebSearchAdapter(api_key=None)
+    web = ProviderWebSearchAdapter(None, model="m")
 
     # A composite of mixed adapters: only the two resolvable ones are picked up, each mapped to its
     # OWN resolve_reference (a bare callable, ready to coerce into a ReferenceResolver).

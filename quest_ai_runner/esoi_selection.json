@@ -309,8 +309,7 @@
    "searxng": "quest_ai_runner.adapters.web_search_backends",
    "serper": "quest_ai_runner.adapters.web_search_backends",
    "tavily": "quest_ai_runner.adapters.web_search_backends",
-   "web_research": "quest_ai_runner.adapters.web_research",
-   "web_search": "quest_ai_runner.adapters.web_search_adapter"
+   "web_research": "quest_ai_runner.adapters.web_research"
   }
  },
  "select-a-rep": {

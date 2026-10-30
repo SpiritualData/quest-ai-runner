@@ -104,9 +104,8 @@ def wire_web_research(cfg: Any) -> None:
 
     # LEGACY fold-in, reached ONLY when the fast path above left ``cfg.web_research`` unset (the
     # ``adapters.web_research`` module is missing, or it found no usable backend) — so a
-    # deployment without the newer module never regresses to no web capability at all. If a
-    # Tavily WebSearchAdapter is already in the retrieval stack (WEB_SEARCH_API_KEY set), keep it.
-    # Otherwise, unless web search is explicitly disabled (WEB_SEARCH_ENABLED=false), wire a
+    # deployment without the newer module never regresses to no web capability at all. Unless
+    # web search is explicitly disabled (WEB_SEARCH_ENABLED=false), wire a
     # ProviderWebSearchAdapter when the model provider supports NATIVE web search (Anthropic
     # web_search tool / Gemini Google Search grounding) — reusing the LLM key, so no separate
     # web-search key is needed.

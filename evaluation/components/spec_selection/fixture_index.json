@@ -6790,50 +6790,6 @@
    "title": "Snippet-first research with page extraction"
   },
   {
-   "digest": "834ca54905b6",
-   "id": "search-the-web:web_search",
-   "intent": "quest-ai-runner",
-   "kind": "implementation",
-   "refs": [
-    "search-the-web"
-   ],
-   "summary": "A retrieval adapter that queries one search vendor over plain HTTP and returns the top pages as a synthesised result through the query surface. It is graceful, returning error observations for a missing key or unreachable endpoint.",
-   "terms": {
-    "adapter": 2.0,
-    "clear": 1.0,
-    "configuration": 1.0,
-    "count": 1.0,
-    "dependency": 1.0,
-    "endpoint": 2.0,
-    "error": 2.0,
-    "free": 1.0,
-    "graceful": 2.0,
-    "http": 2.0,
-    "key": 2.0,
-    "missing": 2.0,
-    "observation": 2.0,
-    "page": 2.0,
-    "plain": 2.0,
-    "query": 2.0,
-    "result": 2.0,
-    "retrieval": 3.0,
-    "return": 2.0,
-    "returning": 2.0,
-    "search": 3.0,
-    "simple": 1.0,
-    "single": 3.0,
-    "style": 3.0,
-    "surface": 2.0,
-    "synthesised": 2.0,
-    "through": 2.0,
-    "top": 2.0,
-    "unreachable": 2.0,
-    "vendor": 3.0,
-    "web": 3.0
-   },
-   "title": "Single-vendor retrieval-style search"
-  },
-  {
    "digest": "87e0c5002cc6",
    "id": "search-the-web:provider_web_search",
    "intent": "quest-ai-runner",
@@ -17459,7 +17415,6 @@
     "metric-search-the-web",
     "QS1:QM1",
     "search-the-web:web_research",
-    "search-the-web:web_search",
     "search-the-web:provider_web_search",
     "search-the-web:serper",
     "search-the-web:brave",
@@ -20994,6 +20949,6 @@
    "title": "Select the intent specifications an input concerns"
   }
  ],
- "n": 361,
+ "n": 360,
  "version": 1
 }

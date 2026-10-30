@@ -33,9 +33,6 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 only when a PDF is actually read. ``parse_drive_url`` parses a Drive/
                                 Docs/Sheets URL into a file/folder id.
   * QuestRetrievalAdapter     — RetrievalAdapter: query Quest API for goal/quest context, notes, related goals.
-  * WebSearchAdapter          — RetrievalAdapter that searches the live web via the Tavily API (stdlib
-                                urllib only; no extra deps). Enable with WEB_SEARCH_ENABLED=true +
-                                WEB_SEARCH_API_KEY env vars, or pass api_key= at construction.
   * ProviderWebSearchAdapter  — RetrievalAdapter that searches the live web via the model provider's
                                 NATIVE tool (Anthropic web_search / Gemini Google Search grounding),
                                 reusing the LLM key (no separate web-search key). The key-free default;
@@ -124,7 +121,6 @@ from .mcp_write_runner import MCPOperationConfig, MCPOperationRunner
 from .anthropic_provider import AnthropicProvider
 from .quest_context_adapter import QuestContextAdapter, build_quest_resolvers
 from .cached_db_adapter import CachedDbAdapter
-from .web_search_adapter import WebSearchAdapter
 from .provider_web_search_adapter import ProviderWebSearchAdapter
 from .web_cache import WebCache, normalize_query
 from .web_page_extract import check_url_is_safe, extract_main_text, select_passages, split_passages
@@ -309,7 +305,6 @@ __all__ = [
     "refuses_as_inbound_mailbox",
     "SessionFileConversationStore",
     "QuestRetrievalAdapter",
-    "WebSearchAdapter",
     "ProviderWebSearchAdapter",
     "WebCache",
     "normalize_query",

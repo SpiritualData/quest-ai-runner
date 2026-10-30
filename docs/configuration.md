@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-216 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+215 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -225,7 +225,6 @@ the docs and `.env.example` that describe what it does.
 | `VOYAGE_EMBEDDING_SIZE` | Vector size of the Voyage embedder (default 1024). | `config_assembler.py`, `config_context_index.py` | - |
 | `VOYAGE_MODEL` |  | `adapters/qdrant_embedders.py` | `docs/vector-context.md` |
 | `VTE_VERSION` | Set by VTE terminals; the terminal UI reads it to pick key handling. Never set by hand. | `textual_ui_widgets.py` | - |
-| `WEB_SEARCH_API_KEY` |  | `adapters/web_search_adapter.py` | `.env.example`, `docs/web-search.md` |
 | `WEB_SEARCH_ENABLED` |  | `config_orchestrator.py` | `.env.example`, `docs/web-search.md` |
 | `WEB_SEARCH_MAX_RESULTS` |  | `config_orchestrator.py` | `.env.example`, `docs/web-search.md` |
 | `WEB_SEARCH_TIER` |  | `config_orchestrator.py` | `.env.example` |

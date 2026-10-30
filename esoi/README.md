@@ -228,7 +228,6 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `gather-evidence:google_chat` | Chat conversation reader | quest_ai_runner/adapters/google_chat_adapter.py |  |
 | `gather-evidence:quest` | Quest API context reader | quest_ai_runner/adapters/quest_retrieval_adapter.py |  |
 | `search-the-web:web_research` | Snippet-first research with page extraction | quest_ai_runner/adapters/web_research.py |  |
-| `search-the-web:web_search` | Single-vendor retrieval-style search | quest_ai_runner/adapters/web_search_adapter.py |  |
 | `search-the-web:provider_web_search` | Model-native search | quest_ai_runner/adapters/provider_web_search_adapter.py |  |
 | `search-the-web:serper` | Pluggable search backends with fallback | quest_ai_runner/adapters/web_search_backends.py |  |
 | `call-a-model:anthropic` | Anthropic SDK provider | quest_ai_runner/adapters/anthropic_provider.py |  |
