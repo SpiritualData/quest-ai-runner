@@ -3861,3 +3861,10 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,explain_an_answer,model_explanation,10,10,10/10,0/0,20,36987,4494,0.0781,77.3,b2c5bb2,0fadbfec,claude-haiku,,,0.8574
 2026-10-30,describe_an_attachment,vision_description,10,10,10/10,0/0,20,18673,3231,0.0053,55.2,b2c5bb2,e57ae993,claude-haiku,,,0.9154
 2026-10-30,justified_model_spend,spec_registry_ablation,15,6,6/15,0/0,0,0,0,0.0,1.3,e339f00,f4536c6e,none,,,
+2026-10-30,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.3,17d73e4,ae7e2b22,none,,,
+2026-10-30,deep_runner,subprocess_runner,11,11,11/11,0/0,0,0,0,0.0,6.4,17d73e4,61d37336,none,,,
+2026-10-30,escalate_to_a_human,quest_decision_sink,15,15,15/15,0/0,0,0,0,0.0,0.0,17d73e4,597d556f,none,,,
+2026-10-30,keep_secrets_out,live_scanner,35,35,35/35,0/0,0,0,0,0.0,5.8,17d73e4,17d7b83a,none,,,
+2026-10-30,expose_the_public_api,live_surface,101,101,101/101,0/0,0,0,0,0.0,4.9,17d73e4,4673d9bb,none,,,
+2026-10-30,learn_by_example,live_examples,37,37,37/37,0/0,0,0,0,0.0,3.8,17d73e4,80050d75,none,,,
+2026-10-30,task_replay,slice_and_writeback,9,8,8/9,0/0,27,41022,1561,0.0,270.9,17d73e4,b3ca71f7,claude-code-subscription,,,0.8971
