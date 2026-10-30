@@ -15,6 +15,41 @@ from quest_ai_runner.core.tools import ToolResult
 from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT
 
 SPEC = json.loads((Path(__file__).resolve().parent / "world.json").read_text(encoding="utf-8"))
+SCIENCE_WORKS = json.loads((Path(__file__).resolve().parent / "science_works.json").read_text(encoding="utf-8"))["works"]
+
+
+def openalex_record(work):
+    """One invented work as an OpenAlex works record (the shape the hub's OpenAlex arm reads), abstract as an inverted index."""
+    inverted = {}
+    for position, word in enumerate(work["abstract"].split()):
+        inverted.setdefault(word, []).append(position)
+    return {"id": f"https://openalex.org/{work['id']}", "doi": f"https://doi.org/{work['doi']}" if work["doi"] else None,
+            "display_name": work["title"], "publication_year": work["year"], "cited_by_count": work["cited_by"],
+            "authorships": [{"author": {"display_name": a}} for a in work["authors"]],
+            "primary_location": {"landing_page_url": work["url"], "source": {"display_name": work["venue"]}},
+            "open_access": {"is_oa": bool(work["oa"]), "oa_status": work["oa"]}, "abstract_inverted_index": inverted}
+
+
+class FakeOpenAlex:
+    """The OpenAlex HTTP call the hub arm makes, answered from the invented works: every search returns all of them. Keeps the
+    requests it was sent."""
+
+    class Reply:
+        status_code, headers = 200, {}
+
+        def __init__(self, body):
+            self.body = body
+
+        def json(self):
+            return self.body
+
+    def __init__(self, works):
+        self.works, self.calls = works, []
+
+    def __call__(self, url, *, params, headers, timeout):  # noqa: ARG002
+        self.calls.append({"url": url, "params": dict(params)})
+        records = [openalex_record(w) for w in self.works]
+        return self.Reply({"meta": {"count": len(records), "cost_usd": 0.001}, "results": records})
 
 
 class FakeWeb:
@@ -59,7 +94,7 @@ class World:
     documentation-only chat a free plan gets (no quests, only the excerpts). ``trace`` is the ordered log of what the
     tools and the web did, kept so a transcript can show the steps; nothing reads it for scoring."""
 
-    def __init__(self, pinned=None, web=None, docs=None, docs_only=False):
+    def __init__(self, pinned=None, web=None, docs=None, docs_only=False, science=False):
         self.quests = copy.deepcopy(SPEC["quests"])
         self.today = SPEC["today"]
         self.pinned = pinned
@@ -69,15 +104,32 @@ class World:
         self.web = FakeWeb(web)
         self.web.trace = self.trace
         self.writes, self.reads = [], []
+        self.science = science
+        self.openalex = FakeOpenAlex(SCIENCE_WORKS)
         self.registry = self.build_registry()
 
     # ---- the tool catalogue on this state
     def build_registry(self):
         from quest_ai_runner.core.tools import build_tool_registry
-        registry = build_tool_registry(dict(os.environ, QUEST_BASE_URL=common.OFFLINE_QUEST_URL, QUEST_API_KEY="offline-eval"))
+        # No literature key unless the case configures the tool: a key in the machine's own environment must not reach the world.
+        env = {k: v for k, v in os.environ.items() if k != "OPENALEX_API_KEY"}
+        registry = build_tool_registry(dict(env, QUEST_BASE_URL=common.OFFLINE_QUEST_URL, QUEST_API_KEY="offline-eval"))
         for name in registry.names():
             spec = registry.get(name)
             spec.handler = self.handler(name, bool(getattr(spec, "mutates", False)), "quest_id" in (spec.properties() or {}))
+        if self.science:
+            # The real tool over the hub's OpenAlex arm, with the HTTP call replaced by the fake: only the network is stubbed.
+            from quest_ai_runner.core.tools_science import science_literature_spec
+            spec = science_literature_spec({"OPENALEX_API_KEY": "offline-eval"}, transport=self.openalex)
+            real = spec.handler
+
+            def searched(args, ctx):
+                result = real(args, ctx)
+                self.reads.append({"tool": spec.name, "args": dict(args)})
+                self.trace.append({"kind": "read", "tool": spec.name, "args": dict(args), "out": str(getattr(result, "text", ""))[:300]})
+                return result
+            spec.handler = searched
+            registry.register(spec)
         return registry
 
     def target(self, args):

@@ -92,7 +92,22 @@ Safeguards in the loop:
 |---|---|
 | `QAR_STANDARD_TOOLS` | `0` turns every standard tool off. Default on. |
 | `QAR_TOOLS_FILE` | One or more TOML files (`:`-separated) of custom tools and standard-tool overrides. |
+| `OPENALEX_API_KEY` | Offers the standard read-only tool `search_scientific_literature` (published papers through the hub's OpenAlex arm; see below). Unset (default): the tool is absent. |
+| `OPENALEX_MAILTO`, `QAR_SCIENCE_DAILY_LIMIT` | Optional contact address sent to OpenAlex; cap on real searches per process per UTC day (default 300). |
 | `QUEST_BASE_URL` (or `QUEST_API_URL`), `QUEST_API_KEY` | Enable the standard mail and quest-data tools. A lane configured by file falls back to its `quest_base_url` / `quest_api_key`. |
+
+### Searching the scientific literature
+
+`search_scientific_literature` (`core/tools_science.py`) is a read-only standard tool over `hubofhubs.science.openalex` (an
+implementation of the hub's `know-the-world` seat; design, sources and limits in the hub's `docs/science-search.md`). Arguments: `query`
+(required), `year_from`, `year_to`, `open_access_only`, `most_cited`, `limit`. Its result lists each work with title, authors, year,
+journal, DOI (and its link), citation count and abstract, says "No DOI listed" for a work without one, and states that only the listed
+works may be cited. A failure comes back as a failed result that tells the planner to cite nothing from memory. No model call.
+
+With no `OPENALEX_API_KEY` the tool is not in the catalog. A request that is about papers, studies, literature or citations then
+carries one extra line in the planner's tool block (`NOT AVAILABLE HERE: ...`, from `STANDARD_TOOL_UNAVAILABLE`), so the AI says plainly
+that it cannot search research papers and names no paper, author or DOI from memory; other requests carry no extra text. Cases:
+`end_to_end` E2E-SCI-01 (configured, fake OpenAlex transport) and E2E-SCI-02 (not configured).
 
 A consumer building its own `RunnerConfig` can instead pass a ready `ToolRegistry` as
 `RunnerConfig.tool_registry` (from `quest_ai_runner.core.tools`); that wins over the env.

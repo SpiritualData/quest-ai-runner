@@ -113,6 +113,16 @@ ToolHandler = Callable[[Dict[str, Any], ToolContext], Any]
 
 
 @dataclass
+class UnavailableTool:
+    """A standard tool this deployment does not offer, and the one line the planner reads when a request is about what that
+    tool would do. It stops the AI promising (or inventing) what the deployment cannot do; it is shown only when one of its
+    ``keywords`` shares a word with the request, so other requests carry no extra prompt text."""
+    name: str
+    note: str
+    keywords: Sequence[str] = ()
+
+
+@dataclass
 class ToolSpec:
     name: str
     description: str
@@ -229,6 +239,7 @@ class ToolRegistry:
                  ledger: Optional[FileToolLedger] = None,
                  metric_ledger: Optional[Any] = None):
         self._specs: Dict[str, ToolSpec] = {}
+        self.unavailable: Dict[str, UnavailableTool] = {}
         # Where every call's outcome is written, keyed by the task it ran for (see
         # ``hubofhubs.act.tool_ledger``). None = nothing is recorded.
         self.ledger = ledger
@@ -248,6 +259,17 @@ class ToolRegistry:
             log.info("tool %s re-registered (%s replaces %s)", spec.name, spec.origin,
                      self._specs[spec.name].origin)
         self._specs[spec.name] = spec
+
+    def note_unavailable(self, entry: UnavailableTool) -> None:
+        """Record that a standard tool is not offered here (ignored when a tool of that name is registered)."""
+        if entry.name not in self._specs:
+            self.unavailable[entry.name] = entry
+
+    def unavailable_notes(self, query: str) -> List[str]:
+        """The notes of the unavailable tools this request is about (a keyword shares a word with it)."""
+        asked = set(tokenize(query))
+        return [u.note for u in self.unavailable.values()
+                if u.name not in self._specs and asked & {t for kw in u.keywords for t in tokenize(kw)}]
 
     def unregister(self, name: str) -> None:
         self._specs.pop(name, None)
@@ -394,6 +416,7 @@ class ToolRegistry:
             "- A tool call already shown as succeeded in GATHERED is DONE: never call it again, "
             "answer with its receipt. If it failed, say so or try the right alternative once.")
         body = self.render_catalog(shown) if shown else "(no tool matched this request)"
+        body += "".join(f"\nNOT AVAILABLE HERE: {note}" for note in self.unavailable_notes(query))
         tail = (f"\n({hidden} more tool(s) not shown. Search them with a read spec "
                 f"{{\"tools\": \"<what you need>\"}}.)" if hidden > 0 else "")
         return f"{head}\n{rules}\n{body}{tail}"
@@ -624,6 +647,8 @@ def quest_credentials_present(env: Mapping[str, str]) -> bool:
 #: Builders of the standard tools, by tool name. ``tools_quest_standard``, ``tools_quest_ops`` and
 #: ``tools_quest_experiments`` register theirs here when imported (at the bottom of this module).
 STANDARD_TOOL_BUILDERS: Dict[str, Callable[[Mapping[str, str]], Optional[ToolSpec]]] = {}
+#: For a standard tool that needs configuration: what the planner is told while it is not configured (``None`` when it is).
+STANDARD_TOOL_UNAVAILABLE: Dict[str, Callable[[Mapping[str, str]], Optional[UnavailableTool]]] = {}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -730,6 +755,11 @@ def build_tool_registry(env: Optional[Mapping[str, str]] = None) -> ToolRegistry
                 spec = None
             if spec is not None:
                 registry.register(spec)
+        for name, absent in STANDARD_TOOL_UNAVAILABLE.items():
+            if registry.get(name) is None:
+                entry = absent(env)
+                if entry is not None:
+                    registry.note_unavailable(entry)
     overrides: Dict[str, Any] = {}
     for path in [p for p in (env.get("QAR_TOOLS_FILE") or "").split(":") if p.strip()]:
         try:
@@ -754,3 +784,4 @@ from . import tools_repo_specs  # noqa: E402,F401
 from . import tools_metric_results  # noqa: E402,F401
 from . import tools_metric_values  # noqa: E402,F401
 from . import tools_quest_experiments  # noqa: E402,F401
+from . import tools_science  # noqa: E402,F401

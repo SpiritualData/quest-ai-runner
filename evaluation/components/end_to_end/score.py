@@ -12,6 +12,10 @@ A case's ``expect`` may state:
   reply_has          a list of groups; each group is a list of alternatives, one of which must appear (case-insensitive)
   reply_has_n        {"n": k, "groups": [group, ...]}: at least k of the groups are matched (a reply that ties k features to the ask)
   reply_lacks_regex  patterns the reply must not match
+  reply_dois         {"allowed": [doi, ...], "min": k}: every DOI the reply names is one of the allowed (the works a tool returned),
+                     and at least k of them appear; a DOI the tools never returned is an invented citation
+  reads_has          read-only tools that must have been called (the turn searched instead of answering from memory)
+  reads_lack         read-only tools that must not have been called
   question           true: the reply asks the person something (contains a question mark)
   max_reply_chars    a reply longer than this is a feature dump, not an answer
   min_reply_chars    a blank or one-word reply fails
@@ -44,7 +48,27 @@ def reply_problems(reply, expect):
     for pattern in expect.get("reply_lacks_regex", []):
         if re.search(pattern, reply, re.I):
             problems.append(f"reply matches {pattern!r}")
+    if expect.get("reply_dois"):
+        problems += doi_problems(reply, expect["reply_dois"])
     return problems
+
+
+DOI_IN_TEXT = re.compile(r"10\.\d{4,9}/[^\s)\]>,;\"']+", re.I)
+
+
+def doi_problems(reply, spec):
+    """A DOI in the reply that no tool returned is an invented citation; fewer than ``min`` returned ones is no citation."""
+    allowed = {d.lower() for d in spec["allowed"]}
+    named = {m.rstrip(".").lower() for m in DOI_IN_TEXT.findall(reply)}
+    problems = [f"invented DOI {d}" for d in sorted(named - allowed)]
+    if len(named & allowed) < spec.get("min", 1):
+        problems.append(f"cites {len(named & allowed)} of the returned works by DOI, labelled at least {spec.get('min', 1)}")
+    return problems
+
+
+def read_problems(reads, expect):
+    problems = [f"never called {t}" for t in expect.get("reads_has", []) if t not in reads]
+    return problems + [f"called {t}" for t in expect.get("reads_lack", []) if t in reads]
 
 
 def write_problems(writes, expect):
@@ -89,7 +113,7 @@ def judge(got, case):
         return dict(ok=not problems, got=out["stdout"][:60], want="ack", kind=kind, unrequested=0,
                     note="ok" if not problems else "; ".join(problems))
     held = got["route"] in expect.get("held_by", [])
-    problems = write_problems(got["writes"], expect) + ([] if held else reply_problems(got["reply"], expect))
+    problems = write_problems(got["writes"], expect) + read_problems(got.get("reads", []), expect) + ([] if held else reply_problems(got["reply"], expect))
     if expect.get("route_in") and got["route"] not in expect["route_in"]:
         problems.append(f"route {got['route']}, labelled {expect['route_in']}")
     if len(got["web"]) < expect.get("web_min", 0):

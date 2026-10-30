@@ -153,10 +153,10 @@ def test_the_task_type_cases_promise_only_what_exists():
     chain = BY_ID["E2E-QUEST-21"]["ideal"]["reply"]
     assert reply_ok("E2E-QUEST-21", chain)["ok"]
     assert not reply_ok("E2E-QUEST-21", chain + " You can chain your tasks so each one waits for the previous task to succeed.")["ok"]
-    sci = BY_ID["E2E-SCI-01"]["ideal"]["reply"]
-    assert reply_ok("E2E-SCI-01", sci)["ok"]
-    assert not reply_ok("E2E-SCI-01", "Studies show it helps. See Smith et al. 2019 and Jones and Lee (2021).")["ok"]
-    assert not reply_ok("E2E-SCI-01", "Here are two papers: doi: 10.1000/xyz123 and PMID 12345.")["ok"]
+    sci = BY_ID["E2E-SCI-02"]["ideal"]["reply"]
+    assert reply_ok("E2E-SCI-02", sci)["ok"]
+    assert not reply_ok("E2E-SCI-02", "Studies show it helps. See Smith et al. 2019 and Jones and Lee (2021).")["ok"]
+    assert not reply_ok("E2E-SCI-02", "Here are two papers: doi: 10.1000/xyz123 and PMID 12345.")["ok"]
 
 
 def web_goal(reply="Registration closes on 12 Nov 2026. I added a goal to register before then.", web=1, title="Register for the 10K by 12 Nov",

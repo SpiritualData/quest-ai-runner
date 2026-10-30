@@ -54,7 +54,7 @@ dependencies = [
     # Quest's connector and the production consumer: quest_ai_runner/hub.py imports it at startup and registers QAR's parts.
     # Required, not an extra. Its own dependency is `esoi` (bare), met by the esoi line above. Dev and tests may use the
     # sibling checkout `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
-    "hubofhubs[locks,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main",
+    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main",
 ]
 
 [project.optional-dependencies]

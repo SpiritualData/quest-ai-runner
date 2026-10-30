@@ -1,0 +1,17 @@
+{
+ "_about": "Three invented works for the offline science cases (placeholder authors, a demo DOI prefix, no real paper). world.py turns them into OpenAlex-shaped records for the fake OpenAlex transport; the abstracts are plain text here.",
+ "works": [
+  {"id": "W1", "doi": "10.5555/sci.demo.cycling-review", "title": "Cycling as cross-training to maintain aerobic fitness during lower-limb injury: a systematic review",
+   "year": 2021, "venue": "Journal of Demo Sports Medicine", "cited_by": 42, "authors": ["Author A", "Author B", "Author C"], "oa": "gold",
+   "url": "https://example.org/crosstraining-review",
+   "abstract": "We reviewed 14 studies of cycling used as cross-training while an athlete could not run. Aerobic capacity was maintained in most studies. Study quality was mixed and most samples were small."},
+  {"id": "W2", "doi": "10.5555/sci.demo.knee-trial", "title": "Low-impact aerobic exercise after a knee ligament strain: a small randomised trial",
+   "year": 2019, "venue": "Demo Journal of Rehabilitation", "cited_by": 17, "authors": ["Author D", "Author E"], "oa": "green",
+   "url": "https://example.org/knee-trial",
+   "abstract": "In 38 adults recovering from a knee ligament strain, stationary cycling three times a week kept aerobic fitness close to baseline. The trial was small and followed people for eight weeks only."},
+  {"id": "W3", "doi": "", "title": "Keeping running fitness without running: a narrative review",
+   "year": 2017, "venue": "Demo Coaching Quarterly", "cited_by": 3, "authors": ["Author F"], "oa": "",
+   "url": "https://example.org/running-fitness-narrative",
+   "abstract": "A narrative review of coaching practice. It suggests cycling and swimming can limit fitness loss but reports no measurements."}
+ ]
+}

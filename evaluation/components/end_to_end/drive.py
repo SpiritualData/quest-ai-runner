@@ -46,7 +46,8 @@ def fold(case, world, result):
 
 def new_world(case):
     spec = case.get("world") or {}
-    return World(pinned=spec.get("pinned"), web=case.get("web"), docs=spec.get("docs"), docs_only=bool(spec.get("docs_only")))
+    return World(pinned=spec.get("pinned"), web=case.get("web"), docs=spec.get("docs"), docs_only=bool(spec.get("docs_only")),
+                 science=bool(spec.get("science")))
 
 
 def run_with(case, world, orchestrator):

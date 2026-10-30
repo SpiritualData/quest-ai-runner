@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-216 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+219 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -25,6 +25,8 @@ the docs and `.env.example` that describe what it does.
 | `MAX_THINKING_TOKENS` | Claude Code variable the CLI provider sets to cap extended thinking on plan() calls (0 turns thinking off). | `adapters/claude_cli_provider.py` | - |
 | `OPENAI_API_KEY` | OpenAI key: registers the OpenAI provider and the OpenAI embedder. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `cli_config.py` +2 | - |
 | `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible endpoint (a LiteLLM proxy, vLLM, Ollama or a gateway) the OpenAI provider calls instead of the OpenAI service; no key is needed for a self-hosted one. Pair with QAR_OPENAI_MODEL_PREFIXES so its model ids route to this provider. | `providers.py` | `docs/hub-of-hubs.md` |
+| `OPENALEX_API_KEY` | OpenAlex API key (free; the account owner activates it from an emailed link). Set it and the standard tool search_scientific_literature is offered; unset (the default) the tool is absent and the planner is told it cannot search research papers. | `core/tools_science.py` | `docs/tools.md` |
+| `OPENALEX_MAILTO` | Contact address sent to OpenAlex with each scholarly search (optional, a courtesy; use a team address, not a person's). | `core/tools_science.py` | `docs/tools.md` |
 | `QAR_ACP_AGENT_COMMAND` |  | `adapters/acp_deep_runner_protocol.py` | `docs/acp-deep-runner.md`, `docs/hub-of-hubs.md` |
 | `QAR_ACP_NODE_PATH` |  | `adapters/acp_deep_runner_protocol.py` | `docs/acp-deep-runner.md` |
 | `QAR_ANSWER_TIMEOUT` |  | `cli_config.py` | `.env.example` |
@@ -177,6 +179,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_REUSE_NESTED_CARDS` |  | `adapters/file_context_store.py` | `docs/context-card-stores.md` |
 | `QAR_RUNNER_ENV_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
 | `QAR_RUNNER_LABEL` |  | `cli_config.py` | `.env.example` |
+| `QAR_SCIENCE_DAILY_LIMIT` | Real scholarly searches one process may make per UTC day (default 300, 0 for no cap). OpenAlex bills about $1 per 1,000 searches against a $1 a day free allowance. | `core/tools_science.py` | `docs/tools.md` |
 | `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `interactive_session_commands.py` | - |
 | `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `adapters/files_search_worker.py`, `adapters/files_server.py`, `adapters/walk_settings.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `adapters/card_store_settings.py` | - |

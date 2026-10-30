@@ -2576,6 +2576,92 @@
   "world": {
    "pinned": "q_fit",
    "docs": [
+    "science_intro"
+   ],
+   "science": true
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reads_has": [
+    "search_scientific_literature"
+   ],
+   "min_reply_chars": 200,
+   "reply_dois": {
+    "allowed": [
+     "10.5555/sci.demo.cycling-review",
+     "10.5555/sci.demo.knee-trial"
+    ],
+    "min": 2
+   },
+   "reply_has": [
+    [
+     "only the abstracts",
+     "abstracts only",
+     "from the abstracts",
+     "not the full text",
+     "not read the full"
+    ],
+    [
+     "suggest",
+     "not conclusive",
+     "small",
+     "limited",
+     "mixed"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "can't search",
+    "cannot search",
+    "\\bpmid\\b",
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "quality_rubric": [
+   "Searches the literature with the tool instead of answering from memory",
+   "Cites two works the search returned, each with its DOI link, and no other paper, author, journal or DOI",
+   "Says what the evidence is based on (abstracts only) and how strong it is (small samples, mixed quality), without overclaiming",
+   "Stays on the person's own situation (the knee, easy cycling) and says it is not medical advice only if it adds something",
+   "Uses plain words and no jargon the person did not use"
+  ],
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "search_scientific_literature",
+       "args": {
+        "query": "cycling cross-training knee injury aerobic fitness",
+        "limit": 5
+       }
+      }
+     ],
+     "rationale": "the person asked for research papers: search the literature rather than answer from memory",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "cite only what the search returned, with DOI, and say how strong it is",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Two papers the search found point the same way. A systematic review of 14 studies (Author A and others, 2021, Journal of Demo Sports Medicine, DOI 10.5555/sci.demo.cycling-review) found cycling kept aerobic capacity in most of them. A small trial of 38 adults after a knee ligament strain (Author D and Author E, 2019, DOI 10.5555/sci.demo.knee-trial) found stationary cycling three times a week kept fitness close to baseline. I read only the abstracts, not the full text, so treat this as a suggestion rather than a conclusion: the review says study quality was mixed and the trial was small and lasted eight weeks. Your physio's say-so on pain and load still comes first."
+  },
+  "source": "a science or literature request in the offline world with the literature search configured (a fake OpenAlex transport returns three invented works, one with no DOI): the right turn searches, cites two of the returned works by DOI, names nothing else, and says it read abstracts only and how strong the evidence is; the unconfigured counterpart is E2E-SCI-02"
+ },
+ {
+  "id": "E2E-SCI-02",
+  "kind": "science",
+  "stratum": "quest_question",
+  "group": "Questions about Quest",
+  "message": "What does the scientific literature say about easy cycling keeping my fitness while my knee heals? Please search the research papers and cite two.",
+  "world": {
+   "pinned": "q_fit",
+   "docs": [
     "science_intro",
     "quest_ai_web"
    ]
@@ -2623,6 +2709,9 @@
     "\\bdoi\\s*:|10\\.\\d{4,}/|\\bpmid\\b",
     "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reads_lack": [
+    "search_scientific_literature"
    ]
   },
   "quality_rubric": [
@@ -2642,7 +2731,7 @@
    ],
    "reply": "I cannot search the research papers from this chat, so I will not give you two citations I cannot check. The Science page in the navigation menu can: its Direct mode finds matching papers and experiences for a question like easy cycling during a knee injury. I can run a web search instead and cite those pages as links, though that is not a literature search. Want me to do that?"
   },
-  "source": "a science or literature request in the offline world: the standard QAR tool catalogue has no research-paper search (a gap in chat; the Science page and Deep Inquiry do search papers, per guide/science.md), so the right reply states the limit, points to Science and offers the web search, and invents no citation"
+  "source": "a science or literature request in the offline world with the literature search NOT configured (no OpenAlex key): the planner is told the tool is unavailable, so the right reply states the limit, points to Science and offers the web search, and invents no citation; the configured counterpart is E2E-SCI-01 (guide/science.md says the Science page and Deep Inquiry do search papers)"
  },
  {
   "id": "E2E-SEQ-01",
