@@ -477,7 +477,7 @@ def _patch_stream(monkeypatch, script):
     """
     import httpx
 
-    from quest_ai_runner.adapters import web_page_extract
+    from hubofhubs.websearch import page_extract as web_page_extract
 
     monkeypatch.setattr(web_page_extract, "default_resolver", lambda host: ["93.184.216.34"])
 

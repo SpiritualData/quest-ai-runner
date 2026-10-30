@@ -7,6 +7,8 @@ from __future__ import annotations
 import abc
 from typing import Any, Dict, FrozenSet, List, Optional
 
+from hubofhubs.ports.retrieval import RetrievalAdapterBase  # noqa: F401  (moved to the hub; same class, old import path)
+
 from .adapters_scope import ThreadLocalCounter
 from .adapters_values import (
     DeepResult,
@@ -122,51 +124,6 @@ class GuidanceProviderBase(abc.ABC):
     ) -> "List[GuidanceCard]":
         """No-op default: returns []. Override to add semantic pre-selection. Never raises."""
         return []
-
-
-class RetrievalAdapterBase(abc.ABC):
-    @abc.abstractmethod
-    def read_section(self, rel_path, *, start_line=None, end_line=None, heading=None, max_bytes=None) -> Observation: ...
-    @abc.abstractmethod
-    def grep(self, pattern, *, scope=None, max_hits=None) -> Observation: ...
-
-    def query(self, spec: Dict[str, Any]) -> Observation:  # optional default
-        return Observation(kind="error", error="query not supported by this adapter")
-
-    # Discovery defaults — non-abstract so existing adapters keep satisfying the ABC. An
-    # adapter that can enumerate its sources/operations overrides these; one that can't
-    # returns a benign "nothing to discover" Observation (never an error that stalls the loop).
-    def list_sources(self) -> Observation:
-        return Observation(kind="query", locator="list_sources",
-                           text="No sources are enumerable for this adapter.")
-
-    def describe_source(self, name: str, *, path: Optional[str] = None) -> Observation:
-        return Observation(kind="query", locator=f"describe_source({name})",
-                           text=f"No schema available for source {name!r}.")
-
-    def list_operations(self) -> Observation:
-        return Observation(kind="query", locator="list_operations",
-                           text="No callable operations are advertised by this adapter.")
-
-    def describe_operation(self, name: str) -> Observation:
-        return Observation(kind="query", locator=f"describe_operation({name})",
-                           text=f"No detail available for operation {name!r}.")
-
-    # PERSISTED REFERENCE RESOLUTION (optional capability, off by default). An adapter whose content
-    # can be a learned card reference overrides ``reference_type`` (to its content ``type``) and the
-    # two methods below. Leaving them as-is is the structural "not supported" signal: callers check
-    # ``adapter.reference_type is not None``. Non-abstract so every existing adapter keeps satisfying
-    # the ABC untouched.
-    reference_type: Optional[str] = None
-
-    def make_locator(self, candidate: Any) -> Dict[str, Any]:
-        """Default: unsupported — no locator. Override in an adapter that sets ``reference_type``."""
-        return {}
-
-    def resolve_reference(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> Optional[str]:
-        """Default: unsupported — nothing to resolve. Override in an adapter that sets
-        ``reference_type`` to re-fetch fresh content for its own references. Never raises."""
-        return None
 
 
 class ModelProviderBase(abc.ABC):

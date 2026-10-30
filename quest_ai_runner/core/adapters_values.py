@@ -40,34 +40,7 @@ class ProgressEvent:
         return d
 
 
-@dataclass
-class Observation:
-    """One result of a gather step — a read, a grep, or a structured query.
-
-    ``kind`` is "read" | "grep" | "query" | "error". The brain renders these into the
-    planner prompt, so they stay small and JSON-serializable.
-    """
-    kind: str
-    rel_path: Optional[str] = None
-    locator: Optional[str] = None         # e.g. "lines 10-40", "heading='Metrics'"
-    text: Optional[str] = None            # for read/query
-    pattern: Optional[str] = None         # for grep
-    scope: Optional[str] = None
-    hits: List[Dict[str, Any]] = field(default_factory=list)  # for grep
-    error: Optional[str] = None
-    # A remark for the PLANNER only, never answer content (e.g. a composite's "not answered by"
-    # refusals beside another adapter's results). The run loop turns it into a planner_only note.
-    planner_note: Optional[str] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        d = {"kind": self.kind}
-        for k in ("rel_path", "locator", "text", "pattern", "scope", "error", "planner_note"):
-            v = getattr(self, k)
-            if v is not None:
-                d[k] = v
-        if self.hits:
-            d["hits"] = self.hits
-        return d
+from hubofhubs.ports.retrieval import Observation  # noqa: F401  (moved to the hub; same class, old import path)
 
 
 @dataclass

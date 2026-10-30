@@ -9,7 +9,8 @@ from typing import Dict, List
 import pytest
 
 from quest_ai_runner.adapters import web_link_access as wla
-from quest_ai_runner.adapters import web_research as wr
+from hubofhubs.websearch import fetch as wr_fetch
+from hubofhubs.websearch import research as wr
 from quest_ai_runner.adapters.web_cache import WebCache
 from quest_ai_runner.adapters.web_link_access import (
     ALL_REASONS,
@@ -34,7 +35,7 @@ ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
 @pytest.fixture(autouse=True)
 def public_dns(monkeypatch):
     """Fake hosts resolve to a public address, so the real SSRF logic runs without a DNS query."""
-    from quest_ai_runner.adapters import web_page_extract
+    from hubofhubs.websearch import page_extract as web_page_extract
 
     monkeypatch.setattr(web_page_extract, "default_resolver", lambda host: ["93.184.216.34"])
 
@@ -211,7 +212,7 @@ class FakeStream:
 def patch_stream(monkeypatch, script: Dict[str, FakeStream]):
     import httpx
 
-    from quest_ai_runner.adapters import web_page_extract
+    from hubofhubs.websearch import page_extract as web_page_extract
 
     monkeypatch.setattr(web_page_extract, "default_resolver", lambda host: ["93.184.216.34"])
     seen: List[str] = []
@@ -281,21 +282,21 @@ def test_octet_stream_binary_is_unsupported(monkeypatch):
 
 
 def test_pdf_over_the_size_cap_is_too_large(monkeypatch):
-    body = b"%PDF-1.4 " + b"a" * (wr.MAX_PDF_BYTES + 10)
+    body = b"%PDF-1.4 " + b"a" * (wr_fetch.MAX_PDF_BYTES + 10)
     assert reason_of(monkeypatch, {EXPORT: FakeStream(200, {"content-type": "application/pdf"}, body)}) == wla.REASON_TOO_LARGE
 
 
 def test_declared_length_over_the_cap_is_too_large_without_reading(monkeypatch):
-    headers = {"content-type": "application/pdf", "content-length": str(wr.MAX_PDF_BYTES + 1)}
+    headers = {"content-type": "application/pdf", "content-length": str(wr_fetch.MAX_PDF_BYTES + 1)}
     assert reason_of(monkeypatch, {EXPORT: FakeStream(200, headers, b"%PDF")}) == wla.REASON_TOO_LARGE
 
 
 def test_text_over_the_cap_is_truncated_with_a_note(monkeypatch):
-    body = (b"word " * (wr.MAX_PAGE_BYTES // 5 + 100))
+    body = (b"word " * (wr_fetch.MAX_PAGE_BYTES // 5 + 100))
     patch_stream(monkeypatch, {EXPORT: FakeStream(200, {"content-type": "text/plain"}, body)})
     page = default_page_fetcher(EXPORT)
     assert page.truncated is True
-    assert wr._with_truncation_note("hello", page).endswith("only the start was read.]")
+    assert wr.with_truncation_note("hello", page).endswith("only the start was read.]")
 
 
 def test_redirect_from_the_export_url_into_a_private_address_is_refused(monkeypatch):
