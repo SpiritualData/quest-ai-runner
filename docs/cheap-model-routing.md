@@ -369,6 +369,23 @@ the smaller prompts route as well is the paid comparison of full, compact and si
 saying no change was asked drops 7 rules (a question about the person's own records: 10,404 tokens down to 7,893, 24 percent, and 30 percent under the full profile's 11,240). The
 judge's `asks_change` accuracy is measured in the paid pass, not yet run.
 
+## Structural fixes for recorded chat misses (2026-10-30, built, not yet measured)
+
+Six misses of the 2026-10-30 `chat_quality` sample (4 of 10) were read against their traces and fixed by changing what the model
+is shown or what the planner's schema makes it fill in, not by more prose. None adds a model call; none is measured yet.
+
+| miss | cause | change |
+|---|---|---|
+| a figure in a stored list never found | the compact profile never said grep reaches files only (three greps of documents for a figure held in records), and a read the adapter clipped looked like a complete one | the compact actions block says where records are read; a read ending in the adapter's `[truncated]` marker gets a "this read was cut, absence proves nothing" note in the planner and answer views |
+| a booking or news reaction answered from goals alone | the prompt's "read the records first" exception is acknowledged and skipped by a cheap planner | the reach judge also returns `needs_records` (a boolean on the person's own message); an inside verdict that sets it stamps one settled line into the planner prompt |
+| a write ignored a constraint the planner had read | the brief said only what the planner chose to restate | a required `facts_read` list (quotes with sources); appended to a deep or deferred brief, and shown to the answer |
+| a parked write lost the findings the person asked to be told | the parked-only branch replaced the reply with the approval card | the answer written from this turn's reads stays in front of the ask (only when something was read) |
+| a requested read-back not reported | the post-work synthesis took request, proposal and result only | it covers each named part and is given the planner's done-standard (this covers deferred runs; the Quest chat's direct-deep reply is written in the backend) |
+| another quest's private data used to answer | the card fence does not cover the model's own reads | a turn bound to quest ids gets one scope note in the context both the planner and the answer read; an unbound turn gets nothing |
+
+Planner prompt tokens (`estimate_tokens`): full 10,181 to 10,149 and compact 3,858 to 3,825 for the body; the decide schema
+gains one bare field (full 1,680 to 1,702, compact 852 to 874), so body plus schema is 11,861 to 11,851 (full) and 4,710 to 4,699 (compact).
+
 
 ## Planner prompt design notes (moved from comments in `core/planner_prompt.py`)
 
