@@ -114,8 +114,8 @@ def rekey_target(card_id: str) -> str:
     stacked middle hops dropped. A function of the id alone, so every run picks the same id.
     """
     parts = card_origin.namespace_segments(card_id)
-    if len(parts) < 3:
-        return ""
+    if len(parts) < 3 or len(card_id) >= card_origin.MAX_ID_CHARS - 10:
+        return ""            # a truncated id has lost the end of its topic: no clean name can be read from it
     return f"{parts[0]}{card_origin.NAMESPACE_SEP}{parts[-1]}"
 
 

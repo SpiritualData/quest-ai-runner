@@ -551,3 +551,10 @@ def test_a_compounded_card_that_is_the_only_copy_is_rekeyed_whole_and_undo_keeps
     # The old id is refused by every writer, so an undo cannot put it back and must not take the new card away.
     undone = tidy.RepositoryTidy(repo, tmp_path).undo(run.manifest)
     assert not undone.failed and set(repo.load_all()) == {"root-a-111111--idealism"}
+
+
+def test_a_compounded_card_with_a_truncated_id_is_not_rekeyed(tmp_path):
+    review(tmp_path)
+    stuck = "root-a-111111--root-b-222222--root-a-111111--" + "x" * 150
+    repo = backend_with([card(stuck, ["z/one.md"])])
+    assert not plan_for(repo, tmp_path).entries
