@@ -367,6 +367,42 @@ def test_a_decision_that_is_already_open_is_a_noop_and_one_already_answered_is_r
     assert refused.status is ToolStatus.REFUSED and "declined" in refused.text
 
 
+ANSWERED = {"detail": "The person already declined this question on Tuesday. Use your own judgment instead."}
+
+
+def raise_ask(monkeypatch, steps, **settings):
+    """The create_decision tool over the real client and a scripted transport (the first step answers the open-asks read)."""
+    from .fake_quest_transport import make_client
+    client, transport = make_client([(200, [])] + steps, monkeypatch, **settings)
+    spec = create_decision_spec({}, client_factory=lambda: client)
+    return spec.handler({"summary": "Approve the plan?", "quest_id": "q1"}, ToolContext()), transport
+
+
+def test_an_ask_the_person_already_answered_is_refused_and_says_not_to_ask_again_in_other_words(monkeypatch):
+    """A 409 with no Retry-After is the refusal for a question the person passed on or declined: the loop fix is the guidance."""
+    result, _ = raise_ask(monkeypatch, [(409, ANSWERED)], write_retry="off")
+    assert result.status is ToolStatus.REFUSED and not result.ok
+    assert "already declined" in result.text and "Do not ask it again in other words" in result.text
+
+
+def test_a_409_that_carries_retry_after_is_a_request_in_progress_not_a_refusal(monkeypatch):
+    """Quest's idempotency guard answers 409 with Retry-After while the first request is still running: retryable, so failed."""
+    busy = {"detail": "A request with this Idempotency-Key is still running"}
+    result, transport = raise_ask(monkeypatch, [(409, busy, {"Retry-After": "2"})], write_retry="off")
+    assert result.status is ToolStatus.FAILED and "Do not ask it again" not in result.text
+    assert "still handling an earlier request" in result.text
+    assert [m for m, _ in transport.paths()].count("POST") == 1
+
+
+def test_an_in_progress_409_is_retried_with_the_same_key_when_write_retry_is_on(monkeypatch):
+    busy = {"detail": "still running"}
+    result, transport = raise_ask(monkeypatch, [(409, busy, {"Retry-After": "2"}), (200, {"decision_id": "d5"})],
+                                  write_retry="on")
+    assert result.status is ToolStatus.APPLIED and "d5" in result.text
+    posts = [r for r in transport.requests if r[0] == "POST"]
+    assert len(posts) == 2 and posts[0][2]["idempotency-key"] == posts[1][2]["idempotency-key"]
+
+
 def test_a_note_that_failed_is_failed_and_one_that_landed_is_applied():
     spec = add_quest_note_spec({}, client_factory=with_client(Client([{"id": "n1"}])))
     assert spec.handler({"quest_id": "q1", "text": "t"}, ToolContext()).status is ToolStatus.APPLIED

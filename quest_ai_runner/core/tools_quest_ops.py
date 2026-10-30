@@ -94,6 +94,11 @@ def open_asks(client, quest_id: str, include_closed: bool = False) -> Optional[L
 # Decision-requests: everything an AI needs from a person
 # ---------------------------------------------------------------------------------------------
 
+ASK_ALREADY_ANSWERED_GUIDANCE = (
+    "Not asked: the person already passed on or declined this question. Do not ask it again in other words; use your "
+    "own judgment or report what you could not do.")
+
+
 def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -117,16 +122,20 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
         try:
             row = client.create_decision(summary, **kwargs)
         except Exception as e:  # QuestWriteError: refused (for example the person already answered this), failed, unknown
-            return write_failed(e, "Quest did not accept the ask, so the person has NOT been asked")
+            failed = write_failed(e, "Quest did not accept the ask, so the person has NOT been asked")
+            if failed.status is ToolStatus.REFUSED and getattr(e, "status", None) == 409:
+                # A 409 that is a refusal (no Retry-After: an in-progress duplicate request is a retryable failure instead)
+                # means the person already passed on or declined this same question. Repeating it in new words is the loop.
+                failed.text = f"{failed.text}\n{ASK_ALREADY_ANSWERED_GUIDANCE}"
+            return failed
         data = data_of(row)
         status = write_status_of(row)
         ident = (data or {}).get("decision_id") or (data or {}).get("id") or getattr(row, "id", "")
         if (data or {}).get("duplicate") == "answered":
             # The person already passed on, or declined, this same question (a client that answers with the payload
             # instead of raising). Quest's message says what they decided; repeating it in new words is the loop.
-            return ToolResult(ok=False, status=ToolStatus.REFUSED, data=data, text=str(data.get("message") or (
-                "Not asked: the person already passed on or declined this question. Do not ask it "
-                "again in other words; use your own judgment or report what you could not do.")))
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, data=data,
+                              text=str(data.get("message") or ASK_ALREADY_ANSWERED_GUIDANCE))
         if status is ToolStatus.NOOP:
             return ToolResult(ok=True, status=ToolStatus.NOOP, data=data, text=str((data or {}).get("message") or (
                 f"Already open as ask {ident}: not raised again. Point to it in your result instead of a second ask.")))

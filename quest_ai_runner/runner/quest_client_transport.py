@@ -202,8 +202,10 @@ class TransportMixin:
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")
             retry_after = parse_retry_after((e.headers or {}).get("Retry-After") if e.headers is not None else None)
+            # A 409 that carries Retry-After is Quest saying a request with this Idempotency-Key is still running: retry later.
+            busy = e.code == 409 and retry_after is not None
             raise QuestApiError(f"Quest API {method} {path} -> {e.code}: {detail}", status=e.code,
-                                retry_after=retry_after, transient=e.code == 429 or e.code >= 500) from e
+                                retry_after=retry_after, transient=e.code == 429 or e.code >= 500 or busy) from e
         except urllib.error.URLError as e:
             raise QuestApiError(f"Quest API {method} {path} unreachable: {e.reason}", transient=True,
                                 outcome_unknown=not never_reached(e)) from e
@@ -256,12 +258,20 @@ class TransportMixin:
     # --- the typed write path -------------------------------------------------------------------
 
     def write_error(self, label: str, error: QuestApiError, *, not_done: bool = False) -> QuestWriteError:
-        """Classify a failed write: 4xx (except 429) is ``refused``; 429 and 503 are ``failed`` (the request was not
+        """Classify a failed write: 4xx (except 429, and a 409 that carries Retry-After, which is a request still in
+        progress) is ``refused``; 429 and 503 are ``failed`` (the request was not
         processed); any other 5xx (a 500, 502 or 504 may follow a commit) and a request that was sent and never answered are
         ``unknown``; one that never left is ``failed``."""
         status = error.status
         detail = self.error_detail(error)
-        if status is not None and 400 <= status < 500 and status != 429:
+        busy = status == 409 and error.retry_after is not None
+        if busy:
+            # Another request with this Idempotency-Key is still running (a retry that overlapped its first attempt). Quest
+            # has not said no: try again shortly, which returns the first request's result.
+            kind = ToolStatus.FAILED
+            wait = f" Try again in {error.retry_after:.0f}s." if error.retry_after else ""
+            message = f"{label} did not finish: Quest is still handling an earlier request with the same key ({detail}).{wait}"
+        elif status is not None and 400 <= status < 500 and status != 429:
             kind = ToolStatus.REFUSED
             message = f"Not done: {detail}" if not_done else f"{label} was refused by Quest ({status}): {detail}"
         elif status is not None and status >= 500 and status != 503:
