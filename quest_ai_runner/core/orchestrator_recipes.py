@@ -12,6 +12,7 @@ from hubofhubs.ports.events import EVENT_DONE, EVENT_EXEC, EVENT_RESULT
 from hubofhubs.ports.deep import ProgressEvent
 from .adapters_values import PlanDecision
 from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
+from .tools_status import DONE_STATUSES, RECEIPT_WORDS
 from .tools import ToolContext
 from .recent_context import quest_scope_key
 from .orchestrator_turn import _Emitter
@@ -77,9 +78,12 @@ class RecipesMixin:
                 return None
             record = ExecutionRecord()
             if outcome.mutates:
+                done = outcome.status in DONE_STATUSES
                 record.facts.append(ExecutionFact(
-                    goal=f"tool {outcome.tool}: {outcome.text[:200]}", succeeded=True, failed=False,
-                    error=None, phases=["tool_call", "done"]))
+                    goal=f"tool {outcome.tool}: {outcome.text[:200]}" if done else f"tool {outcome.tool}",
+                    succeeded=done, failed=not done,
+                    error=None if done else f"{RECEIPT_WORDS[outcome.status]}: {outcome.text[:280]}",
+                    phases=["tool_call", "done" if done else outcome.status.value]))
             res = OrchestratorResult(kind="answer", text=outcome.text, steps=0,
                                      rationale=f"recipe {outcome.recipe_id} ({outcome.tool})",
                                      exit_reason="recipe", execution_record=record)

@@ -197,9 +197,10 @@ class RunBeginMixin:
         # reply can say the work was held rather than silently dropping it.
         rs.brainstorm_suppressed_action: Optional[str] = None
         # Direct tool calls (core/tools.py): whether any ran this turn, and the (name, args)
-        # signatures that SUCCEEDED, so a re-plan that repeats a done call cannot run it twice.
+        # signatures that were SETTLED (applied, held, unchanged), mapped to their status, so a re-plan that repeats a
+        # settled call cannot run it twice.
         rs.tool_calls_ran = False
-        tool_ok_signatures: set = set()
+        tool_ok_signatures: Dict[Any, Any] = {}
         rs.tool_ok_signatures = tool_ok_signatures
         # The question a suppressed "clarify" (planner) or a suppressed understanding-clarify
         # (stage 1) wanted to park as a decision-request. While the latch is held nothing may

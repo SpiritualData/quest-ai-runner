@@ -11,7 +11,8 @@ from typing import Any, Dict, List, Mapping, Sequence
 
 from .tools import (STANDARD_TOOL_BUILDERS, TOKEN_RE, ToolContext, ToolResult, ToolSpec,
                     _NEVER_CODE, _QUEST_ID_PARAM, _quest_id, quest_client_from_env,
-                    quest_credentials_present)
+                    quest_credentials_present, data_of, write_failed)
+from .tools_status import ToolStatus
 
 # ---------------------------------------------------------------------------------------------
 # Experiments: the quest's Experiments section (research questions), read / search / create / edit
@@ -245,11 +246,12 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
             fields["hypotheses"] = hypotheses
         try:
             made = factory().create_experiment(quest_id, question, **fields)
-        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
-            return ToolResult(ok=False, text=f"Nothing was created: {e}")
+        except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
+            return write_failed(e, "Nothing was created")
+        made = data_of(made)
         if not made:
-            return ToolResult(ok=False, text=f"Nothing was created: the experiment {question!r} "
-                                             f"was refused.")
+            return ToolResult(ok=False, status=ToolStatus.FAILED,
+                              text=f"Nothing was created: the experiment {question!r} was refused.")
         return ToolResult(ok=True, data=made,
                           text=(f"Created the experiment {question!r} on quest {quest_id} "
                                 f"(id {made.get('research_question_id')}, status "
@@ -344,10 +346,11 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                 f"quest's own question."))
         try:
             updated = factory().update_experiment(quest_id, rid, **changes)
-        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
-            return ToolResult(ok=False, text=f"Nothing was changed: {e}")
+        except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
+            return write_failed(e, "Nothing was changed")
+        updated = data_of(updated)
         if not updated:
-            return ToolResult(ok=False, text=f"Nothing was changed on experiment {rid}.")
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text=f"Nothing was changed on experiment {rid}.")
         was = "; ".join(f"{k} was {str(before.get(k))[:120]!r}" for k in sorted(changes)
                         if k in before and before.get(k) != changes[k])
         return ToolResult(ok=True, data=updated,
@@ -443,14 +446,14 @@ def delete_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                                               f"concluded or re-dated with update_quest_experiment."))
         line = _experiment_line(target)
         if not args.get("confirm_delete"):
-            return ToolResult(ok=True, data=target, text=(
+            return ToolResult(ok=False, status=ToolStatus.HELD, data=target, text=(
                 f"NOT deleted yet. This would permanently remove: {line}. Deleting cannot be undone "
                 f"and its linked goals and habits stay. Ask the person to confirm deleting this "
                 f"exact experiment, then call again with confirm_delete=true."))
         try:
             factory().delete_experiment(quest_id, rid)
-        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
-            return ToolResult(ok=False, text=f"Nothing was deleted: {e}")
+        except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
+            return write_failed(e, "Nothing was deleted")
         return ToolResult(ok=True, data=target, text=f"Deleted the experiment: {line}.")
 
     return ToolSpec(

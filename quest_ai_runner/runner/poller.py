@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from .config_wiring import build_orchestrator, derive_capabilities, resolve_rep_sync_resolver, resolve_tool_registry
 from ..core import usage_limit
+from ..core.tools_status import ToolStatus
 from ..resources import ResourceGuard, ResourceLimits
 if TYPE_CHECKING:  # typing only: the runner takes its builders from .config_wiring, never from config
     from ..config import RunnerConfig
@@ -446,9 +447,13 @@ class Poller(PassesMixin, SyncMixin):
         if outcome is not None:
             if outcome.ok:
                 self.client.report_done(task_id, outcome.text)
+            elif outcome.status is ToolStatus.HELD:
+                # Waiting for a person's approval: neither done nor failed.
+                self.client.report_needs_you(task_id, outcome.text, outcome.decision_id)
             else:
                 self.client.report_failed(task_id, outcome.text)
-        log.info("task %s -> requested action %s", task_id, "done" if outcome and outcome.ok else "failed")
+        log.info("task %s -> requested action %s", task_id,
+                 outcome.status.value if outcome else "failed")
         return task_id
 
     def publish_action_catalog(self) -> None:

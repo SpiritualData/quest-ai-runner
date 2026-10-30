@@ -16,7 +16,7 @@ def receipt_for(mutates):
     gathered = []
     body = "line. " * 400 + "THE END"
     orch.run_tool_calls([{"name": "send_it", "args": {"body": body}}], gathered=gathered,
-                        exec_record=ExecutionRecord(), tool_ok_signatures=set(),
+                        exec_record=ExecutionRecord(), tool_ok_signatures={},
                         emit=_Silent(), steps=1, ctx=ToolContext())
     return gathered[0]["text"]
 

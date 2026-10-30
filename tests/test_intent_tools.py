@@ -169,7 +169,7 @@ def test_placing_an_unsorted_quest_lands():
 def test_moving_a_quest_the_person_placed_is_held_as_an_ask_not_done():
     backend = StubIntentsBackend()
     result = invoke(intents.place_quest_spec, backend, {"quest_id": "q_placed", "intent_id": "int_a"})
-    assert result.ok and "NOT done" in result.text and "dec_7" in result.text and backend.writes == 0
+    assert result.status.value == "held" and "NOT done" in result.text and "dec_7" in result.text and backend.writes == 0
 
 
 def test_a_per_move_error_is_a_failure():
@@ -183,7 +183,7 @@ def test_a_202_ask_from_the_server_is_surfaced():
             return {"pending": True, "decisionId": "dec_3"}
 
     result = invoke(intents.refresh_spec_spec, Asking(), {})
-    assert result.ok and "NOT done" in result.text and "dec_3" in result.text
+    assert result.status.value == "held" and "NOT done" in result.text and "dec_3" in result.text
 
 
 # --- sub-intents ---------------------------------------------------------------------------------
@@ -208,7 +208,7 @@ def test_create_sub_intent_is_held_as_an_ask_not_done():
     backend = StubIntentsBackend()
     result = invoke(intents.create_sub_intent_spec, backend,
                     {"record_id": "esr_9", "name": "Running", "opportunity": "Its own races and community."})
-    assert result.ok and "NOT done" in result.text and "dec_sub" in result.text
+    assert result.status.value == "held" and "NOT done" in result.text and "dec_sub" in result.text
     assert backend.sub_calls[0][:3] == ("esr_9", "Running", "Its own races and community.")
 
 
@@ -320,7 +320,7 @@ def test_create_sub_intent_passes_reveal_and_rejects_unknown_levels():
 
     ok = invoke(intents.create_sub_intent_spec, Backend(),
                 {"record_id": "esr_9", "name": "Running", "opportunity": "Its own needs.", "reveal": "name"})
-    assert ok.ok and seen["reveal"] == "name"
+    assert ok.status.value == "held" and seen["reveal"] == "name"
     seen.clear()
     assert invoke(intents.create_sub_intent_spec, Backend(),
                   {"record_id": "esr_9", "name": "Running", "opportunity": "x", "reveal": "everyone"}).ok is False

@@ -73,6 +73,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from .requester import apply_requester_env, requester_from_meta
 from .runtime_settings import process_environment
+from .tools_status import DONE_STATUSES, ToolStatus, as_status, status_of_error, write_status_of
 from hubofhubs.act.tool_ledger import FileToolLedger, outcome_from_result
 
 log = logging.getLogger(__name__)
@@ -104,12 +105,48 @@ class ToolContext:
 
 @dataclass
 class ToolResult:
+    """What one tool call came to. ``status`` is the typed outcome (``core.tools_status.ToolStatus``): applied, held (waiting
+    for a person's approval), noop (already so), refused, failed or unknown (sent, never answered). Leave it out for
+    a plain success or failure; ``ok`` then picks applied or failed. Given, it decides ``ok``: only applied and noop are
+    ok, so a write that is held or refused is never ok whatever the caller wrote."""
     ok: bool
     text: str = ""
     data: Any = None
+    status: Any = None
+
+    def __post_init__(self) -> None:
+        self.status = as_status(self.status) or (ToolStatus.APPLIED if self.ok else ToolStatus.FAILED)
+        self.ok = self.status in DONE_STATUSES
 
 
 ToolHandler = Callable[[Dict[str, Any], ToolContext], Any]
+
+
+def data_of(write: Any) -> Any:
+    """The raw answer inside a typed client write result (a plain payload is returned as it is)."""
+    return getattr(write, "data", write)
+
+
+def write_failed(error: BaseException, nothing_text: str) -> ToolResult:
+    """The result of a write that raised. A client write error names its own status (refused, failed, unknown) and its
+    message already says what happened and why, so it is passed on as written; any other error is a plain failure."""
+    typed = getattr(error, "write_status", None) is not None
+    return ToolResult(ok=False, status=status_of_error(error),
+                      text=str(error) if typed else f"{nothing_text}: {error}")
+
+
+def result_of_write(write: Any, applied: str, *, held: Optional[str] = None, noop: Optional[str] = None,
+                    empty: Optional[str] = None) -> ToolResult:
+    """A tool result from what a client write returned: its typed status (or, for a plain payload, the flags the server
+    sent) picks the status and the matching text. A write that returned nothing at all is a failure, never a success."""
+    data = data_of(write)
+    if write is None or (isinstance(write, (dict, list)) and not write and empty is not None):
+        return ToolResult(ok=False, status=ToolStatus.FAILED, data=data, text=empty or "Nothing was written.")
+    status = write_status_of(write)
+    text = {ToolStatus.HELD: held, ToolStatus.NOOP: noop}.get(status) or applied
+    return ToolResult(ok=status in DONE_STATUSES, status=status, data=data, text=text)
+
+
 
 
 @dataclass
@@ -421,8 +458,8 @@ class ToolRegistry:
             "REQUIRED value is unknown and cannot be read, ask with \"clarify\" instead.\n"
             "- Calls run ONLY when action is \"tool\". With action \"answer\" nothing runs, so an "
             "answer saying it was sent would be false: to act this step, the action is \"tool\".\n"
-            "- A tool call already shown as succeeded in GATHERED is DONE: never call it again, "
-            "answer with its receipt. If it failed, say so or try the right alternative once.")
+            "- A call already in GATHERED is settled: never repeat it, give its receipt (HELD FOR APPROVAL = "
+            "waiting, not done). If it failed, say so or try another way once.")
         body = self.render_catalog(shown) if shown else "(no tool matched this request)"
         body += "".join(f"\nNOT AVAILABLE HERE: {note}" for note in self.unavailable_notes(query))
         tail = (f"\n({hidden} more tool(s) not shown. Search them with a read spec "
@@ -514,14 +551,19 @@ class ToolRegistry:
                 box["result"] = coerce_result(spec.handler(resolved, ctx))
             except Exception as e:  # a tool failure is a result, never a crash of the loop
                 log.warning("tool %s raised: %s", name, e)
-                box["result"] = ToolResult(ok=False, text=f"{name} failed: {e}")
+                # A client write error carries its own status (refused, failed, unknown) and a message that says so.
+                typed = getattr(e, "write_status", None) is not None
+                box["result"] = ToolResult(ok=False, text=str(e) if typed else f"{name} failed: {e}",
+                                           status=status_of_error(e))
 
         t = threading.Thread(target=run_handler, name=f"tool-{name}", daemon=True)
         t.start()
         t.join(spec.timeout_seconds)
         if t.is_alive():
-            result = ToolResult(ok=False, text=f"{name} timed out after {spec.timeout_seconds:.0f}s "
-                                               f"(it may still complete; check before retrying)")
+            # A write that was running when the time ran out may still land: unknown, not failed.
+            result = ToolResult(ok=False, status=ToolStatus.UNKNOWN if spec.mutates else ToolStatus.FAILED,
+                                text=f"{name} timed out after {spec.timeout_seconds:.0f}s "
+                                     f"(it may still complete; check before retrying)")
         else:
             result = box.get("result") or ToolResult(ok=False, text=f"{name} returned nothing")
         if len(result.text) > MAX_RESULT_CHARS:

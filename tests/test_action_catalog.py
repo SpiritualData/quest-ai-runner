@@ -394,7 +394,8 @@ def test_an_email_to_an_outsider_cannot_be_sent_and_the_draft_path_files_it_for_
     calls.clear()
     outcome = run_requested_action(task_for("tool", "file_email_draft", {"to": "outsider@x.org", "subject": "S", "body": "B"}),
                                    registry, client=OwnerClient())
-    assert outcome.ok and "NOT sent" in outcome.text and calls[0][0] == "draft"
+    assert outcome.status.value == "held" and not outcome.ok
+    assert "NOT sent" in outcome.text and calls[0][0] == "draft"
 
 
 def test_outward_and_user_attested_tools_are_not_published_or_lose_the_attestation():

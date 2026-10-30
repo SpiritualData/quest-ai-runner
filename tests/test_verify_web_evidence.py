@@ -212,11 +212,19 @@ def test_answer_tail_web_citation_note_absent_with_no_gathered():
 # (d) grounding_answer_tail: a tool that ran this turn is not "a change attempted before"
 
 def test_the_abilities_rule_makes_an_exception_for_tools_that_succeeded_this_turn():
-    ran = [{"kind": "query", "locator": "tool:create_quest_goal", "text": "TOOL create_quest_goal SUCCEEDED (args {}):\nok"}]
+    ran = [{"kind": "query", "locator": "tool:create_quest_goal", "tool_status": "applied",
+            "text": "TOOL create_quest_goal SUCCEEDED (args {}):\nok"}]
     tail = grounding_answer_tail(ran, partial=False)
     assert "ABOUT YOUR OWN ABILITIES" in tail and "EXCEPTION to the rule above" in tail and "(create_quest_goal)" in tail
-    again = [{"kind": "query", "locator": "tool:add_quest_note", "text": "TOOL add_quest_note: ALREADY SUCCEEDED earlier this turn"}]
+    again = [{"kind": "query", "locator": "tool:add_quest_note", "tool_status": "applied",
+              "text": "TOOL add_quest_note: ALREADY SUCCEEDED earlier this turn"}]
     assert "(add_quest_note)" in grounding_answer_tail(again, partial=False)
-    failed = [{"kind": "query", "locator": "tool:create_quest_goal", "text": "TOOL create_quest_goal FAILED (args {}):\nno"}]
-    for gathered in (failed, [], None, [{"kind": "read", "locator": "web", "text": "TOOL create_quest_goal SUCCEEDED"}]):
+    failed = [{"kind": "query", "locator": "tool:create_quest_goal", "tool_status": "failed",
+               "text": "TOOL create_quest_goal FAILED (args {}):\nno"}]
+    held = [{"kind": "query", "locator": "tool:create_quest_goal", "tool_status": "held",
+             "text": "TOOL create_quest_goal HELD FOR APPROVAL (args {}):\nwaiting"}]
+    words_only = [{"kind": "query", "locator": "tool:create_quest_goal",
+                   "text": "TOOL create_quest_goal SUCCEEDED (args {}):\nok"}]
+    for gathered in (failed, held, words_only, [], None,
+                     [{"kind": "read", "locator": "web", "text": "TOOL create_quest_goal SUCCEEDED"}]):
         assert "EXCEPTION to the rule above" not in grounding_answer_tail(gathered, partial=False)

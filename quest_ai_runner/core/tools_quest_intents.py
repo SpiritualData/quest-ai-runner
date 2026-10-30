@@ -17,6 +17,7 @@ from typing import Any, Dict, Mapping, Optional
 
 from .tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env
 from .tools import quest_credentials_present
+from .tools_status import ToolStatus
 from .tools_quest_ops import NO_QUEST, QUEST_OPERATION_BUILDERS, read_failure_reason, trim
 
 SUBJECT_TYPES = ("intent", "quest")
@@ -48,6 +49,15 @@ def subject_of(args: Mapping[str, Any], ctx: ToolContext):
     if not subject_id and subject_type == "quest":
         subject_id = str(ctx.quest_id or "")
     return subject_type, subject_id or None
+
+
+def refusal_result(result: Mapping[str, Any], what: str) -> ToolResult:
+    """A write the server declined, or one that was sent and never answered (``outcomeUnknown``): the second is not a refusal."""
+    if result.get("outcomeUnknown"):
+        return ToolResult(ok=False, status=ToolStatus.UNKNOWN, text=(
+            f"Outcome unknown ({what}): the request was sent but Quest did not answer, so it may or may not have been "
+            f"applied. Read it again before trying again."))
+    return ToolResult(ok=False, status=ToolStatus.REFUSED, text=refusal_text(result, what))
 
 
 def refusal_text(result: Mapping[str, Any], what: str) -> str:
@@ -185,11 +195,11 @@ def refresh_spec_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         client = factory()
         result = client.refresh_spec(subject_type, subject_id, reason=reason, force=bool(args.get("force")))
         if result.get("refused"):
-            return ToolResult(ok=False, text=refusal_text(result, f"{subject_type} {subject_id}"))
+            return refusal_result(result, f"{subject_type} {subject_id}")
         if result.get("pending"):
-            return ToolResult(ok=True, data=result, text=pending_text(result, "this specification change"))
+            return ToolResult(ok=False, status=ToolStatus.HELD, data=result, text=pending_text(result, "this specification change"))
         if result.get("skipped") == "digest_unchanged":
-            return ToolResult(ok=True, data=result, text=(
+            return ToolResult(ok=True, status=ToolStatus.NOOP, data=result, text=(
                 "Nothing changed since the last refresh, so nothing was written. Do not call it again "
                 "this run."))
         applied = result.get("applied") or []
@@ -242,7 +252,7 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
             revision = row.get("revision")
         result = client.edit_spec_record(record_id, fields, int(revision))
         if result.get("refused"):
-            return ToolResult(ok=False, text=refusal_text(result, record_id))
+            return refusal_result(result, record_id)
         return ToolResult(ok=True, data=result, text=(
             f"Record {record_id} updated to revision {result.get('revision')}: {', '.join(sorted(fields))}."))
 
@@ -286,16 +296,16 @@ def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                                     owner_type=str(args.get("owner_type") or "user"),
                                     owner_id=args.get("owner_id") or None)
         if result.get("refused"):
-            return ToolResult(ok=False, text=refusal_text(result, quest_id))
+            return refusal_result(result, quest_id)
         if result.get("pending") is True:
-            return ToolResult(ok=True, data=result, text=pending_text(result, "this move"))
+            return ToolResult(ok=False, status=ToolStatus.HELD, data=result, text=pending_text(result, "this move"))
         errors = result.get("errors") or []
         if errors:
-            return ToolResult(ok=False, data=result, text=(
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, data=result, text=(
                 "Not moved: " + "; ".join(f"{e.get('code')} {trim(e.get('message'), 120)}" for e in errors)))
         held = result.get("pending") or []
         if held:
-            return ToolResult(ok=True, data=result, text=pending_text(
+            return ToolResult(ok=False, status=ToolStatus.HELD, data=result, text=pending_text(
                 {"decisionId": held[0].get("decisionId")}, "moving a quest the person placed"))
         where = f"under intent {intent_id}" if intent_id else "back to unsorted"
         return ToolResult(ok=True, data=result, text=f"Quest {quest_id} placed {where}.")
@@ -342,9 +352,9 @@ def create_sub_intent_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         result = client.create_sub_intent(record_id, name, opportunity, reveal=reveal,
                                           vision_statement=str(args.get("vision_statement") or "").strip())
         if result.get("refused"):
-            return ToolResult(ok=False, text=refusal_text(result, record_id))
+            return refusal_result(result, record_id)
         if result.get("pending") is True:
-            return ToolResult(ok=True, data=result, text=pending_text(result, f"the sub-intent '{trim(name, 60)}'"))
+            return ToolResult(ok=False, status=ToolStatus.HELD, data=result, text=pending_text(result, f"the sub-intent '{trim(name, 60)}'"))
         child = result.get("intent") or {}
         return ToolResult(ok=True, data=result, text=(
             f"Sub-intent {child.get('intentId')} '{trim(child.get('name') or name, 80)}' created "

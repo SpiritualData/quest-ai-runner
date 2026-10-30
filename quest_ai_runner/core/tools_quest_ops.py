@@ -27,8 +27,9 @@ import re
 from datetime import date, timedelta
 from typing import Any, Dict, List, Mapping, Optional
 
-from .tools import (STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env,
-                    quest_credentials_present)
+from .tools import (STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, data_of, quest_client_from_env,
+                    quest_credentials_present, result_of_write, write_failed)
+from .tools_status import ToolStatus, write_status_of
 
 #: Ask states that are finished or waiting on a person, not on an AI run. ``list_asks`` hides these
 #: unless ``include_closed`` is set, so "what is open" is one call with no filter to remember.
@@ -106,32 +107,30 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
         for row in (client.list_open_decisions_for_quest(quest_id) if quest_id else []):
             if same_words(row.get("summary"), summary):
                 ident = row.get("decision_id") or row.get("id")
-                return ToolResult(ok=True, data=row, text=(
+                return ToolResult(ok=True, status=ToolStatus.NOOP, data=row, text=(
                     f"Already open as ask {ident}: not raised again. Point to it in your result "
                     f"instead of a second ask."))
         kwargs: Dict[str, Any] = {"kind": str(args.get("kind") or "approve").strip().lower(),
                                   "quest_id": quest_id}
         if args.get("review_url"):
             kwargs["review_url"] = str(args["review_url"])
-        row = client.create_decision(summary, **kwargs)
-        if (row or {}).get("duplicate") == "answered":
-            # The person already passed on, or declined, this same question. Quest's message says
-            # what they decided and what to do instead; repeating it in new words is the loop.
-            return ToolResult(ok=True, data=row, text=str(row.get("message") or (
-                "Not asked: the person already passed on or declined this question. Do not ask it "
-                "again in other words; use your own judgment or report what you could not do.")))
-        if (row or {}).get("duplicate") is True:
-            return ToolResult(ok=True, data=row, text=str(row.get("message") or (
-                f"Already open as ask {row.get('decision_id')}: not raised again. Point to it in "
-                f"your result instead of a second ask.")))
-        ident = (row or {}).get("decision_id") or (row or {}).get("id")
+        try:
+            row = client.create_decision(summary, **kwargs)
+        except Exception as e:  # QuestWriteError: refused (for example the person already answered this), failed, unknown
+            return write_failed(e, "Quest did not accept the ask, so the person has NOT been asked")
+        data = data_of(row)
+        status = write_status_of(row)
+        ident = (data or {}).get("decision_id") or (data or {}).get("id") or getattr(row, "id", "")
+        if status is ToolStatus.NOOP:
+            return ToolResult(ok=True, status=ToolStatus.NOOP, data=data, text=str((data or {}).get("message") or (
+                f"Already open as ask {ident}: not raised again. Point to it in your result instead of a second ask.")))
         if not ident:
-            return ToolResult(ok=False, text=(
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text=(
                 "Quest did not accept the ask (the runner log has the reason), so the person has "
                 "NOT been asked. Do not report it as raised; try once more with a shorter summary, "
                 "or put it in your result as something you could not raise."))
-        return ToolResult(ok=True, data=row, text=f"Raised ask {ident} for the person on quest "
-                                                  f"{quest_id or '(no quest)'}.")
+        return ToolResult(ok=status in (ToolStatus.APPLIED, ToolStatus.NOOP), status=status, data=data,
+                          text=f"Raised ask {ident} for the person on quest {quest_id or '(no quest)'}.")
 
     return ToolSpec(
         name="create_decision",
@@ -250,10 +249,15 @@ def record_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         kwargs: Dict[str, Any] = {"kind": str(args.get("kind") or "request")}
         if args.get("author"):
             kwargs["author_id"] = str(args["author"])
-        row = client.record_ask(quest_id, text, **kwargs)
+        try:
+            written = client.record_ask(quest_id, text, **kwargs)
+        except Exception as e:  # QuestWriteError
+            return write_failed(e, "Quest did not record the ask. Do not report it as recorded")
+        row = data_of(written)
         if not row or not ask_key(row):
-            return ToolResult(ok=False, text="Quest did not record the ask (the runner log has the "
-                                             "reason). Do not report it as recorded.")
+            return ToolResult(ok=False, status=ToolStatus.FAILED,
+                              text="Quest did not record the ask (the runner log has the "
+                                   "reason). Do not report it as recorded.")
         return ToolResult(ok=True, data=row, text=(
             f"Recorded as ask {ask_key(row)} [{row.get('state') or 'open'}]. Recording the same words "
             f"again is the same ask, so this is safe to repeat."))
@@ -338,11 +342,16 @@ def update_ask_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                 return ToolResult(ok=False, text=f"Not updated: {problem}")
             ask = ask_key(row)
         extra = {"question": question} if question else {}
-        row = client.update_ask(ask, state or None, note=str(args.get("note") or ""),
-                                kind=kind or None, **extra)
+        try:
+            written = client.update_ask(ask, state or None, note=str(args.get("note") or ""),
+                                        kind=kind or None, **extra)
+        except Exception as e:  # QuestWriteError
+            return write_failed(e, "Quest did not update the ask. Do not report it as done")
+        row = data_of(written)
         if not row:
-            return ToolResult(ok=False, text="Quest did not update the ask (the runner log has the "
-                                             "reason). Do not report it as done.")
+            return ToolResult(ok=False, status=ToolStatus.FAILED,
+                              text="Quest did not update the ask (the runner log has the "
+                                   "reason). Do not report it as done.")
         shown = ask_state(row) if row.get("state") else state
         sorted_as = f", sorted as {row.get('kind') or kind}" if kind else ""
         follow = ""
@@ -410,15 +419,17 @@ def update_outcome_progress_spec(env: Mapping[str, str], client_factory=None) ->
             return ToolResult(ok=False, text="Needs outcome_id (or its words), progress_pct (0 to 100) "
                                              "and note (one line naming concrete evidence).")
         try:
-            result = factory().update_outcome_progress(
+            written = factory().update_outcome_progress(
                 quest_id, outcome, args.get("progress_pct"), str(args["note"]),
                 current_value=args.get("current_value"))
         except Exception as e:  # the client's "Not done: <reason>" names what to change
-            return ToolResult(ok=False, text=str(e))
-        if (result or {}).get("pending_approval"):
-            return ToolResult(ok=True, data=result, text=(
-                f"Not written yet: it is waiting for a person to approve ({result.get('decision_id')}). "
+            return write_failed(e, "Not done")
+        result = data_of(written)
+        if write_status_of(written) is ToolStatus.HELD:
+            return ToolResult(ok=False, status=ToolStatus.HELD, data=result, text=(
+                f"Not written yet: it is waiting for a person to approve ({(result or {}).get('decision_id')}). "
                 f"Do not report the number as recorded."))
+        result = result or {}
         return ToolResult(ok=True, data=result, text=(
             f"Recorded {result.get('progress_pct', args.get('progress_pct'))}% on "
             f"{trim(result.get('text') or outcome, 80)!r}."))
@@ -462,10 +473,17 @@ def add_quest_note_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec
             return NO_QUEST
         if not text:
             return ToolResult(ok=False, text="Nothing was written: text is empty.")
-        notes = factory().add_quest_note(quest_id, text)
-        if not notes:
-            return ToolResult(ok=False, text="The note was not saved (the runner log has the reason).")
-        return ToolResult(ok=True, data={"notes": len(notes)}, text=f"Added a note to quest {quest_id}.")
+        try:
+            # One tool call is one logical write: the client gives it one Idempotency-Key for all its attempts.
+            written = factory().add_quest_note(quest_id, text)
+        except Exception as e:  # QuestWriteError: refused, failed, or sent and not answered
+            return write_failed(e, "The note was not saved")
+        notes = data_of(written)
+        if written is None or (isinstance(written, (list, dict)) and not written):
+            return ToolResult(ok=False, status=ToolStatus.FAILED,
+                              text="The note was not saved (the runner log has the reason).")
+        return ToolResult(ok=True, data={"notes": len(notes) if isinstance(notes, list) else None},
+                          text=f"Added a note to quest {quest_id}.")
 
     return ToolSpec(
         name="add_quest_note",
@@ -833,12 +851,12 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
         try:
             made = client.create_quest_workflow(quest_id, title, steps, edges=edges,
                                                 status=str(args.get("status") or "") or None)
-        except Exception as e:  # noqa: BLE001
-            return ToolResult(ok=False, text=f"Nothing was created: {e}")
-        ident = (made or {}).get("workflowId")
+        except Exception as e:  # noqa: BLE001 -- QuestWriteError: refused, failed, or sent and not answered
+            return write_failed(e, "Nothing was created")
+        ident = (data_of(made) or {}).get("workflowId")
         if not ident:
-            return ToolResult(ok=False, text="Nothing was created: Quest returned no workflow.")
-        return ToolResult(ok=True, data=made, text=(
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text="Nothing was created: Quest returned no workflow.")
+        return ToolResult(ok=True, data=data_of(made), text=(
             f"Created the workflow {title!r} ({ident}) on quest {quest_id} with {len(steps)} steps. "
             f"It is on the Workflows page for the quest's members."))
 
@@ -939,14 +957,17 @@ def create_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         if outcome:
             kwargs["outcome_id"] = outcome
         try:
-            goal = client.create_goal(title, period=period, quest_id=quest_id, **kwargs)
-        except Exception as e:
-            return ToolResult(ok=False, text=f"Nothing was created: {e}")
+            made = client.create_goal(title, period=period, quest_id=quest_id, **kwargs)
+        except Exception as e:  # QuestWriteError: refused, failed, or sent and not answered
+            return write_failed(e, "Nothing was created")
+        goal = data_of(made)
         ident = (goal or {}).get("id")
         if not ident:
-            return ToolResult(ok=False, text="Nothing was created: Quest returned no goal.")
-        return ToolResult(ok=True, data=goal, text=(
-            f"Created the {period} goal {title!r} ({ident})" + (f", linked to outcome {outcome}." if outcome else ".")))
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text="Nothing was created: Quest returned no goal.")
+        return result_of_write(
+            made, f"Created the {period} goal {title!r} ({ident})" + (f", linked to outcome {outcome}." if outcome else "."),
+            noop=f"Not created: the {period} goal {title!r} already exists ({ident}).",
+            held=f"Not created yet: the {period} goal {title!r} is waiting for a person to approve it.")
 
     return ToolSpec(
         name="create_goal",
@@ -997,11 +1018,14 @@ def update_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
             if problem:
                 return ToolResult(ok=False, text=f"Not changed: {problem}")
             fields["outcome_id"] = resolved or fields["outcome_id"]
-        goal = client.update_goal(goal_id, fields)
-        if not goal:
-            return ToolResult(ok=False, text=("Quest refused the change (the runner log has the reason). "
-                                              "Check goal_id, and that outcome_id belongs to this quest."))
-        return ToolResult(ok=True, data=goal, text=f"Updated goal {goal_id}: {', '.join(sorted(fields))}.")
+        try:
+            goal = client.update_goal(goal_id, fields)
+        except Exception as e:  # QuestWriteError: the message carries Quest's reason
+            return write_failed(e, "Quest did not change the goal")
+        return result_of_write(
+            goal, f"Updated goal {goal_id}: {', '.join(sorted(fields))}.",
+            empty=("Quest refused the change (the runner log has the reason). "
+                   "Check goal_id, and that outcome_id belongs to this quest."))
 
     return ToolSpec(
         name="update_goal",

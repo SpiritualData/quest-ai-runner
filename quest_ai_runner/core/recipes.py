@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .runtime_settings import process_environment
+from .tools_status import ToolStatus, as_status
 from .prompt_specs import declare, render_prompt
 from hubofhubs.recall.scope_tags import as_tag_list, scope_tags_allow
 
@@ -400,6 +401,10 @@ class RecipeOutcome:
     mutates: bool
     llm_calls: int
     seconds: float
+    status: Any = None
+
+    def __post_init__(self) -> None:
+        self.status = as_status(self.status) or (ToolStatus.APPLIED if self.ok else ToolStatus.FAILED)
 
 
 class RecipeRunner:
@@ -479,13 +484,19 @@ class RecipeRunner:
                 if not isinstance(args, dict) or not args:
                     return None
             result = self.tools.invoke(recipe.tool, args, ctx)
-            if not result.ok:
-                log.info("Recipe %s failed (%s); taking the normal path", recipe.id, result.text[:160])
+            if result.status not in (ToolStatus.APPLIED, ToolStatus.NOOP, ToolStatus.HELD):
+                log.info("Recipe %s did not take effect (%s: %s); taking the normal path", recipe.id,
+                         result.status.value, result.text[:160])
                 return None
-            self.store.mark_used(recipe, request)
+            if result.status is ToolStatus.HELD:
+                # Settled: the write is waiting for a person. Answer with that receipt, never run the plan again.
+                log.info("Recipe %s is held for approval; answering with its receipt", recipe.id)
+            else:
+                self.store.mark_used(recipe, request)
             return RecipeOutcome(recipe_id=recipe.id, tool=recipe.tool, args=args,
-                                 text=result.text, ok=True, mutates=bool(spec.mutates),
-                                 llm_calls=llm_calls, seconds=time.monotonic() - started)
+                                 text=result.text, ok=result.ok, mutates=bool(spec.mutates),
+                                 llm_calls=llm_calls, seconds=time.monotonic() - started,
+                                 status=result.status)
         except Exception as e:  # noqa: BLE001 -- a recipe must never break a turn
             log.warning("Recipe fast path failed, taking the normal path: %s: %s",
                         type(e).__name__, e)

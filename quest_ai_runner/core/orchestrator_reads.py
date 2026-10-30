@@ -14,6 +14,7 @@ from hubofhubs.ports.deep import ProgressEvent
 from .adapters_values import Observation
 from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
 from .tools import ToolContext
+from .tools_status import DONE_STATUSES, RECEIPT_WORDS, ToolStatus, as_status
 from .planner_context import _is_discovery_spec
 from .orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from .orchestrator_constants import log
@@ -413,33 +414,46 @@ class ReadsMixin:
             spec = self.tools.get(name) if self.tools is not None else None
             sig = (name, json.dumps(args, sort_keys=True, default=str))
             if sig in tool_ok_signatures:
-                gathered.append({"kind": "query", "locator": f"tool:{name}",
-                                 "text": f"TOOL {name}: ALREADY SUCCEEDED earlier this turn with "
-                                         f"these args; not run again. Answer with its receipt."})
+                settled = as_status(tool_ok_signatures[sig] if isinstance(tool_ok_signatures, dict) else None,
+                                    ToolStatus.APPLIED)
+                gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": settled.value,
+                                 "text": (f"TOOL {name}: ALREADY SUCCEEDED earlier this turn with these args; not run "
+                                          f"again. Answer with its receipt." if settled is ToolStatus.APPLIED else
+                                          f"TOOL {name}: {RECEIPT_WORDS[settled]} earlier this turn with these args; "
+                                          f"not run again. Answer with its receipt.")})
                 continue
             emit.status(f"Calling {name}…")
             emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}",
                                     data={"phase": "tool_call", "tool": name}))
             result = (self.tools.invoke(name, args, ctx) if self.tools is not None
                       else None)
-            ok = bool(result and result.ok)
+            status = result.status if result is not None else ToolStatus.FAILED
+            ok = status is ToolStatus.APPLIED
+            done = status in DONE_STATUSES
             text = result.text if result is not None else "no tools configured"
-            if ok:
-                tool_ok_signatures.add(sig)
-                if on_success is not None:
-                    try:
-                        on_success(name, dict(args))
-                    except Exception:  # noqa: BLE001 -- learning a recipe never breaks a turn
-                        pass
-            gathered.append({"kind": "query", "locator": f"tool:{name}",
-                             "text": f"TOOL {name} {'SUCCEEDED' if ok else 'FAILED'} "
+            if status in (ToolStatus.APPLIED, ToolStatus.NOOP, ToolStatus.HELD):
+                # Settled: a held write is already an ask for a person, and a no-op already holds. Running either again
+                # only raises a second ask or changes nothing.
+                if isinstance(tool_ok_signatures, dict):
+                    tool_ok_signatures[sig] = status
+                else:
+                    tool_ok_signatures.add(sig)
+            if ok and on_success is not None:
+                try:
+                    on_success(name, dict(args))
+                except Exception:  # noqa: BLE001 -- learning a recipe never breaks a turn
+                    pass
+            gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": status.value,
+                             "text": f"TOOL {name} {RECEIPT_WORDS[status]} "
                                      f"(args {json.dumps(args, default=str)[:(ACTING_TOOL_ARGS_CHARS if (spec is None or spec.mutates) else 600)]}):\n{text}"})
             if spec is None or spec.mutates:
                 exec_record.facts.append(ExecutionFact(
-                    goal=f"tool {name}: {text[:200]}" if ok else f"tool {name}",
-                    succeeded=ok, failed=not ok, error=None if ok else text[:300],
-                    phases=["tool_call", "done" if ok else "failed"]))
+                    goal=f"tool {name}: {text[:200]}" if done else f"tool {name}",
+                    succeeded=done, failed=not done,
+                    error=None if done else f"{RECEIPT_WORDS[status]}: {text[:280]}",
+                    phases=["tool_call", "done" if done else status.value]))
             emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps,
                                     text=f"tool {name}: {text[:200]}",
-                                    data={"phase": "done" if ok else "failed", "tool": name}))
-            log.info("tool %s %s: %s", name, "ok" if ok else "FAILED", text[:200])
+                                    data={"phase": "done" if done else "failed", "tool": name,
+                                          "status": status.value}))
+            log.info("tool %s %s: %s", name, status.value, text[:200])

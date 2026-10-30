@@ -187,7 +187,7 @@ def test_standard_file_email_draft_files_without_sending():
     res = reg.invoke("file_email_draft",
                      {"to": "donor@x.org", "subject": "Thanks", "body": "Hello", "cc": ["a@x.org"]},
                      ToolContext(task_id="t9"))
-    assert res.ok and "draft_1" in res.text and "NOT sent" in res.text
+    assert res.status.value == "held" and "draft_1" in res.text and "NOT sent" in res.text
     assert client.calls == [dict(recipient="donor@x.org", subject="Thanks", body="Hello",
                                  cc=["a@x.org"], task_id="t9")]
 

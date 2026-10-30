@@ -57,7 +57,7 @@ def test_a_proposal_is_sent_with_its_evidence_and_reported_as_proposed_not_recor
     result = run(metric_tools.propose_metric_value_spec, client, {
         "collection_id": "coll_1", "values": {"Kilometres": 18, "Effort": 3}, "evidence": evidence, "confidence": "low",
         "confidence_reason": "two notes", "could_not_see": "the watch data"})
-    assert result.ok and "teamdec_1" in result.text and "Do not report the value as recorded" in result.text
+    assert result.status.value == "held" and "teamdec_1" in result.text and "Do not report the value as recorded" in result.text
     call = client.calls[0]
     assert call[1:4] == ("coll_1", {"Kilometres": 18, "Effort": 3}, evidence)
     assert call[4]["confidence"] == "low" and call[4]["confidence_reason"] == "two notes" and call[4]["could_not_see"] == "the watch data"

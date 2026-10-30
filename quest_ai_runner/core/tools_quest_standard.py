@@ -18,7 +18,10 @@ from .tools import (
     ToolSpec,
     quest_client_from_env,
     quest_credentials_present,
+    result_of_write,
+    write_failed,
 )
+from .tools_status import ToolStatus
 
 
 def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
@@ -33,7 +36,7 @@ def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
             recipients=args.get("to") or None)
         who = ", ".join(args.get("to") or []) or "the quest's configured recipients"
         persona = (result or {}).get("persona") or "Quest AI"
-        return ToolResult(ok=True, data=result,
+        return ToolResult(ok=True, data=getattr(result, "data", result),
                           text=f"Sent \"{args['subject']}\" to {who} as {persona} "
                                f"(quest {args['quest_id']}).")
 
@@ -92,9 +95,10 @@ def file_email_draft_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
             cc=args.get("cc") or None, task_id=args.get("task_id") or ctx.task_id)
         draft_id = (result or {}).get("id")
         if not draft_id:
-            return ToolResult(ok=False, data=result,
+            return ToolResult(ok=False, data=getattr(result, "data", result),
                               text="The draft was not filed: Quest did not return a draft id.")
-        return ToolResult(ok=True, data=result,
+        # The draft is filed, but the email the person asked for is NOT sent: it waits for their approval.
+        return ToolResult(ok=False, status=ToolStatus.HELD, data=getattr(result, "data", result),
                           text=(f"Filed a draft \"{args['subject']}\" to {recipient} in the "
                                 f"Approval Queue (draft {draft_id}). NOT sent: it goes out only "
                                 f"after the person approves it in the Quest app."))
@@ -227,16 +231,15 @@ def quest_field_tool_spec(field_name: str, env: Mapping[str, str],
         if field_name in UNGATED_QUEST_FIELDS and not requested:
             return ToolResult(ok=False, text=(f"Not written: the user did not ask to change the "
                                               f"{spec_text.label}. Suggest it in your reply instead."))
-        result = factory().edit_quest_field(quest_id, {field_name: value.strip()},
-                                            actor="ai", user_requested=requested)
-        if not result:
-            return ToolResult(ok=False, data=result,
-                              text=f"Nothing was written: the update of {field_name} on quest "
-                                   f"{quest_id} failed.")
-        if isinstance(result, dict) and result.get("applied") is False:
-            return ToolResult(ok=True, data=result,
-                              text=_not_applied_text(field_name, quest_id, result))
-        return ToolResult(ok=True, data=result, text=f"Updated {field_name} on quest {quest_id}.")
+        try:
+            result = factory().edit_quest_field(quest_id, {field_name: value.strip()},
+                                                actor="ai", user_requested=requested)
+        except Exception as e:  # QuestWriteError: refused, failed, or sent and not answered
+            return write_failed(e, f"Nothing was written: the update of {field_name} on quest {quest_id} failed")
+        return result_of_write(
+            result, f"Updated {field_name} on quest {quest_id}.",
+            held=_not_applied_text(field_name, quest_id, getattr(result, "data", result) or {}),
+            empty=f"Nothing was written: the update of {field_name} on quest {quest_id} failed.")
 
     return ToolSpec(
         name=QUEST_FIELD_TOOLS[field_name],
@@ -297,23 +300,22 @@ def add_measurable_outcome_spec(env: Mapping[str, str], client_factory=None) -> 
         current = [o for o in (quest.get("measurable_outcomes") or quest.get("measurableOutcomes")
                                or []) if isinstance(o, dict)]
         if any(str(o.get("text") or "").strip().lower() == text.lower() for o in current):
-            return ToolResult(ok=True, text=f"Not added: quest {quest_id} already has the "
-                                            f"measurable outcome {text!r}.")
+            return ToolResult(ok=True, status=ToolStatus.NOOP,
+                              text=f"Not added: quest {quest_id} already has the measurable outcome {text!r}.")
         item: Dict[str, Any] = {"text": text, "completed": False}
         for key in ("target_value", "target_unit", "start_value"):
             if args.get(key) not in (None, ""):
                 item[key] = args[key]
-        result = client.edit_quest_field(quest_id, {"measurable_outcomes": current + [item]},
-                                         actor="ai",
-                                         user_requested=bool(args.get("user_asked_for_this_field")))
-        if not result:
-            return ToolResult(ok=False, text=f"Nothing was written: adding the measurable outcome "
-                                             f"to quest {quest_id} failed.")
-        if isinstance(result, dict) and result.get("applied") is False:
-            return ToolResult(ok=True, data=result,
-                              text=_not_applied_text("measurable_outcomes", quest_id, result))
-        return ToolResult(ok=True, data=result,
-                          text=f"Added the measurable outcome {text!r} to quest {quest_id}.")
+        try:
+            result = client.edit_quest_field(quest_id, {"measurable_outcomes": current + [item]},
+                                             actor="ai",
+                                             user_requested=bool(args.get("user_asked_for_this_field")))
+        except Exception as e:  # QuestWriteError: refused, failed, or sent and not answered
+            return write_failed(e, f"Nothing was written: adding the measurable outcome to quest {quest_id} failed")
+        return result_of_write(
+            result, f"Added the measurable outcome {text!r} to quest {quest_id}.",
+            held=_not_applied_text("measurable_outcomes", quest_id, getattr(result, "data", result) or {}),
+            empty=f"Nothing was written: adding the measurable outcome to quest {quest_id} failed.")
 
     return ToolSpec(
         name="add_quest_measurable_outcome",
@@ -365,12 +367,13 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
                                        "parent_goal_id") if args.get(k) not in (None, "")}
         try:
             goal = factory().create_goal(title, period=period, quest_id=quest_id, **kwargs)
-        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
-            return ToolResult(ok=False, text=f"Nothing was created: {e}")
-        if not goal:
-            return ToolResult(ok=False, text=f"Nothing was created: the goal {title!r} was refused.")
-        return ToolResult(ok=True, data=goal,
-                          text=f"Created the {period} goal {title!r} on quest {quest_id}.")
+        except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
+            return write_failed(e, "Nothing was created")
+        return result_of_write(
+            goal, f"Created the {period} goal {title!r} on quest {quest_id}.",
+            noop=f"Not created: quest {quest_id} already has the {period} goal {title!r}.",
+            held=f"Not created yet: the {period} goal {title!r} is waiting for a person to approve it.",
+            empty=f"Nothing was created: the goal {title!r} was refused.")
 
     return ToolSpec(
         name="create_quest_goal",
@@ -425,19 +428,18 @@ def add_quest_strategy_spec(env: Mapping[str, str], client_factory=None) -> Tool
         raw_ids = args.get("problem_ids")
         problem_ids = [str(i).strip() for i in raw_ids if str(i).strip()] \
             if isinstance(raw_ids, (list, tuple)) else []
-        result = factory().add_quest_strategy(
-            quest_id, title, str(args.get("approach") or "").strip(),
-            actor="ai", user_requested=bool(args.get("user_asked_for_this_field")),
-            problem_ids=problem_ids or None, purpose=str(args.get("purpose") or "").strip(),
-            description=str(args.get("description") or "").strip())
-        if not result:
-            return ToolResult(ok=False, text=f"Nothing was added: the strategy {title!r} on quest "
-                                             f"{quest_id} failed.")
-        if isinstance(result, dict) and result.get("applied") is False:
-            return ToolResult(ok=True, data=result,
-                              text=_not_applied_text(f"the strategy {title!r}", quest_id, result))
-        return ToolResult(ok=True, data=result,
-                          text=f"Added the strategy {title!r} to quest {quest_id}.")
+        try:
+            result = factory().add_quest_strategy(
+                quest_id, title, str(args.get("approach") or "").strip(),
+                actor="ai", user_requested=bool(args.get("user_asked_for_this_field")),
+                problem_ids=problem_ids or None, purpose=str(args.get("purpose") or "").strip(),
+                description=str(args.get("description") or "").strip())
+        except Exception as e:  # QuestWriteError: refused, failed, or sent and not answered
+            return write_failed(e, f"Nothing was added: the strategy {title!r} on quest {quest_id} failed")
+        return result_of_write(
+            result, f"Added the strategy {title!r} to quest {quest_id}.",
+            held=_not_applied_text(f"the strategy {title!r}", quest_id, getattr(result, "data", result) or {}),
+            empty=f"Nothing was added: the strategy {title!r} on quest {quest_id} failed.")
 
     return ToolSpec(
         name="add_quest_strategy",
@@ -508,11 +510,13 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
         try:
             habit = client.create_habit(quest_id, strategy_id, name,
                                         frequency=str(args.get("frequency") or "daily"), **fields)
-        except Exception as e:  # QuestApiError / QuestNotConfigured: report, never raise
-            return ToolResult(ok=False, text=f"Nothing was created: {e}")
-        if not habit:
-            return ToolResult(ok=False, text=f"Nothing was created: the habit {name!r} was refused.")
-        return ToolResult(ok=True, data=habit, text=f"Created the habit {name!r} on quest {quest_id}.")
+        except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
+            return write_failed(e, "Nothing was created")
+        return result_of_write(
+            habit, f"Created the habit {name!r} on quest {quest_id}.",
+            noop=f"Not created: quest {quest_id} already has the habit {name!r}.",
+            held=f"Not created yet: the habit {name!r} is waiting for a person to approve it.",
+            empty=f"Nothing was created: the habit {name!r} was refused.")
 
     return ToolSpec(
         name="create_quest_habit",

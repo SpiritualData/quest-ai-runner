@@ -168,7 +168,8 @@ def test_a_change_held_for_approval_is_reported_as_not_applied():
     client = FakeQuestClient({"applied": False, "reason": "autopilot_off", "decision_id": "d1"})
     result = quest_field_tool_spec("outcome", {}, client_factory=factory(client)).handler(
         {"quest_id": "q1", "value": "new", "user_asked_for_this_field": True}, ToolContext())
-    assert result.ok and "NOT applied" in result.text and "autopilot_off" in result.text
+    assert result.status.value == "held" and not result.ok
+    assert "NOT applied" in result.text and "autopilot_off" in result.text
 
 
 def test_failed_or_empty_writes_report_nothing_written():
@@ -232,7 +233,7 @@ def test_strategy_tool_passes_actor_and_verdict_and_reports_a_held_change():
     client = FakeQuestClient({"applied": False, "reason": "not_user_requested"})
     spec = add_quest_strategy_spec({}, client_factory=factory(client))
     result = spec.handler({"quest_id": "q1", "title": "Progressive long run"}, ToolContext())
-    assert result.ok and "NOT applied" in result.text
+    assert result.status.value == "held" and "NOT applied" in result.text
     assert client.calls[0][4:] == ("ai", False, None)
 
 
@@ -467,7 +468,7 @@ def test_delete_experiment_previews_then_needs_confirmation_and_spares_the_defau
     base = {"quest_id": "q1", "research_question_id": "rq_sleep"}
     assert not spec.handler(base, ToolContext()).ok                      # no ask
     preview = spec.handler({**base, "user_asked_for_this_field": True}, ToolContext())
-    assert preview.ok and "NOT deleted yet" in preview.text and "cold shower" in preview.text
+    assert preview.status.value == "held" and "NOT deleted yet" in preview.text and "cold shower" in preview.text
     assert not [c for c in client.calls if c[0] == "delete_experiment"]
     done = spec.handler({**base, "user_asked_for_this_field": True, "confirm_delete": True},
                         ToolContext())

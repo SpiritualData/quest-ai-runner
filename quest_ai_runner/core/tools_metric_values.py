@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping
 
-from .tools import (STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env,
-                    quest_credentials_present)
+from .tools import (STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, data_of, quest_client_from_env,
+                    quest_credentials_present, write_failed)
+from .tools_status import ToolStatus
 from .tools_quest_ops import trim
 
 COLLECTION_PARAM = {"type": "string", "description": "The metric's collection id, named in the task."}
@@ -74,8 +75,10 @@ def propose_metric_value_spec(env: Mapping[str, str], client_factory=None) -> To
                 confidence_reason=str(args.get("confidence_reason") or ""), could_not_see=str(args.get("could_not_see") or ""),
                 period_start=args.get("period_start"), note=str(args.get("note") or ""))
         except Exception as e:  # a refusal says why: fix the values or the evidence, never retry unchanged
-            return ToolResult(ok=False, text=str(e))
-        return ToolResult(ok=True, data=proposal, text=(
+            return write_failed(e, "Not done")
+        proposal = data_of(proposal)
+        # A proposal is an ask for the person: nothing is recorded until they confirm it.
+        return ToolResult(ok=False, status=ToolStatus.HELD, data=proposal, text=(
             f"Proposed. It is an ask for the person ({proposal.get('decisionId')}); nothing is recorded until they confirm. "
             f"Do not report the value as recorded."))
 

@@ -16,7 +16,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional
 
 from .tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env
-from .tools import quest_credentials_present
+from .tools import data_of, quest_credentials_present, result_of_write, write_failed
+from .tools_status import ToolStatus
 from .tools_quest_ops import (NO_QUEST, QUEST_OPERATION_BUILDERS, QUEST_ID_PARAM, flat_goals, goal_line, goal_row, quest_id_of,
                               words_of)
 
@@ -147,11 +148,12 @@ def create_task_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                 kwargs[key] = args[key]
         try:
             task = client.create_task(text, source="chat", **kwargs)
-        except Exception as e:  # noqa: BLE001
-            return ToolResult(ok=False, text=f"Nothing was created: {e}")
+        except Exception as e:  # noqa: BLE001 -- QuestWriteError: refused, failed, or sent and not answered
+            return write_failed(e, "Nothing was created")
+        task = data_of(task)
         ident = (task or {}).get("id") or (task or {}).get("task_id")
         if not ident:
-            return ToolResult(ok=False, text="Nothing was created: Quest returned no task.")
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text="Nothing was created: Quest returned no task.")
         spawned = (task or {}).get("spawned_goal") or {}
         if spawned:
             verb = "reused the open goal" if spawned.get("reused") else "created the goal"
@@ -218,10 +220,11 @@ def assign_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
             return ToolResult(ok=False, text=f"Not handed over: {problem}")
         try:
             goal = client.assign_goal(goal_id, member, reason=reason, next_step=next_step)
-        except Exception as e:  # noqa: BLE001
-            return ToolResult(ok=False, text=f"Not handed over: {e}")
+        except Exception as e:  # noqa: BLE001 -- QuestWriteError: refused, failed, or sent and not answered
+            return write_failed(e, "Not handed over")
+        goal = data_of(goal)
         if not goal:
-            return ToolResult(ok=False, text="Not handed over: Quest returned nothing. Check goal_id.")
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text="Not handed over: Quest returned nothing. Check goal_id.")
         carried = ""
         task_id_list = []
         try:
@@ -268,11 +271,15 @@ def complete_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
             return ToolResult(ok=False, text="Needs goal_id.")
         completed = args.get("completed", True) is not False
         client = factory()
-        goal = client.complete_goal(goal_id, completed=completed)
-        if not goal:
-            return ToolResult(ok=False, text=("Quest refused the change (the runner log has the reason). "
-                                              "Check goal_id, and that you can edit this goal's quest."))
-        return ToolResult(ok=True, data=goal, text=f"Marked goal {goal_id} {'done' if completed else 'not done'}.")
+        try:
+            goal = client.complete_goal(goal_id, completed=completed)
+        except Exception as e:  # noqa: BLE001 -- QuestWriteError: the message carries Quest's reason
+            return write_failed(e, "Quest did not change the goal")
+        return result_of_write(
+            goal, f"Marked goal {goal_id} {'done' if completed else 'not done'}.",
+            held=f"Not marked yet: the change to goal {goal_id} is waiting for a person to approve it.",
+            empty=("Quest refused the change (the runner log has the reason). "
+                   "Check goal_id, and that you can edit this goal's quest."))
 
     return ToolSpec(
         name="complete_goal",

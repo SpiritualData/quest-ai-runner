@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, List
 
 from .context_doctrine import EVIDENCE_GATE
+from .tools_status import RECEIPT_WORDS, ToolStatus, as_status
 from .planner_context import (
     LINK_NOT_READ_ANSWER_RULE,
     LINK_NOT_READ_MARKER,
@@ -229,18 +230,40 @@ def grounding_context_layer(context_view: str) -> str:
     ])
 
 
-def tool_receipts_that_ran(gathered: List[Dict[str, Any]]) -> List[str]:
-    """Names of the tools whose receipt in ``gathered`` says they SUCCEEDED this turn (``run_tool_calls`` writes the receipt as
-    structured data: locator ``tool:<name>``, text ``TOOL <name> SUCCEEDED ...`` or the already-succeeded note)."""
-    names: List[str] = []
+def tool_receipts_by_status(gathered: List[Dict[str, Any]]) -> Dict[ToolStatus, List[str]]:
+    """The tools that ran this turn, grouped by the typed status of their receipt.
+
+    ``run_tool_calls`` writes each receipt as structured data: locator ``tool:<name>`` and ``tool_status`` (a
+    ``ToolStatus`` value taken from the tool's own result). The status is read from that field and never from the words
+    of the receipt text, so a model's phrasing or a result that merely contains the word "succeeded" cannot change it."""
+    grouped: Dict[ToolStatus, List[str]] = {}
     for obs in gathered or []:
-        locator = str(obs.get("locator") or "") if isinstance(obs, dict) else ""
-        if not locator.startswith("tool:"):
+        if not isinstance(obs, dict):
             continue
-        name, text = locator[len("tool:"):], str(obs.get("text") or "")
-        if (text.startswith(f"TOOL {name} SUCCEEDED") or text.startswith(f"TOOL {name}: ALREADY SUCCEEDED")) and name not in names:
-            names.append(name)
-    return names
+        locator = str(obs.get("locator") or "")
+        status = as_status(obs.get("tool_status"))
+        if not locator.startswith("tool:") or status is None:
+            continue
+        name = locator[len("tool:"):]
+        if name not in grouped.setdefault(status, []):
+            grouped[status].append(name)
+    return grouped
+
+
+def tool_receipts_that_ran(gathered: List[Dict[str, Any]]) -> List[str]:
+    """Names of the tools whose receipt in ``gathered`` has the status ``applied``: the only ones whose change is done."""
+    return tool_receipts_by_status(gathered).get(ToolStatus.APPLIED, [])
+
+
+#: What each non-applied status means for the reply, in the order they are listed.
+RECEIPT_MEANINGS = (
+    (ToolStatus.HELD, "nothing has changed yet, it is waiting for a person to approve it: say so, and never say it is done"),
+    (ToolStatus.NOOP, "it already existed, so nothing needed doing: say that"),
+    (ToolStatus.REFUSED, "Quest would not allow it: say why, as its receipt does"),
+    (ToolStatus.FAILED, "it did not happen: say so"),
+    (ToolStatus.UNKNOWN, "it was sent and no answer came back, so it may or may not have happened: say that it needs "
+                         "checking, never that it was done"),
+)
 
 
 def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
@@ -286,15 +309,21 @@ def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
         "change, say plainly that it has not been made yet and describe exactly what should be "
         "done; the system will execute it."
     )
-    done = tool_receipts_that_ran(content_gathered)
+    by_status = tool_receipts_by_status(content_gathered)
+    done = by_status.get(ToolStatus.APPLIED, [])
     if done:
         # The block above is true of the answer step itself. A tool the system already ran this turn is not "a change
         # attempted before": its receipt is in the content, and a reply that denies it sends the person to repeat it.
+        # Only an ``applied`` receipt is done; the others below say what became of theirs.
         parts.append(
             "EXCEPTION to the rule above: the TOOL lines above marked SUCCEEDED (" + ", ".join(done) + ") were run by "
             "the system in this very turn, before this reply. What they did IS done: report it as done, in the past "
             "tense, exactly as its receipt states, and never tell the person to do it themselves or to check whether it "
             "happened. The rule above still applies to every change that has no SUCCEEDED line.")
+    others = [f"{RECEIPT_WORDS[status]} ({', '.join(by_status[status])}): {meaning}"
+              for status, meaning in RECEIPT_MEANINGS if by_status.get(status)]
+    if others:
+        parts.append("The other TOOL lines above made no change this turn, and each means exactly this. " + "; ".join(others) + ".")
     parts.append(
         "Now write the reply itself, and nothing but the reply: no restatement of what they asked, "
         "no account of your reasoning or of what you are about to do, no mention of the material "

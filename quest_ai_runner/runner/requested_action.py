@@ -4,7 +4,7 @@ A task Quest queues for a published action carries ``requested_action``:
 ``{publisher, kind, name, action_id, args}`` (see ``runner.action_catalog`` for what is published).
 This module calls exactly that tool or connector operation with exactly those arguments and returns
 the outcome. There is no planner in between, so the step does what it says and nothing else. The
-poller reports the outcome (done or failed) through the usual task report calls.
+poller reports the outcome (done, failed, or needs_you when it is held for a person's approval) through the usual task report calls.
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 from ..core.tools import ToolContext
+from ..core.tools_status import DONE_STATUSES, ToolStatus, as_status
 from .action_catalog import KIND_TOOL, PUBLISHER_ID, find_published_action
 
 log = logging.getLogger("quest-ai-runner.requested_action")
@@ -21,8 +22,17 @@ log = logging.getLogger("quest-ai-runner.requested_action")
 
 @dataclass
 class ActionOutcome:
+    """What a requested action came to. ``status`` is the typed outcome (``ToolStatus``): ``held`` means the action is
+    waiting for a person to approve it, so the task is not done and not failed; ``decision_id`` names that ask when
+    Quest returned one. ``ok`` is True for applied and noop only."""
     ok: bool
     text: str
+    status: Any = None
+    decision_id: str = ""
+
+    def __post_init__(self) -> None:
+        self.status = as_status(self.status) or (ToolStatus.APPLIED if self.ok else ToolStatus.FAILED)
+        self.ok = self.status in DONE_STATUSES
 
 
 def decode_json_params(properties: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]:
@@ -95,7 +105,9 @@ def run_requested_action(task: Dict[str, Any], registry: Any, mcp_servers: Seque
                           user_id=str(task.get("user_id") or "") or None,
                           task_id=str(task.get("task_id") or task.get("id") or "") or None)
         result = registry.invoke(name, decode_json_params(spec.properties(), args), ctx)
-        return ActionOutcome(result.ok, result.text or ("done" if result.ok else f"{name} failed"))
+        data = result.data if isinstance(result.data, dict) else {}
+        return ActionOutcome(result.ok, result.text or ("done" if result.ok else f"{name} failed"),
+                             status=result.status, decision_id=str(data.get("decision_id") or data.get("decisionId") or ""))
     alias = name.split(":", 1)[0]
     server = next(s for s in mcp_servers if getattr(s, "alias", None) == alias)
     from ..adapters.mcp_write_adapter import MCPWriteAdapter
