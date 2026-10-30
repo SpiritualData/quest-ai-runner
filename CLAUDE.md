@@ -31,7 +31,8 @@ are moving into the hub seat by seat (`docs/hub-of-hubs.md`); QAR keeps what kno
   the mixin that owns that role, not to `orchestrator.py`. `RunMixin.run` is a short dispatcher: its
   turn is a chain of phase methods (`_run_begin`, `_run_plan_loop`, ...) held in `orchestrator_run_begin`,
   `_loop`, `_answer` and `_close`, which share one run-local namespace `rs`. The ports (`core/adapters_*`) and
-  `core/goal_runner.py` are split the same way (`adapters_*`, `goal_runner_*`); importers name the defining module. `core` never imports
+  `core/goal_runner.py` are split the same way (`adapters_*`, `goal_runner_*`); importers name the defining module, and
+  `core/adapters.py` re-exports only the names the Quest backend imports from it. `core` never imports
   outward: what it needs from `adapters`/`runner` is injected, and `quest_ai_runner/__init__.py`
   registers `cli_model` (`goal_runner.set_cli_model_translator`) and the Quest client factory
   (`tools.set_quest_client_factory`). The same pattern applies to
