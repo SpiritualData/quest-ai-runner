@@ -9,19 +9,67 @@ The result lists each work with its title, authors, year, journal, DOI link and 
 a work with no DOI says so. Nothing here is a model call. The hub reads no environment, so this module reads the names below and
 hands them over: ``OPENALEX_API_KEY``, ``OPENALEX_MAILTO`` (a contact address for OpenAlex, optional) and
 ``QAR_SCIENCE_DAILY_LIMIT`` (real searches per UTC day for this process, default 300).
+
+The registry is rebuilt more than once in a process (the poller resolves it for each job), so the day's count and the answer
+cache live in module state (``shared_limiter``, ``shared_arm``) and survive the rebuild; a restart of the process starts the
+count again, which is why the cap is documented per process.
+
+Every work's title and abstract is third-party text; the hub's result says so (``UNTRUSTED_RULE``) and that only abstracts were read.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional
+import threading
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from .tools import STANDARD_TOOL_BUILDERS, STANDARD_TOOL_UNAVAILABLE, ToolContext, ToolResult, ToolSpec, UnavailableTool
 
 TOOL_NAME = "search_scientific_literature"
 DEFAULT_DAILY_LIMIT = 300
 MAX_WORKS = 10
-#: Words in a request that make the "not available here" note worth its tokens.
-ASKING_ABOUT_PAPERS = ("paper", "papers", "literature", "scientific", "scholarly", "study", "studies", "journal", "citation",
-                       "cite", "doi", "peer", "pubmed", "meta-analysis")
+#: What makes a request one about the research literature, matched on the PERSON's message (never on model output, hard rule
+#: #3). Specific phrases only: a single common word ("paper", "study", "journal", "peer", "cite") fired on "study for my exam",
+#: "journal entry", "paper towels" and "peer review my essay", and the note costs tokens on every request it fires on.
+ASKING_ABOUT_PAPERS = (
+    r"\b(scientific|scholarly|academic|research|journal|clinical|published|peer[- ]reviewed)\s+(literature|papers?|articles?|studies|evidence|research|trials?|sources?)\b",
+    r"\bpeer[- ]reviewed\b",
+    r"\b(literature|systematic)\s+(review|search)\b",
+    r"\b(meta[- ]analys[ie]s|pubmed|arxiv|google scholar|semantic scholar|openalex|crossref)\b",
+    r"\bdoi\b|\b10\.\d{4,9}/",
+    r"\b(studies|research|science)\s+(say|says|show|shows|suggest|suggests|find|finds|found|indicate|indicates)\b",
+    r"\bcite\b.{0,30}\b(papers?|studies|research|articles?|literature)\b",
+)
+
+SHARED_LOCK = threading.Lock()
+SHARED_LIMITERS: Dict[Tuple[str, int], Any] = {}
+SHARED_ARMS: Dict[Tuple[str, str, int], Any] = {}
+
+
+def shared_limiter(key: str, limit: int):
+    """The one daily counter for this key and limit in this process, kept across registry rebuilds."""
+    from hubofhubs.websearch.limiter import DailyLimiter
+
+    with SHARED_LOCK:
+        if (key, limit) not in SHARED_LIMITERS:
+            SHARED_LIMITERS[(key, limit)] = DailyLimiter(limit)
+        return SHARED_LIMITERS[(key, limit)]
+
+
+def shared_arm(key: str, mailto: str, limit: int):
+    """The one OpenAlex arm (so one cache and one counter) per key, contact and limit in this process."""
+    from hubofhubs.science.openalex import OpenAlexWorks
+
+    limiter = shared_limiter(key, limit)
+    with SHARED_LOCK:
+        if (key, mailto, limit) not in SHARED_ARMS:
+            SHARED_ARMS[(key, mailto, limit)] = OpenAlexWorks(api_key=key, mailto=mailto, abstract_chars=400, limiter=limiter)
+        return SHARED_ARMS[(key, mailto, limit)]
+
+
+def reset_shared_state() -> None:
+    """Forget the shared counters and arms (tests)."""
+    with SHARED_LOCK:
+        SHARED_LIMITERS.clear()
+        SHARED_ARMS.clear()
 
 
 def daily_limit_from(env: Mapping[str, str]) -> int:
@@ -38,8 +86,11 @@ def science_literature_spec(env: Mapping[str, str], transport=None) -> Optional[
         return None
     from hubofhubs.science.openalex import OpenAlexWorks, observation_of
 
-    arm = OpenAlexWorks(api_key=key, mailto=(env.get("OPENALEX_MAILTO") or "").strip(), transport=transport,
-                        daily_limit=daily_limit_from(env), abstract_chars=400)
+    mailto, limit = (env.get("OPENALEX_MAILTO") or "").strip(), daily_limit_from(env)
+    if transport is None:
+        arm = shared_arm(key, mailto, limit)
+    else:   # a test's fake transport: its own arm, but the same day's counter as any rebuilt registry
+        arm = OpenAlexWorks(api_key=key, mailto=mailto, transport=transport, abstract_chars=400, limiter=shared_limiter(key, limit))
 
     def as_int(value: Any) -> Optional[int]:
         try:
@@ -94,9 +145,9 @@ def science_literature_spec(env: Mapping[str, str], transport=None) -> Optional[
 
 def science_literature_unavailable(env: Mapping[str, str]) -> Optional[UnavailableTool]:
     return None if (env.get("OPENALEX_API_KEY") or "").strip() else UnavailableTool(
-        name=TOOL_NAME, keywords=ASKING_ABOUT_PAPERS,
-        note=("search_scientific_literature is not set up in this deployment, so you cannot search research papers. If the person "
-              "asks for studies, papers or citations, say plainly that you cannot, and name no paper, author or DOI from memory."))
+        name=TOOL_NAME, patterns=ASKING_ABOUT_PAPERS,
+        note=("search_scientific_literature is not set up here, so you cannot search research papers. If asked for studies or "
+              "citations, say so and name no paper, author or DOI from memory."))
 
 
 STANDARD_TOOL_BUILDERS[TOOL_NAME] = science_literature_spec

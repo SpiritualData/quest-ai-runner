@@ -116,10 +116,19 @@ ToolHandler = Callable[[Dict[str, Any], ToolContext], Any]
 class UnavailableTool:
     """A standard tool this deployment does not offer, and the one line the planner reads when a request is about what that
     tool would do. It stops the AI promising (or inventing) what the deployment cannot do; it is shown only when one of its
-    ``keywords`` shares a word with the request, so other requests carry no extra prompt text."""
+    ``keywords`` shares a word with the request or one of its ``patterns`` (regular expressions, matched case-insensitively
+    on the PERSON's message, never on model output) finds a match in it, so other requests carry no extra prompt text.
+    Prefer ``patterns`` of a few specific words over single common ``keywords``: a common word costs the note on every
+    unrelated request."""
     name: str
     note: str
     keywords: Sequence[str] = ()
+    patterns: Sequence[str] = ()
+
+    def about(self, query: str, asked: set) -> bool:
+        if asked & {t for kw in self.keywords for t in tokenize(kw)}:
+            return True
+        return any(re.search(p, query or "", re.I) for p in self.patterns)
 
 
 @dataclass
@@ -266,10 +275,9 @@ class ToolRegistry:
             self.unavailable[entry.name] = entry
 
     def unavailable_notes(self, query: str) -> List[str]:
-        """The notes of the unavailable tools this request is about (a keyword shares a word with it)."""
+        """The notes of the unavailable tools this request is about (a keyword shares a word with it, or a pattern matches it)."""
         asked = set(tokenize(query))
-        return [u.note for u in self.unavailable.values()
-                if u.name not in self._specs and asked & {t for kw in u.keywords for t in tokenize(kw)}]
+        return [u.note for u in self.unavailable.values() if u.name not in self._specs and u.about(query, asked)]
 
     def unregister(self, name: str) -> None:
         self._specs.pop(name, None)

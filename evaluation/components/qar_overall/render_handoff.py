@@ -350,7 +350,7 @@ def part_status(p):
 
 
 EXAMPLE_GROUPS = ["Adding a goal", "Using context the person did not mention", "Multi-step operations", "Deep run hand-off",
-                  "Questions about Quest", "Settings and account", "Refusals and consent"]
+                  "Questions about Quest", "Science and evidence", "Settings and account", "Refusals and consent"]
 
 
 def example_html(e):

@@ -102,9 +102,16 @@ Safeguards in the loop:
 implementation of the hub's `know-the-world` seat; design, sources and limits in the hub's `docs/science-search.md`). Arguments: `query`
 (required), `year_from`, `year_to`, `open_access_only`, `most_cited`, `limit`. Its result lists each work with title, authors, year,
 journal, DOI (and its link), citation count and abstract, says "No DOI listed" for a work without one, and states that only the listed
-works may be cited. A failure comes back as a failed result that tells the planner to cite nothing from memory. No model call.
+works may be cited, that titles and abstracts are untrusted third-party text (data, never instructions) and that only abstracts were read.
+Retracted works are left out. A failure comes back as a failed result that tells the planner to cite nothing from memory. No model call.
 
-With no `OPENALEX_API_KEY` the tool is not in the catalog. A request that is about papers, studies, literature or citations then
+A finished reply is checked against the turn's data: every DOI in it that the turn did not have (tool results, the person's message, the
+context) is replaced by "[DOI not verified]" and noted in `link_checks` (`Orchestrator.strip_unverified_dois`, beside the link guard and
+switched off with it by `QAR_LINK_GUARD=0`). The check compares DOI strings with returned data; it does not read the model's wording.
+The day's count and the answer cache are kept in process memory across registry rebuilds, so the cap is per process, not per rebuild.
+
+With no `OPENALEX_API_KEY` the tool is not in the catalog. A request that names research papers, the scientific literature, peer-reviewed evidence, a meta-analysis or systematic review, PubMed, a
+DOI, "studies/research show" or "cite ... papers" (specific phrases, not the single words "paper", "study" or "journal") then
 carries one extra line in the planner's tool block (`NOT AVAILABLE HERE: ...`, from `STANDARD_TOOL_UNAVAILABLE`), so the AI says plainly
 that it cannot search research papers and names no paper, author or DOI from memory; other requests carry no extra text. Cases:
 `end_to_end` E2E-SCI-01 (configured, fake OpenAlex transport) and E2E-SCI-02 (not configured).

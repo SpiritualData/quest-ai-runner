@@ -90,7 +90,7 @@ def test_the_quest_questions_cover_the_groups_and_each_carries_a_rubric_and_prov
     assert len(QUEST_CASES) >= 24
     assert all(3 <= len(c["quality_rubric"]) <= 5 for c in TEXT_BEARING)
     assert {c.get("side") for c in QUEST_CASES} >= {"mentee", "mentor"}
-    assert {c["group"] for c in CASES if "group" in c} == {"Questions about Quest", "Settings and account", "Multi-step operations"}
+    assert {c["group"] for c in CASES if "group" in c} == {"Questions about Quest", "Settings and account", "Multi-step operations", "Science and evidence"}
     spec = world.SPEC
     assert spec["docs_provenance"]["copied_from"] == "quest-docs" and spec["docs_provenance"]["commit"]
     for c in TEXT_BEARING:

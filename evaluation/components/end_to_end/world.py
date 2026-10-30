@@ -120,7 +120,7 @@ class World:
         if self.science:
             # The real tool over the hub's OpenAlex arm, with the HTTP call replaced by the fake: only the network is stubbed.
             from quest_ai_runner.core.tools_science import science_literature_spec
-            spec = science_literature_spec({"OPENALEX_API_KEY": "offline-eval"}, transport=self.openalex)
+            spec = science_literature_spec({"OPENALEX_API_KEY": "offline-eval", "QAR_SCIENCE_DAILY_LIMIT": "0"}, transport=self.openalex)   # 0: no cap, the counter is shared across worlds
             real = spec.handler
 
             def searched(args, ctx):

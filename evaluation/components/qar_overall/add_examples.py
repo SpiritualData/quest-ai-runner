@@ -26,9 +26,10 @@ GROUP_OF_KIND = {
     "goal_write": "Adding a goal", "note_write": "Adding a goal", "implicit_quest": "Using context the person did not mention",
     "own_data": "Using context the person did not mention", "multistep": "Multi-step operations", "web_goal": "Multi-step operations",
     "web": "Multi-step operations", "sequential": "Multi-step operations", "hand_off": "Deep run hand-off", "refusal": "Refusals and consent",
+    "science": "Science and evidence",
 }
 SETTINGS_KINDS = {"quest_settings"}
-QUEST_KINDS = {"quest_consult", "quest_clarify", "quest_why", "quest_feature", "quest_mentor", "quest_trap", "quest_ai", "docs_lookup", "science"}
+QUEST_KINDS = {"quest_consult", "quest_clarify", "quest_why", "quest_feature", "quest_mentor", "quest_trap", "quest_ai", "docs_lookup"}
 CUT = 360
 
 

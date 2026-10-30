@@ -80,7 +80,7 @@ def test_the_configured_world_offers_the_tool_and_the_unconfigured_one_tells_the
     assert "NOT AVAILABLE HERE: search_scientific_literature" in plain.registry.render_planner_block(message)
 
 
-def test_the_scripted_arm_searches_through_the_real_tool_and_the_fake_transport_sees_one_filterless_request():
+def test_the_scripted_arm_searches_through_the_real_tool_and_the_fake_transport_sees_one_request_filtered_to_unretracted_works():
     case = BY_ID["E2E-SCI-01"]
     arm = common.load_impl("reference_script", "end_to_end")(common.CallMeter(max_calls=50))
     got = arm(case)
@@ -89,4 +89,4 @@ def test_the_scripted_arm_searches_through_the_real_tool_and_the_fake_transport_
     result = fresh.registry.invoke("search_scientific_literature", {"query": "cycling knee", "limit": 5})
     assert result.ok and result.text.count("DOI 10.5555/") == 2 and "No DOI listed" in result.text
     call = fresh.openalex.calls[0]
-    assert call["url"] == "https://api.openalex.org/works" and "filter" not in call["params"]
+    assert call["url"] == "https://api.openalex.org/works" and call["params"]["filter"] == "is_retracted:false"

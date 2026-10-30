@@ -30,7 +30,8 @@ from .auxiliary_prompts import (
     VERIFY_RUN_OBSERVATIONS_NOTE,
     VERIFY_WEB_EVIDENCE_NOTE,
 )
-from hubofhubs.critique.link_guard import LinkGuard, build_link_guard, evidence_text
+from hubofhubs.critique.link_guard import UNKNOWN, LinkGuard, build_link_guard, evidence_text
+from hubofhubs.science.citations import dois_in, strip_unlisted_dois
 from hubofhubs.ports.model import STEP_JUDGE, STEP_SUMMARIZE, STEP_VERIFY, plan_with_step
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .card_filter import _extract_json
@@ -337,6 +338,34 @@ class JudgesMixin:
                 log.warning("Link guard could not be built: %s: %s", type(e).__name__, e)
                 self.link_guard_instance = None
         return self.link_guard_instance
+
+    def strip_unverified_dois(self, rs: Any, res: Any) -> List[str]:
+        """Replace every DOI in the reply that this turn's evidence does not hold (``hubofhubs.science.citations``).
+
+        The link guard judges links; a bare DOI is not one, and an invented DOI that reads well would pass it. So the DOI
+        strings in the reply are compared with the DOI strings in what the turn had (tool results above all, also the person's
+        message and the context). Reading DOIs in the reply to compare them with that data is not gating on the model's
+        wording (hard rule #3): nothing is decided from the words around the DOI. Fails closed: an unknown DOI is replaced.
+        A real Claude Code worker's output is exempt, as it is for links. Returns the DOIs replaced; never raises.
+        """
+        removed: List[str] = []
+        try:
+            known = dois_in(self.link_evidence_for(rs, res))
+            if res.text:
+                res.text, gone = strip_unlisted_dois(res.text, known)
+                removed.extend(gone)
+            for d in (getattr(res, "deep_results", None) or []):
+                if getattr(d, "output", None) and getattr(d, "model_written", False):
+                    d.output, gone = strip_unlisted_dois(d.output, known)
+                    removed.extend(gone)
+            removed = list(dict.fromkeys(removed))
+            res.link_checks.extend({"url": f"doi:{doi}", "verdict": UNKNOWN, "reason": "DOI not in this turn's evidence"}
+                                   for doi in removed)
+            if removed:
+                log.info("DOI check replaced %d DOI(s) the turn did not have: %s", len(removed), ", ".join(removed[:5]))
+        except Exception as e:  # noqa: BLE001 -- checking DOIs must never lose the reply
+            log.warning("DOI check skipped: %s: %s", type(e).__name__, e, exc_info=True)
+        return removed
 
     def link_evidence_for(self, rs: Any, res: Any) -> str:
         """Everything this turn actually had, as one text, for the link guard's provenance rule.

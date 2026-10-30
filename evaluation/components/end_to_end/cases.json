@@ -2715,7 +2715,7 @@
   "id": "E2E-SCI-01",
   "kind": "science",
   "stratum": "quest_question",
-  "group": "Questions about Quest",
+  "group": "Science and evidence",
   "message": "What does the scientific literature say about easy cycling keeping my fitness while my knee heals? Please search the research papers and cite two.",
   "world": {
    "pinned": "q_fit",
@@ -2745,7 +2745,10 @@
      "only the abstracts",
      "abstracts only",
      "from the abstracts",
+     "titles and abstracts",
      "not the full text",
+     "not full papers",
+     "not the full papers",
      "not read the full"
     ],
     [
@@ -2801,7 +2804,7 @@
   "id": "E2E-SCI-02",
   "kind": "science",
   "stratum": "quest_question",
-  "group": "Questions about Quest",
+  "group": "Science and evidence",
   "message": "What does the scientific literature say about easy cycling keeping my fitness while my knee heals? Please search the research papers and cite two.",
   "world": {
    "pinned": "q_fit",

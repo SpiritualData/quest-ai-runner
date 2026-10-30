@@ -171,6 +171,8 @@ class RunLoopMixin:
                                                for v in _stripped[:5]))
                 except Exception as e:  # noqa: BLE001 -- guarding links must never lose the reply
                     log.warning("Link guard skipped: %s: %s", type(e).__name__, e, exc_info=True)
+                # The same turn's DOIs: an invented bare DOI is not a link, so the guard above lets it through.
+                self.strip_unverified_dois(rs, res)
             # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
             # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
             # so the card PINS them: that is what makes the loop compound and what staleness later
