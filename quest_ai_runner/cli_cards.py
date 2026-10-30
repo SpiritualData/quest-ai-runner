@@ -61,7 +61,17 @@ def run_cards_command(args, log) -> int:
             return tidy_repository(repository_store(cards_dir, corpus, None), local, Path(cards_dir),
                                    apply=bool(getattr(args, "apply", False)), merge_topics=True,
                                    reasons=("surplus",))
-        return tidy_cards(Path(cards_dir), apply=bool(getattr(args, "apply", False)))
+        applying = bool(getattr(args, "apply", False))
+        status = tidy_cards(Path(cards_dir), apply=applying)
+        # What the folder tidy cannot do: a compounded card that is the only copy is re-keyed to its one-hop id (every
+        # write to its current id is refused). A second pass joins the second of two cards re-keyed to one id.
+        from .adapters.card_repository import FilesystemCardRepository
+        for _pass in range(2 if applying else 1):
+            print("")
+            rekeyed = tidy_repository(repository_store(cards_dir, corpus, None), FilesystemCardRepository(cards_dir),
+                                      Path(cards_dir), apply=applying, reasons=("compounded",))
+            status = status or rekeyed
+        return status
     text = report_for(cards_dir, card_limit.max_cards_from_env())
     print(text)
     if args.write:

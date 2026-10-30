@@ -25,6 +25,7 @@ review cache, a sidecar of the lane's local card folder, and nothing else).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -313,7 +314,7 @@ def plan_cards(
     # 6. Compounded candidates not taken above: moved only when a surviving equivalent exists, i.e. another card
     #    neither moved in this run nor a candidate, with the same or more files.
     if pending:
-        claimed_rekeys: Set[str] = set()
+        claimed_rekeys: Dict[str, Dict[str, Any]] = {}   # the one-hop id a card of this run takes -> that card
         holders_by_path: Dict[str, Set[int]] = {}
         survivors: List[Tuple[str, str]] = []          # (card id, key)
         for key, card in items:
@@ -335,11 +336,33 @@ def plan_cards(
                     break
             if files and not matches:
                 clean = rekey_target(str(card.get("id") or key))
-                if (not clean or clean in cards or clean in claimed_rekeys or clean in pending
-                        or card_origin.card_id_problem(clean) or quarantined(clean)):
+                if not clean or card_origin.card_id_problem(clean):
                     note_skip("compounded card kept: its only copy in this store")
                     continue
-                claimed_rekeys.add(clean)
+                if quarantined(clean):
+                    # Its one-hop twin was moved out of the index on purpose earlier: this copy only brings it back
+                    # under an id every writer refuses, so it goes the same way (unless something was added to it).
+                    if is_protected(card):
+                        note_skip(f"compounded card kept: {is_protected(card)}")
+                        continue
+                    record(key, card, "compounded",
+                           f"{pending[key]}; its one-hop twin {clean} was retired from the index earlier")
+                    continue
+                twin = claimed_rekeys.get(clean)
+                if twin is not None and set(card_paths(twin)) == set(card_paths(card)) \
+                        and str(twin.get("name") or "") == str(card.get("name") or ""):
+                    # The same card again: it joins the one that takes the id, on the next pass, once that exists.
+                    note_skip("compounded card kept: its only copy in this store")
+                    continue
+                if clean in cards or clean in claimed_rekeys or clean in pending:
+                    # A different topic already holds that id (or another card of this run takes it): keep this one
+                    # apart under the same id plus six characters of its own, instead of leaving it stuck.
+                    clean = f"{clean}-{hashlib.sha1(key.encode('utf-8', 'replace')).hexdigest()[:6]}"
+                    if (len(clean) > card_origin.MAX_ID_CHARS or clean in cards or clean in claimed_rekeys
+                            or card_origin.card_id_problem(clean)):
+                        note_skip("compounded card kept: its only copy in this store")
+                        continue
+                claimed_rekeys[clean] = card
                 record(key, card, "compounded",
                        f"{pending[key]}; the only copy, so it is re-keyed to {clean} (the card moves whole)",
                        becomes=clean)

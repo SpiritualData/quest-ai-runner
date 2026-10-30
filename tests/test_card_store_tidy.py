@@ -592,3 +592,17 @@ def test_a_local_folder_rekeys_its_compounded_sole_copies_and_joins_the_second_o
                              max_cards=1000)
     store.tidy_store()
     assert set(repo.load_all()) == {"root-a-111111--idealism"}
+
+
+def test_a_second_compounded_sole_copy_with_a_distinct_topic_is_rekeyed_apart_and_a_retired_twin_is_removed(tmp_path):
+    review(tmp_path)
+    one = "root-a-111111--root-b-222222--root-a-111111--idealism"
+    two = "root-a-111111--root-b-222222--root-b-222222--root-a-111111--idealism"
+    three = "root-a-111111--root-b-222222--root-a-111111--folder"
+    repo = backend_with([card(one, ["a/one.md"]), card(two, ["b/two.md"]), card(three, ["c/three.md"])])
+    repo.quarantined = lambda key: object() if key == "root-a-111111--folder" else None
+    plan = plan_for(repo, tmp_path)
+    by_key = {e["key"]: e for e in plan.entries}
+    assert by_key[one]["becomes"] == "root-a-111111--idealism"
+    assert by_key[two]["becomes"].startswith("root-a-111111--idealism-") and by_key[two]["becomes"] != by_key[one]["becomes"]
+    assert three in by_key and "becomes" not in by_key[three] and "keeper" not in by_key[three]
