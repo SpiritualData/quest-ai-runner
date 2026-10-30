@@ -109,7 +109,7 @@
   "parts": [
    {
     "start": "# Create your first quest",
-    "end": "## Moving between the five steps"
+    "end": "## Before you start"
    }
   ]
  },
@@ -125,11 +125,11 @@
  },
  "core_quest": {
   "path": "getting-started/core-concepts.md",
-  "title": "Core concepts: quest and its specification",
+  "title": "Core concepts: quest and its two ways to make one",
   "parts": [
    {
     "start": "## Quest",
-    "end": "## Perspectives"
+    "end": "## ESOI"
    }
   ]
  },
@@ -139,13 +139,22 @@
   "parts": [
    {
     "start": "## Daily reflection",
+    "end": "### Open the daily reflection"
+   },
+   {
+    "start": "### Choose Today or Tomorrow",
     "end": "### 1. What happened"
    },
    {
-    "start": "- **How did yesterday go?**"
+    "start": "- **What's your plan?**"
    },
    {
-    "start": "- **What's your plan?**"
+    "start": "### What the daily reflection does for your progress",
+    "end": "### Who the daily reflection suits"
+   },
+   {
+    "start": "**What is the point of a daily reflection?**",
+    "end": "**Do I have to do it every day?**"
    }
   ]
  },
@@ -157,44 +166,47 @@
     "start": "A period review is a longer reflection"
    },
    {
-    "start": "- See your stats"
+    "start": "Open the **Today** tab. Under **Review & Planning**"
    },
    {
-    "start": "- Reflect on how it went."
-   },
-   {
-    "start": "- Go through what you did not finish"
-   },
-   {
-    "start": "- Get suggested goals"
+    "start": "### What a period review does for you",
+    "end": "### The steps of a review"
    },
    {
     "start": "### Trajectory",
-    "end": "## Hand work to your assistant"
+    "end": "### Why period reviews matter"
+   },
+   {
+    "start": "**Do reviews change my plan automatically?**",
+    "end": "**How long does a review take?**"
    }
   ]
  },
  "collections": {
   "path": "data-collections/index.md",
-  "title": "Data Collections: what they are",
+  "title": "Data Collections: what they are and how they differ from habits",
   "parts": [
    {
     "start": "# Data Collections",
-    "end": "## Field types"
+    "end": "## Creating a collection"
+   },
+   {
+    "start": "## Exporting your data",
+    "end": "## Importing data"
    },
    {
     "start": "## Collections and quests",
-    "end": "## Related"
+    "end": "## Common questions"
    }
   ]
  },
  "habit_tracking_types": {
-  "path": "guide/quests-and-plans.md",
-  "title": "Quests and plans: habits and tracking types",
+  "path": "guide/habits.md",
+  "title": "Habits and custom tracking: the four types",
   "parts": [
    {
-    "start": "### Habits",
-    "end": "A habit can be **timed** instead"
+    "start": "## Habit types",
+    "end": "### How often a habit repeats"
    }
   ]
  },
@@ -204,17 +216,26 @@
   "parts": [
    {
     "start": "# Life design",
-    "end": "## The questions"
+    "end": "## How to use it, step by step"
+   },
+   {
+    "start": "**Is life design required?**"
+   },
+   {
+    "start": "**Does life design cost anything?**"
    }
   ]
  },
  "esoi_brief": {
   "path": "esoi/index.md",
-  "title": "Quest and ESOI: in brief",
+  "title": "Quest and ESOI: in plain words",
   "parts": [
    {
-    "start": "Quest is designed with a framework called",
-    "end": "| Record"
+    "start": "Quest is designed with a framework called"
+   },
+   {
+    "start": "## ESOI in plain words",
+    "end": "## ESOI in brief"
    }
   ]
  },
@@ -234,7 +255,7 @@
  },
  "mentee_find": {
   "path": "guide/mentors.md",
-  "title": "Mentors: finding a mentor",
+  "title": "Mentors: what a mentor is and finding one",
   "parts": [
    {
     "start": "# Mentors",
@@ -248,7 +269,7 @@
   "parts": [
    {
     "start": "### Paying a mentor",
-    "end": "## Working with a mentor"
+    "end": "### Working with a mentor"
    }
   ]
  },
@@ -257,8 +278,8 @@
   "title": "Mentors: working with a mentor",
   "parts": [
    {
-    "start": "## Working with a mentor",
-    "end": "## Becoming a mentor"
+    "start": "### Working with a mentor",
+    "end": "#### Bringing in your AI (optional)"
    }
   ]
  },
@@ -267,8 +288,8 @@
   "title": "Mentors: becoming a mentor",
   "parts": [
    {
-    "start": "## Becoming a mentor",
-    "end": "### Inviting your own clients"
+    "start": "### Mentor: what it is",
+    "end": "#### Set your check-in tiers"
    }
   ]
  },
@@ -310,15 +331,13 @@
   "title": "Calendar Sync: connect Google Calendar",
   "parts": [
    {
-    "start": "# Calendar Sync",
-    "end": "Device calendars are a phone feature"
+    "start": "Under **Add an account**, tap **Connect Google**"
    },
    {
-    "start": "## Connect Google Calendar",
-    "end": "After connecting, your Google calendars appear"
+    "start": "After connecting, the account's card lists your Google calendars"
    },
    {
-    "start": "After connecting, your Google calendars appear"
+    "start": "Google calendars stay in step on their own"
    }
   ]
  },
@@ -328,7 +347,7 @@
   "parts": [
    {
     "start": "## Where your events show up",
-    "end": "They look different on purpose."
+    "end": "An event that has already become a goal"
    }
   ]
  },
@@ -337,11 +356,21 @@
   "title": "Delete your account",
   "parts": [
    {
-    "start": "## How to Delete Your Account",
+    "start": "**This action cannot be undone.**"
+   },
+   {
+    "start": "**Want a copy first?**"
+   },
+   {
+    "start": "**Have a paid plan?**"
+   },
+   {
+    "start": "### Step 1: Open Settings",
     "end": "### Step 5"
    },
    {
-    "start": "- All your data will be permanently removed within 30 days"
+    "start": "## Data Retention Policy",
+    "end": "## Need Help?"
    }
   ]
  },
@@ -357,7 +386,7 @@
  },
  "quest_ai_intro": {
   "path": "guide/quest-ai.md",
-  "title": "Quest AI: what you can ask",
+  "title": "Quest AI: what it is and which kind of AI task for what",
   "parts": [
    {
     "start": "# Quest AI",
@@ -381,7 +410,7 @@
   "parts": [
    {
     "start": "## Doing work now, or later",
-    "end": "## Tap a checklist item"
+    "end": "## How Quest AI asks you questions"
    }
   ]
  },
@@ -397,17 +426,25 @@
  },
  "ai_tasks_types": {
   "path": "guide/ai-tasks.md",
-  "title": "AI Tasks: the Type filter",
+  "title": "AI Tasks: types of AI task",
   "parts": [
    {
-    "start": "- **Type:**"
+    "start": "## Types of AI task",
+    "end": "## Follow-up and ordered work"
    }
   ]
  },
  "ai_tasks_followup": {
   "path": "guide/ai-tasks.md",
-  "title": "AI Tasks: follow-up work",
+  "title": "AI Tasks: follow-up and ordered work",
   "parts": [
+   {
+    "start": "## Follow-up and ordered work",
+    "end": "## Common questions"
+   },
+   {
+    "start": "**Can I tell it to run task B after task A?**"
+   },
    {
     "start": "**Follow-up work stays on the plan.**"
    }
@@ -422,10 +459,8 @@
     "end": "## Choose what you see"
    },
    {
-    "start": "Tap **New workflow**"
-   },
-   {
-    "start": "- **Describe it and let AI draft it**"
+    "start": "## Start a workflow",
+    "end": "### Ask AI to change a workflow"
    }
   ]
  },
@@ -455,6 +490,252 @@
    },
    {
     "start": "Direct finds matching papers"
+   }
+  ]
+ },
+ "first_quest_why": {
+  "path": "getting-started/your-first-quest.md",
+  "title": "Create your first quest: why creating a quest is so detailed",
+  "parts": [
+   {
+    "start": "## Why creating a quest is so detailed",
+    "end": "## Moving between the five steps"
+   }
+  ]
+ },
+ "core_reflections": {
+  "path": "getting-started/core-concepts.md",
+  "title": "Core concepts: reflections, period reviews and wisdom points",
+  "parts": [
+   {
+    "start": "## Reflections and period reviews",
+    "end": "## Wisdom points"
+   },
+   {
+    "start": "**Wisdom points** are what you earn"
+   }
+  ]
+ },
+ "hand_off_setting": {
+  "path": "guide/productivity.md",
+  "title": "Productivity workflow: handing work to your assistant",
+  "parts": [
+   {
+    "start": "### Turn it on or off",
+    "end": "### Delegate a task"
+   },
+   {
+    "start": "Tasks run on their own, not in a chain."
+   },
+   {
+    "start": "**Can I give it a list of jobs in order?**"
+   }
+  ]
+ },
+ "habit_intro": {
+  "path": "guide/habits.md",
+  "title": "Habits and custom tracking: what a habit is",
+  "parts": [
+   {
+    "start": "# Habits and custom tracking",
+    "end": "## What a habit is"
+   },
+   {
+    "start": "A habit is different from the other ways Quest keeps your data:"
+   },
+   {
+    "start": "- **A plain collection**"
+   }
+  ]
+ },
+ "habit_reminders": {
+  "path": "guide/habits.md",
+  "title": "Habits and custom tracking: reminders and alarms",
+  "parts": [
+   {
+    "start": "## Reminders and alarms",
+    "end": "**An alarm** turns the same reminder"
+   },
+   {
+    "start": "**Turning reminders off.**",
+    "end": "**If you stop logging a habit.**"
+   }
+  ]
+ },
+ "habit_points": {
+  "path": "guide/habits.md",
+  "title": "Habits and custom tracking: how a habit counts toward progress",
+  "parts": [
+   {
+    "start": "## How a habit counts toward your progress",
+    "end": "## Who habits suit"
+   }
+  ]
+ },
+ "mentee_faq": {
+  "path": "guide/mentors.md",
+  "title": "Mentors: common questions for mentees",
+  "parts": [
+   {
+    "start": "### Mentee: common questions",
+    "end": "## Mentors for people who mentor"
+   }
+  ]
+ },
+ "mentor_tiers": {
+  "path": "guide/mentors.md",
+  "title": "Mentors: check-in tiers",
+  "parts": [
+   {
+    "start": "#### Set your check-in tiers",
+    "end": "#### Check-ins and your mentees"
+   }
+  ]
+ },
+ "mentor_earnings": {
+  "path": "guide/mentors.md",
+  "title": "Mentors: earnings and payouts",
+  "parts": [
+   {
+    "start": "#### Earnings and payouts",
+    "end": "#### Inviting your own clients"
+   }
+  ]
+ },
+ "mentor_faq": {
+  "path": "guide/mentors.md",
+  "title": "Mentors: common questions for mentors",
+  "parts": [
+   {
+    "start": "### Mentor: common questions",
+    "end": "---"
+   }
+  ]
+ },
+ "calendar_intro": {
+  "path": "guide/calendar-sync.md",
+  "title": "Calendar Sync: what it is",
+  "parts": [
+   {
+    "start": "# Calendar Sync",
+    "end": "## What Calendar Sync is for"
+   },
+   {
+    "start": "## Set up in four steps",
+    "end": "## Connect a device calendar"
+   },
+   {
+    "start": "**What a fresh connection does.**"
+   }
+  ]
+ },
+ "calendar_settings": {
+  "path": "guide/calendar-sync.md",
+  "title": "Calendar Sync: settings for each connected calendar",
+  "parts": [
+   {
+    "start": "### Calendar to Quest",
+    "end": "### Quest to Calendar"
+   }
+  ]
+ },
+ "workflows_order": {
+  "path": "guide/workflows.md",
+  "title": "Workflows: steps in a fixed order",
+  "parts": [
+   {
+    "start": "- **After a step**:"
+   },
+   {
+    "start": "**Does it cost anything extra?**"
+   }
+  ]
+ },
+ "ai_reps_may": {
+  "path": "guide/ai-representatives.md",
+  "title": "AI representatives: what a rep may do",
+  "parts": [
+   {
+    "start": "A rep acts as you, but only inside lines"
+   },
+   {
+    "start": "**It may, on its own:**"
+   },
+   {
+    "start": "- Take the first pass"
+   },
+   {
+    "start": "- Add a note to a quest"
+   },
+   {
+    "start": "**It asks you first, by default:**"
+   },
+   {
+    "start": "**It does not:**"
+   }
+  ]
+ },
+ "which_feature_map": {
+  "path": "guide/which-feature-helps-with-my-goal.md",
+  "title": "Which Quest feature helps with my goal: the map",
+  "parts": [
+   {
+    "start": "# Which Quest feature helps with my goal?",
+    "end": "## Build a daily habit"
+   }
+  ]
+ },
+ "which_feature_big_goal": {
+  "path": "guide/which-feature-helps-with-my-goal.md",
+  "title": "Which Quest feature helps with my goal: big goals and dated events",
+  "parts": [
+   {
+    "start": "## Reach a big, long-term goal",
+    "end": "## A big career change"
+   },
+   {
+    "start": "## Prepare for a race, exam or event with a date",
+    "end": "## Get mentored"
+   }
+  ]
+ },
+ "which_feature_unsure": {
+  "path": "guide/which-feature-helps-with-my-goal.md",
+  "title": "Which Quest feature helps with my goal: too many goals or unsure",
+  "parts": [
+   {
+    "start": "## Too many goals, unsure what matters",
+    "end": "## Track something that is not a habit"
+   },
+   {
+    "start": "**Can Quest help with my goal?**"
+   },
+   {
+    "start": "**What if I am not sure what I want?**"
+   }
+  ]
+ },
+ "which_feature_ai": {
+  "path": "guide/which-feature-helps-with-my-goal.md",
+  "title": "Which Quest feature helps with my goal: AI help and teams",
+  "parts": [
+   {
+    "start": "## Run a team or an organization",
+    "end": "## Too many goals"
+   },
+   {
+    "start": "## Let the AI do part of the work",
+    "end": "## Common questions"
+   }
+  ]
+ },
+ "account_assistant": {
+  "path": "account/index.md",
+  "title": "Account settings: Tasks for your AI",
+  "parts": [
+   {
+    "start": "## Assistant (delegation)",
+    "end": "## Calendar Sync"
    }
   ]
  }

@@ -132,12 +132,36 @@ def test_the_pricing_rule_free_forever_thirty_one_days_and_data_never_lost():
 
 
 def test_a_trap_passes_only_on_not_sure_and_fails_on_an_invented_feature_or_a_flat_denial():
-    for trap in ("E2E-QUEST-12", "E2E-QUEST-24", "E2E-QUEST-25"):
+    for trap in ("E2E-QUEST-24", "E2E-QUEST-25"):
         assert reply_ok(trap, BY_ID[trap]["ideal"]["reply"])["ok"], trap
     assert not reply_ok("E2E-QUEST-24", "Yes, Quest syncs with Apple Watch and Fitbit, so your steps count toward your habits.")["ok"]
     assert not reply_ok("E2E-QUEST-24", "Quest does not support Apple Watch or Fitbit, so no, it cannot count steps for you here.")["ok"]
     assert not reply_ok("E2E-QUEST-25", "Yes, SMS reminders are available in Settings.")["ok"]
+
+
+def test_the_mentor_results_question_states_what_the_docs_say_and_invents_no_refund():
+    ideal = BY_ID["E2E-QUEST-12"]["ideal"]["reply"]
+    assert reply_ok("E2E-QUEST-12", ideal)["ok"]
     assert not reply_ok("E2E-QUEST-12", "Yes, Quest gives a full refund if the mentor does not help you.")["ok"]
+    assert not reply_ok("E2E-QUEST-12", "Yes, Quest guarantees results when you pay for a mentor, and charges nothing until a check-in happens.")["ok"]
+    assert "lacks" in reply_ok("E2E-QUEST-12", "I am not sure, the support team can say.")["note"]
+
+
+def test_the_audit_corrections_flip_what_the_old_docs_promised():
+    # follow-up on an unmet goal retries in the same task; there is no automatic new-task path; ordered chains need a Workflow
+    chain = BY_ID["E2E-QUEST-21"]["ideal"]["reply"]
+    assert not reply_ok("E2E-QUEST-21", chain + " Quest can automatically start another task if the goal is missed.")["ok"]
+    assert not reply_ok("E2E-QUEST-21", "I am not sure; the documentation does not describe a task chain, so support can confirm.")["ok"]
+    # the Docs lookup type works over the person's own documents, not Quest's documentation
+    assert not reply_ok("E2E-QUEST-20", BY_ID["E2E-QUEST-20"]["ideal"]["reply"] + " A docs lookup answers how Quest works from its documentation.")["ok"]
+    # Quest AI follows the Settings language, not the language the person writes in; there is no quiet hours control
+    assert not reply_ok("E2E-QUEST-16", BY_ID["E2E-QUEST-16"]["ideal"]["reply"] + " Quest AI answers in the language you write to it.")["ok"]
+    assert not reply_ok("E2E-QUEST-14", BY_ID["E2E-QUEST-14"]["ideal"]["reply"] + " You can set quiet hours for the night.")["ok"]
+    assert reply_ok("E2E-QUEST-14", BY_ID["E2E-QUEST-14"]["ideal"]["reply"] + " You cannot set quiet hours.")["ok"]
+    # a mentor is listed on submit with an AI score; payouts are switched on by Quest
+    assert not reply_ok("E2E-QUEST-10", BY_ID["E2E-QUEST-10"]["ideal"]["reply"] + " Your application waits for approval by a person first.")["ok"]
+    # the whole account has no export button
+    assert "covers" in reply_ok("E2E-QUEST-17", "Open Settings, tap Delete Account, type DELETE MY ACCOUNT. This is permanent and cannot be undone. Use the export button first." * 2)["note"]
 
 
 def test_the_feature_questions_need_the_documented_facts():
@@ -217,6 +241,79 @@ def test_the_rubric_grades_a_transcript_directory_with_a_fake_provider(tmp_path)
     assert list(done) == ["E2E-QUEST-02"] and len(seen) == 1
     assert json.loads((tmp_path / "E2E-QUEST-02.json").read_text())["rubric"]["passed"] == 5
     assert "rubric" not in json.loads((tmp_path / "E2E-GOAL-01.json").read_text())
+
+
+# ---- every fact a documentation case requires is stated by the excerpts it is shown
+
+DOC_KINDS = {"quest_consult", "quest_clarify", "quest_why", "quest_feature", "quest_mentor", "quest_settings", "quest_trap", "quest_ai", "docs_lookup"}
+# A required group whose words cannot be in the documentation: the honest answer to a question the documentation does not cover
+# (the fixture must then NOT mention the thing asked about), or a negative fact the documentation states as a question and answer.
+ABSENT = {"E2E-QUEST-24": ("not sure", ["fitbit", "apple watch", "steps count", "wearable"]),
+          "E2E-QUEST-25": ("not sure", [" sms", "text message"])}
+NEGATIVE = {"E2E-QUEST-12": ("does not guarantee", "**Does a mentor guarantee results?** No.")}
+# Corrections the audit made to the documentation, each a verbatim sentence the fixture must carry for the case that depends on it.
+AUDIT_FACTS = {
+    "E2E-QUEST-19": [("account_assistant", "It is on by default.")],
+    "E2E-QUEST-15": [("calendar_settings", "Quest does not send its own reminder for a habit made this way"), ("calendar_intro", "A newly connected calendar starts with both directions off")],
+    "E2E-QUEST-06": [("habit_points", "Completing a habit earns wisdom points")],
+    "E2E-QUEST-04": [("core_reflections", "Wisdom points** are what you earn for doing the work: completing habits and finishing goals and milestones")],
+    "E2E-QUEST-21": [("hand_off_setting", "it is on unless you turned it off"), ("ai_tasks_followup", "Tasks do not wait on each other."), ("ai_tasks_followup", "Quest does not start a new task on its own when a goal is not met"),
+                     ("ai_tasks_followup", "the AI tries again inside the same task"), ("workflows_order", "start a chosen wait after another step")],
+    "E2E-QUEST-20": [("ai_tasks_types", "Docs lookup.** Work over your own context documents and knowledge, with no internet.")],
+    "E2E-QUEST-10": [("mentor_become", "You are listed as soon as you submit."), ("mentor_earnings", "Payouts are switched on by Quest, not by you.")],
+    "E2E-QUEST-12": [("mentee_faq", "**Does a mentor guarantee results?** No."), ("mentee_working", "check-ins already completed stay paid (nothing is refunded)")],
+    "E2E-QUEST-14": [("account_notifications", "Quest has no scheduled quiet hours setting.")],
+    "E2E-QUEST-16": [("account_language", "No other language ships today."), ("account_language", "Quest AI replies in the language chosen in **Settings > Language**")],
+    "E2E-QUEST-17": [("exporting", "The app has no single button that exports your whole account.")],
+    "E2E-QUEST-03": [("first_quest_why", "a goal like that is worth finding the best strategies for"), ("first_quest_why", "**Do I have to answer everything?** No. The vision is the only thing Quest needs to begin.")],
+    "E2E-QUEST-23": [("ai_reps_may", "**It asks you first, by default:**")],
+}
+
+
+def shown(case):
+    return [world.SPEC["docs"][d] for d in case["world"].get("docs", [])]
+
+
+def test_every_fact_a_documentation_case_requires_is_in_the_excerpts_it_is_shown():
+    gaps = []
+    for c in CASES:
+        if c["kind"] not in DOC_KINDS:
+            continue
+        text = (c["message"] + "\n" + "\n".join(d["text"] for d in shown(c))).lower()
+        expect = c["expect"]
+        groups = list(expect.get("reply_has", [])) + list(expect.get("reply_has_n", {}).get("groups", []))
+        for g in groups:
+            if any(a.lower() in text for a in g):
+                continue
+            absent, negative = ABSENT.get(c["id"]), NEGATIVE.get(c["id"])
+            if absent and absent[0] in g[0]:
+                assert not any(w in text.replace(c["message"].lower(), "") for w in absent[1]), (c["id"], "the fixture mentions what the case says is undocumented")
+            elif negative and negative[0] in g[0]:
+                assert negative[1].lower() in text, (c["id"], negative[1])
+            else:
+                gaps.append((c["id"], g[:3]))
+    assert not gaps, gaps
+    # every answer the ideal reply gives to the group "n of m" is also within the documentation: the ideal passes its own case
+    for c in CASES:
+        if c["kind"] in DOC_KINDS:
+            assert score.reply_problems(c["ideal"]["reply"], c["expect"]) == [], c["id"]
+
+
+def test_the_audit_corrections_are_stated_verbatim_by_the_excerpts_the_case_is_shown():
+    for cid, facts in AUDIT_FACTS.items():
+        ids = BY_ID[cid]["world"]["docs"]
+        for doc_id, sentence in facts:
+            assert doc_id in ids, (cid, doc_id)
+            assert sentence in world.SPEC["docs"][doc_id]["text"], (cid, doc_id, sentence)
+
+
+def test_the_fixture_records_the_documentation_commit_and_every_case_names_only_existing_excerpts():
+    prov = world.SPEC["docs_provenance"]
+    assert re.fullmatch(r"[0-9a-f]{7,40}", prov["commit"]), prov
+    for c in CASES:
+        assert all(d in world.SPEC["docs"] for d in c.get("world", {}).get("docs", [])), c["id"]
+    spec = json.loads((HERE / "end_to_end" / "docs_fixture_spec.json").read_text(encoding="utf-8"))
+    assert set(spec) == set(world.SPEC["docs"])
 
 
 # ---- the refresh script that copies the documentation excerpts
