@@ -73,7 +73,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from .requester import apply_requester_env, requester_from_meta
 from .runtime_settings import process_environment
-from .tools_status import ACCEPTED_STATUSES, DONE_STATUSES, ToolStatus, as_status, status_of_error, write_status_of
+from .tools_status import ACCEPTED_STATUSES, DONE_STATUSES, RECEIPT_WORDS, ToolStatus, as_status, status_of_error, write_status_of
 from hubofhubs.act.tool_ledger import FileToolLedger, outcome_from_result
 
 log = logging.getLogger(__name__)
@@ -270,6 +270,14 @@ def tokenize(text: str) -> List[str]:
 def coerce_result(raw: Any) -> ToolResult:
     if isinstance(raw, ToolResult):
         return raw
+    if isinstance(getattr(raw, "status", None), ToolStatus) and hasattr(raw, "data"):
+        # A typed client write returned directly (a custom tool that hands back what the Quest client gave it): its status
+        # and answer are the result's, never its repr marked applied. A held write stays held.
+        detail = str(getattr(raw, "detail", "") or "")
+        data = raw.data
+        shown = detail or (json.dumps(data, default=str)[:MAX_RESULT_CHARS] if isinstance(data, (dict, list)) and data else "")
+        return ToolResult(ok=False, status=raw.status, data=data,
+                          text=shown or RECEIPT_WORDS[raw.status].lower())
     if isinstance(raw, str):
         return ToolResult(ok=True, text=raw)
     if isinstance(raw, dict):

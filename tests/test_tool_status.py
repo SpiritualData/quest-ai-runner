@@ -394,3 +394,18 @@ def test_the_tool_ledger_records_a_held_write_as_ok(tmp_path, status, ok):
                     handler=lambda args, c: ToolResult(ok=False, status=status, text=f"it said {status}"))
     ToolRegistry([spec], ledger=ledger).invoke("do_it", {}, ToolContext(task_id="t1"))
     assert [row.ok for row in ledger.since("t1", 0)] == [ok]
+
+
+def test_a_custom_tool_that_returns_a_client_write_directly_keeps_its_status_and_data():
+    """A WriteResult is not a dict or a string: it used to become its repr, marked applied even when it was held."""
+    from quest_ai_runner.runner.quest_client_support import WriteResult
+    held = WriteResult({"decision_id": "dec_1"}, ToolStatus.HELD, id="dec_1", detail="Waiting for the owner to approve.")
+    applied = WriteResult({"id": "g1", "title": "T"}, ToolStatus.APPLIED, id="g1")
+    registry = ToolRegistry([ToolSpec(name="held_one", description="d", mutates=True, handler=lambda a, c: held),
+                             ToolSpec(name="applied_one", description="d", mutates=True, handler=lambda a, c: applied)])
+    result = registry.invoke("held_one", {}, ToolContext())
+    assert result.status is ToolStatus.HELD and not result.ok and result.data == {"decision_id": "dec_1"}
+    assert result.text == "Waiting for the owner to approve." and "WriteResult" not in result.text
+    result = registry.invoke("applied_one", {}, ToolContext())
+    assert result.status is ToolStatus.APPLIED and result.ok and result.data == {"id": "g1", "title": "T"}
+    assert '"id": "g1"' in result.text and "WriteResult" not in result.text
