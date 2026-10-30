@@ -190,33 +190,29 @@ def test_tracker_failed_write_leaves_previous_file_intact(tmp_path, monkeypatch)
 
 def test_multi_provider_records_tokens_to_tracker():
     from tests.conftest import StubProvider
-    from quest_ai_runner.adapters.multi_provider import MultiProvider
+    from quest_ai_runner.providers import routed
 
-    stub = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
-    # Give the stub provider trackable token fields.
-    stub.tokens_in = 0
-    stub.tokens_out = 0
+    class Spending(StubProvider):
+        def answer(self, messages, *, model, system=None, layers=None):
+            self.tokens_in += 200
+            self.tokens_out += 50
+            return "ok"
 
+    stub = Spending(decisions=[])
+    stub.tokens_in = stub.tokens_out = 0
     tracker = DailyUsageTracker(path=None, limits=DailyUsageLimits(max_daily_tokens=1_000_000))
-    mp = MultiProvider(stub, {}, usage_tracker=tracker)
-
-    # Simulate a plan call that consumes tokens.
-    stub.tokens_in += 200
-    stub.tokens_out += 50
-    # Call plan through multi-provider (delta computed from before/after snapshot).
-    # We directly exercise _record_token_delta here since StubProvider.plan() doesn't update fields.
-    mp._record_token_delta(stub, before_in=0, before_out=0)
+    routed(stub, {}, tracker).answer([{"role": "user", "content": "hi"}], model="gemini-2.0-flash")
     assert tracker.total_tokens() == 250
 
 
 def test_multi_provider_answer_returns_limit_message_when_over():
     from tests.conftest import StubProvider
-    from quest_ai_runner.adapters.multi_provider import MultiProvider
+    from quest_ai_runner.providers import routed
 
     stub = StubProvider(decisions=[])
     tracker = DailyUsageTracker(path=None, limits=DailyUsageLimits(max_daily_tokens=100))
     tracker.record(100, 0)  # already at limit
-    mp = MultiProvider(stub, {}, usage_tracker=tracker)
+    mp = routed(stub, {}, tracker)
 
     reply = mp.answer([{"role": "user", "content": "hi"}], model="gemini-2.0-flash")
     assert "Daily token limit reached" in reply
@@ -225,12 +221,12 @@ def test_multi_provider_answer_returns_limit_message_when_over():
 
 def test_multi_provider_plan_returns_answer_action_when_over():
     from tests.conftest import StubProvider
-    from quest_ai_runner.adapters.multi_provider import MultiProvider
+    from quest_ai_runner.providers import routed
 
     stub = StubProvider(decisions=[])
     tracker = DailyUsageTracker(path=None, limits=DailyUsageLimits(max_daily_tokens=100))
     tracker.record(200, 0)  # over limit
-    mp = MultiProvider(stub, {}, usage_tracker=tracker)
+    mp = routed(stub, {}, tracker)
 
     decision = mp.plan("do something", model="gemini-2.0-flash", tool_schema={})
     assert decision.get("action") == "answer"

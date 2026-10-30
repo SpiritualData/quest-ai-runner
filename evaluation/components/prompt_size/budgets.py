@@ -13,13 +13,14 @@ For a point with its own call (planner, deep prompt)::
 
 A point that is a section of another (autopilot batch, context-update bundle) takes ``share`` of its parent's
 budget. Every constant comes from the code that owns it: the window and the characters per token from
-``core.prompt_budget``, the tier models from ``core.model_registry``, the prices from ``pricing``, the call
+``core.prompt_budget``, the tier models from the hub tier selector (``core.model_registry.HUB_TIER_OF``), the prices from ``pricing``, the call
 counts from ``OrchestratorConfig``. Only the shares and dollar caps are policy, and they live in
 ``budget_inputs.json`` with the reason for each."""
 import json
 from pathlib import Path
 
 import common  # noqa: F401  (sets sys.path for the repo)
+from hubofhubs import tiers as hub_tiers
 from quest_ai_runner import pricing
 from quest_ai_runner.core import model_registry, prompt_budget
 from quest_ai_runner.core.orchestrator_types import OrchestratorConfig
@@ -27,15 +28,20 @@ from quest_ai_runner.core.orchestrator_types import OrchestratorConfig
 INPUTS = json.loads((Path(__file__).resolve().parent / "budget_inputs.json").read_text())["points"]
 
 
+def tier_models():
+    """tier -> the model the live registry serves it: the hub tier selector's pick for each tier's hub tier."""
+    picks = hub_tiers.choose()
+    return {tier: picks[hub_tier]["arm"][1] for tier, hub_tier in model_registry.HUB_TIER_OF.items()}
+
+
 def price_per_mtok(model):
-    """Input price per million tokens of ``model`` (a registry fallback id), by its provider family."""
-    provider = "gemini" if model.startswith("gemini") else "anthropic"
-    return pricing.get_input_cost_per_mtok(provider, model)
+    """Input price per million tokens of ``model``, at the hub's price table."""
+    return pricing.get_input_cost_per_mtok(pricing.provider_for_model(model), model)
 
 
 def cheapest_tier():
     """The registry tier whose model has the lowest input price."""
-    top = model_registry.DEFAULT_FALLBACK_TOP
+    top = tier_models()
     return min(top, key=lambda tier: (price_per_mtok(top[tier]), tier))
 
 
@@ -53,7 +59,7 @@ def derive(point):
         tokens = int(parent["budget_tokens"] * spec["share"])
         return dict(point=point, budget_tokens=tokens, budget_chars=int(tokens * prompt_budget.CHARS_PER_TOKEN),
                     basis=f"{spec['share']:.0%} of {spec['share_of']}", **{k: parent[k] for k in ("window_tokens",)})
-    top = model_registry.DEFAULT_FALLBACK_TOP
+    top = tier_models()
     window = prompt_budget.context_window_tokens(top[cheapest_tier()])
     share = spec["window_share"]
     model = top[spec["tier"]]

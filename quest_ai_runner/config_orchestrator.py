@@ -10,75 +10,38 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from .core.model_family import route_extra_model_prefixes
+from hubofhubs.models.anthropic import AnthropicProvider
+from hubofhubs.models.gemini import GeminiProvider
+from hubofhubs.models.openai import OpenAIProvider
+
+from .providers import make_provider, routed, route_extra_model_prefixes
 from .config_retrieval import _retrieval_has_web_search, build_registry, fold_into_retrieval
 from .config_resolvers import register_deepseek
 from .config_support import _log
 
 
 def wire_providers(cfg: Any) -> None:
-    # Auto-build all available providers for multi-provider routing
-    # Any model can auto-route to the right provider based on its name prefix
-    # Always register all providers so models can be routed intelligently
-    from .adapters import AnthropicProvider, GeminiProvider, OpenAIProvider
-
-    all_providers = {}
-    try:
-        all_providers["anthropic"] = AnthropicProvider()
-        _log.debug("Registered Anthropic provider")
-    except Exception as e:  # noqa: BLE001
-        _log.debug(f"Anthropic provider unavailable: {type(e).__name__}")
-    try:
-        all_providers["gemini"] = GeminiProvider()
-        _log.debug("Registered Gemini provider")
-    except Exception as e:  # noqa: BLE001
-        _log.debug(f"Gemini provider unavailable: {type(e).__name__}")
-    try:
-        all_providers["openai"] = OpenAIProvider()
-        _log.debug("Registered OpenAI provider")
-        route_extra_model_prefixes("openai", os.environ)
-    except Exception as e:  # noqa: BLE001
-        _log.debug(f"OpenAI provider unavailable: {type(e).__name__}")
-    # DeepSeek is opt-in: registered ONLY when its key is set, and never auto-bucketed into a tier
-    # (a deployment pins QAR_MODEL_<TIER>=deepseek-... to use it), so adding the key changes no
-    # existing lane's tiers.
+    """Register the vendors as providers and wrap the primary (and the vision provider) in the hub's router, which sends each call to
+    the provider that serves its model id by prefix. DeepSeek is opt-in: registered only when its key is set, and never bucketed into
+    a tier (a deployment pins QAR_MODEL_<TIER>=deepseek-... to use it)."""
+    all_providers = {name: make_provider(name) for name in ("anthropic", "gemini", "openai")}
+    route_extra_model_prefixes("openai", os.environ)
     register_deepseek(all_providers)
-
-    # Always update config with all available providers (overwrite any existing)
-    # This ensures multi-provider routing works correctly. Only apply when the primary
-    # provider is a known real type so stub/custom providers stay offline in tests.
-    _real_types = (AnthropicProvider, GeminiProvider, OpenAIProvider)
-    if all_providers and isinstance(cfg.model_provider, _real_types):
+    # Only when the primary is a known real vendor provider, so stub and custom providers stay offline in tests.
+    real_types = (AnthropicProvider, GeminiProvider, OpenAIProvider)
+    if isinstance(cfg.model_provider, real_types):
         cfg.model_providers = all_providers
         _log.info(f"Multi-provider routing enabled with: {list(all_providers.keys())}")
-    elif not all_providers:
-        _log.warning("No multi-provider setup: no providers could be initialized")
-
-    # Wrap providers with MultiProvider for automatic intelligent routing
-    # This ensures ALL provider calls (not just orchestrator calls) route correctly
-    from .adapters.multi_provider import MultiProvider
-
-    if cfg.model_provider and all_providers:
-        if isinstance(cfg.model_provider, _real_types):
-            original_provider = cfg.model_provider
-            cfg.model_provider = MultiProvider(
-                original_provider, all_providers, usage_tracker=cfg.usage_tracker)
-            # Attach a registry so a quota/rate-limit error on a tier-resolved model
-            # (e.g. a "quality"/"balanced" model hitting its enforced daily Gemini quota)
-            # automatically steps down to the next cheaper tier instead of erroring out.
-            # Built after cfg.model_provider is wrapped so the registry's own auto-bucketing
-            # sees the full multi-provider model list, same as build_registry(cfg) below.
-            try:
-                cfg.model_provider.set_tier_registry(build_registry(cfg))
-            except Exception:  # noqa: BLE001 — fallback wiring must never block startup
-                _log.debug("Could not attach tier registry to MultiProvider; fallback disabled")
-            _log.debug("Wrapped primary provider with MultiProvider for intelligent routing")
-
-    # Also wrap vision_provider if configured (used for image description fallback)
-    if cfg.vision_provider and all_providers:
-        original_vision_provider = cfg.vision_provider
-        cfg.vision_provider = MultiProvider(original_vision_provider, all_providers)
-        _log.debug("Wrapped vision provider with MultiProvider for intelligent routing")
+        original_provider = cfg.model_provider
+        cfg.model_provider = routed(original_provider, all_providers, cfg.usage_tracker)
+        # A quota or rate-limit error on a tier-resolved model steps down to the next cheaper tier; the registry is built after the
+        # wrap so it sees the full multi-provider model list.
+        try:
+            cfg.model_provider.registry = build_registry(cfg)
+        except Exception:  # noqa: BLE001 - fallback wiring must never block startup
+            _log.debug("Could not attach tier registry to MultiProvider; fallback disabled")
+    if cfg.vision_provider:
+        cfg.vision_provider = routed(cfg.vision_provider, all_providers)
 
 
 def wire_web_research(cfg: Any) -> None:

@@ -6,7 +6,7 @@ needs into a ``RunnerConfig``. This package is the public import path for them
 module docstring, and ``esoi/COMPONENTS.md`` lists them by role: retrieval (files, remote files, cached DB, Claude
 sessions, Google Chat and Drive, Notion, Quest, MCP, web research), model providers (Anthropic, Gemini, OpenAI, DeepSeek,
 Claude CLI), context assemblers and card stores (file, BM25, vector, hybrid, Qdrant, Quest API), deep runners
-(fast edit, ACP, MCP operation) and the file writer. Optional extras (``gemini``, ``openai``, ``bm25``, ``qdrant``) are
+(fast edit, ACP, MCP operation) and the file writer. Optional extras (``bm25``, ``qdrant``) are
 imported behind a guard, so a name whose extra is missing is ``None``.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
@@ -16,7 +16,6 @@ from .acp_deep_runner import AcpConfig, AcpDeepRunner
 from .mcp_client import MCPClient, MCPServerSpec
 from .mcp_retrieval_adapter import MCPRetrievalAdapter
 from .mcp_write_runner import MCPOperationRunner
-from .anthropic_provider import AnthropicProvider
 from .cached_db_adapter import CachedDbAdapter
 from .provider_web_search_adapter import ProviderWebSearchAdapter
 from hubofhubs.websearch.cache import WebCache, normalize_query
@@ -53,20 +52,8 @@ from .quest_api_card_repository import QuestApiCardRepository, QuestApiCardVecto
 from .reference_resolver import ReferenceResolver, NoteResolver, build_resolver_registry, collect_reference_resolvers
 from .vector_context_assembler import VectorContextAssembler
 
-# Each of these needs an optional extra (google-genai, openai, bm25s, qdrant-client + fastembed): a missing extra leaves the
+# Each of these needs an optional extra (bm25s, qdrant-client + fastembed): a missing extra leaves the
 # name ``None`` instead of breaking ``import quest_ai_runner.adapters``.
-try:
-    from .gemini_provider import GeminiProvider
-except ImportError:
-    GeminiProvider = None  # type: ignore[assignment,misc]
-try:
-    from .openai_provider import OpenAIProvider
-except ImportError:
-    OpenAIProvider = None  # type: ignore[assignment,misc]
-try:
-    from .deepseek_provider import DeepSeekProvider
-except ImportError:
-    DeepSeekProvider = None  # type: ignore[assignment,misc]
 try:
     from .bm25_content_store import BM25ContentStore
 except ImportError:

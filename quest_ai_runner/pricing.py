@@ -1,262 +1,78 @@
-"""Pricing lookup for different model providers.
-
-Provides cost estimation for bootstrap and context operations based on actual model pricing.
-Pricing is per 1M input tokens, based on current market rates (as of 2026).
+"""Cost estimation for bootstrap and context operations, read from the hub's price table (``hubofhubs/registry/tier_prices.csv``:
+per million tokens, each row with its official source and the date it was checked). A model the table does not price has no
+price here (None), and a bootstrap estimate then uses ``UNPRICED_PER_MTOK``. The keyless command-line provider bills against a
+subscription, modelled as a flat rate per token.
 """
 from __future__ import annotations
 
-import re
-from typing import Optional, Dict, Tuple
+import os
+from typing import Dict, Optional, Tuple
 
-# Pricing per 1M input tokens (USD)
-# Sources:
-#   - Anthropic: https://www.anthropic.com/pricing
-#   - OpenAI: https://openai.com/pricing
-#   - Google Gemini: https://ai.google.dev/pricing
-# These are snapshot prices and may change; consider them estimates.
+from hubofhubs import registry
+from hubofhubs.models.family import VENDOR_PREFIXES, provider_name_for_model, split_tokens
+from hubofhubs.tiers import rates
 
-ANTHROPIC_PRICING = {
-    # Claude 3.5 Sonnet (2024-10-22)
-    "claude-3-5-sonnet-20241022": 3.0,
-    "claude-3.5-sonnet-20241022": 3.0,
-    # Claude 3.5 Haiku (2024-11-01)
-    "claude-3-5-haiku-20241101": 0.8,
-    "claude-3.5-haiku-20241101": 0.8,
-    # Claude 3 Opus (older)
-    "claude-3-opus": 15.0,
-    "claude-opus-4-8": 15.0,  # Opus 4 (2025+): the opus family list price, not the sonnet one
-    "claude-opus-4": 15.0,
-    # Claude 3 Sonnet (older)
-    "claude-3-sonnet": 3.0,
-    "claude-sonnet-4-6": 3.0,  # Sonnet 4 (2025+)
-    "claude-sonnet-4": 3.0,
-    # Claude 3 Haiku (older)
-    "claude-3-haiku": 0.8,
-    "claude-haiku-4-5": 0.8,  # Haiku 4 (2025+)
-    "claude-haiku-4": 0.8,
-    # Claude 5.5 family, base input, prompts up to 100,000 tokens (a Haiku 5.5 prompt over 100,000 tokens costs
-    # $0.50 in / $2.50 out). Source: https://platform.claude.com/docs/en/about-claude/pricing (read 2026-10-29).
-    "claude-haiku-5-5": 0.10,
-    "claude-sonnet-5-5": 2.0,
-    "claude-opus-5-5": 4.0,
-}
-
-# Pricing per 1M OUTPUT tokens (USD) of the Claude 5.5 family. Source: https://platform.claude.com/docs/en/about-claude/pricing
-# (read 2026-10-29).
-ANTHROPIC_OUTPUT_PRICING = {
-    "claude-haiku-5-5": 0.50,
-    "claude-sonnet-5-5": 10.0,
-    "claude-opus-5-5": 20.0,
-}
-
-OPENAI_PRICING = {
-    # GPT-4o (2024-11-20)
-    "gpt-4o-2024-11-20": 2.5,
-    "gpt-4o": 2.5,
-    # GPT-4 Turbo (older)
-    "gpt-4-turbo": 10.0,
-    "gpt-4-turbo-2024-04-09": 10.0,
-    # GPT-4 (older)
-    "gpt-4": 30.0,
-    # o1 (reasoning)
-    "o1": 15.0,
-    "o1-preview": 15.0,
-    # o3 (2025)
-    "o3": 20.0,
-    "o3-mini": 1.0,
-}
-
-GOOGLE_PRICING = {
-    # Gemini 2.0 Flash
-    "gemini-2.0-flash": 0.075,
-    "gemini-2.0-flash-001": 0.075,
-    # Gemini 2.0 Flash Thinking
-    "gemini-2.0-flash-thinking-exp-01-21": 0.0,  # free tier
-    # Gemini 1.5 Pro
-    "gemini-1.5-pro": 1.25,
-    "gemini-1.5-pro-001": 1.25,
-    # Gemini 1.5 Flash
-    "gemini-1.5-flash": 0.075,
-    "gemini-1.5-flash-001": 0.075,
-    # Gemini 3.1 Flash-Lite, paid tier standard, text input. Source: https://ai.google.dev/gemini-api/docs/pricing
-    # (read 2026-10-29: $0.25 in, $1.50 out per 1M tokens, output includes thinking tokens)
-    "gemini-3.1-flash-lite": 0.25,
-    # Gemini 3.6 Flash, paid tier standard, text input. Source: https://ai.google.dev/gemini-api/docs/pricing
-    # (read 2026-10-29: $0.75 in, $3.75 out per 1M tokens through 2026-12-31, then $1.50 / $7.50)
-    "gemini-3.6-flash": 0.75,
-}
-
-# Pricing per 1M OUTPUT tokens (USD), where the output rate is not the family ratio times the input rate.
-GOOGLE_OUTPUT_PRICING = {
-    # Source: https://ai.google.dev/gemini-api/docs/pricing (read 2026-10-29)
-    "gemini-3.1-flash-lite": 1.50,
-    "gemini-3.6-flash": 3.75,
-}
-
-# Output tokens cost this many input tokens when a model has no output rate listed (Anthropic's ratio).
-DEFAULT_OUTPUT_RATIO = 5.0
-
-CLAUDE_CLI_PRICING = {
-    # Claude CLI uses subscription (no per-token billing)
-    # We model it as $20/month subscription used across ~1.2M tokens average per month
-    # = $0.0167 per 1M tokens (rough estimate based on Claude Code subscription pricing)
-    "default": 0.0167,
-}
+# A $20 a month subscription over ~1.2M tokens a month, rough: $0.0167 per million tokens.
+CLAUDE_CLI_PER_MTOK = 0.0167
+UNPRICED_PER_MTOK = 3.0
 
 
-def get_provider_and_model(
-    env: Optional[Dict[str, str]] = None,
-) -> Tuple[str, str, Optional[str]]:
-    """Detect the configured provider and primary model from environment.
-
-    Returns:
-        (provider_name, primary_model_id, api_key_status)
-        - provider_name: "anthropic", "openai", "gemini", or "claude_cli"
-        - primary_model_id: the model being used for planning/answering
-        - api_key_status: "configured" or "missing" (for display)
-    """
-    import os
-
+def get_provider_and_model(env: Optional[Dict[str, str]] = None) -> Tuple[str, str, Optional[str]]:
+    """``(provider_name, primary_model_id, api_key_status)`` from the environment: ``QAR_MODEL_BACKEND`` names the provider (default:
+    Anthropic when its key is set, else the keyless command-line provider). Anthropic models are family names, never release ids,
+    so each resolves to the newest live model; the status is "configured" or "missing" for display, None for the keyless one."""
     env = env or os.environ
-
-    # Check QAR_MODEL_BACKEND for explicit provider selection
-    backend = (env.get("QAR_MODEL_BACKEND") or "").strip().lower()
-    anthropic_key = (env.get("ANTHROPIC_API_KEY") or "").strip()
-
-    # Auto-select: claude_cli if no key, else anthropic
-    if not backend:
-        backend = "anthropic" if anthropic_key else "claude_cli"
-
-    # Map to provider name
+    key = lambda var: (env.get(var) or "").strip()
+    backend = (env.get("QAR_MODEL_BACKEND") or "").strip().lower() or ("anthropic" if key("ANTHROPIC_API_KEY") else "claude_cli")
+    status = lambda var: "configured" if key(var) else "missing"
     if backend == "claude_cli":
-        return ("claude_cli", "sonnet", None)  # family alias: the CLI always runs the latest Sonnet
-    elif backend == "anthropic":
-        # Family names, never release ids: AnthropicProvider resolves each to the newest live model.
-        planner_tier = (env.get("QAR_PLANNER_TIER") or "").strip() or "haiku"
-        model_map = {
-            "haiku": "haiku",
-            "sonnet": "sonnet",
-            "opus": "opus",
-            "fast": "haiku",
-            "balanced": "sonnet",
-            "quality": "opus",
-        }
-        model = model_map.get(planner_tier, "sonnet")
-        api_status = "configured" if anthropic_key else "missing"
-        return ("anthropic", model, api_status)
-    elif backend == "openai":
-        openai_key = (env.get("OPENAI_API_KEY") or "").strip()
-        api_status = "configured" if openai_key else "missing"
-        return ("openai", "gpt-4o", api_status)
-    elif backend == "gemini":
-        gemini_key = (env.get("GOOGLE_API_KEY") or "").strip()
-        api_status = "configured" if gemini_key else "missing"
-        return ("gemini", "gemini-2.0-flash", api_status)
-    else:
-        # Unknown backend; default to anthropic
-        return ("anthropic", "sonnet", None)
+        return "claude_cli", "sonnet", None        # a family alias: the CLI always runs the latest Sonnet
+    if backend == "openai":
+        return "openai", "gpt-4o", status("OPENAI_API_KEY")
+    if backend == "gemini":
+        return "gemini", "gemini-2.0-flash", status("GOOGLE_API_KEY")
+    if backend != "anthropic":
+        return "anthropic", "sonnet", None          # an unknown backend defaults to Anthropic
+    tiers = {"haiku": "haiku", "sonnet": "sonnet", "opus": "opus", "fast": "haiku", "balanced": "sonnet", "quality": "opus"}
+    return "anthropic", tiers.get(key("QAR_PLANNER_TIER") or "haiku", "sonnet"), status("ANTHROPIC_API_KEY")
+
+
+def table_rates(provider: str, model: str) -> Optional[Tuple[float, float]]:
+    """``(input, output)`` USD per million tokens from the hub's table, or None. A release the table does not list is priced as the
+    newest listed release of its family ("haiku", "claude-opus-4-8", "gemini-3.2-flash-lite"), so a new release needs no edit."""
+    prices = registry.read("tier_prices.csv")
+    name = (model or "").lower()
+    found = rates(prices, provider, name)
+    if found is not None:
+        return found
+    wanted = set(split_tokens(name)[0])
+    family = lambda listed: set(split_tokens(listed)[0]) - set(VENDOR_PREFIXES)
+    kin = [r["model"] for r in prices if r["provider"] == provider and family(r["model"]) and family(r["model"]) <= wanted]
+    best = max(kin, key=lambda listed: (len(family(listed)), split_tokens(listed)[1]), default=None)
+    return rates(prices, provider, best) if best else None
 
 
 def get_input_cost_per_mtok(provider: str, model: str) -> Optional[float]:
-    """Look up input cost per 1M tokens for a provider/model combination.
-
-    Args:
-        provider: "anthropic", "openai", "gemini", or "claude_cli"
-        model: the model id (e.g., "sonnet")
-
-    Returns:
-        Cost per 1M input tokens (USD), or None if unknown.
-    """
-    model_lower = (model or "").lower()
-
-    if provider == "anthropic":
-        # Try exact match first
-        if model_lower in ANTHROPIC_PRICING:
-            return ANTHROPIC_PRICING[model_lower]
-        # Fall back to pattern matching
-        for key, price in ANTHROPIC_PRICING.items():
-            if key.replace("-", "").replace("_", "") in model_lower.replace("-", "").replace(
-                "_", ""
-            ):
-                return price
-        # A bare family name ("haiku", "claude-opus") or any release not listed above prices by
-        # family, so a new Claude release needs no edit here.
-        # (the 5.5 family list prices, read 2026-10-29; the aliases resolve to the newest release)
-        for fam, price in (("haiku", 0.10), ("sonnet", 2.0), ("opus", 4.0)):
-            if fam in model_lower:
-                return price
-        # Default to Claude 3.5 Sonnet (most common)
-        return ANTHROPIC_PRICING.get("claude-3-5-sonnet-20241022", 3.0)
-
-    elif provider == "openai":
-        if model_lower in OPENAI_PRICING:
-            return OPENAI_PRICING[model_lower]
-        for key, price in OPENAI_PRICING.items():
-            if key in model_lower:
-                return price
-        # Default to GPT-4o
-        return OPENAI_PRICING.get("gpt-4o", 2.5)
-
-    elif provider == "gemini":
-        if model_lower in GOOGLE_PRICING:
-            return GOOGLE_PRICING[model_lower]
-        for key, price in GOOGLE_PRICING.items():
-            if key in model_lower:
-                return price
-        # Default to Gemini 2.0 Flash
-        return GOOGLE_PRICING.get("gemini-2.0-flash", 0.075)
-
-    elif provider == "claude_cli":
-        # Subscription-based; estimate per token
-        return CLAUDE_CLI_PRICING.get("default", 0.0167)
-
-    return None
-
-
-def provider_for_model(model: str) -> str:
-    """The provider that serves a model id, by its name ("gemini-..." is google, "gpt-"/"o1"/"o3" openai)."""
-    name = (model or "").lower()
-    if name.startswith("gemini"):
-        return "gemini"
-    if name.startswith(("gpt-", "o1", "o3")):
-        return "openai"
-    return "anthropic"
+    """Input cost per million tokens for a provider and model, or None when unpriced."""
+    if provider == "claude_cli":
+        return CLAUDE_CLI_PER_MTOK
+    found = table_rates(provider, model)
+    return None if found is None else found[0]
 
 
 def get_output_cost_per_mtok(provider: str, model: str) -> Optional[float]:
-    """Output cost per 1M tokens: the listed rate when known, else the input rate times DEFAULT_OUTPUT_RATIO."""
-    name = (model or "").lower()
-    if provider == "gemini":
-        for key, price in GOOGLE_OUTPUT_PRICING.items():
-            if key == name or key in name:
-                return price
-    if provider == "anthropic":
-        for key, price in ANTHROPIC_OUTPUT_PRICING.items():
-            if key == name or key in name:
-                return price
-    input_price = get_input_cost_per_mtok(provider, model)
-    return None if input_price is None else input_price * DEFAULT_OUTPUT_RATIO
+    """Output cost per million tokens, or None when unpriced."""
+    found = table_rates(provider, model)
+    return None if found is None else found[1]
 
 
-def estimate_bootstrap_cost(
-    tokens: int,
-    env: Optional[Dict[str, str]] = None,
-) -> Tuple[float, str, str]:
-    """Estimate the cost of a bootstrap with the given token count.
+def provider_for_model(model: str) -> str:
+    """The provider that serves a model id, by its name (the hub's prefix table); an id no prefix names is Anthropic's."""
+    return provider_name_for_model(model) or "anthropic"
 
-    Args:
-        tokens: estimated input tokens for the bootstrap
-        env: environment dict (defaults to os.environ)
 
-    Returns:
-        (cost_usd, provider_name, model_id)
-    """
+def estimate_bootstrap_cost(tokens: int, env: Optional[Dict[str, str]] = None) -> Tuple[float, str, str]:
+    """``(cost_usd, provider_name, model_id)`` of a bootstrap with ``tokens`` input tokens."""
     provider, model, _ = get_provider_and_model(env)
-    cost_per_mtok = get_input_cost_per_mtok(provider, model)
-
-    if cost_per_mtok is None:
-        # Unknown pricing; use a safe default
-        cost_per_mtok = 3.0
-
-    cost = (tokens / 1_000_000) * cost_per_mtok
-    return cost, provider, model
+    per_mtok = get_input_cost_per_mtok(provider, model)
+    return (tokens / 1_000_000) * (UNPRICED_PER_MTOK if per_mtok is None else per_mtok), provider, model

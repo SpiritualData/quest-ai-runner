@@ -30,7 +30,7 @@ import threading
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 log = logging.getLogger("quest-ai-runner.usage")
 
@@ -328,3 +328,15 @@ class DailyUsageTracker:
             return f"{total:,} tokens today (no limit)"
         pct = 100.0 * total / limit if limit > 0 else 100.0
         return f"{total:,}/{limit:,} tokens today ({pct:.0f}%)"
+
+
+def limit_message(tracker: Optional[DailyUsageTracker]) -> Callable[[], str]:
+    """The text a model call returns once the daily token limit is reached, naming the variable that raises it."""
+    def message() -> str:
+        limit = getattr(getattr(tracker, "_limits", None), "max_daily_tokens", None)
+        line = f"Daily token limit reached ({tracker.status() if tracker else ''})."
+        if limit is not None:
+            line += (f" To raise it, set QAR_DAILY_TOKEN_LIMIT={limit * 2} in your .env file (current: {limit:,}). To disable the "
+                     f"limit entirely, set QAR_DAILY_TOKEN_LIMIT=0.")
+        return line + " The counter resets at midnight UTC."
+    return message

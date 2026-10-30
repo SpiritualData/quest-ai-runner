@@ -1,5 +1,6 @@
 """Fake providers shared by the model-provider solutions. Nothing here touches a network or a model."""
 from quest_ai_runner.core.adapters_bases import ModelProviderBase
+from quest_ai_runner.core.model_registry import next_lower_tier
 
 
 class Named(ModelProviderBase):
@@ -58,3 +59,6 @@ class FixedRegistry:
 
     def resolve_tier(self, tier):
         return self._top.get(tier, self._top["balanced"])
+
+    def lower_tier(self, tier):
+        return next_lower_tier(tier)

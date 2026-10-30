@@ -402,7 +402,7 @@ def test_a_missing_worker_binary_is_retried_not_fatal():
     bootstrap, each failing instantly, and the run reported completion having produced almost
     nothing.
     """
-    from quest_ai_runner.adapters.retry_utils import is_transient_error, retry_transient
+    from hubofhubs.models.retry import is_transient_error, retry_transient
 
     assert is_transient_error(FileNotFoundError(2, "No such file or directory", "/x/claude")) is True
 
@@ -422,7 +422,7 @@ def test_a_missing_worker_binary_is_retried_not_fatal():
 def test_a_genuinely_wrong_path_still_fails_with_the_filename():
     # Retrying must not turn a misconfiguration into a mystery: the final error still names it.
     import pytest
-    from quest_ai_runner.adapters.retry_utils import retry_transient
+    from hubofhubs.models.retry import retry_transient
 
     @retry_transient(max_retries=1, base_delay=0.001)
     def always_missing():

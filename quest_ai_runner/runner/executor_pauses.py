@@ -4,12 +4,24 @@ A mixin of ``TaskExecutor`` (see ``executor.py``): methods only, state lives on 
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from hubofhubs.models import outage as provider_outage
+
 from ..core.orchestrator import OrchestratorResult
-from ..core import provider_outage, usage_limit
+from ..core import usage_limit
 from .executor_support import ExecutionOutcome, utc_stamp
 from .executor_contracts import log
+
+# How long a provider-unavailable task waits before its next try: short enough that a brief overload costs little, long enough
+# that a long outage does not burn a claim every poll.
+RETRY_INTERVAL = timedelta(minutes=10)
+
+
+def next_try_at(now: Optional[datetime] = None) -> datetime:
+    """When a task held for a provider outage is next tried."""
+    return (now or datetime.now(timezone.utc)) + RETRY_INTERVAL
 
 
 class PausesMixin:
@@ -221,7 +233,7 @@ class PausesMixin:
         is reported failed is a backend that refuses the hold: a plain requeue would let the lane
         claim it again at once, so the person is told to run it again instead.
         """
-        resume_at = provider_outage.resume_at()
+        resume_at = next_try_at()
         note = (f"The AI model provider is unavailable right now, so this is paused, not failed. "
                 f"It will be tried again at {utc_stamp(resume_at)}.")
         self._report_progress(task_id, "status", text=note,

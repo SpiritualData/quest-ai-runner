@@ -22,12 +22,15 @@ The **brain** (`core`) answers a question by grounding on a corpus you point it 
 a model key (`ANTHROPIC_API_KEY`) and a folder of files.
 
 ```python
+import os
+
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
-from quest_ai_runner.adapters import FilesAdapter, AnthropicProvider
+from hubofhubs.models.anthropic import AnthropicProvider
+from quest_ai_runner.adapters import FilesAdapter
 
 cfg = RunnerConfig(
     retrieval=FilesAdapter("/path/to/docs"),     # any folder of text/markdown/code
-    model_provider=AnthropicProvider(),          # reads ANTHROPIC_API_KEY from the env
+    model_provider=AnthropicProvider(api_key=os.environ["ANTHROPIC_API_KEY"]),   # the hub's arm: the key is an argument
 )
 orch = build_orchestrator(cfg)
 

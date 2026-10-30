@@ -43,7 +43,7 @@ from .tools import ToolRegistry
 
 from .recipes import RecipeStore
 from .link_guard import LinkGuard
-from .model_family import provider_name_for_model
+from hubofhubs.models.family import provider_name_for_model
 from .model_registry import ModelRegistry
 
 # Log labels for where a deep-worker ladder came from (see Orchestrator.log_deep_ladder).

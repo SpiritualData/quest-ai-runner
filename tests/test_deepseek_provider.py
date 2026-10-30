@@ -1,11 +1,7 @@
-"""DeepSeek provider: routing, opt-in registration, tier safety, client wiring. No network."""
-import sys
+"""DeepSeek provider in QAR: opt-in registration, tier safety, the environment it is built from. No network (the arm itself is tested in the hub)."""
 import types
 
-import pytest
-
-from quest_ai_runner.adapters.deepseek_provider import DeepSeekProvider, DEFAULT_BASE_URL
-from quest_ai_runner.adapters.multi_provider import MultiProvider
+from hubofhubs.models.openai import DeepSeekProvider
 from quest_ai_runner.core.model_registry import bucket_top
 
 
@@ -15,55 +11,6 @@ class Marker:
 
     def list_models(self):
         return []
-
-
-def fake_openai(monkeypatch, captured):
-    class FakeClient:
-        def __init__(self, **kw):
-            captured.update(kw)
-    mod = types.ModuleType("openai")
-    mod.OpenAI = FakeClient
-    monkeypatch.setitem(sys.modules, "openai", mod)
-
-
-def test_provider_passes_base_url_and_key(monkeypatch):
-    captured = {}
-    fake_openai(monkeypatch, captured)
-    monkeypatch.delenv("DEEPSEEK_BASE_URL", raising=False)
-    DeepSeekProvider(api_key="k-test")._get_client()
-    assert captured == {"api_key": "k-test", "base_url": DEFAULT_BASE_URL}
-
-
-def test_base_url_env_override(monkeypatch):
-    captured = {}
-    fake_openai(monkeypatch, captured)
-    monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://example.invalid")
-    DeepSeekProvider(api_key="k")._get_client()
-    assert captured["base_url"] == "https://example.invalid"
-
-
-def test_missing_key_message_names_deepseek(monkeypatch):
-    fake_openai(monkeypatch, {})
-    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
-        DeepSeekProvider()._get_client()
-
-
-def test_thinking_off_by_default_and_opt_in(monkeypatch):
-    monkeypatch.delenv("DEEPSEEK_THINKING", raising=False)
-    p = DeepSeekProvider(api_key="k")
-    assert p.extra_create_kwargs() == {"extra_body": {"thinking": {"type": "disabled"}}}
-    monkeypatch.setenv("DEEPSEEK_THINKING", "1")
-    assert p.extra_create_kwargs() == {}
-
-
-def test_multiprovider_routes_deepseek_ids():
-    ds, oa, primary = Marker("ds"), Marker("oa"), Marker("primary")
-    mp = MultiProvider(primary, {"deepseek": ds, "openai": oa})
-    assert mp._get_provider_for_model("deepseek-flash") is ds
-    assert mp._get_provider_for_model("deepseek-v4-pro") is ds
-    assert mp._get_provider_for_model("gpt-4o") is oa
-    assert MultiProvider(primary, {"openai": oa})._get_provider_for_model("deepseek-flash") is primary
 
 
 def test_orchestrator_routes_deepseek_ids():
@@ -99,3 +46,11 @@ def test_registered_only_when_key_set(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "k-test")
     register_deepseek(reg)
     assert isinstance(reg["deepseek"], DeepSeekProvider)
+
+
+def test_the_provider_is_built_from_the_environment(monkeypatch):
+    from quest_ai_runner.providers import make_provider
+    env = {"DEEPSEEK_API_KEY": "k-test", "DEEPSEEK_BASE_URL": "https://example.invalid", "DEEPSEEK_THINKING": "1"}
+    p = make_provider("deepseek", env)
+    assert (p.api_key, p.base_url, p.create_kwargs) == ("k-test", "https://example.invalid", {})
+    assert make_provider("deepseek", {"DEEPSEEK_API_KEY": "k"}).create_kwargs == {"extra_body": {"thinking": {"type": "disabled"}}}

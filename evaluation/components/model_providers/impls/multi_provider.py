@@ -1,13 +1,13 @@
-"""CURRENT: production ``MultiProvider`` (prefix routing and quota tier fallback), ``retry_transient`` and
-``format_provider_error`` (``adapters/retry_utils.py``), the real ``DryRunProvider`` token estimator, and the
+"""CURRENT: the hub's ``MultiProvider`` (prefix routing and quota tier fallback), ``retry_transient`` and
+``format_provider_error`` (``hubofhubs.models.retry``), the real ``DryRunProvider`` token estimator, and the
 ``pricing.py`` table, driven with fake providers. Zero model calls, zero network."""
 
+from hubofhubs.models import outage as provider_outage
+from hubofhubs.models.retry import format_provider_error, retry_transient
+from hubofhubs.models.router import MultiProvider
 from model_providers import fakes
 from quest_ai_runner import pricing
 from quest_ai_runner.adapters.dryrun_provider import DryRunProvider
-from quest_ai_runner.adapters.multi_provider import MultiProvider
-from quest_ai_runner.adapters.retry_utils import format_provider_error, retry_transient
-from quest_ai_runner.core import provider_outage
 
 PLAN_SCHEMA = {"name": "plan", "input_schema": {"type": "object", "properties": {}}}
 

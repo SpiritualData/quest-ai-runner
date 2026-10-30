@@ -5,7 +5,7 @@ web_search,search-the-web,serper;brave;tavily;searxng,quest_ai_runner/adapters/w
 world,gather-evidence,notion;google_chat;openclaw,quest_ai_runner/adapters/notion_adapter.py;quest_ai_runner/adapters/google_drive_adapter.py;quest_ai_runner/adapters/google_chat_adapter.py
 context_assembly,select-context;index-by-meaning,qdrant;bm25;fastembed,quest_ai_runner/adapters/bm25_content_store.py;quest_ai_runner/adapters/qdrant_vector_store.py;quest_ai_runner/adapters/hybrid_context_assembler.py
 science,know-the-world,openalex;arxiv;semantic scholar;pubmed,
-model_providers,call-a-model,anthropic;openai;gemini;deepseek;claude;gpt,quest_ai_runner/adapters/multi_provider.py;quest_ai_runner/adapters/openai_provider.py
+model_providers,call-a-model,anthropic;openai;gemini;deepseek;claude;gpt,quest_ai_runner/providers.py
 memory,persist-cards,mem0;letta;graphiti;cognee,quest_ai_runner/adapters/file_context_store.py;quest_ai_runner/adapters/card_repository.py
 evals,evolve-by-metric,promptfoo;deepeval;ragas;inspect,evaluation/components;esoi.toml
 voice,,pipecat;livekit;whisper,

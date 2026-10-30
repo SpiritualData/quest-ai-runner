@@ -33,7 +33,7 @@ def build_gemini_url_fallback(env: Mapping[str, str]) -> Optional[Callable[[str]
     model = env.get("QAR_WEB_SEARCH_MODEL") or "gemini-2.5-flash-lite"
 
     def fallback(url: str) -> str:
-        from .gemini_provider import GeminiProvider
+        from hubofhubs.models.gemini import GeminiProvider
 
         return GeminiProvider(api_key=key).fetch_url(url, model=model).get("text", "")
 

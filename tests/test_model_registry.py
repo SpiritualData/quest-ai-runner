@@ -116,7 +116,7 @@ def test_is_vision_capable_false_for_text_only_or_unknown(model):
 
 
 def test_family_names_resolve_to_newest_for_every_vendor():
-    from quest_ai_runner.core.model_family import newest_in_family
+    from hubofhubs.models.family import newest_in_family
     live = ["models/gemini-3.5-flash", "models/gemini-3.1-flash-lite", "models/gemini-2.0-flash",
             "models/gemini-3.1-pro", "gpt-4o", "gpt-4o-mini", "gpt-5", "gpt-5-mini", "gpt-image-1",
             "claude-sonnet-4-6", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-opus-5-5"]
@@ -139,3 +139,29 @@ def test_bucket_picks_the_newest_member_regardless_of_list_order():
     assert top["balanced"] == "claude-sonnet-5-5"
     assert top["quality"] == "claude-sonnet-5-5"
     assert top["fast"] == "claude-haiku-5-0"
+
+
+def test_the_hub_selector_picks_each_tier_from_the_configured_providers_and_a_pin_wins():
+    """No measurement exists yet, so the selector holds its defaults (Anthropic), or the cheapest priced arm of the one provider
+    that has a key; a QAR_MODEL_<TIER> pin still wins; a provider with no key is never offered."""
+    class Keyed:
+        def __init__(self, api_key):
+            self.api_key = api_key
+
+        def list_models(self):
+            return []
+
+    class Router(Keyed):
+        def __init__(self, **providers):
+            super().__init__("x")
+            self.providers = providers
+
+    both = ModelRegistry(Router(anthropic=Keyed("k"), gemini=Keyed("k")))
+    assert both.top_models() == {"fast": "claude-haiku-5-5", "balanced": "claude-haiku-5-5",
+                                 "quality": "claude-sonnet-5-5", "best": "claude-sonnet-5-5"}
+    only_gemini = ModelRegistry(Router(anthropic=Keyed(None), gemini=Keyed("k")))
+    assert only_gemini.top_models() == {"fast": "gemini-3.1-flash-lite", "balanced": "gemini-3.1-flash-lite",
+                                        "quality": "gemini-3.6-flash", "best": "gemini-3.6-flash"}
+    pinned = ModelRegistry(Router(anthropic=Keyed("k")), fallback={"balanced": "gemini-3.1-flash-lite"})
+    assert pinned.resolve_tier("balanced") == "gemini-3.1-flash-lite" and pinned.resolve_tier("fast") == "claude-haiku-5-5"
+    assert pinned.lower_tier("best") == "quality"

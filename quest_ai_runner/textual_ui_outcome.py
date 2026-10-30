@@ -11,7 +11,10 @@ import re
 from datetime import datetime
 from typing import Any, List, Optional, Sequence, Tuple
 
-from .core import launch_failure, provider_outage, usage_limit
+from hubofhubs.models import outage as provider_outage
+from hubofhubs.models.retry import format_provider_error
+
+from .core import launch_failure, usage_limit
 
 # The most passes one request gets without the person asking again: their own, plus one automatic
 # second pass when a plan was written and nothing ran.
@@ -152,7 +155,6 @@ def provider_error_lines(error: BaseException, *, message_restored: bool,
         what = "The AI service is busy right now, so I couldn't answer."
         later = " in a minute"
     else:
-        from .adapters.retry_utils import format_provider_error
         detail = " ".join(format_provider_error(error).split())[:240].rstrip()
         what = f"I couldn't answer: {detail}" if detail else "I couldn't answer."
         later = ""

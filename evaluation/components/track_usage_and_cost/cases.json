@@ -9,7 +9,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 3.0
+    "per_mtok": 2.0
    }
   }
  },
@@ -23,7 +23,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 0.8
+    "per_mtok": 0.1
    }
   }
  },
@@ -37,7 +37,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 0.8
+    "per_mtok": 0.1
    }
   }
  },
@@ -51,7 +51,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 15.0
+    "per_mtok": 4.0
    }
   }
  },
@@ -65,7 +65,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 15.0
+    "per_mtok": 4.0
    }
   }
  },
@@ -79,7 +79,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 3.0
+    "per_mtok": null
    }
   }
  },
@@ -93,7 +93,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 2.5
+    "per_mtok": null
    }
   }
  },
@@ -107,7 +107,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 1.0
+    "per_mtok": null
    }
   }
  },
@@ -121,7 +121,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 2.5
+    "per_mtok": null
    }
   }
  },
@@ -135,7 +135,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 0.075
+    "per_mtok": 0.75
    }
   }
  },
@@ -149,7 +149,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 1.25
+    "per_mtok": null
    }
   }
  },
@@ -191,7 +191,7 @@
   },
   "expect": {
    "eq": {
-    "per_mtok": 3.0
+    "per_mtok": null
    }
   }
  },
@@ -207,7 +207,7 @@
   },
   "expect": {
    "eq": {
-    "cost": 1.6,
+    "cost": 0.2,
     "provider": "anthropic",
     "model": "haiku"
    }
@@ -226,7 +226,7 @@
   },
   "expect": {
    "eq": {
-    "cost": 1.25,
+    "cost": 1.5,
     "provider": "openai",
     "model": "gpt-4o"
    }
@@ -278,7 +278,7 @@
   },
   "expect": {
    "eq": {
-    "cost": 15.0,
+    "cost": 4.0,
     "provider": "anthropic",
     "model": "opus"
    }

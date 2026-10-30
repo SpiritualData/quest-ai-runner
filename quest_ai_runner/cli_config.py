@@ -16,7 +16,8 @@ from .adapters import (
 )
 from hubofhubs.ports.model import ModelProvider
 from .core.prompt_specs import PromptSpec, register, render_prompt
-from .core.resolve import resolve
+from .adapters.claude_cli_provider import ClaudeCliProvider
+from .providers import make_provider
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import (
     RunnerConfig,
@@ -49,23 +50,21 @@ def _model_provider_from_env() -> ModelProvider:
     if backend == "multi_provider":
         raise ValueError("QAR_MODEL_BACKEND names the primary vendor; multi_provider is the router build_orchestrator "
                          "wraps around it, so choose anthropic, claude_cli, gemini, openai or deepseek.")
-    try:
-        provider_cls = resolve("call-a-model", backend)   # the declared implementations, core/resolve.py
-    except ValueError as e:
-        raise ValueError(f"Unknown QAR_MODEL_BACKEND: {backend}. {e}") from e
-    kwargs = {}
-    if backend == "claude_cli":
-        kwargs["claude_path"] = os.getenv("QAR_CLAUDE_PATH", "claude")
-        # Headless completions over a large corpus can take a while; let the consumer raise the
-        # per-call wall-clock cap above the conservative default rather than failing the run.
-        if os.getenv("QAR_ANSWER_TIMEOUT"):
-            kwargs["timeout_seconds"] = float(os.environ["QAR_ANSWER_TIMEOUT"])
-        # Cap extended thinking on routing decisions only (see ClaudeCliProvider and
-        # docs/cheap-model-routing.md): "0" turns it off, which measured 11x faster on haiku at the
-        # same accuracy. Unset leaves the CLI default.
-        if (os.getenv("QAR_CLI_PLAN_THINKING_TOKENS") or "").strip().isdigit():
-            kwargs["plan_thinking_tokens"] = int(os.environ["QAR_CLI_PLAN_THINKING_TOKENS"].strip())
-    return provider_cls(**kwargs)
+    if backend != "claude_cli":
+        try:
+            return make_provider(backend)
+        except ValueError as e:
+            raise ValueError(f"Unknown QAR_MODEL_BACKEND: {backend}. {e}") from e
+    kwargs = {"claude_path": os.getenv("QAR_CLAUDE_PATH", "claude")}
+    # Headless completions over a large corpus can take a while; let the consumer raise the per-call wall-clock cap above the
+    # conservative default rather than failing the run.
+    if os.getenv("QAR_ANSWER_TIMEOUT"):
+        kwargs["timeout_seconds"] = float(os.environ["QAR_ANSWER_TIMEOUT"])
+    # Cap extended thinking on routing decisions only (see ClaudeCliProvider and docs/cheap-model-routing.md): "0" turns it off,
+    # which measured 11x faster on haiku at the same accuracy. Unset leaves the CLI default.
+    if (os.getenv("QAR_CLI_PLAN_THINKING_TOKENS") or "").strip().isdigit():
+        kwargs["plan_thinking_tokens"] = int(os.environ["QAR_CLI_PLAN_THINKING_TOKENS"].strip())
+    return ClaudeCliProvider(**kwargs)
 
 
 def _channel_transport_from_env():

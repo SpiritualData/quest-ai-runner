@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 
-from ..core import provider_outage, usage_limit
+from hubofhubs.models import outage as provider_outage
+
+from ..core import usage_limit
 from ..core.orchestrator import OrchestratorResult
 from ..core.orchestrator_constants import AUTO_FOLLOWUP_MAX_RUNS, AUTO_FOLLOWUP_TOKEN_BUDGET
 from .auto_followup import FollowUpDecision, assess, followup_brief, result_tokens

@@ -8,6 +8,7 @@ import os
 from typing import TYPE_CHECKING, Any, List
 
 from .core.model_registry import ModelRegistry
+from .providers import make_provider
 from .config_support import _AUTO_DEEP_RUNNER, _log
 
 if TYPE_CHECKING:
@@ -346,9 +347,4 @@ def register_deepseek(providers: dict) -> None:
     """Add the DeepSeek provider to ``providers`` only when DEEPSEEK_API_KEY is set."""
     if not (os.getenv("DEEPSEEK_API_KEY") or "").strip():
         return
-    try:
-        from .adapters import DeepSeekProvider
-        if DeepSeekProvider is not None:
-            providers["deepseek"] = DeepSeekProvider()
-    except Exception as e:  # noqa: BLE001
-        _log.debug(f"DeepSeek provider unavailable: {type(e).__name__}")
+    providers["deepseek"] = make_provider("deepseek")

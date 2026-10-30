@@ -15,7 +15,10 @@ persona, decision routing) to the generic library. Everything flows through a si
 ## The shape
 
 ```python
-from quest_ai_runner.adapters import AnthropicProvider, FilesAdapter
+import os
+
+from hubofhubs.models.anthropic import AnthropicProvider
+from quest_ai_runner.adapters import FilesAdapter
 from quest_ai_runner.config import RunnerConfig
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
@@ -35,7 +38,7 @@ def build_config() -> RunnerConfig:
 
         # --- adapters (you choose which) ---
         retrieval=FilesAdapter(corpus) if corpus else None,
-        model_provider=AnthropicProvider(),
+        model_provider=AnthropicProvider(api_key=os.environ["ANTHROPIC_API_KEY"]),
         # OPTIONAL. Leaving deep_runner out entirely gets you this same runner, built from
         # QAR_DEEP_WORKING_DIR/corpus_root + QAR_CLAUDE_PATH. Set it only to change something,
         # e.g. the context preamble below. See "Deep execution is on by default".
@@ -277,9 +280,9 @@ class ModelProvider(Protocol):
 Your provider can wrap any SDK. Because the library's `core` never imports a provider directly,
 you can add your own logging, analytics, or cost-triage inside the adapter without touching the
 brain. **The core ships with zero non-stdlib dependencies and never imports your LLM wrapper.**
-The built-in providers live in `quest_ai_runner/adapters/`, not in `core/`: `AnthropicProvider`
-(SDK-backed, installed via the optional `[anthropic]` extra) and `ClaudeCliProvider` (drives the
-local `claude` CLI headless and keyless, no extra dependency).
+The vendor providers (`AnthropicProvider`, `GeminiProvider`, `OpenAIProvider`, `DeepSeekProvider`) and the `MultiProvider` router
+are the hub's (`hubofhubs.models`, per-vendor extras, settings as arguments); `quest_ai_runner/providers.py` builds them from the
+environment. `ClaudeCliProvider` (drives the local `claude` CLI headless and keyless) is in `quest_ai_runner/adapters/`.
 
 A minimal wrapper example:
 

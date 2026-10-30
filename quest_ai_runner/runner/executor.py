@@ -26,7 +26,9 @@ import inspect
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from ..core import provider_outage, usage_limit
+from hubofhubs.models import outage as provider_outage
+
+from ..core import usage_limit
 from ..core.adapters_events import Mode
 from ..core.orchestrator import Orchestrator, OrchestratorResult
 from ..core.requester import requester_from_task

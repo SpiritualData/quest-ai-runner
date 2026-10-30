@@ -119,8 +119,8 @@ class MyProvider:
         ...
 ```
 
-The reference `AnthropicProvider` wraps the Anthropic SDK and is installed via the `[anthropic]`
-extra. Swap in any provider (OpenAI, a local model, a deterministic stub for tests) by matching this
+The reference `AnthropicProvider` wraps the Anthropic SDK; it is the hub's (`hubofhubs.models.anthropic`, extra
+`hubofhubs[anthropic]`) and takes its key as an argument. Swap in any provider (OpenAI, a local model, a deterministic stub for tests) by matching this
 shape: see the stub providers in `tests/conftest.py` and `examples/e2e_demo.py`.
 
 ## DeepRunner
@@ -284,8 +284,8 @@ See [writing-a-consumer.md](writing-a-consumer.md) for the full config and
 
 ## DeepSeek provider
 
-`DeepSeekProvider` (`adapters/deepseek_provider.py`) is the OpenAI adapter pointed at the
-OpenAI-compatible DeepSeek API. It is registered only when `DEEPSEEK_API_KEY` is set, and model
+`DeepSeekProvider` (`hubofhubs.models.openai`) is the OpenAI adapter pointed at the
+OpenAI-compatible DeepSeek API. `quest_ai_runner/providers.py` registers it only when `DEEPSEEK_API_KEY` is set, and model
 ids starting with `deepseek` route to it (orchestrator and `MultiProvider`). `DEEPSEEK_BASE_URL`
 overrides the default `https://api.deepseek.com`. Thinking is off by default (the API default is
 on, which is slower and bills reasoning tokens); set `DEEPSEEK_THINKING=1` to enable it.

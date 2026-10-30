@@ -30,12 +30,8 @@ def web_search():
 
 
 def model_providers():
-    from quest_ai_runner.core import model_family
-    model_family.register_model_prefix("fakevendor", "fakevendor")
-    try:
-        name = model_family.provider_name_for_model("fakevendor-1", {"fakevendor", "anthropic"})
-    finally:
-        model_family.MODEL_PREFIX_PROVIDERS.pop("fakevendor", None)
+    from hubofhubs.models.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
+    name = provider_name_for_model("fakevendor-1", {"fakevendor", "anthropic"}, {**MODEL_PREFIX_PROVIDERS, "fakevendor": "fakevendor"})
     return name == "fakevendor", "model prefix routed by registered data"
 
 

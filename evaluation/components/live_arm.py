@@ -34,11 +34,8 @@ class Pinned:
 
 def api_provider(model):
     """The API provider that serves ``model``: Anthropic for a Claude id (the default), Gemini only for a Gemini candidate."""
-    if str(model).lower().startswith("gemini"):
-        from quest_ai_runner.adapters.gemini_provider import GeminiProvider
-        return GeminiProvider()
-    from quest_ai_runner.adapters.anthropic_provider import AnthropicProvider
-    return AnthropicProvider()
+    from quest_ai_runner.providers import make_provider
+    return make_provider("gemini" if str(model).lower().startswith("gemini") else "anthropic")
 
 
 def build(meter, route):

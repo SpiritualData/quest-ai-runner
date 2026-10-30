@@ -4,7 +4,7 @@
   unflattened, and the plain-string path is unchanged. Uses a fake SDK client so it's offline.
 * ClaudeCliProvider._flatten_messages degrades a block list to text and never crashes.
 """
-from quest_ai_runner.adapters.anthropic_provider import AnthropicProvider
+from hubofhubs.models.anthropic import AnthropicProvider
 from quest_ai_runner.adapters.claude_cli_provider import _flatten_block, _flatten_messages
 
 
@@ -36,7 +36,7 @@ class _FakeClient:
 def _provider_with_fake_client():
     p = AnthropicProvider(api_key="not-used-offline")
     fake = _FakeClient()
-    p._client = fake  # inject so _get_client returns it without importing the SDK
+    p.client = fake  # inject so get_client returns it without importing the SDK
     return p, fake
 
 

@@ -18,6 +18,8 @@ import logging
 import re
 from typing import Dict, List, Optional
 
+from hubofhubs import tiers as hub_tiers
+from hubofhubs.models.family import newest_in_family, split_tokens
 from hubofhubs.ports.model import ModelProvider
 
 # Tier names in capability order (cheap -> expensive). The brain uses these names.
@@ -63,6 +65,16 @@ TIER_DOWNGRADE_ORDER = {
     "balanced": "fast",
     # "fast" has no lower tier to fall back to.
 }
+
+
+# Each tier QAR asks for, and the hub tier (cheap, mid, strong) whose selected arm serves it. Opus (strong) is never a default: it is
+# reachable only by an explicit pin.
+HUB_TIER_OF = {"fast": "cheap", "balanced": "cheap", "quality": "mid", "best": "mid"}
+
+
+def configured_providers(providers) -> set:
+    """The names of the providers that hold a key (or a keyless endpoint): the only ones the tier selector may offer."""
+    return {name for name, p in (providers or {}).items() if getattr(p, "api_key", None) or getattr(p, "keyless", False)}
 
 
 def next_lower_tier(tier: Optional[str]) -> Optional[str]:
@@ -190,7 +202,6 @@ def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> 
     # Priority: more capable families for higher tiers.
     # Gemini/OpenAI tiers come from FAMILY names ("flash-lite", "flash", "pro"), newest live release,
     # so a new Gemini or GPT generation is picked up with no edit here.
-    from .model_family import newest_in_family, split_tokens
     for members in families.values():
         members.sort(key=lambda mid: split_tokens(mid)[1], reverse=True)
     gem_fast = newest_in_family("gemini-flash-lite", models)
@@ -269,6 +280,21 @@ class ModelRegistry:
         # Names ``resolve_tier`` has already warned about substituting, so the warning names each
         # distinct one once rather than on every call.
         self._warned_unknown_tiers: set = set()
+        self._selected: Dict[str, str] = {}
+        self._selected_for: Optional[set] = None
+
+    def selected(self) -> Dict[str, str]:
+        """tier -> model id chosen by the hub's tier selector (``hubofhubs.tiers.choose``) among the configured providers: the
+        measured winner, else the held default, else the cheapest priced arm. Empty when no provider holds a key."""
+        names = configured_providers(getattr(self._provider, "providers", None) or self._providers)
+        if names != self._selected_for:
+            picks = hub_tiers.choose(available=names) if names else {}
+            self._selected = {t: picks[h]["arm"][1] for t, h in HUB_TIER_OF.items() if picks.get(h, {}).get("arm")}
+            self._selected_for = names
+        return dict(self._selected)
+
+    def lower_tier(self, tier: str) -> Optional[str]:
+        return next_lower_tier(tier)
 
     def get_provider_for_tier(self, tier: str) -> ModelProvider:
         """Get the provider to use for a given tier (supports per-tier provider routing).
@@ -297,18 +323,13 @@ class ModelRegistry:
             except Exception:  # noqa: BLE001 — a provider hiccup must never break resolution
                 pass
 
-        if not all_models:
-            result = dict(DEFAULT_FALLBACK_TOP)
-            result.update(self._user_overrides)
-            return result
-
-        # Cache is invalidated if the combined model set changes
-        # (simple approach: use tuple of all model lists as cache key)
+        # Cache is invalidated if the combined model set changes.
         cache_key = tuple(sorted(set(all_models)))
         if self._cache["source_id"] != cache_key or self._cache["top"] is None:
             self._cache["source_id"] = cache_key
-            self._cache["top"] = bucket_top(all_models, self._user_overrides)
-        return dict(self._cache["top"])  # copy so callers can't mutate the cache
+            self._cache["top"] = bucket_top(all_models) if all_models else dict(DEFAULT_FALLBACK_TOP)
+        # The hub's selector replaces the live-list bucketing for every tier it can serve; an explicit pin still wins.
+        return {**self._cache["top"], **self.selected(), **self._user_overrides}
 
     @staticmethod
     def is_tier_name(name: Optional[str]) -> bool:

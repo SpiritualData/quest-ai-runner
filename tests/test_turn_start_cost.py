@@ -151,25 +151,6 @@ def test_reasoning_hint_reaches_only_providers_that_take_it():
     assert New.seen == "minimal"
 
 
-def test_gemini_minimal_reasoning_sets_thinking_and_falls_back():
-    from quest_ai_runner.adapters.gemini_provider import GeminiProvider
-
-    client = MagicMock()
-    GeminiProvider._generate(client, "gemini-x", "prompt", {}, "minimal")
-    cfg = client.models.generate_content.call_args.kwargs["config"]
-    assert cfg["thinking_config"] == {"thinking_level": "minimal"}
-
-    client = MagicMock()
-    client.models.generate_content.side_effect = [ValueError("thinking_level not supported"),
-                                                  "ok"]
-    assert GeminiProvider._generate(client, "gemini-x", "prompt", {}, "minimal") == "ok"
-    assert client.models.generate_content.call_args.kwargs["config"] is None
-
-    client = MagicMock()
-    GeminiProvider._generate(client, "gemini-x", "prompt", {}, None)
-    assert client.models.generate_content.call_args.kwargs["config"] is None
-
-
 def test_startup_refresh_is_skipped_when_the_store_was_refreshed_recently(tmp_path, monkeypatch):
     from quest_ai_runner import config as cfgmod
     from quest_ai_runner.adapters.file_context_store import (

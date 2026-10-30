@@ -7,9 +7,9 @@ from __future__ import annotations
 import abc
 from typing import Any, Dict, FrozenSet, List, Optional
 
+from hubofhubs.ports.model import ModelProviderBase  # noqa: F401  (moved to the hub; same class, old import path)
 from hubofhubs.ports.retrieval import RetrievalAdapterBase  # noqa: F401  (moved to the hub; same class, old import path)
 
-from hubofhubs.ports.scope import ThreadLocalCounter
 from .adapters_values import (
     DeepResult,
     Escalation,
@@ -124,35 +124,6 @@ class GuidanceProviderBase(abc.ABC):
     ) -> "List[GuidanceCard]":
         """No-op default: returns []. Override to add semantic pre-selection. Never raises."""
         return []
-
-
-class ModelProviderBase(abc.ABC):
-    # Thread-local (see ThreadLocalCounter): a provider instance is shared across concurrently
-    # running tasks, so these must describe only the calling thread's own usage, not a global
-    # total. Every subclass shares these instead of redeclaring its own tokens_in/tokens_out.
-    call_count = ThreadLocalCounter()      # Track LLM calls for reporting
-    tokens_in = ThreadLocalCounter()
-    tokens_out = ThreadLocalCounter()
-
-    def __init__(self):
-        self.call_count = 0
-        self.tokens_in = 0
-        self.tokens_out = 0
-
-    @abc.abstractmethod
-    def plan(self, prompt, *, model, tool_schema, layers=None) -> Dict[str, Any]: ...
-    @abc.abstractmethod
-    def answer(self, messages, *, model, system=None, layers=None) -> str: ...
-    @abc.abstractmethod
-    def list_models(self) -> List[str]: ...
-
-    # Optional NATIVE web-search capability. Non-abstract so existing providers keep
-    # satisfying the ABC; a provider whose SDK ships a web-search tool overrides both.
-    def supports_web_search(self, model: Optional[str] = None) -> bool:
-        return False
-
-    def web_search(self, query: str, *, model: str, max_results: int = 5) -> Dict[str, Any]:
-        raise NotImplementedError("web search not supported by this provider")
 
 
 class FileWriterBase(abc.ABC):

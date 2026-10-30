@@ -81,8 +81,8 @@ def test_a_scripted_model_places_the_labelled_files_through_the_real_updater():
 
 def test_the_shipped_wiring_places_nothing_because_a_real_provider_has_no_generate():
     from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
-    from quest_ai_runner.adapters.gemini_provider import GeminiProvider
-    from quest_ai_runner.adapters.multi_provider import MultiProvider
+    from hubofhubs.models.gemini import GeminiProvider
+    from hubofhubs.models.router import MultiProvider
     assert not any(hasattr(p, "generate") for p in (ClaudeCliProvider, GeminiProvider, MultiProvider))
     class AnswerOnly:
         def answer(self, *a, **k):

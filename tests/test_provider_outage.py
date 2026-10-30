@@ -1,12 +1,10 @@
 """A model-provider outage is a WAIT for the queued task, not a failure.
 
-Before ``core/provider_outage.py``, a queued task that hit a provider that was overloaded or down
+Before the hub's ``hubofhubs.models.outage``, a queued task that hit a provider that was overloaded or down
 (a 503, a 529 "overloaded_error") ran out its few seconds of provider retries and was reported
 failed ("failed after 1 attempt"), so the person had to run it again by hand. These tests pin the
 replacement:
-* recognising an outage from its wording, and not mistaking an ordinary error for one;
-* the retry wrapper recording the outage it gives up on, so a run that returns a result instead of
-  raising is still attributed to it;
+* (recognising an outage and the retry wrapper recording one are tested in the hub: ``tests/test_models.py``);
 * the executor putting the task back with ``hold_reason=provider_unavailable`` and a retry time (not
   failed), for a raised outage and for an empty run;
 * never pausing a run that succeeded, never blaming a concurrent run's outage, and reporting the task
@@ -20,7 +18,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from quest_ai_runner.core import provider_outage
+from hubofhubs.models import outage as provider_outage
+from quest_ai_runner.runner import executor_pauses
 from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 
@@ -39,71 +38,9 @@ def fresh_note():
     provider_outage.reset_for_tests()
 
 
-def test_overload_and_unavailable_are_outages():
-    assert provider_outage.is_outage(RuntimeError(OVERLOADED))
-    assert provider_outage.is_outage(RuntimeError(UNAVAILABLE))
-    assert provider_outage.is_outage(ServerError("upstream returned 503"))
-
-
-@pytest.mark.parametrize("text", [
-    "401 Unauthorized: invalid api key",          # a bad key does not get better by waiting
-    "KeyError: 'goal_id'",                         # a bug in our code
-    "read timed out after 30s",                    # a slow backend, not the provider being down
-    "connection reset by peer",                    # a dropped socket, not the provider being down
-])
-def test_ordinary_errors_are_not_outages(text):
-    assert not provider_outage.is_outage(RuntimeError(text))
-
-
-def test_an_outage_is_found_through_the_chain_it_was_raised_from():
-    try:
-        try:
-            raise RuntimeError(OVERLOADED)
-        except RuntimeError as inner:
-            raise ValueError("planner call failed") from inner
-    except ValueError as wrapped:
-        outage = provider_outage.from_exception(wrapped)
-    assert outage is not None and "overloaded" in outage.message
-
-
-def test_retry_wrapper_records_the_outage_it_gives_up_on():
-    from quest_ai_runner.adapters.retry_utils import retry_transient
-
-    @retry_transient(max_retries=1, base_delay=0.0)
-    def call():
-        raise ServerError(UNAVAILABLE)
-
-    started = time.time()
-    with pytest.raises(ServerError):
-        call()
-    assert provider_outage.seen_since(started) is not None
-
-
-def test_a_call_that_succeeds_after_a_retry_records_nothing():
-    from quest_ai_runner.adapters.retry_utils import retry_transient
-
-    attempts = {"n": 0}
-
-    @retry_transient(max_retries=2, base_delay=0.0)
-    def call():
-        attempts["n"] += 1
-        if attempts["n"] == 1:
-            raise ServerError(UNAVAILABLE)
-        return "ok"
-
-    started = time.time()
-    assert call() == "ok"
-    assert provider_outage.seen_since(started) is None
-
-
-def test_seen_since_ignores_an_outage_from_before_the_run():
-    provider_outage.note(RuntimeError(OVERLOADED))
-    assert provider_outage.seen_since(time.time() + 1) is None
-
-
 def test_resume_time_is_a_few_minutes_ahead():
     now = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
-    assert provider_outage.resume_at(now) == now + provider_outage.RETRY_INTERVAL
+    assert executor_pauses.next_try_at(now) == now + executor_pauses.RETRY_INTERVAL
 
 
 # --- the executor ----------------------------------------------------------------------------------

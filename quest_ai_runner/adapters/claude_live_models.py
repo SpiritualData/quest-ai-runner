@@ -76,5 +76,5 @@ def live_claude_models() -> List[str]:
 
 def newest_claude_id(family: str) -> Optional[str]:
     """Newest live id of ``family`` ("opus", "sonnet", "haiku", "fable"), or None."""
-    from ..core.model_family import newest_in_family
+    from hubofhubs.models.family import newest_in_family
     return newest_in_family(f"claude-{family}", live_claude_models())

@@ -36,7 +36,8 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from quest_ai_runner.adapters import AnthropicProvider, ClaudeCliProvider, FilesAdapter
+from hubofhubs.models.anthropic import AnthropicProvider   # the hub's provider arm: settings are arguments
+from quest_ai_runner.adapters import ClaudeCliProvider, FilesAdapter
 from quest_ai_runner.config import RunnerConfig
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.orchestrator import OrchestratorConfig
@@ -49,7 +50,7 @@ def _model_provider():
         backend = "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "claude_cli"
     if backend == "claude_cli":
         return ClaudeCliProvider(claude_path=os.getenv("QAR_CLAUDE_PATH", "claude"))
-    return AnthropicProvider()
+    return AnthropicProvider(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
 def build_config(*, with_model_provider: bool = True) -> RunnerConfig:

@@ -764,7 +764,7 @@
   "expect": {
    "approx": {
     "usd_per_mtok": [
-     0.8,
+     0.1,
      1e-09
     ]
    }
@@ -781,7 +781,7 @@
   "expect": {
    "approx": {
     "usd_per_mtok": [
-     3.0,
+     2.0,
      1e-09
     ]
    }
@@ -798,7 +798,7 @@
   "expect": {
    "approx": {
     "usd_per_mtok": [
-     15.0,
+     4.0,
      1e-09
     ]
    }
@@ -815,7 +815,7 @@
   "expect": {
    "approx": {
     "usd_per_mtok": [
-     0.8,
+     0.1,
      1e-09
     ]
    }
@@ -830,11 +830,8 @@
    "model": "gpt-4o"
   },
   "expect": {
-   "approx": {
-    "usd_per_mtok": [
-     2.5,
-     1e-09
-    ]
+   "eq": {
+    "usd_per_mtok": null
    }
   }
  },
@@ -847,11 +844,8 @@
    "model": "gpt-4o-2024-11-20"
   },
   "expect": {
-   "approx": {
-    "usd_per_mtok": [
-     2.5,
-     1e-09
-    ]
+   "eq": {
+    "usd_per_mtok": null
    }
   }
  },
@@ -866,7 +860,7 @@
   "expect": {
    "approx": {
     "usd_per_mtok": [
-     0.075,
+     0.75,
      1e-09
     ]
    }
@@ -900,7 +894,7 @@
   "expect": {
    "approx": {
     "usd_per_mtok": [
-     3.0,
+     2.0,
      1e-09
     ]
    }
@@ -971,7 +965,7 @@
   "expect": {
    "approx": {
     "usd": [
-     1.6,
+     0.2,
      1e-09
     ]
    },
@@ -995,7 +989,7 @@
   "expect": {
    "approx": {
     "usd": [
-     6.0,
+     4.0,
      1e-09
     ]
    },
@@ -1019,7 +1013,7 @@
   "expect": {
    "approx": {
     "usd": [
-     2.5,
+     3.0,
      1e-09
     ]
    },
@@ -1042,7 +1036,7 @@
   "expect": {
    "approx": {
     "usd": [
-     0.075,
+     0.75,
      1e-09
     ]
    },
@@ -1086,7 +1080,7 @@
   "expect": {
    "approx": {
     "usd": [
-     0.8,
+     0.1,
      1e-09
     ]
    },

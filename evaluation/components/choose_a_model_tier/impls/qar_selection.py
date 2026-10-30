@@ -4,9 +4,9 @@ and ``usage_limit.detect_usage_limit`` / ``UsageLimit.resume_at``. The provider'
 Zero model calls."""
 from datetime import datetime, timezone
 
-from quest_ai_runner.core import provider_outage
+from hubofhubs.models import outage as provider_outage
+from hubofhubs.models.family import resolve_model_name
 from quest_ai_runner.core.deep_model_selection import select_deep_start
-from quest_ai_runner.core.model_family import resolve_model_name
 from quest_ai_runner.core.model_registry import ModelRegistry, is_vision_capable, next_lower_tier
 from quest_ai_runner.core.usage_limit import detect_usage_limit
 

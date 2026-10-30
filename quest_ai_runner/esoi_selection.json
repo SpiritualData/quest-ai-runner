@@ -40,21 +40,19 @@
  "call-a-model": {
   "default": "multi_provider",
   "modules": {
-   "anthropic": "quest_ai_runner.adapters.anthropic_provider",
+   "anthropic": "quest_ai_runner.providers",
    "claude_cli": "quest_ai_runner.adapters.claude_cli_provider",
-   "deepseek": "quest_ai_runner.adapters.deepseek_provider",
-   "gemini": "quest_ai_runner.adapters.gemini_provider",
-   "multi_provider": "quest_ai_runner.adapters.multi_provider",
-   "openai": "quest_ai_runner.adapters.openai_provider"
+   "deepseek": "quest_ai_runner.providers",
+   "gemini": "quest_ai_runner.providers",
+   "multi_provider": "quest_ai_runner.providers",
+   "openai": "quest_ai_runner.providers"
   }
  },
  "choose-a-model-tier": {
   "default": "qar_selection",
   "modules": {
    "deep_model_selection": "quest_ai_runner.core.deep_model_selection",
-   "model_family": "quest_ai_runner.core.model_family",
    "model_registry": "quest_ai_runner.core.model_registry",
-   "provider_outage": "quest_ai_runner.core.provider_outage",
    "usage_limit": "quest_ai_runner.core.usage_limit"
   }
  },

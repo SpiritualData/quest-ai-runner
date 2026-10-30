@@ -26,9 +26,11 @@ def test_a_gemini_model_is_priced_at_its_own_input_and_output_rate():
     assert list_price(["gemini-3.1-flash-lite"], 1_000_000, 1_000_000) == pytest.approx(1.75)
 
 
-def test_an_anthropic_model_keeps_its_rate_and_the_five_times_output_ratio():
+def test_an_anthropic_model_is_priced_from_the_hubs_table_and_an_unlisted_release_as_its_family():
     list_price = load_list_price()
-    assert list_price(["claude-sonnet-4-6"], 1_000_000, 1_000_000) == pytest.approx(3.0 + 15.0)
+    # $2 in, $10 out per 1M (https://platform.claude.com/docs/en/about-claude/pricing, read 2026-10-30)
+    assert list_price(["claude-sonnet-5-5"], 1_000_000, 1_000_000) == pytest.approx(2.0 + 10.0)
+    assert list_price(["claude-sonnet-4-6"], 1_000_000, 1_000_000) == pytest.approx(2.0 + 10.0)
 
 
 def test_haiku_5_5_is_priced_at_its_cited_rate_and_is_the_default_pin():

@@ -108,10 +108,11 @@ pip install -e '.[anthropic,dev]'      # add the Anthropic reference provider + 
 
 ```python
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
-from quest_ai_runner.adapters import FilesAdapter, AnthropicProvider
+from hubofhubs.models.anthropic import AnthropicProvider
+from quest_ai_runner.adapters import FilesAdapter
 
 cfg = RunnerConfig(retrieval=FilesAdapter("/path/to/docs"),
-                   model_provider=AnthropicProvider())
+                   model_provider=AnthropicProvider(api_key="..."))
 orch = build_orchestrator(cfg)
 print(orch.run("What does the pricing doc say?").text)   # grounded answer
 ```
@@ -246,7 +247,7 @@ quest_ai_runner/
 ├── adapters/                  # reference RetrievalAdapter / ModelProvider implementations
 │   ├── files_adapter.py       # read_section/grep over a configured root (quest-docs + corpus)
 │   ├── cached_db_adapter.py   # live DB reads via short-TTL cache (the "no file sync" approach)
-│   └── anthropic_provider.py  # model calls + models.list bucketing
+│   └── claude_cli_provider.py # keyless model calls through the local claude CLI
 ├── runner/                    # the EXECUTOR (the watchdog generalized)
 │   ├── quest_client.py        # assistant-tasks + team-decisions API, qsk_ auth; QuestDecisionSink
 │   ├── poller.py              # event-driven, signature-deduped poll loop; bounded concurrency
@@ -263,7 +264,7 @@ tests/                         # core loop, registry bucketing, runner + example
 | Interface | Role | Reference impl |
 |---|---|---|
 | `RetrievalAdapter` | GATHER: `read_section` / `grep` / `query` over the source | `FilesAdapter`, `CachedDbAdapter` |
-| `ModelProvider` | the LLM: `plan` / `answer` / `list_models` | `AnthropicProvider` |
+| `ModelProvider` | the LLM: `plan` / `answer` / `list_models` | `AnthropicProvider` (the hub's `hubofhubs.models.anthropic`) |
 | `DeepRunner` | spawn a bounded, goal-driven run (`/goal --max-turns`) | `SubprocessGoalRunner` |
 | `EscalationSink` | raise a human-only confirm/decision, return its id | `QuestDecisionSink` |
 
@@ -347,10 +348,11 @@ Auth: `Authorization: Bearer qsk_<hex>` (the executor identity).
 
   ```python
   from quest_ai_runner.config import RunnerConfig, build_orchestrator
-  from quest_ai_runner.adapters import FilesAdapter, AnthropicProvider
+  from hubofhubs.models.anthropic import AnthropicProvider
+from quest_ai_runner.adapters import FilesAdapter
 
   cfg = RunnerConfig(retrieval=FilesAdapter("/path/to/quest-docs"),
-                     model_provider=AnthropicProvider())
+                     model_provider=AnthropicProvider(api_key="..."))
   orch = build_orchestrator(cfg)
   result = orch.run("What does the pricing doc say?")   # OrchestratorResult(kind="answer", ...)
   ```
@@ -359,14 +361,15 @@ Auth: `Authorization: Bearer qsk_<hex>` (the executor identity).
 
   ```python
   from quest_ai_runner.config import RunnerConfig
-  from quest_ai_runner.adapters import FilesAdapter, AnthropicProvider
+  from hubofhubs.models.anthropic import AnthropicProvider
+from quest_ai_runner.adapters import FilesAdapter
   from quest_ai_runner.core.goal_runner import SubprocessGoalRunner, SubprocessConfig
   from quest_ai_runner.runner.poller import Poller
 
   cfg = RunnerConfig(
       quest_base_url="https://api.example.org", quest_api_key="qsk_...", team_id="team_123",
       retrieval=FilesAdapter("/path/to/corpus"),
-      model_provider=AnthropicProvider(),
+      model_provider=AnthropicProvider(api_key="..."),
       deep_runner=SubprocessGoalRunner(SubprocessConfig(working_dir="/path/to/corpus")),
   )
   Poller(cfg, state_path="qar_state.json").run_forever()

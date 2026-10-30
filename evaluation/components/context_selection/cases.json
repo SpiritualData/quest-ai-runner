@@ -44,8 +44,8 @@
  {
   "id": "CTX-008",
   "area": "adapters",
-  "task": "AnthropicProvider wraps the Anthropic SDK for plan and answer calls",
-  "target": "quest_ai_runner/adapters/anthropic_provider.py"
+  "task": "Which module builds the vendor model providers from the environment variables and routes model ids to them?",
+  "target": "quest_ai_runner/providers.py"
  },
  {
   "id": "CTX-009",
@@ -174,8 +174,8 @@
  {
   "id": "CTX-031",
   "area": "symptom",
-  "task": "A rate limit or 503 from a provider should retry with backoff; where is the helper?",
-  "target": "quest_ai_runner/adapters/retry_utils.py"
+  "task": "The bootstrap dry run prints a wrong cost estimate for a model; where is the price lookup?",
+  "target": "quest_ai_runner/pricing.py"
  },
  {
   "id": "CTX-032",
@@ -250,8 +250,8 @@
  {
   "id": "CTX-043",
   "area": "paraphrase",
-  "task": "Which provider talks to Gemini and lists its models?",
-  "target": "quest_ai_runner/adapters/gemini_provider.py"
+  "task": "Which registry maps each tier to a model chosen by the hub tier selector?",
+  "target": "quest_ai_runner/core/model_registry.py"
  },
  {
   "id": "CTX-044",
@@ -275,8 +275,8 @@
  {
   "id": "CTX-047",
   "area": "paraphrase",
-  "task": "Detects a provider outage and waits it out before retrying a run",
-  "target": "quest_ai_runner/core/provider_outage.py"
+  "task": "What text does a model call return once the daily token limit is reached?",
+  "target": "quest_ai_runner/usage.py"
  },
  {
   "id": "CTX-048",

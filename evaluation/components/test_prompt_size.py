@@ -44,7 +44,7 @@ def test_budgets_come_from_the_window_a_share_of_it_and_the_cost_per_call():
     from prompt_size import budgets
     from quest_ai_runner.core import prompt_budget
     planner = budgets.derive("planner")
-    assert planner["window_tokens"] == prompt_budget.context_window_tokens("gemini-3.1-flash-lite")
+    assert planner["window_tokens"] == prompt_budget.context_window_tokens("claude-haiku-5-5")
     assert planner["budget_tokens"] == min(planner["window_bound"], planner["cost_bound"])
     assert planner["window_bound"] == int(planner["window_tokens"] * budgets.INPUTS["planner"]["window_share"])
     price = budgets.price_per_mtok(planner["model"]) / 1_000_000
@@ -53,8 +53,8 @@ def test_budgets_come_from_the_window_a_share_of_it_and_the_cost_per_call():
     deep = budgets.derive("deep_prompt")
     assert deep["window_bound"] == planner["window_tokens"] - prompt_budget.WORKER_RESERVED_TOKENS
     assert budgets.derive("autopilot_batch")["budget_tokens"] == int(deep["budget_tokens"] * 0.5)
-    from quest_ai_runner.core.model_registry import DEFAULT_FALLBACK_TOP
-    assert DEFAULT_FALLBACK_TOP[budgets.cheapest_tier()] == DEFAULT_FALLBACK_TOP["fast"]
+    top = budgets.tier_models()
+    assert top[budgets.cheapest_tier()] == top["fast"] == "claude-haiku-5-5"
 
 
 def test_a_tighter_spend_cap_lowers_the_budget(monkeypatch):

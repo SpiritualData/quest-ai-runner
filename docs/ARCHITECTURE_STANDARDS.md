@@ -48,9 +48,8 @@ The authoritative, checked inventory is `esoi/components.csv` (rendered in
 | `core/guard.py`, `core/inbox.py` | per-turn `ExecutionRecord` (claim honesty is judged in the goal verification); mid-run `InputInbox` |
 | `adapters/files_adapter.py` | reference `RetrievalAdapter` over a configured file root |
 | `adapters/cached_db_adapter.py` | reference `RetrievalAdapter` over a live DB with a short-TTL cache |
-| `adapters/{anthropic,gemini,openai}_provider.py` | reference `ModelProvider`s |
-| `adapters/multi_provider.py` | routes a model call to the right provider by model-name prefix |
-| `adapters/retry_utils.py` | provider-agnostic retry/backoff + `parse_json_with_retry` |
+| `providers.py` | builds the hub's provider arms (`hubofhubs.models`: Anthropic, Gemini, OpenAI, DeepSeek) and its router from the environment |
+| `adapters/claude_cli_provider.py` | the keyless `ModelProvider` over the local `claude` CLI |
 | `adapters/*_vector_store.py`, `*_context_*` | optional vector/card context assembly |
 | `runner/quest_client.py` | the Quest HTTP client (`qsk_` auth) + `QuestDecisionSink` |
 | `runner/poller.py` | event-driven, signature-deduped poll loop; bounded concurrency |
@@ -122,7 +121,7 @@ The most common source of bugs here. Four rules, in order:
    `ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")`. Never a
    hardcoded id, never `list_models()[0]` (the current provider may not route it). Tiers: `"fast"`
    cheap lookups, `"balanced"` filtering/judgment, `"best"` high-stakes reasoning.
-3. **Retry transient errors** (503/429/timeout) with the helpers in `adapters/retry_utils.py`
+3. **Retry transient errors** (503/429/timeout) with the helpers in `hubofhubs.models.retry`
    (the retry decorator; `parse_json_with_retry` when the call must yield valid JSON).
 4. **Strip fences before `json.loads`**: LLM JSON often arrives in ```` ```json ```` fences. Use a
    helper like `_extract_json()` in `core/card_filter.py`, never `json.loads(raw)`.

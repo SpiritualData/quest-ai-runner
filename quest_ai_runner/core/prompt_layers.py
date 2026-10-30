@@ -28,19 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-# A single ordered prompt block handed to a provider: its text and whether that text is a stable,
-# cache-eligible layer. ``{"text": str, "cache": bool}``.
-LayerBlock = Dict[str, Any]
-
-# Providers that expose explicit cache breakpoints cap how many a single request may carry
-# (Anthropic allows at most four ``cache_control`` markers). The layering never needs more than a
-# couple (head + context), but this is the shared ceiling a provider guards against.
-MAX_CACHE_BREAKPOINTS = 4
-
-# The separator between layers when they are flattened back into one plain string. Kept as a blank
-# line so the flattened form reads naturally and ``prefix()`` stays a true byte-prefix of
-# ``render()`` (see ``join_layers``).
-LAYER_SEPARATOR = "\n\n"
+from hubofhubs.models.layers import LayerBlock, join_layers
 
 # Supported non-English language codes a user-facing prompt can pin a reply to. Small and
 # deliberate: only add a code here once a consumer actually offers it as a stored preference.
@@ -86,25 +74,6 @@ def language_instruction(language: Optional[str] = None) -> str:
         "written; do not translate them. Never use em dashes; split the sentence or use a comma, "
         "colon, or parentheses instead."
     )
-
-
-def join_layers(*parts: str) -> str:
-    """Join non-empty layer strings in order with the shared separator.
-
-    Empty parts are dropped so a missing layer never leaves a doubled separator. Because parts are
-    joined in the given order and empties are dropped consistently, the join of a leading subset is
-    always a byte-prefix of the join of the full sequence (relied on by ``PromptLayers.prefix``).
-    """
-    return LAYER_SEPARATOR.join(p for p in parts if p)
-
-
-def blocks_to_prompt(blocks: List[LayerBlock]) -> str:
-    """Flatten ordered layer blocks back into ONE plain string (the graceful-degradation shape).
-
-    A provider with no cache support calls this to recover exactly the prompt it would have built
-    from the flattened layers, so passing ``layers`` never changes behavior for such a provider.
-    """
-    return join_layers(*[str(b.get("text") or "") for b in (blocks or [])])
 
 
 @dataclass
@@ -176,17 +145,3 @@ def compose_layers(*, persona: str = "", standards: str = "", context: str = "",
     (persona, standards, context) render a byte-identical ``prefix()`` and differ only in the tail.
     """
     return PromptLayers(head=turn_prompt_head(persona, standards), context=context or "", tail=tail or "")
-
-
-def cache_control_indices(blocks: List[LayerBlock], *, max_breakpoints: int = MAX_CACHE_BREAKPOINTS) -> List[int]:
-    """The indices of ``blocks`` that should carry a cache breakpoint, capped at ``max_breakpoints``.
-
-    Every ``cache=True`` block is a candidate. If more candidates exist than the provider allows,
-    keep the LAST ``max_breakpoints`` of them: a breakpoint caches everything up to and including
-    its block, so keeping the later markers still caches the longest shared prefixes. Shared by any
-    provider that renders explicit cache breakpoints, so the cap is enforced in ONE place.
-    """
-    candidates = [i for i, b in enumerate(blocks or []) if b.get("cache")]
-    if len(candidates) > max_breakpoints:
-        candidates = candidates[-max_breakpoints:]
-    return candidates
