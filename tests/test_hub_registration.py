@@ -54,5 +54,5 @@ def test_assembly_gives_a_card_store_over_the_repository_and_names_the_layer():
 
 
 def test_the_hub_default_is_untouched_by_qar():
-    default = hubofhubs.assemble(hubofhubs.HubConfig(seats=(qar_hub.CARD_STORE,)))
+    default = hubofhubs.assemble(hubofhubs.AssemblyConfig(solutions=(qar_hub.CARD_STORE,)))
     assert "local_card_store" in default.reasons[0]

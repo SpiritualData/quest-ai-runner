@@ -118,8 +118,8 @@ def render_overseer_prompt(digest: str) -> str:
 
 
 # Built once, at import (startup), then frozen: nothing resolves at call time.
-WATCHING = hubofhubs.assemble(hubofhubs.HubConfig(
-    seats=(SEAT,), selections={SEAT: ARM}, options={SEAT: {"render": render_overseer_prompt}}))
+WATCHING = hubofhubs.assemble(hubofhubs.AssemblyConfig(
+    solutions=(SEAT,), selections={SEAT: ARM}, options={SEAT: {"render": render_overseer_prompt}}))
 WATCHER = WATCHING[SEAT]
 
 

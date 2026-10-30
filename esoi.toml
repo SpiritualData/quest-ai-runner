@@ -93,3 +93,6 @@ QI3 = "Acting first without taking a human-only step decides whether people can 
 QI4 = "One engine for every consumer is how QAR stays worth maintaining, but it serves the person only indirectly."
 QI5 = "Selection by metric is the method that keeps the other ideals improving; it is a means, so it carries less than the outcomes it protects."
 QI6 = "Cost and quality known before they surprise anyone: spend is a real constraint (a daily cap), so it weighs as much as consent."
+
+[records]
+template_version = 1
