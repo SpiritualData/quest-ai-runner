@@ -3649,3 +3649,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,prompt_size,situational,27,25,25/27,0/0,0,0,0,0.0,0.8,993d6c4-dirty,b4e98878,none,,,
 2026-10-29,prompt_size,live,27,25,25/27,0/0,0,0,0,0.0,0.9,219bd24-dirty,b4e98878,none,,,
 2026-10-29,prompt_size,situational,27,25,25/27,0/0,0,0,0,0.0,0.8,219bd24-dirty,b4e98878,none,,,
+2026-10-29,context_selection,hybrid_union,63,51,29/38,22/25,0,0,0,0.0,12.5,7f1e163,75abe17a,none,,,
+2026-10-29,overseer_signals,digest_probe,16,16,16/16,0/0,0,0,0,0.0,0.0,7f1e163,5d29c4ef,none,,,
