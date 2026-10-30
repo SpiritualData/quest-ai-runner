@@ -20,13 +20,15 @@ END = "<!-- hub-table:end -->"
 
 def seat_rows(facts, bound):
     """One row per seat, so the page stays the size of the mind and not of the registry (72 areas). An area is bound when
-    ``esoi/hub_seats.csv`` names it; every other area is unbound: no seam, no probe, so the scorer reads it as not yet connected."""
-    lines = ["| Seat | Areas | Bound by QAR | Unbound | Research stale | Hand-wired where a hub covers it |", "|---|---|---|---|---|---|"]
+    ``esoi/hub_seats.csv`` names it; every other area is unbound: no seam, no probe, so the scorer reads it as not yet connected.
+    "Should connect" counts the areas whose call is adopt or coexist; a real gap is one of those with no seam."""
+    lines = ["| Seat | Areas | Bound by QAR | Should connect (adopt or coexist) | Real gaps (no seam) | Research stale | Hand-wired where a hub covers it |",
+             "|---|---|---|---|---|---|---|"]
     for seat in dict.fromkeys(f["seat"] for f in facts.values()):
         mine = [f for f in facts.values() if f["seat"] == seat]
         wired = sorted({n for f in mine for n in f["reinvented"]})
-        lines.append(f"| {seat} | {len(mine)} | {sum(1 for f in mine if f['area'] in bound)} | "
-                     f"{sum(1 for f in mine if f['area'] not in bound)} | {sum(1 for f in mine if not f['fresh'])} | "
+        lines.append(f"| {seat} | {len(mine)} | {sum(1 for f in mine if f['area'] in bound)} | {sum(1 for f in mine if f['expected'])} | "
+                     f"{sum(1 for f in mine if f['expected'] and not f['seam'])} | {sum(1 for f in mine if not f['fresh'])} | "
                      f"{', '.join(wired) or 'none'} |")
     return "\n".join(lines)
 
@@ -35,8 +37,10 @@ def block():
     facts, connections, numbers = evaluate(binding())
     bound = {s["area"] for s in binding().seats}
     return "\n\n".join([
-        f"QAR binds {len(bound)} of the registry's {len(facts)} areas. The rest are unbound on purpose: QAR has no seam or probe for "
-        "them yet, so the scorer reads them as not yet connected (the hub's `docs/registry.md` lists every area).",
+        f"QAR binds {len(bound)} of the registry's {len(facts)} areas. Each area carries a `call` from its recommendation (adopt, coexist, "
+        f"keep, watch or avoid). The checks that need a connection (by configuration, one seam, selectable, a fake hub) count only the "
+        f"{numbers['to_connect']} areas called adopt or coexist; an area called keep, watch or avoid is not a gap. An unbound area that should "
+        "be connected has no seam or probe, so the scorer reads it as not yet connected: that is a real gap (the hub's `docs/registry.md` lists every area).",
         seat_rows(facts, bound),
         "The bound areas:\n\n" + render_docs.seat_table(facts=facts, areas=bound),
         "Reading of the hub's scorer on QAR's bindings:\n\n" + render_docs.metric_lines(numbers, facts)])

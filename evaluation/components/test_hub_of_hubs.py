@@ -30,9 +30,31 @@ def test_doc_stays_bounded():
     assert len((REPO / "docs" / "hub-of-hubs.md").read_text().splitlines()) <= 120
 
 
-def test_every_registry_area_has_every_check_as_a_case():
+def test_every_registry_area_has_every_check_that_applies_to_it_as_a_case():
     have = {(c["args"]["area"], c["kind"]) for c in CASES}
-    assert have == {(r["area"], k) for r in registry.read("hubs.csv") for k in KINDS}
+    assert have == {(r["area"], k) for r in registry.read("hubs.csv") for k in KINDS
+                    if k not in registry.CONNECTION_KINDS or registry.should_connect(r)}
+
+
+def test_the_case_file_is_what_the_hub_generates():
+    from hubofhubs import cases
+    assert CASES == cases.cases(), "regenerate: python -m hubofhubs.cases > evaluation/components/hub_of_hubs/cases.json"
+
+
+# THE DEFINITION OF QME9 (2026-10-30). The connection checks (by configuration, one seam, selectable, a fake hub) are cases only for the
+# research areas whose call (hubs.csv `call`, from each recommendation) is adopt or coexist; a blank call counts as coexist. An area called
+# keep, watch or avoid is not a gap: it has no case for those checks, and the scorer's seam and selectable shares are over the same
+# areas. Weights and thresholds are unchanged. The registry facts (registered, fresh, no vendor branch, nothing hand-wired) still cover
+# every area. The areas that should be connected and have no seam are the real gaps, listed in the generated docs.
+def test_the_real_gaps_are_the_adopt_or_coexist_areas_with_no_seam():
+    facts, _, numbers = evaluate(binding())
+    wanted = {r["area"] for r in registry.read("hubs.csv") if registry.should_connect(r)}
+    assert {a for a, f in facts.items() if f["expected"]} == wanted
+    assert numbers["to_connect"] == len(wanted)
+    assert numbers["unconnected"] == sorted(a for a in wanted if not facts[a]["seam"])
+    kept = {a for a in facts if a not in wanted}
+    assert kept and not (kept & set(numbers["unconnected"]))
+    assert not {c["args"]["area"] for c in CASES if c["kind"] in registry.CONNECTION_KINDS} & kept
 
 
 # THE BINDING RULE (corrected 2026-10-30). The registry now breaks each seat into sub-solution areas (72, from 12 broad ones), and
