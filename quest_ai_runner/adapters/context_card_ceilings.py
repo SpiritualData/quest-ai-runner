@@ -65,7 +65,11 @@ _STATE_FILE_RE = re.compile(r"(?:^|[_.-])state\.json$", re.IGNORECASE)
 #
 # QAR_BOOTSTRAP_MAX_CARDS still exists for an operator who wants a hard cap on one pass, and it is
 # opt-in with no default.
-_MAX_CARDS_PER_FOLDER_DEFAULT = 1
+_MAX_CARDS_PER_FOLDER_DEFAULT = 8
+# Why eight and not one: the indexing prompt itself asks for 2 to 8 topic cards per area of the corpus, so a rule of one
+# per folder contradicted what the indexer is told to produce, and flagged a store as "inflated" (and refused to embed it)
+# when it only held several topics about one folder's content. A real inflation (copies, loops) is hundreds of cards over
+# the folder count, which eight per folder still catches.
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -325,7 +329,7 @@ def apply_card_ceilings(
             parts.append(f"{dropped['max_cards']} (over max_cards)")
         _log.debug(
             "context index: skipped %d card(s) during ceiling application (normal): %s. "
-            "One topic card describes each folder; raise QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER if needed.",
+            "Each folder's topics are capped at QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER; raise it if needed.",
             sum(dropped.values()), "; ".join(parts),
         )
     return kept

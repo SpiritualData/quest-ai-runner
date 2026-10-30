@@ -193,7 +193,7 @@ Env it reads:
   budget of one card per 25 files and five cards per "area"; both were invented, and on a store
   that already held more cards than the budget allowed, the budget's only effect was to refuse to
   index anything new forever.
-  QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER (optional)  — cards allowed per folder (default 1; 0 = no
+  QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER (optional)  — cards allowed per folder (default 8; 0 = no
                                                    limit). Raise it only for a corpus that
                                                    genuinely holds several topics in one folder.
   QAR_BOOTSTRAP_MAX_CARDS (optional)             — hard cap on cards in ONE bootstrap pass. Opt-in

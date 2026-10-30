@@ -37,7 +37,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_AUTOPILOT_PASS_TIME` | Default daily local time (HH:MM) of the autopilot pass; sets RunnerConfig.autopilot_pass_time. | `cli_config.py` | - |
 | `QAR_BOOTSTRAP_EMAIL_USER` | Quest user id the bootstrap report email is sent to. | `cli_context.py` | - |
 | `QAR_BOOTSTRAP_MAX_CARDS` | Hard cap on cards created in ONE bootstrap pass (unset = no cap). | `adapters/context_bootstrap_support.py` | - |
-| `QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER` | Cards allowed per folder in bootstrap (default 1; 0 = no per-folder cap). | `adapters/context_card_ceilings.py` | - |
+| `QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER` | Cards allowed per folder in bootstrap (default 8, the most the indexing prompt asks for in one area; 0 = no per-folder cap). | `adapters/context_card_ceilings.py` | - |
 | `QAR_BOOTSTRAP_MAX_FILES` | Stop the bootstrap walk after this many files (unset = no limit). | `adapters/context_bootstrap_support.py` | - |
 | `QAR_BOOTSTRAP_TIER` | Model tier used for bootstrap topic extraction (default balanced). | `cli_context.py` | - |
 | `QAR_BOOTSTRAP_WORKERS` | Parallel bootstrap workers; overrides QAR_MAX_PARALLEL for bootstrap only. | `adapters/context_bootstrap_support.py` | - |

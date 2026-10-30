@@ -992,7 +992,7 @@ def topic_cards_over_folders(topic_count: int, folders: Optional[int], per_folde
     """True when the store holds more topic cards than the folder rule lets the corpus have.
 
     Both numbers are facts, not choices: how many folders the corpus has, and the per-folder rule in
-    force (``QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER``, one by default). With no per-folder rule (0) the
+    force (``QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER``, eight by default). With no per-folder rule (0) the
     statement cannot be made and this is False.
     """
     return bool(folders) and per_folder > 0 and topic_count > folders * per_folder

@@ -418,7 +418,8 @@ class TestOnlyWhatIsNeededIsRead:
             assert s.inflated() is False
         assert len(walks) == 1
 
-    def test_a_remembered_count_never_says_inflated_without_a_fresh_walk(self, tmp_path):
+    def test_a_remembered_count_never_says_inflated_without_a_fresh_walk(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "1")   # the rule under test: one card per folder
         root = tmp_path / "corpus"
         (root / "a").mkdir(parents=True)
         (root / "a" / "n.md").write_text("x")

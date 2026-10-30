@@ -563,7 +563,8 @@ def test_a_compounded_card_with_a_truncated_id_is_not_rekeyed(tmp_path):
     assert not plan_for(repo, tmp_path).entries
 
 
-def test_a_store_with_more_topic_cards_than_folders_takes_the_second_step_without_being_over_its_limit(tmp_path):
+def test_a_store_with_more_topic_cards_than_folders_takes_the_second_step_without_being_over_its_limit(tmp_path, monkeypatch):
+    monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "1")   # the rule under test: one card per folder
     # More topic cards than the few folders the corpus (and the store's own files inside it) can have.
     repo = backend_with([card(name, ["docs/a.md"], keywords=[name]) for name in
                          ("billing", "invoices", "sign-in", "reports", "audits", "payroll", "tax", "budgets")])

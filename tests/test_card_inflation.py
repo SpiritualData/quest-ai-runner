@@ -363,7 +363,8 @@ class TestCardCeilings:
         assert card_folder_key(make_card("c", ["top.py", "other.py"])) == "."
         assert card_folder_key(make_card("c", [])) == ""
 
-    def test_one_card_per_folder(self):
+    def test_one_card_per_folder(self, monkeypatch):
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "1")   # the rule under test: one card per folder
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
         kept = apply_card_ceilings(cards, [])
@@ -411,7 +412,8 @@ class TestCardCeilings:
         assert sorted(FilesystemCardRepository(str(cards_dir)).load_all()) == ["old0", "old1", "old2"]
         assert "Context store full at 3: 3 topic" in caplog.text and "QAR_MAX_CARDS" in caplog.text
 
-    def test_existing_cards_hold_their_own_folder(self):
+    def test_existing_cards_hold_their_own_folder(self, monkeypatch):
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "1")   # the rule under test: one card per folder
         existing = [make_card("already", ["app/one.py", "app/two.py"])]
         fresh = [make_card("another", ["app/three.py", "app/four.py"])]
         assert apply_card_ceilings(fresh, existing) == []
@@ -431,7 +433,8 @@ class TestCardCeilings:
             "refusing a refresh leaves the store stale without making it any smaller"
         )
 
-    def test_truncation_is_logged_with_the_numbers_and_never_silent(self, caplog):
+    def test_truncation_is_logged_with_the_numbers_and_never_silent(self, caplog, monkeypatch):
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "1")   # the rule under test: one card per folder
         # DEBUG, not WARNING: dropping a second card for a folder is the expected outcome (fca3b8d).
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
