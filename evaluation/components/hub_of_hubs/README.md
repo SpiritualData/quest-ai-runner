@@ -7,7 +7,7 @@ repository; this folder only says how QAR meets them.
 | File | Role |
 |---|---|
 | `__init__.py` | imports `hubofhubs` (a required dependency) like the esoi library: installed, or the sibling checkout `../ai-hub-of-hubs-structure` put on the path |
-| `binding.py` | the seat bindings: `esoi/hub_seats.csv` says which QAR solution fills each area; builds the hub's `Binding` |
+| `binding.py` | the seat bindings: `esoi/hub_seats.csv` says which QAR solution fills each area QAR uses (the rest are unbound); builds the hub's `Binding` |
 | `probes.py`, `fake_hub.py` | one probe per area proving a fake hub can be added through that area's configuration entry |
 | `impls/registry_scan.py` | the live arm: the hub's `evaluate` on QAR's bindings |
 | `broken/vendor_grep.py` | the floor: grep for vendor names |

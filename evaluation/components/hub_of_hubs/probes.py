@@ -73,7 +73,7 @@ def evals():
 
 
 def mcp_source():
-    """Science sources arrive as MCP servers: the probe is the lane-file path, shared with tools_mcp."""
+    """Science sources arrive as MCP servers: the probe is the lane-file path, shared with mcp_client."""
     return tools_mcp()
 
 
@@ -86,6 +86,8 @@ def world_hub():
     return ok, "one aggregator entry in the hub's example lane config, no per-app entries"
 
 
-PROBES = {"web_search": web_search, "model_providers": model_providers, "tools_mcp": tools_mcp,
+# Keyed by registry area. A probe exists only where the area's own configuration entry can be exercised offline; the sub-areas
+# the registry added in 2026-10 that QAR does not bind have none, and so report that a fake hub is not proven for them.
+PROBES = {"web_search": web_search, "model_providers": model_providers, "mcp_client": tools_mcp,
           "agent_harness": agent_harness, "context_assembly": context_assembly, "evals": evals,
-          "world": world_hub, "science": mcp_source}
+          "integration_aggregators": world_hub, "science_find_evidence": mcp_source}

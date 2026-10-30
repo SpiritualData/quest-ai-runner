@@ -35,14 +35,40 @@ def test_every_registry_area_has_every_check_as_a_case():
     assert have == {(r["area"], k) for r in registry.read("hubs.csv") for k in KINDS}
 
 
+# THE BINDING RULE (corrected 2026-10-30). The registry now breaks each seat into sub-solution areas (72, from 12 broad ones), and
+# QAR uses only some of them. The binding therefore records which areas QAR uses, and the rule is no longer "the binding equals the
+# registry". It is: (1) every bound area exists in the registry, once, so a renamed or removed area cannot leave a stale binding;
+# (2) every area that holds one of QAR's wired hub connections or hand-wired integrations is bound, so a connection cannot float
+# without a seam; (3) the areas QAR has a probe for are bound (a probe on an unbound area would never run); (4) each bound area
+# cites real solutions and real paths; (5) an unbound area reads as not yet connected (no seam, no fake hub), never as passing.
+# The earlier rule also demanded `world`, `tools_mcp` and `science`; those broad areas were replaced by their sub-areas, which are
+# `integration_aggregators` and `channels`, `mcp_client`, and `science_find_evidence`.
 def test_bindings_cite_real_solutions_and_paths():
     solutions = {r["solution_id"] for r in registry.read("solutions.csv", REPO / "esoi")}
-    assert {s["area"] for s in binding().seats} == {r["area"] for r in registry.read("hubs.csv")}
+    areas = {r["area"] for r in registry.read("hubs.csv")}
+    bound = [s["area"] for s in binding().seats]
+    assert len(set(bound)) == len(bound) and set(bound) <= areas, sorted(set(bound) - areas)
     for seat in binding().seats:
         for sid in registry.split(seat["seam_solution_id"]):
             assert sid in solutions, seat["area"]
         for path in registry.split(seat["code_paths"]):
             assert (REPO / path).exists(), path
+
+
+def test_every_area_qar_wires_or_probes_is_bound():
+    bound = {s["area"] for s in binding().seats}
+    wired = {c["area"] for c in registry.read("hub_capabilities.csv") if c["consumer"] == "quest-ai-runner"}
+    hand = {i["area"] for i in registry.read("hub_integrations.csv") if i["consumer"] == "quest-ai-runner"}
+    assert (wired | hand | set(probes.PROBES)) <= bound
+    assert {"mcp_client", "integration_aggregators", "science_find_evidence"} <= bound
+
+
+def test_an_unbound_area_reads_as_not_yet_connected():
+    facts, _, _ = evaluate(binding())
+    unbound = [a for a in facts if a not in {s["area"] for s in binding().seats}]
+    assert len(unbound) > 50
+    for area in unbound:
+        assert not facts[area]["seam"] and not facts[area]["selectable"] and not check(facts[area], "fake_hub")["holds"], area
 
 
 def test_the_hub_rows_for_qar_cite_real_paths():
@@ -56,7 +82,8 @@ def test_the_hub_rows_for_qar_cite_real_paths():
 
 def test_a_fake_hub_needs_configuration_and_no_core_edit():
     facts, _, _ = evaluate(binding())
-    for area in ("web_search", "model_providers", "tools_mcp", "agent_harness", "context_assembly", "evals", "world", "science"):
+    for area in ("web_search", "model_providers", "mcp_client", "agent_harness", "context_assembly", "evals", "integration_aggregators",
+                 "science_find_evidence"):
         assert check(facts[area], "fake_hub")["holds"], area
     assert not check(facts["voice"], "fake_hub")["holds"]                    # unprobed is not proven
     assert not check(facts["memory"], "fake_hub")["holds"]
@@ -72,7 +99,7 @@ def test_the_world_is_one_aggregator_connection_with_no_per_app_entry():
 def test_qar_has_no_vendor_branch_in_core_and_names_what_it_hand_wires():
     facts, _, numbers = evaluate(binding())
     assert numbers["vendor_branches"] == 0
-    assert {a for a, f in facts.items() if f["reinvented"]} == {"world", "model_providers"}
+    assert {a for a, f in facts.items() if f["reinvented"]} == {"integration_aggregators", "model_providers"}
 
 
 def test_the_live_implementation_beats_the_baseline():

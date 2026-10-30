@@ -14,6 +14,6 @@ def build(meter):  # noqa: ARG001
     source = "\n".join(p.read_text(encoding="utf-8", errors="ignore") for p in (REPO / "quest_ai_runner").rglob("*.py"))
 
     def measure(kind, args):
-        named = any(re.search(re.escape(t), source, re.I) for t in terms[args["area"]])
+        named = any(re.search(re.escape(t), source, re.I) for t in terms.get(args["area"], []))   # an unbound area names no vendor
         return {"holds": named if kind in ("registered", "seam", "core_clean", "no_reinvented") else False}
     return measure
