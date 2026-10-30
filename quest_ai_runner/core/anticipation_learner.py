@@ -16,7 +16,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from .text_sampling import keywords_from_text
+from hubofhubs.recall.text_sampling import keywords_from_text
 
 log = logging.getLogger("quest-ai-runner.anticipation")
 

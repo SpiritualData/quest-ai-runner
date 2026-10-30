@@ -416,7 +416,7 @@ def test_an_autopilot_runs_receipt_closes_what_it_accounts_for(tmp_path):
 # --- one history per prompt, and never the thread's own earlier runs ----------------------------
 
 def test_only_one_turn_history_is_rendered():
-    from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+    from hubofhubs.recall.composite_assembler import CompositeContextAssembler
     from quest_ai_runner.core.turn_context_store import assembler_renders_turns
 
     class Hybrid:

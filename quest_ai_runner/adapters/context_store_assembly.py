@@ -13,7 +13,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from hubofhubs.ports.context import AssembledContext
-from ..core.background_pacing import Pacer
+from hubofhubs.recall.background_pacing import Pacer
 from .card_content_render import (
     content_item_text as _content_item_text,
     filter_content_by_time_range,

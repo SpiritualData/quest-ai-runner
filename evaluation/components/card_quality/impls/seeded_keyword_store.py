@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.core.text_sampling import keywords_from_text
+from hubofhubs.recall.text_sampling import keywords_from_text
 
 COLLECTION = re.compile(r"collection '([^']+)' \(id (\w+)\)")
 

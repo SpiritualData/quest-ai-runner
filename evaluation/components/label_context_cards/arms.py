@@ -8,7 +8,7 @@ import common  # noqa: F401  (puts the repository on the path)
 from quest_ai_runner.adapters.card_metadata_generator import CardMetadataGenerator
 from quest_ai_runner.adapters.context_card_updater import categorize_files_with_llm
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.core.text_sampling import keywords_from_text
+from hubofhubs.recall.text_sampling import keywords_from_text
 
 
 class StubCollectionResolver:

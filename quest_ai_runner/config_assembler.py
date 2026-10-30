@@ -12,6 +12,11 @@ import os
 import threading
 from typing import TYPE_CHECKING, Callable, Optional
 
+from typing import Any, List
+
+from esoi import implementation
+from hubofhubs.recall.composite_assembler import CompositeContextAssembler
+
 from .config_context_index import (
     _bootstrap_if_needed,
     _build_qdrant_card_repo_from_env,
@@ -23,6 +28,12 @@ from .core.resolve import resolve
 
 if TYPE_CHECKING:  # typing only: config imports this module, not the other way round
     from .config import RunnerConfig
+
+
+@implementation("select-context", "composite")
+def composite(assemblers: List[Any]) -> CompositeContextAssembler:
+    """QAR's ``select-context`` arm that runs several assemblers in order as one: the hub's composite assembler."""
+    return CompositeContextAssembler(assemblers)
 
 
 def build_card_repository(cfg: "RunnerConfig", cards_dir: str, *,
@@ -208,7 +219,6 @@ def _resolve_context_assembler_base(
         # This ensures turns are always at <corpus_root>/.quest-context/turns/ —
         # consistent regardless of cwd, and shared across CLI, chat, and the executor lane.
         from .core.turn_context_store import TurnContextStore
-        from .core.composite_assembler import CompositeContextAssembler
         turns_dir = os.path.join(cards_dir, "turns")
         turn_store = TurnContextStore(
             turns_dir=turns_dir,
@@ -470,7 +480,7 @@ def _resolve_context_assembler_base(
         assemblers = [file_assembler, turn_store]
         if claude_assembler is not None:
             assemblers.append(claude_assembler)
-        return CompositeContextAssembler(assemblers)
+        return composite(assemblers)
     except CardScopeError:
         raise  # a bad QAR_CARDS_SCOPE must stop startup, not quietly run on another scope
     except Exception:  # noqa: BLE001 — never let context wiring break runner construction

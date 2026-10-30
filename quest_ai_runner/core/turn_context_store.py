@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .text_sampling import keywords_from_text, select_representatives
+from hubofhubs.recall.text_sampling import keywords_from_text, select_representatives
 
 
 def scope_tags_for(meta: Optional[Dict[str, Any]]) -> List[str]:
@@ -68,7 +68,7 @@ class TurnContextStore:
     Usage in a consumer::
 
         from quest_ai_runner.core.turn_context_store import TurnContextStore
-        from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+        from hubofhubs.recall.composite_assembler import CompositeContextAssembler
 
         turn_store = TurnContextStore()
         cfg = RunnerConfig(
@@ -281,5 +281,5 @@ def assembler_renders_turns(assembler: Any) -> bool:
     past brief twice (2026-10-06: about 289K characters each). The poller asks this before it
     renders the rep's own turns, so only one history reaches the prompt. Never raises.
     """
-    from .composite_assembler import find_assembler
+    from hubofhubs.recall.composite_assembler import find_assembler
     return find_assembler(assembler, lambda a: isinstance(a, TurnContextStore)) is not None

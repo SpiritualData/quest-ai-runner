@@ -43,7 +43,7 @@ import re
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, TypeVar
 
 from .card_content_render import content_identity_key
-from .tfdfidf_sampling import keywords_from_text
+from hubofhubs.recall.text_sampling import keywords_from_text
 
 T = TypeVar("T")
 

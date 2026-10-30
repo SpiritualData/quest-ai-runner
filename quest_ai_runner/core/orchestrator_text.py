@@ -294,7 +294,7 @@ def _card_update_store(assembler: Any) -> Optional[Any]:
     ``HybridContextAssembler``'s ``_keyword``/``_vector`` arms) and returns the first capable inner
     store it finds. Returns None when nothing card-update-capable is reachable.
     """
-    from .composite_assembler import find_assembler
+    from hubofhubs.recall.composite_assembler import find_assembler
 
     def _is_capable(obj: Any) -> bool:
         return bool(obj is not None

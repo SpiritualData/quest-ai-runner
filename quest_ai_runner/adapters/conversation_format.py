@@ -27,8 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..core.date_bounds import parse_date_bound, timestamp_in_range  # noqa: F401  (re-exported)
-from .tfdfidf_sampling import extract_terms, keywords_from_text, select_representatives
+from hubofhubs.recall.date_bounds import parse_date_bound, timestamp_in_range  # noqa: F401  (re-exported)
+from hubofhubs.recall.text_sampling import extract_terms, keywords_from_text, select_representatives
 
 # ---------------------------------------------------------------------------
 # Shared constants used by select_current_slice / select_related (and the

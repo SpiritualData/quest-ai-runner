@@ -25,7 +25,7 @@ from .adapters_events import (
 )
 from .adapters_values import PlanDecision, ProgressEvent
 from .answer_explanation import is_eligible, trace_from_result
-from .card_thread import CardThreadDecision, parse_card_thread
+from hubofhubs.recall.card_thread import CardThreadDecision, parse_card_thread
 from .goal_metrics import deep_metric_data
 from .orchestrator_capabilities import (
     planner_full_view_start,

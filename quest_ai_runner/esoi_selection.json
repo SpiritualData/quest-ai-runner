@@ -326,7 +326,7 @@
   "default": "hybrid",
   "modules": {
    "bm25": "quest_ai_runner.adapters.bm25_content_store",
-   "composite": "quest_ai_runner.core.composite_assembler",
+   "composite": "quest_ai_runner.config_assembler",
    "file": "quest_ai_runner.adapters.file_context_store",
    "hybrid": "quest_ai_runner.adapters.hybrid_context_assembler",
    "rep": "quest_ai_runner.adapters.rep_context_assembler",

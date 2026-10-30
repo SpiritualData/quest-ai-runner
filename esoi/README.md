@@ -266,7 +266,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `select-context:hybrid` | Parallel keyword and vector fusion | quest_ai_runner/adapters/hybrid_context_assembler.py |  |
 | `select-context:bm25` | Exact-content BM25 arm | quest_ai_runner/adapters/bm25_content_store.py |  |
 | `select-context:rep` | Per-agent preference wrapper | quest_ai_runner/adapters/rep_context_assembler.py |  |
-| `select-context:composite` | Ordered assembler composition | quest_ai_runner/core/composite_assembler.py |  |
+| `select-context:composite` | Ordered assembler composition | quest_ai_runner/config_assembler.py |  |
 | `select-context:seeded_keyword_store` | Seeded keyword card-quality arm | evaluation/components/card_quality/impls/seeded_keyword_store.py |  |
 | `select-context:seeded_keyword_open` | Open-gate ablation of the card-quality arm | evaluation/components/card_quality/impls/seeded_keyword_open.py |  |
 | `select-context:live_updater_hybrid` | Live learner plus hybrid store arm | evaluation/components/card_quality/impls/live_updater_hybrid.py |  |

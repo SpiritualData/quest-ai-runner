@@ -97,7 +97,7 @@ from .overseer import (
     build_digest,
     oversee,
 )
-from .card_thread import (
+from hubofhubs.recall.card_thread import (  # the public names a consumer's compat probe keys on; the code lives in the hub
     ACTION_CONTINUE,
     ACTION_NEW,
     ACTION_SWITCH,
@@ -123,7 +123,7 @@ from .card_thread import (
 )
 from .context_doctrine import CARD_LIFECYCLE_GATE, CARD_THREAD_GATE
 from .turn_context_store import TurnContextStore
-from .composite_assembler import CompositeContextAssembler
+from hubofhubs.recall.composite_assembler import CompositeContextAssembler
 
 __all__ = [
     # adapters / value objects

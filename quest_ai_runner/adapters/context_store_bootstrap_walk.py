@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import card_origin
 from .card_store_mounts import MODE_MOUNT
-from ..core.background_pacing import Pacer
+from hubofhubs.recall.background_pacing import Pacer
 from .card_content_render import tokenize as _tokenize
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 from .context_bootstrap_support import (

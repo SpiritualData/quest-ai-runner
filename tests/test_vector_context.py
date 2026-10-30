@@ -1763,7 +1763,7 @@ class TestResolveContextAssemblerSeedSourceWiring:
         assembler = resolve_context_assembler(cfg)
         # resolve_context_assembler now returns a CompositeContextAssembler wrapping
         # [HybridContextAssembler, TurnContextStore]. Unwrap to find the hybrid arm.
-        from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+        from hubofhubs.recall.composite_assembler import CompositeContextAssembler
         assert isinstance(assembler, CompositeContextAssembler), (
             f"expected CompositeContextAssembler, got {type(assembler)!r}"
         )
@@ -2480,7 +2480,7 @@ class TestVectorBackendEnvSwitch:
             f"{[r.getMessage() for r in qdrant_records]}"
         )
         # And the resolved assembler has no vector (hybrid) arm.
-        from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+        from hubofhubs.recall.composite_assembler import CompositeContextAssembler
         assert isinstance(assembler, CompositeContextAssembler)
         assert not any(
             isinstance(a, HybridContextAssembler) for a in assembler._assemblers

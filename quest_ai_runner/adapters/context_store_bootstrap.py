@@ -19,7 +19,7 @@ from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames, sk
 from .card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
 from . import card_origin
 from .bootstrap_reporter import mark_bootstrap_completed
-from ..core.background_pacing import Pacer
+from hubofhubs.recall.background_pacing import Pacer
 from hubofhubs.filemodes import match_umask
 from .context_bootstrap_support import (
     _BOOTSTRAP_MAX_BYTES,

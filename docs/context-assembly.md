@@ -599,7 +599,7 @@ def _last_transcript(self) -> str:
 
 ### CompositeContextAssembler
 
-`quest_ai_runner.core.composite_assembler.CompositeContextAssembler` wraps multiple
+`hubofhubs.recall.composite_assembler.CompositeContextAssembler` wraps multiple
 `ContextAssembler` instances into one. It calls each on `assemble()` (concatenating non-empty
 `context_view` strings with a double newline separator), merges `card_ids` and `stale` lists,
 and calls each on `record()` best-effort (never raises). This is how turn cards compose with
@@ -607,7 +607,7 @@ file cards or any other assembler:
 
 ```python
 from quest_ai_runner.core.turn_context_store import TurnContextStore
-from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+from hubofhubs.recall.composite_assembler import CompositeContextAssembler
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 file_store = FileContextStore(cards_dir=".quest-context/cards")
@@ -804,7 +804,7 @@ wait rather than a silent one:
   subgoals each still assemble for their own focus.
 - A search the turn has stopped waiting for keeps running, because its index is what makes the next
   turn fast. It does not starve the rest of the process: past the soft deadline the keyword index
-  build calls a `Pacer` (`core/background_pacing.py`), a real 2 ms pause after each 30 ms of work.
+  build calls a `Pacer` (`hubofhubs.recall.background_pacing`), a real 2 ms pause after each 30 ms of work.
   The prewarm and the vector seed export use the same pacer. (`time.sleep(0)` does not work: with a
   busy thread beside it, a thread's 3,000 blocking calls took 7.4 s with `sleep(0)` every 200 items
   and 8.1 s without, against 35 ms with the pause.)

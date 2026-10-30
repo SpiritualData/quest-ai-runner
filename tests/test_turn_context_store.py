@@ -1,7 +1,7 @@
 """Offline tests for TurnContextStore and CompositeContextAssembler."""
 import pytest
 from quest_ai_runner.core.turn_context_store import TurnContextStore
-from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+from hubofhubs.recall.composite_assembler import CompositeContextAssembler
 from hubofhubs.ports.context import AssembledContext
 
 

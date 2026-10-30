@@ -61,7 +61,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from esoi import implementation
 from ..core.adapters_values import Observation
 from ..core.adapters_bases import RetrievalAdapterBase
-from .tfdfidf_sampling import keywords_from_text
+from hubofhubs.recall.text_sampling import keywords_from_text
 
 log = logging.getLogger("quest-ai-runner.notion")
 

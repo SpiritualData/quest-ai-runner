@@ -82,8 +82,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
 from esoi import implementation
-from .date_bounds import parse_date_bound, timestamp_in_range
-from .text_sampling import keywords_from_text
+from hubofhubs.recall.date_bounds import parse_date_bound, timestamp_in_range
+from hubofhubs.recall.text_sampling import keywords_from_text
 from quest_ai_runner.core.scope_tags import scope_tags_allow, scope_tags_from_keys
 from hubofhubs.filemodes import match_umask
 

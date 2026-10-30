@@ -70,7 +70,7 @@ from .conversation_format import (
     conversation_to_text,
     resolve_conv_key,
 )
-from .tfdfidf_sampling import extract_terms, keywords_from_text, select_representatives
+from hubofhubs.recall.text_sampling import extract_terms, keywords_from_text, select_representatives
 
 _log = logging.getLogger("quest-ai-runner.google-chat")
 

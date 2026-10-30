@@ -20,7 +20,7 @@ from .card_content_render import (
     tokenize as _tokenize,
 )
 from .card_repository import card_embed_text
-from ..core.background_pacing import Pacer
+from hubofhubs.recall.background_pacing import Pacer
 from ..core.scope_tags import union_scope_tags
 from ..core.vector_scopes import SeedItems
 from .context_card_extraction import _card_slug, _managed_names, _trim_content_by_recency

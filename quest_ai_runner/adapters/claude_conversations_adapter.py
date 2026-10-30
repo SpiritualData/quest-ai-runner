@@ -32,7 +32,7 @@ from .conversation_format import (
     timestamp_in_range,
     truncate_transcript_middle,
 )
-from .tfdfidf_sampling import extract_terms, keywords_from_text, select_representatives
+from hubofhubs.recall.text_sampling import extract_terms, keywords_from_text, select_representatives
 from .card_scoped_learning import (
     active_card_terms,
     gate_terms,

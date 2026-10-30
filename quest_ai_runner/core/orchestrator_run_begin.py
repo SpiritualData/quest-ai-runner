@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .adapters_events import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
 from .adapters_values import PlanDecision, ProgressEvent
-from .card_thread import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
+from hubofhubs.recall.card_thread import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
 from .context_doctrine import CACHED_HINT_GATE
 from .guard import ExecutionRecord
 from .orchestrator_capabilities import (

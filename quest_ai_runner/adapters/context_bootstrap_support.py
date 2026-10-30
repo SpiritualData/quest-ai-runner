@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 from .card_store_identity import identity_of
 from hubofhubs.filemodes import match_umask
-from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
+from hubofhubs.recall.text_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
 
 
 _log = logging.getLogger("quest-ai-runner.context")

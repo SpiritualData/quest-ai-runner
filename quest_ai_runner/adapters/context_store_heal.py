@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Callable, Optional
 
-from ..core.background_pacing import Pacer
+from hubofhubs.recall.background_pacing import Pacer
 from . import card_limit as limit_mod
 from . import card_store_hygiene as hygiene
 from . import card_store_tidy as tidy
