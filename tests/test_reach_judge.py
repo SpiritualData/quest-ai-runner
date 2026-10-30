@@ -32,6 +32,7 @@ from quest_ai_runner.core.orchestrator_capabilities import provider_call_accepts
 from quest_ai_runner.core.reach_judge import (
     OUTSIDE_UNCOVERED_LINE,
     OUTSIDE_UNCOVERED_LINE_WEB,
+    REACH_JUDGE_TOOL,
     REACH_VERDICTS,
     VERDICT_HEADING,
     WEB_REACH_NOTE,
@@ -271,11 +272,16 @@ _PRE_CHANGE_JUDGE_PROMPT_NO_WEB = (
     'Decide ONE thing about the request below, and nothing else. Do not answer it and do not plan it.\n\nWHAT THIS ASSISTANT CAN REACH:\na short summary\n\nTHE REQUEST:\ncheck the latest score\n\n"outside": doing or answering this needs a machine or server and its files, folders, processes,\n  jobs, logs or quotas; a code repository; or a document, spreadsheet, drive or service held\n  somewhere other than the readable sources above. Set "covered_by" to the environment whose\n  description covers that kind of work on that place, or null when none of them does.\n"world": it asks for a current public fact about the world (news, a price, the weather, a result,\n  what is happening now). General knowledge the assistant simply knows is NOT this.\n"inside": everything it needs is in the readable sources above.\n\nJUDGE WHERE THE ANSWER LIVES, NOT WHERE THE WORK HAPPENED. A request about someone\'s own or their\nteam\'s work, plans, goals, tasks, records or progress is "inside" even when the work it describes\nis carried out elsewhere: the answer is in the records above. "How is that piece of work going",\n"what is the team on this week", "what is still open", "remind me to do X" are all "inside". It is\n"outside" only when the request needs you to INSPECT OR CHANGE the other place itself. A request\nthat merely RECORDS a fact about another place into these records is also "inside".\n'
 )
 
+ASKS_CHANGE_PARAGRAPH = (
+    'ALSO set "asks_change": true if it asks you to do, make, send or change something (a polite "can you"\n'
+    'or a bare defect report counts); false if it only asks a question or shares news.\n'
+)
+
 
 def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
     prompt_default = judge_prompt("check the latest score", "a short summary")
     # Unchanged apart from the no-em-dash rule every registered prompt now carries.
-    assert prompt_default == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB.rstrip() + "\n\n" + NO_EM_DASH_RULE
+    assert prompt_default == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB + ASKS_CHANGE_PARAGRAPH + "\n" + NO_EM_DASH_RULE
     prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
                                          web_configured=False)
     assert prompt_explicit_false == prompt_default
@@ -295,6 +301,16 @@ def test_judge_prompt_web_note_has_blank_line_framing():
     same blank-line paragraph framing; the web-off rendering is untouched, pinned above."""
     prompt = judge_prompt("check the latest score", "a short summary", web_configured=True)
     assert "above.\n\n" + WEB_REACH_NOTE + "\n\nJUDGE WHERE" in prompt
+
+
+def test_asks_change_is_kept_only_when_the_judge_answered_it_with_a_boolean():
+    assert normalize_verdict({"reach": "inside", "asks_change": False}) == {
+        "reach": "inside", "covered_by": None, "asks_change": False}
+    assert normalize_verdict({"reach": "inside", "asks_change": True})["asks_change"] is True
+    for garbled in ("false", "no", 0, 1, None, ["x"]):
+        assert "asks_change" not in normalize_verdict({"reach": "inside", "asks_change": garbled}), garbled
+    assert REACH_JUDGE_TOOL["input_schema"]["properties"]["asks_change"]["type"] == "boolean"
+    assert "asks_change" not in REACH_JUDGE_TOOL["input_schema"]["required"]   # a missing one is unknown, not a failure
 
 
 # ---------------------------------------------------------------------------

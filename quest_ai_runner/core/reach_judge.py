@@ -58,6 +58,7 @@ REACH_JUDGE_TOOL: Dict[str, Any] = {
                 "description": "With 'outside': the name of the environment whose description "
                                "covers that kind of work on that place, or null if none does.",
             },
+            "asks_change": {"type": "boolean", "description": "Whether it asks for something to be done."},
         },
         "required": ["reach"],
     },
@@ -86,6 +87,8 @@ is carried out elsewhere: the answer is in the records above. "How is that piece
 "what is the team on this week", "what is still open", "remind me to do X" are all "inside". It is
 "outside" only when the request needs you to INSPECT OR CHANGE the other place itself. A request
 that merely RECORDS a fact about another place into these records is also "inside".
+ALSO set "asks_change": true if it asks you to do, make, send or change something (a polite "can you"
+or a bare defect report counts); false if it only asks a question or shares news.
 """
 
 #: What the planner is told when the work is out of reach AND something can do it.
@@ -143,7 +146,8 @@ WEB_REACH_NOTE = (
 
 
 def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
-    """A judge response reduced to ``{"reach": ..., "covered_by": ...}``, or None.
+    """A judge response reduced to ``{"reach": ..., "covered_by": ...}``, or None. ``"asks_change"`` is added only when
+    the judge answered it with a real boolean, so a missing or garbled one stays unknown rather than becoming False.
 
     None means "no usable verdict", and the planner then runs exactly as it would have with no
     judge at all. Every failure path leads here on purpose: an unparseable answer, a hallucinated
@@ -159,7 +163,10 @@ def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
     covered = covered.strip() if isinstance(covered, str) and covered.strip() else None
     if covered and covered.lower() in ("null", "none", "n/a"):
         covered = None
-    return {"reach": reach.strip().lower(), "covered_by": covered}
+    verdict = {"reach": reach.strip().lower(), "covered_by": covered}
+    if isinstance(raw.get("asks_change"), bool):
+        verdict["asks_change"] = raw["asks_change"]
+    return verdict
 
 
 def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000, *,

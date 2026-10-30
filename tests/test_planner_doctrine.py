@@ -59,6 +59,10 @@ def test_the_situation_is_built_from_structured_state_only():
     for intent in ("ask", "inform", "hold_off"):
         assert planner_situation(turn_facts={"user_intent": intent}).asks_change is False
     assert planner_situation(turn_facts={"user_intent": None}).asks_change is None
+    assert planner_situation(asks_change=False).asks_change is False and planner_situation(asks_change=True).asks_change
+    assert planner_situation(asks_change=False, turn_facts={"user_intent": "act"}).asks_change is True    # any "change" wins
+    assert planner_situation(asks_change=True, turn_facts={"user_intent": "ask"}).asks_change is True
+    assert planner_situation(asks_change=False, turn_facts={"user_intent": "ask"}).asks_change is False
     assert planner_situation(turn_facts={"runs_in_flight": 0}).run_in_progress is False
     assert planner_situation(turn_facts={"runs_in_flight": 2}).run_in_progress is True
     assert planner_situation(turn_facts={"runs_in_flight": None}).run_in_progress is None
@@ -106,3 +110,17 @@ def test_the_reach_verdict_picks_the_hand_off_doctrine():
         orch.reach_verdict = lambda message, v=verdict: {"reach": v} if v else None
         orch._plan("do the thing", "", "ctx", [])
         assert (mark in provider.prompts[-1]) is expected, verdict
+
+
+def test_the_reach_judge_rules_the_change_rules_out_on_the_first_step_and_failing_keeps_them():
+    from .test_reach_judge import DispatchingProvider
+    for reach_response, gone in (({"reach": "inside", "asks_change": False}, True),
+                                 ({"reach": "inside", "asks_change": True}, False),
+                                 ({"reach": "inside"}, False), ("garbage", False)):
+        provider = DispatchingProvider(reach_response, {"action": "answer", "rationale": "ok"})
+        orch = build(provider, planner_prompt_profile=SITUATIONAL_PROFILE, planner_reach_judge=True,
+                     read_reach_summary="Can read local notes.")
+        orch._plan("what is still open on my list", "", "ctx", [])
+        prompt = provider.prompts[-1]
+        assert (DEEP_MARK not in prompt and CHANGE_MARK not in prompt) is gone, reach_response
+        assert "QUESTION vs STATEMENT vs COMMAND" in prompt

@@ -333,9 +333,13 @@ The backend does not send `work_types` yet; until it does only `env_id` triggers
 `planner_prompt_profile = "situational"` assembles the planner prompt per turn from only the rules that apply
 (`PLANNER_RULES` in `core/planner_prompt.py`, the situation in `core/planner_doctrine.py`, the generic assembler in the hub's
 `hubofhubs.doctrine`). Each rule is a section of the full prompt, wording unchanged, plus a condition over structured facts:
-`mode` (normal, brainstorm, hold_off), `deep_available`, `run_in_progress` (a count the consumer passes as
-`context_meta["runs_in_flight"]`), `reach` (the reach judge's verdict), `tools_offered`, `asks_change` (the planner's own
-`user_intent` verdict from an earlier step, so step 0 does not know it) and `has_material`. A fact the turn does not know is
+`mode` (normal, brainstorm, hold_off), `deep_available`, `run_in_progress`, `reach` (the reach judge's verdict),
+`tools_offered`, `asks_change` and `has_material`. `asks_change` is the reach judge's boolean on the person's own message
+(the same one small call, run before the first plan) or the planner's `user_intent` "act" from an earlier step; either one
+saying "change" keeps the rules, and a judge that is off, fails or times out leaves it unknown. `run_in_progress` comes from
+`context_meta["runs_in_flight"]`, a key the consumer supplies (QAR never sets it, like `tool_pins` or `scope_tags`): the
+number of runs of this conversation in flight, 0 for none. Until a consumer sends it the fact is unknown and `work-in-progress`
+stays in every turn. A fact the turn does not know is
 None and keeps the rule, so a rule leaves only on a positive reason, and nothing is gated on words the model wrote. The
 default stays "full", which is every rule in order and byte-identical to the old prompt.
 
@@ -361,9 +365,9 @@ the tools block and the frame, without the decide schema): a brainstorm or hold-
 profile, a question after the first step with the reach judge saying "inside" 32 percent smaller, a cold first step 0 percent
 (it knows nothing yet). The 54 classification cases, each with the facts its label implies, keep every rule their expected
 route depends on (`ROUTE_RULES` in `evaluation/components/prompt_size/score.py`) and are 11 percent smaller on average. Whether
-the smaller prompts route as well is the paid comparison of full, compact and situational, not yet run. Open: a first-step
-`asks_change` needs a judge call before planning (`judge_execution_directive` exists but is a model call); until then the
-first step, the largest prompt, keeps the change-authoring rules.
+the smaller prompts route as well is the paid comparison of full, compact and situational, not yet run. A first step with the judge
+saying no change was asked drops 7 rules (a question about the person's own records: 10,404 tokens down to 7,893, 24 percent, and 30 percent under the full profile's 11,240). The
+judge's `asks_change` accuracy is measured in the paid pass, not yet run.
 
 
 ## Planner prompt design notes (moved from comments in `core/planner_prompt.py`)

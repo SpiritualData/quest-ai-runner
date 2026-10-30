@@ -31,7 +31,7 @@ from .auxiliary_prompts import (
     VERIFY_WEB_EVIDENCE_NOTE,
 )
 from .link_guard import LinkGuard, build_link_guard, evidence_text
-from hubofhubs.ports.model import STEP_JUDGE, STEP_SUMMARIZE, STEP_VERIFY, answer_with_reasoning, plan_with_step
+from hubofhubs.ports.model import STEP_JUDGE, STEP_SUMMARIZE, STEP_VERIFY, plan_with_step
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .card_filter import _extract_json
 from .planner_context import _is_discovery_obs, _render_gathered, cap_section
@@ -58,42 +58,6 @@ from .orchestrator_text import clip_head_and_tail
 
 class JudgesMixin:
     """Verification and the small judges: goal check, link guard, directive, quest and brainstorm release."""
-
-    # --- execution directive detection (LLM-based, FORCE deep when user explicitly rejects planning) ----
-
-    def _detect_execution_directive(self, user_message: str) -> bool:
-        """True iff the user has EXPLICITLY demanded execution over planning.
-
-        Uses a fast LLM call (haiku) to classify whether the message contains
-        a directive to execute/implement/build rather than plan/analyze.
-
-        This is flexible and maintains naturally — no brittle keyword lists.
-        """
-        if not user_message or len(user_message.strip()) < 10:
-            return False
-
-        # Fast classification call (haiku tier)
-        classify_prompt = (
-            "Classify this user message as EXECUTION or ANALYSIS.\n\n"
-            "EXECUTION: user explicitly demands you DO work (code it, implement, build, execute, "
-            "fix it, apply changes, make it happen, just do it, no more planning, etc.)\n\n"
-            "ANALYSIS: user asks you to think/plan/review/explain/understand (not to execute)\n\n"
-            f"Message: {user_message}\n\n"
-            "Answer ONLY 'EXECUTION' or 'ANALYSIS':"
-        )
-
-        try:
-            model = self.registry.resolve_tier("haiku")
-            provider = self.get_provider_for_model(model)
-            result = answer_with_reasoning(
-                provider,
-                [{"role": "user", "content": classify_prompt}],
-                model=model,
-                step=STEP_JUDGE,
-            )
-            return result and "EXECUTION" in result.upper()
-        except Exception:  # noqa: BLE001 — classification failure → assume not an execution directive
-            return False
 
     # --- our own goal verification (replaces Claude Code's /goal) -------------
 

@@ -17,7 +17,6 @@ core/orchestrator_answering.py::AnsweringMixin._grounded_answer
 core/orchestrator_answering.py::AnsweringMixin._synthesize_after_deep
 core/orchestrator_answering.py::AnsweringMixin._synthesize_after_queued
 core/orchestrator_cards.py::CardsMixin._call_card_updater
-core/orchestrator_judges.py::JudgesMixin._detect_execution_directive
 core/orchestrator_planning.py::PlanningMixin._plan
 core/orchestrator_planning.py::PlanningMixin.cascade_review
 core/orchestrator_planning.py::PlanningMixin.judge_reach

@@ -157,6 +157,7 @@ class PlanningMixin:
                 brainstorm=brainstorm, user_vetoed_task=user_vetoed_task,
                 deep_available=True if (self.deep_runner or self.deep_runner_ladder or self.deep_runners) else None,
                 tools_offered=self.tools is not None, reach=(reach or {}).get("reach"),
+                asks_change=(reach or {}).get("asks_change"),
                 has_material=bool((context_view or "").strip() or gathered), turn_facts=turn_facts)).text
         # MODEL TIER DISCIPLINE is only worth its tokens when some wired deep runner actually runs
         # against the ladder it describes (see ``model_tier_doctrine_applies``); otherwise it is
