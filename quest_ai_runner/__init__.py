@@ -7,7 +7,11 @@ Consumers supply everything specific via ``quest_ai_runner.config.RunnerConfig``
 """
 from typing import TYPE_CHECKING, Optional
 
-from . import adapters, config, core, resources, runner
+from .hub_path import ensure_hub
+
+ensure_hub()   # before anything imports hubofhubs: an environment built before it was required still starts
+
+from . import adapters, config, core, resources, runner  # noqa: E402
 from .adapters.claude_cli_provider import cli_model as _cli_model
 from .runner.quest_client import quest_client_from_env as _quest_client_from_env
 
