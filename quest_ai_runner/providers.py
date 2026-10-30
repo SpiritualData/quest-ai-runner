@@ -60,6 +60,21 @@ def deepseek(env: Mapping[str, str]) -> DeepSeekProvider:
                             thinking=flag(env, "DEEPSEEK_THINKING"), env_name="DEEPSEEK_API_KEY")
 
 
+def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
+    """The prepaid-credit rows the hub's tier selector counts, from ``QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD`` (the monthly allowance, in
+    USD) and ``QAR_ANTHROPIC_CREDIT_VALUE`` (0 to 1: what a credit is worth if not used here; unset means face value, 1). Unset
+    allowance means no credit is counted. The hub holds no organization's allowance; this is where QAR's deployment supplies it."""
+    env = os.environ if env is None else env
+    try:
+        allowance = float((env.get("QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD") or "").strip())
+    except ValueError:
+        return []
+    if allowance <= 0:
+        return []
+    return [{"provider": "anthropic", "balance": "", "allowance": str(allowance),
+             "credit_value": (env.get("QAR_ANTHROPIC_CREDIT_VALUE") or "").strip(), "currency": "USD", "period": "monthly"}]
+
+
 def make_provider(name: str, env: Optional[Mapping[str, str]] = None) -> Any:
     """The vendor provider ``name`` (anthropic, gemini, openai or deepseek) configured from ``env`` (default: the process environment)."""
     return resolve("call-a-model", name)(os.environ if env is None else env)

@@ -36,3 +36,25 @@ def test_a_missing_key_names_the_variable_to_set(name, variable, monkeypatch):
     monkeypatch.setitem(sys.modules, "google.genai", google.genai)
     with pytest.raises(RuntimeError, match=variable):
         make_provider(name, {}).get_client()
+
+
+def test_the_credit_rows_come_from_the_two_credit_variables_and_nothing_set_means_none():
+    from quest_ai_runner.providers import credits_from_environment
+    assert credits_from_environment({}) == [] and credits_from_environment({"QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD": "not a number"}) == []
+    assert credits_from_environment({"QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD": "0"}) == []
+    [row] = credits_from_environment({"QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD": "150"})
+    assert (row["provider"], row["allowance"], row["credit_value"]) == ("anthropic", "150.0", "")       # unset value: face value
+    [row] = credits_from_environment({"QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD": "150", "QAR_ANTHROPIC_CREDIT_VALUE": "0.5"})
+    assert row["credit_value"] == "0.5"
+
+
+def test_the_environment_credit_reaches_the_tier_selector_the_way_the_hub_counts_it(monkeypatch):
+    from hubofhubs import tiers
+    from quest_ai_runner.core import model_registry
+    from quest_ai_runner.providers import credits_from_environment
+    monkeypatch.setenv("QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD", "200")
+    monkeypatch.setenv("QAR_ANTHROPIC_CREDIT_VALUE", "0.5")
+    assert model_registry.credit_source is credits_from_environment or model_registry.credit_source() == credits_from_environment()
+    assert tiers.credit_of(model_registry.credit_source(), "anthropic") == (200.0, 0.5)
+    monkeypatch.delenv("QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD")
+    assert tiers.credit_of(model_registry.credit_source(), "anthropic") == (0.0, 1.0)

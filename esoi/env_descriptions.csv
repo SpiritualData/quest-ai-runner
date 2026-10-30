@@ -2,6 +2,8 @@ variable,description
 CLAUDE_CONFIG_DIR,Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir.
 MAX_THINKING_TOKENS,Claude Code variable the CLI provider sets to cap extended thinking on plan() calls (0 turns thinking off).
 OPENAI_API_KEY,OpenAI key: registers the OpenAI provider and the OpenAI embedder.
+QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD,"Monthly prepaid Anthropic credit in USD that the hub tier selector counts as cost-lowering when it ranks measured arms; unset or 0 counts no credit. The hub ships no allowance, this is the deployment's own."
+QAR_ANTHROPIC_CREDIT_VALUE,"What an Anthropic credit is worth if not used here, 0 to 1 (lower when it expires unused); unset counts it at face value (1), the reading that never understates cost."
 QAR_ASYNC_CARD_UPDATE,Default on; 0/false/off disables updating cards from a deep run's edits in the background.
 QAR_AUTOPILOT_ADOPT_RECURRING,1/true sets RunnerConfig.autopilot_adopt_recurring: a recurring task is adopted as the quest's pass.
 QAR_AUTOPILOT_PASS_TIME,Default daily local time (HH:MM) of the autopilot pass; sets RunnerConfig.autopilot_pass_time.

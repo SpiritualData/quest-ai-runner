@@ -71,6 +71,43 @@ TIER_DOWNGRADE_ORDER = {
 # reachable only by an explicit pin.
 HUB_TIER_OF = {"fast": "cheap", "balanced": "cheap", "quality": "mid", "best": "mid"}
 
+# The bars a measured arm must clear before it replaces what the live list gives: enough shared cases, and a pass rate that
+# would not make the answers worse. Below them nothing changes.
+TIER_MIN_CASES = 10
+TIER_MIN_PASS_RATE = 0.9
+
+
+def no_credits() -> list:
+    return []
+
+
+# Where the credit rows come from (``provider``, ``balance``, ``allowance``, ``credit_value``). Core reads no environment: the
+# package wiring installs the source that does (``set_credit_source``); none installed means no credit is counted.
+credit_source = no_credits
+
+
+def set_credit_source(source) -> None:
+    global credit_source
+    credit_source = source or no_credits
+
+
+def measured_pick(got: dict, min_pass_rate: float) -> bool:
+    """Whether the selector's pick for a tier came from a measurement that clears the bars (and not from a held default or the
+    cheapest price, which are preferences)."""
+    arm = tuple(got.get("arm") or ())
+    return bool(arm) and any((s["provider"], s["model"]) == arm and s.get("eligible") and s["pass_rate"] >= min_pass_rate
+                             for s in got.get("scored", []))
+
+
+def measured_picks(available: set, credits) -> Dict[str, str]:
+    """QAR tier -> model id for each tier whose hub pick is MEASURED; a tier with no measurement is absent, so the live list or the
+    pin decides it. Balanced is dropped when it would equal fast, so stepping down a tier on a quota error still changes model."""
+    picks = hub_tiers.choose(available=available, credits=credits, min_cases=TIER_MIN_CASES, min_pass_rate=TIER_MIN_PASS_RATE)
+    out = {t: picks[h]["arm"][1] for t, h in HUB_TIER_OF.items() if h in picks and measured_pick(picks[h], TIER_MIN_PASS_RATE)}
+    if out.get("balanced") and out.get("balanced") == out.get("fast"):
+        del out["balanced"]
+    return out
+
 
 def configured_providers(providers) -> set:
     """The names of the providers that hold a key (or a keyless endpoint): the only ones the tier selector may offer."""
@@ -261,6 +298,7 @@ class ModelRegistry:
         fallback: Optional[Dict[str, str]] = None,
         providers: Optional[Dict[str, ModelProvider]] = None,
         provider_overrides: Optional[Dict[str, str]] = None,
+        credits: Optional[list] = None,
     ):
         """Initialize ModelRegistry with optional multi-provider support.
 
@@ -270,6 +308,7 @@ class ModelRegistry:
             providers: Optional dict of provider_name -> ModelProvider for multi-provider
             provider_overrides: Optional dict of tier -> provider_name for per-tier routing
                                (e.g. {"best": "anthropic", "fast": "gemini"})
+            credits: Optional credit rows for the tier selector (default: ``credit_source()``)
         """
         self._provider = provider
         self._providers = providers or {}
@@ -280,17 +319,28 @@ class ModelRegistry:
         # Names ``resolve_tier`` has already warned about substituting, so the warning names each
         # distinct one once rather than on every call.
         self._warned_unknown_tiers: set = set()
+        self._credits = credits
         self._selected: Dict[str, str] = {}
-        self._selected_for: Optional[set] = None
+        self._selected_for: Optional[tuple] = None
 
     def selected(self) -> Dict[str, str]:
-        """tier -> model id chosen by the hub's tier selector (``hubofhubs.tiers.choose``) among the configured providers: the
-        measured winner, else the held default, else the cheapest priced arm. Empty when no provider holds a key."""
-        names = configured_providers(getattr(self._provider, "providers", None) or self._providers)
-        if names != self._selected_for:
-            picks = hub_tiers.choose(available=names) if names else {}
-            self._selected = {t: picks[h]["arm"][1] for t, h in HUB_TIER_OF.items() if picks.get(h, {}).get("arm")}
-            self._selected_for = names
+        """tier -> model id the hub's tier selector (``hubofhubs.tiers.choose``) picked BY MEASUREMENT among the configured
+        providers. A tier with no measurement that clears the bars is absent: the live list or the pin decides it, as before. Never
+        raises: a failing selector leaves the live list in charge."""
+        try:
+            names = configured_providers(getattr(self._provider, "providers", None) or self._providers)
+            credits = list(self._credits if self._credits is not None else credit_source())
+            key = (frozenset(names), repr(credits))
+        except Exception:  # noqa: BLE001 -- resolve_tier never raises
+            log.warning("tier selection skipped: could not read the providers or credits", exc_info=True)
+            return {}
+        if key != self._selected_for:
+            try:
+                self._selected = measured_picks(names, credits) if names else {}
+            except Exception:  # noqa: BLE001 -- a bad registry file must not stop a lane from resolving a model
+                log.warning("tier selection skipped: the hub's selector failed", exc_info=True)
+                self._selected = {}
+            self._selected_for = key
         return dict(self._selected)
 
     def lower_tier(self, tier: str) -> Optional[str]:
@@ -328,7 +378,7 @@ class ModelRegistry:
         if self._cache["source_id"] != cache_key or self._cache["top"] is None:
             self._cache["source_id"] = cache_key
             self._cache["top"] = bucket_top(all_models) if all_models else dict(DEFAULT_FALLBACK_TOP)
-        # The hub's selector replaces the live-list bucketing for every tier it can serve; an explicit pin still wins.
+        # A measured pick from the hub's selector replaces the live-list bucketing for its tier; an explicit pin still wins.
         return {**self._cache["top"], **self.selected(), **self._user_overrides}
 
     @staticmethod
