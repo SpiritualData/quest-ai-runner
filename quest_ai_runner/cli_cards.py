@@ -153,7 +153,7 @@ def undo_repository(repo, cards_dir: Path, manifest: Path) -> int:
 def tidy_cards(cards_dir: Path, *, apply: bool) -> int:
     """List (or, with ``apply``, carry out) the moves the store's own tidy makes. Nothing is ever deleted."""
     from .adapters import card_store_hygiene as hygiene
-    from .adapters.card_store_lock import TIDY_LOCK_FILE, StoreLock
+    from hubofhubs.recall.card_store_lock import TIDY_LOCK_FILE, StoreLock
 
     own_store_id = hygiene.store_id_of(cards_dir)
     plan = hygiene.plan_tidy(hygiene.card_files_in(cards_dir), own_store_id=own_store_id)
@@ -191,7 +191,7 @@ def undo_cards(cards_dir: Path, manifest: Path) -> int:
     """Take back the moves a tidy manifest records. Moving the files back by hand puts the cards back but not
     what was joined onto the cards that stood for them (each joined note would then exist twice); this does both."""
     from .adapters import card_store_hygiene as hygiene
-    from .adapters.card_store_lock import TIDY_LOCK_FILE, StoreLock
+    from hubofhubs.recall.card_store_lock import TIDY_LOCK_FILE, StoreLock
 
     if not manifest.is_file():
         print(f"error: {manifest} is not a file. The manifests are the *-tidy-manifest.jsonl files in "

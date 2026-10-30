@@ -19,7 +19,7 @@ from quest_ai_runner.adapters.composite_retrieval_adapter import CompositeRetrie
 from quest_ai_runner.adapters.files_adapter import FilesAdapter
 from quest_ai_runner.adapters.google_chat_adapter import GoogleChatAdapter
 from quest_ai_runner.adapters.provider_web_search_adapter import ProviderWebSearchAdapter
-from quest_ai_runner.adapters.reference_resolver import collect_reference_resolvers
+from hubofhubs.recall.reference_resolver import collect_reference_resolvers
 
 
 def test_resolvable_adapters_advertise_a_reference_type():

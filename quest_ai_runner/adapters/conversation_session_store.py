@@ -39,7 +39,7 @@ class ChatSessionStore:
     def current_slice(self, conv_id: str, query: str, **kwargs) -> Any:
         try:
             from hubofhubs.ports.context import ConversationContext
-            from .conversation_format import select_current_slice
+            from hubofhubs.recall.conversation_format import select_current_slice
             messages = []
             for u, a in self._history:
                 messages.append({"role": "user", "content": u})

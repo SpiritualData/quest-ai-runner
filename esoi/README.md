@@ -303,7 +303,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `store-feedback:dump_all` | Remember-everything baseline | evaluation/components/feedback_loop/impls/dump_all.py |  |
 | `recall-recent-context:file` | Lexical-gated scoped file store | quest_ai_runner/core/recent_context.py |  |
 | `receive-input-mid-run:in_memory` | In-memory thread-safe inbox | quest_ai_runner/core/inbox.py |  |
-| `resolve-references:note` | Registry of built-in and host resolvers | quest_ai_runner/adapters/reference_resolver.py |  |
+| `resolve-references:note` | Registry of built-in and host resolvers | quest_ai_runner/config_assembler.py |  |
 | `resolve-references:card_resolvers` | Production registry under scripted host resolvers | evaluation/components/resolve_references/impls/card_resolvers.py |  |
 | `cache-cards:null` | Card repository with a cache seam and a null cache | quest_ai_runner/adapters/quest_api_card_repository.py |  |
 | `cache-cards:file` | Durable file cache | quest_ai_runner/adapters/card_cache_file.py |  |

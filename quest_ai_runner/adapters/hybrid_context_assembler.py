@@ -430,7 +430,7 @@ class HybridContextAssembler(ContextAssemblerBase):
         try:
             # Local import keeps the core<-adapter dependency one-directional and avoids any cycle.
             from ..core.card_filter import consolidate_context
-            from .card_content_render import render_block_lines
+            from hubofhubs.recall.card_content_render import render_block_lines
 
             def _block_fragment(blk: dict) -> str:
                 """The exact text a content block contributed to a rendered section (header + indented

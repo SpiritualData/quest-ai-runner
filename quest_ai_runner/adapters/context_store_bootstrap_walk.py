@@ -13,8 +13,9 @@ from pathlib import Path
 from . import card_origin
 from .card_store_mounts import MODE_MOUNT
 from hubofhubs.recall.background_pacing import Pacer
-from .card_content_render import tokenize as _tokenize
-from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
+from hubofhubs.recall.card_content_render import tokenize as _tokenize
+from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
+from .walk_settings import effective_skip_dirs
 from .context_bootstrap_support import (
     _BOOTSTRAP_MAX_BYTES,
     _SOURCE_EXTS,

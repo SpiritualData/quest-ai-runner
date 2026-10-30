@@ -16,7 +16,7 @@ The links pinned here, end to end:
 """
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.adapters.card_content_render import (
+from hubofhubs.recall.card_content_render import (
     locator_label,
     mark_items_used,
     normalize_content,

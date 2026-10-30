@@ -267,7 +267,7 @@
  "resolve-references": {
   "default": "note",
   "modules": {
-   "note": "quest_ai_runner.adapters.reference_resolver"
+   "note": "quest_ai_runner.config_assembler"
   }
  },
  "run-deep-work": {

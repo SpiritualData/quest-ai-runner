@@ -16,6 +16,7 @@ from typing import Any, List
 
 from esoi import implementation
 from hubofhubs.recall.composite_assembler import CompositeContextAssembler
+from hubofhubs.recall.reference_resolver import NoteResolver
 
 from .config_context_index import (
     _bootstrap_if_needed,
@@ -34,6 +35,12 @@ if TYPE_CHECKING:  # typing only: config imports this module, not the other way 
 def composite(assemblers: List[Any]) -> CompositeContextAssembler:
     """QAR's ``select-context`` arm that runs several assemblers in order as one: the hub's composite assembler."""
     return CompositeContextAssembler(assemblers)
+
+
+@implementation("resolve-references", "note")
+def note_resolver() -> NoteResolver:
+    """QAR's ``resolve-references`` built-in for ``note`` items: the hub's note resolver (the registry itself is the hub's ``build_resolver_registry``)."""
+    return NoteResolver()
 
 
 def build_card_repository(cfg: "RunnerConfig", cards_dir: str, *,
@@ -180,7 +187,7 @@ def _resolve_context_assembler_base(
         # the RetrievalAdapter interface). Its OWN ``resolve_reference`` IS the resolver for its type,
         # so e.g. a wired ``GoogleChatAdapter`` makes its learned ``chat_thread`` references resolve
         # FRESH with no extra config. Consumer-supplied ``cfg.reference_resolvers`` win a collision.
-        from .adapters.reference_resolver import collect_reference_resolvers
+        from hubofhubs.recall.reference_resolver import collect_reference_resolvers
         _store_resolvers = {
             **collect_reference_resolvers(cfg.retrieval),
             **(cfg.reference_resolvers or {}),

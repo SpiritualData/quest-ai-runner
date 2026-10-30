@@ -737,7 +737,7 @@ def apply_tidy(cards_dir: Path, plan: TidyPlan, pace: Pace = no_pace,
     names the card that stands for the one that moved and what was joined onto it, which is what
     ``undo_tidy`` needs to take the move back. Never deletes.
     """
-    from .card_store_lock import StoreLock
+    from hubofhubs.recall.card_store_lock import StoreLock
     result = TidyResult()
     lock = StoreLock.for_dir(str(cards_dir))
     manifest = cards_dir / QUARANTINE_DIR_NAME / (
@@ -820,7 +820,7 @@ def undo_tidy(cards_dir: Path, manifest: Path, pace: Pace = no_pace) -> UndoResu
     and counted. Moving the files back by hand puts the cards back but not what was joined onto their
     keepers, so each joined note would then exist twice; this is the undo that is exact.
     """
-    from .card_store_lock import StoreLock
+    from hubofhubs.recall.card_store_lock import StoreLock
     result = UndoResult()
     lock = StoreLock.for_dir(str(cards_dir))
     lines: List[Dict[str, Any]] = []
@@ -923,7 +923,7 @@ class Health:
 def indexable_folders(root: Path) -> int:
     """How many directories of the corpus hold an indexable file at any depth: the most places a topic
     card can be about (a card is about the deepest folder its files share). A fact about the corpus."""
-    from ._walk import effective_skip_dirs
+    from .walk_settings import effective_skip_dirs
     from .context_folder_review import _dir_file_counts
     keys: Set[str] = set()
     for rel in _dir_file_counts(root, effective_skip_dirs(root)):

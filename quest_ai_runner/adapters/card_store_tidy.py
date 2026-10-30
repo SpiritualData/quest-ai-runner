@@ -285,13 +285,13 @@ class RepositoryTidy:
     def folder_lock(self):
         """The local folder's write lock (shared with every process writing it), or nothing for a backend."""
         if is_local_folder(self.repo):
-            from .card_store_lock import StoreLock
+            from hubofhubs.recall.card_store_lock import StoreLock
             return StoreLock.for_dir(str(self.cards_dir))
         return contextlib.nullcontext()
 
     def process_lock(self):
         """Held for a whole tidy or undo, so two processes never tidy one store together."""
-        from .card_store_lock import TIDY_LOCK_FILE, StoreLock
+        from hubofhubs.recall.card_store_lock import TIDY_LOCK_FILE, StoreLock
         where = self.cards_dir if is_local_folder(self.repo) else private_dir(self.state_dir)
         return StoreLock.for_dir(str(where), TIDY_LOCK_FILE)
 

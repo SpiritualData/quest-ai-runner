@@ -50,7 +50,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from esoi import implementation
 from ..core.adapters_bases import ContextAssemblerBase
-from .card_content_render import (
+from hubofhubs.recall.card_content_render import (
     MAX_CARD_REF_CHARS as _MAX_CARD_REF_CHARS,
     MAX_CARD_REFS as _MAX_CARD_REFS,
     tokenize as _tokenize,
@@ -321,7 +321,7 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         # are consumer-injected via ``reference_resolvers``. An un-wired type degrades to a graceful
         # unresolved-pointer line at render time (never an error). Local import avoids any cycle.
         try:
-            from .reference_resolver import build_resolver_registry
+            from hubofhubs.recall.reference_resolver import build_resolver_registry
             self._resolvers: Dict[str, Any] = build_resolver_registry(
                 file_read_text=self._read_file_fresh,
                 consumer_resolvers=reference_resolvers,

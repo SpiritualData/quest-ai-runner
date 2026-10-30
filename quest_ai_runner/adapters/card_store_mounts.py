@@ -56,7 +56,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from hubofhubs.ports.context import VectorHit
 from ..core.adapters_bases import VectorStoreBase
-from ._walk import effective_skip_dirs, prune_dirnames
+from hubofhubs.recall.walk import prune_dirnames
+from .walk_settings import effective_skip_dirs
 from .card_repository import CardRepository, FilesystemCardRepository
 from .card_store_identity import (
     BOOTSTRAP_META_FILE,

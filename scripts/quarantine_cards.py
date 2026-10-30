@@ -104,7 +104,7 @@ from quest_ai_runner.adapters.card_store_hygiene import (  # noqa: E402,F401  (r
     settle_move,
     store_id_of,
 )
-from quest_ai_runner.adapters.card_store_lock import StoreLock  # noqa: E402
+from hubofhubs.recall.card_store_lock import StoreLock  # noqa: E402
 from quest_ai_runner.adapters.card_store_hygiene import in_quarantine  # noqa: E402
 from quest_ai_runner.adapters.card_store_tidy_plan import (  # noqa: E402,F401  (re-exported)
     ALL_REASONS,

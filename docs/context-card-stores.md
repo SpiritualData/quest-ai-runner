@@ -440,7 +440,7 @@ the limit and counted. The limit never trims a store by itself: the [tidy](#tidy
   exchange the regenerable cards for learned ones for good. The card is admitted and counted as kept above the
   limit, and the report says so. The limit never trims a store it finds above it; only the tidy of provable
   duplicates (see below) or the cleanup script removes anything from it;
-- the folder's lock (`.store.lock`, `adapters/card_store_lock.py`) is shared by every process that changes
+- the folder's lock (`.store.lock`, `hubofhubs.recall.card_store_lock`) is shared by every process that changes
   the folder (the lanes, a terminal chat, a tidy), so four writers at the limit still end at the limit and
   every move is counted once. Nothing done while it is held is proportional to the size of the store: the
   count is a listing of file names, remembered until the folder changes; the cold cards that may move are

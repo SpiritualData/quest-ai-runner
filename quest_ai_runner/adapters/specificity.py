@@ -53,7 +53,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Sequence, Set
 
-from .card_content_render import tokenize
+from hubofhubs.recall.card_content_render import tokenize
 
 # A query term counts as "distinguishing" (named in the label, and the basis of the on-subject
 # judgement) when its neighborhood-IDF weight is at least this fraction of the query's TOP weight.

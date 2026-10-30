@@ -14,8 +14,9 @@ from pathlib import Path
 
 from .card_repository import FilesystemCardRepository
 from .card_store_mounts import MODE_MOUNT, resolve_mounts
-from .card_content_render import MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_CHARS
-from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames, skip_subtrees
+from hubofhubs.recall.card_content_render import MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_CHARS
+from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames, skip_subtrees
+from .walk_settings import effective_skip_dirs
 from .card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
 from . import card_origin
 from .bootstrap_reporter import mark_bootstrap_completed

@@ -79,12 +79,12 @@ from ..core.adapters_bases import ContextAssemblerBase
 from ..core.card_filter import _memo_get, _memo_put, _selection_key
 from ..core.scope_tags import scope_tags_allow
 from ..core.vector_scopes import CARD_SEED_SCOPE
-from .card_content_render import (
+from hubofhubs.recall.card_content_render import (
     render_card_content,
     render_card_content_blocks,
     tokenize as _tokenize,
 )
-from .reference_resolver import build_resolver_registry
+from hubofhubs.recall.reference_resolver import build_resolver_registry
 from .specificity import SpecificityResult, rerank_factor, score_candidates
 
 # Type alias for a seed source callable: returns a list of items suitable for

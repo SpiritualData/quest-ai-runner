@@ -120,7 +120,7 @@ def test_current_sha_reads_nothing_when_mtime_matches(tmp_path):
 
 
 def test_conversation_scan_skips_library_dirs_but_finds_real_ones(tmp_path):
-    from quest_ai_runner.adapters.conversation_format import _find_conversation_dirs
+    from hubofhubs.recall.conversation_format import _find_conversation_dirs
 
     (tmp_path / "app" / ".claude").mkdir(parents=True)
     (tmp_path / "notes" / "conversations").mkdir(parents=True)

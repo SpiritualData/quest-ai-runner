@@ -64,7 +64,7 @@ from .card_scoped_learning import (
     learn_card_references,
     learnable_candidates,
 )
-from .conversation_format import (
+from hubofhubs.recall.conversation_format import (
     conversation_digest,
     conversation_timestamp,
     conversation_to_text,

@@ -10,7 +10,7 @@ plain-string calls, are tested with the providers in the hub (``tests/test_model
 
 All offline: no network and no API key.
 """
-from quest_ai_runner.adapters.card_content_render import render_card_content_blocks
+from hubofhubs.recall.card_content_render import render_card_content_blocks
 from quest_ai_runner.core.prompt_layers import (
     PromptLayers,
     compose_layers,

@@ -19,7 +19,7 @@ import time
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.google_chat_adapter import GoogleChatAdapter, static_token_provider
 from quest_ai_runner.adapters.card_scoped_learning import learn_card_references
-from quest_ai_runner.adapters.reference_resolver import build_resolver_registry
+from hubofhubs.recall.reference_resolver import build_resolver_registry
 
 
 class _FakeChat:

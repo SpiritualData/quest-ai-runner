@@ -395,7 +395,7 @@ class TestAStaleWriterDoesNotUndoTheLimit:
 def lock_log(monkeypatch):
     """Every acquisition of a card folder's lock in this process: whether it waited, and what the folder's
     repository was asked to do while it was held (``load_all`` parses every card, ``read`` one)."""
-    from quest_ai_runner.adapters.card_store_lock import StoreLock
+    from hubofhubs.recall.card_store_lock import StoreLock
     log = {"acquired": [], "held": 0, "under_lock": []}
     real_acquire, real_release = StoreLock.acquire, StoreLock.release
 

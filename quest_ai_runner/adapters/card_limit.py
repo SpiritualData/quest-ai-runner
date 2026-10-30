@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from . import card_origin
-from .card_store_lock import StoreLock
+from hubofhubs.recall.card_store_lock import StoreLock
 from hubofhubs.filemodes import match_umask
 
 log = logging.getLogger("quest-ai-runner.card-limit")

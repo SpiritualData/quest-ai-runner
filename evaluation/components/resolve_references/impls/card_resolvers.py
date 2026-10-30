@@ -1,9 +1,10 @@
 """CURRENT: the production resolver registry (``build_resolver_registry``, the built-in note and file
 resolvers, coercion of consumer callables) and the production renderer ``render_card_content_blocks``
-(``adapters/reference_resolver.py``, ``adapters/card_content_render.py``). The fakes are the consumer's
+(``hubofhubs.recall.reference_resolver``, ``hubofhubs.recall.card_content_render``), reached through the registry QAR exports as
+``quest_ai_runner.adapters.build_resolver_registry``. The fakes are the consumer's
 file text and scripted resolvers. Zero model calls, zero network."""
-from quest_ai_runner.adapters.card_content_render import render_card_content_blocks
-from quest_ai_runner.adapters.reference_resolver import build_resolver_registry
+from hubofhubs.recall.card_content_render import render_card_content_blocks
+from quest_ai_runner.adapters import build_resolver_registry
 
 
 def scripted(spec):

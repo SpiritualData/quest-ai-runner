@@ -45,7 +45,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from hubofhubs.ports.context import ConversationContext, ConversationStore
 
 from esoi import implementation
-from .conversation_format import (
+from .walk_settings import conversation_scan_skip_dirs
+from hubofhubs.recall.conversation_format import (
     conversation_digest,
     conversation_messages,
     conversation_timestamp,
@@ -113,7 +114,7 @@ class SessionFileConversationStore(ConversationStore):
             return
         try:
             self._filepaths, self._conv_id_lookup = scan_conversation_files(
-                self.corpus_root, self.sessions_dir
+                self.corpus_root, self.sessions_dir, conversation_scan_skip_dirs(self.corpus_root)
             )
             self._scanned_at = now
         except Exception:  # noqa: BLE001 — scanning must never raise

@@ -78,7 +78,8 @@ _LARGE_CORPUS_FILES = 5000
 def _count_indexable_files(corpus: str) -> int:
     """How many files one bootstrap of ``corpus`` would index, using the real walk rules."""
     from pathlib import Path as _Path
-    from .adapters._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
+    from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
+    from .adapters.walk_settings import effective_skip_dirs
     from .adapters.file_context_store import _SOURCE_EXTS
     root = _Path(corpus).resolve()
     skip = effective_skip_dirs(root)
@@ -204,7 +205,8 @@ def _cmd_bootstrap(args, log) -> int:
     """Run the `bootstrap` subcommand; returns the process exit code."""
     from .adapters.card_limit import max_cards_from_env
     from .adapters.file_context_store import FileContextStore
-    from .adapters._walk import effective_skip_dirs, prune_dirnames
+    from hubofhubs.recall.walk import prune_dirnames
+    from .adapters.walk_settings import effective_skip_dirs
     import shutil
     from pathlib import Path
 
@@ -215,7 +217,8 @@ def _cmd_bootstrap(args, log) -> int:
     if args.dry_run:
         from .adapters.dryrun_provider import DryRunProvider
         from .adapters.file_context_store import FileContextStore
-        from .adapters._walk import effective_skip_dirs, prune_dirnames
+        from hubofhubs.recall.walk import prune_dirnames
+        from .adapters.walk_settings import effective_skip_dirs
 
         # Count source files and estimate areas
         corpus_path = Path(corpus)

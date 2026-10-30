@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 from . import card_origin
 from . import card_limit as limit_mod
 from .card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
-from .card_content_render import (
+from hubofhubs.recall.card_content_render import (
     dedupe_content as _dedupe_content,
     normalize_content as _normalize_content,
     render_card_content,

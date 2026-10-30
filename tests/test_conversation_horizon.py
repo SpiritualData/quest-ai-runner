@@ -20,7 +20,7 @@ import time
 
 from quest_ai_runner.adapters import session_file_conversation_store as sfcs_module
 from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
-from quest_ai_runner.adapters.conversation_format import (
+from hubofhubs.recall.conversation_format import (
     rank_candidates_by_digest,
     truncate_transcript_middle,
 )

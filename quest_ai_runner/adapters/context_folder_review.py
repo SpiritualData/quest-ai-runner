@@ -9,7 +9,7 @@ import os
 from typing import Any, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
-from ._walk import is_claude_state_file, prune_dirnames
+from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
 from .context_bootstrap_support import _BOOTSTRAP_MAX_BYTES, _SOURCE_EXTS, _extract_json_array, _log
 
 

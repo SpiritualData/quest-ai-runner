@@ -42,7 +42,7 @@ from quest_ai_runner.adapters.context_folder_review import (
     verdict_is_pinned,
     _is_excluded_folder,
 )
-from quest_ai_runner.adapters._walk import effective_skip_dirs
+from quest_ai_runner.adapters.walk_settings import effective_skip_dirs
 
 
 def topic_provider(topics):

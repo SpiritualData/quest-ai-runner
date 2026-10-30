@@ -16,7 +16,7 @@ from . import card_limit as limit_mod
 from . import card_store_hygiene as hygiene
 from . import card_store_tidy as tidy
 from .card_repository import FilesystemCardRepository
-from .card_store_lock import TIDY_LOCK_FILE, StoreLock
+from hubofhubs.recall.card_store_lock import TIDY_LOCK_FILE, StoreLock
 from .context_bootstrap_support import _log
 
 

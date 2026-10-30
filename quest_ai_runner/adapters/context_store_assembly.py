@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from hubofhubs.ports.context import AssembledContext
 from hubofhubs.recall.background_pacing import Pacer
-from .card_content_render import (
+from hubofhubs.recall.card_content_render import (
     content_item_text as _content_item_text,
     filter_content_by_time_range,
     mark_items_used as _mark_items_used,
@@ -23,7 +23,8 @@ from .card_content_render import (
     tokenize as _tokenize,
 )
 from . import card_origin
-from ._walk import effective_skip_dirs, prune_dirnames
+from hubofhubs.recall.walk import prune_dirnames
+from .walk_settings import effective_skip_dirs
 from ..core.scope_tags import scope_tags_allow
 from .context_card_extraction import (
     _QUEST_FOLDER_BOOST,
@@ -57,7 +58,7 @@ class AssemblyMixin:
                 return
             if ref_type in self._resolvers and not override:
                 return
-            from .reference_resolver import coerce_resolver
+            from hubofhubs.recall.reference_resolver import coerce_resolver
             coerced = coerce_resolver(resolver)
             if coerced is not None:
                 self._resolvers[ref_type] = coerced

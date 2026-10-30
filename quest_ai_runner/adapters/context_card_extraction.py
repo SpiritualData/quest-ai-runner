@@ -11,7 +11,7 @@ import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
-from .card_content_render import (
+from hubofhubs.recall.card_content_render import (
     MAX_CARD_CONTENT_ITEMS as _MAX_CARD_CONTENT_ITEMS,
     normalize_content as _normalize_content,
     tokenize as _tokenize,

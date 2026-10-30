@@ -49,7 +49,7 @@ from .hybrid_context_assembler import HybridContextAssembler
 from .quest_guidance_loader import QuestGuidanceLoader
 from .quest_retrieval_adapter import QuestRetrievalAdapter
 from .quest_api_card_repository import QuestApiCardRepository, QuestApiCardVectorStore
-from .reference_resolver import ReferenceResolver, NoteResolver, build_resolver_registry, collect_reference_resolvers
+from hubofhubs.recall.reference_resolver import ReferenceResolver, NoteResolver, build_resolver_registry, collect_reference_resolvers
 from .vector_context_assembler import VectorContextAssembler
 
 # Each of these needs an optional extra (bm25s, qdrant-client + fastembed): a missing extra leaves the

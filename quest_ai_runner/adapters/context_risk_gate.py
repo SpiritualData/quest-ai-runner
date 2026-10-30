@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from ._walk import prune_dirnames, skip_subtrees
+from hubofhubs.recall.walk import prune_dirnames, skip_subtrees
 from .card_store_identity import BOOTSTRAP_META_FILE, is_merged, read_meta
 from .context_bootstrap_support import _log
 from .context_folder_review import (

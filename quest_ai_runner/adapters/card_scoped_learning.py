@@ -42,7 +42,7 @@ import json
 import re
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, TypeVar
 
-from .card_content_render import content_identity_key
+from hubofhubs.recall.card_content_render import content_identity_key
 from hubofhubs.recall.text_sampling import keywords_from_text
 
 T = TypeVar("T")

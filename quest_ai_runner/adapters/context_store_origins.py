@@ -8,7 +8,7 @@ import contextlib
 from typing import Any, ContextManager, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
-from .card_store_lock import StoreLock
+from hubofhubs.recall.card_store_lock import StoreLock
 
 NOT_PREPARED = object()      # ``_store_write`` was not told which cold cards may move out: it looks
 from .card_store_mounts import MODE_MOUNT, Mount

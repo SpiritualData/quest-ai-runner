@@ -53,7 +53,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from esoi import implementation
 from hubofhubs.ports.context import AssembledContext
 from ..core.adapters_bases import ContextAssemblerBase
-from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
+from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
+from .walk_settings import effective_skip_dirs
 
 logger = logging.getLogger(__name__)
 

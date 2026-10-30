@@ -40,7 +40,7 @@ def main() -> int:
     from pathlib import Path
 
     from .files_server import DEFAULT_MAX_HITS, ServedFilesAdapter
-    from ._walk import skip_subtrees
+    from hubofhubs.recall.walk import skip_subtrees
 
     adapter = ServedFilesAdapter(request["root"], deny=request.get("deny") or (),
                                  allow_dot=request.get("allow_dot") or (),

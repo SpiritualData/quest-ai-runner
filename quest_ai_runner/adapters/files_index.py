@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from ._walk import prune_dirnames
+from hubofhubs.recall.walk import prune_dirnames
 
 DEFAULT_TTL_SECONDS = 120.0
 MAX_INDEX_ENTRIES = 400_000

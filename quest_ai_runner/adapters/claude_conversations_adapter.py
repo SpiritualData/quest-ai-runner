@@ -20,7 +20,8 @@ from typing import Any, Dict, List, Optional, Set
 from hubofhubs.ports.context import AssembledContext
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.adapters_retrieval import RetrievalAdapter
-from .conversation_format import (
+from .walk_settings import conversation_scan_skip_dirs
+from hubofhubs.recall.conversation_format import (
     conversation_digest,
     conversation_metadata,
     conversation_timestamp,
@@ -108,7 +109,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         *.json files at any depth; otherwise uses the explicit sessions_dir.
         """
         self._conversations, self._conversation_filepaths, self._conv_id_lookup = load_conversations(
-            self.corpus_root, self.sessions_dir
+            self.corpus_root, self.sessions_dir, conversation_scan_skip_dirs(self.corpus_root)
         )
         self._loaded = True
 

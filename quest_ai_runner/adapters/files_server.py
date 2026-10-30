@@ -68,7 +68,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from ._walk import prune_dirnames
+from hubofhubs.recall.walk import prune_dirnames
 from .files_index import VisibleIndex
 from .files_redaction import redact
 from .files_adapter import (

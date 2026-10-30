@@ -16,7 +16,7 @@ Covers:
 """
 import json
 
-from quest_ai_runner.adapters.conversation_format import compact_message
+from hubofhubs.recall.conversation_format import compact_message
 from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
 from hubofhubs.ports.context import ConversationContext
 from quest_ai_runner.core.adapters_events import EVENT_UNDERSTANDING, Mode
