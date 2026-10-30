@@ -8,7 +8,6 @@ rule. Opt in with ``planner_prompt_profile="situational"``; the default stays "f
 from dataclasses import dataclass, fields, replace
 from typing import Any, Mapping, Optional
 
-from esoi import implementation
 from hubofhubs.doctrine import Doctrine, assemble_doctrine
 
 from .planner_prompt import PLANNER_RULES
@@ -45,7 +44,6 @@ def planner_situation(*, brainstorm: bool = False, user_vetoed_task: bool = Fals
     return replace(base, **{k: v for k, v in facts.items() if k in FACTS})
 
 
-@implementation("assemble-a-prompt", "situational")
 def situational_template(situation: PlannerSituation) -> Doctrine:
     """The planner prompt template for ``situation``: the rules that apply, in order, still ``.format``-able."""
     return assemble_doctrine(PLANNER_RULES, {name: getattr(situation, name) for name in FACTS})
