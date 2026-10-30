@@ -4,7 +4,9 @@
 > the existing keyword/IDF ``FileContextStore``.  Implemented behind the
 > ``VectorStore`` Protocol (defined in ``hubofhubs.ports.context``) so the core stays
 > dependency-free.  Heavy deps (qdrant-client, fastembed) live behind the
-> optional ``[qdrant]`` extra.
+> optional ``[qdrant]`` extra. The store, the assemblers and the BM25 arm are the hub's
+> (``hubofhubs.recall``); the modules named below are QAR's thin bindings of them
+> (prefix, seed scope, environment names, prompts), at the same import paths.
 
 ---
 

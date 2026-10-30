@@ -1,15 +1,7 @@
 # Model-call sites not yet migrated to a registered prompt spec (core/prompt_specs.py).
 # The baseline only shrinks: delete a line when its site migrates; never add one.
-adapters/bm25_content_store.py::BM25ContentStore._generate_queries
 adapters/context_card_dedup.py::_dedup_cluster_llm
-adapters/context_card_extraction.py::_discover_areas
-adapters/context_card_extraction.py::_extract_topic_cards
-adapters/context_folder_review.py::_review_folder_batch
-adapters/vector_context_assembler.py::VectorContextAssembler._generate_queries
-adapters/vector_context_assembler.py::VectorContextAssembler._llm_review
-adapters/vector_context_assembler.py::VectorContextAssembler._record_inner
 config_resolvers.py::_resolve_anticipation_refiner
-core/card_filter.py::filter_cards_by_relevance
 core/orchestrator_answering.py::AnsweringMixin._answer_subquestions
 core/orchestrator_answering.py::AnsweringMixin._grounded_answer
 core/orchestrator_answering.py::AnsweringMixin._synthesize_after_deep

@@ -1105,7 +1105,7 @@ class TestRecencyDecay:
             store,
             confidence_min_score=0.0,
             half_life_days=30.0,
-            _clock=lambda: now,
+            clock=lambda: now,
         )
         ac = asm.assemble("billing payment")
         assert len(ac.card_ids) >= 2, "expected both hits to be returned"
@@ -1135,7 +1135,7 @@ class TestRecencyDecay:
             store,
             confidence_min_score=0.0,
             half_life_days=30.0,
-            _clock=lambda: now,
+            clock=lambda: now,
         )
         ac = asm.assemble("billing payment")
         assert "old-assoc" in ac.card_ids, "old association should still appear at gate=0.0"
@@ -1154,7 +1154,7 @@ class TestRecencyDecay:
         asm = VectorContextAssembler(
             store,
             confidence_min_score=0.0,
-            _clock=lambda: now,
+            clock=lambda: now,
         )
         ac = asm.assemble("billing payment")
         assert "days ago" in ac.context_view or "day ago" in ac.context_view or "today" in ac.context_view, (
@@ -1293,7 +1293,7 @@ class TestCapacityBound:
             store,
             confidence_min_score=0.0,
             max_associations=3,
-            _clock=lambda: now,
+            clock=lambda: now,
         )
         for i in range(5):
             asm.record(
@@ -1322,8 +1322,8 @@ class TestCapacityBound:
         coll = list(store._data.values())[0]
         remaining_ids = list(coll.keys())
         # The association for "oldest task alpha" should have been evicted.
-        from quest_ai_runner.adapters.vector_context_assembler import _task_slug
-        oldest_id = f"assoc:{_task_slug('oldest task alpha')}"
+        from quest_ai_runner.adapters.vector_context_assembler import task_slug
+        oldest_id = f"assoc:{task_slug('oldest task alpha')}"
         assert oldest_id not in remaining_ids, (
             f"oldest association should have been evicted; remaining: {remaining_ids}"
         )
@@ -1361,7 +1361,7 @@ class TestTimestampInPayload:
         """When ts is not in outcome, the clock value is used."""
         fixed_ts = 99999.0
         store = FakeVectorStore()
-        asm = VectorContextAssembler(store, _clock=lambda: fixed_ts)
+        asm = VectorContextAssembler(store, clock=lambda: fixed_ts)
         asm.record("some task", {"kind": "met"})  # no ts in outcome
         coll = list(store._data.values())[0]
         item = list(coll.values())[0]
@@ -2874,7 +2874,7 @@ class TestDefaultMaxSeedItems:
 
     def test_no_env_var_uses_the_builtin_default(self, monkeypatch):
         monkeypatch.delenv("QAR_VECTOR_MAX_SEED_ITEMS", raising=False)
-        assert vca.default_max_seed_items() == vca._MAX_SEED_ITEMS_DEFAULT
+        assert vca.default_max_seed_items() == vca.MAX_SEED_ITEMS_DEFAULT
 
     def test_env_var_overrides_the_default(self, monkeypatch):
         monkeypatch.setenv("QAR_VECTOR_MAX_SEED_ITEMS", "7")
@@ -2886,13 +2886,13 @@ class TestDefaultMaxSeedItems:
 
     def test_negative_value_falls_back_to_the_builtin_default(self, monkeypatch):
         monkeypatch.setenv("QAR_VECTOR_MAX_SEED_ITEMS", "-5")
-        assert vca.default_max_seed_items() == vca._MAX_SEED_ITEMS_DEFAULT
+        assert vca.default_max_seed_items() == vca.MAX_SEED_ITEMS_DEFAULT
 
     def test_garbage_value_is_ignored_with_a_warning(self, monkeypatch, caplog):
         monkeypatch.setenv("QAR_VECTOR_MAX_SEED_ITEMS", "not-a-number")
         with caplog.at_level("WARNING"):
             value = vca.default_max_seed_items()
-        assert value == vca._MAX_SEED_ITEMS_DEFAULT
+        assert value == vca.MAX_SEED_ITEMS_DEFAULT
         assert "QAR_VECTOR_MAX_SEED_ITEMS" in caplog.text
 
 
@@ -3048,13 +3048,13 @@ class TestVectorArmSnippetHardCap:
         every time" -- measured at nearly 5k tokens for a single quest card. ``_snippet`` must
         cap its output regardless of line count."""
         long_unbroken_text = "word " * 2000  # ~10,000 chars, zero newlines
-        out = vca._snippet(long_unbroken_text)
+        out = vca.snippet(long_unbroken_text)
         assert len(out) <= vca.SNIPPET_MAX_CHARS
 
     def test_snippet_still_prefers_the_first_few_lines_when_present(self):
         """Regression guard: normal multi-line text is unaffected by the new cap."""
         text = "line one\nline two\nline three\nline four\nline five"
-        out = vca._snippet(text)
+        out = vca.snippet(text)
         assert out == "line one | line two | line three"
 
     def test_vector_hit_text_line_is_capped_for_an_unbroken_embedded_string(self):
