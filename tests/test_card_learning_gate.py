@@ -24,11 +24,8 @@ from quest_ai_runner.core.card_learning import (
     turn_teaches_new_facts,
 )
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    CARD_UPDATE_NOTHING_LEARNABLE,
-    Orchestrator,
-    OrchestratorConfig,
-)
+from quest_ai_runner.core.auxiliary_prompts import CARD_UPDATE_NOTHING_LEARNABLE
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 

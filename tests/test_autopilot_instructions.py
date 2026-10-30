@@ -8,13 +8,8 @@ before the goal ladder), the byte-identical guarantee when instructions are abse
 rule itself, the title fallback chain, the defensive truncation, and that a quest carrying
 instructions never reaches the goal-proposal path.
 """
-from quest_ai_runner.runner.autopilot import (
-    MAX_INSTRUCTIONS_CHARS,
-    PROPOSAL_TEXT_PREFIX,
-    AutopilotPass,
-    _batch_title,
-    compose_batch_text,
-)
+from quest_ai_runner.runner.autopilot import MAX_INSTRUCTIONS_CHARS, AutopilotPass, _batch_title, compose_batch_text
+from quest_ai_runner.runner.autopilot_defaults import PROPOSAL_TEXT_PREFIX
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 

@@ -17,15 +17,13 @@ from typing import Any, Dict
 
 import pytest
 
-from quest_ai_runner.adapters.file_context_store import (
-    FileContextStore,
-    _normalize_content,
-    _rank_content_by_recency_relevance,
-    _trim_content_by_recency,
-)
+from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.adapters.context_card_extraction import _trim_content_by_recency
 from quest_ai_runner.adapters.card_content_render import (
     content_identity_key,
     dedupe_content,
+    normalize_content as _normalize_content,
+    rank_content_by_recency_relevance as _rank_content_by_recency_relevance,
 )
 from quest_ai_runner.adapters.reference_resolver import (
     NoteResolver,

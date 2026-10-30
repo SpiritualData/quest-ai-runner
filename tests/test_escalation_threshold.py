@@ -20,14 +20,13 @@ from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     DECIDE_TOOL,
     PLANNER_PROMPT,
-    PLANNER_PROMPT_COMPACT,
-    USER_INTENTS,
     Orchestrator,
     OrchestratorConfig,
     decide_tool_for,
     normalize_decision,
-    normalize_user_intent,
 )
+from quest_ai_runner.core.planner_prompt import PLANNER_PROMPT_COMPACT
+from quest_ai_runner.core.orchestrator_decide_tool import USER_INTENTS, normalize_user_intent
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 

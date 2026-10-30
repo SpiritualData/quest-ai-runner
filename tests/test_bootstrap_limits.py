@@ -46,7 +46,7 @@ def test_a_truncated_walk_warns_loudly(tmp_path, monkeypatch, caplog):
 
 
 def test_counting_indexable_files_matches_the_walk_rules(tmp_path):
-    from quest_ai_runner.cli import _count_indexable_files
+    from quest_ai_runner.cli_context import _count_indexable_files
     corpus = tmp_path / "c"
     (corpus / "node_modules" / "pkg").mkdir(parents=True)
     (corpus / "node_modules" / "pkg" / "index.js").write_text("x")   # skipped dir

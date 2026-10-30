@@ -497,7 +497,7 @@ def test_a_registered_backend_is_selected_by_name_with_no_branch_in_the_module()
 # ---------------------------------------------------------------------------
 
 def test_shipped_hosted_apis_are_data_entries_run_by_one_backend():
-    from quest_ai_runner.adapters.web_search_backends import ConfiguredJsonBackend
+    from hubofhubs.websearch.backends import ConfiguredJsonBackend
     for cls in (SerperBackend, BraveBackend, TavilyBackend):
         assert issubclass(cls, ConfiguredJsonBackend) and cls.spec["name"] in ("serper", "brave", "tavily")
 

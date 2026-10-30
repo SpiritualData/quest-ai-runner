@@ -23,14 +23,14 @@ from typing import Any, List
 from quest_ai_runner.core.adapters_events import EVENT_CONTEXT, EVENT_UNDERSTANDING
 from quest_ai_runner.core.adapters_values import ProgressEvent
 from quest_ai_runner.core.model_registry import ModelRegistry
+from quest_ai_runner.core.auxiliary_prompts import GOAL_CONDITION_SYSTEM
 from quest_ai_runner.core.orchestrator import (
-    GOAL_CONDITION_SYSTEM,
     Orchestrator,
     _project_card_metadata_for_event,
     _project_sources_for_event,
-    _safe_event_title,
-    is_small_talk,
 )
+from quest_ai_runner.core.orchestrator_events import _safe_event_title
+from quest_ai_runner.core.orchestrator_decisions import is_small_talk
 
 from .conftest import StubProvider, StubRetrieval
 

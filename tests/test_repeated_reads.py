@@ -17,12 +17,8 @@ Fully offline: scripted planner decisions and an in-memory retrieval stub.
 from typing import Any, Dict, List
 
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    OrchestratorConfig,
-    read_spec_key,
-    split_repeated_reads,
-)
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.orchestrator_capabilities import read_spec_key, split_repeated_reads
 
 from .conftest import StubProvider, StubRetrieval
 

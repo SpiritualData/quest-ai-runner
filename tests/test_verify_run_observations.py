@@ -31,11 +31,9 @@ import re
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters_values import DeepResult
-from quest_ai_runner.core.orchestrator import (
-    OrchestratorConfig,
-    VERIFY_RUN_OBSERVATIONS_NOTE,
-    VERIFY_WEB_EVIDENCE_MAX_CHARS,
-)
+from quest_ai_runner.core.orchestrator import OrchestratorConfig
+from quest_ai_runner.core.auxiliary_prompts import VERIFY_RUN_OBSERVATIONS_NOTE
+from quest_ai_runner.core.orchestrator_decisions import VERIFY_WEB_EVIDENCE_MAX_CHARS
 
 from .conftest import StubProvider
 

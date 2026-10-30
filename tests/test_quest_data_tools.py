@@ -17,18 +17,19 @@ from quest_ai_runner.core.quest_field_instructions import (
     render_compact_block,
     render_markdown,
 )
-from quest_ai_runner.core.tools import (
+from quest_ai_runner.core.tools_quest_standard import (
     QUEST_DATA_TOOLS,
     QUEST_FIELD_TOOLS,
-    ToolContext,
     add_measurable_outcome_spec,
     add_quest_strategy_spec,
-    build_tool_registry,
     create_quest_goal_spec,
-    create_quest_experiment_spec,
     create_quest_habit_spec,
-    find_quest_experiments_spec,
     quest_field_tool_spec,
+)
+from quest_ai_runner.core.tools import ToolContext, build_tool_registry
+from quest_ai_runner.core.tools_quest_experiments import (
+    create_quest_experiment_spec,
+    find_quest_experiments_spec,
     update_quest_experiment_spec,
 )
 
@@ -393,7 +394,7 @@ def test_experiment_tools_are_standard_and_selected_by_their_words():
 
 
 def test_experiment_search_ignores_filler_stems_and_the_default_questions_context():
-    from quest_ai_runner.core.tools import search_experiments
+    from quest_ai_runner.core.tools_quest_experiments import search_experiments
     rows = FakeQuestClient.experiments + [
         {"research_question_id": "rq_ctx", "kind": "default", "status": "open",
          "question": "What will it take to run a marathon?",

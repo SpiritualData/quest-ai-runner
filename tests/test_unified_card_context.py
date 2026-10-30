@@ -14,13 +14,8 @@ from typing import Any, Dict, List, Optional
 
 from hubofhubs.ports.context import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    DECIDE_TOOL,
-    MODEL_TIER_BLOCK,
-    Orchestrator,
-    PLANNER_PROMPT,
-    TurnCardCache,
-)
+from quest_ai_runner.core.orchestrator import DECIDE_TOOL, Orchestrator, PLANNER_PROMPT, TurnCardCache
+from quest_ai_runner.core.planner_prompt import MODEL_TIER_BLOCK
 
 from .conftest import StubProvider, StubRetrieval
 

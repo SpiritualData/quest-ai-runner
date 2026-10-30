@@ -91,7 +91,7 @@ def test_bucket_top_honours_explicit_pin():
 
 
 def test_registered_only_when_key_set(monkeypatch):
-    from quest_ai_runner.config import register_deepseek
+    from quest_ai_runner.config_resolvers import register_deepseek
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     reg = {}
     register_deepseek(reg)

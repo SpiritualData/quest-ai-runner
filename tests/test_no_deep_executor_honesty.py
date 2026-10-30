@@ -30,11 +30,8 @@ import pytest
 from quest_ai_runner.core.adapters_events import EVENT_INTENT, EVENT_RESULT, SURFACING_EVENTS, Mode
 from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    NO_DEEP_EXECUTOR_TEXT,
-    Orchestrator,
-    OrchestratorConfig,
-)
+from quest_ai_runner.core.orchestrator_constants import NO_DEEP_EXECUTOR_TEXT
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 from quest_ai_runner.interactive_session import _DeepRunTracker
 from quest_ai_runner.textual_ui import QuestAITerminal
 from tests.conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval

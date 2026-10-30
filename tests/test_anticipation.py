@@ -25,7 +25,6 @@ from quest_ai_runner.core.anticipation import (
     PREDICTION_TTL_SECONDS,
     PRUNE_AGE_DAYS,
     PRUNE_WEIGHT,
-    AskFeatures,
     Anticipator,
     FilePredictionStore,
     Pattern,
@@ -45,6 +44,7 @@ from quest_ai_runner.core.anticipation import (
     similarity,
     update_weight,
 )
+from quest_ai_runner.core.anticipation_learner import AskFeatures
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 from quest_ai_runner.core.scope_tags import scope_tags_from_keys

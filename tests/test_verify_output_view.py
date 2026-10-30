@@ -1,6 +1,6 @@
 """The judge must not mistake its own view limit for a cut-off in the worker's output."""
-from quest_ai_runner.core.orchestrator import (VERIFY_GOAL_PROMPT, VERIFY_OUTPUT_MAX_CHARS,
-                                               verify_output_view)
+from quest_ai_runner.core.auxiliary_prompts import VERIFY_GOAL_PROMPT
+from quest_ai_runner.core.orchestrator_decisions import VERIFY_OUTPUT_MAX_CHARS, verify_output_view
 
 
 def test_a_long_brief_under_the_cap_is_shown_whole():

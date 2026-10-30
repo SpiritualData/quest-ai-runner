@@ -14,7 +14,8 @@ from __future__ import annotations
 import pytest
 
 from quest_ai_runner.interactive_session import _DeepRunTracker
-from quest_ai_runner.textual_ui import FutureContextPanel, QuestAITerminal, _build_future_context_text
+from quest_ai_runner.textual_ui import FutureContextPanel, QuestAITerminal
+from quest_ai_runner.textual_ui_helpers import _build_future_context_text
 
 
 # ---------------------------------------------------------------------------

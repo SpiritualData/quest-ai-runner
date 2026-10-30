@@ -8,7 +8,7 @@ systems when they are meant to be one.
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.autopilot import personas_on_duty
+from quest_ai_runner.runner.autopilot_personas import personas_on_duty
 from quest_ai_runner.runner.quest_folder_sync import quest_for_path
 
 SUNDAY = datetime(2026, 7, 12, 9, 0, tzinfo=timezone.utc)

@@ -32,10 +32,10 @@ from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     Orchestrator,
     OrchestratorConfig,
-    grounding_context_layer,
     truncate_verify_context,
     verify_context_max_chars,
 )
+from quest_ai_runner.core.orchestrator_events import grounding_context_layer
 
 from .conftest import StubProvider, StubRetrieval
 

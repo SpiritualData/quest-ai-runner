@@ -25,14 +25,10 @@ All offline: no network, no API key.
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    VERIFY_WEB_EVIDENCE_MAX_CHARS,
-    VERIFY_WEB_EVIDENCE_NOTE,
-    _gathered_has_web_evidence,
-    grounding_answer_tail,
-    grounding_context_layer,
-)
+from quest_ai_runner.core.orchestrator import Orchestrator, grounding_answer_tail
+from quest_ai_runner.core.orchestrator_decisions import VERIFY_WEB_EVIDENCE_MAX_CHARS, _gathered_has_web_evidence
+from quest_ai_runner.core.auxiliary_prompts import VERIFY_WEB_EVIDENCE_NOTE
+from quest_ai_runner.core.orchestrator_events import grounding_context_layer
 
 from .conftest import StubProvider
 

@@ -19,8 +19,8 @@ These tests pin the parts that are product decisions rather than implementation 
 """
 from datetime import datetime, timezone
 
+from quest_ai_runner.runner.autopilot_defaults import DEFAULT_LADDER_PER_SCOPE
 from quest_ai_runner.runner.autopilot import (
-    DEFAULT_LADDER_PER_SCOPE,
     AutopilotPass,
     compose_batch_text,
     current_goal_ladder,

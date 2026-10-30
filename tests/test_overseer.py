@@ -21,13 +21,8 @@ from quest_ai_runner.core.adapters_events import EVENT_OVERSEER, EVENT_PLAN, Mod
 from quest_ai_runner.core.adapters_sinks import MilestoneSink
 from quest_ai_runner.core.adapters_values import ProgressEvent
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    OrchestratorConfig,
-    _oversee_worth_a_look,
-    _prior_escalation_lines,
-    _recent_conversation_turns,
-)
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, _oversee_worth_a_look
+from quest_ai_runner.core.planner_context import _prior_escalation_lines, _recent_conversation_turns
 from quest_ai_runner.core.overseer import (
     OVERSEER_PROMPT,
     OverseerSignal,

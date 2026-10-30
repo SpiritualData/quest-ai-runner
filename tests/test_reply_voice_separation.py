@@ -17,12 +17,8 @@ from typing import Any, Dict, List
 from quest_ai_runner.core.adapters_events import EVENT_UNDERSTANDING
 from quest_ai_runner.core.adapters_values import ProgressEvent
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    REPLY_VOICE_SYSTEM,
-    Orchestrator,
-    _grounding_block,
-    restates_meaningfully,
-)
+from quest_ai_runner.core.orchestrator import REPLY_VOICE_SYSTEM, Orchestrator, _grounding_block
+from quest_ai_runner.core.orchestrator_decisions import restates_meaningfully
 
 from .conftest import StubProvider, StubRetrieval
 

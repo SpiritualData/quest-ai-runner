@@ -27,11 +27,8 @@ from typing import Any, Dict, List, Optional
 from hubofhubs.ports.context import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.prompt_specs import NO_EM_DASH_RULE
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    OrchestratorConfig,
-    provider_call_accepts_tier,
-)
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.orchestrator_capabilities import provider_call_accepts_tier
 from quest_ai_runner.core.reach_judge import (
     OUTSIDE_UNCOVERED_LINE,
     OUTSIDE_UNCOVERED_LINE_WEB,

@@ -14,12 +14,9 @@ What stays here is the third:
   itself escalated into a task.
 """
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    HOLD_OFF_NO_ACTION_ACK_NOTE,
-    Orchestrator,
-    OrchestratorConfig,
-    message_forbids_new_task,
-)
+from quest_ai_runner.core.planner_prompt import HOLD_OFF_NO_ACTION_ACK_NOTE
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.orchestrator_decisions import message_forbids_new_task
 
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 

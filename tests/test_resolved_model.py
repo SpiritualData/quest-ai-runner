@@ -4,7 +4,7 @@ import json
 from quest_ai_runner.core import goal_runner, goal_runner_session
 from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.interactive_session import _model_display
-from quest_ai_runner.runner.executor import _model_used_note
+from quest_ai_runner.runner.executor_support import _model_used_note
 
 
 def write_session(tmp_path, records):

@@ -12,14 +12,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from quest_ai_runner.runner.autopilot import (
-    AutopilotPass,
-    compose_batch_text,
-    current_scope_label,
-    previous_period_bounds,
-    previous_period_key,
-    select_period_goals,
-)
+from quest_ai_runner.runner.autopilot import AutopilotPass, compose_batch_text, current_scope_label
+from quest_ai_runner.runner.autopilot_periods import previous_period_bounds, previous_period_key, select_period_goals
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 

@@ -89,7 +89,7 @@ def test_bootstrap_never_indexes_a_claude_code_state_file(tmp_path):
 
 
 def test_prune_is_opt_outable(monkeypatch):
-    from quest_ai_runner.adapters.file_context_store import _prune_dead_cards
+    from quest_ai_runner.adapters.context_folder_review import _prune_dead_cards
     monkeypatch.delenv("QAR_PRUNE_DEAD_CARDS", raising=False)
     assert _prune_dead_cards() is True          # default ON
     for off in ("0", "false", "no", "FALSE"):

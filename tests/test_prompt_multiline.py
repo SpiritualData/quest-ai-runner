@@ -220,7 +220,7 @@ def test_terminal_bytes_reach_the_prompt_as_the_right_key(data, key):
 
 
 def test_newline_hint_does_not_promise_shift_enter_in_vte_terminals():
-    from quest_ai_runner.textual_ui import newline_hint
+    from quest_ai_runner.textual_ui_widgets import newline_hint
 
     assert newline_hint({"VTE_VERSION": "8000"}) == "Ctrl+J or Alt+Enter=newline"
     assert newline_hint({}) == "Shift+Enter or Ctrl+J=newline"

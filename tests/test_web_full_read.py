@@ -7,7 +7,7 @@ from hubofhubs.websearch.cache import WebCache
 from hubofhubs.websearch.research import paginate_text
 from quest_ai_runner.adapters.web_research import WebResearchAdapter, build_web_research_from_env
 from quest_ai_runner.adapters.web_search_backends import SearchResponse
-from quest_ai_runner.core.orchestrator import VERIFY_WEB_EVIDENCE_MAX_CHARS
+from quest_ai_runner.core.orchestrator_decisions import VERIFY_WEB_EVIDENCE_MAX_CHARS
 from quest_ai_runner.core.orchestrator_capabilities import describe_read_spec, read_spec_key
 from quest_ai_runner.core.orchestrator_decisions import VERIFY_WEB_PAGE_EVIDENCE_MAX_CHARS
 from quest_ai_runner.core.planner_context import (

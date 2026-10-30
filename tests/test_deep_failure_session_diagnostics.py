@@ -33,8 +33,8 @@ from pathlib import Path
 
 import pytest
 
+from quest_ai_runner.core.goal_runner_session import SESSION_TAIL_MAX_ACTIONS
 from quest_ai_runner.core.goal_runner import (
-    SESSION_TAIL_MAX_ACTIONS,
     SubprocessConfig,
     SubprocessGoalRunner,
     read_session_activity_tail,

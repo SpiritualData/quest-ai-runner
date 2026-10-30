@@ -12,15 +12,15 @@ they work to, and the goals only ever appear in the ladder.
 import time
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.autopilot import (
+from quest_ai_runner.runner.autopilot_defaults import (
     AUTOPILOT_WORK_KIND,
     BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS,
     BUNDLED_DEFAULT_QUEST_INSTRUCTIONS,
     DEFAULT_ASSISTANT_REP_ID,
+)
+from quest_ai_runner.runner.autopilot import (
     DEFAULT_TEAM_DAILY_BUDGET,
-    PERSONA_HELD,
     AutopilotPass,
-    cadence_due,
     current_scope_label,
     default_persona_instructions_for,
     default_quest_instructions_for,
@@ -28,10 +28,10 @@ from quest_ai_runner.runner.autopilot import (
     run_requested,
     compose_batch_text,
     persona_instructions_for,
-    personas_on_duty,
     resolve_persona,
-    resolve_task_persona,
 )
+from quest_ai_runner.runner.autopilot_personas import PERSONA_HELD, personas_on_duty, resolve_task_persona
+from quest_ai_runner.runner.autopilot_periods import cadence_due
 # The client's OWN period formats, so the fake below accepts exactly what the real one accepts
 # instead of a shape invented here (the five quest-backend's period_utils parses).
 from quest_ai_runner.runner.quest_client import _PERIOD_RE
@@ -1631,7 +1631,7 @@ def test_period_keys_match_the_backends_underscore_format():
     plain ISO date, but week/month/quarter are 2026_W28 / 2026_07 / 2026_Q3. A hyphen here would
     never match the current period, so every quest would silently fall through to the unscoped
     fallback and today's goals would never be worked."""
-    from quest_ai_runner.runner.autopilot import _current_period_key
+    from quest_ai_runner.runner.autopilot_periods import _current_period_key
 
     assert _current_period_key("day", NOW) == "2026-07-12"
     assert _current_period_key("week", NOW) == "2026_W28"
@@ -1854,7 +1854,7 @@ def test_autopilot_created_work_is_never_routed_back_into_another_pass():
     kind -- otherwise the executor would route each created task into another autopilot pass,
     which would create more tasks, forever."""
     from quest_ai_runner.runner.executor import _is_autopilot_pass
-    from quest_ai_runner.runner.autopilot import AUTOPILOT_WORK_KIND
+    from quest_ai_runner.runner.autopilot_defaults import AUTOPILOT_WORK_KIND
 
     assert _is_autopilot_pass({"task_kind": "autopilot"}) is True
     assert _is_autopilot_pass({"task_kind": AUTOPILOT_WORK_KIND}) is False

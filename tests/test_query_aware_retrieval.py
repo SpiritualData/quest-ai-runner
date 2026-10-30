@@ -31,12 +31,8 @@ from quest_ai_runner.adapters.session_file_conversation_store import SessionFile
 from hubofhubs.ports.context import AssembledContext, ConversationContext
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    DECIDE_TOOL,
-    Orchestrator,
-    _format_now_block,
-    parse_goal_condition_reply,
-)
+from quest_ai_runner.core.orchestrator import DECIDE_TOOL, Orchestrator, parse_goal_condition_reply
+from quest_ai_runner.core.orchestrator_decisions import _format_now_block
 from quest_ai_runner.core.recent_context import filter_relevant, render_recent_cards
 
 from .conftest import StubProvider, StubRetrieval

@@ -881,10 +881,8 @@ def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
 def test_resolve_deep_timeout_seconds_env_var_and_config_precedence(monkeypatch):
     """The hard cap is OPT-IN. Explicit SubprocessConfig.timeout_seconds wins, then
     QAR_DEEP_TIMEOUT_SECONDS; unset, zero or garbage means no fixed cap (None)."""
-    from quest_ai_runner.core.goal_runner import (
-        QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR,
-        resolve_deep_timeout_seconds,
-    )
+    from quest_ai_runner.core.goal_runner_contract import QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR
+    from quest_ai_runner.core.goal_runner import resolve_deep_timeout_seconds
 
     monkeypatch.delenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
     assert resolve_deep_timeout_seconds(None) is None      # no arbitrary default kill

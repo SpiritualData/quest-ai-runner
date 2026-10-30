@@ -19,12 +19,8 @@ Offline, driven against fakes and a tmp_path store.
 """
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.runner.context_updates import (
-    UpdateEngine,
-    parse_dispositions,
-    split_disposition,
-    usage_receipt_gate,
-)
+from quest_ai_runner.runner.context_updates import UpdateEngine, parse_dispositions
+from quest_ai_runner.runner.context_update_receipts import split_disposition, usage_receipt_gate
 from quest_ai_runner.runner.feedback_ledger import (
     DONE,
     IN_FORCE,

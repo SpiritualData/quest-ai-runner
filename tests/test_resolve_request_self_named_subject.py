@@ -5,7 +5,7 @@ the cheap gate sent it to the resolver, which replied "CLARIFY: Which daily refl
 be summarized?" and the turn ended on that question. "My latest" is resolved by reading the data,
 not by asking. The rule lives in the resolver prompt, ahead of the CLARIFY rule.
 """
-from quest_ai_runner.core.orchestrator import RESOLVE_REQUEST_PROMPT
+from quest_ai_runner.core.auxiliary_prompts import RESOLVE_REQUEST_PROMPT
 
 
 def test_self_named_subject_rule_comes_before_the_clarify_rule():

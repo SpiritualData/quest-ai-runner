@@ -13,7 +13,8 @@ Textual event loop needed) and confirm `_build_session_worker` routes through
 
 from __future__ import annotations
 
-from quest_ai_runner.textual_ui import QuestAITerminal, _missing_model_provider_message
+from quest_ai_runner.textual_ui import QuestAITerminal
+from quest_ai_runner.textual_ui_helpers import _missing_model_provider_message
 
 
 # ---------------------------------------------------------------------------

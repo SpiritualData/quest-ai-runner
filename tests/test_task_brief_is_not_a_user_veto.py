@@ -17,7 +17,7 @@ Offline: the real Orchestrator/TaskExecutor with a capturing deep runner, mirror
 ``test_working_dir_override``. The deep runner being called at all IS the assertion -- a vetoed
 turn never reaches it.
 """
-from quest_ai_runner.core.orchestrator import message_forbids_new_task
+from quest_ai_runner.core.orchestrator_decisions import message_forbids_new_task
 
 from .test_working_dir_override import CapturingDeepRunner, _brain
 from .test_runner import MockQuestClient

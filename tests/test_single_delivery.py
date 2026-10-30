@@ -7,7 +7,7 @@ was mailed on top of the automatic copy. These tests pin the fix: the task text 
 delivery is automatic, and the verifier treats "email it" as met by the result, so no attempt is
 pushed into sending it by hand.
 """
-from quest_ai_runner.core.orchestrator import VERIFY_GOAL_PROMPT
+from quest_ai_runner.core.auxiliary_prompts import VERIFY_GOAL_PROMPT
 from quest_ai_runner.runner.executor import AUTOMATIC_DELIVERY_NOTE, TaskExecutor
 
 from .test_runner import MockQuestClient

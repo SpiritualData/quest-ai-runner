@@ -13,10 +13,8 @@ from __future__ import annotations
 
 import logging
 
-from quest_ai_runner.interactive_session import (
-    _BACKGROUND_BOOTSTRAP_LOGGER_NAMES,
-    _suppress_background_bootstrap_logs,
-)
+from quest_ai_runner.interactive_session_persona import _BACKGROUND_BOOTSTRAP_LOGGER_NAMES
+from quest_ai_runner.interactive_session import _suppress_background_bootstrap_logs
 
 
 def _reset_loggers():

@@ -6,9 +6,9 @@ from quest_ai_runner.core.orchestrator import (
     QUEST_DATA_WRITE_SURFACE_INSTRUCTION,
     OrchestratorConfig,
     apply_quest_data_ladder_guard,
-    ladder_for_quest_data,
     normalize_decision,
 )
+from quest_ai_runner.core.orchestrator_decisions import ladder_for_quest_data
 
 
 class Rung:

@@ -29,12 +29,8 @@ from typing import Any, Dict, List, Optional
 from quest_ai_runner.core.prompt_specs import NO_EM_DASH_RULE
 from quest_ai_runner.core.adapters_values import PlanDecision
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    OrchestratorConfig,
-    PLANNER_DECISION_RUBRIC,
-    provider_call_accepts_tier,
-)
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, PLANNER_DECISION_RUBRIC
+from quest_ai_runner.core.orchestrator_capabilities import provider_call_accepts_tier
 from quest_ai_runner.core.planner_cascade import (
     WEB_REVIEW_NOTE,
     apply_review,

@@ -28,9 +28,11 @@ from quest_ai_runner.core.prompt_budget import (PRIORITY_HISTORY, PRIORITY_REQUE
                                                 PRIORITY_RETRIEVAL, PRIORITY_UPDATES, Section,
                                                 count_blocks, estimate_tokens, fit_sections)
 from quest_ai_runner.core.turn_context_store import TurnContextStore
-from quest_ai_runner.runner.autopilot import compose_batch_text, render_last_run_output
-from quest_ai_runner.runner.context_updates import (BLOCK_END, BLOCK_START, parse_manifest,
-                                                    usage_receipt_gate)
+from quest_ai_runner.runner.autopilot import compose_batch_text
+from quest_ai_runner.runner.autopilot_briefs import render_last_run_output
+from quest_ai_runner.core.managed_blocks import BLOCK_END, BLOCK_START
+from quest_ai_runner.runner.context_updates import parse_manifest
+from quest_ai_runner.runner.context_update_receipts import usage_receipt_gate
 from quest_ai_runner.runner.executor import TaskExecutor, across_pass_resume, task_scope_tags
 
 from .conftest import StubProvider, StubRetrieval

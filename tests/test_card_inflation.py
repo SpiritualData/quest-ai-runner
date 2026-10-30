@@ -26,22 +26,23 @@ from quest_ai_runner.adapters.card_repository import (
     QUARANTINE_DIR_NAME,
     FilesystemCardRepository,
 )
-from quest_ai_runner.adapters.file_context_store import (
-    FileContextStore,
+from quest_ai_runner.adapters.file_context_store import FileContextStore, _folder_review
+from quest_ai_runner.adapters.context_card_ceilings import (
     apply_card_ceilings,
     card_folder_key,
     card_is_too_thin,
     card_preference_key,
     collapse_cards_by_file_set,
+    path_is_data_file,
+)
+from quest_ai_runner.adapters.context_folder_review import (
     drop_verdicts_under_final_exclusions,
     final_exclusion_covering,
-    path_is_data_file,
     verdict_is_final,
     verdict_is_pinned,
-    _folder_review,
     _is_excluded_folder,
-    effective_skip_dirs,
 )
+from quest_ai_runner.adapters._walk import effective_skip_dirs
 
 
 def topic_provider(topics):

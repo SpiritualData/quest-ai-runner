@@ -28,7 +28,8 @@ from quest_ai_runner.adapters.session_file_conversation_store import SessionFile
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator
-from quest_ai_runner.runner.executor import CONV_CONTEXT_MAX_BYTES, TaskExecutor
+from quest_ai_runner.runner.executor_support import CONV_CONTEXT_MAX_BYTES
+from quest_ai_runner.runner.executor import TaskExecutor
 
 from .conftest import StubProvider
 

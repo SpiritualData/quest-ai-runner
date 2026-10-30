@@ -78,19 +78,19 @@ def test_hanging_guidance_select_does_not_hang_the_turn(monkeypatch):
 
 def test_guidance_selection_timeout_env_default(monkeypatch):
     monkeypatch.delenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", raising=False)
-    from quest_ai_runner.core.orchestrator import guidance_selection_timeout_seconds
+    from quest_ai_runner.core.orchestrator_capabilities import guidance_selection_timeout_seconds
     assert guidance_selection_timeout_seconds() == 15.0
 
 
 def test_guidance_selection_timeout_env_override(monkeypatch):
     monkeypatch.setenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", "2.5")
-    from quest_ai_runner.core.orchestrator import guidance_selection_timeout_seconds
+    from quest_ai_runner.core.orchestrator_capabilities import guidance_selection_timeout_seconds
     assert guidance_selection_timeout_seconds() == 2.5
 
 
 def test_guidance_selection_timeout_invalid_env_falls_back(monkeypatch):
     monkeypatch.setenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", "not-a-number")
-    from quest_ai_runner.core.orchestrator import guidance_selection_timeout_seconds
+    from quest_ai_runner.core.orchestrator_capabilities import guidance_selection_timeout_seconds
     assert guidance_selection_timeout_seconds() == 15.0
 
 

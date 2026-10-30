@@ -20,10 +20,9 @@ from quest_ai_runner.runner.autopilot import (
     compose_batch_text,
     persona_entries_on_duty,
     persona_instructions_for,
-    personas_on_duty,
     resolve_persona,
-    resolve_task_persona,
 )
+from quest_ai_runner.runner.autopilot_personas import personas_on_duty, resolve_task_persona
 
 from .test_autopilot import NOW, FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 

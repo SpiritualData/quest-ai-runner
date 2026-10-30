@@ -4,7 +4,7 @@ Its example used to be {"query": {"kind": "...", "id": "..."}}, a shape no read 
 Cards stored it, later planners copied it from those cards, and in one Quest turn eight reads in
 that shape were refused (qualitative eval, 2026-10-07).
 """
-from quest_ai_runner.core.orchestrator import CARD_UPDATE_PROMPT
+from quest_ai_runner.core.auxiliary_prompts import CARD_UPDATE_PROMPT
 
 
 def test_full_ref_is_copied_from_a_real_read_never_invented():

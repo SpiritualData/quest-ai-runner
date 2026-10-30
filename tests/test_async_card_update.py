@@ -17,19 +17,17 @@ from typing import Any, Dict, List, Optional
 from hubofhubs.ports.context import AssembledContext
 from quest_ai_runner.core.adapters_values import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
+from quest_ai_runner.core.auxiliary_prompts import DEEP_FUTURE_CONTEXT_INSTRUCTION
+from quest_ai_runner.core.orchestrator_constants import DEFAULT_CARD_MERGE_SIMILARITY
 from quest_ai_runner.core.orchestrator import (
-    DEEP_FUTURE_CONTEXT_INSTRUCTION,
-    DEFAULT_CARD_MERGE_SIMILARITY,
     FUTURE_CONTEXT_DELIMITER,
     Orchestrator,
     OrchestratorConfig,
     _card_update_store,
-    _future_context_for_display,
-    _normalize_card_edits,
-    _parse_future_context,
-    _proposed_card_text,
     _strip_future_context,
 )
+from quest_ai_runner.core.orchestrator_text import _future_context_for_display, _parse_future_context
+from quest_ai_runner.core.orchestrator_decisions import _normalize_card_edits, _proposed_card_text
 
 from .conftest import StubRetrieval
 

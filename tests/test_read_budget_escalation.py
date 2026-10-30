@@ -15,11 +15,8 @@ second reply ("yes please fix both") started a deep run. Three generic causes, e
 from typing import Any, Dict, List
 
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    OrchestratorConfig,
-    clip_head_and_tail,
-)
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.orchestrator_text import clip_head_and_tail
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 

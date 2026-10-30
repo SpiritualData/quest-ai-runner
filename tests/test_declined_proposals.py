@@ -8,12 +8,9 @@ quests" proposal ten times across seventy-two messages. ``declined_proposals_blo
 SAME history into ``context_view`` itself, so both the planner and the grounded answer see it.
 """
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    DECLINED_PROPOSALS_NOTE,
-    Orchestrator,
-    OrchestratorConfig,
-    declined_proposals_block,
-)
+from quest_ai_runner.core.planner_prompt import DECLINED_PROPOSALS_NOTE
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.planner_context import declined_proposals_block
 
 from .conftest import StubProvider, StubRetrieval
 

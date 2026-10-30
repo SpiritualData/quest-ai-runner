@@ -364,7 +364,7 @@ def test_an_owner_without_a_stamp_still_runs():
 
 
 def standard_registry(calls):
-    from quest_ai_runner.core.tools import file_email_draft_spec, send_quest_email_spec
+    from quest_ai_runner.core.tools_quest_standard import file_email_draft_spec, send_quest_email_spec
 
     class Mailer:
         def send_quest_email(self, quest_id, **kw):

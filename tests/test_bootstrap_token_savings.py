@@ -12,11 +12,8 @@ from typing import List, Dict, Any
 # Add the package to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from quest_ai_runner.adapters.file_context_store import (
-    _select_representative_files,
-    _extract_file_snippet,
-    _summarize_snippet,
-)
+from quest_ai_runner.adapters.context_bootstrap_support import _select_representative_files
+from quest_ai_runner.adapters.context_card_extraction import _extract_file_snippet, _summarize_snippet
 
 
 def generate_mock_files(num_files: int, num_folders: int = 5) -> List[str]:
@@ -212,9 +209,7 @@ if __name__ == "__main__":
 
 
 def test_bootstrap_workers_follows_the_deployment_parallelism_budget(monkeypatch):
-    from quest_ai_runner.adapters.file_context_store import (
-        _BOOTSTRAP_WORKERS_DEFAULT, _bootstrap_workers,
-    )
+    from quest_ai_runner.adapters.context_bootstrap_support import _BOOTSTRAP_WORKERS_DEFAULT, _bootstrap_workers
 
     # Each worker holds one model call open, and for the subprocess-backed (keyless) provider that
     # is a child PROCESS. A deployment that has declared how many concurrent model calls its box
@@ -244,8 +239,10 @@ def test_bootstrap_workers_follows_the_deployment_parallelism_budget(monkeypatch
 
 
 def test_head_extractors_read_a_prefix_not_the_whole_file(tmp_path):
-    from quest_ai_runner.adapters.file_context_store import (
-        _extract_leading_comment, _extract_text_description, _read_head,
+    from quest_ai_runner.adapters.context_card_extraction import (
+        _extract_leading_comment,
+        _extract_text_description,
+        _read_head,
     )
 
     # A corpus root can legitimately contain data dumps no name-based ignore rule excludes. These
@@ -268,9 +265,8 @@ def test_head_extractors_read_a_prefix_not_the_whole_file(tmp_path):
 
 
 def test_ast_extractors_skip_a_file_too_big_to_card(tmp_path):
-    from quest_ai_runner.adapters.file_context_store import (
-        _BOOTSTRAP_MAX_BYTES, _extract_symbols, _read_whole_if_small,
-    )
+    from quest_ai_runner.adapters.context_bootstrap_support import _BOOTSTRAP_MAX_BYTES
+    from quest_ai_runner.adapters.context_card_extraction import _extract_symbols, _read_whole_if_small
 
     small = tmp_path / "small.py"
     small.write_text("def alpha():\n    pass\n\nclass Beta:\n    pass\n")

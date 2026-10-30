@@ -21,15 +21,13 @@ Offline, driven against fakes.
 """
 from datetime import datetime, timedelta, timezone
 
+from quest_ai_runner.core.managed_blocks import BLOCK_END, BLOCK_START
 from quest_ai_runner.runner.context_updates import (
-    BLOCK_END,
-    BLOCK_START,
     ContextUpdate,
     ContextUpdates,
     SourceReport,
     UpdateEngine,
     Watermarks,
-    append_receipt,
     build_update_engine,
     default_spec_resolver,
     parse_manifest,
@@ -38,6 +36,7 @@ from quest_ai_runner.runner.context_updates import (
     strip_usage_block,
     watermark_path_for,
 )
+from quest_ai_runner.runner.context_update_receipts import append_receipt
 
 NOW = datetime(2026, 9, 9, 9, 0, 0, tzinfo=timezone.utc)
 

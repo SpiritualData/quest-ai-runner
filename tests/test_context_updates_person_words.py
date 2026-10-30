@@ -17,13 +17,8 @@ Offline, hand-built bundles.
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.context_updates import (
-    MAX_BODY_CHARS,
-    MAX_PERSON_BODY_CHARS,
-    PERSON_BODY_BUDGET,
-    ContextUpdate,
-    ContextUpdates,
-)
+from quest_ai_runner.runner.context_update_types import MAX_BODY_CHARS, MAX_PERSON_BODY_CHARS, PERSON_BODY_BUDGET
+from quest_ai_runner.runner.context_updates import ContextUpdate, ContextUpdates
 
 NOW = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc)
 

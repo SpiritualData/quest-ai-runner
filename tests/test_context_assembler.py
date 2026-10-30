@@ -10,11 +10,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quest_ai_runner.adapters.file_context_store import (
-    FileContextStore,
-    _card_slug,
-    _tokenize,
-)
+from quest_ai_runner.adapters.file_context_store import FileContextStore, _tokenize
+from quest_ai_runner.adapters.context_card_extraction import _card_slug
 from hubofhubs.ports.context import AssembledContext, ContextAssembler
 from quest_ai_runner.core.context_doctrine import (
     DEEP_CONTEXT_DOCTRINE,
@@ -22,12 +19,8 @@ from quest_ai_runner.core.context_doctrine import (
     SUFFICIENCY_GATE,
     compose_deep_preamble,
 )
-from quest_ai_runner.core.orchestrator import (
-    MODEL_TIER_BLOCK,
-    PLANNER_PROMPT,
-    Orchestrator,
-    OrchestratorConfig,
-)
+from quest_ai_runner.core.planner_prompt import MODEL_TIER_BLOCK
+from quest_ai_runner.core.orchestrator import PLANNER_PROMPT, Orchestrator, OrchestratorConfig
 
 
 # ---------------------------------------------------------------------------
@@ -2021,7 +2014,7 @@ class TestRichSummaryHelpers:
     """The _build_rich_summary / _extract_docstrings helpers extract docstrings from .py files."""
 
     def test_module_docstring_in_rich_summary(self, tmp_path):
-        from quest_ai_runner.adapters.file_context_store import _build_rich_summary
+        from quest_ai_runner.adapters.context_card_extraction import _build_rich_summary
 
         p = tmp_path / "analyzer.py"
         p.write_text(
@@ -2038,7 +2031,7 @@ class TestRichSummaryHelpers:
         )
 
     def test_class_and_fn_docstrings_in_rich_summary(self, tmp_path):
-        from quest_ai_runner.adapters.file_context_store import _build_rich_summary
+        from quest_ai_runner.adapters.context_card_extraction import _build_rich_summary
 
         p = tmp_path / "engine.py"
         p.write_text(
@@ -2061,7 +2054,7 @@ class TestRichSummaryHelpers:
         ), f"def docstrings not in helper text: {combined!r}"
 
     def test_description_populated_for_py_with_docstring(self, tmp_path):
-        from quest_ai_runner.adapters.file_context_store import _build_rich_summary
+        from quest_ai_runner.adapters.context_card_extraction import _build_rich_summary
 
         p = tmp_path / "service.py"
         p.write_text(
@@ -2076,7 +2069,7 @@ class TestRichSummaryHelpers:
         assert description, f"expected non-empty description, got: {description!r}"
 
     def test_no_docstring_falls_back_to_symbol_list(self, tmp_path):
-        from quest_ai_runner.adapters.file_context_store import _build_rich_summary
+        from quest_ai_runner.adapters.context_card_extraction import _build_rich_summary
 
         p = tmp_path / "nodoc.py"
         p.write_text(

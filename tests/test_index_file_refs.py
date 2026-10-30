@@ -5,7 +5,7 @@ already holds: stage 1 alone measured ~32,550 output tokens of nothing but paths
 it again for every card it proposes, including the 52% that dedup discards. An index costs two or
 three tokens where a path costs fifteen, and the grouping decision is identical.
 """
-from quest_ai_runner.adapters.file_context_store import _numbered_tree, _resolve_file_refs
+from quest_ai_runner.adapters.context_card_extraction import _numbered_tree, _resolve_file_refs
 
 ORDERED = ["src/alpha.py", "src/beta.py", "docs/guide.md"]
 ALLOWED = set(ORDERED)

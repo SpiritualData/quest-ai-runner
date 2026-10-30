@@ -2,9 +2,8 @@
 from typing import Any, Dict, List
 
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    OrchestratorConfig,
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.planner_context import (
     _render_gathered,
     _render_gathered_for_planner,
     _summarize_observation,
@@ -101,7 +100,7 @@ def test_deep_fanout_runs_subtasks_in_parallel():
     assert res.kind == "deep"
     assert len(res.deep_results) == 2
     assert {c["goal"] for c in runner.calls} == {"A", "B"}
-    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    from quest_ai_runner.core.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
     assert not any(CONTINUE_AFTER_DECISION_NOTE in (d.output or "") for d in res.deep_results), \
         "a fan-out where nothing parks must stay byte-for-byte unaffected"
 
@@ -128,7 +127,7 @@ def test_fan_out_reply_carries_only_one_ask_when_two_subgoals_both_park():
     # race, the AGGREGATED reply must carry exactly ONE ask (the first subtask, by order), never
     # both -- this is checked at aggregation, not by timing.
     from quest_ai_runner.core.adapters_values import DeepResult
-    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    from quest_ai_runner.core.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
@@ -174,8 +173,10 @@ def test_fan_out_names_a_sibling_stopped_before_it_ran_as_not_done_yet():
     # subgoal parked first) left an empty result that the aggregation silently filtered out, so the
     # reply read as if that part were handled. It must be NAMED as not done yet, by its own goal.
     from quest_ai_runner.core.adapters_values import DeepResult
-    from quest_ai_runner.core.orchestrator import (CONTINUE_AFTER_DECISION_NOTE,
-                                                   NOT_STARTED_AFTER_DECISION_NOTE)
+    from quest_ai_runner.core.orchestrator_constants import (
+        CONTINUE_AFTER_DECISION_NOTE,
+        NOT_STARTED_AFTER_DECISION_NOTE,
+    )
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
             {"goal": "Add the venue goal", "brief": "a"},
@@ -205,8 +206,8 @@ def test_fan_out_reports_what_landed_as_well_as_the_one_ask():
     # ``max_parallel=1`` makes the order deterministic: the landed subtask runs and finishes before
     # the parking one is dispatched at all.
     from quest_ai_runner.core.adapters_values import DeepResult
-    from quest_ai_runner.core.orchestrator import (CONTINUE_AFTER_DECISION_NOTE,
-                                                   unconfirmed_no_change_text)
+    from quest_ai_runner.core.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
+    from quest_ai_runner.core.orchestrator import unconfirmed_no_change_text
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
@@ -253,7 +254,7 @@ def test_fan_out_drops_only_the_extra_asks_not_the_finished_work():
 def test_a_single_goal_turn_that_parks_is_unaffected():
     # The aggregation filter and the stop-event are both gated on ``multi``: a plain single-goal
     # deep run that parks must come back exactly as before, with no continuation sentence added.
-    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    from quest_ai_runner.core.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
     ])
@@ -449,7 +450,7 @@ def test_unexecuted_work_classifier_catches_inability_confessions():
     # Caught live (2026-07-19 reliability battery): a write-a-file task was answered with an
     # explicit inability confession + a plan for "the system" to run, and reported done. The
     # classifier missed both shapes; they must register as unexecuted work.
-    from quest_ai_runner.core.orchestrator import _answer_describes_unexecuted_work as describes
+    from quest_ai_runner.core.orchestrator_text import _answer_describes_unexecuted_work as describes
 
     assert describes(
         "I cannot execute this task in the read-and-answer step -- I can't run commands or "
@@ -495,7 +496,8 @@ def test_discovery_listing_is_not_answer_grounding_content():
     # A capability MENU (list_operations and friends) must inform the planner but NEVER be presented
     # to the answer LLM as content to answer from — otherwise the model answers from the menu ("I
     # have these operations, shall I run discovery?") instead of gathering real material.
-    from quest_ai_runner.core.orchestrator import _grounding_block, _render_gathered
+    from quest_ai_runner.core.orchestrator import _grounding_block
+    from quest_ai_runner.core.planner_context import _render_gathered
 
     discovery = {"kind": "query", "locator": "list_operations", "discovery": True,
                  "text": "OPERATION: discover_goals — list goals"}
@@ -571,7 +573,7 @@ def test_evidence_gate_is_woven_into_deep_and_grounding():
     # The grounding-context header no longer blankly forbids quoting: it must still let the model
     # name/quote the person's OWN words when that is the evidence for a claim, while still hiding
     # the retrieval mechanism itself (never "I read" / "the context I was given").
-    from quest_ai_runner.core.orchestrator import grounding_context_layer
+    from quest_ai_runner.core.orchestrator_events import grounding_context_layer
     header = grounding_context_layer("some context")
     assert "own words" in header
 
@@ -683,7 +685,7 @@ def test_answer_goal_verifier_none_exhausted_accepts():
 def test_verify_goal_prompt_rejects_future_intent():
     # The VERIFY_GOAL_PROMPT must explicitly instruct the verifier that future-intent language
     # ("Let me check", "I'm pulling up", etc.) is met=false.
-    from quest_ai_runner.core.orchestrator import VERIFY_GOAL_PROMPT
+    from quest_ai_runner.core.auxiliary_prompts import VERIFY_GOAL_PROMPT
     assert "Let me check" in VERIFY_GOAL_PROMPT
     assert "pulling" in VERIFY_GOAL_PROMPT  # "I'm pulling up" may wrap
     assert "Future intent is NOT a result" in VERIFY_GOAL_PROMPT
@@ -1499,7 +1501,7 @@ def test_narration_rationale_instructions_demand_grounding_discipline():
     is complete. Step 0 (nothing read yet) must name what it's about to check, not what it expects;
     re-plan beats must speak only to what GATHERED shows and voice unconfirmed hunches as hunches.
     """
-    from quest_ai_runner.core.orchestrator import (
+    from quest_ai_runner.core.planner_prompt import (
         _RATIONALE_INSTRUCTION_NARRATE,
         _RATIONALE_INSTRUCTION_NARRATE_REPLAN,
     )
@@ -2179,7 +2181,7 @@ def test_deferred_deep_that_failed_and_changed_nothing_is_never_written_up_as_do
     say its work landed may feed that synthesis; this one is reported in its own words through
     ``unconfirmed_no_change_text``, and no regeneration rewrites it."""
     from quest_ai_runner.core.adapters_values import DeepResult
-    from quest_ai_runner.core.orchestrator import UNCONFIRMED_NO_CHANGE_LEAD
+    from quest_ai_runner.core.orchestrator_text import UNCONFIRMED_NO_CHANGE_LEAD
     failed_text = "The goal could not be added: the quest was not found."
     provider = StubProvider(
         decisions=[{"action": "answer", "rationale": "answer then make the change",
@@ -2403,7 +2405,7 @@ def test_honest_enqueue_has_a_deterministic_floor_when_the_rewrite_call_fails():
     fall back to the pre-deep draft, which under queued doctrine may already claim the work is
     queued. The correction must not depend on a model call: a plain not-queued sentence is
     appended deterministically."""
-    from quest_ai_runner.core.orchestrator import NOT_QUEUED_NOTE
+    from quest_ai_runner.core.planner_prompt import NOT_QUEUED_NOTE
 
     class _RegenFailsProvider(StubProvider):
         """Answers normally until the honest-enqueue regeneration, then goes down."""
@@ -2455,11 +2457,8 @@ def test_render_planner_prompt_fills_every_slot_by_default():
     """FINDING 5b: PLANNER_PROMPT gained a mandatory {deferred_deep_semantics} slot, so a raw
     .format() by an external consumer now raises KeyError. render_planner_prompt is the
     non-breaking path: pass what you have, defaults fill the rest."""
-    from quest_ai_runner.core.orchestrator import (
-        DEFERRED_DEEP_INLINE_SEMANTICS,
-        DEFERRED_DEEP_QUEUED_SEMANTICS,
-        render_planner_prompt,
-    )
+    from quest_ai_runner.core.planner_prompt import DEFERRED_DEEP_INLINE_SEMANTICS, DEFERRED_DEEP_QUEUED_SEMANTICS
+    from quest_ai_runner.core.orchestrator import render_planner_prompt
 
     rendered = render_planner_prompt(user_message="what is the price?")
     assert "what is the price?" in rendered

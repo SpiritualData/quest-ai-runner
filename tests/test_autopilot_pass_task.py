@@ -13,7 +13,8 @@ import pytest
 
 from quest_ai_runner.config import RunnerConfig
 from quest_ai_runner.runner.autopilot import OPEN_TASK_STATUSES
-from quest_ai_runner.runner.poller import Poller, _foreign_series_looks_alive
+from quest_ai_runner.runner.poller import Poller
+from quest_ai_runner.runner.poller_schedule import _foreign_series_looks_alive
 
 from .conftest import StubProvider, StubRetrieval
 

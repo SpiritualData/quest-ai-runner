@@ -12,13 +12,8 @@ from datetime import datetime, timedelta, timezone
 
 from quest_ai_runner.config import RunnerConfig
 from quest_ai_runner.runner.autopilot import AutopilotPass, compose_batch_text
-from quest_ai_runner.runner.context_updates import (
-    BLOCK_START,
-    ContextUpdate,
-    UpdateEngine,
-    Watermarks,
-    build_update_engine,
-)
+from quest_ai_runner.core.managed_blocks import BLOCK_START
+from quest_ai_runner.runner.context_updates import ContextUpdate, UpdateEngine, Watermarks, build_update_engine
 from quest_ai_runner.runner.executor import TaskExecutor
 
 from tests.test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _quest
@@ -258,7 +253,7 @@ def _executor_with(engine, notes):
 def test_a_delegated_task_is_handed_what_changed_and_its_result_carries_the_receipt():
     """Not only a batch the pass composed: a task somebody delegated from chat asks the engine
     too, so nobody has to write "check my notes" into the prompt."""
-    from quest_ai_runner.runner.executor import REPLY_LOOP_CONTRACT
+    from quest_ai_runner.runner.executor_contracts import REPLY_LOOP_CONTRACT
 
     marks = Watermarks(None)
     engine = UpdateEngine(None, watermarks=marks, always=("quest_notes",), now_fn=_now)
