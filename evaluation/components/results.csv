@@ -3848,3 +3848,7 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,write_through_mcp,allowlist_writer,15,15,15/15,0/0,0,0,0,0.0,0.0,7381018,5f3dda75,none,,,
 2026-10-30,end_to_end,qar_live,13,13,13/13,0/0,93,680361,38587,0.6676,379.3,59c4006,489a4a26,claude-code-subscription,,,0.7771
 2026-10-30,chat_quality,dev_quest_chat,10,4,4/10,0/0,239,1864765,88744,0.2308,804.0,59c4006,8c27caa9,claude-haiku-5-5,,sample:10,
+2026-10-30,classification,qar_planner,3,3,2/2,1/1,3,57387,1046,0.0011,11.9,c3fadc9,231318c2,unknown,,sample:3,
+2026-10-30,classification,keyword_rules,3,3,2/2,1/1,0,0,0,0.0,0.0,c3fadc9,231318c2,none,,sample:3,
+2026-10-30,prompt_size,live,3,3,3/3,0/0,0,0,0,0.0,0.1,c3fadc9,c46aeb4b,none,,sample:3,
+2026-10-30,prompt_size,situational,3,3,3/3,0/0,0,0,0,0.0,0.1,c3fadc9,c46aeb4b,none,,sample:3,
