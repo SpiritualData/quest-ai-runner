@@ -3755,3 +3755,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-29,proactive_guidance,proactive_guidance.broken.nudge_every_time:build,24,0,0/24,0/0,0,0,0,0.0,0.0,7f9a10b,b27633e9,none,,,
 2026-10-29,hub_of_hubs,registry_scan,80,64,64/80,0/0,0,0,0,0.0,0.0,7f9a10b,bc172b4a,none,,,
 2026-10-29,hub_of_hubs,hub_of_hubs.broken.vendor_grep:build,80,28,28/80,0/0,0,0,0,0.0,5.3,7f9a10b,bc172b4a,none,,,
+2026-10-29,prompt_size,live,29,27,27/29,0/0,0,0,0,0.0,0.8,0723704,c46aeb4b,none,,,
+2026-10-29,prompt_size,situational,29,27,27/29,0/0,0,0,0,0.0,0.9,0723704,c46aeb4b,none,,,
