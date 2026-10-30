@@ -140,7 +140,19 @@ def test_a_new_ledger_file_has_the_permissions_an_ordinary_write_gets(tmp_path):
 
 def test_the_directory_comes_from_the_environment(tmp_path):
     assert metric_ledger_from_env({"QAR_METRIC_LEDGER_DIR": str(tmp_path)}).directory == str(tmp_path)
-    assert metric_ledger_from_env({}).directory.endswith("qar-metric-ledger")
+    assert os.path.basename(metric_ledger_from_env({}).directory).startswith("qar-metric-ledger")
+
+
+def test_an_account_that_cannot_write_the_shared_folder_gets_its_own(tmp_path, monkeypatch):
+    """The shared default folder belongs to the account that made it; another account's runs must still record."""
+    from quest_ai_runner.core import jsonl_ledger
+    shared = tmp_path / "qar-metric-ledger"
+    shared.mkdir()
+    monkeypatch.setattr(jsonl_ledger.tempfile, "gettempdir", lambda: str(tmp_path))
+    assert jsonl_ledger.default_directory("qar-metric-ledger") == str(shared)
+    real_access = os.access
+    monkeypatch.setattr(os, "access", lambda p, m: False if str(p) == str(shared) else real_access(p, m))
+    assert jsonl_ledger.default_directory("qar-metric-ledger") == f"{shared}-{os.getuid()}"
 
 
 # -- reconciling rows --------------------------------------------------------------------------

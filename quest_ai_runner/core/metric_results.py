@@ -31,7 +31,7 @@ from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
 
-from .jsonl_ledger import KeyedJsonlFiles
+from .jsonl_ledger import KeyedJsonlFiles, default_directory
 
 SOURCE_MEASURED = "measured"
 SOURCE_RECORDED = "recorded"
@@ -148,7 +148,7 @@ class FileMetricLedger:
     """The default ledger: a JSON-lines file per run in a directory the brain and the deep worker's shell both reach."""
 
     def __init__(self, directory: Optional[str] = None):
-        self.directory = directory or os.path.join(tempfile.gettempdir(), "qar-metric-ledger")
+        self.directory = directory or default_directory("qar-metric-ledger")
         self.files = KeyedJsonlFiles(self.directory)
 
     def record(self, result: MetricResult) -> bool:

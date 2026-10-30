@@ -26,7 +26,7 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Dict, Iterable, List, Optional
 
-from .jsonl_ledger import LEDGER_MAX_AGE_SECONDS, KeyedJsonlFiles  # noqa: F401  (age re-exported)
+from .jsonl_ledger import LEDGER_MAX_AGE_SECONDS, KeyedJsonlFiles, default_directory  # noqa: F401  (age re-exported)
 
 log = logging.getLogger("quest-ai-runner.tool_ledger")
 
@@ -85,7 +85,7 @@ class FileToolLedger:
     """
 
     def __init__(self, directory: Optional[str] = None):
-        self.directory = directory or os.path.join(tempfile.gettempdir(), "qar-tool-ledger")
+        self.directory = directory or default_directory("qar-tool-ledger")
         self.files = KeyedJsonlFiles(self.directory)
 
     def path_for(self, task_id: str) -> str:
