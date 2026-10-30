@@ -43,7 +43,8 @@ from typing import Any, Dict, List, Optional
 
 from esoi import implementation
 from ..core import usage_limit
-from ..core.adapters import ModelProviderBase, ThreadLocalCounter
+from hubofhubs.ports.scope import ThreadLocalCounter
+from ..core.adapters_bases import ModelProviderBase
 from .retry_utils import retry_transient
 
 # Tools the spawned planner/answer process is barred from. plan/answer are PURE completions —

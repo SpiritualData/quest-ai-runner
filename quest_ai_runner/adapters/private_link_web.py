@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Optional, Sequence
 
-from ..core.adapters import Observation
+from ..core.adapters_values import Observation
 from .google_link_reader import parse_google_link
 
 log = logging.getLogger("quest-ai-runner.private-link-web")

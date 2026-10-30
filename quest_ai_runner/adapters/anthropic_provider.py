@@ -18,7 +18,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import ModelProviderBase
+from ..core.adapters_bases import ModelProviderBase
 from ..core.prompt_layers import blocks_to_prompt, cache_control_indices
 from .retry_utils import retry_transient
 

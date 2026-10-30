@@ -11,7 +11,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
+from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.core.adapters_retrieval import RetrievalAdapter
 from esoi import implementation
 
 

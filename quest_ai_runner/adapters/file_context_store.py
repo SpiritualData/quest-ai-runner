@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from esoi import implementation
-from ..core.adapters import ContextAssemblerBase
+from ..core.adapters_bases import ContextAssemblerBase
 from ._walk import effective_skip_dirs
 from .card_content_render import (
     MAX_CARD_CONTENT_ITEMS as _MAX_CARD_CONTENT_ITEMS,

@@ -104,7 +104,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from esoi import implementation
-from ..core.adapters import VectorHit, VectorStoreBase
+from hubofhubs.ports.context import VectorHit
+from ..core.adapters_bases import VectorStoreBase
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from .qdrant_embedders import embed_batch_size, embed_max_chars, FASTEMBED_EMBEDDER_ID
 

@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import ModelProviderBase
+from ..core.adapters_bases import ModelProviderBase
 from ..core.prompt_layers import join_layers
 from .retry_utils import parse_json_with_retry, retry_transient
 

@@ -58,16 +58,11 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from esoi import implementation
-from ..core.adapters import (
-    EVENT_EXEC,
-    FUTURE_CONTEXT_VIA_FIELD,
-    WRITE_SURFACE_FILES,
-    DeepResult,
-    DeepRunnerBase,
-    FileWriter,
-    ModelProvider,
-    ProgressEvent,
-)
+from hubofhubs.ports.model import ModelProvider
+from ..core.adapters_events import EVENT_EXEC
+from ..core.adapters_values import FUTURE_CONTEXT_VIA_FIELD, WRITE_SURFACE_FILES, DeepResult, ProgressEvent
+from ..core.adapters_bases import DeepRunnerBase
+from ..core.adapters_deep import FileWriter
 from ..core.model_registry import ModelRegistry
 from ..vendor.aider_editblock import (
     DEFAULT_FENCE,

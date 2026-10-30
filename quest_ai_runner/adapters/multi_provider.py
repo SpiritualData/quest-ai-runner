@@ -18,12 +18,8 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import (
-    ModelProvider,
-    ThreadLocalCounter,
-    answer_with_reasoning,
-    plan_with_step,
-)
+from hubofhubs.ports.model import ModelProvider, answer_with_reasoning, plan_with_step
+from hubofhubs.ports.scope import ThreadLocalCounter
 from ..core.model_family import provider_name_for_model
 from ..usage import active_spec
 

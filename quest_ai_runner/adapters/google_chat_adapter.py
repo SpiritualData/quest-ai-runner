@@ -55,7 +55,9 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import AssembledContext, Observation, RetrievalAdapterBase
+from hubofhubs.ports.context import AssembledContext
+from ..core.adapters_values import Observation
+from ..core.adapters_bases import RetrievalAdapterBase
 from .card_scoped_learning import (
     active_card_terms,
     gate_terms,

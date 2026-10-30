@@ -59,7 +59,8 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from esoi import implementation
-from ..core.adapters import Observation, RetrievalAdapterBase
+from ..core.adapters_values import Observation
+from ..core.adapters_bases import RetrievalAdapterBase
 from .tfdfidf_sampling import keywords_from_text
 
 log = logging.getLogger("quest-ai-runner.notion")

@@ -17,7 +17,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from quest_ai_runner.core.adapters import AssembledContext, Observation, RetrievalAdapter
+from hubofhubs.ports.context import AssembledContext
+from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.core.adapters_retrieval import RetrievalAdapter
 from .conversation_format import (
     conversation_digest,
     conversation_metadata,

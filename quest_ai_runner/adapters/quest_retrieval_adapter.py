@@ -20,7 +20,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
+from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.core.adapters_retrieval import RetrievalAdapter
 from quest_ai_runner.core.reflections import DEFAULT_PERIODS, collect_reflections
 from esoi import implementation
 

@@ -73,15 +73,9 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import (
-    AssembledContext,
-    ContextAssemblerBase,
-    STEP_SELECT,
-    STEP_SUMMARIZE,
-    VectorHit,
-    VectorStore,
-    answer_with_reasoning,
-)
+from hubofhubs.ports.context import AssembledContext, VectorHit, VectorStore
+from hubofhubs.ports.model import STEP_SELECT, STEP_SUMMARIZE, answer_with_reasoning
+from ..core.adapters_bases import ContextAssemblerBase
 from ..core.card_filter import _memo_get, _memo_put, _selection_key
 from ..core.scope_tags import scope_tags_allow
 from ..core.vector_scopes import CARD_SEED_SCOPE

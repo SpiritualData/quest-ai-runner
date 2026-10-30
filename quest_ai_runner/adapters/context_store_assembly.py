@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 from datetime import datetime, timezone
 
-from ..core.adapters import AssembledContext
+from hubofhubs.ports.context import AssembledContext
 from ..core.background_pacing import Pacer
 from .card_content_render import (
     content_item_text as _content_item_text,

@@ -39,7 +39,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import OperationWriterBase, WriteResult
+from ..core.adapters_bases import OperationWriterBase
+from ..core.adapters_deep import WriteResult
 from .mcp_client import MCPClient, MCPServerSpec
 
 _log = logging.getLogger("quest-ai-runner.mcp_write_adapter")

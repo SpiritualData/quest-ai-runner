@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import Observation, RetrievalAdapterBase
+from ..core.adapters_values import Observation
+from ..core.adapters_bases import RetrievalAdapterBase
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 
 log = logging.getLogger("quest-ai-runner.files_adapter")

@@ -54,7 +54,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
-from ..core.adapters import VectorHit, VectorStoreBase
+from hubofhubs.ports.context import VectorHit
+from ..core.adapters_bases import VectorStoreBase
 from ._walk import effective_skip_dirs, prune_dirnames
 from .card_repository import CardRepository, FilesystemCardRepository
 from .card_store_identity import (

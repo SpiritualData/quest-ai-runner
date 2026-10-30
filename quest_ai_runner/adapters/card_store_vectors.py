@@ -32,7 +32,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from ..core.adapters import VectorHit
+from hubofhubs.ports.context import VectorHit
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from .card_store_identity import EMBEDDED
 

@@ -61,13 +61,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import (
-    ChannelTransportBase,
-    InboundBatch,
-    InboundMessage,
-    OutboundReply,
-    SendResult,
-)
+from ..core.adapters_channels import ChannelTransportBase, InboundBatch, InboundMessage, OutboundReply, SendResult
 from .mcp_client import MCPClient, MCPServerSpec, MCPToolResult
 
 _log = logging.getLogger("quest-ai-runner.openclaw-channel")

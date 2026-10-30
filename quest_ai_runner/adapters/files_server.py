@@ -68,7 +68,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from ..core.adapters import Observation  # noqa: F401  (re-exported type for callers building tests)
 from ._walk import prune_dirnames
 from .files_index import VisibleIndex
 from .files_redaction import REDACTED, redact  # noqa: F401  (redact re-exported for callers and tests)

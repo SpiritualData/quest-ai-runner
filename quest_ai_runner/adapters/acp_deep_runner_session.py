@@ -13,7 +13,8 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Set, Tuple
 
-from ..core.adapters import Escalation, EVENT_EXEC, ProgressEvent
+from ..core.adapters_values import Escalation, ProgressEvent
+from ..core.adapters_events import EVENT_EXEC
 from .acp_deep_runner_config import (
     AcpConfig,
     ALLOW,

@@ -51,7 +51,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from esoi import implementation
-from ..core.adapters import AssembledContext, ContextAssemblerBase
+from hubofhubs.ports.context import AssembledContext
+from ..core.adapters_bases import ContextAssemblerBase
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 
 logger = logging.getLogger(__name__)

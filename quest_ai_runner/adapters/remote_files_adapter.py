@@ -31,7 +31,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..core.adapters import Observation, RetrievalAdapterBase
+from ..core.adapters_values import Observation
+from ..core.adapters_bases import RetrievalAdapterBase
 
 log = logging.getLogger("quest-ai-runner.remote_files_adapter")
 

@@ -54,16 +54,11 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import (
-    EVENT_EXEC,
-    FUTURE_CONTEXT_VIA_FIELD,
-    WRITE_SURFACE_OPERATIONS,
-    DeepResult,
-    DeepRunnerBase,
-    ModelProvider,
-    OperationWriter,
-    ProgressEvent,
-)
+from hubofhubs.ports.model import ModelProvider
+from ..core.adapters_events import EVENT_EXEC
+from ..core.adapters_values import FUTURE_CONTEXT_VIA_FIELD, WRITE_SURFACE_OPERATIONS, DeepResult, ProgressEvent
+from ..core.adapters_bases import DeepRunnerBase
+from ..core.adapters_deep import OperationWriter
 from ..core.model_registry import ModelRegistry
 
 _log = logging.getLogger("quest-ai-runner.mcp_write_runner")

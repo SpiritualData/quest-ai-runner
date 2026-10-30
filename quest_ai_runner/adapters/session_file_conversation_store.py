@@ -42,7 +42,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from quest_ai_runner.core.adapters import ConversationContext, ConversationStore
+from hubofhubs.ports.context import ConversationContext, ConversationStore
 
 from esoi import implementation
 from .conversation_format import (

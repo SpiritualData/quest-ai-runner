@@ -57,7 +57,8 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import VectorHit, VectorStoreBase
+from hubofhubs.ports.context import VectorHit
+from ..core.adapters_bases import VectorStoreBase
 from . import card_origin
 from .card_repository import card_embed_text
 

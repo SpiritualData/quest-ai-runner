@@ -49,7 +49,8 @@ import time
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from ..core.adapters import AssembledContext, ContextAssemblerBase, ContextAssembler
+from hubofhubs.ports.context import AssembledContext, ContextAssembler
+from ..core.adapters_bases import ContextAssemblerBase
 
 logger = logging.getLogger(__name__)
 
