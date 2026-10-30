@@ -3893,3 +3893,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,quest_ops,qar_orchestrator,10,10,8/8,2/2,80,631216,30818,0.5794,330.1,18b6b8b,de2edf94,unknown,,sample:10,
 2026-10-30,quest_ops,qar_orchestrator,22,22,14/14,8/8,174,1324468,62686,1.1886,718.9,18b6b8b,de2edf94,unknown,,,
 2026-10-30,classification,keyword_rules,10,4,3/8,1/2,0,0,0,0.0,0.0,18b6b8b,231318c2,none,,sample:10,
+2026-10-30,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,5.4,dd5a6b5,6d7d1f64,none,,,
