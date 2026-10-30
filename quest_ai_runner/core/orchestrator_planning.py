@@ -113,7 +113,8 @@ class PlanningMixin:
                                       self.cfg.card_thread_enabled,
                                       tools=self.tools is not None,
                                       compact=compact_plan,
-                                      web=self.web is not None)
+                                      web=self.web is not None,
+                                      staged_plans=bool(getattr(self.cfg, "staged_plans", False)))
         # THE CASCADE'S ONE EXTRA FIELD, present only when a consumer opted in, so a deployment
         # that does not use the cascade pays nothing for it. Copied before mutating: the schemas
         # above are module-level singletons on the no-variant path.

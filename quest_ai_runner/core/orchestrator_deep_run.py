@@ -30,6 +30,7 @@ from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord, class
 from .planner_context import _is_discovery_obs, _render_gathered
 from .orchestrator_decisions import _truncate_goal, apply_quest_data_ladder_guard
 from .orchestrator_decide_tool import DEFERRED_RUNNER_KEY
+from .orchestrator_staged_plan import count_tasks, is_staged, plan_stages, tasks_in
 from .orchestrator_constants import (
     CONTINUE_AFTER_DECISION_NOTE,
     DEEP_CONTINUATION_TURN_MULTIPLIER_CAP,
@@ -67,6 +68,35 @@ from .orchestrator_types import OrchestratorResult
 
 class DeepRunMixin:
     """Running a deep goal: attempts, continuation, verification and result."""
+
+    def _hand_off_staged_plan(self, subtasks: List[Any], plan: PlanDecision, user_message: str,
+                              runner_override: Optional[Any], self_initiated: bool,
+                              user_ordered: bool) -> Optional[OrchestratorResult]:
+        """Offer a staged plan (core/orchestrator_staged_plan.py) to the runner that can realise it as real stages.
+
+        The runner is the pinned ``runner_override`` or the consumer's queue runner
+        (``deep_runners[DEFERRED_RUNNER_KEY]``), and only counts if it offers ``run_staged_plan(goal=,
+        stages=)``. None means "run it in process as usual": no such runner, a self-initiated escalation
+        the user did not order (the ordinary path declines those), or the runner handed the plan back.
+        A runner that raises ends the turn with that failure rather than running a half-created plan twice.
+        """
+        runner = runner_override if runner_override is not None else self.deep_runners.get(DEFERRED_RUNNER_KEY)
+        offer = getattr(runner, "run_staged_plan", None)
+        if not callable(offer):
+            return None
+        if self_initiated and not user_ordered and runner_starts_background_work(runner):
+            return None
+        stages = plan_stages(subtasks)
+        goal = (plan.goal or "").strip() or user_message
+        goals = [(t.get("goal") or "").strip() or user_message for stage in stages for t in stage]
+        try:
+            res = offer(goal=goal, stages=stages)
+        except Exception as e:  # noqa: BLE001 -- surfaced as a failed hand-off, never re-run in process
+            log.error(f"staged plan hand-off failed: {e}")
+            res = DeepResult(met=False, error=f"{type(e).__name__}: {e}")
+        if res is None:
+            return None
+        return OrchestratorResult(kind="deep", deep_results=[res], goals=goals, rationale=plan.rationale)
 
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
                   emit: Optional[_Emitter] = None,
@@ -183,16 +213,23 @@ class DeepRunMixin:
             return OrchestratorResult(kind="deep", goals=goals, rationale=plan.rationale,
                                       deep_results=[], text=NO_DEEP_EXECUTOR_TEXT)
 
+        # A STAGED PLAN (core/orchestrator_staged_plan.py) goes to a runner that can realise it as real stages (a
+        # consumer's queue runner, say) when one offers ``run_staged_plan``; that runner may hand it
+        # back (None) when it cannot take it, and it then runs in process, step by step, below.
+        if getattr(self.cfg, "staged_plans", False) and is_staged(subtasks):
+            handed = self._hand_off_staged_plan(subtasks, plan, user_message, runner_override,
+                                                self_initiated, user_ordered)
+            if handed is not None:
+                return handed
+
         # HIERARCHICAL GOAL: the overall user-level goal this turn pursues. When the work fans out
         # into parallel subgoals, each subgoal process must be told the HIGHER goal it serves, so it
         # stays aligned with the whole instead of optimizing its piece in isolation.
         overall_goal = (plan.goal or "").strip() or user_message
-        multi = len(subtasks) > 1
+        multi = count_tasks(subtasks) > 1
         # How many goals this call runs in all (a sequential group counts each of its tasks): the
         # turn-start assembly can stand in for a goal only when there is exactly one.
-        goal_count = sum(
-            len([t for t in item if isinstance(t, dict)]) if isinstance(item, list) else 1
-            for item in subtasks if isinstance(item, (dict, list)))
+        goal_count = count_tasks(subtasks)
         turn_context = card_context if goal_count == 1 else None
         # Whether the async post-deep card updater is active (toggle on + provider + card-update
         # store). Computed once: it gates appending the FUTURE-CONTEXT instruction to each deep brief.
@@ -1091,7 +1128,7 @@ class DeepRunMixin:
         seq_groups = []
         for item in subtasks:
             if is_sequential_group(item):
-                seq_groups.append([t for t in item if isinstance(t, dict)])
+                seq_groups.append([t for t in item if isinstance(t, (dict, list))])
             elif isinstance(item, dict):
                 flat_tasks.append(item)
 
@@ -1103,6 +1140,15 @@ class DeepRunMixin:
             """Run tasks in a group sequentially, returning results in order."""
             results = []
             for task_num, task in enumerate(group, 1):
+                if isinstance(task, list):
+                    # A step of tasks that run together (staged plans, core/orchestrator_staged_plan.py).
+                    step = [t for t in tasks_in(task)]
+                    with ThreadPoolExecutor(max_workers=min(self.cfg.max_parallel, len(step))) as step_pool:
+                        futs = [step_pool.submit(run_one, t, f"{group_index}.{task_num}.{n}")
+                                for n, t in enumerate(step, 1)]
+                        results.extend(f.result() for f in futs)
+                    all_goals.extend((t.get("goal") or "").strip() or user_message for t in step)
+                    continue
                 res = run_one(task, task_index=f"{group_index}.{task_num}")
                 results.append(res)
                 all_goals.append((task.get("goal") or "").strip() or user_message)

@@ -143,6 +143,10 @@ DEFAULT_MAX_SUBQUESTIONS = 4
 
 
 DEFAULT_MAX_DEEP_SUBTASKS = 4
+# A staged plan (OrchestratorConfig.staged_plans): at most this many steps in one sequence and this many
+# tasks across the plan. The top level keeps the DEFAULT_MAX_DEEP_SUBTASKS cap a flat list has always had.
+DEFAULT_MAX_PLAN_STAGES = 4
+DEFAULT_MAX_PLAN_TASKS = 8
 
 
 DEFAULT_DEEP_MAX_TURNS = 30

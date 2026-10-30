@@ -410,6 +410,30 @@ _WEB_READ_SPEC_FIELDS: Dict[str, Dict[str, Any]] = {
 }
 
 
+_STAGED_TASK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "goal": {"type": "string"}, "brief": {"type": "string"},
+        "run_when": {"type": "string", "enum": ["always", "prev_met", "prev_not_met"]},
+    },
+}
+#: ``deep_subtasks`` when ``OrchestratorConfig.staged_plans`` is on (core/orchestrator_staged_plan.py): an entry is a
+#: task, or a SEQUENCE (a list) whose steps are a task or a list of tasks that run together.
+STAGED_DEEP_SUBTASKS_FIELD = {
+    "type": "array",
+    "description": "Deep work, each entry one concurrent run. An entry may instead be a LIST: a "
+                   "sequence of steps run one after another, where a step is a task or a list of "
+                   "tasks run together. Use a sequence only when a later task needs an earlier "
+                   "one's result or must wait for it. A task may set run_when: 'always' (default), "
+                   "'prev_met' (only if the step before it met its goal) or 'prev_not_met' (only "
+                   "if it did not, for example a fallback). Keep plans small.",
+    "items": {"anyOf": [
+        _STAGED_TASK_SCHEMA,
+        {"type": "array", "items": {"anyOf": [_STAGED_TASK_SCHEMA, {"type": "array", "items": _STAGED_TASK_SCHEMA}]}},
+    ]},
+}
+
+
 def strip_schema_descriptions(schema: Any) -> Any:
     """PUBLIC: a deep copy of ``schema`` with every ``description`` key removed.
 
@@ -429,7 +453,8 @@ def strip_schema_descriptions(schema: Any) -> Any:
 
 def decide_tool_for(mode_signals: bool, deferred_queued: bool,
                     card_thread: bool = False, tools: bool = False,
-                    compact: bool = False, web: bool = False) -> Dict[str, Any]:
+                    compact: bool = False, web: bool = False,
+                    staged_plans: bool = False) -> Dict[str, Any]:
     """Return the decide-tool schema variant for this run's configuration.
 
     ``mode_signals`` adds the opt-in ``mode_signal`` field; ``card_thread`` adds the opt-in
@@ -443,9 +468,11 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
     required list, which is the whole contract a response has to satisfy.
     """
     base = DECIDE_TOOL_WITH_MODE_SIGNAL if mode_signals else DECIDE_TOOL
-    if not deferred_queued and not card_thread and not tools and not web:
+    if not deferred_queued and not card_thread and not tools and not web and not staged_plans:
         return compact_decide_schema(base) if compact else base
     tool = copy.deepcopy(base)
+    if staged_plans:
+        tool["input_schema"]["properties"]["deep_subtasks"] = copy.deepcopy(STAGED_DEEP_SUBTASKS_FIELD)
     if tools:
         props = tool["input_schema"]["properties"]
         props["action"]["enum"] = list(props["action"]["enum"]) + ["tool"]

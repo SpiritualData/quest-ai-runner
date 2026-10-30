@@ -37,7 +37,9 @@ class PlanDecision:
     # change never lands on a file-editing rung. None = not assessed; the ladder is unchanged.
     deep_target: Optional[str] = None
     subquestions: List[str] = field(default_factory=list)
-    deep_subtasks: List[Dict[str, Any]] = field(default_factory=list)
+    # Flat task dicts; with OrchestratorConfig.staged_plans also lists (sequences) of dicts or of
+    # lists of dicts. See core/orchestrator_staged_plan.py.
+    deep_subtasks: List[Any] = field(default_factory=list)
     rationale: str = ""
     # Optional deferred deep work: when action="answer", can also queue a deep task to run after
     deferred_deep: Optional[Dict[str, Any]] = None  # {"goal": "...", "brief": "...", "rationale": "..."}

@@ -18,6 +18,8 @@ from .orchestrator_constants import (
     DEFAULT_DEEP_MAX_TURNS,
     DEFAULT_MAX_CONSECUTIVE_READS,
     DEFAULT_MAX_DEEP_SUBTASKS,
+    DEFAULT_MAX_PLAN_STAGES,
+    DEFAULT_MAX_PLAN_TASKS,
     DEFAULT_MAX_ELAPSED_SECONDS,
     DEFAULT_MAX_GATHERED_CHARS,
     DEFAULT_MAX_GATHER_CHARS,
@@ -43,6 +45,14 @@ class OrchestratorConfig:
     max_parallel: int = DEFAULT_MAX_PARALLEL
     max_subquestions: int = DEFAULT_MAX_SUBQUESTIONS
     max_deep_subtasks: int = DEFAULT_MAX_DEEP_SUBTASKS
+    # STAGED PLANS (core/orchestrator_staged_plan.py). True lets the planner write ``deep_subtasks`` with nesting,
+    # a list of lists: a list is a sequence, and a step of a sequence may itself be a list of tasks
+    # that run together; a task may say ``run_when`` (always, prev_met, prev_not_met). A deep runner
+    # that offers ``run_staged_plan`` realises the plan its own way; otherwise it runs in process,
+    # step by step. False (default): the schema and normalizer accept the flat list only, unchanged.
+    staged_plans: bool = False
+    max_plan_stages: int = DEFAULT_MAX_PLAN_STAGES
+    max_plan_tasks: int = DEFAULT_MAX_PLAN_TASKS
     deep_max_turns: int = DEFAULT_DEEP_MAX_TURNS
     max_gather_chars: int = DEFAULT_MAX_GATHER_CHARS
     max_consecutive_reads: int = DEFAULT_MAX_CONSECUTIVE_READS

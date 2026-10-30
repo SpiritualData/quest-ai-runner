@@ -15,6 +15,7 @@ from .auxiliary_prompts import QUEST_DATA_WRITE_SURFACE_INSTRUCTION
 from .model_registry import TIERS
 from .deep_model_selection import normalize_difficulty
 from .orchestrator_types import OrchestratorConfig
+from .orchestrator_staged_plan import normalize_staged_subtasks
 from .orchestrator_constants import log
 from .orchestrator_decide_tool import USER_INTENT_ACT, normalize_user_intent
 
@@ -139,11 +140,17 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
             subs.append(s.strip())
     subs = subs[: cfg.max_subquestions]
 
-    deep_subs: List[Dict[str, Any]] = []
-    for d in (raw.get("deep_subtasks") or []):
-        if isinstance(d, dict) and (d.get("goal") or d.get("brief")):
-            deep_subs.append({"goal": d.get("goal") or None, "brief": d.get("brief") or None})
-    deep_subs = deep_subs[: cfg.max_deep_subtasks]
+    deep_subs: List[Any] = []
+    if getattr(cfg, "staged_plans", False):
+        # Nested plans allowed (core/orchestrator_staged_plan.py): caps on top level, steps per sequence, total tasks.
+        deep_subs = normalize_staged_subtasks(
+            raw.get("deep_subtasks"), max_items=cfg.max_deep_subtasks,
+            max_stages=cfg.max_plan_stages, max_tasks=cfg.max_plan_tasks)
+    else:
+        for d in (raw.get("deep_subtasks") or []):
+            if isinstance(d, dict) and (d.get("goal") or d.get("brief")):
+                deep_subs.append({"goal": d.get("goal") or None, "brief": d.get("brief") or None})
+        deep_subs = deep_subs[: cfg.max_deep_subtasks]
 
     deferred_deep: Optional[Dict[str, Any]] = None
     deferred_raw = raw.get("deferred_deep")
