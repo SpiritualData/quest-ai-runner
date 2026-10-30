@@ -50,7 +50,7 @@ from typing import Any, Dict, List, Optional
 
 from esoi import implementation
 from hubofhubs.ports.context import AssembledContext, ContextAssembler
-from ..core.adapters_bases import ContextAssemblerBase
+from hubofhubs.ports.context import ContextAssemblerBase
 
 logger = logging.getLogger(__name__)
 

@@ -834,7 +834,7 @@ class QuestApiCardRepository:
 # ---------------------------------------------------------------------------
 
 from hubofhubs.ports.context import VectorHit  # noqa: E402
-from ..core.adapters_bases import VectorStoreBase  # noqa: E402
+from hubofhubs.ports.context import VectorStoreBase  # noqa: E402
 
 
 class QuestApiCardVectorStore(VectorStoreBase):

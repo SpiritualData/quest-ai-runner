@@ -139,7 +139,7 @@ works as a drop-in:
 
 ```python
 from hubofhubs.ports.context import VectorHit
-from quest_ai_runner.core.adapters_bases import VectorStoreBase
+from hubofhubs.ports.context import VectorStoreBase
 
 class MyStore(VectorStoreBase):
     def search(self, query, *, scope=None, top_k=8):

@@ -2,7 +2,7 @@
 
 The hub imports its model SDKs, httpx, mcp and the page libraries inside functions, so a missing declaration shows only when
 that arm runs. This reads the hub's source, lists every non-standard-library module it imports, and checks that each one's
-distribution is declared by QAR's core dependencies (``hubofhubs[locks,web]``) or by the ``all`` extra."""
+distribution is declared by QAR's core dependencies (``hubofhubs[locks,science,web]``) or by the ``all`` extra."""
 import ast
 import sys
 import tomllib
@@ -13,7 +13,8 @@ import hubofhubs
 ROOT = Path(__file__).resolve().parents[1]
 # Import name -> distribution name, for every library the hub is allowed to import. A new library must be added here AND declared.
 DISTRIBUTION = {"anthropic": "anthropic", "google": "google-genai", "openai": "openai", "httpx": "httpx", "mcp": "mcp",
-                "filelock": "filelock", "pypdf": "pypdf", "trafilatura": "trafilatura", "esoi": "esoi"}
+                "filelock": "filelock", "pypdf": "pypdf", "trafilatura": "trafilatura", "esoi": "esoi",
+                "qdrant_client": "qdrant-client", "fastembed": "fastembed", "voyageai": "voyageai", "bm25s": "bm25s"}
 # Pulled by the hub's own extras named in QAR's core dependency line (locks, web) and by esoi's line.
 THROUGH_CORE = {"filelock", "httpx", "esoi"}
 
@@ -36,7 +37,8 @@ def declared_names(requirements) -> set:
 def test_every_library_the_hub_imports_is_declared_for_the_all_extra():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     core = project["dependencies"]
-    assert any(req.startswith("hubofhubs[locks,web]") for req in core), "the hub's locks and web extras are core"
+    hub_line = next(req for req in core if req.startswith("hubofhubs["))
+    assert {"locks", "web"} <= set(hub_line[len("hubofhubs["):hub_line.index("]")].split(",")), "the hub's locks and web extras are core"
     everything = declared_names(project["optional-dependencies"]["all"])
     imported = imported_third_party(Path(hubofhubs.__file__).parent)
     unknown = imported - set(DISTRIBUTION)

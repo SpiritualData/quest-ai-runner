@@ -28,7 +28,7 @@ from quest_ai_runner.adapters.vector_context_assembler import (
     VectorContextAssembler,
     seed_source_takes_limit,
 )
-from quest_ai_runner.core.adapters_bases import VectorStoreBase
+from hubofhubs.ports.context import VectorStoreBase
 from quest_ai_runner.core.vector_scopes import SeedItems
 
 

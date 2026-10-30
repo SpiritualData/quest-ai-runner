@@ -75,7 +75,7 @@ from typing import Any, Callable, Dict, List, Optional
 from esoi import implementation
 from hubofhubs.ports.context import AssembledContext, VectorHit, VectorStore
 from hubofhubs.ports.model import STEP_SELECT, STEP_SUMMARIZE, answer_with_reasoning
-from ..core.adapters_bases import ContextAssemblerBase
+from hubofhubs.ports.context import ContextAssemblerBase
 from ..core.card_filter import _memo_get, _memo_put, _selection_key
 from hubofhubs.recall.scope_tags import scope_tags_allow
 from ..core.vector_scopes import CARD_SEED_SCOPE

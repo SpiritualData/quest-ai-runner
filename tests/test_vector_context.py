@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from hubofhubs.ports.context import AssembledContext, ContextAssembler, VectorHit, VectorStore
-from quest_ai_runner.core.adapters_bases import VectorStoreBase
+from hubofhubs.ports.context import VectorStoreBase
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
 from quest_ai_runner.adapters import vector_context_assembler as vca
 from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
@@ -2914,7 +2914,7 @@ class TestSeededCardsRemainRetrievableUnderAnyScope:
         pytest.importorskip("qdrant_client")
         from quest_ai_runner.adapters.qdrant_vector_store import (
             QdrantVectorStore,
-            _scope_hash,
+            scope_hash,
         )
 
         with tempfile.TemporaryDirectory() as td:
@@ -2923,7 +2923,7 @@ class TestSeededCardsRemainRetrievableUnderAnyScope:
                 embedder=lambda texts: [[0.1] * 8 for _ in texts],
                 vector_size=8,
             )
-            seed_digest = _scope_hash(CARD_SEED_SCOPE)
+            seed_digest = scope_hash(CARD_SEED_SCOPE)
 
             # A scope entirely unrelated to the seed scope (e.g. one task's goal_id).
             unrelated_filter = store._visibility_filter({"goal_id": "g1"})

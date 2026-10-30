@@ -58,7 +58,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
 from hubofhubs.ports.context import VectorHit
-from ..core.adapters_bases import VectorStoreBase
+from hubofhubs.ports.context import VectorStoreBase
 from hubofhubs.recall import card_origin
 from hubofhubs.recall.card_repository import card_embed_text
 

@@ -64,6 +64,8 @@ gemini = ["google-genai>=2.0"]
 openai = ["openai>=1.0"]
 qdrant = ["qdrant-client>=1.7", "fastembed>=0.3"]
 bm25 = ["bm25s>=0.2"]
+# The Voyage AI embedder (hubofhubs.recall.embedders.make_voyage_embedder, imported lazily when a lane selects it).
+voyage = ["voyageai"]
 # AcpDeepRunner: the opt-in DeepRunner that drives Claude over the Agent Client Protocol instead
 # of a one-shot `claude -p` subprocess (see docs/acp-deep-runner.md). The default deep runner needs
 # none of this. The Python side is this package; the agent side is the separate Node program
@@ -95,6 +97,7 @@ all = [
     "qdrant-client>=1.7",
     "fastembed>=0.3",
     "bm25s>=0.2",
+    "voyageai",      # the hub's Voyage AI embedder factory (hubofhubs.recall.embedders)
     "mcp==2.0.0",
     "trafilatura",   # the hub's page extraction (optional there: without it page text degrades)
 ]

@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from esoi import implementation
-from ..core.adapters_bases import ContextAssemblerBase
+from hubofhubs.ports.context import ContextAssemblerBase
 from hubofhubs.recall.card_content_render import (
     MAX_CARD_REF_CHARS,
     MAX_CARD_REFS,

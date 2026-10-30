@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.ports.context import VectorHit
-from quest_ai_runner.core.adapters_bases import VectorStoreBase
+from hubofhubs.ports.context import VectorStoreBase
 from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
 
 

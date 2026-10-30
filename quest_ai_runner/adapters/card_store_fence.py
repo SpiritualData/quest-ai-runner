@@ -16,7 +16,7 @@ from hubofhubs.ports.context import VectorHit
 from hubofhubs.recall.card_store_identity import EMBEDDED
 from hubofhubs.recall.card_store_mounts import MOUNT_ID_SEP, NO_STORE, Mount, Rebase, mounted_card_id, rebase_path
 
-from ..core.adapters_bases import VectorStoreBase
+from hubofhubs.ports.context import VectorStoreBase
 from .card_store_vectors import ReaderFactory, RemoteMountReaders, compatibility, embedded_reason
 
 log = logging.getLogger("quest-ai-runner.card-mounts")
