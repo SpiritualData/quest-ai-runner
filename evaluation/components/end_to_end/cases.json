@@ -702,7 +702,7 @@
    ],
    "reply": "Your night shifts and a schedule that flips are exactly what a plan has to be built around, so here is how Quest would help with the half marathon. First, you describe where you are now and what you have already tried, including the plans you dropped, so the plan is built from your real starting point and not a generic template. Second, the plan becomes milestones, dated goals and habits that show on Today and Schedule, and you can ask Quest AI to rework it when your shifts change. Third, a short daily reflection and a weekly or monthly review show whether you are on pace for the half marathon and let you adjust before you fall behind; the reflection can look back at today and plan tomorrow, or look back at yesterday and plan today, so you can use whichever matches when your day ends. Do your shifts change from week to week, or in blocks of a few weeks?"
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; getting-started/index.md, getting-started/your-first-quest.md, getting-started/core-concepts.md, guide/habits.md, guide/productivity.md and guide/which-feature-helps-with-my-goal.md; the right reply fits two to four features to THIS goal, not a feature list"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; getting-started/index.md, getting-started/your-first-quest.md, getting-started/core-concepts.md, guide/habits.md, guide/productivity.md and guide/which-feature-helps-with-my-goal.md; the right reply fits two to four features to THIS goal, not a feature list"
  },
  {
   "id": "E2E-QUEST-02",
@@ -761,7 +761,7 @@
    ],
    "reply": "Yes, it can. Quest is built for goals that take weeks or months, and it helps you turn what you want into a plan you can follow day to day. To point it at the right thing, can I ask two questions? What is the one area that would change your year most, for example health, work or money? And what have you already tried that did not hold?"
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; a vague goal, so the right behaviour is to ask one or two questions first and not assume a circumstance (guide/which-feature-helps-with-my-goal.md lists the questions to ask back)"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; a vague goal, so the right behaviour is to ask one or two questions first and not assume a circumstance (guide/which-feature-helps-with-my-goal.md lists the questions to ask back)"
  },
  {
   "id": "E2E-QUEST-03",
@@ -845,7 +845,7 @@
    ],
    "reply": "A quest is not a checklist. It is the specification of one big, long-term intention, and a goal like that is worth finding the best strategies for before you start. Generic advice cannot do that, because the right path depends on where you start, what you have already tried, and your time, budget and limits, so Quest asks for those specifics once and uses them in every later step: the end state you want, where you are now, what you prefer and refuse, and then the strategies and plan built from them. Only the vision is needed to begin, and you can leave the other sections light and fill them in later. If you only want to write the goal down, make a quick quest: you write the outcome and build the plan yourself, it skips the research steps, and it is free forever."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; the why of the quest creation flow; built from verbatim excerpts of quest-docs commit 8a98eba; getting-started/your-first-quest.md now states outright that a big goal is worth the best strategies and that only the vision is required"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; the why of the quest creation flow; built from verbatim excerpts of quest-docs commit db5ed8d; getting-started/your-first-quest.md now states outright that a big goal is worth the best strategies and that only the vision is required"
  },
  {
   "id": "E2E-QUEST-04",
@@ -934,7 +934,7 @@
    ],
    "reply": "The daily reflection is a short check-in that bookends your day: you look back at what happened, then write what is next in plain words, and Quest turns your plan into timed goals for you to check before anything is added to your schedule. It keeps the week from drifting, and every field is optional, so it can be two sentences. A period review does the same for a week, month, quarter or year: you see your stats, reflect on how it went, decide per goal whether to move it forward, keep it or abandon it, and get suggested goals for the next period. For goals with a target number it also shows your trajectory, Ahead, On pace, At risk or Done, so you can adjust early. Nothing changes in your plan until you choose it."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; the why of the daily reflection and period reviews; built from verbatim excerpts of quest-docs commit 8a98eba; guide/productivity.md (the trajectory labels are Ahead, On pace, At risk and Done) and getting-started/core-concepts.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; the why of the daily reflection and period reviews; built from verbatim excerpts of quest-docs commit db5ed8d; guide/productivity.md (the trajectory labels are Ahead, On pace, At risk and Done) and getting-started/core-concepts.md"
  },
  {
   "id": "E2E-QUEST-05",
@@ -1007,7 +1007,7 @@
    ],
    "reply": "A Data Collection is a log where you define the fields, so each dream entry can hold exactly what you want, such as mood on waking, lucidity rating, the dream itself and symbols, and you can tag, search and filter entries. It is free for everyone on every plan, you can export it to CSV, JSON, TXT or PDF whenever you like, and if all you want is a good dream journal it is as simple as a dedicated app. A habit has a schedule, reminders and a place on Today, while a collection is a log you add to whenever you like, which suits a dream journal. If you later link it to a quest, the patterns in your data become real material for personalizing your plan."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; collections and how they differ from habits, from data-collections/index.md and guide/habits.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; collections and how they differ from habits, from data-collections/index.md and guide/habits.md"
  },
  {
   "id": "E2E-QUEST-06",
@@ -1066,7 +1066,7 @@
    ],
    "reply": "Yes. When you add a habit you answer What do you want to track? and choose one of four types. Quantity tracks an amount against a target, such as read 30 pages, with a target amount and a unit, and each time you log you enter how much you did. Timer tracks time on a clock, with a stopwatch or a countdown, such as practice piano 45 minutes. The other two are Simple Check-In, where you mark Complete, Partial or Skip, and Frequency-Based, a set number of times per period, such as three a week. All four can carry custom fields, reminders and alarms."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; the four habit types (Simple Check-In, Frequency-Based, Quantity, Timer) from guide/habits.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; the four habit types (Simple Check-In, Frequency-Based, Quantity, Timer) from guide/habits.md"
  },
  {
   "id": "E2E-QUEST-07",
@@ -1228,7 +1228,7 @@
    ],
    "reply": "ESOI stands for Evolvable Structure that Optimizes Intent. In plain words, Quest writes your goal of cutting your anxiety in half down as one intention: the end state you want and why it matters, what is in the way, the ways you could handle it, how you will carry them out and how you will measure it, and that structure can change as your results come in. An experiment is a small test of one of your strategies in your own life, with a question, something you do and something you record, for example which morning routine lowers your anxiety most. You log the linked habit, tap Analyze my data, and Quest shows what your own record says, with a confidence level, so the plan improves from your own evidence. Experiments are optional: you can choose Skip experiments and add one later."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; ESOI and experiments in plain words, from esoi/index.md, guide/experiments.md and getting-started/your-first-quest.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; ESOI and experiments in plain words, from esoi/index.md, guide/experiments.md and getting-started/your-first-quest.md"
  },
  {
   "id": "E2E-QUEST-09",
@@ -1308,7 +1308,7 @@
    ],
    "reply": "A mentor is a real person who guides you through your quest with check-ins and a private chat, so for a first marathon it adds human accountability and judgment on top of your plan; mentors are optional. To find one, open Mentorship in the navigation menu, tap Find a mentor and describe in your own words what you want help with, for example finishing a first marathon. Each result shows the mentor's background, focus areas and a verification badge, and you can request one, choosing a check-in tier and how often to meet. Requesting does not charge you: each mentor sets tiers with one fixed price per check-in, you add credit to your own balance, and credit is spent only when a check-in takes place. You choose which of your quests a mentor can open. Do you want help mostly with the training plan, or with staying consistent when life gets busy?"
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; mentee side: a prospective mentee with a specific goal, from guide/mentors.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; mentee side: a prospective mentee with a specific goal, from guide/mentors.md"
  },
  {
   "id": "E2E-QUEST-10",
@@ -1401,7 +1401,7 @@
    ],
    "reply": "Open Mentorship in the navigation menu and tap Become a mentor. The application has four steps: share what you have, such as a resume or links, your account details, your mentor profile, and your credentials, where you need at least one thing that can be checked, such as a certification, a licence, a testimonial or a link to your portfolio. You are listed as soon as you submit, with no approval wait, and an AI scores your application from 0 to 100 within a minute or two; mentees see that score as a badge. What you offer is check-in tiers: named packages, each with one fixed price per check-in, which you set yourself. When you complete a check-in, the tier's price is added to your earnings as pending credit, and any service fee your mentee pays is added on top, so you receive your full price. Payouts are switched on by Quest, not by you, so until they are, your earnings are safe and keep building. Once they are on, you set up payouts through Stripe and withdraw to your bank, though payout set-up is not available in every country, and Quest cannot promise earnings or clients."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; mentor side: a prospective mentor, from guide/mentors.md (listed on submit with an AI score, no approval wait; payouts are switched on by Quest)"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; mentor side: a prospective mentor, from guide/mentors.md (listed on submit with an AI score, no approval wait; payouts are switched on by Quest)"
  },
  {
   "id": "E2E-QUEST-11",
@@ -1483,7 +1483,7 @@
    ],
    "reply": "You decide, quest by quest. Under My mentors each quest is Not shared, View or Edit. With View your mentor sees the whole quest dashboard but cannot change it, with Edit they can also edit it, and they only see the quests you share. You can change or stop sharing at any time. Payment comes from the credit in your own balance and is only spent when a check-in takes place: the tier's price plus a 5% service fee on the Free and Quest AI plans, with no fee on Quest Guided."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; mentee in the mentorship flow, how it works, from guide/mentors.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; mentee in the mentorship flow, how it works, from guide/mentors.md"
  },
  {
   "id": "E2E-QUEST-12",
@@ -1562,7 +1562,7 @@
    ],
    "reply": "No. Quest does not guarantee results: a mentor supports and advises you, and you still own your quest and your decisions. On money, you are charged only when a check-in takes place, cancelled check-ins are not charged, and if you end a mentorship the check-ins already completed stay paid and nothing is refunded. I do not see a money-back policy for not reaching a goal in the documentation I have, so for that the support team can confirm."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; a trap on a mentor feature: guide/mentors.md says a mentor does not guarantee results and that completed check-ins stay paid when a mentorship ends, but describes no money-back policy, so the right reply states the no-guarantee fact, shares only what is documented about charging and sends anything else to support"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; a trap on a mentor feature: guide/mentors.md says a mentor does not guarantee results and that completed check-ins stay paid when a mentorship ends, but describes no money-back policy, so the right reply states the no-guarantee fact, shares only what is documented about charging and sends anything else to support"
  },
  {
   "id": "E2E-QUEST-13",
@@ -1635,7 +1635,7 @@
    ],
    "reply": "Both are in Settings. Under Account, Profile & Identity opens your account screen, where you set your Display Name (the name shown in chats), edit your Bio and upload a profile photo. In the Timezone section you can set your time zone or leave it on Auto-detect, which shows your current one. Your Today, Schedule and period reviews use that time zone to decide what counts as today, so a wrong time zone is a likely cause of Today switching days at the wrong time."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; profile settings and time zone, from account/index.md (Settings > Account > Profile & Identity, and the Timezone setting)"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; profile settings and time zone, from account/index.md (Settings > Account > Profile & Identity, and the Timezone setting)"
  },
  {
   "id": "E2E-QUEST-14",
@@ -1698,6 +1698,12 @@
       "no setting for quiet hours",
       "is no quiet hours",
       "not have scheduled quiet hours"
+     ],
+     [
+      "no setting for how often",
+      "no frequency setting",
+      "no notification frequency",
+      "does not have a frequency setting"
      ]
     ]
    },
@@ -1706,7 +1712,8 @@
     "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\bsms\\b",
-    "(?<!n't )(?<!not )(?<!cannot )(?<!no )(?<!to )\\b(set|schedule|enable|turn on) (up )?(a |your )?(scheduled )?quiet hours\\b"
+    "(?<!n't )(?<!not )(?<!cannot )(?<!no )(?<!to )\\b(set|schedule|enable|turn on) (up )?(a |your )?(scheduled )?quiet hours\\b",
+    "(?<!n't )(?<!not )(?<!cannot )(?<!no )(?<!to )\\b(set|change|choose|adjust|limit) (how often|the frequency|notification frequency)"
    ]
   },
   "quality_rubric": [
@@ -1724,9 +1731,9 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "Open the bell in the header to reach your Notifications page, then the gear in its header for the notification settings. There you can turn push and email on or off, choose which categories you want (Habits, Quests, Mentors, Community, the chats, Data and System), switch Sound and Vibration off, and toggle Habit & Goal Reminders on their own. One thing to watch: Push Notifications also covers the habit and goal reminders Quest schedules for your set times, so turning push off silences those too. To keep your reminders and cut the rest, keep push and Habit & Goal Reminders on and switch off the categories you do not need. Quest has no scheduled quiet hours setting, so those categories and switches are the controls. You can also pick a primary device so only one device receives notifications, and remove devices you no longer use."
+   "reply": "Open the bell in the header to reach your Notifications page, then the gear in its header for the notification settings. There you can turn push and email on or off, choose which categories you want (Habits, Quests, Mentors, Community, the chats, Data and System), switch Sound and Vibration off, and toggle Habit & Goal Reminders on their own. One thing to watch: Push Notifications also covers the habit and goal reminders Quest schedules for your set times, so turning push off silences those too. To keep your reminders and cut the rest, keep push and Habit & Goal Reminders on and switch off the categories you do not need. Quest has no setting for how often it notifies you and no scheduled quiet hours setting, so those categories and switches are the controls. You can also pick a primary device so only one device receives notifications, and remove devices you no longer use."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; notifications, from account/index.md (the page states Quest has no scheduled quiet hours setting) and guide/habits.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; notifications, from account/index.md (the page states Quest has no notification frequency setting and no scheduled quiet hours setting) and guide/habits.md"
  },
  {
   "id": "E2E-QUEST-15",
@@ -1825,7 +1832,7 @@
    ],
    "reply": "Yes. Go to Settings > Calendar Sync, tap Connect Google and sign in with your Google account in the browser, then turn on the calendars you want. A fresh connection does nothing until you choose: to let a calendar inform Quest, open its settings and turn on Show events on Quest and use for AI scheduling. Its events then appear on Today and Schedule in their real time slots, the AI plans your day around them, and your scheduling links will not offer a time they cover. Switching that on also turns on Create goals from calendar events, so new events become goals, or a habit for a simple daily or weekly repeat; Quest sends no reminder of its own for a habit made this way, because the calendar event already reminds you, and you can turn that setting off if you only want busy time. Calendar events are read-only in Quest, so you change them in the calendar they came from. Your own goals and habits go out to a calendar only if you turn on Add Quest schedule to this calendar and then Sync goals or Sync habits. Tap Sync now on the account to check that it worked."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; Google Calendar sync, from guide/calendar-sync.md and how-to/goals-and-plans.md (a new connection starts with both directions off; calendar-made habits get no Quest reminder)"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; Google Calendar sync, from guide/calendar-sync.md and how-to/goals-and-plans.md (a new connection starts with both directions off; calendar-made habits get no Quest reminder)"
  },
  {
   "id": "E2E-QUEST-16",
@@ -1916,7 +1923,7 @@
    ],
    "reply": "Yes. Quest is available in English and Español, and no other language ships today. Go to Settings, tap the Language row and pick Español from the Select Language list. The app switches right away with no restart, and the choice is saved with your account so it carries over to every device. It changes the interface (navigation, buttons, labels, error messages, onboarding and settings) and Quest's world content such as planet, town and category names. It does not change what you have written: your quest titles, notes and descriptions always display in the language you wrote them in, so your existing quests are not translated. What Quest AI writes for you follows the language set in Settings > Language, so set it to Español to get replies in Español, or ask it explicitly for another language in your message."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; languages, from account/index.md (two languages; Quest AI follows the Settings > Language choice, not the language the person writes in)"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; languages, from account/index.md (two languages; Quest AI follows the Settings > Language choice, not the language the person writes in)"
  },
  {
   "id": "E2E-QUEST-17",
@@ -1959,37 +1966,47 @@
     "free to start",
     "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
-    "\\b(export|download)\\s+(all of\\s+)?your\\s+(entire|whole|full)\\s+(account|data)\\b"
+    "\\b(export|download)\\s+(all of\\s+)?your\\s+(entire|whole|full)\\s+(account|data)\\b",
+    "(?<!n't )(?<!not )(?<!no )(?<!cannot )(?<!to )\\b(export|exports|send|sync|save)\\s+(it |them |your [a-z ]{0,20})?(directly )?(to|into) google sheets"
    ],
    "reply_has_n": {
-    "n": 2,
+    "n": 3,
     "groups": [
      [
-      "no single button",
-      "whole account",
-      "entire account"
+      "download my collections data"
      ],
      [
-      "api"
+      "one json",
+      "json file",
+      "single json"
+     ],
+     [
+      "not in that file",
+      "not included",
+      "quests, goals"
+     ],
+     [
+      "stripe",
+      "web subscription"
+     ],
+     [
+      "apple",
+      "google play"
      ],
      [
       "csv"
      ],
      [
       "30 days"
-     ],
-     [
-      "apple",
-      "google play"
      ]
     ]
    }
   },
   "quality_rubric": [
    "Gives concrete steps in the app's own words (Settings, Account, Delete Account)",
-   "Says deletion cannot be undone and how to take data out first",
-   "Mentions cancelling a store subscription separately",
-   "Says there is no single button that exports the whole account and does not overclaim what can be exported",
+   "Says deletion cannot be undone and how to take collections data out first",
+   "Says Quest cancels a web subscription but a store subscription must be cancelled in the store",
+   "Says quests, goals and the profile are not in the collections download and there is no Google Sheets export",
    "Uses plain words and no jargon the person did not use"
   ],
   "ideal": {
@@ -2000,9 +2017,9 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "To take your data with you first: any Data Collection exports to CSV, JSON, TXT or PDF from its export button (or several at once from the collections list), and a quest can be exported as a PDF. The app has no single button that exports your whole account; for programmatic access to the rest, including all your collections at once, use the API. To delete: open Settings, scroll to the Account section near the bottom and tap Delete Account, review what will be deleted, tap Continue, then type DELETE MY ACCOUNT exactly as shown and tap Delete My Account. This cannot be undone, and your data is removed from our servers within 30 days. If you subscribed through the Apple App Store or Google Play, cancel that subscription separately, because deleting your account does not cancel it."
+   "reply": "To take your data first: any Data Collection exports to CSV, JSON, TXT or PDF from its export button. To take all your collections at once, open Settings and, in the last Account section, tap Download my collections data, which saves all your collections and their entries as one JSON file. Quests, goals and your profile are not in that file, and there is no Google Sheets export, so choose CSV if you want a spreadsheet; a quest can also be exported as a PDF. To delete: in the same Account section tap Delete Account, review what will be deleted, tap Continue, then type DELETE MY ACCOUNT exactly and tap Delete My Account. Quest cancels a web subscription (Stripe) for you first, then deletes your data, then removes your sign-in. This cannot be undone, and your data is removed from our servers within 30 days. If you subscribed through the Apple App Store or Google Play, Quest cannot cancel that one, so cancel it in the store yourself."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; account deletion and data export, from account/delete-account.md and reference/developers.md (collections export; the app has no whole-account export button)"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; account deletion and data export, from account/delete-account.md and reference/developers.md (Download my collections data saves collections and entries as one JSON, no quests, goals or profile, no Google Sheets export; deletion cancels a Stripe subscription, deletes data, then removes the sign-in; store subscriptions are cancelled in the store)"
  },
  {
   "id": "E2E-QUEST-24",
@@ -2147,6 +2164,92 @@
   "source": "the product owner: questions about Quest matter for the subscription funnel; a settings trap: the documentation lists push and email notifications and no text messages (checked 2026-10-30), so the right reply is not-sure plus support"
  },
  {
+  "id": "E2E-QUEST-26",
+  "kind": "quest_trap",
+  "stratum": "quest_question",
+  "group": "Questions about Quest",
+  "message": "Can I ask Quest AI in chat for a plan with stages, where it does step one, then step two only if step one falls short, then step three, all as one ordered plan?",
+  "world": {
+   "pinned": null,
+   "docs_only": true,
+   "docs": [
+    "ai_tasks_followup",
+    "ai_tasks_staged",
+    "quest_ai_now_later",
+    "workflows_order"
+   ]
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "min_reply_chars": 150,
+   "max_reply_chars": 1500,
+   "reply_has": [
+    [
+     "off by default",
+     "not on by default",
+     "turned off by default"
+    ]
+   ],
+   "reply_has_n": {
+    "n": 2,
+    "groups": [
+     [
+      "workflow"
+     ],
+     [
+      "one request",
+      "single request",
+      "in one task"
+     ],
+     [
+      "same task",
+      "tries again",
+      "retries"
+     ],
+     [
+      "not fully done"
+     ],
+     [
+      "ladder",
+      "test cases",
+      "shows they work",
+      "show they work"
+     ]
+    ]
+   },
+   "reply_lacks_regex": [
+    "free to start",
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
+    "\\b(premium|pro|plus|starter|basic|business|enterprise|family|student|lifetime)\\s+(plan|tier|subscription)\\b",
+    "\\bquest\\s+(pro|plus|premium|max|ultra|lite|basic|starter)\\b",
+    "(?<!n't )(?<!not )(?<!cannot )(?<!to )\\b(i|quest ai|it) (can|will) (set up|turn|queue|run|make|create|build)[^.]{0,50}(staged|ordered|multi-step) plan",
+    "\\b(yes|sure)[,.!]? (i|quest ai) (can|will)",
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "quality_rubric": [
+   "Says plainly that it cannot promise an ordered multi-step plan from chat, because staged plans are off by default",
+   "Offers what works now (the steps in order inside one request, or a Workflow)",
+   "Explains that a missed goal retries inside the same task and the person decides the next step",
+   "Does not promise a staged plan, a task chain or an automatic follow-up",
+   "Uses plain words and no jargon the person did not use"
+  ],
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "a trap on a chat feature the documentation says is off by default, so the reply promises no ordered plan",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "I would not promise that as a chat feature. The documentation describes staged plans, where one request with an order in it becomes a plan of stages and a later step can run only if the earlier stage met its goal or did not, but they are off by default until a staged-plan test run shows they work, so I cannot say you will get them here. What works now: write the steps in order inside one request, which is one task with one result; if a task misses its goal it tries again inside the same task and ends as Not fully done, and you carry on by sending a message in it; or build a Workflow, whose steps can start once the step before is done and which is part of the paid plans."
+  },
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; a trap on staged plans: guide/ai-tasks.md says they are off by default until a staged ladder shows they work, so the right reply promises no ordered multi-step plan as a chat feature and offers one request, a Workflow, or a follow-up message in the task"
+ },
+ {
   "id": "E2E-QUEST-18",
   "kind": "quest_ai",
   "stratum": "quest_question",
@@ -2226,7 +2329,7 @@
    ],
    "reply": "Quest AI is one chat that knows your quests, plans and progress, so you can use it three ways. You can ask it things, for example to explain what a strategy is based on or to summarize where you are on a quest. You can have it change your quest, such as adding a goal or a habit: that runs right there in the chat after you approve it (or at once if Auto-run is on), and it is recorded as a Quest operation. Or you can hand it work that takes time or should wait, like researching three standing desks under a budget: Quest AI turns that into an AI task that works in the background and reports back, and you can follow its progress and read the result when it is done. A quick request runs in the moment, while something deferred, scheduled or needing the live web becomes a task, and you can force a task by saying make a task for it."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; Quest AI chat, quest operations and background tasks, from guide/quest-ai.md and guide/ai-tasks.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; Quest AI chat, quest operations and background tasks, from guide/quest-ai.md and guide/ai-tasks.md"
  },
  {
   "id": "E2E-QUEST-19",
@@ -2244,7 +2347,8 @@
     "quest_ai_intro",
     "reflection",
     "which_feature_ai",
-    "account_assistant"
+    "account_assistant",
+    "ai_reps_team"
    ]
   },
   "expect": {
@@ -2308,7 +2412,7 @@
    ],
    "reply": "For admin that never gets done, I would start with AI tasks: you write what you want done, for example in your daily reflection, one task per line, or by asking Quest AI in chat, and your assistant works on it in the background and reports back. Second, a workflow lays out who does what and by when as a diagram, with each step run by a person on your team or by one of your AI reps, so the weekly admin with your two part-timers, once they are on your team, does not depend on you remembering it, and a missed step shows up as a risk. Third, an AI rep is your own AI counterpart, and you can add one for a specific area such as admin. Which admin jobs come back every week, and which are one-off?"
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; which AI productivity features fit a stated situation, from guide/ai-tasks.md, guide/workflows.md, guide/ai-representatives.md, guide/productivity.md and guide/which-feature-helps-with-my-goal.md; the right reply fits features to THIS person"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; which AI productivity features fit a stated situation, from guide/ai-tasks.md, guide/workflows.md, guide/ai-representatives.md, guide/productivity.md and guide/which-feature-helps-with-my-goal.md; the right reply fits features to THIS person"
  },
  {
   "id": "E2E-QUEST-20",
@@ -2355,7 +2459,8 @@
     "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\bscience (task|search) type\\b",
-    "docs lookup (answers|is|means|looks up)[^.;]{0,60}(how quest works|quest's (own )?documentation|product documentation)"
+    "docs lookup (answers|is|means|looks up)[^.;]{0,60}(how quest works|quest's (own )?documentation|product documentation)",
+    "\\bscience (is|counts as|are) (a|an) (ai )?(task )?(type|kind)\\b"
    ]
   },
   "quality_rubric": [
@@ -2373,9 +2478,9 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "Tasks come in kinds, and you can filter them by Type on the AI Tasks page. You never pick the type: you say what you want and Quest AI routes it. A Quest operation is a change to your Quest data made from chat, such as adding a goal, and it also covers general deep work that needs no web or documents, such as drafting or planning. A Web search is work that needs the live internet, such as researching the best standing desks under a budget overnight; for a quick fact you need now, Quest AI searches inside the reply instead and creates no task. A Docs lookup is work over your own context documents and knowledge with no internet, such as going through your notes on a grant and listing the open questions; asking how Quest itself works is different, and is answered in chat. An External environment task is a deep run on one of your team's connected runners, for work only that machine can do, such as checking server logs. You do not need an external environment: a Quest operation or a web search is a task like any other."
+   "reply": "Tasks come in kinds, and you can filter them by Type on the AI Tasks page. You never pick the type: you say what you want and Quest AI routes it. A Quest operation is a change to your Quest data made from chat, such as adding a goal, and it also covers general deep work that needs no web or documents, such as drafting or planning. A Web search is work that needs the live internet, such as researching the best standing desks under a budget overnight; for a quick fact you need now, Quest AI searches inside the reply instead and creates no task. A Docs lookup is work over your own context documents and knowledge with no internet, such as going through your notes on a grant and listing the open questions; asking how Quest itself works is different, and is answered in chat. An External environment task is a deep run on one of your team's connected runners, for work only that machine can do, such as checking server logs. You do not need an external environment: a Quest operation or a web search is a task like any other. Science is not a task type: for papers use the Science page, and for evidence behind a quest run a Deep Inquiry."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; the task types, from guide/ai-tasks.md and guide/quest-ai.md (a Docs lookup works over the person's own documents, not Quest's documentation; research-paper search is the Science page, not a task type)"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; the task types, from guide/ai-tasks.md and guide/quest-ai.md (a Docs lookup works over the person's own documents, not Quest's documentation; research-paper search is the Science page, not a task type)"
  },
  {
   "id": "E2E-QUEST-21",
@@ -2474,9 +2579,9 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "Not as a chain of separate tasks. Tasks do not wait on each other, and there is no setting that says run B when A is done. For an order you have three options: write the three steps in order inside one request (one task is one piece of work with one result); ask for a checklist in chat and tap the boxes in the order you want (each tap starts its own task); or build a Workflow, whose steps can start once the step before is done, which is part of the paid plans. On your second question: no, Quest does not start a new task on its own when a goal is not met, and there is no way to say if this is not met, create that task. Before a task reports, its result is checked against what you asked, and if it falls short it tries again inside the same task. If it still does not reach the goal it ends as Not fully done, with what is missing at the end of its result, and you carry on by sending a message in the task."
+   "reply": "Not as a chain of separate tasks. Tasks do not wait on each other, and there is no setting that says run B when A is done. For an order you have three options: write the three steps in order inside one request (one task is one piece of work with one result); ask for a checklist in chat and tap the boxes in the order you want (each tap starts its own task); or build a Workflow, whose steps can start once the step before is done, which is part of the paid plans. On your second question: no, Quest does not start a new task on its own when a goal is not met, and there is no way to say if this is not met, create that task. The one exception is a staged plan, where a later step can be set to run only if the earlier stage met its goal or did not, but that feature is off by default, so do not count on it. Before a task reports, its result is checked against what you asked, and if it falls short it tries again inside the same task. If it still does not reach the goal it ends as Not fully done, with what is missing at the end of its result, and you carry on by sending a message in the task."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; guide/ai-tasks.md (Follow-up and ordered work) and guide/productivity.md: tasks do not wait on each other, an order comes from one request, a chat checklist or a Workflow, and a task that misses its goal retries inside the same task and ends as Not fully done; Quest starts no new task on its own and has no if-not-met rule"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; guide/ai-tasks.md (Follow-up and ordered work) and guide/productivity.md: tasks do not wait on each other, an order comes from one request, a chat checklist or a Workflow, and a task that misses its goal retries inside the same task and ends as Not fully done; Quest starts no new task on its own and has no if-not-met rule"
  },
  {
   "id": "E2E-QUEST-22",
@@ -2558,7 +2663,7 @@
    ],
    "reply": "A workflow shows who does what, and when, as a diagram: steps joined by arrows. Each step is run by a person on your team or by one of your AI reps, and says what needs to happen and by when, and Quest watches whether it happened so a missed step shows up as a risk. To create one for your weekly review, open the menu, expand AI Productivity, tap Workflows, then tap New workflow, name it, choose your team, and pick Describe it and let AI draft it. Say what the review is for and who is involved, ask for changes if the draft is off, and nothing runs until you choose Create workflow; a workflow made there is live straight away, so check the draft first. Workflows are part of the AI Productivity features, included in the 31 day trial and the paid plans."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; workflows, from guide/workflows.md"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; workflows, from guide/workflows.md"
  },
  {
   "id": "E2E-QUEST-23",
@@ -2571,7 +2676,8 @@
    "docs_only": true,
    "docs": [
     "ai_reps_intro",
-    "ai_reps_may"
+    "ai_reps_may",
+    "ai_reps_team"
    ]
   },
   "expect": {
@@ -2622,6 +2728,10 @@
      [
       "outbound email",
       "email"
+     ],
+     [
+      "team ai representatives",
+      "team ai reps"
      ]
     ]
    },
@@ -2647,9 +2757,9 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "An AI rep is your own AI counterpart in Quest: the version of Quest AI that acts as you, carrying your context, working in your voice and running work on your behalf. You always have one default rep, which represents you to your teammates and conducts a chat or runs a task when no other rep is chosen, and you can create more for different areas, each with a name, an area and a Behavior that says how it should respond as you. On its own it may answer in your voice, take the first pass on a task or goal assigned to you, add a note to a quest and record progress. By default it asks you first before changing your Quest data, such as editing a quest or creating or deleting goals, and anything that speaks for you outside Quest, such as an outbound email, waits in your approvals for you to review and send."
+   "reply": "An AI rep is your own AI counterpart in Quest: the version of Quest AI that acts as you, carrying your context, working in your voice and running work on your behalf. You always have one default rep, which represents you to your teammates and conducts a chat or runs a task when no other rep is chosen, and you can create more for different areas, each with a name, an area and a Behavior that says how it should respond as you. On its own it may answer in your voice, take the first pass on a task or goal assigned to you, add a note to a quest and record progress. By default it asks you first before changing your Quest data, such as editing a quest or creating or deleting goals, and anything that speaks for you outside Quest, such as an outbound email, waits in your approvals for you to review and send. On a team, the Team AI Representatives screen, opened from your Profile page under AI Productivity or from the navigation menu under Your AI, lists every rep for your active team."
   },
-  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit 8a98eba; AI reps, from guide/ai-representatives.md (what a rep may do on its own and what it asks first)"
+  "source": "the product owner: questions about Quest matter for the subscription funnel; built from verbatim excerpts of quest-docs commit db5ed8d; AI reps, from guide/ai-representatives.md (what a rep may do on its own and what it asks first)"
  },
  {
   "id": "E2E-DOCS-01",
@@ -2810,7 +2920,8 @@
    "pinned": "q_fit",
    "docs": [
     "science_intro",
-    "quest_ai_web"
+    "quest_ai_web",
+    "ai_tasks_types"
    ]
   },
   "web": [
@@ -2876,9 +2987,9 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "I cannot search the research papers from this chat, so I will not give you two citations I cannot check. The Science page in the navigation menu can: its Direct mode finds matching papers and experiences for a question like easy cycling during a knee injury. I can run a web search instead and cite those pages as links, though that is not a literature search. Want me to do that?"
+   "reply": "I cannot search the research papers from this chat, so I will not give you two citations I cannot check. The Science page in the navigation menu can: its Direct mode finds matching papers and experiences for a question like easy cycling during a knee injury. For evidence behind one of your quests, a Deep Inquiry does that. I can run a web search instead and cite those pages as links, though that is not a literature search. Want me to do that?"
   },
-  "source": "a science or literature request in the offline world with the literature search NOT configured (no OpenAlex key): the planner is told the tool is unavailable, so the right reply states the limit, points to Science and offers the web search, and invents no citation; the configured counterpart is E2E-SCI-01 (guide/science.md says the Science page and Deep Inquiry do search papers)"
+  "source": "a science or literature request in the offline world with the literature search NOT configured (no OpenAlex key): the planner is told the tool is unavailable, so the right reply states the limit, points to Science and offers the web search, and invents no citation; the configured counterpart is E2E-SCI-01 (guide/science.md says the Science page and Deep Inquiry do search papers); guide/science.md and guide/ai-tasks.md state that chat does not search the scientific literature, that Science is not a task type, and that evidence questions go to the Science page or a Deep Inquiry"
  },
  {
   "id": "E2E-SEQ-01",

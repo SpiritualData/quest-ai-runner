@@ -160,8 +160,22 @@ def test_the_audit_corrections_flip_what_the_old_docs_promised():
     assert reply_ok("E2E-QUEST-14", BY_ID["E2E-QUEST-14"]["ideal"]["reply"] + " You cannot set quiet hours.")["ok"]
     # a mentor is listed on submit with an AI score; payouts are switched on by Quest
     assert not reply_ok("E2E-QUEST-10", BY_ID["E2E-QUEST-10"]["ideal"]["reply"] + " Your application waits for approval by a person first.")["ok"]
-    # the whole account has no export button
+    # the collections download exists but holds no quests, goals or profile; there is no Google Sheets export
+    ideal17 = BY_ID["E2E-QUEST-17"]["ideal"]["reply"]
+    assert not reply_ok("E2E-QUEST-17", ideal17 + " You can also export it to Google Sheets.")["ok"]
     assert "covers" in reply_ok("E2E-QUEST-17", "Open Settings, tap Delete Account, type DELETE MY ACCOUNT. This is permanent and cannot be undone. Use the export button first." * 2)["note"]
+    # no notification frequency setting
+    assert not reply_ok("E2E-QUEST-14", BY_ID["E2E-QUEST-14"]["ideal"]["reply"] + " You can adjust how often it notifies you.")["ok"]
+    # Science is not a task type
+    assert not reply_ok("E2E-QUEST-20", BY_ID["E2E-QUEST-20"]["ideal"]["reply"] + " Science is a task type for papers.")["ok"]
+
+
+def test_the_staged_plan_trap_promises_no_ordered_plan_as_a_chat_feature():
+    ideal = BY_ID["E2E-QUEST-26"]["ideal"]["reply"]
+    assert reply_ok("E2E-QUEST-26", ideal)["ok"]
+    assert not reply_ok("E2E-QUEST-26", "Yes, I can set up a staged plan for that right now: step one, then step two only if it falls short, then step three.")["ok"]
+    assert not reply_ok("E2E-QUEST-26", "Quest AI can turn that into an ordered plan in chat. Staged plans run each stage after the last one ends.")["ok"]
+    assert "lacks" in reply_ok("E2E-QUEST-26", "Write the steps in order in one request or build a workflow, and a task retries in the same task.")["note"]
 
 
 def test_the_feature_questions_need_the_documented_facts():
@@ -245,28 +259,33 @@ def test_the_rubric_grades_a_transcript_directory_with_a_fake_provider(tmp_path)
 
 # ---- every fact a documentation case requires is stated by the excerpts it is shown
 
-DOC_KINDS = {"quest_consult", "quest_clarify", "quest_why", "quest_feature", "quest_mentor", "quest_settings", "quest_trap", "quest_ai", "docs_lookup"}
+DOC_KINDS = {"quest_consult", "quest_clarify", "quest_why", "quest_feature", "quest_mentor", "quest_settings", "quest_trap", "quest_ai", "docs_lookup", "science"}
 # A required group whose words cannot be in the documentation: the honest answer to a question the documentation does not cover
 # (the fixture must then NOT mention the thing asked about), or a negative fact the documentation states as a question and answer.
 ABSENT = {"E2E-QUEST-24": ("not sure", ["fitbit", "apple watch", "steps count", "wearable"]),
           "E2E-QUEST-25": ("not sure", [" sms", "text message"])}
-NEGATIVE = {"E2E-QUEST-12": ("does not guarantee", "**Does a mentor guarantee results?** No.")}
+NEGATIVE = {"E2E-QUEST-12": ("does not guarantee", "**Does a mentor guarantee results?** No."),
+            "E2E-SCI-02": ("can't search", "Quest AI chat does not search the scientific literature")}
 # Corrections the audit made to the documentation, each a verbatim sentence the fixture must carry for the case that depends on it.
 AUDIT_FACTS = {
-    "E2E-QUEST-19": [("account_assistant", "It is on by default.")],
+    "E2E-QUEST-19": [("account_assistant", "It is on by default."), ("ai_reps_team", "Open it from your Profile page (**AI Productivity**, then **Team AI Representatives**)")],
     "E2E-QUEST-15": [("calendar_settings", "Quest does not send its own reminder for a habit made this way"), ("calendar_intro", "A newly connected calendar starts with both directions off")],
     "E2E-QUEST-06": [("habit_points", "Completing a habit earns wisdom points")],
     "E2E-QUEST-04": [("core_reflections", "Wisdom points** are what you earn for doing the work: completing habits and finishing goals and milestones")],
-    "E2E-QUEST-21": [("hand_off_setting", "it is on unless you turned it off"), ("ai_tasks_followup", "Tasks do not wait on each other."), ("ai_tasks_followup", "Quest does not start a new task on its own when a goal is not met"),
+    "E2E-QUEST-21": [("hand_off_setting", "it is on unless you turned it off"), ("ai_tasks_followup", "Tasks you create one by one do not wait on each other"), ("ai_tasks_followup", "A missed goal never starts a new task by itself"), ("ai_tasks_followup", "(off by default)"),
                      ("ai_tasks_followup", "the AI tries again inside the same task"), ("workflows_order", "start a chosen wait after another step")],
-    "E2E-QUEST-20": [("ai_tasks_types", "Docs lookup.** Work over your own context documents and knowledge, with no internet.")],
+    "E2E-QUEST-20": [("ai_tasks_types", "Docs lookup.** Work over your own context documents and knowledge, with no internet."), ("ai_tasks_types", "Science is not a task type, and Quest AI chat does not search the scientific literature")],
+    "E2E-SCI-02": [("science_intro", "Quest AI chat does not search the scientific literature"), ("ai_tasks_types", "run a [Deep Inquiry](/guide/deep-inquiries)")],
+    "E2E-QUEST-26": [("ai_tasks_staged", "Staged plans are **off by default**."), ("ai_tasks_staged", "until a staged ladder"), ("ai_tasks_followup", "A missed goal never starts a new task by itself")],
     "E2E-QUEST-10": [("mentor_become", "You are listed as soon as you submit."), ("mentor_earnings", "Payouts are switched on by Quest, not by you.")],
     "E2E-QUEST-12": [("mentee_faq", "**Does a mentor guarantee results?** No."), ("mentee_working", "check-ins already completed stay paid (nothing is refunded)")],
-    "E2E-QUEST-14": [("account_notifications", "Quest has no scheduled quiet hours setting.")],
+    "E2E-QUEST-14": [("account_notifications", "Quest has no setting for how often it notifies you and no scheduled quiet hours setting.")],
     "E2E-QUEST-16": [("account_language", "No other language ships today."), ("account_language", "Quest AI replies in the language chosen in **Settings > Language**")],
-    "E2E-QUEST-17": [("exporting", "The app has no single button that exports your whole account.")],
+    "E2E-QUEST-17": [("exporting", "tap **Download my collections data**"), ("exporting", "Your quests, goals and profile are not in that file"), ("exporting", "There is no Google Sheets export."),
+                     ("account_delete", "1. It cancels any web subscription (Stripe) immediately."), ("account_delete", "3. It removes your sign-in"),
+                     ("account_delete", "Quest cannot cancel that one: cancel it in the store yourself")],
     "E2E-QUEST-03": [("first_quest_why", "a goal like that is worth finding the best strategies for"), ("first_quest_why", "**Do I have to answer everything?** No. The vision is the only thing Quest needs to begin.")],
-    "E2E-QUEST-23": [("ai_reps_may", "**It asks you first, by default:**")],
+    "E2E-QUEST-23": [("ai_reps_may", "**It asks you first, by default:**"), ("ai_reps_team", "under **Your AI** tap **Team AI Representatives**")],
 }
 
 
@@ -277,7 +296,7 @@ def shown(case):
 def test_every_fact_a_documentation_case_requires_is_in_the_excerpts_it_is_shown():
     gaps = []
     for c in CASES:
-        if c["kind"] not in DOC_KINDS:
+        if c["kind"] not in DOC_KINDS or c["world"].get("science"):   # a case with the literature tool configured is answered from its results
             continue
         text = (c["message"] + "\n" + "\n".join(d["text"] for d in shown(c))).lower()
         expect = c["expect"]
@@ -295,7 +314,7 @@ def test_every_fact_a_documentation_case_requires_is_in_the_excerpts_it_is_shown
     assert not gaps, gaps
     # every answer the ideal reply gives to the group "n of m" is also within the documentation: the ideal passes its own case
     for c in CASES:
-        if c["kind"] in DOC_KINDS:
+        if c["kind"] in DOC_KINDS and not c["world"].get("science"):
             assert score.reply_problems(c["ideal"]["reply"], c["expect"]) == [], c["id"]
 
 

@@ -366,10 +366,10 @@
    },
    {
     "start": "### Step 1: Open Settings",
-    "end": "### Step 5"
+    "end": "## Data Retention Policy"
    },
    {
-    "start": "## Data Retention Policy",
+    "start": "## Premium Subscriptions",
     "end": "## Need Help?"
    }
   ]
@@ -440,7 +440,11 @@
   "parts": [
    {
     "start": "## Follow-up and ordered work",
-    "end": "## Common questions"
+    "end": "<!-- STAGED-PLANS"
+   },
+   {
+    "start": "**When a goal is not met.**",
+    "end": "To make the check meaningful"
    },
    {
     "start": "**Can I tell it to run task B after task A?**"
@@ -525,7 +529,7 @@
     "end": "### Delegate a task"
    },
    {
-    "start": "Tasks run on their own, not in a chain."
+    "start": "Separate tasks run on their own, not in a chain."
    },
    {
     "start": "**Can I give it a list of jobs in order?**"
@@ -736,6 +740,25 @@
    {
     "start": "## Assistant (delegation)",
     "end": "## Calendar Sync"
+   }
+  ]
+ },
+ "ai_tasks_staged": {
+  "path": "guide/ai-tasks.md",
+  "title": "AI Tasks: staged plans",
+  "parts": [
+   {
+    "start": "### Staged plans",
+    "end": "- **Stages.**"
+   }
+  ]
+ },
+ "ai_reps_team": {
+  "path": "guide/ai-representatives.md",
+  "title": "AI representatives: the Team AI reps screen",
+  "parts": [
+   {
+    "start": "If you are on a team, the **Team AI reps** screen"
    }
   ]
  }
