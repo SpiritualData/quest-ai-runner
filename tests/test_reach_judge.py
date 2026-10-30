@@ -30,6 +30,7 @@ from quest_ai_runner.core.prompt_specs import NO_EM_DASH_RULE
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 from quest_ai_runner.core.orchestrator_capabilities import provider_call_accepts_tier
 from quest_ai_runner.core.reach_judge import (
+    RECORDS_LINE,
     OUTSIDE_UNCOVERED_LINE,
     OUTSIDE_UNCOVERED_LINE_WEB,
     REACH_JUDGE_TOOL,
@@ -277,11 +278,20 @@ ASKS_CHANGE_PARAGRAPH = (
     'or a bare defect report counts); false if it only asks a question or shares news.\n'
 )
 
+NEEDS_RECORDS_PARAGRAPH = (
+    'ALSO set "needs_records": true when a correct answer or action depends on something the person has stored\n'
+    'about their own life or work that the request itself does not state: a note, a decision, a log entry or\n'
+    'measurement, what a named person can do and when, a date, a deadline, a preference. A request to book,\n'
+    'schedule, send or arrange something with or for a named person or on a date is always true. False for\n'
+    'small talk, general knowledge and a request that carries everything it needs.\n'
+)
+
 
 def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
     prompt_default = judge_prompt("check the latest score", "a short summary")
     # Unchanged apart from the no-em-dash rule every registered prompt now carries.
-    assert prompt_default == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB + ASKS_CHANGE_PARAGRAPH + "\n" + NO_EM_DASH_RULE
+    assert prompt_default == (_PRE_CHANGE_JUDGE_PROMPT_NO_WEB + ASKS_CHANGE_PARAGRAPH + NEEDS_RECORDS_PARAGRAPH
+                              + "\n" + NO_EM_DASH_RULE)
     prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
                                          web_configured=False)
     assert prompt_explicit_false == prompt_default
@@ -610,3 +620,42 @@ def test_gate_docs_fallback_is_a_no_op_on_none_meta():
     orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
     orch.reach_verdict("restart the service")
     orch.gate_docs_fallback(None, "restart the service")  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# needs_records: the right answer depends on what the person stored (a cheap planner books or answers
+# from the goals it can see and never opens the note that holds the constraint)
+# ---------------------------------------------------------------------------
+
+def test_needs_records_is_kept_only_when_the_judge_answered_it_with_a_boolean():
+    assert normalize_verdict({"reach": "inside", "needs_records": True})["needs_records"] is True
+    assert normalize_verdict({"reach": "inside", "needs_records": False})["needs_records"] is False
+    for garbled in ("true", "yes", 1, None, ["x"]):
+        assert "needs_records" not in normalize_verdict({"reach": "inside", "needs_records": garbled}), garbled
+    assert REACH_JUDGE_TOOL["input_schema"]["properties"]["needs_records"]["type"] == "boolean"
+    assert "needs_records" not in REACH_JUDGE_TOOL["input_schema"]["required"]
+
+
+def test_an_inside_verdict_adds_one_settled_line_only_when_records_are_needed():
+    assert verdict_block({"reach": "inside", "needs_records": False}) == ""
+    assert verdict_block({"reach": "inside", "covered_by": None}) == ""
+    flagged = verdict_block({"reach": "inside", "needs_records": True})
+    assert flagged == VERDICT_HEADING + RECORDS_LINE + "\n"
+    assert "\u2014" not in flagged
+    # An out-of-reach or world verdict keeps its own line; the flag never stacks a records line on it.
+    assert RECORDS_LINE not in verdict_block({"reach": "world", "needs_records": True})
+    assert RECORDS_LINE not in verdict_block({"reach": "outside", "covered_by": None, "needs_records": True})
+
+
+def test_the_planner_prompt_carries_the_records_line_only_for_a_flagged_request():
+    for profile in ("full", "compact"):
+        flagged = DispatchingProvider(reach_response={"reach": "inside", "needs_records": True},
+                                      decide_response={"action": "answer", "rationale": "ok"})
+        build(flagged, planner_reach_judge=True, read_reach_summary="Can read notes.",
+              planner_prompt_profile=profile)._plan("Can you help me book Ana for Friday?", "", "", [])
+        assert RECORDS_LINE in flagged.prompts[-1], profile
+        plain = DispatchingProvider(reach_response={"reach": "inside", "needs_records": False},
+                                    decide_response={"action": "answer", "rationale": "ok"})
+        build(plain, planner_reach_judge=True, read_reach_summary="Can read notes.",
+              planner_prompt_profile=profile)._plan("Thanks!", "", "", [])
+        assert RECORDS_LINE not in plain.prompts[-1], profile

@@ -24,7 +24,8 @@ Measured, not assumed (2026-10-05, 765 labelled messages):
 So the judge runs once per turn, before planning, and its verdict is stamped into the planner's
 prompt as something already settled. Three verdicts, and only two of them change anything:
 
-  "inside"  nothing is added; the planner plans exactly as it would have.
+  "inside"  nothing is added, unless the judge also flagged that the right answer depends on records the
+            person stored (``needs_records``): then one settled line tells the planner to read them first.
   "outside" the planner is told the work is out of a read's reach, and whether an attached
             environment covers it, so the choice is hand it off or say plainly that nothing can.
   "world"   the planner is told this is a current public fact, so it answers rather than searching
@@ -59,6 +60,8 @@ REACH_JUDGE_TOOL: Dict[str, Any] = {
                                "covers that kind of work on that place, or null if none does.",
             },
             "asks_change": {"type": "boolean", "description": "Whether it asks for something to be done."},
+            "needs_records": {"type": "boolean", "description": "Whether a correct answer or action depends on "
+                                                                 "something the person stored that the request does not state."},
         },
         "required": ["reach"],
     },
@@ -89,6 +92,11 @@ is carried out elsewhere: the answer is in the records above. "How is that piece
 that merely RECORDS a fact about another place into these records is also "inside".
 ALSO set "asks_change": true if it asks you to do, make, send or change something (a polite "can you"
 or a bare defect report counts); false if it only asks a question or shares news.
+ALSO set "needs_records": true when a correct answer or action depends on something the person has stored
+about their own life or work that the request itself does not state: a note, a decision, a log entry or
+measurement, what a named person can do and when, a date, a deadline, a preference. A request to book,
+schedule, send or arrange something with or for a named person or on a date is always true. False for
+small talk, general knowledge and a request that carries everything it needs.
 """
 
 #: What the planner is told when the work is out of reach AND something can do it.
@@ -135,6 +143,18 @@ WORLD_LINE_WEB = (
 
 VERDICT_HEADING = "--- WHERE WHAT THIS REQUEST NEEDS ACTUALLY LIVES (already settled) ---\n"
 
+#: What the planner is told when the request is "inside" and its right answer depends on what the person stored. A
+#: cheap planner answers or hands off such a request from the goals it can already see, without opening the notes,
+#: decisions or entries that hold the constraint; a stronger tier saying so, once, is the proven way to settle a
+#: sub-judgment the cheap model misses (the reach judge's own finding).
+RECORDS_LINE = (
+    "A correct answer to this request depends on things the person has STORED (a note, a decision, a log "
+    "entry, what a named person can do and when, a date). This was judged separately and is settled: do not "
+    "answer, hand off, confirm or ask until you have read what their records hold (unless GATHERED already shows "
+    "it), and goals alone are not all of them: notes, decisions and collection entries are read through list_sources / list_operations. Then say "
+    "what you found, and say plainly what you could not find."
+)
+
 #: Appended to ``REACH_JUDGE_PROMPT`` when a live web adapter is wired (``Orchestrator.web``), so
 #: the judge itself knows a public web page or document is reachable, not just the verdict text
 #: stamped into the planner afterwards. Default "" leaves the prompt byte-for-byte unchanged.
@@ -146,8 +166,8 @@ WEB_REACH_NOTE = (
 
 
 def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
-    """A judge response reduced to ``{"reach": ..., "covered_by": ...}``, or None. ``"asks_change"`` is added only when
-    the judge answered it with a real boolean, so a missing or garbled one stays unknown rather than becoming False.
+    """A judge response reduced to ``{"reach": ..., "covered_by": ...}``, or None. ``"asks_change"`` and ``"needs_records"`` are
+    added only when the judge answered them with a real boolean, so a missing or garbled one stays unknown rather than becoming False.
 
     None means "no usable verdict", and the planner then runs exactly as it would have with no
     judge at all. Every failure path leads here on purpose: an unparseable answer, a hallucinated
@@ -164,8 +184,9 @@ def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
     if covered and covered.lower() in ("null", "none", "n/a"):
         covered = None
     verdict = {"reach": reach.strip().lower(), "covered_by": covered}
-    if isinstance(raw.get("asks_change"), bool):
-        verdict["asks_change"] = raw["asks_change"]
+    for flag in ("asks_change", "needs_records"):
+        if isinstance(raw.get(flag), bool):
+            verdict[flag] = raw[flag]
     return verdict
 
 
@@ -188,9 +209,10 @@ def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000
 def verdict_block(verdict: Optional[Dict[str, Any]], *, web_configured: bool = False) -> str:
     """The block appended to the planner prompt, or "" when nothing should change.
 
-    An "inside" verdict deliberately adds NOTHING. It is the common case, so saying "this is
-    reachable" on every ordinary request would spend tokens to tell the planner what it already
-    assumes, and would give it a sentence to over-read on the requests that are genuinely mixed.
+    An "inside" verdict deliberately adds NOTHING, unless the judge also set ``needs_records``
+    (``RECORDS_LINE``). It is the common case, so saying "this is reachable" on every ordinary
+    request would spend tokens to tell the planner what it already assumes, and would give it a
+    sentence to over-read on the requests that are genuinely mixed.
 
     ``web_configured`` (default False, so an existing caller is byte-for-byte unchanged) is
     whether a live web adapter is wired (``Orchestrator.web``). It changes the "world" wording
@@ -206,6 +228,8 @@ def verdict_block(verdict: Optional[Dict[str, Any]], *, web_configured: bool = F
     reach = verdict.get("reach")
     if reach == "world":
         return VERDICT_HEADING + (WORLD_LINE_WEB if web_configured else WORLD_LINE) + "\n"
+    if reach == "inside":
+        return VERDICT_HEADING + RECORDS_LINE + "\n" if verdict.get("needs_records") is True else ""
     if reach != "outside":
         return ""
     covered = verdict.get("covered_by")
