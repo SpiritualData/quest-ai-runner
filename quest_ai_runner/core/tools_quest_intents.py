@@ -251,9 +251,11 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         handler=handler,
         description=("Change fields of one specification record you wrote. Columns are the record "
                      "type's own names (a solution: name, description, purpose, approach, out_of_scope, tags; "
-                     "a metric: name, purpose, record, disadvantages). A solution's strategy statement is name "
-                     "+ approach (purpose until it has an approach). A metric's disadvantages hold what it "
-                     "cannot see or could reward wrongly. A field the person edited is "
+                     "a metric: name, purpose, record, disadvantages, cascading_conditionals). A solution's strategy "
+                     "statement is name + approach (purpose until it has an approach). A metric's disadvantages hold "
+                     "what it cannot see or could reward wrongly. A costly metric's cascading_conditionals list its "
+                     "stages cheapest first, as `name [key=value | key=value]` joined by ` > ` (esoi cascade). A "
+                     "field the person edited is "
                      "refused; derived columns cannot be written."),
         when_to_use="A record you wrote is wrong or out of date and refresh_spec did not fix it.",
         when_not_to_use=("A field the person wrote or edited. Rewriting a record that is already "
