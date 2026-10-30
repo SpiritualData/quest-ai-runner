@@ -115,12 +115,17 @@ class HealMixin:
             over_folders = self.over_folder_budget(cards)
             if over_folders and not reasons:
                 reasons, why = tidy.DEFAULT_REASONS, "its topic cards outnumber the folders of its corpus"
-            if not reasons or (tidy.is_local_folder(repo) and reasons == tidy.PROVABLE_REASONS):
+            if not reasons:
                 return 0
             own_store_id = self.own_store_id()
             plan = tidy.plan_store(cards, cards_dir=self._cards_dir, reasons=reasons, own_store_id=own_store_id,
                                    repo=repo)
             plan.why = why
+            if tidy.is_local_folder(repo) and reasons == tidy.PROVABLE_REASONS:
+                # A local folder's provable copies are the folder tidy's (``self.tidy``). What it cannot do is re-key a
+                # compounded card that is the only copy (every write to such an id is refused, so it would stay stuck)
+                # or join the second of two onto the first once that exists: the compounded entries are taken here.
+                plan.entries = [e for e in plan.entries if e["reason"] == "compounded"]
             if (limit > 0 and len(cards) - len(plan.entries) > limit) or over_folders:
                 # Still over the owner's limit after the plan, or holding more topic cards than the corpus has
                 # folders (a store that is neither embedded nor synced until it is tidied): the second step joins
@@ -141,6 +146,13 @@ class HealMixin:
                     joined=len(seconds & set(run.removed_keys)))
                 _log.warning("%s Because %s. By reason: %s.", message, why, plan.summary())
                 self.say(message, notify)
+                if any(e.get("becomes") for e in plan.entries) and not self.in_rekey_followup:
+                    # Cards that were re-keyed to one id: the second of them joins the first, now that it exists.
+                    self.in_rekey_followup = True
+                    try:
+                        self.tidy_store(notify)
+                    finally:
+                        self.in_rekey_followup = False
             return run.removed
         except Exception:  # noqa: BLE001
             _log.warning("context index: the card tidy stopped on an error", exc_info=True)

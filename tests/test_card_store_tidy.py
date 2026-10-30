@@ -572,3 +572,23 @@ def test_a_store_with_more_topic_cards_than_folders_takes_the_second_step_withou
     assert store.over_folder_budget(store._own_cards())
     assert store.tidy_store() == 7
     assert len(repo.load_all()) == 1
+
+
+def test_a_local_folder_rekeys_its_compounded_sole_copies_and_joins_the_second_onto_the_first(tmp_path):
+    """The folder tidy leaves compounded sole copies alone, and every write to such an id is refused."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    for number in range(30):
+        (corpus / f"area{number}").mkdir()
+        (corpus / f"area{number}" / "note.md").write_text("x", encoding="utf-8")
+    cards_dir = tmp_path / "cards"
+    review(cards_dir)
+    first = "root-a-111111--root-b-222222--root-a-111111--idealism"
+    second = "root-a-111111--root-b-222222--root-b-222222--root-a-111111--idealism"
+    repo = FilesystemCardRepository(str(cards_dir))
+    for key in (first, second):       # on disk from before the guard: the repository refuses to write these ids now
+        (cards_dir / f"{key}.json").write_text(json.dumps(card(key, ["area1/note.md"])), encoding="utf-8")
+    store = FileContextStore(str(cards_dir), repo_root=str(corpus), auto_bootstrap=False, self_heal=True,
+                             max_cards=1000)
+    store.tidy_store()
+    assert set(repo.load_all()) == {"root-a-111111--idealism"}

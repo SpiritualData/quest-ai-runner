@@ -241,6 +241,7 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         self.moving_ids: frozenset = frozenset()
         self.tidy_lock = threading.Lock()
         self.inflation_verdict: Optional[bool] = None
+        self.in_rekey_followup = False     # the tidy running once more after it re-keyed cards
         self.in_second_pass = False        # an indexing pass re-running itself once (see _bootstrap_walk)
         # THE CARD LIMIT (see card_limit): one admission function every writer goes through, in
         # ``_store_write``. It counts this store's own cards on every repository (a backend's too).
