@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from .adapters import AssembledContext
+from hubofhubs.ports.context import AssembledContext
 from .anticipation_learner import (
     K,
     MATCH_SERVE,

@@ -10,7 +10,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from .adapters import Observation
+from .adapters_values import Observation
 from .runtime_settings import core_settings
 
 

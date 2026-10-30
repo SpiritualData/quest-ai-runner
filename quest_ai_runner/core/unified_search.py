@@ -33,7 +33,7 @@ from esoi import implementation, solution
 
 from . import prompt_budget
 from .prompt_specs import declare, render_prompt
-from .adapters import STEP_SELECT, answer_with_reasoning
+from hubofhubs.ports.model import STEP_SELECT, answer_with_reasoning
 from .spec_selection import (GATE_POOL, SpecSelection, VectorSearch, attach_links, fuse, gate_decision, lexical_vector_gated,
                              narrow_lexical_scored, parse_ids, semantic_scored, tokens)
 

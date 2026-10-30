@@ -42,9 +42,9 @@ from esoi import implementation
 from . import usage_limit
 from .requester import apply_requester_env
 from .runtime_settings import process_environment
-from .adapters import (
-    DeepResult, DeepRunner, EVENT_EXEC, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent,
-)
+from .adapters_values import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent
+from .adapters_deep import DeepRunner
+from .adapters_events import EVENT_EXEC
 
 from .goal_runner_contract import (  # noqa: F401
     BALANCED_CLI_MODEL,

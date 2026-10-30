@@ -15,8 +15,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import GuidanceCard as CoreGuidanceCard
-from quest_ai_runner.core.adapters import GuidanceProviderBase
+from quest_ai_runner.core.adapters_guidance import GuidanceCard as CoreGuidanceCard
+from quest_ai_runner.core.adapters_bases import GuidanceProviderBase
 from esoi import implementation
 
 log = logging.getLogger("quest-ai-runner.guidance")

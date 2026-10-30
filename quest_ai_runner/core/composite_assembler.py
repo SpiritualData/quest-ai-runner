@@ -78,7 +78,7 @@ class CompositeContextAssembler:
         ``("arm_done", {"assembler": ..., "cards_found": ..., "context_chars": ...})``.
         ``on_event`` is NOT forwarded to inner assemblers; only this composite emits it.
         """
-        from .adapters import AssembledContext
+        from hubofhubs.ports.context import AssembledContext
         import logging
 
         _log = logging.getLogger(__name__)

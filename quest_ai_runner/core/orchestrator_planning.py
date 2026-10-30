@@ -40,13 +40,9 @@ from .planner_context import (
     planner_links_block,
     planner_web_block,
 )
-from .adapters import (
-    PlanDecision,
-    STEP_JUDGE,
-    STEP_PLAN,
-    ScopedThreadPoolExecutor as ThreadPoolExecutor,
-    plan_with_step,
-)
+from hubofhubs.ports.model import STEP_JUDGE, STEP_PLAN, plan_with_step
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from .adapters_values import PlanDecision
 from .reach_judge import (
     REACH_JUDGE_TOOL,
     judge_prompt,

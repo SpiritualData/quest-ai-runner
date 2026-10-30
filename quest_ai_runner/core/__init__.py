@@ -4,7 +4,9 @@ This is the package a host application (a chat backend or cockpit) imports IN-PR
 chat: construct an ``Orchestrator`` with adapters and call ``run``. It knows nothing about
 Quest, any database, or any org — only the four adapter interfaces.
 """
-from .adapters import (
+from hubofhubs.ports.context import ConversationContext, ConversationStore
+from hubofhubs.ports.model import ModelProvider
+from .adapters_events import (
     EVENT_CARD_THREAD,
     EVENT_DECISION,
     EVENT_DONE,
@@ -20,35 +22,31 @@ from .adapters import (
     EVENT_RESULT,
     EVENT_STATUS,
     EVENT_UNDERSTANDING,
+    SURFACING_EVENTS,
+    Mode,
+)
+from .adapters_values import (
     FUTURE_CONTEXT_VIA_FIELD,
     FUTURE_CONTEXT_VIA_OUTPUT,
     WRITE_SURFACE_AGENT,
     WRITE_SURFACE_FILES,
     WRITE_SURFACE_OPERATIONS,
-    SURFACING_EVENTS,
-    ConversationContext,
-    ConversationStore,
     DeepResult,
-    DeepRunner,
-    DeepRunnerBase,
     Escalation,
-    EscalationSink,
-    EscalationSinkBase,
-    FanoutSink,
-    MilestoneSink,
-    Mode,
-    ModelProvider,
-    ModelProviderBase,
     Observation,
     PlanDecision,
     ProgressEvent,
-    ProgressSink,
-    ProgressSinkBase,
-    RetrievalAdapter,
-    RetrievalAdapterBase,
-    StreamSink,
-    WebResearch,
 )
+from .adapters_deep import DeepRunner, EscalationSink, ProgressSink
+from .adapters_bases import (
+    DeepRunnerBase,
+    EscalationSinkBase,
+    ModelProviderBase,
+    ProgressSinkBase,
+    RetrievalAdapterBase,
+)
+from .adapters_sinks import FanoutSink, MilestoneSink, StreamSink
+from .adapters_retrieval import RetrievalAdapter, WebResearch
 from .goal_runner import (
     ESCALATION_MARKER,
     GoalRunner,

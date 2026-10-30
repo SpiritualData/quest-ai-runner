@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from .deep_model_selection import DEFAULT_DIFFICULTY_MODELS
 from .planner_prompt import DEFAULT_PLANNER_PROMPT_PROFILE
-from .adapters import DeepResult
+from .adapters_values import DeepResult
 from .guard import ExecutionRecord
 from .orchestrator_constants import (
     AUTO_FOLLOWUP_MAX_RUNS,

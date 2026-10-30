@@ -7,12 +7,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from .guard import ExecutionRecord
-from .adapters import (
-    PlanDecision,
-    STEP_REPLY,
-    ScopedThreadPoolExecutor as ThreadPoolExecutor,
-    answer_with_reasoning,
-)
+from hubofhubs.ports.model import STEP_REPLY, answer_with_reasoning
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from .adapters_values import PlanDecision
 from .auxiliary_prompts import (
     REPLY_VOICE_SYSTEM,
     SYNTHESIZE_AFTER_DEEP_PROMPT,

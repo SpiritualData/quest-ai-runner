@@ -36,7 +36,7 @@ from esoi import implementation, solution
 
 from . import prompt_budget
 from .prompt_specs import declare, render_prompt
-from .adapters import STEP_SELECT, answer_with_reasoning
+from hubofhubs.ports.model import STEP_SELECT, answer_with_reasoning
 
 log = logging.getLogger("quest-ai-runner.spec-selection")
 

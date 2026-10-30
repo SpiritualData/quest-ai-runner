@@ -34,14 +34,8 @@ from .auxiliary_prompts import (
     VERIFY_WEB_EVIDENCE_NOTE,
 )
 from .link_guard import LinkGuard, build_link_guard, evidence_text
-from .adapters import (
-    STEP_JUDGE,
-    STEP_SUMMARIZE,
-    STEP_VERIFY,
-    ScopedThreadPoolExecutor as ThreadPoolExecutor,
-    answer_with_reasoning,
-    plan_with_step,
-)
+from hubofhubs.ports.model import STEP_JUDGE, STEP_SUMMARIZE, STEP_VERIFY, answer_with_reasoning, plan_with_step
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .card_filter import _extract_json
 from .planner_context import _is_discovery_obs, _render_gathered, cap_section
 from .prompt_layers import compose_layers, language_instruction

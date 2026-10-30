@@ -18,7 +18,7 @@ import logging
 import re
 from typing import Dict, List, Optional
 
-from .adapters import ModelProvider
+from hubofhubs.ports.model import ModelProvider
 
 # Tier names in capability order (cheap -> expensive). The brain uses these names.
 # Semantic names (provider-agnostic): fast/balanced/quality (best = quality if not overridden)

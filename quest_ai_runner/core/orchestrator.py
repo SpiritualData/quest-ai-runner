@@ -29,22 +29,14 @@ import threading
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any, Callable, Dict, List, Optional
 
-from .adapters import (
-    ScopedThreadPoolExecutor as ThreadPoolExecutor,
-    EVENT_CONTEXT,
-    EVENT_PARTIAL,
-    EVENT_READ,
-    ContextAssembler,
-    ConversationStore,
-    DeepRunner,
-    EscalationSink,
-    GuidanceProvider,
-    Mode,
-    ModelProvider,
-    PlanDecision,
-    ProgressEvent,
-    RetrievalAdapter,
-)
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.ports.context import ContextAssembler, ConversationStore
+from hubofhubs.ports.model import ModelProvider
+from .adapters_events import EVENT_CONTEXT, EVENT_PARTIAL, EVENT_READ, Mode
+from .adapters_deep import DeepRunner, EscalationSink
+from .adapters_guidance import GuidanceProvider
+from .adapters_values import PlanDecision, ProgressEvent
+from .adapters_retrieval import RetrievalAdapter
 from .anticipation import Anticipator
 from .inbox import InputInbox
 from .resolve import resolve

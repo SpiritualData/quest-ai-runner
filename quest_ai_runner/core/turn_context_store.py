@@ -128,7 +128,7 @@ class TurnContextStore:
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
     ) -> Any:
         """Return relevant past turns as context_view. Never raises."""
-        from .adapters import AssembledContext  # local import to avoid circular
+        from hubofhubs.ports.context import AssembledContext
 
         try:
             cards = self._load_cards()
@@ -208,7 +208,7 @@ class TurnContextStore:
                              f"{turn_excerpt(card.get('assistant_summary', ''), self._max_assistant_chars or 400)}")
             return AssembledContext(context_view="\n".join(lines))
         except Exception:
-            from .adapters import AssembledContext
+            from hubofhubs.ports.context import AssembledContext
             return AssembledContext()
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:

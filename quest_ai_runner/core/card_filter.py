@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from . import prompt_budget
 from .prompt_specs import declare, render_prompt
-from .adapters import ModelProvider, STEP_SELECT, answer_with_reasoning
+from hubofhubs.ports.model import ModelProvider, STEP_SELECT, answer_with_reasoning
 
 _log = logging.getLogger("quest-ai-runner.card-filter")
 

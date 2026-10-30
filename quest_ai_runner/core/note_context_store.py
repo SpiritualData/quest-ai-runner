@@ -303,7 +303,7 @@ class NoteContextStore:
         ``_MAX_TOTAL`` total.  Returns an empty ``AssembledContext`` if there are no notes or
         nothing is relevant.
         """
-        from .adapters import AssembledContext  # local import to avoid circular
+        from hubofhubs.ports.context import AssembledContext
 
         try:
             cards = self._load_cards()
@@ -347,7 +347,7 @@ class NoteContextStore:
                 lines.append(f"- {card.get('text', '')}")
             return AssembledContext(context_view="\n".join(lines))
         except Exception:
-            from .adapters import AssembledContext
+            from hubofhubs.ports.context import AssembledContext
             return AssembledContext()
 
     # ------------------------------------------------------------------

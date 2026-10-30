@@ -11,15 +11,9 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
-from .adapters import (
-    EVENT_CONTEXT,
-    EVENT_MODE_SIGNAL,
-    EVENT_UNDERSTANDING,
-    Mode,
-    PlanDecision,
-    ProgressEvent,
-    ScopedThreadPoolExecutor as ThreadPoolExecutor,
-)
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from .adapters_events import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
+from .adapters_values import PlanDecision, ProgressEvent
 from .card_thread import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
 from .context_doctrine import CACHED_HINT_GATE
 from .guard import ExecutionRecord
@@ -228,7 +222,7 @@ class RunBeginMixin:
         on_detach = None
         active_sink = sink
         if background_sink is not None and detach_check is not None:
-            from .adapters import FanoutSink
+            from .adapters_sinks import FanoutSink
             fan = FanoutSink(live=sink, background=background_sink) if sink is not None else \
                 FanoutSink(live=background_sink, background=background_sink)
             active_sink = fan

@@ -12,18 +12,10 @@ from .auxiliary_prompts import (
     DEEP_FUTURE_CONTEXT_INSTRUCTION,
     SELF_INITIATED_READ_ONLY_INSTRUCTION,
 )
-from .adapters import (
-    DeepResult,
-    EVENT_EXEC,
-    EVENT_MILESTONE,
-    EVENT_STATUS,
-    FUTURE_CONTEXT_VIA_FIELD,
-    PlanDecision,
-    ProgressEvent,
-    ScopedThreadPoolExecutor as ThreadPoolExecutor,
-    runner_starts_background_work,
-    runner_uses_deep_model,
-)
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from .adapters_values import DeepResult, FUTURE_CONTEXT_VIA_FIELD, PlanDecision, ProgressEvent
+from .adapters_events import EVENT_EXEC, EVENT_MILESTONE, EVENT_STATUS
+from .adapters_bases import runner_starts_background_work, runner_uses_deep_model
 from .deep_model_selection import start_status_text
 from .goal_metrics import GoalMetrics, run_hint, working_dir_of
 from . import launch_failure, usage_limit

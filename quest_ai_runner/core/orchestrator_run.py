@@ -11,7 +11,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional
 
-from .adapters import Mode, ProgressSink
+from .adapters_events import Mode
+from .adapters_deep import ProgressSink
 from .orchestrator_run_answer import RunAnswerMixin
 from .orchestrator_run_begin import RunBeginMixin
 from .orchestrator_run_close import RunCloseMixin
@@ -277,7 +278,7 @@ class RunMixin(RunBeginMixin, RunLoopMixin, RunAnswerMixin, RunCloseMixin):
         import queue as _queue
         import threading as _threading
 
-        from .adapters import StreamSink
+        from .adapters_sinks import StreamSink
 
         q: "_queue.Queue" = _queue.Queue()
         _SENTINEL = object()

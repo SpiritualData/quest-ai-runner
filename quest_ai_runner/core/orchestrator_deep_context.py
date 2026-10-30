@@ -15,7 +15,8 @@ from .recent_context import (
     quest_scope_key,
     render_recent_cards,
 )
-from .adapters import ScopedThreadPoolExecutor as ThreadPoolExecutor, runner_uses_deep_model
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from .adapters_bases import runner_uses_deep_model
 from .orchestrator_capabilities import (
     context_assembly_timeout_seconds,
     record_context_assembly_timeout,

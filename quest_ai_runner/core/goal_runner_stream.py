@@ -45,7 +45,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from esoi import implementation
 
 from . import usage_limit
-from .adapters import DeepResult, EVENT_EXEC, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent
+from .adapters_values import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent
+from .adapters_events import EVENT_EXEC
 from .goal_runner import SubprocessGoalRunner
 from .goal_runner_contract import (
     BALANCED_CLI_MODEL,

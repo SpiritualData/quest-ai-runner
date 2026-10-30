@@ -9,7 +9,8 @@ import time
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
-from .adapters import (
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from .adapters_events import (
     EVENT_CARD_THREAD,
     EVENT_DECISION,
     EVENT_DONE,
@@ -21,10 +22,8 @@ from .adapters import (
     EVENT_RESULT,
     EVENT_TOKENS,
     Mode,
-    PlanDecision,
-    ProgressEvent,
-    ScopedThreadPoolExecutor as ThreadPoolExecutor,
 )
+from .adapters_values import PlanDecision, ProgressEvent
 from .answer_explanation import is_eligible, trace_from_result
 from .card_thread import CardThreadDecision, parse_card_thread
 from .goal_metrics import deep_metric_data

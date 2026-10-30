@@ -18,7 +18,8 @@ from .card_learning import (
     turn_observations,
     turn_teaches_new_facts,
 )
-from .adapters import PlanDecision, STEP_SUMMARIZE, answer_with_reasoning, plan_with_step
+from hubofhubs.ports.model import STEP_SUMMARIZE, answer_with_reasoning, plan_with_step
+from .adapters_values import PlanDecision
 from .card_filter import _extract_json
 from .orchestrator_text import _card_update_store, _deep_future_context
 from .orchestrator_constants import DEFAULT_CARD_MERGE_SIMILARITY, log

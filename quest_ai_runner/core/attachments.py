@@ -40,7 +40,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from .adapters import ModelProvider
+from hubofhubs.ports.model import ModelProvider
 from .model_registry import is_vision_capable
 from .prompt_specs import PromptSpec, register, render_prompt
 

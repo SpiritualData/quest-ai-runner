@@ -37,7 +37,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, FrozenSet, List, Optional
 
-from .adapters import PlanDecision
+from .adapters_values import PlanDecision
 from .prompt_specs import declare, render_prompt
 
 #: The confidence values a planner may report, weakest first.

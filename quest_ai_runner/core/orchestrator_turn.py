@@ -12,17 +12,11 @@ from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 
 from .prompt_specs import PromptSpec, register, render_prompt
 
-from .adapters import (
-    EVENT_PARTIAL,
-    EVENT_STATUS,
-    Mode,
-    ProgressEvent,
-    ProgressSink,
-    STEP_NARRATION,
-    STEP_REPLY,
-    ScopedThreadPoolExecutor as ThreadPoolExecutor,
-    answer_with_reasoning,
-)
+from hubofhubs.ports.model import STEP_NARRATION, STEP_REPLY, answer_with_reasoning
+from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from .adapters_events import EVENT_PARTIAL, EVENT_STATUS, Mode
+from .adapters_values import ProgressEvent
+from .adapters_deep import ProgressSink
 
 
 class TurnCardCache:
@@ -280,14 +274,14 @@ class _Emitter:
                 self.mode = Mode.BACKGROUND
         except Exception:  # noqa: BLE001
             pass
-# How much of the user's message the first beat sees (it is one short sentence, so a long message costs little).
-_NARRATION_MESSAGE_CHARS = 3000
 
 
 # Cap on how many prior-turn narration lines a consumer's ``prior_narration`` can carry into a
 # Narrator: bounds prompt growth from a long voice conversation to the last handful of beats, which
 # is enough to stop the ack repeating its own recent pattern without re-reading a whole session.
 _MAX_PRIOR_NARRATION = 8
+# How much of the user's message the first beat sees (it is one short sentence, so a long message costs little).
+_NARRATION_MESSAGE_CHARS = 3000
 
 
 class Narrator:

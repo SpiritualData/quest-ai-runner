@@ -12,7 +12,8 @@ import time
 from typing import Callable, Dict, List, Optional, Set
 from pathlib import Path
 
-from .adapters import EVENT_EXEC, ProgressEvent
+from .adapters_events import EVENT_EXEC, EVENT_STATUS
+from .adapters_values import ProgressEvent
 from .runtime_settings import core_settings
 from .goal_runner_contract import DEFAULT_MONITOR_HEARTBEAT_SECONDS, _log
 
@@ -288,6 +289,7 @@ def _monitor_claude_session(
     monitor_start = time.time()
     last_beat = monitor_start
     beat_run_id = forced_run_id or (session_id[:8] if session_id else None)
+    model_said: List[str] = []       # the model this session reported, once
 
     def maybe_emit_heartbeat(note: str) -> None:
         nonlocal last_beat
@@ -392,6 +394,16 @@ def _monitor_claude_session(
                                             # Only emit assistant messages (the actual work output)
                                             if msg_type not in ("assistant", "message"):
                                                 continue
+
+                                            # The exact model the worker is running on, said while it runs (the
+                                            # result names it only after the run): its first message carries it.
+                                            live_model = str((msg.get("message") or {}).get("model") or "")
+                                            if live_model and not live_model.startswith("<") and not model_said:
+                                                model_said.append(live_model)
+                                                callback(ProgressEvent(
+                                                    type=EVENT_STATUS, text=f"Running on {live_model}",
+                                                    data={"deep_run_model_live": {"model": live_model,
+                                                                                  "run_id": beat_run_id}}))
 
                                             # Format and emit the message as a progress event
                                             msg_text = _format_message_text(msg)
