@@ -640,8 +640,9 @@ class QuestsMixin:
             # NOT happened. Say so; never hand back an empty outcome that reads like a silent success.
             message = (payload or {}).get("message") or "Waiting for a person to approve this change."
             decision_id = (payload or {}).get("decision_id")
+            # Held only when an ask exists for a person to resolve; with none, nothing is waiting, so it is refused.
             return WriteResult({"pending_approval": True, "decision_id": decision_id, "message": message},
-                               ToolStatus.HELD, id=str(decision_id or ""), detail=str(message))
+                               ToolStatus.HELD if decision_id else ToolStatus.REFUSED, id=str(decision_id or ""), detail=str(message))
         outcome = (payload or {}).get("outcome") or {}
         return WriteResult(outcome, ToolStatus.APPLIED, id=str(outcome.get("id") or ""))
 

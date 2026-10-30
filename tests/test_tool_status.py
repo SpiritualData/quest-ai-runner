@@ -50,15 +50,27 @@ def test_a_status_may_be_given_as_its_string():
 
 
 def test_classify_payload_reads_the_server_flags_not_words():
-    assert classify_payload({"applied": False, "reason": "needs approval"}) is ToolStatus.HELD
-    assert classify_payload({"pending_approval": True, "decision_id": "d1"}) is ToolStatus.HELD
-    assert classify_payload({"pending": True}) is ToolStatus.HELD
-    assert classify_payload({"id": "g1"}, http_status=202) is ToolStatus.HELD
+    assert classify_payload({"applied": False, "reason": "needs approval", "decision_id": "d1"}) is ToolStatus.HELD
+    assert classify_payload({"pending_approval": True, "decisionId": "d1"}) is ToolStatus.HELD
+    assert classify_payload({"pending": True, "decision_id": "d1"}) is ToolStatus.HELD
+    assert classify_payload({"id": "g1", "decision_id": "d1"}, http_status=202) is ToolStatus.HELD
     assert classify_payload({"already_existed": True, "id": "g1"}) is ToolStatus.NOOP
     assert classify_payload({"duplicate": True}) is ToolStatus.NOOP
     assert classify_payload({"id": "g1", "message": "Not applied, held, waiting"}) is ToolStatus.APPLIED
     assert classify_payload([{"id": "n1"}]) is ToolStatus.APPLIED
-    assert write_status_of({"applied": False}) is ToolStatus.HELD
+    assert write_status_of({"applied": False, "decision_id": "d1"}) is ToolStatus.HELD
+
+
+def test_not_applied_with_no_ask_to_resolve_is_refused_not_held():
+    """Held promises that a person will be asked. A 202 or applied:false with no decision id (the strategy gate's "suggest it
+    instead", a null id) has no ask, so nothing is waiting: it is a refusal."""
+    assert classify_payload({"applied": False, "reason": "gated", "decision_id": None}) is ToolStatus.REFUSED
+    assert classify_payload({"applied": False, "reason": "needs approval"}) is ToolStatus.REFUSED
+    assert classify_payload({"pending_approval": True}) is ToolStatus.REFUSED
+    assert classify_payload({"pending": True}) is ToolStatus.REFUSED
+    assert classify_payload({"id": "g1"}, http_status=202) is ToolStatus.REFUSED
+    assert classify_payload({"applied": False, "decision_id": ""}) is ToolStatus.REFUSED
+    assert write_status_of({"applied": False}) is ToolStatus.REFUSED
 
 
 def test_a_tool_that_raises_a_typed_write_error_keeps_its_status():
@@ -292,16 +304,28 @@ def test_a_measurable_outcome_that_already_exists_is_a_noop_and_a_held_one_is_he
         {"quest_id": "q1", "text": "publish 40 videos"}, ToolContext())
     assert noop.status is ToolStatus.NOOP and noop.ok
     held = add_measurable_outcome_spec({}, client_factory=with_client(
-        Client({"applied": False, "reason": "x"}))).handler(
+        Client({"applied": False, "reason": "x", "decision_id": "d1"}))).handler(
         {"quest_id": "q1", "text": "Run daily"}, ToolContext())
     assert held.status is ToolStatus.HELD
 
 
 def test_a_strategy_held_for_approval_is_held():
     result = add_quest_strategy_spec({}, client_factory=with_client(
-        Client({"applied": False, "reason": "not_user_requested"}))).handler(
+        Client({"applied": False, "reason": "not_user_requested", "decision_id": "d1"}))).handler(
         {"quest_id": "q1", "title": "Progressive long run"}, ToolContext())
-    assert result.status is ToolStatus.HELD
+    assert result.status is ToolStatus.HELD and "ask for the owner to approve" in result.text
+
+
+def test_a_strategy_the_gate_declines_without_an_ask_is_refused_and_says_to_suggest_it():
+    """The real gate answers 202 {applied: false, decision_id: null, message: "... Suggest the strategy to the person
+    instead."}. No ask was raised, so it is refused (not held): there is no approval to wait for."""
+    gate = {"applied": False, "reason": "not_user_requested", "decision_id": None,
+            "message": "The person did not ask for it. Suggest the strategy to the person instead."}
+    result = add_quest_strategy_spec({}, client_factory=with_client(Client(gate))).handler(
+        {"quest_id": "q1", "title": "Progressive long run"}, ToolContext())
+    assert result.status is ToolStatus.REFUSED and not result.ok
+    assert "No ask was raised" in result.text and "Suggest it to the person instead" in result.text
+    assert "ask for the owner to approve" not in result.text
 
 
 def test_a_goal_that_already_existed_is_a_noop_and_a_refused_one_says_so():

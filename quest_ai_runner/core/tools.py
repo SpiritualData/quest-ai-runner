@@ -144,7 +144,8 @@ def result_of_write(write: Any, applied: str, *, held: Optional[str] = None, noo
     if write is None or (isinstance(write, (dict, list)) and not write and empty is not None):
         return ToolResult(ok=False, status=ToolStatus.FAILED, data=data, text=empty or "Nothing was written.")
     status = write_status_of(write)
-    text = {ToolStatus.HELD: held, ToolStatus.NOOP: noop}.get(status) or applied
+    # A payload that says "not applied" with no ask to resolve reads REFUSED; its not-applied text is the explanation.
+    text = {ToolStatus.HELD: held, ToolStatus.NOOP: noop, ToolStatus.REFUSED: held}.get(status) or applied
     return ToolResult(ok=status in DONE_STATUSES, status=status, data=data, text=text)
 
 

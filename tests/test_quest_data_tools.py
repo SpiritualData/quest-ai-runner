@@ -230,7 +230,7 @@ def test_goal_tool_carries_every_period_nuance_and_needs_the_users_ask():
 
 
 def test_strategy_tool_passes_actor_and_verdict_and_reports_a_held_change():
-    client = FakeQuestClient({"applied": False, "reason": "not_user_requested"})
+    client = FakeQuestClient({"applied": False, "reason": "not_user_requested", "decision_id": "d1"})
     spec = add_quest_strategy_spec({}, client_factory=factory(client))
     result = spec.handler({"quest_id": "q1", "title": "Progressive long run"}, ToolContext())
     assert result.status.value == "held" and "NOT applied" in result.text

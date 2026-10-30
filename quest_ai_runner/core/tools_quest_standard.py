@@ -21,7 +21,7 @@ from .tools import (
     result_of_write,
     write_failed,
 )
-from .tools_status import ToolStatus
+from .tools_status import ToolStatus, decision_id_of
 
 
 def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
@@ -204,6 +204,10 @@ def _with_standard(description: str, key: str, period: Optional[str] = None) -> 
 
 def _not_applied_text(what: str, quest_id: str, result: Mapping[str, Any]) -> str:
     reason = result.get("reason") or result.get("message") or "it needs the owner's approval"
+    if not decision_id_of(result):
+        # Nothing was queued for anyone: Quest said no, so there is no approval to wait for.
+        return (f"NOT applied: {what} on quest {quest_id} was not changed ({reason}). No ask was raised for the owner, "
+                f"so nothing is waiting: the quest reads exactly as it did. Suggest it to the person instead.")
     return (f"NOT applied: {what} on quest {quest_id} was not changed ({reason}). It is now an ask "
             f"for the owner to approve, so the quest reads exactly as it did.")
 

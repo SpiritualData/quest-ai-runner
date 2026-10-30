@@ -65,19 +65,28 @@ def status_of_error(error: BaseException) -> ToolStatus:
     return as_status(getattr(error, "write_status", None), ToolStatus.FAILED)
 
 
+def decision_id_of(payload: Any) -> str:
+    """The ask a payload names (``decision_id`` or ``decisionId``), or an empty string."""
+    if isinstance(payload, dict):
+        return str(payload.get("decision_id") or payload.get("decisionId") or "")
+    return ""
+
+
 def classify_payload(payload: Any, http_status: Optional[int] = None) -> ToolStatus:
     """The status of a write from what the server SENT: its HTTP status and the flags in its answer.
 
-    ``held`` when Quest took the request but is waiting on a person (HTTP 202, ``applied`` false, ``pending_approval``
-    or ``pending`` true); ``noop`` when it says the thing already existed (``already_existed``, ``duplicate`` true);
-    otherwise ``applied``. Only structured fields are read, never the wording of a message."""
-    if http_status == 202:
-        return ToolStatus.HELD
-    if isinstance(payload, dict):
-        if payload.get("applied") is False or payload.get("pending_approval") or payload.get("pending") is True:
-            return ToolStatus.HELD
-        if payload.get("already_existed") or payload.get("duplicate") is True:
-            return ToolStatus.NOOP
+    Quest answers "not applied" (HTTP 202, ``applied`` false, ``pending_approval`` or ``pending`` true) in two ways. With an
+    ask a person can resolve (a ``decision_id``) the request is ``held``: it waits for them. With none (a gate that says
+    "suggest it instead", a draft with no ask) nothing is waiting on anyone, so the write is ``refused``: reporting it
+    held would promise an approval that no one has been asked for. ``noop`` when it says the thing already existed
+    (``already_existed``, ``duplicate`` true); otherwise ``applied``. Only structured fields are read, never the wording of a
+    message."""
+    not_applied = http_status == 202 or (isinstance(payload, dict) and (
+        payload.get("applied") is False or bool(payload.get("pending_approval")) or payload.get("pending") is True))
+    if not_applied:
+        return ToolStatus.HELD if decision_id_of(payload) else ToolStatus.REFUSED
+    if isinstance(payload, dict) and (payload.get("already_existed") or payload.get("duplicate") is True):
+        return ToolStatus.NOOP
     return ToolStatus.APPLIED
 
 

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Mapping, Optional
 
-from ..core.tools_status import DONE_STATUSES, ToolStatus, classify_payload
+from ..core.tools_status import DONE_STATUSES, ToolStatus, classify_payload, decision_id_of
 
 
 log = logging.getLogger("quest-ai-runner.quest_client")
@@ -94,7 +94,7 @@ class WriteResult:
         detail, ident = "", ""
         if isinstance(payload, dict):
             detail = str(payload.get("reason") or payload.get("message") or "")
-            held_id = payload.get("decision_id") if status is ToolStatus.HELD else None
+            held_id = decision_id_of(payload) if status is ToolStatus.HELD else None
             ident = str(held_id or next((payload[k] for k in cls.ID_KEYS if payload.get(k)), "") or "")
         return cls(payload, status, id=ident, detail=detail)
 

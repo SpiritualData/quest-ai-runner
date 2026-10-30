@@ -111,8 +111,17 @@ def test_an_applied_false_body_is_held_even_on_a_200(monkeypatch):
                             monkeypatch)
     result = client.edit_quest_field("q1", {"outcome": "x"})
     assert result.status is ToolStatus.HELD and result.get("applied") is False and result.id == "d2"
-    strategy, _ = make_client([(202, {"applied": False, "reason": "gated"})], monkeypatch)
+    strategy, _ = make_client([(202, {"applied": False, "reason": "gated", "decision_id": "d3"})], monkeypatch)
     assert strategy.add_quest_strategy("q1", "T").status is ToolStatus.HELD
+
+
+def test_a_202_with_no_ask_to_resolve_is_refused_because_nothing_is_waiting(monkeypatch):
+    """The strategy gate answers 202 {applied: false, decision_id: null}: no ask exists, so it is not held."""
+    strategy, _ = make_client([(202, {"applied": False, "reason": "gated", "decision_id": None})], monkeypatch)
+    result = strategy.add_quest_strategy("q1", "T")
+    assert result.status is ToolStatus.REFUSED and not result.id
+    edit, _ = make_client([(200, {"applied": False, "reason": "autopilot_off"})], monkeypatch)
+    assert edit.edit_quest_field("q1", {"outcome": "x"}).status is ToolStatus.REFUSED
 
 
 def test_a_goal_the_server_says_already_existed_is_a_noop(monkeypatch):
