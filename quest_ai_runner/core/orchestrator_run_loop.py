@@ -40,6 +40,7 @@ from .orchestrator_events import _is_orchestrator_command
 from .orchestrator_text import _future_context_for_display, unconfirmed_no_change_text
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
+from .scope_tags import scope_fence_block
 from .tools import ToolContext
 
 
@@ -319,6 +320,11 @@ class RunLoopMixin:
         started = rs.started
         tool_ok_signatures = rs.tool_ok_signatures
         transcript = rs.transcript
+        # A person's turn bound to quest(s) is told its scope once, in the context every planner step and the
+        # answer read (see ``scope_tags.SCOPE_FENCE_NOTE``); an unbound turn adds nothing.
+        _scope_note = scope_fence_block(self._meta_quest_ids(_ctx_meta)) if message_is_user_turn else ""
+        if _scope_note:
+            rs.context_view = _scope_note + ("\n\n" + rs.context_view if rs.context_view else "")
         for step in range(cfg.max_steps):
             rs.steps = step + 1
             # Cooperative cancellation, checked before starting each new plan/gather/replan step.

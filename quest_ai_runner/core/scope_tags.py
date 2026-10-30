@@ -108,3 +108,30 @@ def union_scope_tags(*tag_sources: ScopeTags) -> List[str]:
     except Exception:  # noqa: BLE001
         return out
     return out
+
+
+#: What a turn bound to one or more quests tells the model about its scope. The card fence above keeps another
+#: quest's CARDS out of context; a read the model issues itself (a grep, a collection query, a hand-off) can still
+#: return another quest's records, and a cheap model answers from whatever it holds. The ids come from the turn's
+#: own quest scope (``meta["quest_id"]`` / ``meta["quest_ids"]``), set by the caller, never from words the model wrote.
+SCOPE_FENCE_NOTE = (
+    "--- THIS CONVERSATION'S SCOPE (set by the system) ---\n"
+    "This conversation is about {which}. \"My budget\", \"my goals\", \"my notes\" and every other question about "
+    "the person's own records mean the records of {those}. Records that belong to a different quest are private to "
+    "it: never state, count or use them to answer, even when a read returned them (compare the quest id on a record "
+    "with {the_id} above). When the answer exists only in another quest, say it is not recorded in this quest and "
+    "offer to look there if they name it. Things that belong to no quest (team agreements, general notes) stay usable.")
+
+
+def scope_fence_block(quest_ids: ScopeTags) -> str:
+    """The scope note for a turn bound to ``quest_ids``, or ``""`` when it is bound to none. Never raises."""
+    try:
+        ids = as_tag_list(quest_ids)
+        if not ids:
+            return ""
+        one = len(ids) == 1
+        return SCOPE_FENCE_NOTE.format(
+            which=f"quest {ids[0]}" if one else "quests " + ", ".join(ids[:6]),
+            those="that quest" if one else "those quests", the_id="the id" if one else "those ids")
+    except Exception:  # noqa: BLE001
+        return ""
