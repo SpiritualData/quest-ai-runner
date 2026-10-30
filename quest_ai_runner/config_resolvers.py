@@ -351,4 +351,7 @@ def register_deepseek(providers: dict) -> None:
     """Add the DeepSeek provider to ``providers`` only when DEEPSEEK_API_KEY is set."""
     if not (os.getenv("DEEPSEEK_API_KEY") or "").strip():
         return
-    providers["deepseek"] = make_provider("deepseek")
+    try:
+        providers["deepseek"] = make_provider("deepseek")
+    except Exception as e:  # noqa: BLE001 -- an opt-in provider that cannot be built must not stop the others
+        _log.debug(f"DeepSeek provider unavailable: {type(e).__name__}")

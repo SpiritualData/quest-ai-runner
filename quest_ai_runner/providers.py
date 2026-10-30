@@ -38,24 +38,26 @@ def flag(env: Mapping[str, str], var: str) -> bool:
 
 @implementation("call-a-model", "anthropic")
 def anthropic(env: Mapping[str, str]) -> AnthropicProvider:
-    return AnthropicProvider(api_key=env.get("ANTHROPIC_API_KEY") or None, thinking=flag(env, "QAR_ANTHROPIC_THINKING"))
+    return AnthropicProvider(api_key=env.get("ANTHROPIC_API_KEY") or None, thinking=flag(env, "QAR_ANTHROPIC_THINKING"),
+                             env_name="ANTHROPIC_API_KEY")
 
 
 @implementation("call-a-model", "gemini")
 def gemini(env: Mapping[str, str]) -> GeminiProvider:
-    return GeminiProvider(api_key=env.get("GOOGLE_API_KEY") or None)
+    return GeminiProvider(api_key=env.get("GOOGLE_API_KEY") or None, env_name="GOOGLE_API_KEY")
 
 
 @implementation("call-a-model", "openai")
 def openai(env: Mapping[str, str]) -> OpenAIProvider:
     base = env.get("OPENAI_BASE_URL") or None      # any OpenAI-compatible endpoint (a proxy, vLLM, Ollama): a self-hosted one needs no key
-    return OpenAIProvider(api_key=env.get("OPENAI_API_KEY") or None, base_url=base, keyless=bool(base))
+    return OpenAIProvider(api_key=env.get("OPENAI_API_KEY") or None, base_url=base, keyless=bool(base),
+                          env_name="OPENAI_API_KEY")
 
 
 @implementation("call-a-model", "deepseek")
 def deepseek(env: Mapping[str, str]) -> DeepSeekProvider:
     return DeepSeekProvider(api_key=env.get("DEEPSEEK_API_KEY") or None, base_url=env.get("DEEPSEEK_BASE_URL") or None,
-                            thinking=flag(env, "DEEPSEEK_THINKING"))
+                            thinking=flag(env, "DEEPSEEK_THINKING"), env_name="DEEPSEEK_API_KEY")
 
 
 def make_provider(name: str, env: Optional[Mapping[str, str]] = None) -> Any:

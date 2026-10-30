@@ -18,6 +18,7 @@ STORE_COMMANDS = ("move-root", "migrate-imports", "merge-into", "store-info", "u
 # far longer than the card client's interactive default; a client that gives up first leaves the
 # server still embedding while it sends the next batch.
 UPLOAD_TIMEOUT_SECONDS = 600.0
+DEFAULT_COLLECTION_PREFIX = "qar_ctx"
 
 
 def is_store_command(argv: Optional[List[str]]) -> bool:
@@ -92,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     si.add_argument("--vector-location", default=None, metavar="URL|embedded",
                     help="publish where this store's card points live (a Qdrant server URL, or "
                          "'embedded'); readers on other backends query them read-only from there")
-    si.add_argument("--vector-collection-prefix", default="qar_ctx")
+    si.add_argument("--vector-collection-prefix", default=DEFAULT_COLLECTION_PREFIX)
     si.add_argument("--vector-size", type=int, default=None,
                     help="size of the vectors at that location (default: detected on a server)")
     si.add_argument("--embedder-id", default=None,
@@ -201,8 +202,9 @@ def vector_location_from_args(args):
     if not location:
         return None, "--vector-location needs a server URL or 'embedded'"
     size = args.vector_size
+    prefix = args.vector_collection_prefix or DEFAULT_COLLECTION_PREFIX     # an explicit empty value means the default, as it always did
     record = ident.vector_location_record(
-        location, collection_prefix=args.vector_collection_prefix, vector_size=size,
+        location, collection_prefix=prefix, vector_size=size,
         embedder=args.embedder_id if args.embedder_id is not None else embedder_id_from_env())
     if record["location"] == ident.EMBEDDED:
         import os
@@ -212,12 +214,12 @@ def vector_location_from_args(args):
         from .adapters.card_store_vectors import ReadOnlyVectorReader
         try:
             sizes = ReadOnlyVectorReader(QdrantClient(url=location, timeout=5),
-                                         collection_prefix=args.vector_collection_prefix).detect_sizes()
+                                         collection_prefix=prefix).detect_sizes()
         except Exception as exc:  # noqa: BLE001
             return None, f"could not reach {location} to detect the vector size ({exc.__class__.__name__}); pass --vector-size"
         if len(sizes) != 1:
             return None, (f"found vector sizes {sorted(sizes) or 'none'} under prefix "
-                          f"{args.vector_collection_prefix!r}; pass --vector-size")
+                          f"{prefix!r}; pass --vector-size")
         record["vector_size"] = sizes[0]
     return record, ""
 

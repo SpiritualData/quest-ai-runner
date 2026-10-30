@@ -54,3 +54,15 @@ def test_the_provider_is_built_from_the_environment(monkeypatch):
     p = make_provider("deepseek", env)
     assert (p.api_key, p.base_url, p.create_kwargs) == ("k-test", "https://example.invalid", {})
     assert make_provider("deepseek", {"DEEPSEEK_API_KEY": "k"}).create_kwargs == {"extra_body": {"thinking": {"type": "disabled"}}}
+
+
+def test_a_provider_that_cannot_be_built_does_not_stop_the_others(monkeypatch):
+    import quest_ai_runner.config_resolvers as resolvers
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "k-test")
+
+    def broken(name):
+        raise ImportError("openai is not installed")
+    monkeypatch.setattr(resolvers, "make_provider", broken)
+    reg = {"anthropic": object()}
+    resolvers.register_deepseek(reg)
+    assert list(reg) == ["anthropic"]
