@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 
-from quest_ai_runner.core.adapters_values import DeepResult, ProgressEvent
-from quest_ai_runner.core.adapters_events import (
+from hubofhubs.ports.deep import DeepResult, ProgressEvent
+from hubofhubs.ports.events import (
     EVENT_CONTEXT,
     EVENT_EXEC,
     EVENT_PLAN,
@@ -401,7 +401,8 @@ FITS_BESIDE_THE_CLOCK = 52
 
 def fixed_start_statuses():
     from quest_ai_runner.core.deep_model_selection import start_status_text
-    from quest_ai_runner.core.goal_metrics import NUDGE_STATUS, READING_STATUS
+    from esoi.iteration import READING_STATUS
+    from quest_ai_runner.core.goal_metrics import NUDGE_STATUS
     ladder = {"start_model": "sonnet", "ladder": ["sonnet", "opus"], "difficulty": "simple"}
     pinned = {"start_model": "opus", "ladder": ["opus"]}
     return [start_status_text(ladder), start_status_text(pinned), NUDGE_STATUS,

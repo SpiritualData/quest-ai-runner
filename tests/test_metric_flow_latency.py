@@ -12,8 +12,9 @@ import time
 
 import pytest
 
-from quest_ai_runner.core import spec_slice
-from quest_ai_runner.core.adapters_events import Mode
+from esoi import spec_index
+from esoi import spec_slice
+from hubofhubs.ports.events import Mode
 from quest_ai_runner.core.goal_iteration import SliceAndWriteback
 from quest_ai_runner.core.orchestrator import PlanDecision
 from quest_ai_runner.core.orchestrator_turn import _Emitter
@@ -76,7 +77,7 @@ def test_a_repository_without_specification_records_pays_nothing(world, tmp_path
     def index_must_not_be_built(*args, **kwargs):
         raise AssertionError("a repository with no records had an index built")
 
-    monkeypatch.setattr(spec_slice.repo_specs, "repo_index", index_must_not_be_built)
+    monkeypatch.setattr(spec_index, "build", index_must_not_be_built)
     started = time.monotonic()
     done = run_goal(orchestrate(world, worker, iteration=SliceAndWriteback(meters=[meter])), timeline)
     assert time.monotonic() - started < 2

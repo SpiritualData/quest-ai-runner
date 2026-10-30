@@ -5,9 +5,9 @@ code proposes a metric or answers a regression. Zero model calls."""
 from types import SimpleNamespace
 
 import common  # noqa: F401
+from esoi.metric_meter import AFTER, BEFORE
+from esoi.spec_slice import SpecSlice
 from quest_ai_runner.core.goal_metrics import GoalMetrics
-from quest_ai_runner.core.metric_meter import Reading
-from quest_ai_runner.core.spec_slice import SpecSlice
 
 
 class MemoryLedger:
@@ -22,21 +22,30 @@ class MemoryLedger:
         return [r for r in self.rows if r.run_id == run_id]
 
 
+class Meter:
+    """A meter that returns one moment's true reading for the case."""
+    name = "fixed"
+    cheap = True
+
+    def __init__(self, serves, value):
+        self.serves, self.value = (serves,), value
+
+    def measure(self, spec_slice, working_dir=None):  # noqa: ARG002
+        return self.value
+
+
 class Iteration:
-    """The arm under the goal loop, with a meter that reads the case's true values."""
+    """The arm under the goal loop, with meters that read the case's true values."""
     name = "slice-and-writeback"
     measures = True
 
     def __init__(self, case):
         self.case = case
+        self.source = self if case["has_metric"] else None
+        self.meters = [Meter(BEFORE, case.get("before")), Meter(AFTER, case.get("after"))]
 
     def slice_for(self, request, working_dir=None):  # noqa: ARG002
-        if not self.case["has_metric"]:
-            return None
         return SpecSlice(root="", solution_id="s", metric_id="m", metric_name="metric")
-
-    def read_metric(self, spec_slice, working_dir=None, *, when="before", announce=None):  # noqa: ARG002
-        return Reading(value=self.case["before" if when == "before" else "after"], meter="fixed")
 
 
 def build(meter):  # noqa: ARG001

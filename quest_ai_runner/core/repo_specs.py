@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from .runtime_settings import process_environment
 from .spec_selection import (SpecSelection, VectorSearch, card_line, intent_specs, related_specs, select_specs)
 from .unified_search import RecordView, TagTable, UnifiedSelection, solutions_and_problems_with_links, views_from_spec_index
 
@@ -37,6 +38,19 @@ def find_root(start: Optional[Path] = None) -> Optional[Path]:
         return Path(env).expanduser().resolve() if (Path(env).expanduser() / CONFIG_NAME).is_file() else None
     here = Path(start or Path.cwd()).resolve()
     return next((p for p in [here, *here.parents] if (p / CONFIG_NAME).is_file()), None)
+
+
+def root_for(working_dir: Optional[str]) -> Optional[Path]:
+    """``find_root`` from a folder given as text; no folder means the process's own (a tool call runs in the work folder)."""
+    return find_root(Path(working_dir) if working_dir else None)
+
+
+def slice_root(working_dir: Optional[str]) -> Optional[Path]:
+    """The repository a task's slice is read from: None with no folder to look from (the process's own folder is a guess about
+    where the work happens), else ``find_root`` (so ``QAR_SPEC_ROOT`` still names the repository)."""
+    if not (working_dir or process_environment().get("QAR_SPEC_ROOT")):
+        return None
+    return root_for(working_dir)
 
 
 def cache_dir() -> Path:

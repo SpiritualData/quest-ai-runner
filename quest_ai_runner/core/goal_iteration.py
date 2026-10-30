@@ -8,9 +8,9 @@ contributes:
   ``generic-doctrine``      nothing. The standing instructions are the whole method; the worker's recorded results, or its
                             statement that none applies, are what the record holds. The off switch.
   ``slice-only``            the slice of the specification the goal serves goes into the brief: the next milestone and the
-                            metric that measures it (``spec_slice``).
+                            metric that measures it (``esoi.spec_slice``).
   ``slice-and-writeback``   the slice, plus the runner reads the metric before the work and after it with its own meters
-                            (``metric_meter``) and writes those readings to the ledger itself. The selected arm.
+                            (``esoi.metric_meter``) and writes those readings to the ledger itself. The selected arm.
 
 ``slice-and-writeback`` is selected by Joshua's direction of 2026-10-21 that every run's metric result before and after is
 recorded by code; the replay metric of the solution is not built, so that is a direction and not a measured win. A lane turns
@@ -21,32 +21,28 @@ arm, so a consumer that builds the brain itself gets the same default as ``build
 A repository without ESOI records, or a goal whose working folder is not known, has no slice, and an arm that measures then
 reads nothing, announces nothing and waits for nothing. When there is a slice, a reading is bounded (``read_value``): it is
 announced before a meter that takes time runs, and a meter that has not answered in time is left behind.
+
+An arm is only what the goal loop hands the ``esoi.iteration.MetricIteration`` it runs: a slice ``source`` (or none) and the
+``meters`` it reads with. The reading, the ledger and the bound on both are the esoi library's.
 """
 from __future__ import annotations
 
-from typing import Callable, Optional, Protocol, Sequence
+from typing import Optional, Protocol, Sequence
 
 from esoi import implementation
+from esoi.metric_meter import MetricMeter, meters_from_names
+from esoi.spec_slice import RepoSliceSource, SliceSource
 
-from .metric_meter import BEFORE, MetricMeter, Reading, meters_from_names, read_value
-from .runtime_settings import core_settings
-from .spec_slice import RepoSliceSource, SliceSource, SpecSlice
+from . import repo_specs
+from .runtime_settings import core_settings, process_environment
 
 
 class GoalIteration(Protocol):
-    """What the code adds around one deep goal. An arm that adds nothing returns ``None`` and ``(None, "")``."""
+    """What the code adds around one deep goal: a slice source (None for none) and the meters that read its metric."""
     name: str
     measures: bool
-
-    def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
-        """The slice of the specification the goal serves, or None."""
-        ...
-
-    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *, when: str = BEFORE,
-                    announce: Optional[Callable[[], None]] = None) -> Reading:
-        """The slice's metric now, as a bounded ``Reading`` taken ``when`` (``BEFORE`` or ``AFTER`` the work);
-        ``announce`` is called before a meter that takes time runs."""
-        ...
+    source: Optional[SliceSource]
+    meters: Sequence[MetricMeter]
 
 
 @implementation("iterate-by-spec", "generic-doctrine")
@@ -54,13 +50,8 @@ class DoctrineOnly:
     """The standing instructions are the whole method: no slice in the brief and no reading by the runner."""
     name = "generic-doctrine"
     measures = False
-
-    def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
-        return None
-
-    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *, when: str = BEFORE,
-                    announce: Optional[Callable[[], None]] = None) -> Reading:
-        return Reading()
+    source: Optional[SliceSource] = None
+    meters: Sequence[MetricMeter] = ()
 
 
 @implementation("iterate-by-spec", "slice-only")
@@ -69,10 +60,7 @@ class SliceOnly(DoctrineOnly):
     name = "slice-only"
 
     def __init__(self, source: Optional[SliceSource] = None):
-        self.source = source or RepoSliceSource()
-
-    def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
-        return self.source.slice_for(request, working_dir)
+        self.source = source or RepoSliceSource(find_root=repo_specs.slice_root, cache_dir=repo_specs.cache_dir())
 
 
 @implementation("iterate-by-spec", "slice-and-writeback")
@@ -83,8 +71,5 @@ class SliceAndWriteback(SliceOnly):
 
     def __init__(self, source: Optional[SliceSource] = None, meters: Optional[Sequence[MetricMeter]] = None):
         super().__init__(source)
-        self.meters = list(meters) if meters is not None else meters_from_names(core_settings().metric_meters)
-
-    def read_metric(self, spec_slice: SpecSlice, working_dir: Optional[str] = None, *, when: str = BEFORE,
-                    announce: Optional[Callable[[], None]] = None) -> Reading:
-        return read_value(self.meters, spec_slice, working_dir, when=when, announce=announce)
+        self.meters = list(meters) if meters is not None else meters_from_names(core_settings().metric_meters,
+                                                                               process_environment())

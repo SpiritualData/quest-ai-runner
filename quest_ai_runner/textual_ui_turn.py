@@ -18,7 +18,7 @@ from .textual_ui_widgets import (
     _READY_PLACEHOLDER,
 )
 from .textual_ui_prompt import PromptTextArea
-from .core.metric_results import without_line
+from esoi.metric_results import without_line
 from .textual_ui_helpers import (
     HangingText, _build_shallow_context_bullets, context_block_lines, indented_line, metric_groups, person_line,
     plural, working_notes_in,
@@ -45,7 +45,7 @@ class TurnMixin:
 
     def _types(self) -> dict:
         if self._ev is None:
-            from .core.adapters_events import (
+            from hubofhubs.ports.events import (
                 EVENT_CONTEXT,
                 EVENT_STATUS,
                 EVENT_PLAN,

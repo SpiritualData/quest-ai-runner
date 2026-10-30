@@ -19,14 +19,13 @@ from typing import Any, Dict, List, Optional
 import pytest
 from esoi import scaffold
 
+from esoi.metric_meter import AFTER, BEFORE, EVERY_MOMENT
+from esoi.metric_results import NOT_RECORDED_LINE, MetricResult
 from quest_ai_runner.config import build_orchestrator
-from quest_ai_runner.core.adapters_events import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, Mode
-from quest_ai_runner.core.adapters_values import DeepResult
-from quest_ai_runner.core import spec_slice
+from hubofhubs.ports.deep import DeepResult
+from hubofhubs.ports.events import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, Mode
 from quest_ai_runner.core.goal_iteration import DoctrineOnly, SliceAndWriteback, SliceOnly
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
-from quest_ai_runner.core.metric_meter import AFTER, BEFORE, EVERY_MOMENT
-from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE, MetricResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision
 from quest_ai_runner.core.orchestrator_turn import _Emitter

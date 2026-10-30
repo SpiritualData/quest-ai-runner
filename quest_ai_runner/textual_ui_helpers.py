@@ -11,7 +11,7 @@ from collections import Counter
 from typing import Any, List, Mapping, Optional, Sequence
 from rich.text import Text
 
-from .core.metric_results import NOT_RECORDED_LINE, SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED
+from esoi.metric_results import NOT_RECORDED_LINE, SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED
 from .core.orchestrator_text import ellipsize, sentence  # noqa: F401  (the terminal's own name for it, used all over)
 
 

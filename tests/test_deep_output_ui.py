@@ -15,8 +15,8 @@ from __future__ import annotations
 import pytest
 from rich.text import Text
 
-from quest_ai_runner.core.adapters_events import EVENT_MILESTONE
-from quest_ai_runner.core.metric_results import NOT_RECORDED_LINE, render_line
+from hubofhubs.ports.events import EVENT_MILESTONE
+from esoi.metric_results import NOT_RECORDED_LINE, render_line
 from quest_ai_runner.interactive_session import _DeepRunTracker
 from quest_ai_runner.textual_ui import QuestAITerminal, DeepDetailPanel
 

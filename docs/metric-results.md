@@ -1,8 +1,10 @@
 # The metric record of a deep goal
 
-**Code:** `core/metric_results.py` (the row, the ledger, the payload), `core/goal_metrics.py` (the flow),
-`core/tools_metric_results.py` (the tool), `core/spec_slice.py` and `core/metric_meter.py` (the slice and the meters),
-`core/goal_iteration.py` (the arms). **Specification:** solution `iterate-by-spec`.
+**Code:** the esoi library holds the row, the ledger, the payload, the slice and the meters (`esoi.metric_results`,
+`esoi.spec_slice`, `esoi.metric_meter`, `esoi.iteration`; the guide is `docs/guides/measure-before-and-after.md` in the esoi
+repository). QAR holds `core/goal_metrics.py` (the flow around a goal: the gate and the nudge), `core/tools_metric_results.py`
+(the tool and the ledger folder), `core/goal_iteration.py` (the arms) and `core/repo_specs.py` (`slice_root`, which repository a
+goal's slice is read from). **Specification:** solution `iterate-by-spec`.
 
 ESOI asks every piece of work to say what the relevant metric was before and after the change. Left to a worker's closing
 words that is a claim. Here the runner keeps the record itself: the numbers are written to a ledger by code, the goal loop
@@ -44,7 +46,7 @@ Where a consumer reads it:
   and on the `EVENT_RESULT` of a deep turn (also on an answer turn that ran deep work);
 - one plain line at the end of the deep result text, for a consumer that shows text only, written by code from the
   entries: `Metric: <name> <before> -> <after> (measured)`, `Metric: not applicable (<reason>)`, or `No metric was recorded
-  for this change.` A consumer that shows the entries itself drops that line with `metric_results.without_line(text,
+  for this change.` A consumer that shows the entries itself drops that line with `esoi.metric_results.without_line(text,
   entries, missing)`, which removes only a line equal to what `render_line` wrote for those entries;
 - the answer explanation (`docs/answer-explanation.md`, payload version 3): `explanation["metrics"]` and
   `explanation["metric_missing"]`, the same entries, kept in the facts half of the panel so no model writes or edits them.
@@ -74,7 +76,7 @@ all say so. Choosing between implementations by the cascade (the highest result 
 ## When two numbers differ
 
 A worker writes the number it reports with the decimals it chose (`0.4`), and the meter's is more exact (`0.38`): they say
-the same thing. `metric_results.differs(measured, recorded)` therefore takes the measured value, rounds it half up to the
+the same thing. `esoi.metric_results.differs(measured, recorded)` therefore takes the measured value, rounds it half up to the
 number of decimals the RECORDED value is written with (read from its shortest exact form, so `0.4` has one and `0.38` two),
 and calls the two the same when that equals the recorded value. Anything else is a difference, compared exactly. There is no
 tolerance: `0.38` against `0.4` and `0.91` against `0.9` agree, while `0.38` against `0.3`, or a recorded `0.38` against a
@@ -181,14 +183,15 @@ The reading before the work happens before the worker spawns, so it is bounded a
 - the slice lookup is local and lexical (tens of milliseconds, bounded at 3 seconds) and starts nothing when there is no
   folder to look in.
 
-**The slice** (`spec_slice`) is found without a model, from the `esoi/` records of the repository around the goal's working
+**The slice** (`esoi.spec_slice`) is found without a model, from the `esoi/` records of the repository around the goal's working
 folder, by the same lexical selection `find_specs` uses. It is given only when it is clear: the selection is confident, or
-every candidate belongs to one solution. Otherwise there is none. The milestone is the first one not archived (a milestone
+every candidate belongs to one solution. Otherwise there is none. The milestone is the first one neither met (its text ends with a `[met: DATE]` marker) nor archived (a milestone
 is archived when its text begins with `Archived`, `(archived)` or `[archived]`). Its target is a number only when the text
 holds exactly one number; a percent is read as a fraction. The metric is the solution's `authoritative_metric_id`, or its
-only metric. A goal whose working folder is not known gets no slice.
+only metric. A goal whose working folder is not known gets no slice, unless `QAR_SPEC_ROOT` names the repository
+(`repo_specs.slice_root`).
 
-**The meters** (`metric_meter`), tried in the order `QAR_METRIC_METERS` names (default `recorded_row,offline_arm`):
+**The meters** (`esoi.metric_meter`), tried in the order `QAR_METRIC_METERS` names (default `recorded_row,offline_arm`):
 
 - `recorded_row` reads the latest row of the results log for the metric's arm, while that row is current. A row recorded
   before the measured code changed gives nothing. It answers the reading before the work only: the row's staleness check

@@ -29,7 +29,7 @@ flowchart TB
   SUB["Subconscious + Intuition<br/>admit-to-the-mind<br/>core/card_filter.py"]
   MIND["Mind<br/>keep-a-working-stream<br/>core/orchestrator.py"]
   SCI["Science<br/>know-the-world<br/>adapters/web_research.py"]
-  CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/spec_slice.py"]
+  CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/goal_metrics.py"]
   OV["Overseer<br/>risk check<br/>watch-a-run<br/>core/overseer.py"]
   BODY["Body<br/>acts inside Quest<br/>act-as-the-body<br/>runner/quest_client.py"]
   WO["World out<br/>acts outside Quest<br/>act-in-the-world<br/>adapters/acp_deep_runner.py"]

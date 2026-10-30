@@ -8,10 +8,11 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass
 
+from esoi.metric_results import MAX_METRICS
+
 from ..core.orchestrator import OrchestratorResult
-from ..core.adapters_values import ProgressEvent
+from hubofhubs.ports.deep import ProgressEvent
 from ..core.goal_metrics import deep_metric_data
-from ..core.metric_results import MAX_METRICS
 from .executor_contracts import log
 
 

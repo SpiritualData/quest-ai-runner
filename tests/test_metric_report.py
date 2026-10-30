@@ -5,8 +5,8 @@
 carries them passes them on as the progress post's ``data``. A client or a test double that does not declare
 ``result_data`` is called exactly as before, and a run with no metric facts reports exactly as before.
 """
-from quest_ai_runner.core.adapters_values import DeepResult, ProgressEvent
-from quest_ai_runner.core.metric_results import MAX_METRICS, MetricResult, payload_of, reconcile
+from hubofhubs.ports.deep import DeepResult, ProgressEvent
+from esoi.metric_results import MAX_METRICS, MetricResult, payload_of, reconcile
 from quest_ai_runner.core.orchestrator_types import OrchestratorResult
 from quest_ai_runner.runner.executor import TaskExecutor
 from quest_ai_runner.runner.executor_support import _TaskProgressSink

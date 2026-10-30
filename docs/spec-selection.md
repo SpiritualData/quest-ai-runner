@@ -57,7 +57,7 @@ quest_ai_runner.tools --spec-root <folder> call ...` (the flag sets `QAR_SPEC_RO
 not named in a brief at all when no root is found (`ToolSpec.needs_spec_root`): a brief never names a tool its worker could not call.
 
 It is the slice source that `iterate-by-spec` and `ground-in-intent` were waiting for. `iterate-by-spec` calls it, lexical only
-and for deep goals only (`core/spec_slice.py`); `ground-in-intent` does not. A record is otherwise not part of the context a run
+and for deep goals only (`esoi.spec_slice`, wired by `core/goal_iteration.py`); `ground-in-intent` does not. A record is otherwise not part of the context a run
 is assembled with: it reaches a run only through the tools above. Searching cards and records in one pipeline, with a record as
 a read-only view of its row, is the solution `search-cards-and-specs` (`esoi/solutions.csv`), decided by its own metric; its
 first implementation is below.

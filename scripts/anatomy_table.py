@@ -19,7 +19,7 @@ PARTS = [
     ("Subconscious, incl. Intuition", "quest_ai_runner/core/card_filter.py", "admit-to-the-mind"),
     ("Mind", "quest_ai_runner/core/orchestrator.py", "keep-a-working-stream"),
     ("Science", "quest_ai_runner/adapters/web_research.py", "know-the-world"),
-    ("Critical thinking", "quest_ai_runner/core/spec_slice.py", "think-critically"),
+    ("Critical thinking", "quest_ai_runner/core/goal_metrics.py", "think-critically"),
     ("Overseer", "quest_ai_runner/core/overseer.py", "watch-a-run"),
     ("Body", "quest_ai_runner/runner/quest_client.py", "act-as-the-body"),
     ("World (act)", "quest_ai_runner/adapters/acp_deep_runner.py", "act-in-the-world"),

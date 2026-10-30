@@ -73,8 +73,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from .requester import apply_requester_env, requester_from_meta
 from .runtime_settings import process_environment
-from .metric_results import metric_ledger_from_env
-from .tools_failure_ledger import FileToolLedger, outcome_from_result
+from hubofhubs.act.tool_ledger import FileToolLedger, outcome_from_result
 
 log = logging.getLogger(__name__)
 
@@ -231,7 +230,7 @@ class ToolRegistry:
                  metric_ledger: Optional[Any] = None):
         self._specs: Dict[str, ToolSpec] = {}
         # Where every call's outcome is written, keyed by the task it ran for (see
-        # ``core/tools_failure_ledger.py``). None = nothing is recorded.
+        # ``hubofhubs.act.tool_ledger``). None = nothing is recorded.
         self.ledger = ledger
         # Where a run's metric results are kept, keyed by the run (``core/metric_results.py``); the
         # ``record_metric_result`` tool writes to it and the goal loop reads it. None = the flow uses
@@ -720,8 +719,8 @@ def build_tool_registry(env: Optional[Mapping[str, str]] = None) -> ToolRegistry
     ``QAR_METRIC_LEDGER_DIR`` the same for each run's metric results (``core/metric_results.py``).
     """
     env = process_environment() if env is None else env
-    registry = ToolRegistry(ledger=FileToolLedger(env.get("QAR_TOOL_LEDGER_DIR") or None),
-                            metric_ledger=metric_ledger_from_env(env))
+    registry = ToolRegistry(ledger=FileToolLedger(env.get("QAR_TOOL_LEDGER_DIR") or None, name="qar-tool-ledger"),
+                            metric_ledger=tools_metric_results.metric_ledger_from_env(env))
     if env_flag(env.get("QAR_STANDARD_TOOLS"), default=True):
         for name, builder in STANDARD_TOOL_BUILDERS.items():
             try:

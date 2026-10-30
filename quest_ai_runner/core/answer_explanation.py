@@ -54,8 +54,9 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from esoi.metric_results import SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, SOURCES, format_value
+
 from .prompt_specs import PromptSpec, register
-from .metric_results import SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, SOURCES, format_value
 
 log = logging.getLogger(__name__)
 

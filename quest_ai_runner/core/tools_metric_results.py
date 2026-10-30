@@ -18,13 +18,22 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional
 
-from .metric_results import (SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, MetricResult, metric_ledger_from_env,
-                             payload_of, render_line)
-from .spec_slice import describe_metric
+from esoi.metric_results import (SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger, MetricResult, payload_of,
+                                 render_line)
+from esoi.spec_slice import describe_metric
+from hubofhubs.critique.jsonl_ledger import default_directory
+
+from .repo_specs import root_for
 from .tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec
 
 TOOL_NAME = "record_metric_result"
+LEDGER_DIR_ENV = "QAR_METRIC_LEDGER_DIR"
 KEYWORDS = ("metric", "result", "before", "after", "milestone", "measure", "record")
+
+
+def metric_ledger_from_env(env: Mapping[str, str]) -> FileMetricLedger:
+    """The ledger ``QAR_METRIC_LEDGER_DIR`` names (default: a folder in the system temp directory, like the tool ledger)."""
+    return FileMetricLedger(env.get(LEDGER_DIR_ENV) or default_directory("qar-metric-ledger"))
 
 
 def truthy(value: Any) -> bool:
@@ -78,7 +87,7 @@ def build_result(args: Mapping[str, Any], run_id: str, task_id: str) -> MetricRe
     metric_id = str(args.get("metric_id") or "").strip()
     if not metric_id:
         raise ValueError("metric_id is needed (or not_applicable with a reason)")
-    known: Dict[str, str] = describe_metric(metric_id)
+    known: Dict[str, str] = describe_metric(metric_id, None, find_root=root_for)
     return MetricResult(source=SOURCE_RECORDED, run_id=run_id, task_id=task_id, metric_id=metric_id,
                         solution_id=str(args.get("solution_id") or known.get("solution_id") or ""),
                         name=known.get("name", ""), milestone=str(args.get("milestone") or ""),

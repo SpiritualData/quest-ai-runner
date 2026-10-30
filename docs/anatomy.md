@@ -14,7 +14,7 @@ flowchart TB
   SUB["Subconscious + Intuition<br/>admit-to-the-mind<br/>core/card_filter.py"]
   MIND["Mind<br/>keep-a-working-stream<br/>core/orchestrator.py"]
   SCI["Science<br/>know-the-world<br/>adapters/web_research.py"]
-  CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/spec_slice.py"]
+  CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/goal_metrics.py"]
   OV["Overseer<br/>risk check<br/>watch-a-run<br/>core/overseer.py"]
   BODY["Body<br/>acts inside Quest<br/>act-as-the-body<br/>runner/quest_client.py"]
   WO["World out<br/>acts outside Quest<br/>act-in-the-world<br/>adapters/acp_deep_runner.py"]
@@ -85,7 +85,7 @@ The table is generated from `esoi/solutions.csv` and `esoi/metrics.csv` by
 | Subconscious, incl. Intuition | `quest_ai_runner/core/card_filter.py` | `admit-to-the-mind` | `metric-admit-to-the-mind` | arm built, selected: recency_window |
 | Mind | `quest_ai_runner/core/orchestrator.py` | `keep-a-working-stream` | `metric-keep-a-working-stream` | arm built, selected: rebuilt_per_step |
 | Science | `quest_ai_runner/adapters/web_research.py` | `know-the-world` | `metric-know-the-world` | spec only, no arm yet, selected: web_with_support_check |
-| Critical thinking | `quest_ai_runner/core/spec_slice.py` | `think-critically` | `metric-think-critically` | spec only, no arm yet, selected: deep_runs_only |
+| Critical thinking | `quest_ai_runner/core/goal_metrics.py` | `think-critically` | `metric-think-critically` | spec only, no arm yet, selected: deep_runs_only |
 | Overseer | `quest_ai_runner/core/overseer.py` | `watch-a-run` | `metric-watch-a-run` | arm built, selected: overseer |
 | Body | `quest_ai_runner/runner/quest_client.py` | `act-as-the-body` | `metric-act-as-the-body` | arm built, selected: card_and_reads |
 | World (act) | `quest_ai_runner/adapters/acp_deep_runner.py` | `act-in-the-world` | `metric-act-in-the-world` | spec only, no arm yet, selected: coding_agent_prompt_reach |
