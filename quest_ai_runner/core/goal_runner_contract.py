@@ -14,6 +14,7 @@ from typing import Any, Callable, List, Optional, Tuple
 from dataclasses import dataclass
 
 from hubofhubs.ports.deep import DeepResult, DeepRunner
+from .deep_launch import DeepLaunchSettings
 from .runtime_settings import DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS as _DEFAULT_REVIEW_INTERVAL, core_settings
 
 
@@ -67,6 +68,12 @@ def resolve_deep_timeout_seconds(configured: Optional[float]) -> Optional[float]
     if configured is not None:
         return float(configured) if float(configured) > 0 else None
     return core_settings().deep_timeout_seconds
+
+
+def resolve_deep_launch(configured: Optional[DeepLaunchSettings]) -> DeepLaunchSettings:
+    """The launch parameters of the deep worker: ``configured`` (``SubprocessConfig.launch``) when the consumer pinned one, else
+    the ``QAR_DEEP_*`` launch variables the config layer parsed into ``CoreSettings.deep_launch``. Both default to today's launch."""
+    return configured if configured is not None else core_settings().deep_launch
 
 
 def resolve_deep_review_interval_seconds(configured: Optional[float]) -> Optional[float]:
@@ -584,6 +591,12 @@ class SubprocessConfig:
     # (which restricts the worker to ONLY these servers, ignoring its ambient config) -- that is a
     # separate, stricter policy left for a consumer to opt into explicitly if a later phase wires it.
     mcp_config_path: Optional[str] = None
+    # How the worker is launched (``core.deep_launch``): the lean flags the one-shot chat provider already uses (``--tools``,
+    # ``--setting-sources``, ``--strict-mcp-config``, ``--exclude-dynamic-system-prompt-sections``), a spend ceiling
+    # (``--max-budget-usd``) and a turn override, as parameters of the one launch. None reads the QAR_DEEP_TOOLS,
+    # QAR_DEEP_SETTING_SOURCES, QAR_DEEP_STRICT_MCP, QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS and QAR_DEEP_MAX_BUDGET_USD variables
+    # (``CoreSettings.deep_launch``); with none of those set it is today's launch, no flag added.
+    launch: Optional[DeepLaunchSettings] = None
     # The token budget for the composed deep prompt (``core.prompt_budget``). None reads
     # QAR_DEEP_PROMPT_TOKEN_BUDGET, else the library default; any value is capped at what the
     # run's model window can hold beside the worker's own system prompt and working room.

@@ -108,6 +108,7 @@ so there is one set of switches and not two:
 | `QAR_DEEP_AUTO_MODEL` | `0`/`false`/`off` turns off the automatic starting model (on by default, see below) |
 | `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL`, `QAR_DEEP_MODEL_HARD` | the model a deep run starts on per planner-rated difficulty (defaults `haiku`, `sonnet`, `sonnet`) |
 | `QAR_DEEP_MAX_TURNS` | hard per-attempt turn cap (`OrchestratorConfig.deep_max_turns`, default 30) |
+| `QAR_DEEP_TOOLS`, `QAR_DEEP_SETTING_SOURCES`, `QAR_DEEP_STRICT_MCP`, `QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS`, `QAR_DEEP_MAX_BUDGET_USD` | the lean launch of the deep worker (`--tools`, `--setting-sources`, `--strict-mcp-config`, `--exclude-dynamic-system-prompt-sections`, `--max-budget-usd`), the same flags the chat provider already uses; each is a parameter of `SubprocessConfig.launch` (`core/deep_launch.py`) and unset adds no flag, so the default launch is unchanged. The turn cap is `QAR_DEEP_MAX_TURNS` |
 | `QAR_CONTEXT_PREAMBLE_FILE` | a file whose contents become `RunnerConfig.context_preamble` (org/persona doctrine on every deep-run brief), preferred over the inline `QAR_CONTEXT_PREAMBLE` (still supported) since multi-line prose is miserable as a bare env var |
 
 Resolution happens in `config.resolve_deep_runner`, which `build_orchestrator` calls and then

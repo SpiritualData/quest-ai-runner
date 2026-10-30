@@ -45,6 +45,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from esoi import implementation
 
 from . import usage_limit
+from .deep_launch import build_deep_argv
 from hubofhubs.ports.deep import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent
 from hubofhubs.ports.events import EVENT_EXEC
 from .goal_runner import SubprocessGoalRunner
@@ -503,26 +504,18 @@ class StreamJsonGoalRunner(SubprocessGoalRunner):
             if replay is not None and replay + prompt_tokens > room:
                 resume_session_id = None
 
-        cmd: List[str] = [binary, "-p", "--input-format", "stream-json",
-                          "--output-format", "stream-json", "--verbose", "--replay-user-messages"]
-        if self.cfg.skip_permissions:
-            cmd.append("--dangerously-skip-permissions")
-        if self.cfg.allowed_tools:
-            cmd += ["--allowed-tools", ",".join(self.cfg.allowed_tools)]
-        if self.cfg.disallowed_tools:
-            cmd += ["--disallowed-tools", ",".join(self.cfg.disallowed_tools)]
-        if self.cfg.mcp_config_path:
-            cmd += ["--mcp-config", self.cfg.mcp_config_path]
-        cmd += ["--model", cli_safe_model(model, self._model_translator) or BALANCED_CLI_MODEL]
         turns = max_turns if max_turns is not None else DEFAULT_DEEP_MAX_TURNS
-        if goal.strip():
-            cmd += ["--max-turns", str(int(turns))]
         if resume_session_id:
-            session_id = resume_session_id
-            cmd += ["--resume", session_id]
+            session_id, session_flag = resume_session_id, "--resume"
         else:
-            session_id = str(uuid.uuid4())
-            cmd += ["--session-id", session_id]
+            session_id, session_flag = str(uuid.uuid4()), "--session-id"
+        cmd = build_deep_argv(
+            binary, streaming=True, skip_permissions=self.cfg.skip_permissions,
+            allowed_tools=self.cfg.allowed_tools, disallowed_tools=self.cfg.disallowed_tools,
+            mcp_config_path=self.cfg.mcp_config_path,
+            model=cli_safe_model(model, self._model_translator) or BALANCED_CLI_MODEL, turns=turns,
+            goal_given=bool(goal.strip()), session_flag=session_flag, session_id=session_id,
+            launch=self._launch_settings())
 
         stop_monitor = threading.Event()
         monitor_thread = None

@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Mapping, Optional, Union
 
+from .deep_launch import DeepLaunchSettings
+
 DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS = 300.0
 
 
@@ -43,6 +45,10 @@ class CoreSettings:
     deep_instructions_files: Optional[str] = None
     link_policy_file: str = ""  # [QAR_LINK_POLICY_FILE]
     claude_config_dir: Optional[str] = None  # [CLAUDE_CONFIG_DIR]
+    # How the deep worker is launched: the lean flags, a spend ceiling and a turn override. The default adds no flag, so it is
+    # today's launch [QAR_DEEP_TOOLS, QAR_DEEP_SETTING_SOURCES, QAR_DEEP_STRICT_MCP, QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS,
+    # QAR_DEEP_MAX_BUDGET_USD]
+    deep_launch: DeepLaunchSettings = DeepLaunchSettings()
     # Which meters read a metric's value, in the order tried (core/metric_meter.py) [QAR_METRIC_METERS]
     metric_meters: str = "recorded_row,offline_arm"
     # The longest ONE reading of a metric may take, in all (an offline arm is stopped at it); a reading is taken before

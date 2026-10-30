@@ -12,6 +12,7 @@ import os
 from typing import Mapping, Optional
 
 from .config_support import _log
+from .core.deep_launch import DeepLaunchSettings
 from .core.runtime_settings import (
     DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS,
     CoreSettings,
@@ -42,6 +43,30 @@ def _optional_positive(raw: Optional[str], name: str) -> Optional[float]:
         _log.warning("%s=%r is not a valid number, ignoring it", name, raw)
         return None
     return value if value > 0 else None
+
+
+_TRUE = ("1", "true", "yes", "on")
+
+
+def deep_launch_from_env(env: Mapping[str, str]) -> DeepLaunchSettings:
+    """The deep worker's launch parameters the environment asks for; unset or blank leaves a parameter at today's launch.
+
+    ``QAR_DEEP_TOOLS``: comma-separated built-in tool names (``--tools``); ``none`` is no tools at all.
+    ``QAR_DEEP_SETTING_SOURCES``: comma-separated ``user``, ``project``, ``local`` (``--setting-sources``); ``none`` loads none.
+    ``QAR_DEEP_STRICT_MCP`` and ``QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS``: ``1`` adds ``--strict-mcp-config`` and
+    ``--exclude-dynamic-system-prompt-sections``. ``QAR_DEEP_MAX_BUDGET_USD``: a positive number (``--max-budget-usd``).
+    The turn cap is the existing ``QAR_DEEP_MAX_TURNS`` (``OrchestratorConfig.deep_max_turns``), not a second variable.
+    """
+    tools_raw = (env.get("QAR_DEEP_TOOLS") or "").strip()
+    tools = None if not tools_raw else (() if tools_raw.lower() == "none" else
+                                         tuple(t.strip() for t in tools_raw.split(",") if t.strip()))
+    sources_raw = (env.get("QAR_DEEP_SETTING_SOURCES") or "").strip()
+    sources = None if not sources_raw else ("" if sources_raw.lower() == "none" else sources_raw)
+    return DeepLaunchSettings(
+        tools=tools, setting_sources=sources,
+        strict_mcp=(env.get("QAR_DEEP_STRICT_MCP") or "").strip().lower() in _TRUE,
+        exclude_dynamic_sections=(env.get("QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS") or "").strip().lower() in _TRUE,
+        max_budget_usd=_optional_positive(env.get("QAR_DEEP_MAX_BUDGET_USD"), "QAR_DEEP_MAX_BUDGET_USD"))
 
 
 def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSettings:
@@ -92,6 +117,7 @@ def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSetti
         deep_prompt_token_budget=budget,
         deep_timeout_seconds=_optional_positive(env.get("QAR_DEEP_TIMEOUT_SECONDS"), "QAR_DEEP_TIMEOUT_SECONDS"),
         deep_review_interval_seconds=review,
+        deep_launch=deep_launch_from_env(env),
         deep_instructions_files=env.get("QAR_DEEP_INSTRUCTIONS_FILES"),
         link_policy_file=env.get("QAR_LINK_POLICY_FILE", ""),
         claude_config_dir=env.get("CLAUDE_CONFIG_DIR"),

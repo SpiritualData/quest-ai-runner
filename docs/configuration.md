@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-219 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+224 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -81,7 +81,9 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DECISION_ASSIGNEES` |  | `cli_config.py`, `config_environment.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_DECISION_DEFAULT_DEADLINE_HOURS` |  | `cli_config.py`, `runner/quest_client_support.py` | `docs/adapters.md`, `docs/quest-api-contract.md` |
 | `QAR_DEEP_AUTO_MODEL` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
+| `QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS` | 1 adds --exclude-dynamic-system-prompt-sections to the deep worker launch, which moves per-machine text out of the cached prefix; unset leaves the launch as it was. CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_DEEP_INSTRUCTIONS_FILES` |  | `config_core_settings.py`, `core/standing_instructions.py` | `.env.example`, `docs/acp-deep-runner.md` |
+| `QAR_DEEP_MAX_BUDGET_USD` | A positive number adds --max-budget-usd to the deep worker launch as its spend ceiling; unset adds none. CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_DEEP_MAX_TURNS` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_DEEP_MODELS` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_DEEP_MODEL_HARD` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
@@ -89,7 +91,10 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_MODEL_SIMPLE` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_DEEP_PROMPT_TOKEN_BUDGET` | Token budget for one deep prompt, capped at the model's window. CoreSettings.deep_prompt_token_budget. | `config_core_settings.py` | `.env.example` |
 | `QAR_DEEP_REVIEW_INTERVAL_SECONDS` |  | `config_core_settings.py`, `core/goal_runner_contract.py` | `.env.example`, `docs/writing-a-consumer.md` |
+| `QAR_DEEP_SETTING_SOURCES` | Adds --setting-sources to the deep worker launch: a comma-separated list of user, project, local, or none to load none; unset adds no flag. CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/writing-a-consumer.md` |
+| `QAR_DEEP_STRICT_MCP` | 1 adds --strict-mcp-config to the deep worker launch, so only the servers of the lane's mcp config load; unset leaves the launch as it was. CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_DEEP_TIMEOUT_SECONDS` |  | `config_core_settings.py`, `core/goal_runner_contract.py` | `.env.example`, `docs/acp-deep-runner.md`, `docs/writing-a-consumer.md` |
+| `QAR_DEEP_TOOLS` | Adds --tools to the deep worker launch: a comma-separated list of the only built-in tools the worker gets, or none for no tools; unset adds no flag (the CLI default tool set). CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_DEEP_WORKING_DIR` |  | `config_resolvers.py` | `.env.example`, `docs/adapters.md`, `docs/corpus-playbooks.md` +3 |
 | `QAR_DISCOVERY_TEAM_ID` |  | `cli_config.py` | `.env.example`, `docs/deployment.md` |
 | `QAR_EMBEDDER_BACKEND` |  | `adapters/qdrant_embedders.py`, `config_assembler.py`, `config_context_index.py` | `docs/context-card-stores.md` |
@@ -120,7 +125,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` |  | `config_core_settings.py` | `.env.example`, `docs/guidance-cards.md` |
 | `QAR_INTENT_JUDGE_TIMEOUT_SECONDS` | Budget for the intent-directive judgment call (default 8). CoreSettings.intent_judge_timeout_seconds. | `config_core_settings.py` | `.env.example` |
 | `QAR_LANE_USER_ID` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
-| `QAR_LINK_GUARD` |  | `cli_config.py` | `docs/link-guard.md` |
+| `QAR_LINK_GUARD` |  | `cli_config.py` | `docs/link-guard.md`, `docs/tools.md` |
 | `QAR_LINK_POLICY_FILE` |  | `cli_config.py`, `config_core_settings.py` | `.env.example`, `docs/link-guard.md` |
 | `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `adapters/card_store_settings.py` | `.env.example`, `docs/context-assembly.md`, `docs/context-card-stores.md` |
 | `QAR_MAX_LOAD_PER_CORE` |  | `resources.py` | `.env.example`, `docs/deployment.md` |

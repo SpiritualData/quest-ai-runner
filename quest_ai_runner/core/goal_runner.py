@@ -40,6 +40,7 @@ from typing import Any, Callable, List, Optional, Set
 from esoi import implementation
 
 from . import usage_limit
+from .deep_launch import DeepLaunchSettings, build_deep_argv
 from .requester import apply_requester_env
 from .runtime_settings import process_environment
 from hubofhubs.ports.deep import DeepResult, DeepRunner, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent
@@ -71,6 +72,7 @@ from .goal_runner_contract import (  # noqa: F401
     stop_process_group,
     parse_deep_review,
     resolve_deep_review_interval_seconds,
+    resolve_deep_launch,
     resolve_deep_timeout_seconds,
     resume_target_missing,
 )
@@ -109,6 +111,10 @@ class SubprocessGoalRunner(DeepRunner):
         # Maps a model id to what ``claude --model`` can invoke (see ``cli_safe_model``). Core
         # cannot import the adapter that owns the real translator, so the config layer passes it.
         self._model_translator = model_translator
+
+    def _launch_settings(self) -> DeepLaunchSettings:
+        """The launch parameters in force for the next worker (config first, else the environment-backed core settings)."""
+        return resolve_deep_launch(self.cfg.launch)
 
     def _build_env(self, requester_user_id: Optional[str] = None, run_id: Optional[str] = None) -> dict:
         env = dict(process_environment())
@@ -330,17 +336,9 @@ class SubprocessGoalRunner(DeepRunner):
         # immediately hits EOF on the piped stdin prompt, and exits 0 having done NOTHING — which
         # this runner would record as met=True (a silent no-op that looks "Completed"). The -p flag
         # is what makes the deep run actually execute the goal and produce output.
-        cmd: List[str] = [binary, "-p", "--output-format", "json"]
-        if self.cfg.skip_permissions:
-            cmd.append("--dangerously-skip-permissions")
-        # Apply explicit tool gating when the consumer pinned it (kept in lock-step with
-        # web_enabled() so what the env ADVERTISES matches what the worker is actually allowed).
-        if self.cfg.allowed_tools:
-            cmd += ["--allowed-tools", ",".join(self.cfg.allowed_tools)]
-        if self.cfg.disallowed_tools:
-            cmd += ["--disallowed-tools", ",".join(self.cfg.disallowed_tools)]
-        if self.cfg.mcp_config_path:
-            cmd += ["--mcp-config", self.cfg.mcp_config_path]
+        # The argv is built once, below, by ``deep_launch.build_deep_argv`` (a pure function shared with the streaming path):
+        # explicit tool gating (``allowed_tools`` / ``disallowed_tools``, kept in lock-step with web_enabled() so what the env
+        # ADVERTISES matches what the worker is allowed), ``--mcp-config``, and the launch parameters (``self._launch_settings``).
         # The worker is Claude Code, which ONLY runs Claude models. The orchestrator resolves the
         # model from the consumer's tier config, which in a Gemini/OpenAI deployment is a NON-Claude
         # id (e.g. "gemini-3.5-flash"). Passing that as --model makes Claude Code error ("issue with
@@ -356,10 +354,7 @@ class SubprocessGoalRunner(DeepRunner):
         if model and not runnable:
             _log.debug("deep worker is Claude Code; model %r is not runnable, using balanced %r",
                        model, BALANCED_CLI_MODEL)
-        cmd += ["--model", runnable or BALANCED_CLI_MODEL]
         turns = max_turns if max_turns is not None else DEFAULT_DEEP_MAX_TURNS
-        if goal.strip():
-            cmd += ["--max-turns", str(int(turns))]
 
         # Bind this run to an explicit, deterministic session id (rather than letting Claude Code
         # pick one) so the progress monitor can watch EXACTLY this run's session file instead of
@@ -372,11 +367,15 @@ class SubprocessGoalRunner(DeepRunner):
         # likely running out of room again at the same place. The id stays the same across the whole
         # continuation, so the monitor and the transcript stay one thread of work.
         if resume_session_id:
-            session_id = resume_session_id
-            cmd += ["--resume", session_id]
+            session_id, session_flag = resume_session_id, "--resume"
         else:
-            session_id = str(uuid.uuid4())
-            cmd += ["--session-id", session_id]
+            session_id, session_flag = str(uuid.uuid4()), "--session-id"
+        cmd = build_deep_argv(
+            binary, streaming=False, skip_permissions=self.cfg.skip_permissions,
+            allowed_tools=self.cfg.allowed_tools, disallowed_tools=self.cfg.disallowed_tools,
+            mcp_config_path=self.cfg.mcp_config_path, model=runnable or BALANCED_CLI_MODEL, turns=turns,
+            goal_given=bool(goal.strip()), session_flag=session_flag, session_id=session_id,
+            launch=self._launch_settings())
 
         # No fixed kill by default: an optional hard cap (config or QAR_DEEP_TIMEOUT_SECONDS) and a
         # periodic LLM liveness review of the session log decide when a run must stop.
