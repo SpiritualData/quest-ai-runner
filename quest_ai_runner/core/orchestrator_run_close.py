@@ -200,7 +200,8 @@ class RunCloseMixin:
                         emit.status("Writing up what was done…")
                     rs.text = self._synthesize_after_deep(
                         rs.user_message, prior_answer=rs.text, deep_output=deep_output,
-                        transcript=transcript, model=rs.model, rep_preamble=rep_preamble)
+                        transcript=transcript, model=rs.model, rep_preamble=rep_preamble,
+                        standard=rs.should_defer_deep.get("goal") or "")
                     _deep_block = "--- WHAT WAS JUST EXECUTED (deep run output) ---\n" + deep_output
                     rs.context_view = (rs.context_view + "\n\n" + _deep_block) if rs.context_view else _deep_block
                     rs._deferred_deep_grounded = True

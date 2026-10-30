@@ -97,11 +97,15 @@ class AnsweringMixin:
     def _synthesize_after_deep(self, user_message: str, *, prior_answer: str, deep_output: str,
                                transcript: str, model: str,
                                rep_preamble: Optional[str] = None,
-                               prompt_template: str = SYNTHESIZE_AFTER_DEEP_PROMPT) -> str:
+                               prompt_template: str = SYNTHESIZE_AFTER_DEEP_PROMPT,
+                               standard: str = "") -> str:
         """Rewrite the final reply to REPORT what a (deferred) deep run actually did/produced.
 
         ``prompt_template`` is the report shape: the interactive after-deep reply by default, or
         ``SYNTHESIZE_TASK_REPORT_PROMPT`` for a finished background task's chat report.
+        ``standard`` is the planner's own done-standard for the work (its ``goal``, checkable and
+        short): when given, the reply is told to show it met, so a clause such as "confirmed in the
+        reply" is answered in the reply instead of lost between the run and the write-up.
 
         After a deferred deep run, the pre-deep answer is a proposal that usually reads as "shall I
         proceed?", while the real deliverable lives in the deep run's output. This folds that output
@@ -115,6 +119,9 @@ class AnsweringMixin:
                 request=user_message,
                 proposal=(prior_answer or "(none)").strip()[:4000],
                 result=out[:24000],
+                standard_line=(f"- The DONE-STANDARD for this work is: {standard.strip()[:400]}\n"
+                               "  The reply must show it met, or say plainly that it is not.\n"
+                               if (standard or "").strip() else ""),
             )
             messages: List[Dict[str, Any]] = []
             if rep_preamble:

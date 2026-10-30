@@ -833,7 +833,10 @@ Rules:
   proposal worded it. Answer the question first when the request asked one, then report the change.
 - If the RESULT genuinely shows the work is incomplete, say plainly what is done and what remains
   with a concrete next step. Do not pretend completeness.
-- Write in the assistant's own voice. Be concise and concrete. Never use em dashes.
+- Cover every part the request named, in the order they gave it: each check ("make sure none
+  exists"), each change, and each confirmation or read-back ("then confirm it is there"), with what
+  the RESULT shows for it. A part the RESULT does not show was done is reported as not done.
+{standard_line}- Write in the assistant's own voice. Be concise and concrete. Never use em dashes.
 
 === USER REQUEST ===
 {request}

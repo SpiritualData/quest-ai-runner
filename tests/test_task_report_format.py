@@ -56,3 +56,22 @@ def test_after_deep_reply_keeps_its_own_prompt():
                                 transcript="", model=orch.registry.resolve_tier("balanced"))
     sent = "\n".join(str(m["content"]) for m in provider.last_answer_messages)
     assert "How to test, step by step:" not in sent
+
+
+def test_after_deep_reply_is_told_to_cover_every_named_part_and_the_done_standard():
+    """A request such as "add it if missing, then confirm it is there" has three parts, and a reply that
+    reports only the change loses the read-back. The planner's own done-standard is passed through."""
+    provider = StubProvider([], answer_text="REPLY")
+    orch = make_orchestrator(provider)
+    model = orch.registry.resolve_tier("balanced")
+    orch._synthesize_after_deep("add the goal if missing, then confirm it is there", prior_answer="",
+                                deep_output="created goal; read back: found", transcript="", model=model,
+                                standard="A goal exists on the quest, confirmed in the reply")
+    sent = "\n".join(str(m["content"]) for m in provider.last_answer_messages)
+    assert "Cover every part the request named" in sent and "read-back" in sent
+    assert "DONE-STANDARD for this work is: A goal exists on the quest, confirmed in the reply" in sent
+    assert "{standard_line}" not in sent
+    plain = StubProvider([], answer_text="REPLY")
+    make_orchestrator(plain)._synthesize_after_deep("do x", prior_answer="", deep_output="did x", transcript="",
+                                                    model=model)
+    assert "DONE-STANDARD" not in "\n".join(str(m["content"]) for m in plain.last_answer_messages)
