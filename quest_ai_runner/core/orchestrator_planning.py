@@ -19,6 +19,7 @@ from .planner_cascade import (
     escalation_spec,
     should_escalate,
 )
+from .planner_doctrine import SITUATIONAL_PROFILE, planner_situation, situational_template
 from .planner_prompt import (
     DEFERRED_DEEP_INLINE_SEMANTICS,
     DEFERRED_DEEP_QUEUED_SEMANTICS,
@@ -68,7 +69,8 @@ class PlanningMixin:
               brainstorm: bool = False,
               user_vetoed_task: bool = False,
               card_thread_block: str = "",
-              tool_pins: Sequence[str] = ()) -> PlanDecision:
+              tool_pins: Sequence[str] = (),
+              turn_facts: Optional[Dict[str, Any]] = None) -> PlanDecision:
         # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
         # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
         # short reference note — the planner's job there is to react to the NEW gathered
@@ -145,12 +147,22 @@ class PlanningMixin:
         # ONCE per turn by run() and passed in. Empty string when the consumer did not opt in, so
         # the prompt is byte-identical to a build without the feature.
         thread_block = card_thread_block if self.cfg.card_thread_enabled else ""
+        # THE REACH VERDICT, judged once per turn on a stronger tier and cached for the re-plan
+        # steps, so a multi-step turn pays for it once. It is a fact about THIS request: appended
+        # AFTER the body below, and (situational profile) one of the facts the rules are picked by.
+        reach = self.reach_verdict(user_message)
         planner_template = planner_prompt_for_profile(self.cfg.planner_prompt_profile)
+        if (self.cfg.planner_prompt_profile or "").strip().lower() == SITUATIONAL_PROFILE:
+            planner_template = situational_template(planner_situation(
+                brainstorm=brainstorm, user_vetoed_task=user_vetoed_task,
+                deep_available=True if (self.deep_runner or self.deep_runner_ladder or self.deep_runners) else None,
+                tools_offered=self.tools is not None, reach=(reach or {}).get("reach"),
+                has_material=bool((context_view or "").strip() or gathered), turn_facts=turn_facts)).text
         # MODEL TIER DISCIPLINE is only worth its tokens when some wired deep runner actually runs
         # against the ladder it describes (see ``model_tier_doctrine_applies``); otherwise it is
         # dead weight on every planner call (Quest's in-process chat runners never touch it).
         model_tier_block = MODEL_TIER_BLOCK if self.model_tier_doctrine_applies() else ""
-        prompt = planner_template.format(
+        slots = dict(
             user_message=user_message,
             transcript=plan_transcript or "(no prior messages)",
             context_view=plan_context or "(no context)",
@@ -168,6 +180,7 @@ class PlanningMixin:
                 (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
                 if narrate else _RATIONALE_INSTRUCTION_PLAIN),
         )
+        prompt = planner_template.format(**slots)
         # Bounded hard (see NARRATION_SAID_PLANNER_MAX): the only job of this block is stopping the
         # NEXT line from echoing the shape of the one or two just said, not an audit trail of the
         # whole turn's narration.
@@ -196,11 +209,6 @@ class PlanningMixin:
             prompt = prompt + "\n\n" + web_block
         if getattr(self.cfg, "planner_cascade", False):
             prompt = prompt + "\n\n" + PLANNER_CONFIDENCE_INSTRUCTION
-        # THE REACH VERDICT, judged once per turn on a stronger tier and cached for the re-plan
-        # steps, so a multi-step turn pays for it once. Appended AFTER the body: it is a fact about
-        # THIS request, not doctrine, and it belongs beside the request rather than above the
-        # action list.
-        reach = self.reach_verdict(user_message)
         reach_text = verdict_block(reach, web_configured=self.web is not None)
         if reach_text:
             prompt = prompt + "\n\n" + reach_text
@@ -216,23 +224,7 @@ class PlanningMixin:
         plan_kwargs: Dict[str, Any] = {"model": model, "tool_schema": decide_tool}
         if provider_call_accepts_layers(provider.plan):
             plan_body = planner_template.format(
-                user_message=user_message,
-                transcript=plan_transcript or "(no prior messages)",
-                context_view="(provided in the CONTEXT section above)",
-                gathered=cap_section(_render_gathered_for_planner(
-                    gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over,
-                    current_step=step), gmax, keep="tail"),
-                max_reads=self.cfg.max_reads_per_step,
-                max_subq=self.cfg.max_subquestions,
-                max_deep=self.cfg.max_deep_subtasks,
-                mode_signal_block=mode_signal_block,
-                card_thread_block=thread_block,
-                deferred_deep_semantics=deferred_semantics,
-                model_tier_block=model_tier_block,
-                rationale_instruction=(
-                    (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
-                    if narrate else _RATIONALE_INSTRUCTION_PLAIN),
-            )
+                **dict(slots, context_view="(provided in the CONTEXT section above)"))
             tail_parts: List[str] = []
             if brainstorm:
                 tail_parts.append(brainstorm_note)

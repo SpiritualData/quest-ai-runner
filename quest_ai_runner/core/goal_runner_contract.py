@@ -58,18 +58,6 @@ DEEP_REVIEW_CALL_TIMEOUT_SECONDS = 120.0
 DEFAULT_MONITOR_HEARTBEAT_SECONDS = 10.0
 
 
-def _positive_float(raw: Optional[str], name: str) -> Optional[float]:
-    raw = (raw or "").strip()
-    if not raw:
-        return None
-    try:
-        value = float(raw)
-    except ValueError:
-        _log.warning("%s=%r is not a valid number, ignoring it", name, raw)
-        return None
-    return value if value > 0 else None
-
-
 def resolve_deep_timeout_seconds(configured: Optional[float]) -> Optional[float]:
     """The OPTIONAL hard wall-clock cap for the deep subprocess, or None for no cap.
 

@@ -471,6 +471,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `know-the-world:memory_only` | unconfirmed: for Payal to confirm | evaluation/components/know_the_world/impls/memory_only.py |  |
 | `act-in-the-world:scripted_ideal` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/scripted_ideal.py |  |
 | `act-in-the-world:rules_only` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/rules_only.py |  |
+| `assemble-a-prompt:situational` | unconfirmed: for Payal to confirm | quest_ai_runner/core/planner_doctrine.py |  |
 
 ## Metrics
 

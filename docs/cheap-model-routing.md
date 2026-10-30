@@ -326,3 +326,122 @@ A task that carries an `env_id` (the person chose an environment) or `work_types
 `web_search`, `quest_ops`, `quest_docs_ops`) skips the planner even when `QAR_TASK_DIRECT_DEEP` is
 off, and the work types are named in the deep goal. Tested offline in `tests/test_task_direct_deep.py`.
 The backend does not send `work_types` yet; until it does only `env_id` triggers this.
+
+
+## The situational profile (built 2026-10-29, not yet measured on routing)
+
+`planner_prompt_profile = "situational"` assembles the planner prompt per turn from only the rules that apply
+(`PLANNER_RULES` in `core/planner_prompt.py`, the situation in `core/planner_doctrine.py`, the generic assembler in the hub's
+`hubofhubs.doctrine`). Each rule is a section of the full prompt, wording unchanged, plus a condition over structured facts:
+`mode` (normal, brainstorm, hold_off), `deep_available`, `run_in_progress` (a count the consumer passes as
+`context_meta["runs_in_flight"]`), `reach` (the reach judge's verdict), `tools_offered`, `asks_change` (the planner's own
+`user_intent` verdict from an earlier step, so step 0 does not know it) and `has_material`. A fact the turn does not know is
+None and keeps the rule, so a rule leaves only on a positive reason, and nothing is gated on words the model wrote. The
+default stays "full", which is every rule in order and byte-identical to the old prompt.
+
+| rule | tokens | in the prompt when |
+|---|---|---|
+| role, decision-order (rubric, user_intent, answer what you hold), read-real-content, sufficiency, read-action, answer-action, model-tier-field, parallel-subquestions, tail-frame | 4,606 | always |
+| boundary-examples | 312 | deep runner not known absent, normal mode |
+| command-vs-question | 932 | deep runner not known absent, normal mode |
+| work-in-progress | 284 | a run is in flight or unknown |
+| code-file-commands | 464 | normal mode, change not ruled out |
+| execute-dont-describe | 343 | normal mode, change not ruled out |
+| reach-of-a-read | 836 | normal mode, reach "outside" or unknown |
+| specificity | 587 | there is context or a read to ground an answer in |
+| cached-hint | 164 | same |
+| can-it-be-done | 155 | normal mode, change not ruled out |
+| deep-action | 1,046 | normal mode, change not ruled out |
+| confirm-action | 225 | normal mode, change not ruled out |
+| deep-difficulty | 154 | normal mode, change not ruled out |
+| deep-fan-out | 84 | normal mode, change not ruled out |
+
+Measured offline (`esoi run prompt_size --impl situational`, zero model calls, 3.5 characters per token, planner prompt with
+the tools block and the frame, without the decide schema): a brainstorm or hold-off turn 40 percent smaller than the full
+profile, a question after the first step with the reach judge saying "inside" 32 percent smaller, a cold first step 0 percent
+(it knows nothing yet). The 54 classification cases, each with the facts its label implies, keep every rule their expected
+route depends on (`ROUTE_RULES` in `evaluation/components/prompt_size/score.py`) and are 11 percent smaller on average. Whether
+the smaller prompts route as well is the paid comparison of full, compact and situational, not yet run. Open: a first-step
+`asks_change` needs a judge call before planning (`judge_execution_directive` exists but is a model call); until then the
+first step, the largest prompt, keeps the change-authoring rules.
+
+
+## Planner prompt design notes (moved from comments in `core/planner_prompt.py`)
+
+```
+THE PLANNER PROMPT: the single tunable that governs how the brain decides.
+Rendered with .format(...). Generic: no org names, no app names.
+
+Built at module load from three named parts so the doctrine gates from context_doctrine
+(SUFFICIENCY_GATE, MODEL_TIER_GATE) can be woven in WITHOUT brace-escaping issues.
+Those constants contain NO literal {/} characters, so they pass through .format() untouched
+when the final assembled string is .format()-ed in _plan(). Only the real format slots
+({user_message}, {transcript}, {context_view}, {gathered}, {max_reads}, {max_subq},
+{max_deep}) are substituted; JSON-example braces use the standard {{...}} double-brace form.
+```
+
+```
+The ORDERED DECISION PROCEDURE, and the first thing the planner reads.
+
+Why it exists (measured 2026-10-05): the doctrine below it is correct but it is long, and the
+order a reader meets it in is the order a cheap model applies it in. "CORE PRINCIPLE -- READ REAL
+CONTENT BEFORE ANSWERING" sat ahead of "REACH OF A READ", so on an eval of 765 labelled messages
+a small model issued a read for work no read could ever reach on 37 of 76 hand-off cases, and
+when nothing attached could reach the work it handed it off anyway instead of saying so. The
+rules were all present; their PRIORITY was not. Priority is what this block states, in the
+cheapest form a model can hold: stop at the first rule that applies.
+
+Keep it SHORT and keep it FIRST. Everything under it refines these rules, it never reorders them.
+```
+
+```
+THE COMPACT PLANNER PROFILE
+
+Input tokens are what a routing decision costs: a planner call carries thousands of them and
+returns about a hundred. Measured on the full prompt above (cl100k, 2026-10-05): the head is
+3,475 tokens and the actions block 2,289, which together are more than half of one call, while
+the grounding data is 1,772 and the request itself is 12.
+
+This profile is the same doctrine with the parts a PLANNER does not use removed. What goes:
+  * the long prose behind the ordered rubric, which now states the same priorities in 411 tokens;
+  * SPECIFICITY_GATE and CACHED_HINT_GATE, which govern how an ANSWER is grounded. The planner
+    does not write the answer, and the answer path enforces both again on its own
+    (``_grounding_block``, ``grounding_answer_tail``), so a planner pays for them twice;
+  * SUFFICIENCY_GATE's checklist, folded into one line of the read action.
+What stays, in full: the ordered rubric, the boundary examples, the read grammar (the planner has
+to emit valid reads), the goal-versus-brief distinction, and the model-tier gate.
+
+It is OPT IN (``OrchestratorConfig.planner_prompt_profile``, default "full"), so an existing
+deployment is byte-for-byte unchanged until its operator asks for it.
+```
+
+```
+THE RUBRIC GOES FIRST, and that was measured, not assumed. This repo learned the opposite for
+the TOOLS block (CHANGELOG 2026-09-27: above the planner body, a live Gemini planner filled
+tool_calls correctly and still chose action "answer"; moving it last fixed every probe), so the
+same placement was tried here. It is worse: on the 376 scored rows of the dev half,
+gemini-2.5-flash-lite scored 86.4 percent with the rubric first and 84.6 percent with it last
+(2026-10-05). The lesson does not transfer, because a tool block is an OPTION the model has to
+notice while deciding, and a rubric is the FRAME it decides inside.
+```
+
+```
+Folded into the grounding of EVERY reply a latched turn produces, whatever terminal path it took
+(zero extra LLM calls). It carries two things:
+
+  1. The HONESTY FLOOR (a hard rule): a held turn ran nothing, so no reply of it may say or imply
+     that it did, or that execution is imminent. A real held reply once said "The system will now
+     execute this action to add it directly to your plan" while nothing ran: the worst possible
+     failure, and the reason this rides on EVERY latched reply.
+  2. The NO-ACTION ACKNOWLEDGMENT (guidance, with explicit permission to skip): if the message
+     asked for something, name the hold out loud so the user knows why nothing happened and how to
+     lift it. This is deliberately NOT gated on an intent detector. A real run proved why: the
+     cheap regex prefilter does not see "Set that up.", "Book it." or "Do the thing we discussed"
+     as directives at all, so gating on it left exactly the turns that most needed the
+     acknowledgment without it. The ANSWERING model reads the message anyway; it is the better
+     judge of whether the message asked for something, and the note tells it to skip the
+     acknowledgment when the user was plainly just thinking out loud.
+
+No em dashes: this steers user-facing text.
+```
+

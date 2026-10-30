@@ -85,6 +85,8 @@ def production_inputs(point, index, sweep):
 
 def build_inputs(case):
     point, fx = case["point"], case["fixture"]
+    if point == "planner_situation":     # a turn's facts with the smallest inputs, so the doctrine is what is measured
+        return dict(user_message="x", transcript="", context_view="context", gathered=[], situation=case["situation"])
     if fx == "production":
         return production_inputs(point, case.get("sample", 0), case.get("sweep", 1))
     big = fx == "incident"

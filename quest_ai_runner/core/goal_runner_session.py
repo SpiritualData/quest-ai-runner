@@ -4,7 +4,6 @@ Split out of ``goal_runner.py`` by definition; that module re-exports every name
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import threading
@@ -98,36 +97,6 @@ def session_file_size(working_dir: Optional[str], session_id: Optional[str]) -> 
         return 0
 
 
-def _find_active_jsonl_file(project_dir: Path) -> Optional[Path]:
-    """Find the most recently modified JSONL file with conversation content."""
-    if not project_dir.exists():
-        return None
-
-    jsonl_files = list(project_dir.glob("*.jsonl"))
-    if not jsonl_files:
-        return None
-
-    # Sort by modification time (most recent first)
-    jsonl_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-
-    # Find the first file with actual conversation content
-    for jsonl_file in jsonl_files:
-        try:
-            with open(jsonl_file, 'r') as f:
-                content = f.read()
-                if '"type":"user"' in content or '"type":"assistant"' in content:
-                    return jsonl_file
-        except Exception:
-            continue
-
-    return jsonl_files[0] if jsonl_files else None
-
-
-def _hash_line(line: str) -> str:
-    """Create a hash of a line for deduplication."""
-    return hashlib.md5(line.encode()).hexdigest()
-
-
 def _truncate_keep_end(text: str, limit: int) -> str:
     """Keep the END of a string that's too long to show in full, not the start.
 
@@ -208,40 +177,6 @@ def _format_message_text(msg: dict) -> str:
     if msg_type not in ("assistant", "user") and text_parts:
         return " ".join(text_parts)
     return ""
-
-
-def _detect_new_session(
-    project_dir: Path,
-    cutoff_time: float,
-    timeout: float = 15.0,
-) -> Optional[str]:
-    """Detect a new JSONL session file created after cutoff_time.
-
-    Returns the session ID (filename stem) or None if timeout.
-    """
-    start = time.time()
-    _log.info("waiting for new session file in %s (timeout %.0fs)", project_dir, timeout)
-    while time.time() - start < timeout:
-        try:
-            files = list(project_dir.glob("*.jsonl"))
-            _log.debug("  found %d jsonl files in project dir", len(files))
-            for jsonl_file in files:
-                try:
-                    mtime = jsonl_file.stat().st_mtime
-                    age = time.time() - mtime
-                    if mtime > cutoff_time:
-                        session_id = jsonl_file.stem
-                        _log.info("✓ detected new claude session: %s (age %.1fs)", session_id, age)
-                        return session_id
-                    else:
-                        _log.debug("  file %s is too old (%.1fs)", jsonl_file.name, age)
-                except Exception as e:
-                    _log.debug("error checking file: %s", e)
-        except Exception as e:
-            _log.debug("error globbing: %s", e)
-        time.sleep(0.5)
-    _log.warning("✗ timeout waiting for new session after %.0fs", timeout)
-    return None
 
 
 def _monitor_claude_session(

@@ -432,7 +432,9 @@ class RunLoopMixin:
                                       user_vetoed_task=(hold_off_active
                                                         and cfg.execution_mode != "brainstorm"),
                                       card_thread_block=rs.card_thread_block,
-                                      tool_pins=(rs._ctx_meta or {}).get("tool_pins") or ())
+                                      tool_pins=(rs._ctx_meta or {}).get("tool_pins") or (),
+                                      turn_facts={"user_intent": rs.turn_user_intent,
+                                                  "runs_in_flight": (rs._ctx_meta or {}).get("runs_in_flight")})
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
                 log.exception(
                     f"Planner failed on step {rs.steps}: {e}. Falling back to grounded answer."

@@ -73,6 +73,21 @@ def test_every_impl_builds_a_callable():
             assert hasattr(importlib.import_module(f"{comp}.impls.{p.stem}"), "build")
 
 
+def test_planner_situation_scorer_fails_a_prompt_that_drops_a_needed_rule():
+    """The invariant is only worth its name if a prompt missing a rule the turn needs fails it."""
+    from prompt_size.score import marker, score_case
+    from quest_ai_runner.core.planner_prompt import PLANNER_RULES
+    texts = {r.id: marker(r) for r in PLANNER_RULES}
+    case = {"point": "planner_situation", "name": "n", "situation": {}, "requires": ["deep-action"], "absent": ["deep-difficulty"]}
+    good = lambda point, inputs: texts["decision-order"] + texts["deep-action"]  # noqa: E731
+    assert score_case(good, case)["ok"]
+    assert "rule deep-action missing" in score_case(lambda p, i: texts["decision-order"], case)["note"]
+    kept = score_case(lambda p, i: good(p, i) + texts["deep-difficulty"], case)
+    assert kept["ok"] and "1 rule(s) kept" in kept["note"]     # reported, not failed: the full profile passes too
+    labelled = {"point": "planner_situation", "labelled_cases": "classification"}
+    assert not score_case(lambda p, i: texts["decision-order"], labelled)["ok"]
+
+
 def _toy_corpus(tmp_path):
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "poller.py").write_text('"""Discovers due tasks and claims them with bounded concurrency."""\n\ndef poll(): pass\n')

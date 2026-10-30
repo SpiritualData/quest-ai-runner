@@ -21,14 +21,18 @@ class _Capture:
         return {}
 
 
-def build(meter):
+def build(meter, profile="full"):
     orch = common.build_offline_orchestrator(meter)
     cap = _Capture()
     orch.get_provider_for_model = lambda model: cap
 
     def assemble(point, inputs):
-        if point == "planner":
-            orch._plan(inputs["user_message"], inputs["transcript"], inputs["context_view"], inputs["gathered"])
+        if point in ("planner", "planner_situation"):
+            facts = inputs.get("situation") or {}   # a planner_situation case names the turn's facts; "profile" overrides the arm's
+            orch.cfg.planner_prompt_profile = inputs.get("profile", profile)
+            orch._plan(inputs["user_message"], inputs["transcript"], inputs["context_view"], inputs["gathered"],
+                       brainstorm=facts.get("mode", "normal") != "normal", user_vetoed_task=facts.get("mode") == "hold_off",
+                       turn_facts=facts)
             return cap.prompt
         if point == "autopilot_batch":
             from quest_ai_runner.runner.autopilot_briefs import compose_batch_text
