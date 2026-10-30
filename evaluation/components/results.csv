@@ -3868,3 +3868,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,expose_the_public_api,live_surface,101,101,101/101,0/0,0,0,0,0.0,4.9,17d73e4,4673d9bb,none,,,
 2026-10-30,learn_by_example,live_examples,37,37,37/37,0/0,0,0,0,0.0,3.8,17d73e4,80050d75,none,,,
 2026-10-30,task_replay,slice_and_writeback,9,8,8/9,0/0,27,41022,1561,0.0,270.9,17d73e4,b3ca71f7,claude-code-subscription,,,0.8971
+2026-10-30,qar_overall,recorded_rows,9,5,5/9,0/0,0,0,0,0.0,4.8,67b01e4,6d7d1f64,none,,,
+2026-10-30,classification,keyword_rules,54,37,25/31,12/23,0,0,0,0.0,0.0,67b01e4,231318c2,none,,,
