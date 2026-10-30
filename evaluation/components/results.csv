@@ -3899,3 +3899,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,draft_a_metric,capped_model_draft,3,3,3/3,0/0,3,4954,1731,0.0009,16.8,19aa7be,b64ac4bc,claude-code-subscription,,sample:3,
 2026-10-30,draft_a_metric,capped_model_draft,10,10,10/10,0/0,10,16691,6146,0.0052,53.1,19aa7be,b64ac4bc,claude-code-subscription,,,
 2026-10-30,label_context_cards,fast_model_labels,3,2,2/3,0/0,3,2548,284,0.0002,12.0,19aa7be,3d0f3720,claude-code-subscription,,sample:3,
+2026-10-30,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,4.6,8aba047,6d7d1f64,none,,,
