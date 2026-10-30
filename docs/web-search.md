@@ -170,7 +170,7 @@ process sees another's spend without needing its own call to trip the limit. **S
 dir per API key/quota** -- the limit is enforced per `QAR_WEB_CACHE_DIR`, not per process, so
 giving two independent quotas the same directory would wrongly cap them together, and giving one
 quota two directories would let it spend twice. Without `QAR_WEB_CACHE_DIR` (memory-only cache),
-the counter is back to per-process, same as before. On a platform without `fcntl` (Windows), or
+the counter is back to per-process, same as before. If `filelock` is not installed (the hub `locks` extra, which QAR requires), or
 if the lock can't be acquired within ~2s, the guard degrades to per-process counting for that
 call rather than blocking the turn; it is a cost guard, not a quota enforcer.
 
