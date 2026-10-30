@@ -34,8 +34,10 @@ TAG = "Evolvable Structure that Optimizes Intent"
 RUNNER_LINE = ("In whatever work you do (unless the human tells you otherwise), ensure that ESOI is generally "
                "applied, resulting in the effective creation of collaborative innovation tools, and the "
                "effective use of preexisting tools for collective progress over time. A change is finished only when "
-               "its metric result is recorded with record_metric_result, before and after the change, or marked "
-               "not applicable with the reason.")
+               "its metric result is recorded with record_metric_result, before and after the change, as far as the "
+               "metric's cascading conditionals call for it (a stage that was not run stays empty and the reason says "
+               "so, never an estimate), or marked not applicable with the reason. Where the solution has no metric, or "
+               "a costly metric has no cascading conditionals, defining them is part of the work.")
 PUBLIC_INTRO = """\
 <!-- Generated from the evolvable-structure skill by scripts/sync_standing_instructions.py. Do not
 edit by hand: change the skill and rerun the script. -->

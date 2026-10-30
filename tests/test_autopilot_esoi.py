@@ -84,3 +84,10 @@ def test_block_rides_in_every_batch_brief():
 def test_solution_with_milestone_beats_bare_strategy_without_metric():
     records = [sol("user_1", "Bare strategy", milestones=""), sol("s1", "P1", ["m1"]), met("m1", "4 (2026-10-26)")]
     assert esoi.pick_solution(records)[0]["recordId"] == "s1"
+
+
+def test_the_readiness_block_tells_the_run_to_follow_the_metrics_cascade():
+    records = [sol("s1", "A", ["m1"]), met("m1", "5 (2026-10-26)", "2026-10-26T00:00:00+00:00")]
+    text = esoi.render({"records": records}, esoi.pick_solution(records), refreshed=False)
+    assert "cheapest cascading stage first" in text and "a stage not run stays empty" in text
+    assert "—" not in text

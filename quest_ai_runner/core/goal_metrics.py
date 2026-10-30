@@ -42,7 +42,8 @@ from .tools_metric_results import TOOL_NAME
 NUDGE_BRIEF = (
     "Your change has no metric result on record. If the request you were given told you not to record a metric, record "
     "nothing: say so in one sentence and stop. Otherwise record it now with record_metric_result: the value of the "
-    "metric this work serves before and after your change, or not_applicable with a one-sentence reason if no metric "
+    "metric this work serves before and after your change (a stage its cascading conditionals did not call for stays "
+    "empty, and the reason says so), or not_applicable with a one-sentence reason if no metric "
     "applies. Do not redo or extend the work, and do not repeat your earlier summary: reply with one sentence saying "
     "what you recorded.")
 # The two statuses below are fixed sentences a person reads on an 80-column screen beside the clock and the spinner, so

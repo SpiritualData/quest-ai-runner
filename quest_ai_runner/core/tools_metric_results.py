@@ -53,8 +53,8 @@ def record_metric_result_spec(env: Mapping[str, str]) -> ToolSpec:
         description=("Put the metric result of your change on this run's record: the metric's value before and after, or "
                      "that no metric applies. The runner shows it beside the values it measured itself."),
         when_to_use=("Before you finish work that changes something: pass the metric's before and after numbers (one end "
-                     "is fine; the ids come from the brief), or not_applicable with a one-sentence reason if "
-                     "no metric applies."),
+                     "is fine, and a value the metric's cascading conditionals did not call for stays out, never estimated; the ids "
+                     "come from the brief), or not_applicable with a one-sentence reason if no metric applies."),
         when_not_to_use="Anything that is not a metric value: findings and summaries go in your final message.",
         parameters={"type": "object", "properties": {
             "metric_id": {"type": "string", "description": "The metric's id (needed unless not_applicable)."},
@@ -63,7 +63,7 @@ def record_metric_result_spec(env: Mapping[str, str]) -> ToolSpec:
             "before": {"type": "number", "description": "Value before your change (a number only)."},
             "after": {"type": "number", "description": "Value after your change (a number only)."},
             "not_applicable": {"type": "boolean", "description": "true if no metric applies (give a reason, no values)."},
-            "reason": {"type": "string", "description": "Why none applies, or how you measured."}}},
+            "reason": {"type": "string", "description": "Why none applies, how you measured, or which cascade stage was not run and why."}}},
         mutates=False, origin="standard", workflow_step=False, keywords=KEYWORDS, timeout_seconds=30.0,
         on_request_only=True, standing_deep=True)
 

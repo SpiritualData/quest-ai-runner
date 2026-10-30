@@ -255,8 +255,10 @@ _CONFIRMATION_RULE = (
 _SOLUTION_IMPROVEMENT_RULE = (
     "IMPROVE ONE SOLUTION. Unless this run's input was only a question, improve at least one "
     "solution of the quest's ESOI specification (get_spec) in this run: pick one of its "
-    "implementations or add an alternative, measure the alternatives with the solution's metric, "
-    "and keep whichever measures best. Report it in your result and as a goal update or quest "
+    "implementations or add an alternative, measure the alternatives with the solution's metric "
+    "(through its cascading conditionals: the cheapest stage first, a costlier one only when the previous "
+    "gate is met and the spend allowed, a stage not run reported as not measured), "
+    "and keep whichever measures best at the latest stage run. Report it in your result and as a goal update or quest "
     "note: \"Solution <name>: metric <name> before <value> (source, date), after <value> (source, "
     "date), change <delta>\". If the specification is too thin to do the job or reach the quest's "
     "priorities, create the missing Solution and Metric (edit_spec_record), never over a field the "

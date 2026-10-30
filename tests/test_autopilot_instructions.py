@@ -160,7 +160,8 @@ def test_default_quest_instructions_require_solution_metric_before_and_after():
     assert "ONE Solution" in text
     assert "before <value> (source, date), after <value> (source, date), change <delta>" in text
     assert "ESOI_SPEC.md in the quest's synced folder, when present" in text
-    assert "measuring it is this run's work" in text
+    assert "measuring it, or writing its cascading conditionals when it is costly, is this run's work" in text
+    assert "A stage of the Metric's cascading conditionals that was not run is said so, never estimated" in text
     assert "—" not in text
 
 

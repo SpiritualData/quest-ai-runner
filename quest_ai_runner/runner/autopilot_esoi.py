@@ -118,7 +118,9 @@ def render(spec: Dict[str, Any], picked: Optional[Tuple[Dict[str, Any], Optional
         mf = metric.get("fields") or {}
         lines.append(f"Metric: {mf.get('name')} ({metric.get('recordId')}). Current record: "
                      f"{str(mf.get('record') or '').strip()[:300]}. Measure with: {str(mf.get('command') or 'not written').strip()[:200]}.")
-        lines.append("Re-measure it before acting and after, write the new value into the Metric's record field "
+        lines.append("Re-measure it before acting and after, cheapest cascading stage first and a costlier one only when the "
+                     "previous stage's gate is met and the spend is allowed (a stage not run stays empty, with the reason, "
+                     "never an estimate), write the new value into the Metric's record field "
                      "(edit_spec_record, with number, source and date), call record_metric_result with the metric id and "
                      "before/after numbers, and put the 'Solution <name>: metric <name> before ... after ... change ...' "
                      "line in a quest note.")

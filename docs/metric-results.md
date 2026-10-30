@@ -61,6 +61,16 @@ four lines, then `K more metric results. Alt+D shows them all.`; or `No metric w
 once per turn however many events carry the same entry; a job's own record never writes it, because what follows a
 record is not known until the turn ends. The numbers carry no unit: the data has none.
 
+## Costly metrics and cascading conditionals
+
+A metric that costs to run lists its stages, cheapest first, in its `cascading_conditionals` (the field of the ESOI metric
+template). A result is recorded only for the stages that list calls for, so a stage that was not run has no number: the
+entry keeps `before` or `after` as `null` and its `reason` says which stage was not run. A number is never estimated to
+fill it. Where a solution has no metric, or a costly metric has no cascading conditionals, writing them is part of the
+work; the standing instructions, the finish gate's one request, the NEXT PRIORITY block and the autopilot's readiness block
+all say so. Choosing between implementations by the cascade (the highest result at the latest stage run) is done by the
+`esoi` library (`esoi cascade`), not by this runner.
+
 ## When two numbers differ
 
 A worker writes the number it reports with the decimals it chose (`0.4`), and the meter's is more exact (`0.38`): they say

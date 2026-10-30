@@ -235,5 +235,6 @@ def next_priority_block(found: SpecSlice) -> str:
         f"NEXT PRIORITY for this work (solution_id {found.solution_id}):",
         "Milestone: " + (found.milestone[:MILESTONE_CHARS] if found.milestone else "none is set for this solution"),
         f"Metric: {metric}",
-        "Record the metric's value before and after your change with record_metric_result; if no metric applies to "
+        "Record the metric's value before and after your change with record_metric_result, as far as its cascading "
+        "conditionals call for (a stage not run stays empty, with the reason); if no metric applies to "
         "this work, record not_applicable with a one-sentence reason."])
