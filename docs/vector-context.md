@@ -2,7 +2,7 @@
 
 > Status: design-of-record for the vector search capability added alongside
 > the existing keyword/IDF ``FileContextStore``.  Implemented behind the
-> ``VectorStore`` Protocol (defined in ``core.adapters``) so the core stays
+> ``VectorStore`` Protocol (defined in ``hubofhubs.ports.context``) so the core stays
 > dependency-free.  Heavy deps (qdrant-client, fastembed) live behind the
 > optional ``[qdrant]`` extra.
 
@@ -134,11 +134,12 @@ store = QdrantVectorStore(embedder=my_embedder, vector_size=1536)
 ## Custom VectorStore (fully pluggable)
 
 You do not have to use Qdrant at all.  Any class that satisfies the
-``VectorStore`` Protocol (defined in ``quest_ai_runner.core.adapters``)
+``VectorStore`` Protocol (defined in ``hubofhubs.ports.context``)
 works as a drop-in:
 
 ```python
-from quest_ai_runner.core.adapters import VectorStoreBase, VectorHit
+from hubofhubs.ports.context import VectorHit
+from quest_ai_runner.core.adapters_bases import VectorStoreBase
 
 class MyStore(VectorStoreBase):
     def search(self, query, *, scope=None, top_k=8):

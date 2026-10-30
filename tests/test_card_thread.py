@@ -256,7 +256,7 @@ class _StubAssembler:
 
 
 class _CollectSink:
-    """A ProgressSink that keeps every event (see core.adapters.ProgressSinkBase.update)."""
+    """A ProgressSink that keeps every event (see core.adapters_bases.ProgressSinkBase.update)."""
 
     def __init__(self):
         self.events = []

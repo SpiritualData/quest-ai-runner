@@ -301,7 +301,7 @@ def verify_output_view(output: Optional[str], max_chars: int = VERIFY_OUTPUT_MAX
 
 
 # Gates ``_verify_goal``'s web-evidence precedence note (below) onto this turn's gathered reads: it
-# fires ONLY when at least one observation came from the LIVE WEB adapter (core/adapters.WebResearch
+# fires ONLY when at least one observation came from the LIVE WEB adapter (core/adapters_retrieval.WebResearch
 # -- a search's ``rel_path`` is "web_search:<q>", a page fetch's ``locator`` starts "web extract: "),
 # never for an ordinary corpus/grep/query read, so a deployment with no web adapter wired -- or a
 # turn that never searched -- renders byte-identical to before this existed.

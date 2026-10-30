@@ -1,6 +1,6 @@
 # How to implement adapters
 
-The brain depends only on **four interfaces**, defined in `quest_ai_runner.core.adapters`. A
+The brain depends only on **four interfaces**, defined in the `quest_ai_runner.core.adapters_*` modules (`ModelProvider` and `ContextAssembler` in `hubofhubs.ports`). A
 consumer supplies concrete implementations via `RunnerConfig`. They are `typing.Protocol`s, so you
 can satisfy them structurally (just match the methods) or subclass the provided ABCs
 (`RetrievalAdapterBase`, etc.).
@@ -18,7 +18,7 @@ can satisfy them structurally (just match the methods) or subclass the provided 
 How the brain gathers grounding. All three methods return an `Observation`.
 
 ```python
-from quest_ai_runner.core.adapters import Observation
+from quest_ai_runner.core.adapters_values import Observation
 
 class MyRetrieval:
     def read_section(self, rel_path, *, start_line=None, end_line=None,
@@ -128,7 +128,7 @@ shape: see the stub providers in `tests/conftest.py` and `examples/e2e_demo.py`.
 Runs deep, goal-driven work to a checkable done-standard.
 
 ```python
-from quest_ai_runner.core.adapters import DeepResult
+from quest_ai_runner.core.adapters_values import DeepResult
 
 class MyDeepRunner:
     def run_goal(self, *, goal, brief, model=None, max_turns=None) -> DeepResult:
@@ -217,7 +217,8 @@ facts, feature-flow guides, behavior policies) into a corpus of opaque **guidanc
 retrieves on demand. Cards are opaque text to the runner, so it stays app-agnostic.
 
 ```python
-from quest_ai_runner.core.adapters import GuidanceCard, GuidanceProviderBase
+from quest_ai_runner.core.adapters_guidance import GuidanceCard
+from quest_ai_runner.core.adapters_bases import GuidanceProviderBase
 
 class MyGuidance(GuidanceProviderBase):
     def list(self):                      # cheap catalog: id + title + relevance, body EMPTY

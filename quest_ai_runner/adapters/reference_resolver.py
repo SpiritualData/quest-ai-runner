@@ -212,7 +212,7 @@ def collect_reference_resolvers(retrieval: Optional[Any]) -> Dict[str, Any]:
 
     Walks a retrieval adapter (or a composite exposing an ``adapters`` list, recursively) and, for
     each one that advertises the RetrievalAdapter reference-resolution capability -- a non-None
-    ``reference_type`` and a callable ``resolve_reference`` (see ``core.adapters.RetrievalAdapter``)
+    ``reference_type`` and a callable ``resolve_reference`` (see ``core.adapters_retrieval.RetrievalAdapter``)
     -- maps its type to its OWN ``resolve_reference`` bound method. That method mirrors
     ``ReferenceResolver.resolve``'s signature/contract exactly, so it can be dropped straight into
     ``build_resolver_registry``'s ``consumer_resolvers`` with no wrapper. Fully DUCK-TYPED (never

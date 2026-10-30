@@ -19,7 +19,7 @@ any domain.
 
 ## The dependency rule (why `core` is `core`)
 
-`core/adapters.py` (a module) defines the **interfaces**: abstract `Protocol`/`ABC` ports the brain
+`core/adapters_*.py` (modules) defines the **interfaces**: abstract `Protocol`/`ABC` ports the brain
 needs. `adapters/` (a package) provides the **concrete implementations**. Dependencies point only
 **inward**: `core` declares the boundary and imports none of the fill-ins; `runner`, `adapters`, and
 `config` depend on `core`. That's the classic ports-and-adapters shape, and why `core` stays the same
@@ -41,7 +41,7 @@ The authoritative, checked inventory is `esoi/components.csv` (rendered in
 | Module | Role |
 |---|---|
 | `core/orchestrator.py` | the bounded plan/gather/re-plan/answer loop; emits `ProgressEvent`s |
-| `core/adapters.py` | the adapter interfaces + value objects + the streaming sinks |
+| `core/adapters_*.py` | the adapter interfaces + value objects + the streaming sinks |
 | `core/model_registry.py` | tier → live top-model id (via a `ModelProvider`) |
 | `core/goal_runner.py` | the `/goal --max-turns` contract (`GoalRunner`, `SubprocessGoalRunner`) |
 | `core/card_filter.py` | LLM card selection + `_extract_json()` fence-stripping helper |
@@ -144,7 +144,7 @@ result = provider.answer([{"role": "user", "content": prompt}], model=model)
 `Mode` only selects which `ProgressSink` is wired, and **the sink, never the orchestrator, decides
 what surfaces**. `Mode.LIVE` → `StreamSink` forwards every event; `Mode.BACKGROUND` → `MilestoneSink`
 drops planning/reading/status chatter and forwards only `SURFACING_EVENTS` (result, decision,
-milestone, context, done, tokens). A new event gets an `EVENT_*` constant in `core/adapters.py` and a
+milestone, context, done, tokens). A new event gets an `EVENT_*` constant in `core/adapters_events.py` and a
 deliberate choice: in `SURFACING_EVENTS` (always shown) or LIVE-only texture (like `EVENT_EXEC`).
 Never branch the orchestrator on mode for visibility: that policy lives in the sink, once.
 

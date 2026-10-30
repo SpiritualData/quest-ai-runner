@@ -27,7 +27,7 @@ PLANNER_TOOLS_HEAD = (
     "\"tool_calls\". To find a tool that is not listed below, use a read spec "
     "{\"tools\": \"<what you need>\"}.\n")
 
-# The planner's LIVE WEB block (``Orchestrator.web`` is wired, ``core/adapters.WebResearch``).
+# The planner's LIVE WEB block (``Orchestrator.web`` is wired, ``core/adapters_retrieval.WebResearch``).
 # Rendered via ``.format(describe=...)`` with the adapter's own ``describe()`` string. Placed
 # AFTER the planner body (see the ``tools_block``/``PLANNER_TOOLS_HEAD`` placement note above and
 # ``tests/test_tools.py::test_tools_block_comes_after_the_planner_body``): a block placed BEFORE

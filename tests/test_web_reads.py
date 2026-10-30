@@ -8,7 +8,7 @@ classification, the reach judge's web-aware "world" wording, and ``build_orchest
 ``cfg.web_research`` instead of folding a web-search adapter into the retrieval composite.
 
 Fully offline: a FAKE ``WebResearch`` object (matching the interface in
-``core/adapters.WebResearch`` / ``adapters/web_research.WebResearchAdapter``), never the real
+``core/adapters_retrieval.WebResearch`` / ``adapters/web_research.WebResearchAdapter``), never the real
 backends (those are part A's own tests: ``test_web_search_backends.py``,
 ``test_web_cache.py``, ``test_web_page_extract.py``).
 """

@@ -8,8 +8,8 @@
  {
   "id": "CTX-002",
   "area": "core",
-  "task": "Where are the RetrievalAdapter and ModelProvider Protocol interfaces defined?",
-  "target": "quest_ai_runner/core/adapters.py"
+  "task": "Where is the RetrievalAdapter Protocol interface defined?",
+  "target": "quest_ai_runner/core/adapters_retrieval.py"
  },
  {
   "id": "CTX-003",

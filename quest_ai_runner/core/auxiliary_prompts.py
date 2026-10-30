@@ -163,7 +163,7 @@ VERIFY_WEB_EVIDENCE_NOTE = (
 # The verifier used to judge a deep run's WORKER OUTPUT TEXT with no view of the run's own
 # structured evidence (``DeepResult.observations``: write receipts and reads that returned
 # content, built by the runner from its own bookkeeping, never from the wording of its output --
-# see ``core/adapters.DeepResult``). Live finding: a worker's own records carried the receipt line
+# see ``core/adapters_values.DeepResult``). Live finding: a worker's own records carried the receipt line
 # "Added the goal ..." for a write that really happened, yet the verifier saw only the output text
 # and brief, found no evidence there, and returned met=False with "no evidence" right next to a
 # correct result, so "Goal not met: ..." reached the chat beside the correct reply. This note fires

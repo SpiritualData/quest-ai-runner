@@ -1,6 +1,6 @@
 """SessionFileConversationStore — a local ConversationStore over Claude session files.
 
-A reference implementation of the ``ConversationStore`` Protocol (``core.adapters``) backed by
+A reference implementation of the ``ConversationStore`` Protocol (``hubofhubs.ports.context``) backed by
 local Claude session JSON files (``~/.claude/sessions`` and any ``.claude``/``conversations`` dirs
 under a corpus root). The orchestrator's User Input Understanding step uses it to resolve a short or
 anaphoric message ("ok do it", "the first one") into a self-contained goal condition.

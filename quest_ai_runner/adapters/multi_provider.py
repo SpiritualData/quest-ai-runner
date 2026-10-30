@@ -229,7 +229,7 @@ class MultiProvider(ModelProvider):
         cheaper tier and retries (see set_tier_registry); a pinned model= call, or one
         already at the cheapest tier, just raises as before.
 
-        ``step`` (optional, see ``core.adapters.STEP_*``) is forwarded to the WRAPPED provider
+        ``step`` (optional, see ``hubofhubs.ports.model.STEP_*``) is forwarded to the WRAPPED provider
         only when that provider's own ``plan`` declares it (``plan_with_step`` checks) -- a wrapped
         provider that does not know about ``step`` is called exactly as before.
         """
@@ -262,7 +262,7 @@ class MultiProvider(ModelProvider):
         cheaper tier and retries (see set_tier_registry); a pinned model= call, or one
         already at the cheapest tier, just raises as before.
 
-        ``step`` (optional, see ``core.adapters.STEP_*``) is forwarded to the WRAPPED provider
+        ``step`` (optional, see ``hubofhubs.ports.model.STEP_*``) is forwarded to the WRAPPED provider
         only when that provider's own ``answer`` declares it (``answer_with_reasoning`` checks,
         alongside ``reasoning``) -- a wrapped provider that does not know about ``step`` is called
         exactly as before.

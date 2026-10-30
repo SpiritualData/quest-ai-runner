@@ -94,7 +94,7 @@ class PlanDecision:
     # boundary in ``QuestClient.create_decision``, so a hallucinated value here degrades rather
     # than losing the escalation); a deadline the decision should be resolved by, as the planner
     # wrote it (an ISO datetime, or a short relative form like "in 48h" -- parsed by
-    # ``core.adapters.parse_deadline``, unparseable or absent means no deadline); and
+    # ``core.adapters_values.parse_deadline``, unparseable or absent means no deadline); and
     # "hold" | "proceed" for what happens if nobody answers by the deadline ("proceed" auto-
     # resolves the decision server-side; anything else, including no deadline at all, "hold"s).
     confirm_kind: Optional[str] = None

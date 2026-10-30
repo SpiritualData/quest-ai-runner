@@ -43,9 +43,9 @@ long-lived provider tokens: a lane receives a token through the environment vari
   repository works instead of an install (pytest `pythonpath`; the `hub_of_hubs` component also puts it on the path).
 - **Seats moved.** `search-backend` (web search): `hubofhubs.websearch` holds the backends, cache, limiter, fetch and extraction, and the research adapter; QAR keeps the `search-the-web` rows, the `QAR_*` setting names and the one-call constructor (`adapters/web_search_backends.py`, `web_research.py`). Not yet measured after the move: the paid pass owns `metric-search-the-web` and `metric-know-the-world`.
 - **Seats moved (earlier).** `watch-for-risk`: the overseer engine is `hubofhubs.risk` (`overseer`); QAR passes its prompt as data and assembles the seat in `core/overseer.py`. Not yet measured after the move: the paid pass owns `metric-watch-a-run` (`overseer_signals`, `judges` and the live arms).
-- **Ports.** For this pass `core/adapters.py` stays the import path of QAR's ports; the Protocols that need no Quest knowledge
-  are moving into the hub seat by seat, with `core/adapters.py` re-exporting the hub names, and the importers are rewritten as
-  each seat moves (`CHANGELOG.md`).
+- **Ports.** The Protocols that need no Quest knowledge live in the hub seat (`hubofhubs.ports.{scope,model,context}`); the ones
+  that carry QAR's own value objects and events stay in `core/adapters_*.py`. There is no `core/adapters.py` re-export layer:
+  every importer names the module that defines what it uses (`CHANGELOG.md`).
 - **Bindings.** `esoi/hub_seats.csv` says which QAR solution fills each area, the vendor terms to look for in `quest_ai_runner/core`
   and the code paths. The hub's registry rows for this consumer (`quest-ai-runner` in `hub_capabilities.csv` and
   `hub_integrations.csv`) say which hub connections are wired and which single services are hand-wired.

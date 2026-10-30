@@ -431,7 +431,7 @@ def guidance_selection_timeout_seconds() -> float:
     2026-09-26 for the same reason as ``context_assembly_timeout_seconds``); read fresh on every
     call so it can be tuned without a restart.
 
-    ``GuidanceProvider.select()`` is a caller-supplied implementation (``core/adapters.py``'s
+    ``GuidanceProvider.select()`` is a caller-supplied implementation (``core/adapters_guidance.py``'s
     ``GuidanceProviderBase``); a consumer's ``dynamic_guidance_loader`` or its own LLM filtering
     call inside ``select()`` can block on I/O with no timeout of its own. Called with no bound at
     all, that hangs the ENTIRE turn indefinitely, in the SAME "Searching context…" status the

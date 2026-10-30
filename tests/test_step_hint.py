@@ -1,4 +1,4 @@
-"""The optional ``step`` hint (``core.adapters.STEP_*``), mirroring the existing ``reasoning`` hint.
+"""The optional ``step`` hint (``hubofhubs.ports.model.STEP_*``), mirroring the existing ``reasoning`` hint.
 
 Pinned here:
 

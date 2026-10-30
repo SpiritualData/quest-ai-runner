@@ -868,7 +868,7 @@ user_message --> STEP 1: Understand input --> goal_condition --> STEP 2: select 
                   (pulls conversation context, only as needed)   (assemble + retrieval off the goal)
 ```
 
-**`ConversationStore` (a storage-agnostic adapter, `core.adapters`).** Conversation history lives in
+**`ConversationStore` (a storage-agnostic adapter, `hubofhubs.ports.context`).** Conversation history lives in
 different places for different consumers (local Claude session JSON under `~/.claude/sessions`; a
 Mongo collection in a server). The store hides that behind two methods, both of which NEVER raise:
 - `current_slice(conv_id, query, *, recent_turns=4, max_chars)`: a relevant slice of THE current

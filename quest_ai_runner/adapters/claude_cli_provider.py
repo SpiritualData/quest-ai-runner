@@ -8,7 +8,7 @@ mechanism the deep-runner (:class:`~quest_ai_runner.core.goal_runner.SubprocessG
 uses for the autonomous work; this brings the orchestrator's cheap planner/answer calls onto the
 same keyless footing so the WHOLE runner can operate on a subscription alone.
 
-It satisfies the same :class:`~quest_ai_runner.core.adapters.ModelProvider` interface:
+It satisfies the same :class:`~hubofhubs.ports.model.ModelProvider` interface:
 
   * ``plan``  — runs the planner prompt headless and asks the model to emit ONLY the ``decide``
                 tool's JSON object (the CLI can't force ``tool_choice``, so we instruct + parse

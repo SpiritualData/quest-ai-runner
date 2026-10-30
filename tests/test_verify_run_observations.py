@@ -8,7 +8,7 @@ right next to the correct reply.
 
 Same shape as ``tests/test_verify_web_evidence.py``'s web-evidence fix: a deep run's own receipts
 (write confirmations, reads that returned content -- built by the RUNNER from its own bookkeeping,
-never from the wording of its output, see ``core/adapters.DeepResult``) are rendered in the
+never from the wording of its output, see ``core/adapters_values.DeepResult``) are rendered in the
 verify prompt's volatile tail as a labeled EVIDENCE section, gated strictly on
 ``DeepResult.observations_reported`` so a runner that does not report observations leaves the
 prompt byte-for-byte unchanged.

@@ -100,7 +100,7 @@ reading the actual source files in this repo. Files covered:
 | Task theme | Target file |
 |---|---|
 | plan-gather-replan loop | `quest_ai_runner/core/orchestrator.py` |
-| RetrievalAdapter / ModelProvider Protocol | `quest_ai_runner/core/adapters.py` |
+| RetrievalAdapter Protocol | `quest_ai_runner/core/adapters_retrieval.py` |
 | model tier bucketing | `quest_ai_runner/core/model_registry.py` |
 | SubprocessGoalRunner | `quest_ai_runner/core/goal_runner.py` |
 | prepare_attachments | `quest_ai_runner/core/attachments.py` |

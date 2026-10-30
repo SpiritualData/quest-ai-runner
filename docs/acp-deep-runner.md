@@ -7,7 +7,7 @@ session, instead of shelling out to `claude -p` once and parsing the JSON it pri
 
 **This is additive.** `SubprocessGoalRunner` is unchanged and remains the default. Nothing switches
 to ACP unless a consumer explicitly wires it. The brain cannot tell the two apart: both satisfy
-`core.adapters.DeepRunner`, with the same `run_goal` signature, the same `DeepResult`, the same
+`core.adapters_deep.DeepRunner`, with the same `run_goal` signature, the same `DeepResult`, the same
 `EVENT_EXEC` progress stream, and the same human-fork behaviour.
 
 ## Why it exists: mid-turn steering

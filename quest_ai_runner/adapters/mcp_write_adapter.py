@@ -3,7 +3,7 @@ server's MUTATING tools.
 
 Maps QAR's write side onto MCP's own ``tools/list`` (discovery) + ``tools/call`` (execution),
 mirroring ``mcp_retrieval_adapter.MCPRetrievalAdapter``'s relationship to ``MCPClient`` exactly,
-but for the ``OperationWriter`` interface (``core/adapters.py``) instead of ``RetrievalAdapter``:
+but for the ``OperationWriter`` interface (``core/adapters_deep.py``) instead of ``RetrievalAdapter``:
 
   * ``list_writable_operations()`` -> MCP ``tools/list`` (``MCPClient.list_tools``), filtered to
                               this adapter's own ``writable_tools`` allowlist and rendered as

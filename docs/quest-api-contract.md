@@ -134,7 +134,7 @@ Returns a `decision_id`. The executor stamps it onto the task via the `needs_you
   PR). The planner sets it via `PlanDecision.confirm_review_url` (`Escalation.review_url`); Quest
   rejects any non-http(s) value and the app shows it as a prominent button on the ask.
 - `deadline` is optional, ISO 8601. The planner can specify one as a relative form ("in 48h", "in
-  2 days") via `PlanDecision.confirm_deadline`; `core.adapters.parse_deadline` turns that into the
+  2 days") via `PlanDecision.confirm_deadline`; `core.adapters_values.parse_deadline` turns that into the
   real datetime sent here. With no deadline given anywhere, `QuestDecisionSink` still applies
   `QAR_DECISION_DEFAULT_DEADLINE_HOURS` if the deployment set it; otherwise no deadline is sent.
 - `default_on_silence` is `"hold"` (default; the decision just sits open past its deadline) or

@@ -82,7 +82,7 @@ def wire_providers(cfg: Any) -> None:
 
 
 def wire_web_research(cfg: Any) -> None:
-    # Fast, token-efficient LIVE WEB access (``core.adapters.WebResearch``): built once here from
+    # Fast, token-efficient LIVE WEB access (``core.adapters_retrieval.WebResearch``): built once here from
     # env (backend auto-selection, snippet-first search, bounded page fetch, cache; see
     # ``adapters/web_research.py``), reached by the planner through its OWN read keys
     # (``{"web": ...}``, ``{"web_page": ...}``) — never folded into ``cfg.retrieval``/

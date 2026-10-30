@@ -269,7 +269,7 @@ solved"; resolvability + learning is done, topic routing is not.
 "Can this adapter's content be persisted as a learned card reference and re-fetched later?" used to
 be tribal knowledge: you had to read code to find out, and the one `conversation` resolver was
 hard-wired to local Claude session files. It is now a **formal, checkable capability on the single
-interface every retrieval adapter already implements**, `core.adapters.RetrievalAdapter`, the same
+interface every retrieval adapter already implements**, `core.adapters_retrieval.RetrievalAdapter`, the same
 optional-capability convention `query()` already uses there (an adapter that does not do it returns a
 benign default). There is deliberately **no second Protocol**: a `ReferenceResolvable`-style marker
 would collide confusingly with the existing `ReferenceResolver` (the resolver-*object* shape in

@@ -3,7 +3,7 @@
 WHY IT EXISTS
 -------------
 Mirrors ``adapters.fast_edit_runner.FastEditRunner``'s role in the deep-runner ladder, but for an
-``OperationWriter`` (``core/adapters.py``) instead of a ``FileWriter``: given a goal, brief, and
+``OperationWriter`` (``core/adapters_deep.py``) instead of a ``FileWriter``: given a goal, brief, and
 the context already gathered, it asks the model to pick AT MOST ONE writable MCP operation -- from
 the schemas the writer itself discovers via ``list_writable_operations()`` -- and the arguments
 for it, executes it through the writer, and returns. Same "one round trip instead of a full agent"

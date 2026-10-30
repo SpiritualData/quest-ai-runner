@@ -3,7 +3,7 @@
 QAR's task poller and interactive terminal session cover "run a queued task" and "someone is
 typed in at a terminal." Neither covers a **live conversation over a messaging app**: someone
 texting the assistant on their phone and expecting a reply in the same chat. This is that lane:
-a generic `core.adapters.ChannelTransport` interface plus a `runner.channel_runner.ChannelRunner`
+a generic `core.adapters_channels.ChannelTransport` interface plus a `runner.channel_runner.ChannelRunner`
 loop, with a reference transport, `adapters.openclaw_channel.OpenClawChannel`, wrapping the
 generic `adapters.mcp_client.MCPClient` to talk to [OpenClaw](https://github.com/openclaw/openclaw)
 (MIT) over MCP.
@@ -149,7 +149,7 @@ whatever conversations OpenClaw relays, tagged with the channel's own name in ea
 on `InboundMessage.raw` for a consumer that wants to branch on it).
 
 A consumer that wants a channel OpenClaw does not support writes its own `ChannelTransport`
-(`core.adapters.ChannelTransport` / `ChannelTransportBase`), and the runner only depends on that
+(`core.adapters_channels.ChannelTransport` / `ChannelTransportBase`), and the runner only depends on that
 interface, not on OpenClaw specifically.
 
 ## Unverified assumptions (no live OpenClaw instance was available at authoring time)

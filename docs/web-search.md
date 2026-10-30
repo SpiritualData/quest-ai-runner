@@ -35,7 +35,7 @@ retrieval stack) -- see `core/orchestrator.py`'s wiring for the decision actuall
 ## The read shapes, and how they are wired
 
 `core/orchestrator.py` dispatches these two read shapes itself, through the generic
-`core/adapters.WebResearch` Protocol (`Orchestrator.web`) -- never through
+`core/adapters_retrieval.WebResearch` Protocol (`Orchestrator.web`) -- never through
 `CompositeRetrievalAdapter`, which broadcasts every `grep`/`query` to every member adapter and so
 would fire a paid web search on an ordinary corpus read. `build_orchestrator` sets
 `Orchestrator.web` from `RunnerConfig.web_research`, which it auto-builds with

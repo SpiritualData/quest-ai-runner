@@ -17,7 +17,7 @@ AUTHORIZATION is a plain membership test against ``RunnerConfig.channel_allowed_
 operator-configured sender ids, checked against ``InboundMessage.sender_id`` (a field the
 TRANSPORT reports from the channel's own protocol, not text any model generated). An EMPTY
 allowlist means DENY ALL (fail closed): an unconfigured deployment authorizes nobody rather than
-everybody. This is a real security boundary, not hygiene -- see ``core.adapters.ChannelTransport``
+everybody. This is a real security boundary, not hygiene -- see ``core.adapters_channels.ChannelTransport``
 and ``adapters.openclaw_channel`` for why (OpenClaw's own history of exploitable exposure).
 ``EVENT_DECISION`` events are relayed to the chat as a message; this lane NEVER auto-resolves a
 Quest decision-request from a channel reply -- that is a separate trust decision, out of scope.

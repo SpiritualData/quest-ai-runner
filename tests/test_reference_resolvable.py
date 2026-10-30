@@ -3,7 +3,7 @@
 Joshua's root complaint was that "this adapter's content can be persisted + resolved as a learned
 card reference" was tribal knowledge -- you had to read code to find out. The fix is NOT a second
 Protocol; it is an OPTIONAL CAPABILITY on the ONE interface every retrieval adapter already
-implements (``core.adapters.RetrievalAdapter``), mirroring how ``query`` is already optional there:
+implements (``core.adapters_retrieval.RetrievalAdapter``), mirroring how ``query`` is already optional there:
 
   * an adapter that supports it advertises a NON-None ``reference_type`` and implements
     ``make_locator`` / ``resolve_reference``;

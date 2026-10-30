@@ -53,7 +53,7 @@ class ReadsMixin:
             return Observation(kind="query", locator=f"tools({query})",
                                text="TOOLS MATCHING YOUR SEARCH (call with action \"tool\"):\n"
                                     + text)
-        # LIVE WEB (the WebResearch adapter, core/adapters.py): dispatched directly here, BEFORE
+        # LIVE WEB (the WebResearch adapter, core/adapters_retrieval.py): dispatched directly here, BEFORE
         # the retrieval-None guard below, because this never goes through ``self.retrieval`` --
         # folding it into CompositeRetrievalAdapter would broadcast every grep/query to it too,
         # firing a paid, slow web search on an ordinary corpus read. ``self.web is None`` returns

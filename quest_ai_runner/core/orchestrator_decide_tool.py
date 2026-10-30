@@ -370,7 +370,7 @@ TOOL_CALLS_TOOL_FIELD: Dict[str, Any] = {
 }
 
 
-# The opt-in LIVE WEB read-spec fields (Orchestrator.web is wired, core/adapters.WebResearch):
+# The opt-in LIVE WEB read-spec fields (Orchestrator.web is wired, core/adapters_retrieval.WebResearch):
 # added to ``reads.items.properties`` ONLY when configured, so a deployment with no web adapter
 # pays zero schema tokens for fields it could never use. See the WEB block (PLANNER_WEB_HEAD)
 # for the planner-facing usage rules; these are just the shapes the schema accepts.

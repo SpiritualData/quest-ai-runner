@@ -206,7 +206,7 @@ class RunnerConfig:
     # search adapter uses, not a parallel one. Needs the optional [mcp] extra only if this list is
     # non-empty; an empty list (the default) touches nothing MCP-related.
     mcp_servers: List[MCPServerSpec] = field(default_factory=list)
-    # Fast, token-efficient LIVE WEB access (the ``WebResearch`` interface, ``core/adapters.py``):
+    # Fast, token-efficient LIVE WEB access (the ``WebResearch`` interface, ``core/adapters_retrieval.py``):
     # snippet-first search plus a bounded single-page fetch, reached by the planner through its
     # own two read keys (``{"web": ...}``, ``{"web_page": ...}``) -- NEVER folded into
     # ``retrieval``/``CompositeRetrievalAdapter``, because that composite broadcasts every

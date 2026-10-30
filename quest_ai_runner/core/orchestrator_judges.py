@@ -149,7 +149,7 @@ class JudgesMixin:
         (``DeepResult.observations``/``.observations_reported``): one plain line per write receipt
         the runner's write log actually confirmed landed, and per source it actually read back --
         built by the runner from its OWN records, never from the wording of its output (see
-        ``core/adapters.DeepResult``). This is the gap a live finding exposed: a worker's own
+        ``core/adapters_values.DeepResult``). This is the gap a live finding exposed: a worker's own
         ``DeepResult.observations`` carried the receipt line "Added the goal ..." for a write that
         really happened, yet the verifier judged only the worker's OUTPUT TEXT and its brief, saw no
         evidence, and returned met=False with "no evidence" next to a correct result. Rendered here

@@ -2,7 +2,7 @@
 
 **Code:** `core/guidance_provider.py` (selection), `adapters/guidance_card_manager.py` (files),
 `adapters/quest_guidance_loader.py` (hosted cards), `adapters/feedback_processor.py` (learning),
-`core/adapters.py` (the `GuidanceProvider` interface). **Wiring:** `RunnerConfig.guidance_provider`.
+`core/adapters_guidance.py` (the `GuidanceProvider` interface). **Wiring:** `RunnerConfig.guidance_provider`.
 
 A guidance card is one unit of standing instruction: a preference, a policy, a house standard, a
 "when you do X, always Y". Cards live as markdown files and/or rows in a host database, and the
@@ -212,7 +212,7 @@ cfg = RunnerConfig(
 orch = build_orchestrator(cfg)
 ```
 
-Or implement `GuidanceProvider` (`core/adapters.py`) yourself. Three methods, none of which may
+Or implement `GuidanceProvider` (`core/adapters_guidance.py`) yourself. Three methods, none of which may
 ever raise: `list()` (catalog, bodies empty), `read(card_id)` (one card with body), and `select()`
 (top cards for a message, may return `[]`).
 
