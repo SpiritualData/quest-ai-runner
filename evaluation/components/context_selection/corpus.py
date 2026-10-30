@@ -13,7 +13,7 @@ from pathlib import Path
 
 import common  # noqa: F401  (puts the repo root on sys.path)
 from hubofhubs.recall.context_card_extraction import (
-    _SOURCE_FILE_WEIGHT, _TEST_FILE_WEIGHT, _build_rich_summary, _extract_symbols, _is_test_path, _path_slug,
+    SOURCE_FILE_WEIGHT, TEST_FILE_WEIGHT, build_rich_summary, extract_symbols, is_test_path, path_slug,
 )
 
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".quest-context", ".eggs", ".mypy_cache",
@@ -45,13 +45,13 @@ def build_corpus(root):
                 corpus.files.append(str((Path(dirpath) / name).relative_to(root)))
     for rel in corpus.files:
         path = root / rel
-        syms = _extract_symbols(path)
-        summary, description = _build_rich_summary(rel, path, syms)
-        cid = _path_slug(rel)
+        syms = extract_symbols(path)
+        summary, description = build_rich_summary(rel, path, syms)
+        cid = path_slug(rel)
         corpus.cards[cid] = dict(
             id=cid, keywords=[], summary=summary, description=description,
             files=[dict(path=rel, symbols=syms)],
-            weight=_TEST_FILE_WEIGHT if _is_test_path(rel) else _SOURCE_FILE_WEIGHT)
+            weight=TEST_FILE_WEIGHT if is_test_path(rel) else SOURCE_FILE_WEIGHT)
         corpus.symbols += len(syms)
     return corpus
 

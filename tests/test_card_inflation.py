@@ -26,7 +26,7 @@ from hubofhubs.recall.card_repository import (
     QUARANTINE_DIR_NAME,
     FilesystemCardRepository,
 )
-from hubofhubs.recall.context_folder_review import _folder_review
+from hubofhubs.recall.context_folder_review import folder_review
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from hubofhubs.recall.context_card_ceilings import (
     apply_card_ceilings,
@@ -41,7 +41,7 @@ from hubofhubs.recall.context_folder_review import (
     final_exclusion_covering,
     verdict_is_final,
     verdict_is_pinned,
-    _is_excluded_folder,
+    is_excluded_folder,
 )
 from quest_ai_runner.adapters.walk_settings import STORE_DIR_NAME, effective_skip_dirs
 
@@ -132,9 +132,9 @@ class TestFolderExclusionFinality:
     def test_the_corpus_root_never_excludes_the_whole_tree(self):
         # "." is a prefix of every path composed as "./child". One cached root verdict collapsed a
         # real corpus walk from 76,593 files to 13.
-        assert not _is_excluded_folder("anything/at/all", {"."})
-        assert not _is_excluded_folder(".", {"."})
-        assert _is_excluded_folder("vendor/pkg/a", {"vendor/pkg"})
+        assert not is_excluded_folder("anything/at/all", {"."})
+        assert not is_excluded_folder(".", {"."})
+        assert is_excluded_folder("vendor/pkg/a", {"vendor/pkg"})
 
 
 class TestFolderReviewKeepsNestedRepoExcluded:
@@ -171,19 +171,19 @@ class TestFolderReviewKeepsNestedRepoExcluded:
 
     def test_the_nested_repository_stays_excluded_and_its_children_are_not_judged(self, tmp_path):
         corpus = tmp_path / "corpus"
-        # Above _FOLDER_REVIEW_MIN_FILES (2000) so the review actually runs.
+        # Above FOLDER_REVIEW_MIN_FILES (2000) so the review actually runs.
         self.build_corpus(corpus, nested_files=2100)
         cards_dir = tmp_path / "cards"
         provider = self.keep_everything_provider()
 
-        excluded = _folder_review(corpus, effective_skip_dirs(corpus), provider, None, cards_dir,
+        excluded = folder_review(corpus, effective_skip_dirs(corpus), provider, None, cards_dir,
                                   store_dir_name=STORE_DIR_NAME)
 
-        assert _is_excluded_folder("code/vendored", excluded), (
+        assert is_excluded_folder("code/vendored", excluded), (
             "a nested repository must stay excluded however much the model likes its children"
         )
-        assert _is_excluded_folder("code/vendored/perspectives/alpha", excluded)
-        assert not _is_excluded_folder("notes", excluded)
+        assert is_excluded_folder("code/vendored/perspectives/alpha", excluded)
+        assert not is_excluded_folder("notes", excluded)
 
         cached = json.loads((cards_dir / "folder_review.json").read_text(encoding="utf-8"))
         assert cached["version"] >= 2
@@ -223,12 +223,12 @@ class TestFolderReviewKeepsNestedRepoExcluded:
                                 "mixed": False, "reason": "unsolicited"})
                 return json.dumps(answers)
 
-        excluded = _folder_review(corpus, effective_skip_dirs(corpus), VolunteersExtra(), None,
+        excluded = folder_review(corpus, effective_skip_dirs(corpus), VolunteersExtra(), None,
                                   cards_dir, store_dir_name=STORE_DIR_NAME)
         cached = json.loads((cards_dir / "folder_review.json").read_text(encoding="utf-8"))
         assert "code/vendored/perspectives/alpha" not in cached["folders"]
         assert "a/folder/that/does/not/exist" not in cached["folders"]
-        assert _is_excluded_folder("code/vendored/perspectives/alpha", excluded)
+        assert is_excluded_folder("code/vendored/perspectives/alpha", excluded)
 
     def test_a_non_mixed_model_skip_is_not_overturned_by_a_kept_child(self, tmp_path):
         # Re-opening a large SKIP on size alone is how the 23k-file subtree got back in. Only a
@@ -247,7 +247,7 @@ class TestFolderReviewKeepsNestedRepoExcluded:
 
         # No provider: the cached verdicts plus the deterministic safeguards decide everything,
         # and the corpus is too small for the model arm anyway.
-        excluded = _folder_review(corpus, effective_skip_dirs(corpus), None, None, cards_dir, store_dir_name=STORE_DIR_NAME)
+        excluded = folder_review(corpus, effective_skip_dirs(corpus), None, None, cards_dir, store_dir_name=STORE_DIR_NAME)
         assert excluded == set(), "a corpus under the review's minimum size prunes nothing"
 
         # The rule itself, read off the same verdicts.

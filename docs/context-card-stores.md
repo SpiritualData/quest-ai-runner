@@ -125,7 +125,7 @@ The cards themselves are not.
 | 6 | Stale imports are only pruned when a bootstrap pass runs; between passes a copy outlives the card it was copied from. `_imported_card_unchanged` only avoids rewrites, it does not detect a source change until the next pass | `:3237`, `:3679` | Replaced: a mount reads the owner's current cards (`MountedCardRepository.revision`) |
 | 7 | Excluded folders are honoured for a NESTED store (`:3663`) but not for an ANCESTOR import, whose files are only filtered to lie under the root. Files in excluded or skipped folders re-enter through the ancestor and undo the prune | `_import_ancestor_cards` `:3374-3440` | Replaced for mounts (the mounted view is read, not merged into this corpus's coverage). Remains in `copy` mode |
 | 8 | An imported card carries paths but not fingerprints, so every importing corpus re-hashes (`git hash-object`) every file of every imported card | `:3891` onward | Replaced: the owner's cards are read as they are |
-| 9 | `_folder_review` decides "this nested repository has its own store" with `.exists()` on a path inside the store, which is False for an unreadable store, so it logs "bootstrap them separately" for a store that exists | `:762` | Remains in `copy` mode (in `mount` mode the walk is skipped by `skip_subtrees` before the review runs) |
+| 9 | `folder_review` decides "this nested repository has its own store" with `.exists()` on a path inside the store, which is False for an unreadable store, so it logs "bootstrap them separately" for a store that exists | `:762` | Remains in `copy` mode (in `mount` mode the walk is skipped by `skip_subtrees` before the review runs) |
 | 10 | `bootstrap_report_state.json` was enumerated as a card (it was missing from the sidecar list), counted in `card_count` and scored for keyword matches | `card_repository.py:47` | **Fixed** |
 | 11 | Task associations carry no `scope_tags` and are written unscoped, so the quest fence never applies to them and they are served to every search on the collection | `vector_context_assembler.py:464`, `:520` | Fenced by store in `mount` mode (they are attributed to the writing lane's store and visible to nobody else). The quest fence gap itself remains: a follow-up should stamp `scope_tags` on the association payload |
 | 12 | The vector arm's `scope` argument is the whole context meta, which matches no stored digest | `vector_context_assembler.py:858` | Not changed; the store fence does not depend on it. Worth a follow-up |
@@ -370,7 +370,7 @@ nested store discovery, ancestor imports, mounts discovery and the `migrate-impo
 - **Signals, no model, computed in one cheap walk** (`risk_signals` is a pure function): a folder whose
   subtree holds three or more card stores (one nested store is normal and is no signal); a series of
   sibling folders named like dates, timestamps or version numbers that share one child structure;
-  a very large folder (the folder review's own `_FOLDER_REVIEW_MIN_FILES`); and a copy of the corpus
+  a very large folder (the folder review's own `FOLDER_REVIEW_MIN_FILES`); and a copy of the corpus
   itself. That last one is asked of EVERY folder the walk meets, whether or not it holds a card store: a
   folder whose own child folders repeat at least three of the corpus root's top-level folder names and 80% of
   them (the names on the way down to it are not counted) is a copy, and a dated or versioned name on its

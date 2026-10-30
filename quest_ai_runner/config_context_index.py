@@ -12,10 +12,10 @@ from typing import Any, Callable, List, Optional, Tuple
 from pathlib import Path
 
 from .adapters.file_context_store import (
-    _BOOTSTRAP_META_FILE,
-    _BOOTSTRAP_VERSION,
-    _TFDFIDF_VERSION,
-    _read_bootstrap_meta,
+    BOOTSTRAP_META_FILE,
+    BOOTSTRAP_VERSION,
+    TFDFIDF_VERSION,
+    read_bootstrap_meta,
 )
 from .config_support import _log
 
@@ -29,7 +29,7 @@ def _cards_exist(cards_dir: str) -> bool:
         p = Path(cards_dir)
         return p.is_dir() and any(
             e.suffix == ".json" and not e.name.startswith(".")
-            and e.name != _BOOTSTRAP_META_FILE
+            and e.name != BOOTSTRAP_META_FILE
             for e in p.iterdir()
         )
     except OSError:
@@ -146,18 +146,18 @@ def _bootstrap_if_needed(
         # Global version bump → full LLM re-index for uncovered/stale files.
         # Per-feature version behind → cheap targeted migration (no LLM) until all cards updated.
         # Each is detected and handled separately so an unrelated feature never forces extra work.
-        meta = _read_bootstrap_meta(cards_dir)
+        meta = read_bootstrap_meta(cards_dir)
         stored_version = meta.get("version", 0)
         stored_features = meta.get("feature_versions", {})
 
         # A repository-backed lane's version markers live with the cards on the backend, not in a
         # local meta file it may never have had, so it never forces a full re-index from here.
-        needs_full = not repository_backed and stored_version < _BOOTSTRAP_VERSION
-        needs_tfdfidf = not repository_backed and stored_features.get("tfdfidf", 0) < _TFDFIDF_VERSION
+        needs_full = not repository_backed and stored_version < BOOTSTRAP_VERSION
+        needs_tfdfidf = not repository_backed and stored_features.get("tfdfidf", 0) < TFDFIDF_VERSION
 
         if needs_full:
             _tell(
-                f"Context index: algorithm updated (v{stored_version} -> v{_BOOTSTRAP_VERSION}),"
+                f"Context index: algorithm updated (v{stored_version} -> v{BOOTSTRAP_VERSION}),"
                 " re-indexing in background. Chat is ready now."
             )
         elif needs_tfdfidf:

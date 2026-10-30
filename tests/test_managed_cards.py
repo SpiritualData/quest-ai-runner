@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.recall.context_card_extraction import _managed_names
+from hubofhubs.recall.context_card_extraction import managed_names
 
 
 def _store(tmp_path: Path) -> FileContextStore:
@@ -115,9 +115,9 @@ def test_partially_managed_card_still_accepts_the_unmanaged_field(tmp_path: Path
 
 
 def test_malformed_declaration_degrades_to_unmanaged(tmp_path: Path) -> None:
-    assert _managed_names(None) == set()
-    assert _managed_names("name") == set()
-    assert _managed_names(["name", "", None, 3]) == {"name", "3"}
+    assert managed_names(None) == set()
+    assert managed_names("name") == set()
+    assert managed_names(["name", "", None, 3]) == {"name", "3"}
 
     store = _store(tmp_path)
     _write_card(store, {"id": "bad", "name": "old", "managed_fields": "name"})

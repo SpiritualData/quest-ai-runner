@@ -42,19 +42,19 @@ from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 from hubofhubs.recall.walk import prune_dirnames, skip_subtrees
 from hubofhubs.recall.card_store_identity import BOOTSTRAP_META_FILE, is_merged, read_meta
 from hubofhubs.recall.context_folder_review import (
-    _FOLDER_REVIEW_FILE,
-    _FOLDER_REVIEW_MIN_FILES,
-    _FOLDER_REVIEW_START_DEPTH,
+    FOLDER_REVIEW_FILE,
+    FOLDER_REVIEW_MIN_FILES,
+    FOLDER_REVIEW_START_DEPTH,
     HARD_RISK_KINDS,
-    _dir_file_counts,
-    _is_excluded_folder,
-    _roll_up_to_depth,
+    dir_file_counts,
+    is_excluded_folder,
+    roll_up_to_depth,
     load_verdicts,
     review_corpus,
 )
 from .card_store_settings import STORE_DIR_NAME, folder_review_enabled, skip_nested_repos
 
-_CARDS_DIR = STORE_DIR_NAME
+CARDS_DIR = STORE_DIR_NAME
 
 # Three card stores under one folder is a pattern (copies of a tree), one is a normal nested
 # corpus, two can be a coincidence. Three dated siblings is a series, two is a pair.
@@ -154,8 +154,8 @@ def risk_signals(stores: Sequence[str], series: Dict[str, Sequence[str]],
             flagged.append(folder)
             out.setdefault(folder, []).append((
                 "stores", f"contains {below[folder]} card stores"))
-    for folder, n in _roll_up_to_depth(counts, _FOLDER_REVIEW_START_DEPTH).items():
-        if folder != "." and n >= _FOLDER_REVIEW_MIN_FILES:
+    for folder, n in roll_up_to_depth(counts, FOLDER_REVIEW_START_DEPTH).items():
+        if folder != "." and n >= FOLDER_REVIEW_MIN_FILES:
             out.setdefault(folder, []).append(("large", f"very large, {n} files"))
     return out
 
@@ -173,7 +173,7 @@ class TreeFacts:
 
 def _has_store(directory: Path) -> bool:
     try:
-        cards = directory / _CARDS_DIR
+        cards = directory / CARDS_DIR
         return (cards / BOOTSTRAP_META_FILE).is_file() and not is_merged(str(cards))
     except OSError:
         return False
@@ -239,7 +239,7 @@ def copy_of_self_reason(store_dir: Path, rel: str, walk_root: Path, own_cards_di
     at least three of the corpus root's top-level folder names and 80% of them, ignoring the
     folders on the way down to it. A legitimate nested project matches none of these.
     """
-    cards = store_dir / _CARDS_DIR
+    cards = store_dir / CARDS_DIR
     meta = read_meta(str(cards))
     if own_cards_dir is not None:
         own_id = read_meta(str(own_cards_dir)).get("store_id")
@@ -283,7 +283,7 @@ def scan_tree(walk_root: Path, skip_dirs: Set[str], own_cards_dir: Optional[Path
             dirnames.sort()
             rel = current.relative_to(root).as_posix()
             rel = "" if rel == "." else rel
-            if rel and _has_store(current) and (own is None or (current / _CARDS_DIR).resolve() != own):
+            if rel and _has_store(current) and (own is None or (current / CARDS_DIR).resolve() != own):
                 facts.stores.append(rel)
                 why = copy_of_self_reason(current, rel, root, own, root_layout, skip_dirs)
                 if why:
@@ -359,7 +359,7 @@ class FolderGate:
         return "" if rel == "." else rel
 
     def excludes_rel(self, rel: str) -> bool:
-        return _is_excluded_folder(rel, self.excluded)
+        return is_excluded_folder(rel, self.excluded)
 
     def excludes_dir(self, path: Path) -> bool:
         """Whether a directory is, or sits under, a folder this corpus must not read."""
@@ -392,7 +392,7 @@ def folder_gate(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[
     try:
         facts = scan_tree(walk_root, skip_dirs, cards_dir)
         with skip_subtrees(facts.series_paths):
-            counts = _dir_file_counts(walk_root, skip_dirs)
+            counts = dir_file_counts(walk_root, skip_dirs)
         risk = risk_signals(facts.stores, facts.series, counts, facts.copies)
         risk.update(scan_ancestors(walk_root, skip_dirs))
         verdicts: Dict[str, Dict] = load_verdicts(cards_dir)
@@ -424,7 +424,7 @@ def folder_gate(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[
                 "copies, or a copy of the corpus itself) and could not be reviewed, so they are not indexed, not entered, and no "
                 "store beneath them is imported or mounted: %s. To include one anyway, set "
                 '"index": true for that folder in %s.',
-                len(gate.blocked), shown, Path(cards_dir) / _FOLDER_REVIEW_FILE)
+                len(gate.blocked), shown, Path(cards_dir) / FOLDER_REVIEW_FILE)
     except Exception:  # noqa: BLE001
         _log.info("context index: risk gate failed; falling back to the plain review", exc_info=True)
     return gate

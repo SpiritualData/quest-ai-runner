@@ -10,8 +10,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore, _tokenize
-from hubofhubs.recall.context_card_extraction import _card_slug
+from quest_ai_runner.adapters.file_context_store import FileContextStore, tokenize
+from hubofhubs.recall.context_card_extraction import card_slug
 from hubofhubs.ports.context import AssembledContext, ContextAssembler
 from quest_ai_runner.core.context_doctrine import (
     DEEP_CONTEXT_DOCTRINE,
@@ -223,48 +223,48 @@ class TestPlannerPromptGates:
 
 
 # ---------------------------------------------------------------------------
-# _tokenize and _card_slug helpers
+# tokenize and card_slug helpers
 # ---------------------------------------------------------------------------
 
 class TestTokenize:
     def test_basic(self):
-        assert "chat" in _tokenize("chat ai conversation")
+        assert "chat" in tokenize("chat ai conversation")
 
     def test_stopwords_dropped(self):
-        toks = _tokenize("the quick brown fox")
+        toks = tokenize("the quick brown fox")
         assert "the" not in toks
 
     def test_short_tokens_dropped(self):
-        toks = _tokenize("a an be it me")
+        toks = tokenize("a an be it me")
         assert not toks  # all short or stopwords
 
     def test_numbers_kept(self):
-        toks = _tokenize("version 123 release")
+        toks = tokenize("version 123 release")
         assert "123" in toks
 
     def test_empty(self):
-        assert _tokenize("") == set()
+        assert tokenize("") == set()
 
     def test_case_insensitive(self):
-        assert _tokenize("Chat AI") == _tokenize("chat ai")
+        assert tokenize("Chat AI") == tokenize("chat ai")
 
 
 class TestCardSlug:
     def test_deterministic(self):
-        assert _card_slug("foo bar baz") == _card_slug("foo bar baz")
+        assert card_slug("foo bar baz") == card_slug("foo bar baz")
 
     def test_different_texts_different_slugs(self):
-        assert _card_slug("task one") != _card_slug("task two")
+        assert card_slug("task one") != card_slug("task two")
 
     def test_slug_format(self):
-        slug = _card_slug("implement the chat feature")
+        slug = card_slug("implement the chat feature")
         # slug should contain keyword tokens + a hex digest part
         assert len(slug) > 8
         parts = slug.split("-")
         assert len(parts) >= 2
 
     def test_empty_text_still_works(self):
-        slug = _card_slug("")
+        slug = card_slug("")
         assert len(slug) > 0
 
 
@@ -531,7 +531,7 @@ class TestFileContextStoreRecord:
         cards_dir = tmp_path / "cards"
         cards_dir.mkdir()
         task = "fix the chat endpoint"
-        slug = _card_slug(task)
+        slug = card_slug(task)
         (cards_dir / f"{slug}.json").write_text("CORRUPTED {{{", encoding="utf-8")
         store = FileContextStore(str(cards_dir))
         store.record(task, {"kind": "answer"})  # must not raise
@@ -2011,10 +2011,10 @@ class TestCardCache:
 # ---------------------------------------------------------------------------
 
 class TestRichSummaryHelpers:
-    """The _build_rich_summary / _extract_docstrings helpers extract docstrings from .py files."""
+    """The build_rich_summary / _extract_docstrings helpers extract docstrings from .py files."""
 
     def test_module_docstring_in_rich_summary(self, tmp_path):
-        from hubofhubs.recall.context_card_extraction import _build_rich_summary
+        from hubofhubs.recall.context_card_extraction import build_rich_summary
 
         p = tmp_path / "analyzer.py"
         p.write_text(
@@ -2025,13 +2025,13 @@ class TestRichSummaryHelpers:
             "    pass\n",
             encoding="utf-8",
         )
-        summary, description = _build_rich_summary("analyzer.py", p, ["BehaviourAnalyzer"])
+        summary, description = build_rich_summary("analyzer.py", p, ["BehaviourAnalyzer"])
         assert "Analyze user behaviour" in summary, (
             f"module docstring not in summary: {summary!r}"
         )
 
     def test_class_and_fn_docstrings_in_rich_summary(self, tmp_path):
-        from hubofhubs.recall.context_card_extraction import _build_rich_summary
+        from hubofhubs.recall.context_card_extraction import build_rich_summary
 
         p = tmp_path / "engine.py"
         p.write_text(
@@ -2046,7 +2046,7 @@ class TestRichSummaryHelpers:
             "    pass\n",
             encoding="utf-8",
         )
-        summary, description = _build_rich_summary("engine.py", p, ["ScoreEngine", "build_index"])
+        summary, description = build_rich_summary("engine.py", p, ["ScoreEngine", "build_index"])
         combined = summary + " " + description
         assert (
             "Computes recommendation scores" in combined
@@ -2054,7 +2054,7 @@ class TestRichSummaryHelpers:
         ), f"def docstrings not in helper text: {combined!r}"
 
     def test_description_populated_for_py_with_docstring(self, tmp_path):
-        from hubofhubs.recall.context_card_extraction import _build_rich_summary
+        from hubofhubs.recall.context_card_extraction import build_rich_summary
 
         p = tmp_path / "service.py"
         p.write_text(
@@ -2065,11 +2065,11 @@ class TestRichSummaryHelpers:
             "    pass\n",
             encoding="utf-8",
         )
-        summary, description = _build_rich_summary("service.py", p, ["dispatch"])
+        summary, description = build_rich_summary("service.py", p, ["dispatch"])
         assert description, f"expected non-empty description, got: {description!r}"
 
     def test_no_docstring_falls_back_to_symbol_list(self, tmp_path):
-        from hubofhubs.recall.context_card_extraction import _build_rich_summary
+        from hubofhubs.recall.context_card_extraction import build_rich_summary
 
         p = tmp_path / "nodoc.py"
         p.write_text(
@@ -2077,7 +2077,7 @@ class TestRichSummaryHelpers:
             "\ndef make_widget(size):\n    pass\n",
             encoding="utf-8",
         )
-        summary, description = _build_rich_summary(
+        summary, description = build_rich_summary(
             "nodoc.py", p, ["WidgetFactory", "make_widget"]
         )
         assert "WidgetFactory" in summary or "make_widget" in summary, (

@@ -58,7 +58,7 @@ from .walk_settings import effective_skip_dirs
 
 logger = logging.getLogger(__name__)
 
-_SOURCE_EXTS: Set[str] = {
+SOURCE_EXTS: Set[str] = {
     ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs",
     ".java", ".rb", ".md", ".sh", ".yaml", ".yml", ".toml", ".json",
     ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt", ".scala",
@@ -66,7 +66,7 @@ _SOURCE_EXTS: Set[str] = {
 }
 
 # Max file size to read during indexing (512 KB -- same as FileContextStore).
-_BOOTSTRAP_MAX_BYTES = 512 * 1024
+BOOTSTRAP_MAX_BYTES = 512 * 1024
 
 # Maximum number of files to index (safety bound).
 _MAX_FILES = 10_000
@@ -271,10 +271,10 @@ class BM25ContentStore(ContextAssemblerBase):
                 if len(paths) >= _MAX_FILES:
                     break
                 fpath = Path(dirpath) / fname
-                if is_claude_state_file(fname) or fpath.suffix not in _SOURCE_EXTS:
+                if is_claude_state_file(fname) or fpath.suffix not in SOURCE_EXTS:
                     continue
                 try:
-                    if fpath.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+                    if fpath.stat().st_size > BOOTSTRAP_MAX_BYTES:
                         continue
                 except OSError:
                     continue
@@ -338,10 +338,10 @@ class BM25ContentStore(ContextAssemblerBase):
             prune_dirnames(dirnames, current=Path(dirpath), base_skip=self._skip_dirs)
             for fname in filenames:
                 fpath = Path(dirpath) / fname
-                if is_claude_state_file(fname) or fpath.suffix not in _SOURCE_EXTS:
+                if is_claude_state_file(fname) or fpath.suffix not in SOURCE_EXTS:
                     continue
                 try:
-                    if fpath.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+                    if fpath.stat().st_size > BOOTSTRAP_MAX_BYTES:
                         continue
                 except OSError:
                     continue

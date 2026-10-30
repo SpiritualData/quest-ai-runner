@@ -15,18 +15,18 @@ from pathlib import Path
 from hubofhubs.recall import card_origin
 from hubofhubs.recall.card_store_mounts import MODE_MOUNT
 from hubofhubs.recall.background_pacing import Pacer
-from hubofhubs.recall.card_content_render import tokenize as _tokenize
+from hubofhubs.recall.card_content_render import tokenize
 from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
 from .walk_settings import effective_skip_dirs
 from hubofhubs.recall.context_bootstrap_support import (
-    _BOOTSTRAP_MAX_BYTES,
-    _SOURCE_EXTS,
-    _TFDFIDF_VERSION,
-    _card_file_paths,
-    _run_parallel,
+    BOOTSTRAP_MAX_BYTES,
+    SOURCE_EXTS,
+    TFDFIDF_VERSION,
+    card_file_paths,
+    run_parallel,
 )
-from hubofhubs.recall.context_card_extraction import _extract_topic_cards
-from hubofhubs.recall.context_folder_review import _is_excluded_folder
+from hubofhubs.recall.context_card_extraction import extract_topic_cards
+from hubofhubs.recall.context_folder_review import is_excluded_folder
 from .card_store_settings import bootstrap_max_cards, bootstrap_max_files, prune_dead_cards
 from .context_risk_gate import FolderGate, folder_gate
 from hubofhubs.recall.context_card_ceilings import folders_for_room
@@ -123,12 +123,12 @@ class BootstrapWalkMixin:
                 # the root must be the EMPTY string before any path is composed from it.
                 if here == ".":
                     here = ""
-                if _is_excluded_folder(here, excluded_folders):
+                if is_excluded_folder(here, excluded_folders):
                     dirnames[:] = []
                     continue
                 dirnames[:] = [
                     d for d in dirnames
-                    if not _is_excluded_folder(f"{here}/{d}".lstrip("/"), excluded_folders)
+                    if not is_excluded_folder(f"{here}/{d}".lstrip("/"), excluded_folders)
                 ]
             # Also exclude the cards dir itself (it's internal state, not source).
             dirnames[:] = [
@@ -142,10 +142,10 @@ class BootstrapWalkMixin:
                 if is_claude_state_file(fname):
                     continue
                 fpath = Path(dirpath) / fname
-                if fpath.suffix not in _SOURCE_EXTS:
+                if fpath.suffix not in SOURCE_EXTS:
                     continue
                 try:
-                    if fpath.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+                    if fpath.stat().st_size > BOOTSTRAP_MAX_BYTES:
                         continue
                 except OSError:
                     continue
@@ -388,7 +388,7 @@ class BootstrapWalkMixin:
         # These cards already have correct LLM-generated content; only the cheap computed fields
         # (e.g. tfdfidf_terms) need refreshing.  They are added to topic_cards WITHOUT triggering
         # LLM calls — stage 4b recomputes the field, stage 5 writes the updated card.
-        # The per-entry "tfdfidf_v" field IS the checkpoint: entries already at _TFDFIDF_VERSION
+        # The per-entry "tfdfidf_v" field IS the checkpoint: entries already at TFDFIDF_VERSION
         # are skipped automatically, so an interrupted migration resumes on the next startup.
         tfdfidf_migration_cards: List[Dict[str, Any]] = []
         for card in own_cards:
@@ -396,7 +396,7 @@ class BootstrapWalkMixin:
             if not cid:
                 continue
             card_files = [fe for fe in card.get("files", []) if isinstance(fe, dict) and fe.get("path")]
-            if any(fe.get("tfdfidf_v", 0) < _TFDFIDF_VERSION for fe in card_files):
+            if any(fe.get("tfdfidf_v", 0) < TFDFIDF_VERSION for fe in card_files):
                 tfdfidf_migration_cards.append({
                     "id": cid,
                     "name": card.get("name", ""),
@@ -408,7 +408,7 @@ class BootstrapWalkMixin:
         if tfdfidf_migration_cards:
             _log.info(
                 "context index: %d card(s) have file entries below tfdfidf v%d — will update",
-                len(tfdfidf_migration_cards), _TFDFIDF_VERSION,
+                len(tfdfidf_migration_cards), TFDFIDF_VERSION,
             )
 
         if not uncovered and not stale_covered and not tfdfidf_migration_cards and not imported_cards:
@@ -494,7 +494,7 @@ class BootstrapWalkMixin:
                     "description": card.get("summary", ""),
                     "files": files,
                 }
-                regenerated = _extract_topic_cards(area, set(files), provider, model, walk_root=walk_root)
+                regenerated = extract_topic_cards(area, set(files), provider, model, walk_root=walk_root)
                 if regenerated:
                     # Replace the card IN PLACE with exactly one card under its own id. Any extra
                     # topics the model returns used to be written as brand-new cards, so a file that
@@ -544,8 +544,8 @@ class BootstrapWalkMixin:
         seen: Set[str] = set()
         for tc in topic_cards:
             # Normalised rather than trusted: a card reaching here can have come from the model
-            # (plain paths) or from disk via a dedup merge (dicts). See _card_file_paths.
-            for rel in _card_file_paths(tc):
+            # (plain paths) or from disk via a dedup merge (dicts). See card_file_paths.
+            for rel in card_file_paths(tc):
                 if rel not in seen:
                     seen.add(rel)
                     referenced.append(rel)
@@ -554,7 +554,7 @@ class BootstrapWalkMixin:
         if referenced:
             _log.info("context index: stage 4 — fingerprinting %d file(s)", len(referenced))
             n_workers = min(8, len(referenced))
-            fp_results = _run_parallel(
+            fp_results = run_parallel(
                 [lambda r=rel: (r, self._fingerprint(r)) for rel in referenced],
                 max_workers=n_workers,
             )
@@ -575,15 +575,15 @@ class BootstrapWalkMixin:
             def _read_file_terms(rel: str) -> tuple:
                 try:
                     p = walk_root / rel
-                    if p.exists() and p.stat().st_size <= _BOOTSTRAP_MAX_BYTES:
+                    if p.exists() and p.stat().st_size <= BOOTSTRAP_MAX_BYTES:
                         text = p.read_text(encoding="utf-8", errors="replace")
-                        return rel, _tokenize(text)
+                        return rel, tokenize(text)
                 except Exception:  # noqa: BLE001
                     pass
                 return rel, set()
 
             n_workers_content = min(8, len(referenced))
-            content_results = _run_parallel(
+            content_results = run_parallel(
                 [lambda r=rel: _read_file_terms(r) for rel in referenced],
                 max_workers=n_workers_content,
             )
@@ -638,7 +638,7 @@ class BootstrapWalkMixin:
                     "why": "",
                     "symbols": [],
                     "tfdfidf_terms": tfdfidf_terms_map.get(rel, []),
-                    "tfdfidf_v": _TFDFIDF_VERSION,
+                    "tfdfidf_v": TFDFIDF_VERSION,
                 })
 
             # Load existing card so we preserve usage_count / last_outcome if present.
@@ -674,7 +674,7 @@ class BootstrapWalkMixin:
                 unchanged = bool(file_dicts) and all(
                     fd["sha256"]
                     and old_file_data.get(fd["path"], {}).get("sha256", "") == fd["sha256"]
-                    and old_file_data.get(fd["path"], {}).get("tfdfidf_v", 0) >= _TFDFIDF_VERSION
+                    and old_file_data.get(fd["path"], {}).get("tfdfidf_v", 0) >= TFDFIDF_VERSION
                     for fd in file_dicts
                 ) and len(old_file_data) == len(file_dicts)
                 if unchanged:

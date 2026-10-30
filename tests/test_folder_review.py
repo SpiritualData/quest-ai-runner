@@ -26,7 +26,7 @@ def test_a_nested_repository_is_found_without_a_model_call(tmp_path):
     _mk(tmp_path, "mine")
     dep = _mk(tmp_path, "vendor/dep")
     (dep / ".git").mkdir()
-    found = fcs._nested_vcs_dirs(tmp_path, set())
+    found = fcs.nested_vcs_dirs(tmp_path, set())
     assert "vendor/dep" in found and found["vendor/dep"] == ".git"
     assert "mine" not in found
 
@@ -35,7 +35,7 @@ def test_the_corpus_root_is_never_called_a_nested_repository(tmp_path):
     # The corpus itself is virtually always a git repo; excluding it would index nothing.
     (tmp_path / ".git").mkdir()
     _mk(tmp_path, "src")
-    assert fcs._nested_vcs_dirs(tmp_path, set()) == {}
+    assert fcs.nested_vcs_dirs(tmp_path, set()) == {}
 
 
 # --- layer 2: fuzzy duplicates ----------------------------------------------------------------
@@ -51,8 +51,8 @@ def test_a_near_duplicate_tree_is_detected_by_percentage(tmp_path):
         for i in range(30):
             (d / f"m{i}.py").write_text(f"def f{i}(): return {i}\n")
     (tmp_path / "b/pkg/extra_only_here.py").write_text("x = 1\n")
-    counts = fcs._dir_file_counts(tmp_path, set())
-    dupes = fcs._duplicate_folders(tmp_path, ["a/pkg", "b/pkg"], counts)
+    counts = fcs.dir_file_counts(tmp_path, set())
+    dupes = fcs.duplicate_folders(tmp_path, ["a/pkg", "b/pkg"], counts)
     assert dupes, "a near-identical tree must be reported"
     dup, of = next(iter(dupes.items()))
     assert dupes[dup][1] >= 0.7
@@ -64,8 +64,8 @@ def test_unrelated_folders_are_not_called_duplicates(tmp_path):
         d.mkdir()
         for i in range(30):
             (d / f"{word}{i}.py").write_text(f"# {word} {i}\n")
-    counts = fcs._dir_file_counts(tmp_path, set())
-    assert fcs._duplicate_folders(tmp_path, ["x", "y"], counts) == {}
+    counts = fcs.dir_file_counts(tmp_path, set())
+    assert fcs.duplicate_folders(tmp_path, ["x", "y"], counts) == {}
 
 
 # --- layer 3: the model, and the guards around it ---------------------------------------------
@@ -74,8 +74,8 @@ def test_unrelated_folders_are_not_called_duplicates(tmp_path):
 def test_an_ai_instruction_file_is_detected_as_a_signal(tmp_path):
     d = _mk(tmp_path, "notes")
     (d / "CLAUDE.md").write_text("# how to work here\n")
-    assert "CLAUDE.md" in fcs._ai_instruction_files_in(tmp_path, "notes")
-    assert fcs._ai_instruction_files_in(tmp_path, ".") != []   # found from the root too
+    assert "CLAUDE.md" in fcs.ai_instruction_files_in(tmp_path, "notes")
+    assert fcs.ai_instruction_files_in(tmp_path, ".") != []   # found from the root too
 
 
 def test_a_small_corpus_is_never_sent_to_the_model(tmp_path):
@@ -87,13 +87,13 @@ def test_a_small_corpus_is_never_sent_to_the_model(tmp_path):
         def answer(self, *a, **k):
             raise AssertionError("a small corpus must not reach the model")
 
-    assert fcs._folder_review(tmp_path, set(), Boom(), None, tmp_path / "cards", store_dir_name=".quest-context") == set()
+    assert fcs.folder_review(tmp_path, set(), Boom(), None, tmp_path / "cards", store_dir_name=".quest-context") == set()
 
 
 def test_verdicts_are_cached_and_human_editable(tmp_path):
     cards = tmp_path / "cards"
     cards.mkdir()
-    (cards / fcs._FOLDER_REVIEW_FILE).write_text(json.dumps(
+    (cards / fcs.FOLDER_REVIEW_FILE).write_text(json.dumps(
         {"folders": {"junk": {"index": False, "reason": "hand-edited"}}}))
     _mk(tmp_path, "junk")
 
@@ -103,17 +103,17 @@ def test_verdicts_are_cached_and_human_editable(tmp_path):
 
     # Small corpus short-circuits before the model, and the cached verdict is still honoured
     # for the caller that consults the file.
-    loaded = json.loads((cards / fcs._FOLDER_REVIEW_FILE).read_text())["folders"]
+    loaded = json.loads((cards / fcs.FOLDER_REVIEW_FILE).read_text())["folders"]
     assert loaded["junk"]["index"] is False
 
 
 def test_excluded_folder_matching_is_prefix_safe():
     ex = {"build"}
-    assert fcs._is_excluded_folder("build", ex) is True
-    assert fcs._is_excluded_folder("build/sub", ex) is True
+    assert fcs.is_excluded_folder("build", ex) is True
+    assert fcs.is_excluded_folder("build/sub", ex) is True
     # "buildings" must NOT be swept up by "build".
-    assert fcs._is_excluded_folder("buildings", ex) is False
-    assert fcs._is_excluded_folder(".", ex) is False
+    assert fcs.is_excluded_folder("buildings", ex) is False
+    assert fcs.is_excluded_folder(".", ex) is False
 
 
 def test_a_parent_with_a_kept_child_is_not_excluded():
@@ -123,8 +123,8 @@ def test_a_parent_with_a_kept_child_is_not_excluded():
         "workspace": {"index": False, "reason": "huge duplicate mirror"},
         "workspace/notes": {"index": True, "reason": "real notes"},
     }
-    assert fcs._has_kept_child(verdicts, "workspace") is True
-    assert fcs._has_kept_child(verdicts, "workspace/notes") is False
+    assert fcs.has_kept_child(verdicts, "workspace") is True
+    assert fcs.has_kept_child(verdicts, "workspace/notes") is False
 
 
 def test_a_card_store_inside_an_excluded_folder_is_not_imported(tmp_path):
@@ -135,8 +135,8 @@ def test_a_card_store_inside_an_excluded_folder_is_not_imported(tmp_path):
     one real store that way, from three different nightly snapshots.
     """
     excluded = {"backups"}
-    assert fcs._is_excluded_folder("backups/hq/docs/2026-09-10_0230/hq", excluded) is True
-    assert fcs._is_excluded_folder("stories/real", excluded) is False
+    assert fcs.is_excluded_folder("backups/hq/docs/2026-09-10_0230/hq", excluded) is True
+    assert fcs.is_excluded_folder("stories/real", excluded) is False
 
 
 # --- the risk gate: one decision for every card source -----------------------------------------

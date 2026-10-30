@@ -9,7 +9,7 @@ import logging
 import json
 from typing import Any, Dict, List, Optional, Set
 
-from hubofhubs.recall.context_bootstrap_support import _extract_json_array, _jaccard, _merge_card_group
+from hubofhubs.recall.context_bootstrap_support import extract_json_array, jaccard, merge_card_group
 from hubofhubs.recall.context_card_ceilings import collapse_cards_by_file_set
 
 _log = logging.getLogger("quest-ai-runner.context")
@@ -137,7 +137,7 @@ def _parse_groupings(raw: str, n_cards: int) -> Optional[List[List[int]]]:
     Returns None (caller keeps the cluster unchanged) on any parse/validation failure — this is
     what keeps a mocked provider that returns non-grouping JSON from corrupting the cards.
     """
-    payload = _extract_json_array(raw or "")
+    payload = extract_json_array(raw or "")
     if not payload:
         return None
     try:
@@ -189,7 +189,7 @@ def _dedup_cluster_llm(cluster: List[Dict[str, Any]], provider, model) -> List[D
         groups = _parse_groupings(raw, len(cluster))
         if groups is None:
             return cluster
-        return [_merge_card_group([cluster[i] for i in g]) for g in groups]
+        return [merge_card_group([cluster[i] for i in g]) for g in groups]
     except Exception:  # noqa: BLE001
         _log.exception("context index: LLM dedup failed for cluster, keeping it unchanged")
         return cluster
@@ -202,7 +202,7 @@ def _dedup_fallback(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         files_a = set(card.get("files", []))
         matched = False
         for rep in merged:
-            if _jaccard(files_a, set(rep.get("files", []))) >= _DEDUP_FALLBACK_JACCARD:
+            if jaccard(files_a, set(rep.get("files", []))) >= _DEDUP_FALLBACK_JACCARD:
                 rep["files"] = list(dict.fromkeys(rep.get("files", []) + card.get("files", [])))
                 rep["keywords"] = list(
                     dict.fromkeys(rep.get("keywords", []) + card.get("keywords", []))
@@ -270,7 +270,7 @@ def _dedup_topic_cards(
         if has_existing:
             # Merge the new cards INTO the first existing card in the cluster, preserving its id.
             existing_member = next(combined[i] for i in cluster_idx if is_existing[i])
-            merged = _merge_card_group([existing_member] + new_members)
+            merged = merge_card_group([existing_member] + new_members)
             out.append(merged)
             continue
 

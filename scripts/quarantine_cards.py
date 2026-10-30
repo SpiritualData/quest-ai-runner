@@ -115,7 +115,7 @@ from hubofhubs.recall.card_store_tidy_plan import (  # noqa: E402,F401  (re-expo
     strip_prefix,
     under_any_prefix,
 )
-from hubofhubs.recall.context_card_ceilings import _FILE_SET_DEDUP_JACCARD  # noqa: E402
+from hubofhubs.recall.context_card_ceilings import FILE_SET_DEDUP_JACCARD  # noqa: E402
 
 SKIP_FILES = {"bootstrap_meta.json", "folder_review.json"}
 
@@ -295,7 +295,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--keep-prefix", action="append", default=[], metavar="PATH",
                         help="corpus-relative folder whose cards the folder review excludes but "
                              "that you want kept (repeatable); an --excluded-prefix beneath it still applies")
-    parser.add_argument("--jaccard", type=float, default=_FILE_SET_DEDUP_JACCARD,
+    parser.add_argument("--jaccard", type=float, default=FILE_SET_DEDUP_JACCARD,
                         help="file-set overlap at which two cards count as the same card")
     parser.add_argument("--manifest", default=None,
                         help="where to write the manifest (default: inside the quarantine dir)")

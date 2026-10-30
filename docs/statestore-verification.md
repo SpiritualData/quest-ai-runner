@@ -70,7 +70,7 @@ All 16 tests passing (100% pass rate):
 **Mechanism:** StateStore uses `os.rename()` (atomic at OS level) for the temp + replace pattern:
 ```python
 tmp_fd, tmp_path = tempfile.mkstemp(dir=str(cards_dir), ...)
-os.replace(tmp_path, str(Path(cards_dir) / _BOOTSTRAP_META_FILE))
+os.replace(tmp_path, str(Path(cards_dir) / BOOTSTRAP_META_FILE))
 ```
 
 **Outcome:** 

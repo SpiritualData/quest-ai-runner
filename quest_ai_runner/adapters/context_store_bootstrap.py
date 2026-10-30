@@ -16,7 +16,7 @@ from pathlib import Path
 
 from hubofhubs.recall.card_repository import FilesystemCardRepository
 from hubofhubs.recall.card_store_mounts import MODE_MOUNT, resolve_mounts
-from hubofhubs.recall.card_content_render import MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_CHARS
+from hubofhubs.recall.card_content_render import MAX_CARD_REF_ITEM_CHARS
 from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames, skip_subtrees
 from .card_store_settings import STORE_DIR_NAME, max_cards_per_folder
 from .walk_settings import effective_skip_dirs
@@ -26,19 +26,19 @@ from .bootstrap_reporter import mark_bootstrap_completed
 from hubofhubs.recall.background_pacing import Pacer
 from hubofhubs.filemodes import match_umask
 from hubofhubs.recall.context_bootstrap_support import (
-    _BOOTSTRAP_MAX_BYTES,
-    _BOOTSTRAP_META_FILE,
-    _DISCOVERED_FILE,
-    _MAX_ANCESTOR_WALK_LEVELS,
-    _MAX_MERGED_KEYWORDS,
-    _SOURCE_EXTS,
-    _TFDFIDF_VERSION,
-    _card_file_paths,
-    _write_bootstrap_meta,
+    BOOTSTRAP_MAX_BYTES,
+    BOOTSTRAP_META_FILE,
+    DISCOVERED_FILE,
+    MAX_ANCESTOR_WALK_LEVELS,
+    MAX_MERGED_KEYWORDS,
+    SOURCE_EXTS,
+    TFDFIDF_VERSION,
+    card_file_paths,
+    write_bootstrap_meta,
 )
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
-from hubofhubs.recall.context_card_ceilings import _MIN_FILES_PER_CARD, apply_card_ceilings, card_is_too_thin
-from hubofhubs.recall.context_folder_review import _dir_file_counts
+from hubofhubs.recall.context_card_ceilings import MIN_FILES_PER_CARD, apply_card_ceilings, card_is_too_thin
+from hubofhubs.recall.context_folder_review import dir_file_counts
 from .context_risk_gate import folder_gate
 
 _log = logging.getLogger("quest-ai-runner.context")
@@ -125,7 +125,7 @@ class BootstrapMixin:
             _log.exception("context index: bootstrap failed before writing; no cards were saved")
             return 0
         if n > 0 and not self._dry_run:
-            _write_bootstrap_meta(
+            write_bootstrap_meta(
                 str(self._cards_dir),
                 self._count_cards_on_disk(),
                 feature_versions=self._completed_feature_versions(),
@@ -145,12 +145,12 @@ class BootstrapMixin:
         try:
             all_cards = self._own_cards()
             tfdfidf_done = all(
-                fe.get("tfdfidf_v", 0) >= _TFDFIDF_VERSION
+                fe.get("tfdfidf_v", 0) >= TFDFIDF_VERSION
                 for card in all_cards.values()
                 for fe in card.get("files", [])
                 if isinstance(fe, dict) and fe.get("path")
             )
-            return {"tfdfidf": _TFDFIDF_VERSION} if tfdfidf_done else {}
+            return {"tfdfidf": TFDFIDF_VERSION} if tfdfidf_done else {}
         except Exception:  # noqa: BLE001
             return {}
 
@@ -209,12 +209,12 @@ class BootstrapMixin:
             if walk_root is None or not walk_root.is_dir():
                 return (0, 0)
             skip_dirs = effective_skip_dirs(walk_root)
-            walked = set(_dir_file_counts(walk_root, skip_dirs))
+            walked = set(dir_file_counts(walk_root, skip_dirs))
             walked_files: Set[str] = set()
             for dirpath, dirnames, filenames in os.walk(walk_root):
                 prune_dirnames(dirnames, current=Path(dirpath), base_skip=skip_dirs)
                 for fn in filenames:
-                    if not is_claude_state_file(fn) and Path(fn).suffix.lower() in _SOURCE_EXTS:
+                    if not is_claude_state_file(fn) and Path(fn).suffix.lower() in SOURCE_EXTS:
                         try:
                             walked_files.add((Path(dirpath) / fn).relative_to(walk_root).as_posix())
                         except ValueError:
@@ -224,11 +224,11 @@ class BootstrapMixin:
                 if not cid:
                     continue
                 # Cap a keyword list that earlier unbounded merges let run away (see
-                # _merge_card_group). A card matching every query answers none of them.
+                # merge_card_group). A card matching every query answers none of them.
                 kws = card.get("keywords") or []
-                if len(kws) > _MAX_MERGED_KEYWORDS:
+                if len(kws) > MAX_MERGED_KEYWORDS:
                     unedited = card_origin.matches_index_hash(card)
-                    card["keywords"] = kws[:_MAX_MERGED_KEYWORDS]
+                    card["keywords"] = kws[:MAX_MERGED_KEYWORDS]
                     if unedited:
                         card_origin.stamp_index_hash(card)      # the index's own repair is not an edit by hand
                     if not self._dry_run:
@@ -254,7 +254,7 @@ class BootstrapMixin:
                 if self._card_is_degenerate(card):
                     dead = True
                 else:
-                    entries = _card_file_paths(card)
+                    entries = card_file_paths(card)
                     dead = bool(entries) and all(
                         self._file_entry_is_dead(e, walked_files, walk_root, skip_dirs)
                         for e in entries)
@@ -364,7 +364,7 @@ class BootstrapMixin:
         """Whether one pinned path is something this corpus will never index again.
 
         Deliberately NARROWER than "not in the current walk". A file can be absent from ``walked``
-        for innocent reasons -- an extension outside ``_SOURCE_EXTS``, a path recorded by a run
+        for innocent reasons -- an extension outside ``SOURCE_EXTS``, a path recorded by a run
         rather than discovered by the walk -- and deleting cards for those would throw away real
         learning. So a path counts as dead only when it is positively gone: inside a skipped
         directory, is one of Claude Code's own on-disk state files (see ``is_claude_state_file``:
@@ -447,7 +447,7 @@ class BootstrapMixin:
                 if gate is not None and gate.excludes_dir(current_dir):
                     dirnames[:] = []
                     continue
-                if (current_dir / ".quest-context" / _BOOTSTRAP_META_FILE).is_file() \
+                if (current_dir / ".quest-context" / BOOTSTRAP_META_FILE).is_file() \
                         and not is_merged_store(str(current_dir / ".quest-context")) \
                         and not self.is_own_store(current_dir):
                     found.append(current_dir)
@@ -484,7 +484,7 @@ class BootstrapMixin:
             if [fe.get("path", "") for fe in entries] != list(imported.get("files", [])):
                 return False
             for fe in entries:
-                if fe.get("tfdfidf_v", 0) < _TFDFIDF_VERSION:
+                if fe.get("tfdfidf_v", 0) < TFDFIDF_VERSION:
                     return False
                 p = Path(fe.get("path", ""))
                 if not p.is_absolute() and self._repo_root is not None:
@@ -681,13 +681,13 @@ class BootstrapMixin:
         ``<ancestor>/.quest-context/bootstrap_meta.json``, and returns the FIRST (nearest) match --
         trusting it transitively, same as the downward case trusts a nested match to have already
         reused whatever is beneath IT. This store's own directory is not a match (``is_own_store``).
-        Bounded by ``_MAX_ANCESTOR_WALK_LEVELS`` and stops at the filesystem root either way. Never
+        Bounded by ``MAX_ANCESTOR_WALK_LEVELS`` and stops at the filesystem root either way. Never
         raises; returns ``None`` on any failure or no match.
         """
         try:
             current = walk_root.resolve().parent
-            for _ in range(_MAX_ANCESTOR_WALK_LEVELS):
-                if (current / ".quest-context" / _BOOTSTRAP_META_FILE).is_file() \
+            for _ in range(MAX_ANCESTOR_WALK_LEVELS):
+                if (current / ".quest-context" / BOOTSTRAP_META_FILE).is_file() \
                         and not is_merged_store(str(current / ".quest-context")) \
                         and not self.is_own_store(current) \
                         and not (gate is not None and gate.ancestor_blocked(current)):
@@ -804,7 +804,7 @@ class BootstrapMixin:
         if not self._dry_run and outcome.mounts and not read_store_meta(str(self._cards_dir)):
             # A corpus that mounts stores is itself a store with an identity, even before it has a
             # card of its own: record it, so its mounts (and its own cards, later) have a home.
-            _write_bootstrap_meta(str(self._cards_dir), 0, root=str(walk_root))
+            write_bootstrap_meta(str(self._cards_dir), 0, root=str(walk_root))
         if not self._dry_run and read_store_meta(str(self._cards_dir)):
             from hubofhubs.recall.card_store_identity import update_identity
             update_identity(str(self._cards_dir),
@@ -881,11 +881,11 @@ class BootstrapMixin:
         for card in existing_cards:
             if card.get("id") in {tc.get("id") for tc in topic_cards}:
                 continue
-            covered_elsewhere.update(_card_file_paths(card))
+            covered_elsewhere.update(card_file_paths(card))
         multi_file_new = [tc for tc in topic_cards
-                          if len(_card_file_paths(tc)) >= _MIN_FILES_PER_CARD]
+                          if len(card_file_paths(tc)) >= MIN_FILES_PER_CARD]
         for card in multi_file_new:
-            covered_elsewhere.update(_card_file_paths(card))
+            covered_elsewhere.update(card_file_paths(card))
 
         kept: List[Dict[str, Any]] = []
         thin: Dict[str, int] = {}
@@ -906,9 +906,9 @@ class BootstrapMixin:
         return apply_card_ceilings(kept, existing_cards, max_cards=max_cards, per_folder=max_cards_per_folder())
 
     def _read_discovered(self) -> Dict[str, float]:
-        """The discovered-files record (see ``_DISCOVERED_FILE``). Never raises."""
+        """The discovered-files record (see ``DISCOVERED_FILE``). Never raises."""
         try:
-            data = json.loads((self._cards_dir / _DISCOVERED_FILE).read_text(encoding="utf-8"))
+            data = json.loads((self._cards_dir / DISCOVERED_FILE).read_text(encoding="utf-8"))
             files = data.get("files") if isinstance(data, dict) else None
             return {str(k): float(v) for k, v in files.items()} if isinstance(files, dict) else {}
         except Exception:  # noqa: BLE001
@@ -939,7 +939,7 @@ class BootstrapMixin:
             except OSError:
                 continue
         try:
-            target = self._cards_dir / _DISCOVERED_FILE
+            target = self._cards_dir / DISCOVERED_FILE
             target.parent.mkdir(parents=True, exist_ok=True)
             tmp_fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), prefix=".tmp_disc_",
                                                 suffix=".json")
@@ -954,7 +954,7 @@ class BootstrapMixin:
                 except OSError:
                     pass
         except Exception:  # noqa: BLE001
-            _log.debug("context index: could not write %s", _DISCOVERED_FILE, exc_info=True)
+            _log.debug("context index: could not write %s", DISCOVERED_FILE, exc_info=True)
 
     def prewarm(self, notify: Optional[Callable[[str], None]] = None) -> None:
         """Load the cards and build the scoring index ahead of the first turn. Never raises.
@@ -1048,7 +1048,7 @@ class BootstrapMixin:
 
         return result
 
-    def _read_file_fresh(self, path: str, max_chars: int = _MAX_CARD_REF_ITEM_CHARS) -> str:
+    def _read_file_fresh(self, path: str, max_chars: int = MAX_CARD_REF_ITEM_CHARS) -> str:
         """Read a file's CURRENT content fresh, capped at ``max_chars``. Never raises; "" on failure.
 
         This is the fresh-read path the built-in ``file`` ReferenceResolver uses: a ``file`` content
@@ -1064,7 +1064,7 @@ class BootstrapMixin:
             if not p.exists() or not p.is_file():
                 return ""
             try:
-                if p.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+                if p.stat().st_size > BOOTSTRAP_MAX_BYTES:
                     # Big file: read only the head we need rather than the whole thing.
                     with open(p, "r", encoding="utf-8", errors="replace") as fh:
                         text = fh.read(max_chars + 1)

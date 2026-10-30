@@ -152,7 +152,7 @@ def planner_web_block(web: Any) -> str:
 # words the model wrote, so reading it is structural. Without a note beside it, the rows after the clip are simply
 # absent, and a cheap model reads absence as "no such record" (a clipped list of the person's records, answered as
 # "nothing recorded").
-_CUT_MARKER = re.compile(r"\[(?:\.\.\.)?\s*truncated\]\s*$")
+TRUNCATED_TAIL = re.compile(r"\[(?:\.\.\.)?\s*truncated\]\s*$")
 CUT_READ_NOTE = (
     "[THIS READ WAS CUT at its size limit: what follows the cut was not shown. A fact missing above is NOT "
     "evidence that it does not exist. Read again narrowed (a filter, a time range, only the fields you need) "
@@ -163,7 +163,7 @@ def read_was_cut(obs: Any) -> bool:
     """True when ``obs`` is a read whose text its adapter clipped at a size limit. Never raises."""
     try:
         return (isinstance(obs, dict) and obs.get("kind") in ("read", "query")
-                and bool(_CUT_MARKER.search(str(obs.get("text") or ""))))
+                and bool(TRUNCATED_TAIL.search(str(obs.get("text") or ""))))
     except Exception:  # noqa: BLE001
         return False
 

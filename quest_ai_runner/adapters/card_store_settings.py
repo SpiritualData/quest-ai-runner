@@ -14,7 +14,7 @@ from hubofhubs.recall.card_limit import parse_max_cards
 from hubofhubs.recall.context_bootstrap_support import bootstrap_workers as hub_bootstrap_workers
 from hubofhubs.recall.context_bootstrap_support import flag_enabled, optional_positive_int
 from hubofhubs.recall.card_store_mounts import parse_mount_mode
-from hubofhubs.recall.context_card_ceilings import _MAX_CARDS_PER_FOLDER_DEFAULT, positive_int
+from hubofhubs.recall.context_card_ceilings import MAX_CARDS_PER_FOLDER_DEFAULT, positive_int
 
 from .walk_settings import STORE_DIR_NAME, skip_dirs_from_env
 
@@ -55,7 +55,7 @@ def bootstrap_max_cards() -> Optional[int]:
 def max_cards_per_folder() -> int:
     """``QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER``: topic cards one folder may hold (default 8, ``0`` means no rule)."""
     return positive_int("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", os.getenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER"),
-                        _MAX_CARDS_PER_FOLDER_DEFAULT)
+                        MAX_CARDS_PER_FOLDER_DEFAULT)
 
 
 def skip_nested_repos() -> bool:

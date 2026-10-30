@@ -14,16 +14,16 @@ from hubofhubs.recall import card_limit as limit_mod
 from hubofhubs.recall import card_origin
 from hubofhubs.recall.card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
 from hubofhubs.recall.card_content_render import (
-    dedupe_content as _dedupe_content,
-    normalize_content as _normalize_content,
+    dedupe_content,
+    normalize_content,
     render_card_content,
-    tokenize as _tokenize,
+    tokenize,
 )
 from hubofhubs.recall.card_repository import card_embed_text
 from hubofhubs.recall.background_pacing import Pacer
 from hubofhubs.recall.scope_tags import union_scope_tags
 from ..core.vector_scopes import SeedItems
-from hubofhubs.recall.context_card_extraction import _card_slug, _managed_names, _trim_content_by_recency
+from hubofhubs.recall.context_card_extraction import card_slug, managed_names, trim_content_by_recency
 from .context_card_dedup import _record_summary
 
 # How many cards an edit may be passed on through when the card it was meant for has been moved out and the card
@@ -355,8 +355,8 @@ class CardsMixin:
 
         # The card's own declaration of what its WRITER owns (see the docstring). Read from the
         # loaded card, so only a card that opted in is protected and every other card is untouched.
-        managed_fields = _managed_names(card.get("managed_fields"))
-        managed_items = _managed_names(card.get("managed_items"))
+        managed_fields = managed_names(card.get("managed_fields"))
+        managed_items = managed_names(card.get("managed_items"))
 
         # 0) embedded field edits (name/description/summary). These are part of the embedding text,
         # so changing them re-fingerprints the card and triggers re-embedding on the next sync.
@@ -376,7 +376,7 @@ class CardsMixin:
             if isinstance(seed, str) and seed.strip():
                 card["summary"] = seed.strip()
 
-        content = _normalize_content(card.get("content"))
+        content = normalize_content(card.get("content"))
 
         # 1) removals (a consumer-managed item is never removable through this API)
         if remove:
@@ -387,7 +387,7 @@ class CardsMixin:
         for item_id, new_raw in (replace or []):
             if item_id in managed_items:
                 continue
-            normalized = _normalize_content([new_raw])
+            normalized = normalize_content([new_raw])
             if not normalized:
                 continue
             new_item = normalized[0]
@@ -405,16 +405,16 @@ class CardsMixin:
 
         # 3) additions
         if add:
-            content.extend(_normalize_content(add))
+            content.extend(normalize_content(add))
 
         # 3b) collapse duplicate references (same collection id / file path / note) into one merged
         # item, keeping the existing item's stable id and the newest ts + freshest why, so re-adding
         # a reference across deep runs never bloats the card. Existing content precedes additions, so
         # an existing item keeps its id while picking up the newer ts/why from the re-add.
-        content = _dedupe_content(content)
+        content = dedupe_content(content)
 
         # 4) recency trim + persist
-        card["content"] = _trim_content_by_recency(content)
+        card["content"] = trim_content_by_recency(content)
         card_origin.stamp_created_at(card, loaded if isinstance(loaded, dict) else None)
         self._write_card_atomic(card_id, card, victims)
         return not self._dry_run
@@ -462,7 +462,7 @@ class CardsMixin:
         # every day, and that card, keyed on the whole brief's vocabulary, was then the top match
         # for the next pass of the same thread (self-retrieval, 2026-10-06).
         own_task = str(outcome.get("task_id") or "")
-        return _card_slug(f"thread record {own_task}") if own_task else _card_slug(task_text)
+        return card_slug(f"thread record {own_task}") if own_task else card_slug(task_text)
 
     def _record_inner(self, task_text: str, outcome: Dict[str, Any], victims: Optional[List[str]] = None) -> None:
         # Keywords come from the request's gist, never every word of a composed brief.
@@ -479,7 +479,7 @@ class CardsMixin:
         # A queued run's task text is a brief: its keywords, summary and provenance come from what the
         # run did (response, files), never from the brief.
         gist = str(outcome.get("response") or "") if own_task else task_text
-        card.setdefault("keywords", sorted(_tokenize(decision_excerpt(gist))))
+        card.setdefault("keywords", sorted(tokenize(decision_excerpt(gist))))
         # NOT the raw task text: for a persona run its first 200 characters are scaffolding that
         # is identical across every run (see _record_summary).
         card.setdefault("summary", _record_summary("" if own_task else task_text, outcome,
@@ -538,12 +538,12 @@ class CardsMixin:
         if raw_content:
             if isinstance(raw_content, dict):
                 raw_content = [raw_content]
-            existing_content = _normalize_content(card.get("content"))
-            existing_content.extend(_normalize_content(raw_content))
+            existing_content = normalize_content(card.get("content"))
+            existing_content.extend(normalize_content(raw_content))
             # Collapse duplicate references (same collection id / file path / note) before trimming,
             # so re-recording the same source on a card merges instead of accumulating copies.
-            existing_content = _dedupe_content(existing_content)
-            card["content"] = _trim_content_by_recency(existing_content)
+            existing_content = dedupe_content(existing_content)
+            card["content"] = trim_content_by_recency(existing_content)
 
         # SCOPE TAGS (see core/scope_tags.py): a turn's outcome may carry ``scope_tags`` (derived by
         # the orchestrator from the quest(s) it is scoped to). UNION them onto the card's own

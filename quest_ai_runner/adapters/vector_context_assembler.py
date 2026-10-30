@@ -82,7 +82,7 @@ from ..core.vector_scopes import CARD_SEED_SCOPE
 from hubofhubs.recall.card_content_render import (
     render_card_content,
     render_card_content_blocks,
-    tokenize as _tokenize,
+    tokenize,
 )
 from hubofhubs.recall.reference_resolver import build_resolver_registry
 from hubofhubs.critique.specificity import SpecificityResult, rerank_factor, score_candidates
@@ -798,7 +798,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         collection / conversation data it points at, identically to the keyword arm.
         """
         now = self._clock()
-        task_kws = _tokenize(task_text) if task_text else set()
+        task_kws = tokenize(task_text) if task_text else set()
         parts: List[str] = []
         for hit in hits:
             part_lines = [f"### Vector hit: {hit.id}  (score={hit.score:.3f})"]
@@ -1044,7 +1044,7 @@ class VectorContextAssembler(ContextAssemblerBase):
 
         # --- Card metadata: populate selection info for UI display and transparency ---------
         # Build metadata for each selected vector hit so the orchestrator can emit which cards were chosen.
-        task_kws = _tokenize(task_text) if task_text else set()
+        task_kws = tokenize(task_text) if task_text else set()
         card_metadata: List[Dict[str, Any]] = []
         for h in kept:
             payload = h.payload or {}

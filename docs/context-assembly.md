@@ -127,7 +127,7 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
   content ranker prefers hot sources under its render budget (a cold source is outranked, never
   dropped). The stamp happens AFTER rendering and never appears in the rendered text, so two
   identical turns render byte-identically (prompt-cache prefixes are safe), and it is debounced
-  (`_SOURCE_USAGE_MIN_INTERVAL_SECONDS`) because one turn assembles context several times. Missing
+  (`SOURCE_USAGE_MIN_INTERVAL_SECONDS`) because one turn assembles context several times. Missing
   fields mean "never used": legacy cards need no migration. `conversation`-type items reach this
   same seam through `ClaudeConversationsAdapter`'s cross-session recall learning: see
   [Cross-session recall becomes card-scoped learning](claude-conversations-integration.md#card-scoped-learning-cross-session-recall-joins-the-card-system)

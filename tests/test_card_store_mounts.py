@@ -27,7 +27,7 @@ from hubofhubs.recall import card_store_identity as ident
 from quest_ai_runner.adapters import card_store_fence as fence
 from quest_ai_runner.adapters import card_store_migrate as migrate
 from hubofhubs.recall.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.file_context_store import FileContextStore, _write_bootstrap_meta
+from quest_ai_runner.adapters.file_context_store import FileContextStore, write_bootstrap_meta
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
 
 
@@ -60,7 +60,7 @@ def make_owner(root: Path, cards: List[Dict[str, Any]], *, with_files: bool = Tr
                 target = root / fe["path"]
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text("def f():\n    pass\n", encoding="utf-8")
-    _write_bootstrap_meta(str(cards_dir), len(cards), root=str(root))
+    write_bootstrap_meta(str(cards_dir), len(cards), root=str(root))
     return cards_dir
 
 
@@ -111,7 +111,7 @@ class TestStoreIdentity:
         assert meta["vector_id_scheme"] == ident.SCHEME_QUALIFIED
         assert meta["root"] == str(tmp_path / "a")
         # A later bootstrap pass rewrites the pass keys but never the identity.
-        _write_bootstrap_meta(str(d), 5, root=str(tmp_path / "elsewhere"))
+        write_bootstrap_meta(str(d), 5, root=str(tmp_path / "elsewhere"))
         again = ident.read_meta(str(d))
         assert again["store_id"] == meta["store_id"]
         assert again["root"] == meta["root"], "a bootstrap never moves the recorded root"

@@ -22,7 +22,7 @@ import json
 from pathlib import Path
 
 from hubofhubs.recall.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.file_context_store import _write_bootstrap_meta
+from quest_ai_runner.adapters.file_context_store import write_bootstrap_meta
 
 SERIES_DIR = "backups"
 DOCS_DIR = "docs"
@@ -56,7 +56,7 @@ def write_store(root, cards, recorded_root=None):
             target = root / fe["path"]
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("def f():\n    pass\n", encoding="utf-8")
-    _write_bootstrap_meta(str(cards_dir), len(cards), root=str(recorded_root or root))
+    write_bootstrap_meta(str(cards_dir), len(cards), root=str(recorded_root or root))
     return cards_dir
 
 

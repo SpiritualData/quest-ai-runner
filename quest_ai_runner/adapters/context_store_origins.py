@@ -14,7 +14,7 @@ from hubofhubs.recall.card_store_lock import StoreLock
 NOT_PREPARED = object()      # ``_store_write`` was not told which cold cards may move out: it looks
 from hubofhubs.recall.card_store_mounts import MODE_MOUNT, Mount
 from hubofhubs.recall.card_store_identity import ORIGIN_FIELD, read_meta as read_store_meta, writer_origins
-from hubofhubs.recall.context_bootstrap_support import _card_file_paths
+from hubofhubs.recall.context_bootstrap_support import card_file_paths
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -133,7 +133,7 @@ class OriginsMixin:
         if str(card.get("runner_env_id") or "") != runner_env_id():
             return False
         root = self._effective_root()
-        paths = _card_file_paths(card)
+        paths = card_file_paths(card)
         if not root or not paths:
             return False
         base = Path(root).resolve()

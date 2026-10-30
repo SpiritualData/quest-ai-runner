@@ -53,9 +53,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from esoi import implementation
 from ..core.adapters_bases import ContextAssemblerBase
 from hubofhubs.recall.card_content_render import (
-    MAX_CARD_REF_CHARS as _MAX_CARD_REF_CHARS,
-    MAX_CARD_REFS as _MAX_CARD_REFS,
-    tokenize as _tokenize,
+    MAX_CARD_REF_CHARS,
+    MAX_CARD_REFS,
+    tokenize,
 )
 from hubofhubs.recall import card_limit as card_limit_policy
 from hubofhubs.recall.card_repository import CardRepository, FilesystemCardRepository
@@ -64,25 +64,25 @@ from hubofhubs.recall.card_store_mounts import MODE_MOUNT, Mount, MountedCardRep
 from .card_store_settings import card_mount_mode
 
 from hubofhubs.recall.context_bootstrap_support import (
-    _BOOTSTRAP_META_FILE,
-    _BOOTSTRAP_VERSION,
-    _SOURCE_EXTS,
-    _TFDFIDF_VERSION,
-    _read_bootstrap_meta,
-    _write_bootstrap_meta,
+    BOOTSTRAP_META_FILE,
+    BOOTSTRAP_VERSION,
+    SOURCE_EXTS,
+    TFDFIDF_VERSION,
+    read_bootstrap_meta,
+    write_bootstrap_meta,
 )
 from hubofhubs.recall.context_folder_review import (
-    _FOLDER_REVIEW_FILE,
-    _ai_instruction_files_in,
-    _dir_file_counts,
-    _duplicate_folders,
-    _folder_review,
-    _has_kept_child,
-    _is_excluded_folder,
-    _nested_vcs_dirs,
+    FOLDER_REVIEW_FILE,
+    ai_instruction_files_in,
+    dir_file_counts,
+    duplicate_folders,
+    folder_review,
+    has_kept_child,
+    is_excluded_folder,
+    nested_vcs_dirs,
 )
 from hubofhubs.recall.context_card_extraction import (
-    _RECENCY_BOOST_MAX_DEFAULT,
+    RECENCY_BOOST_MAX_DEFAULT,
 )
 from .context_store_origins import OriginsMixin
 from .context_store_cards import CardsMixin
@@ -189,10 +189,10 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         provider: Any = None,
         model: Optional[str] = None,
         reference_resolvers: Optional[Dict[str, Any]] = None,
-        max_card_refs: int = _MAX_CARD_REFS,
-        max_card_ref_chars: int = _MAX_CARD_REF_CHARS,
+        max_card_refs: int = MAX_CARD_REFS,
+        max_card_ref_chars: int = MAX_CARD_REF_CHARS,
         card_repository: Optional[CardRepository] = None,
-        recency_boost_max: float = _RECENCY_BOOST_MAX_DEFAULT,
+        recency_boost_max: float = RECENCY_BOOST_MAX_DEFAULT,
         quest_folder_map: Optional[Dict[str, str]] = None,
         reuse_nested_cards: Optional[bool] = None,
         mount_mode: Optional[str] = None,

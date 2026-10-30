@@ -33,7 +33,7 @@ def test_a_path_still_in_the_walk_is_alive(tmp_path):
 
 def test_a_file_that_exists_but_the_walk_skipped_is_kept(tmp_path):
     # NARROWNESS MATTERS. A path can be absent from the walk for innocent reasons -- an extension
-    # outside _SOURCE_EXTS, or a path recorded by a RUN rather than discovered by the walk.
+    # outside SOURCE_EXTS, or a path recorded by a RUN rather than discovered by the walk.
     # Deleting those would throw away real learning, so "not walked" alone is never enough.
     (tmp_path / "notes.odt").write_text("real content")
     assert _dead("notes.odt", walked=[], root=tmp_path) is False
@@ -209,20 +209,20 @@ def test_a_dedup_merge_across_new_and_stored_cards_yields_plain_paths():
     raised TypeError: unhashable type: 'dict' -- after all the model work was done, reported as
     "Cards created: 0". It only bites on a RE-bootstrap, which is why a first run looked fine.
     """
-    from hubofhubs.recall.context_bootstrap_support import _merge_card_group, _card_file_paths
+    from hubofhubs.recall.context_bootstrap_support import merge_card_group, card_file_paths
 
     fresh = {"id": "a", "name": "A", "keywords": ["k1"], "files": ["src/a.py"]}
     stored = {"id": "b", "name": "B", "keywords": ["k2"],
               "files": [{"path": "src/b.py", "sha256": "deadbeef"}]}
 
-    merged = _merge_card_group([fresh, stored])
+    merged = merge_card_group([fresh, stored])
     assert merged["files"] == ["src/a.py", "src/b.py"]
     assert all(isinstance(f, str) for f in merged["files"])
     set(merged["files"])          # must not raise
 
-    assert _card_file_paths(stored) == ["src/b.py"]
-    assert _card_file_paths({"files": []}) == []
-    assert _card_file_paths({"files": [{"no_path": 1}, "", "ok.py"]}) == ["ok.py"]
+    assert card_file_paths(stored) == ["src/b.py"]
+    assert card_file_paths({"files": []}) == []
+    assert card_file_paths({"files": [{"no_path": 1}, "", "ok.py"]}) == ["ok.py"]
 
 
 # --- a card's summary must describe the card, not the prompt that made it ---------------------
@@ -271,15 +271,15 @@ def test_a_nameless_card_whose_summary_is_only_scaffolding_is_degenerate():
 def test_merging_cards_does_not_grow_keywords_without_bound():
     # Merges compound: one real store held a card with 2,174 keywords where the prompt asks for
     # 5 to 12. That card matches almost any query and crowds out the ones that actually answer it.
-    from hubofhubs.recall.context_bootstrap_support import _merge_card_group, _MAX_MERGED_KEYWORDS
+    from hubofhubs.recall.context_bootstrap_support import merge_card_group, MAX_MERGED_KEYWORDS
 
     group = [{"id": f"c{i}", "name": f"C{i}", "files": [f"f{i}.py"],
               "keywords": [f"kw{i}_{j}" for j in range(20)]} for i in range(10)]
-    merged = _merge_card_group(group)
-    assert len(merged["keywords"]) <= _MAX_MERGED_KEYWORDS
+    merged = merge_card_group(group)
+    assert len(merged["keywords"]) <= MAX_MERGED_KEYWORDS
     # The representative card's own keywords survive: they are the most on-topic.
     assert merged["keywords"][0] == "kw0_0"
     # A normal-sized merge is untouched.
-    small = _merge_card_group([{"id": "a", "keywords": ["x", "y"], "files": ["a.py"]},
+    small = merge_card_group([{"id": "a", "keywords": ["x", "y"], "files": ["a.py"]},
                                {"id": "b", "keywords": ["y", "z"], "files": ["b.py"]}])
     assert small["keywords"] == ["x", "y", "z"]

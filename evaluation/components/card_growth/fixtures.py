@@ -23,7 +23,7 @@ topic, and two cards are duplicates only when they pin the same files AND name t
 """
 import json
 
-from hubofhubs.recall.context_card_extraction import _path_slug
+from hubofhubs.recall.context_card_extraction import path_slug
 
 OUTER_ROOT, INNER_ROOT = "corpus", "corpus/org"
 INNER_TOPICS = ("poller", "executor", "ledger", "planner", "router", "budget")
@@ -101,7 +101,7 @@ def inflate(passes, surplus):
     """The outer store's cards after ``passes`` copy-mode bootstrap passes over both stores."""
     outer_own, inner_own = own_cards(surplus)
     outer, inner = dict(outer_own), dict(inner_own)
-    outer_ns, inner_ns = _path_slug(OUTER_ROOT), _path_slug(INNER_ROOT)
+    outer_ns, inner_ns = path_slug(OUTER_ROOT), path_slug(INNER_ROOT)
     for _ in range(passes):
         new_outer, new_inner = dict(outer_own), dict(inner_own)
         for c in inner.values():

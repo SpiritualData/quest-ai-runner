@@ -72,14 +72,14 @@ def make_store(root: Path, cards: List[Dict[str, Any]], *, legacy: bool = False)
 
 
 def make_owner_meta(cards_dir: Path, root: Path, count: int, legacy: bool) -> None:
-    from quest_ai_runner.adapters.file_context_store import _write_bootstrap_meta
+    from quest_ai_runner.adapters.file_context_store import write_bootstrap_meta
     if legacy:
         ident.write_meta(str(cards_dir), {"version": 1, "feature_versions": {}, "card_count": count,
                                           "root": str(root)})
         assert ident.ensure_store_id(str(cards_dir))
         assert ident.read_meta(str(cards_dir))["vector_id_scheme"] == "legacy"
     else:
-        _write_bootstrap_meta(str(cards_dir), count, root=str(root))
+        write_bootstrap_meta(str(cards_dir), count, root=str(root))
         assert ident.read_meta(str(cards_dir))["vector_id_scheme"] == "qualified"
 
 
@@ -433,8 +433,8 @@ class TestVectorLocationIdentity:
                               "embedded", "--apply"]) == 0
         rec = ident.vector_location_of(ident.read_meta(str(d)))
         assert rec["location"] == "embedded" and rec["path"] == str(d / "qdrant")
-        from quest_ai_runner.adapters.file_context_store import _write_bootstrap_meta
-        _write_bootstrap_meta(str(d), 1, root=str(tmp_path / "o"))
+        from quest_ai_runner.adapters.file_context_store import write_bootstrap_meta
+        write_bootstrap_meta(str(d), 1, root=str(tmp_path / "o"))
         assert ident.vector_location_of(ident.read_meta(str(d))) == rec
 
     def test_compatibility_rule(self):

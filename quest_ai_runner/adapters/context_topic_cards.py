@@ -9,11 +9,11 @@ import logging
 from typing import Any, Dict, List
 from pathlib import Path
 
-from hubofhubs.recall.context_card_extraction import _discover_areas, _extract_topic_cards
+from hubofhubs.recall.context_card_extraction import discover_areas, extract_topic_cards
 from hubofhubs.recall.context_bootstrap_support import (
-    _CHUNK_SIZE,
-    _run_parallel,
-    _select_representative_files,
+    CHUNK_SIZE,
+    run_parallel,
+    select_representative_files,
 )
 from .card_store_settings import bootstrap_workers
 from .context_card_dedup import _dedup_topic_cards
@@ -45,16 +45,16 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
         # then chunk and discover areas in parallel. This heuristic selects files distinctive
         # within each folder (high within-folder term frequency, penalizing corpus-generic terms),
         # so the LLM sees diverse structure without processing all paths.
-        representative_paths = _select_representative_files(paths, samples_per_folder=3)
-        chunks = [representative_paths[i:i + _CHUNK_SIZE] for i in range(0, len(representative_paths), _CHUNK_SIZE)]
+        representative_paths = select_representative_files(paths, samples_per_folder=3)
+        chunks = [representative_paths[i:i + CHUNK_SIZE] for i in range(0, len(representative_paths), CHUNK_SIZE)]
         _log.info(
             "context index: bootstrap stage 1 — %d representative file(s) from %d total file(s) "
             "across %d chunk(s)",
             len(representative_paths), len(paths), len(chunks),
         )
         areas: List[Dict[str, Any]] = []
-        for result in _run_parallel(
-            [lambda c=chunk: _discover_areas(c, provider, model) for chunk in chunks],
+        for result in run_parallel(
+            [lambda c=chunk: discover_areas(c, provider, model) for chunk in chunks],
             max_workers=bootstrap_workers(),
         ):
             if result:
@@ -68,8 +68,8 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
         # Stage 2: extract topic cards per area in parallel (with sampled snippets).
         raw_cards: List[Dict[str, Any]] = []
         walk_root_path = Path(walk_root).resolve() if walk_root else None
-        for result in _run_parallel(
-            [lambda a=area: _extract_topic_cards(a, allowed, provider, model, walk_root=walk_root_path) for area in areas],
+        for result in run_parallel(
+            [lambda a=area: extract_topic_cards(a, allowed, provider, model, walk_root=walk_root_path) for area in areas],
             max_workers=bootstrap_workers(),
         ):
             if result:

@@ -12,8 +12,8 @@ from typing import List, Dict, Any
 # Add the package to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hubofhubs.recall.context_bootstrap_support import _select_representative_files
-from hubofhubs.recall.context_card_extraction import _extract_file_snippet, _summarize_snippet
+from hubofhubs.recall.context_bootstrap_support import select_representative_files
+from hubofhubs.recall.context_card_extraction import extract_file_snippet, summarize_snippet
 
 
 def generate_mock_files(num_files: int, num_folders: int = 5) -> List[str]:
@@ -42,7 +42,7 @@ def measure_stage1_output(file_paths: List[str]) -> Dict[str, Any]:
     full_tokens = estimate_tokens(full_output)
 
     # Sampled output (with TF-DF-IDF)
-    sampled = _select_representative_files(file_paths, samples_per_folder=3)
+    sampled = select_representative_files(file_paths, samples_per_folder=3)
     sampled_output = "\n".join(sampled)
     sampled_chars = len(sampled_output)
     sampled_tokens = estimate_tokens(sampled_output)
@@ -63,7 +63,7 @@ def measure_stage1_output(file_paths: List[str]) -> Dict[str, Any]:
 def measure_stage2_output(area_files: List[str]) -> Dict[str, Any]:
     """Measure Stage 2 output: paths only vs sampled + snippets + summaries.
 
-    Note: _extract_file_snippet requires actual files to exist, so we simulate
+    Note: extract_file_snippet requires actual files to exist, so we simulate
     with mock snippets instead.
     """
     # Baseline: just file paths (Stage 2 without optimization)
@@ -72,7 +72,7 @@ def measure_stage2_output(area_files: List[str]) -> Dict[str, Any]:
     paths_tokens = estimate_tokens(paths_output)
 
     # With optimization: sample + mock snippets + summaries
-    sampled_files = _select_representative_files(area_files, samples_per_folder=2) if len(area_files) > 5 else area_files
+    sampled_files = select_representative_files(area_files, samples_per_folder=2) if len(area_files) > 5 else area_files
 
     # Simulate file snippets (mock)
     file_entries = []
@@ -85,7 +85,7 @@ def measure_stage2_output(area_files: List[str]) -> Dict[str, Any]:
         else:
             snippet = f'"""Module {fpath}"""\ndef main(): pass'
 
-        summarized = _summarize_snippet(fpath, snippet)
+        summarized = summarize_snippet(fpath, snippet)
         file_entries.append(summarized)
 
     optimized_output = "\n---\n".join(file_entries)
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
 
 def test_bootstrap_workers_follows_the_deployment_parallelism_budget(monkeypatch):
-    from hubofhubs.recall.context_bootstrap_support import _BOOTSTRAP_WORKERS_DEFAULT
+    from hubofhubs.recall.context_bootstrap_support import BOOTSTRAP_WORKERS_DEFAULT
     from quest_ai_runner.adapters.card_store_settings import bootstrap_workers as _bootstrap_workers
 
     # Each worker holds one model call open, and for the subprocess-backed (keyless) provider that
@@ -227,9 +227,9 @@ def test_bootstrap_workers_follows_the_deployment_parallelism_budget(monkeypatch
     # Unset -> the historical default; a garbage value is ignored rather than crashing indexing.
     monkeypatch.delenv("QAR_BOOTSTRAP_WORKERS", raising=False)
     monkeypatch.delenv("QAR_MAX_PARALLEL", raising=False)
-    assert _bootstrap_workers() == _BOOTSTRAP_WORKERS_DEFAULT
+    assert _bootstrap_workers() == BOOTSTRAP_WORKERS_DEFAULT
     monkeypatch.setenv("QAR_MAX_PARALLEL", "not-a-number")
-    assert _bootstrap_workers() == _BOOTSTRAP_WORKERS_DEFAULT
+    assert _bootstrap_workers() == BOOTSTRAP_WORKERS_DEFAULT
 
     # Never zero: a 0 would deadlock the semaphore rather than "disable" the stage.
     monkeypatch.setenv("QAR_MAX_PARALLEL", "0")

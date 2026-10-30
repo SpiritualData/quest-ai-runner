@@ -80,14 +80,14 @@ def _count_indexable_files(corpus: str) -> int:
     from pathlib import Path as _Path
     from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
     from .adapters.walk_settings import effective_skip_dirs
-    from .adapters.file_context_store import _SOURCE_EXTS
+    from .adapters.file_context_store import SOURCE_EXTS
     root = _Path(corpus).resolve()
     skip = effective_skip_dirs(root)
     total = 0
     for dirpath, dirnames, filenames in os.walk(root):
         prune_dirnames(dirnames, current=_Path(dirpath), base_skip=skip)
         for fn in filenames:
-            if not is_claude_state_file(fn) and _Path(fn).suffix.lower() in _SOURCE_EXTS:
+            if not is_claude_state_file(fn) and _Path(fn).suffix.lower() in SOURCE_EXTS:
                 total += 1
     return total
 

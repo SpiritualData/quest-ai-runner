@@ -17,27 +17,27 @@ from datetime import datetime, timezone
 from hubofhubs.ports.context import AssembledContext
 from hubofhubs.recall.background_pacing import Pacer
 from hubofhubs.recall.card_content_render import (
-    content_item_text as _content_item_text,
+    content_item_text,
     filter_content_by_time_range,
-    mark_items_used as _mark_items_used,
-    normalize_content as _normalize_content,
+    mark_items_used,
+    normalize_content,
     render_card_content_blocks,
-    tokenize as _tokenize,
+    tokenize,
 )
 from hubofhubs.recall import card_origin
 from hubofhubs.recall.walk import prune_dirnames
 from .walk_settings import effective_skip_dirs
 from hubofhubs.recall.scope_tags import scope_tags_allow
 from hubofhubs.recall.context_card_extraction import (
-    _LINKED_FOLDER_BOOST,
-    _RECENCY_BOOST_HALF_LIFE_DAYS,
-    _RECENCY_BOOST_USAGE_CAP,
-    _SOURCE_FILE_WEIGHT,
-    _SOURCE_USAGE_MIN_INTERVAL_SECONDS,
-    _card_covered_paths,
-    _card_display_title,
+    LINKED_FOLDER_BOOST,
+    RECENCY_BOOST_HALF_LIFE_DAYS,
+    RECENCY_BOOST_USAGE_CAP,
+    SOURCE_FILE_WEIGHT,
+    SOURCE_USAGE_MIN_INTERVAL_SECONDS,
+    card_covered_paths,
+    card_display_title,
 )
-from hubofhubs.recall.context_bootstrap_support import _BOOTSTRAP_MAX_BYTES, _SOURCE_EXTS, _run_parallel
+from hubofhubs.recall.context_bootstrap_support import BOOTSTRAP_MAX_BYTES, SOURCE_EXTS, run_parallel
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -74,7 +74,7 @@ class AssemblyMixin:
         card up the RANKING, used ONLY after the confidence gate has passed on the un-boosted score.
 
         Blends two real signals, each normalized to 0..1: usage (``usage_count`` saturating at
-        ``_RECENCY_BOOST_USAGE_CAP``) and recency (the newest content ``ts``, decayed by a 30-day
+        ``RECENCY_BOOST_USAGE_CAP``) and recency (the newest content ``ts``, decayed by a 30-day
         half-life). With no usage and no timestamped content the factor is exactly 1.0 (no effect),
         so cards without history rank purely on relevance. Returns 1.0 when the boost is disabled
         (max == 0.0). Never raises.
@@ -83,8 +83,8 @@ class AssemblyMixin:
             return 1.0
         try:
             usage = float(card.get("usage_count", 0) or 0.0)
-            usage_norm = (min(usage, _RECENCY_BOOST_USAGE_CAP) / _RECENCY_BOOST_USAGE_CAP
-                          if _RECENCY_BOOST_USAGE_CAP > 0 else 0.0)
+            usage_norm = (min(usage, RECENCY_BOOST_USAGE_CAP) / RECENCY_BOOST_USAGE_CAP
+                          if RECENCY_BOOST_USAGE_CAP > 0 else 0.0)
             content = card.get("content") or []
             ts_values = [float(it.get("ts") or 0.0) for it in content if isinstance(it, dict)]
             newest = max(ts_values) if ts_values else 0.0
@@ -92,7 +92,7 @@ class AssemblyMixin:
             if newest > 0.0:
                 now = datetime.now(timezone.utc).timestamp()
                 age_days = max(0.0, (now - newest) / 86400.0)
-                recency_norm = 0.5 ** (age_days / _RECENCY_BOOST_HALF_LIFE_DAYS)
+                recency_norm = 0.5 ** (age_days / RECENCY_BOOST_HALF_LIFE_DAYS)
             signal = 0.5 * usage_norm + 0.5 * recency_norm   # 0..1
             return 1.0 + self._recency_boost_max * signal
         except Exception:  # noqa: BLE001
@@ -186,7 +186,7 @@ class AssemblyMixin:
         weights: Dict[str, float] = {}
 
         def _add(text: str, w: float) -> None:
-            for t in _tokenize(text):
+            for t in tokenize(text):
                 if w > weights.get(t, 0.0):
                     weights[t] = w
 
@@ -223,8 +223,8 @@ class AssemblyMixin:
         # relay config live" reaches a card that points at ``config/relay.toml`` even though the
         # card pins no files of its own. Structural path components (``src``, ``lib``) are common
         # across cards, so IDF damps them on its own; no extra down-weighting is needed.
-        for item in _normalize_content(card.get("content")):
-            _add(_content_item_text(item), 2.0)
+        for item in normalize_content(card.get("content")):
+            _add(content_item_text(item), 2.0)
 
         return weights
 
@@ -316,10 +316,10 @@ class AssemblyMixin:
                     if fn.startswith("."):
                         continue
                     fpath = Path(dirpath) / fn
-                    if fpath.suffix not in _SOURCE_EXTS:
+                    if fpath.suffix not in SOURCE_EXTS:
                         continue
                     try:
-                        if fpath.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+                        if fpath.stat().st_size > BOOTSTRAP_MAX_BYTES:
                             continue
                         text = fpath.read_text(encoding="utf-8", errors="replace")
                         matching = [ln.rstrip() for ln in text.splitlines() if rx.search(ln)]
@@ -358,7 +358,7 @@ class AssemblyMixin:
     def _assemble_inner(self, task_text: str, *,
                         meta: Optional[Dict[str, Any]] = None,
                         read_only: bool = False) -> AssembledContext:
-        task_kws = _tokenize(task_text)
+        task_kws = tokenize(task_text)
         if not task_kws and not (meta or {}).get("priority_card_ids"):
             return AssembledContext()
 
@@ -456,12 +456,12 @@ class AssemblyMixin:
             tw = card_weight_maps[cid]
             base_score = sum(tw[t] * _idf(t) for t in task_kws if t in tw)
             # Apply test-file penalty.
-            card_weight = float(card.get("weight", _SOURCE_FILE_WEIGHT))
+            card_weight = float(card.get("weight", SOURCE_FILE_WEIGHT))
             score = base_score * card_weight
-            # QUEST-FOLDER BOOST (pre-gate; see _LINKED_FOLDER_BOOST for why this differs from the
+            # QUEST-FOLDER BOOST (pre-gate; see LINKED_FOLDER_BOOST for why this differs from the
             # post-gate recency/usage boost below).
             if folder_prefix and self._card_pins_folder(card, folder_prefix):
-                score *= _LINKED_FOLDER_BOOST
+                score *= LINKED_FOLDER_BOOST
             # CONFIDENCE GATE: only a match that clears the threshold is injected. A weak match
             # contributes NOTHING, so an uncertain query yields an empty context view and the run
             # falls back to plain Claude Code (never worse). This is what makes the layer dominate:
@@ -510,8 +510,8 @@ class AssemblyMixin:
                 candidate_dicts = [
                     {
                         "id": c.get("id", ""),
-                        "title": _card_display_title(c),
-                        "files": _card_covered_paths(c),
+                        "title": card_display_title(c),
+                        "files": card_covered_paths(c),
                         "adapter": "keyword",
                     }
                     for c in idf_candidates
@@ -554,7 +554,7 @@ class AssemblyMixin:
         if time_range and top_cards:
             time_filtered_cards: List[Dict[str, Any]] = []
             for card in top_cards:
-                content = _normalize_content(card.get("content"))
+                content = normalize_content(card.get("content"))
                 if not content:
                     # No dated content to filter on (a file-only card): keep it as-is.
                     time_filtered_cards.append(card)
@@ -598,7 +598,7 @@ class AssemblyMixin:
         fp_results: Dict[tuple, Dict[str, Any]] = {}  # (ci, fi) -> {"sha256": ...}
         if fp_jobs:
             n_workers = min(8, len(fp_jobs))
-            raw = _run_parallel(
+            raw = run_parallel(
                 [lambda ci=ci, fi=fi, fe=fe: (
                     (ci, fi), {"sha256": self._current_sha(fe.get("path", ""), fe)})
                  for ci, fi, fe in fp_jobs],
@@ -617,9 +617,9 @@ class AssemblyMixin:
             card_id = card.get("id", "")
             card_ids.append(card_id)
             # A learned card has no ``summary``: its title is its name/description (see
-            # _card_display_title). Without this it rendered as "(no summary)" and the worker was
+            # card_display_title). Without this it rendered as "(no summary)" and the worker was
             # handed a headless block of references.
-            summary = _card_display_title(card) or "(no summary)"
+            summary = card_display_title(card) or "(no summary)"
             # Use the pre-sorted file list (mtime descending = most recently modified first).
             files = card.get("_sorted_files", card.get("files", []))
 
@@ -690,7 +690,7 @@ class AssemblyMixin:
                         try:
                             for entry in sorted(dir_abs.iterdir()):
                                 if (entry.is_file()
-                                        and entry.suffix in _SOURCE_EXTS
+                                        and entry.suffix in SOURCE_EXTS
                                         and not entry.name.startswith(".")):
                                     rel = str(entry.relative_to(self._repo_root))
                                     if rel not in pinned_paths:
@@ -752,7 +752,7 @@ class AssemblyMixin:
             else:
                 # Pinned files first, then the card's file REFERENCES: a learned card pins no
                 # files, so without the references it would report covering nothing.
-                display_files = _card_covered_paths(card, limit=3)
+                display_files = card_covered_paths(card, limit=3)
                 relevance_score = idf_score_map.get(card_id, 0.0) / _max_idf
             # Structured content ITEMS (id/type/why/locator/text/preview/pointer_eligible) resolved
             # FRESH, the same blocks that fed this card's view lines. The consolidating filter selects
@@ -766,7 +766,7 @@ class AssemblyMixin:
             )
             card_metadata.append({
                 "id": card_id,
-                "title": _card_display_title(card),
+                "title": card_display_title(card),
                 "relevance_score": relevance_score,
                 "file_count": len(card.get("files", [])),
                 "files": display_files,
@@ -911,9 +911,9 @@ class AssemblyMixin:
         card = loaded
         changed = False
         if item_ids:
-            content = _normalize_content(card.get("content"))
-            if content and _mark_items_used(content, item_ids, now=now,
-                                            min_interval=_SOURCE_USAGE_MIN_INTERVAL_SECONDS):
+            content = normalize_content(card.get("content"))
+            if content and mark_items_used(content, item_ids, now=now,
+                                            min_interval=SOURCE_USAGE_MIN_INTERVAL_SECONDS):
                 card["content"] = content
                 changed = True
         if file_paths:
@@ -924,7 +924,7 @@ class AssemblyMixin:
                     prev = float(fe.get("last_used_ts") or 0.0)
                 except (TypeError, ValueError):
                     prev = 0.0
-                if (now - prev) < _SOURCE_USAGE_MIN_INTERVAL_SECONDS:
+                if (now - prev) < SOURCE_USAGE_MIN_INTERVAL_SECONDS:
                     continue  # same use, already stamped moments ago (see mark_items_used)
                 fe["last_used_ts"] = now
                 try:

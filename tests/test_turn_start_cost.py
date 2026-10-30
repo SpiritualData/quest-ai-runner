@@ -120,7 +120,7 @@ def test_current_sha_reads_nothing_when_mtime_matches(tmp_path):
 
 
 def test_conversation_scan_skips_library_dirs_but_finds_real_ones(tmp_path):
-    from hubofhubs.recall.conversation_format import _find_conversation_dirs
+    from hubofhubs.recall.conversation_format import find_conversation_dirs
 
     (tmp_path / "app" / ".claude").mkdir(parents=True)
     (tmp_path / "notes" / "conversations").mkdir(parents=True)
@@ -128,7 +128,7 @@ def test_conversation_scan_skips_library_dirs_but_finds_real_ones(tmp_path):
     (tmp_path / "web" / "node_modules" / "lib" / ".claude").mkdir(parents=True)
     (tmp_path / "venv" / "lib" / "site-packages" / "sdk" / "conversations").mkdir(parents=True)
 
-    found = {p.relative_to(tmp_path).as_posix() for p in _find_conversation_dirs(tmp_path)}
+    found = {p.relative_to(tmp_path).as_posix() for p in find_conversation_dirs(tmp_path)}
     assert found == {"app/.claude", "notes/conversations", ".tool/conversations"}
 
 
@@ -154,13 +154,13 @@ def test_reasoning_hint_reaches_only_providers_that_take_it():
 def test_startup_refresh_is_skipped_when_the_store_was_refreshed_recently(tmp_path, monkeypatch):
     from quest_ai_runner import config as cfgmod
     from quest_ai_runner.adapters.file_context_store import (
-        _TFDFIDF_VERSION, _write_bootstrap_meta,
+        TFDFIDF_VERSION, write_bootstrap_meta,
     )
 
     cards = tmp_path / "cards"
     cards.mkdir()
     (cards / "some-card.json").write_text('{"id": "some-card"}', encoding="utf-8")
-    _write_bootstrap_meta(str(cards), 1, feature_versions={"tfdfidf": _TFDFIDF_VERSION})
+    write_bootstrap_meta(str(cards), 1, feature_versions={"tfdfidf": TFDFIDF_VERSION})
     monkeypatch.setenv("QAR_REFRESH_MIN_INTERVAL_SECONDS", "1800")
 
     def run():
@@ -266,13 +266,13 @@ def test_two_processes_starting_together_refresh_the_same_folder_once(tmp_path, 
 
     from quest_ai_runner import config as cfgmod
     from quest_ai_runner.adapters.file_context_store import (
-        _TFDFIDF_VERSION, _write_bootstrap_meta,
+        TFDFIDF_VERSION, write_bootstrap_meta,
     )
 
     cards = tmp_path / "cards"
     cards.mkdir()
     (cards / "some-card.json").write_text('{"id": "some-card"}', encoding="utf-8")
-    _write_bootstrap_meta(str(cards), 1, feature_versions={"tfdfidf": _TFDFIDF_VERSION})
+    write_bootstrap_meta(str(cards), 1, feature_versions={"tfdfidf": TFDFIDF_VERSION})
     monkeypatch.setenv("QAR_REFRESH_MIN_INTERVAL_SECONDS", "1800")
 
     inside = threading.Event()

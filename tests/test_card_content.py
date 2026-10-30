@@ -18,7 +18,7 @@ from typing import Any, Dict
 import pytest
 
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.recall.context_card_extraction import _trim_content_by_recency
+from hubofhubs.recall.context_card_extraction import trim_content_by_recency
 from hubofhubs.ports.context import AssembledContext
 
 
@@ -66,7 +66,7 @@ class TestContentHelpers:
     def test_trim_keeps_newest_in_original_order(self):
         items = [{"id": f"n{i}", "type": "note", "locator": {}, "ts": float(i), "why": ""}
                  for i in range(5)]
-        kept = _trim_content_by_recency(items, max_items=3)
+        kept = trim_content_by_recency(items, max_items=3)
         assert [it["id"] for it in kept] == ["n2", "n3", "n4"]  # newest 3, original order
 
 
