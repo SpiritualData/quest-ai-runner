@@ -447,9 +447,13 @@ class Poller(PassesMixin, SyncMixin):
         if outcome is not None:
             if outcome.ok:
                 self.client.report_done(task_id, outcome.text)
-            elif outcome.status is ToolStatus.HELD:
-                # Waiting for a person's approval: neither done nor failed.
+            elif outcome.status is ToolStatus.HELD and outcome.decision_id:
+                # Waiting for a person's approval on an ask they can resolve: neither done nor failed.
                 self.client.report_needs_you(task_id, outcome.text, outcome.decision_id)
+            elif outcome.status is ToolStatus.HELD:
+                # Held with no ask to resolve (a draft saved for review, a proposal Quest queued): a needs_you with
+                # no decision would park the task, and the workflow step, forever. The action ran; say it is held.
+                self.client.report_done(task_id, outcome.text)
             else:
                 self.client.report_failed(task_id, outcome.text)
         log.info("task %s -> requested action %s", task_id,

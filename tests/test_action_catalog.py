@@ -215,6 +215,9 @@ class ReportingClient:
     def report_failed(self, task_id, result, session_id=None):
         self.reports.append(("failed", task_id, result))
 
+    def report_needs_you(self, task_id, result, decision_id, session_id=None):
+        self.reports.append(("needs_you", task_id, result, decision_id))
+
     def publish_action_catalog(self, owner_type, owner_id, publisher_id, actions, **kw):
         self.published.append((owner_type, owner_id, [a["action_id"] for a in actions], kw))
         return {"action_count": len(actions)}
@@ -238,6 +241,25 @@ def test_the_poller_runs_a_requested_action_directly_and_reports_done(tmp_path, 
     assert poller._handle_one(task) == "task_1"
     assert client.reports == [("done", "task_1", "send_mail ok")]
     assert send.calls[0][0] == {"subject": "Hi"}
+
+
+def held_action(name, data):
+    action = spec(name, parameters={"type": "object", "properties": {}})
+    action.handler = lambda args, ctx: ToolResult(ok=False, status="held", text=f"{name} waits for approval", data=data)
+    return action
+
+
+def test_a_held_action_with_a_decision_asks_the_person_and_one_without_is_reported_done_with_the_held_text(tmp_path):
+    """needs_you is a parked state a person must resolve, so it needs the ask they resolve it on. An email draft or a blocked
+    strategy has no decision id: parking it forever would stall the workflow step, so the task reports done with the held text."""
+    client = ReportingClient()
+    poller = poller_with(tmp_path, ToolRegistry([held_action("ask_it", {"decision_id": "dec_7"}), held_action("draft_it", {"draft_id": "d1"}),
+                                                  held_action("block_it", {"decision_id": None})]), client)
+    for name in ("ask_it", "draft_it", "block_it"):
+        poller._handle_one(task_for("tool", name, {}, text="x", status="queued"))
+    assert client.reports == [("needs_you", "task_1", "ask_it waits for approval", "dec_7"),
+                              ("done", "task_1", "draft_it waits for approval"),
+                              ("done", "task_1", "block_it waits for approval")]
 
 
 def test_the_poller_reports_failure_for_an_action_it_cannot_run(tmp_path):

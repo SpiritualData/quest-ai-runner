@@ -4,7 +4,7 @@ A task Quest queues for a published action carries ``requested_action``:
 ``{publisher, kind, name, action_id, args}`` (see ``runner.action_catalog`` for what is published).
 This module calls exactly that tool or connector operation with exactly those arguments and returns
 the outcome. There is no planner in between, so the step does what it says and nothing else. The
-poller reports the outcome (done, failed, or needs_you when it is held for a person's approval) through the usual task report calls.
+poller reports the outcome (done, failed, or needs_you when it is held for a person's approval on an ask; a held action with no ask reports done with the held text) through the usual task report calls.
 """
 from __future__ import annotations
 
