@@ -128,6 +128,12 @@ class PlanDecision:
     # own structured declaration, never a reading of its prose; see the pending-read gate in
     # ``orchestrator_run_loop``).
     pending_read: List[Dict[str, Any]] = field(default_factory=list)
+    # THE FACTS THIS DECISION RESTS ON, declared by the planner on the call it already makes (zero extra
+    # LLM calls): each fact in CONTEXT and GATHERED that bears on the request, as a short quote with its
+    # source. The planner is the one reader that sees the newest reads in full beside the request, so what it
+    # lists is carried on: appended to a deep brief (a change must respect a stored constraint the code
+    # writer never read) and shown to the answer (which reads every gathered page of a long turn).
+    facts_read: List[str] = field(default_factory=list)
 
 
 # ``DeepResult.launch_problem`` values.

@@ -195,7 +195,7 @@ def test_strip_schema_descriptions_keeps_the_contract_and_drops_the_prose():
     assert props["action"]["enum"] == ["read", "answer", "deep", "confirm", "clarify"]
     # user_intent joined the required set when the escalation nets stopped reading the user's
     # words with a regex and started honoring the planner's own verdict.
-    assert stripped["input_schema"]["required"] == ["action", "rationale", "user_intent", "pending_read"]
+    assert stripped["input_schema"]["required"] == ["action", "rationale", "user_intent", "pending_read", "facts_read"]
     assert props["model_tier"]["enum"] == ["haiku", "sonnet", "opus", None]
     assert "reads" in props and "deferred_deep" in props
 

@@ -249,10 +249,15 @@ DECIDE_TOOL: Dict[str, Any] = {
             # opened. Honored structurally by the loop (see ``PlanDecision.pending_read``). The
             # rubric at the top of both planner profiles states it, so the schema stays bare.
             "pending_read": {"type": "array", "items": {"type": "object"}},
+            # What the planner found in CONTEXT and GATHERED that bears on the request, one short
+            # quote with its source each. Honored structurally (see ``PlanDecision.facts_read``):
+            # appended to a deep brief, carried to the answer. The rubric states it, so the schema
+            # stays bare.
+            "facts_read": {"type": "array", "items": {"type": "string"}},
         },
         # REQUIRED, like card_thread: an optional field is one a model quietly omits, and every
         # omission costs an intent-judge call on an answer turn.
-        "required": ["action", "rationale", "user_intent", "pending_read"],
+        "required": ["action", "rationale", "user_intent", "pending_read", "facts_read"],
     },
 }
 

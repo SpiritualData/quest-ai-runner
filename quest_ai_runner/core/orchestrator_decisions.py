@@ -61,8 +61,30 @@ def clean_read_specs(raw: Any, cfg: OrchestratorConfig, *, tools_enabled: bool =
     return clean_reads
 
 
+#: How many facts, and how many characters of each, a planner's ``facts_read`` keeps.
+MAX_FACTS_READ = 8
+MAX_FACT_CHARS = 240
+FACTS_BRIEF_HEAD = "FACTS FOUND IN THIS TURN'S READS (the work must respect every one):"
+FACTS_ANSWER_HEAD = "--- FACTS FOUND IN WHAT WAS READ (state those that bear on the question) ---"
+
+
+def clean_facts(raw: Any) -> List[str]:
+    """The usable facts in a planner's ``facts_read``: non-empty strings, clipped, deduplicated, bounded."""
+    out: List[str] = []
+    for f in (raw if isinstance(raw, list) else []):
+        text = " ".join(f.split())[:MAX_FACT_CHARS] if isinstance(f, str) else ""
+        if text and text not in out:
+            out.append(text)
+    return out[:MAX_FACTS_READ]
+
+
+def facts_block(head: str, facts: List[str]) -> str:
+    return head + "\n" + "\n".join(f"- {f}" for f in facts)
+
+
 def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
-                       tools_enabled: bool = False, web_enabled: bool = False) -> PlanDecision:
+                       tools_enabled: bool = False, web_enabled: bool = False,
+                       user_message: str = "") -> PlanDecision:
     # A provider's structured output is not guaranteed to be a dict: some models/SDKs return a LIST
     # (e.g. multiple tool calls, or a JSON array). Coerce to a dict so a stray shape degrades to a
     # safe "answer" instead of raising 'list' object has no attribute 'get' from the planner.
@@ -202,11 +224,23 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
     else:
         confidence = None
 
+    # THE FACTS the decision rests on travel with the work it starts: a stored constraint the planner
+    # read must reach the code writer's brief, which otherwise holds only what the planner chose to restate
+    # (a brief that said "work out the weekly distance from the log" and not "no running for ten days").
+    facts_read = clean_facts(raw.get("facts_read"))
+    deep_brief = raw.get("deep_brief") or None
+    if facts_read:
+        block = facts_block(FACTS_BRIEF_HEAD, facts_read)
+        if action == "deep":
+            deep_brief = f"{deep_brief or user_message}\n\n{block}".strip()
+        if deferred_deep is not None:
+            deferred_deep["brief"] = f"{deferred_deep.get('brief') or user_message}\n\n{block}".strip()
+
     return PlanDecision(
         action=action,
         reads=clean_reads,
         goal=raw.get("goal") or None,
-        deep_brief=raw.get("deep_brief") or None,
+        deep_brief=deep_brief,
         confirm_question=raw.get("confirm_question") or None,
         model_tier=tier,
         deep_difficulty=normalize_difficulty(raw.get("deep_difficulty")),
@@ -231,6 +265,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         confidence=confidence,
         user_intent=normalize_user_intent(raw.get("user_intent")),
         pending_read=pending_read,
+        facts_read=facts_read,
     )
 
 

@@ -87,10 +87,12 @@ part that is still missing, and say plainly what you could not check rather than
 Set `act_declined` true only when you choose "answer" for a message that asks you to act because
 what you read shows it cannot or should not go ahead as asked; the reply then states that fact and
 the nearest option that works, which is the whole response. False in every other case.
-ALWAYS set `pending_read`: the read specs (same shape as `reads`) for anything you have located
-but not opened that your answer depends on, such as a file a listing or search just showed. A
-refused or unreachable path does not count. Empty when you are reading this step or could answer
-from content you already hold. Choose "answer" only with it empty.
+ALWAYS set `pending_read`: read specs (same shape as `reads`) for anything you located but have
+not opened that your answer depends on, such as a file a listing just showed; a refused path does
+not count. Empty when you are reading this step or hold the content. Choose "answer" only with it empty.
+ALWAYS set `facts_read`: each fact in CONTEXT and GATHERED that bears on this request, as a short
+quote with its source (a note, an entry, a date, a stored constraint), or empty. The reply and any
+change must respect all of them.
 """
 
 # Fresh, GENERAL boundary examples. They exist because the four hardest calls above are hard in
@@ -485,15 +487,12 @@ TAIL_FRAME = """\
 {user_message}
 
 --- RECENT TRANSCRIPT (prior completed exchanges, most recent last) ---
-NOTE: The transcript shows COMPLETED PRIOR WORK. The USER'S MESSAGE above is the NEW, CURRENT
-REQUEST, and it is the LATEST thing the person said, so it TAKES PRIORITY. Where it disagrees with,
-redirects, narrows or replaces an earlier request in the transcript, follow the latest message and
-drop the earlier reading of what to do. Carry on with an earlier request ONLY where it is not yet
-completed AND nothing later contradicts it. Work the transcript shows as already done IS done: do
-not run it again, and if they are asking about it, say what it produced. EXCEPTION: when the message
-is a DIRECT FOLLOW-UP about what you JUST said (e.g. "what's the filepath?", "which one?", "say that
-again"), the transcript is exactly where the answer lives -- use it and answer from it instead of
-re-searching the corpus.
+NOTE: The transcript is COMPLETED PRIOR WORK. The USER'S MESSAGE above is the NEW request and takes
+priority: where it redirects, narrows or replaces an earlier request, follow it. Continue an earlier
+request ONLY where it is not yet completed AND nothing later contradicts it. Work the transcript
+shows as done IS done: do not run it again; if they ask about it, say what it produced. A DIRECT
+FOLLOW-UP about what you JUST said ("which one?", "say that again") is answered from the transcript,
+not by re-searching the corpus.
 {transcript}
 
 --- CONTEXT (compact; LOCATES content, does NOT replace reading it) ---

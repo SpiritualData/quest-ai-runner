@@ -18,7 +18,8 @@ from .orchestrator_decide_tool import (
     USER_INTENT_HOLD_OFF,
     own_escalation_adds_nothing,
 )
-from .orchestrator_decisions import _clarify_question_text, _truncate_goal, user_ordered_work
+from .orchestrator_decisions import (FACTS_ANSWER_HEAD, _clarify_question_text, _truncate_goal, facts_block,
+                                     user_ordered_work)
 from .orchestrator_text import _answer_describes_unexecuted_work
 from .orchestrator_types import OrchestratorResult
 from .overseer import OverseerSignal
@@ -142,6 +143,11 @@ class RunAnswerMixin:
             if rs.plan.rationale and rs.plan.action == "answer":
                 planner_block = f"--- PLANNER ANALYSIS ---\n{rs.plan.rationale}"
                 cv = (cv + "\n\n" + planner_block if cv else planner_block)
+            # The facts the planner itself listed from the reads (``facts_read``): the answerer reads
+            # every gathered page of a long turn, the planner listed the ones that bear on the request.
+            if rs.plan.facts_read and rs.plan.action == "answer":
+                facts = facts_block(FACTS_ANSWER_HEAD, rs.plan.facts_read)
+                cv = (cv + "\n\n" + facts if cv else facts)
             return cv
 
         # Cap/budget fallback: still in read mode -> best-effort answer or escalate to deep.
