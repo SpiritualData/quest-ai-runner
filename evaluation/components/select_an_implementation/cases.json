@@ -9,7 +9,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "AnthropicProvider",
+    "cls": "anthropic",
     "error": null
    }
   }
@@ -24,7 +24,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "GeminiProvider",
+    "cls": "gemini",
     "error": null
    }
   }
@@ -39,7 +39,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "OpenAIProvider",
+    "cls": "openai",
     "error": null
    }
   }
@@ -54,7 +54,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "DeepSeekProvider",
+    "cls": "deepseek",
     "error": null
    }
   }
@@ -84,7 +84,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "GeminiProvider",
+    "cls": "gemini",
     "error": null
    }
   }
@@ -163,7 +163,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "GeminiProvider",
+    "cls": "gemini",
     "error": null
    }
   }
@@ -181,7 +181,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "OpenAIProvider",
+    "cls": "openai",
     "error": null
    }
   }
@@ -196,7 +196,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "MultiProvider",
+    "cls": "routed",
     "error": null
    }
   }
@@ -230,7 +230,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "MultiProvider",
+    "cls": "routed",
     "error": null
    }
   },
@@ -245,7 +245,7 @@
   },
   "expect": {
    "eq": {
-    "cls": "MultiProvider",
+    "cls": "routed",
     "default": "multi_provider",
     "error": null
    }
@@ -355,7 +355,7 @@
   "expect": {
    "eq": {
     "cls": null,
-    "error": "ValueError"
+    "error": "SelectionError"
    }
   }
  },
@@ -370,7 +370,7 @@
   "expect": {
    "eq": {
     "cls": null,
-    "error": "ValueError"
+    "error": "SelectionError"
    }
   },
   "heldout": true
