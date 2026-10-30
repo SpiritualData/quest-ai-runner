@@ -3902,3 +3902,9 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,qar_overall,recorded_rows,9,7,7/9,0/0,0,0,0,0.0,4.6,8aba047,6d7d1f64,none,,,
 2026-10-30,end_to_end,qar_live,1,1,1/1,0/0,10,90376,4841,0.0671,45.2,3c44407,df4c3439,claude-code-subscription,,only:E2E-WEBGOAL-01,0.737
 2026-10-30,end_to_end,qar_live,1,1,1/1,0/0,8,49670,3458,0.0926,43.3,3c44407,df4c3439,claude-code-subscription,,only:E2E-SEQ-01,0.7418
+2026-10-30,end_to_end,qar_live,1,1,1/1,0/0,13,113142,5206,0.1057,48.7,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-REFUSE-01,0.7282
+2026-10-30,end_to_end,qar_live,1,1,1/1,0/0,3,21069,1098,0.0048,11.8,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-CONSENT-01,0.9561
+2026-10-30,end_to_end,qar_live,1,0,0/1,0/0,7,55618,4476,0.1204,39.5,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-QUEST-01,0.0512
+2026-10-30,end_to_end,qar_live,1,0,0/1,0/0,7,50640,4778,0.0718,38.8,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-QUEST-10,0.053
+2026-10-30,end_to_end,qar_live,1,1,1/1,0/0,7,41925,1983,0.0439,26.0,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-QUEST-13,0.8033
+2026-10-30,end_to_end,qar_live,1,0,0/1,0/0,7,50337,2526,0.0984,29.8,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-QUEST-12,0.0755
