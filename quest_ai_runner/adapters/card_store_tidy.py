@@ -407,7 +407,8 @@ class RepositoryTidy:
             now = self.current(entry["key"], cards.get(entry["key"]), run, "the card")
             if now is None:
                 continue
-            joins = entry["reason"] == "item-id" or bool(entry.get("joins"))
+            # A re-keyed card moves whole, so what makes it protected (notes, usage) travels with it.
+            joins = entry["reason"] == "item-id" or bool(entry.get("joins")) or bool(entry.get("becomes"))
             if is_protected(now) and not joins:
                 run.skip(f"it gained something since the plan: {is_protected(now)}")
                 continue
@@ -442,7 +443,8 @@ class RepositoryTidy:
                     run.failed = f"the card {becomes} could not be written"
                     return
                 written = self.repo.read(becomes)
-                self.journal(run, {"op": "create", "key": becomes, "after": card_revision(written or card)})
+                self.journal(run, {"op": "create", "key": becomes, "after": card_revision(written or card),
+                                   "rekey_of": entry["key"] if entry["reason"] == "compounded" else ""})
                 run.created += 1
                 self.changed(lock)
             if not self.remove(entry["key"], entry["reason"]):
@@ -548,6 +550,11 @@ class RepositoryTidy:
                 result.skip("changed since the tidy, so it was left as it is")
                 return
             if op == "create":
+                origin = str(line.get("rekey_of") or "")
+                if origin and card_origin.card_id_problem(origin):
+                    result.skip("a re-keyed card stays: the id it came from is refused by every writer, so "
+                                "taking this one away would leave no card (the original is in the export)")
+                    return
                 if not self.repo.delete(key):
                     result.skip("it could not be removed")
                     return

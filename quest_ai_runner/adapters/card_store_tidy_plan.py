@@ -7,7 +7,8 @@ port), and the script imports it instead of keeping a second copy.
 
   item-id     a card stored under a vector point id (``card:<id>``); its notes join the card it names.
   compounded  an id that stacks import prefixes, moved only when a SURVIVING card (not itself moved, not a
-              compounded candidate) pins the same or more files; with none it is the only copy and stays.
+              compounded candidate) pins the same or more files; with none it is the only copy and is re-keyed to its one-hop id
+              (``rekey_target``) so the guard stops refusing it.
   excluded    more than half of its files sit under folders the folder review excludes for good.
   surplus     the same files as another card (identical, or an overlap at or above the threshold); the best
               keeper stays (``keeper_rank``: most used, an index-pass card over an annotated one, best name
@@ -104,6 +105,18 @@ def stray_plan(key: str, stray: Dict[str, Any], cards: Dict[str, Dict[str, Any]]
     if quarantined(target_id):
         return "", "", "the card it stands for was moved out of the index"
     return target_id, f"stored under a vector point id; it becomes {target_id}", ""
+
+
+def rekey_target(card_id: str) -> str:
+    """The one-hop id a compounded copy that is its store's only copy is re-keyed to, or "" when none is clear.
+
+    ``<first namespace>--<topic>``: the shape ``card_origin.import_id`` gives a one-level import, with the
+    stacked middle hops dropped. A function of the id alone, so every run picks the same id.
+    """
+    parts = card_origin.namespace_segments(card_id)
+    if len(parts) < 3:
+        return ""
+    return f"{parts[0]}{card_origin.NAMESPACE_SEP}{parts[-1]}"
 
 
 def plan_cards(
@@ -300,6 +313,7 @@ def plan_cards(
     # 6. Compounded candidates not taken above: moved only when a surviving equivalent exists, i.e. another card
     #    neither moved in this run nor a candidate, with the same or more files.
     if pending:
+        claimed_rekeys: Set[str] = set()
         holders_by_path: Dict[str, Set[int]] = {}
         survivors: List[Tuple[str, str]] = []          # (card id, key)
         for key, card in items:
@@ -320,7 +334,15 @@ def plan_cards(
                 if not matches:
                     break
             if files and not matches:
-                note_skip("compounded card kept: its only copy in this store")
+                clean = rekey_target(str(card.get("id") or key))
+                if (not clean or clean in cards or clean in claimed_rekeys or clean in pending
+                        or card_origin.card_id_problem(clean) or quarantined(clean)):
+                    note_skip("compounded card kept: its only copy in this store")
+                    continue
+                claimed_rekeys.add(clean)
+                record(key, card, "compounded",
+                       f"{pending[key]}; the only copy, so it is re-keyed to {clean} (the card moves whole)",
+                       becomes=clean)
                 continue
             detail = pending[key]
             extra: Dict[str, Any] = {}

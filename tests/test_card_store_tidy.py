@@ -535,3 +535,19 @@ def test_latest_manifest_is_the_last_run_even_in_the_same_second(tmp_path):
     tidy.RepositoryTidy(repo, tmp_path).undo(first.manifest)
     second = tidy.RepositoryTidy(repo, tmp_path).apply(plan_for(repo, tmp_path), repo.load_all())
     assert tidy.latest_manifest(tmp_path) == second.manifest != first.manifest
+
+
+def test_a_compounded_card_that_is_the_only_copy_is_rekeyed_whole_and_undo_keeps_it(tmp_path):
+    """The guard refuses every write to a compounded id, so a sole copy would stay stuck for ever: it moves to
+    its one-hop id with everything it holds, used or not."""
+    review(tmp_path)
+    stuck = "root-a-111111--root-b-222222--root-a-111111--idealism"
+    repo = backend_with([card(stuck, ["z/one.md"], usage_count=3)])
+    plan = plan_for(repo, tmp_path)
+    assert [(e["key"], e.get("becomes")) for e in plan.entries] == [(stuck, "root-a-111111--idealism")]
+    run = tidy.RepositoryTidy(repo, tmp_path).apply(plan, repo.load_all())
+    after = repo.load_all()
+    assert set(after) == {"root-a-111111--idealism"} and after["root-a-111111--idealism"]["usage_count"] == 3
+    # The old id is refused by every writer, so an undo cannot put it back and must not take the new card away.
+    undone = tidy.RepositoryTidy(repo, tmp_path).undo(run.manifest)
+    assert not undone.failed and set(repo.load_all()) == {"root-a-111111--idealism"}
