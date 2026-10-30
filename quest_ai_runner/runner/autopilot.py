@@ -82,38 +82,22 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .context_updates import ContextUpdates, UpdateEngine
 from .insights import InsightsContext
-# The client's OWN period formats, borrowed rather than restated: a goal this module proposes is
-# created through ``QuestClient.create_goal``, so the shape it must satisfy is that client's, and a
-# second copy here would be a second thing to keep in step with the backend's period_utils.
-from .quest_client import _PERIOD_RE as _GOAL_PERIOD_RE
 from .goal_handoff import preferences_text, run_goal_handoff
 from .reflections import ReflectionContext
 
 from .autopilot_defaults import (
     AUTOPILOT_PASS_KIND,
-    AUTOPILOT_WORK_KIND,
-    BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS,
-    BUNDLED_DEFAULT_QUEST_INSTRUCTIONS,
-    DEFAULT_ASSISTANT_REP_ID,
-    DEFAULT_LADDER_PER_SCOPE,
     DEFAULT_TEAM_DAILY_BUDGET,
-    LAST_RUN_OUTPUT_MAX_CHARS,
     MAX_INSTRUCTIONS_CHARS,
     OPEN_TASK_STATUSES,
-    PROPOSAL_TEXT_PREFIX,
     log,
 )
 from .autopilot_periods import (
-    _current_period_key,
     _parse_dt,
-    cadence_due,
     current_goal_ladder,
     current_scope_label,
     has_new_ask_since,
-    previous_period_bounds,
-    previous_period_key,
     run_requested,
-    select_period_goals,
 )
 from .autopilot_personas import (
     PERSONA_HELD,
@@ -121,17 +105,13 @@ from .autopilot_personas import (
     default_quest_instructions_for,
     persona_entries_on_duty,
     persona_instructions_for,
-    personas_on_duty,
     resolve_persona,
-    resolve_task_persona,
     split_held_for_another_day,
 )
 from .autopilot_briefs import (
     _batch_title,
     compose_batch_text,
     next_steps_from_pass,
-    render_last_run_output,
-    select_last_run_output,
 )
 from .autopilot_esoi import esoi_readiness
 from .autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label

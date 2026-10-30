@@ -37,7 +37,6 @@ from .context_card_dedup import _first_substantive_line, _is_prompt_echo
 from .context_card_ceilings import _MIN_FILES_PER_CARD, apply_card_ceilings, card_is_too_thin
 from .context_folder_review import _dir_file_counts
 from .context_risk_gate import folder_gate
-from .context_card_extraction import _path_slug
 
 
 class BootstrapMixin:

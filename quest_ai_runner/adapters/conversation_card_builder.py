@@ -117,20 +117,6 @@ class ConversationCardBuilder:
         card_file.write_text(json.dumps(card, indent=2))
         return card_file
 
-    def build_and_write(
-        self, conv_id: str, conv: Dict[str, Any], conv_file_path: str
-    ) -> Optional[Path]:
-        """Create a card with a conversation source and write it.
-
-        Returns:
-            Path to written card, or None on error
-        """
-        try:
-            card = self.create_card_with_conversation(conv_id, conv, conv_file_path)
-            return self.write_card(card)
-        except Exception:  # noqa: BLE001
-            return None
-
     @staticmethod
     def _get_messages(conv: Dict[str, Any]) -> list:
         """Extract messages from conversation dict."""

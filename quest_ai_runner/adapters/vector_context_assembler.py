@@ -746,14 +746,6 @@ class VectorContextAssembler(ContextAssemblerBase):
             logger.debug("VectorContextAssembler._llm_review failed", exc_info=True)
             return candidates  # on failure keep all (best-effort)
 
-    def _render_hits(self, hits: List[VectorHit], task_text: str = "") -> str:
-        """Render a list of VectorHits into a human-readable context view string.
-
-        Thin join over ``_render_hit_sections`` (the per-hit form), kept so callers/tests that want
-        the whole view as one string are unchanged.
-        """
-        return "\n\n---\n\n".join(self._render_hit_sections(hits, task_text))
-
     def _hit_min_score(self, hit: Any) -> float:
         """The confidence floor THIS hit must clear: its own declared floor, else the global one.
 

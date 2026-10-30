@@ -34,42 +34,25 @@ from collections import Counter, OrderedDict
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 
 from textual import work
-from textual._ansi_sequences import ANSI_SEQUENCES_KEYS
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll  # Horizontal kept for layout elsewhere if needed
-from textual.geometry import Offset
 from textual.message import Message
 from textual.selection import Selection
 from textual.strip import Strip
 from textual.widgets import Header, Input, OptionList, RichLog, Static, TextArea
 from textual.widgets.option_list import Option
 
-from rich.markdown import Markdown as RichMarkdown
-from rich.segment import Segment
-from rich.style import Style as RichStyle
 from rich.text import Text
 import logging
 
-from .adapters.retry_utils import format_provider_error
 from .interactive_session import (
     InteractiveSession,
-    _BANNER,
     _DeepRunTracker,
-    _HELP,
-    _SLASH_COMMANDS,
     _Console,
-    _model_display,
-    _model_label,
-    _parse_skill_frontmatter,
-    _BOLD, _CYAN, _DIM, _RESET,
 )
 
 from .textual_ui_helpers import (  # noqa: F401
-    _CLIPBOARD_COMMANDS,
-    _build_future_context_text,
-    _build_shallow_context_bullets,
-    _copy_to_clipboard_tool,
     _missing_model_provider_message,
 )
 from .textual_ui_widgets import (  # noqa: F401
@@ -79,19 +62,15 @@ from .textual_ui_widgets import (  # noqa: F401
     FutureContextPanel,
     KeyHints,
     TurnContext,
-    _AWAITING_DECISION_PLACEHOLDER,
-    _BUSY_PLACEHOLDER,
     _READY_PLACEHOLDER,
     _RichLogConsole,
     _RichLogHandler,
-    newline_hint,
 )
 from .textual_ui_transcript import (  # noqa: F401
     TranscriptLog,
 )
 from .textual_ui_prompt import (  # noqa: F401
     PromptTextArea,
-    _ALT_ENTER_SEQUENCE,
     _QarKeys,
 )
 from .textual_ui_startup import StartupMixin

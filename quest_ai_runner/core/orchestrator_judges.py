@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from .answer_explanation import (
-    EXPLAIN_PROMPT,
     EXPLAIN_TOOL,
     TurnTrace,
     build_payload,
@@ -20,8 +19,6 @@ from .answer_explanation import (
 from .guard import ExecutionRecord
 from .runtime_settings import core_settings
 from .auxiliary_prompts import (
-    INTENT_DIRECTIVE_PROMPT,
-    LANDED_WORK_DENIAL_PROMPT,
     LANDED_WORK_DENIAL_TOOL,
     INTENT_DIRECTIVE_TOOL,
     MODE_RELEASE_PROMPT,

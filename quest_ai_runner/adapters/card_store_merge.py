@@ -55,7 +55,7 @@ import posixpath
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from . import card_limit, card_origin

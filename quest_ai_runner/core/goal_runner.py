@@ -35,7 +35,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Set, Tuple
+from typing import Any, Callable, List, Optional, Set
 
 from esoi import implementation
 
@@ -49,29 +49,19 @@ from .adapters_events import EVENT_EXEC
 from .goal_runner_contract import (  # noqa: F401
     BALANCED_CLI_MODEL,
     CANCEL_POLL_SECONDS,
-    DEFAULT_CANCEL_GRACE_SECONDS,
     DEEP_REVIEW_CALL_TIMEOUT_SECONDS,
     DEEP_REVIEW_PROMPT,
     DEFAULT_DEEP_MAX_TURNS,
-    DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS,
-    DEFAULT_DEEP_REVIEW_MODEL,
     DEFAULT_MONITOR_HEARTBEAT_SECONDS,
-    ESCALATION_ID_RE,
     ESCALATION_MARKER,
-    ESCALATION_MARKER_ANYWHERE_RE,
     GoalRunner,
-    QAR_DEEP_REVIEW_INTERVAL_SECONDS_ENV_VAR,
     QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR,
-    RESUME_TARGET_MISSING_MARKERS,
     SubprocessConfig,
     WEB_TOOLS,
     _is_claude_model,
     _log,
     _parse_worker_output,
-    _positive_float,
     _run_goal_accepts_context_preamble,
-    _run_goal_accepts_resume_session_id,
-    _run_goal_accepts_working_dir,
     cli_safe_model,
     set_cli_model_translator,
     compose_goal_prompt,
@@ -79,7 +69,6 @@ from .goal_runner_contract import (  # noqa: F401
     envelope_reports_no_work,
     extract_escalation_id,
     kill_process_group,
-    signal_process_group,
     stop_process_group,
     parse_deep_review,
     resolve_deep_review_interval_seconds,
@@ -87,20 +76,9 @@ from .goal_runner_contract import (  # noqa: F401
     resume_target_missing,
 )
 from .goal_runner_session import (  # noqa: F401
-    FILE_CHANGE_TOOLS,
-    SESSION_TAIL_MAX_ACTIONS,
-    SESSION_TAIL_MAX_BYTES,
-    SESSION_TAIL_MAX_CHARS,
-    SESSION_TAIL_THIN_OUTPUT_CHARS,
-    _claude_project_bases,
-    _detect_new_session,
-    _find_active_jsonl_file,
     _find_claude_project_dir,
     _find_session_file,
-    _format_message_text,
-    _hash_line,
     _monitor_claude_session,
-    _truncate_keep_end,
     describe_session_activity,
     landed_file_changes,
     read_session_activity_tail,

@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from ..core.text_sampling import *  # noqa: F401,F403
 from ..core.text_sampling import (  # noqa: F401
-    _NL_STOP,
-    compute_idf,
     extract_terms,
     keywords_from_text,
     select_representatives,

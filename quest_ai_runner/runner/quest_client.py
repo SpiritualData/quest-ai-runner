@@ -75,11 +75,9 @@ from ..core.adapters_values import Escalation
 from ..core.adapters_bases import EscalationSinkBase
 
 from .quest_client_support import (
-    GOAL_UPDATE_FANOUT_CAP,
     QAR_DECISION_DEFAULT_DEADLINE_HOURS_ENV_VAR,
     QuestApiError,
     QuestNotConfigured,
-    QuestPendingApproval,
     _PERIOD_RE,
     log,
 )

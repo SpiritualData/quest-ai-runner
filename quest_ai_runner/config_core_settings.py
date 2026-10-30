@@ -9,7 +9,7 @@ call so a running process can be retuned without a restart, exactly as before.
 from __future__ import annotations
 
 import os
-from typing import Callable, Mapping, Optional
+from typing import Mapping, Optional
 
 from .config_support import _log
 from .core.runtime_settings import (

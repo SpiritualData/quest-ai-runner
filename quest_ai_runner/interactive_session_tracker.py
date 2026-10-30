@@ -60,12 +60,6 @@ class _DeepRunTracker:
                 self._runs[run_id]['metrics'] = list(metrics or [])
                 self._runs[run_id]['metric_missing'] = bool(missing)
 
-    def set_model(self, run_id: str, model: str) -> None:
-        """Record which LLM model a deep run actually executed with."""
-        with self._lock:
-            if run_id in self._runs and model:
-                self._runs[run_id]['model'] = model
-
     def update_goal(self, run_id: str, goal: str) -> None:
         """Set/refine a run's goal text once the real subgoal is known."""
         with self._lock:
@@ -166,36 +160,8 @@ class _DeepRunTracker:
 
             return "\n".join(lines), row_run
 
-    def set_active_run(self, run_id: str) -> bool:
-        """Switch to viewing a specific run's detailed progress."""
-        with self._lock:
-            if run_id in self._runs:
-                self._active_run_id = run_id
-                return True
-        return False
-
-    def next_run(self) -> Optional[str]:
-        """Cycle to the next run."""
-        with self._lock:
-            run_ids = sorted(self._runs.keys())
-            if not run_ids:
-                return None
-            if self._active_run_id is None or self._active_run_id not in run_ids:
-                self._active_run_id = run_ids[0]
-                return self._active_run_id
-            idx = run_ids.index(self._active_run_id)
-            self._active_run_id = run_ids[(idx + 1) % len(run_ids)]
-            return self._active_run_id
-
     def get_active_run(self) -> Optional[str]:
         """Get the currently active run ID."""
         with self._lock:
             return self._active_run_id
 
-    def get_run_detail(self, run_id: Optional[str]) -> str:
-        """Get full execution details for a run."""
-        with self._lock:
-            if run_id and run_id in self._runs:
-                info = self._runs[run_id]
-                return f"\n".join(info.get('exec_lines', [])[-50:])  # last 50 exec events
-        return ""

@@ -59,7 +59,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import (Any, Callable, Dict, Iterable, Iterator, List, Optional, Protocol, Sequence,
+from typing import (Any, Callable, Dict, Iterator, List, Optional, Protocol, Sequence,
                     Tuple, runtime_checkable)
 from esoi import implementation
 

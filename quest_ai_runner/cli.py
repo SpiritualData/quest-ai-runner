@@ -421,51 +421,35 @@ os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
-from .config import (ConfigFileError, RunnerConfig, apply_config_environment, apply_file_defaults,
-                     load_quest_client, parse_decision_assignees, resolve_config_objects)
+from .config import (ConfigFileError, RunnerConfig, apply_file_defaults,
+                     load_quest_client, resolve_config_objects)
 from hubofhubs.ports.model import ModelProvider
-from .pricing import estimate_bootstrap_cost, get_provider_and_model
+from .pricing import estimate_bootstrap_cost
 from .runner.channel_runner import ChannelRunner
 from .runner.poller import Poller
 
 from .cli_config import (  # noqa: F401
-    ASK_CLASSIFY_SYSTEM,
-    ASSIGNED_GOAL_JUDGE_SYSTEM,
-    _apply_channel_env,
     _ask_classifier,
-    _channel_transport_from_env,
     _config_from_env,
     _goal_judge,
     _model_provider_from_env,
     _quest_model,
-    _team_ids_from_env,
-    ask_key_of,
-    float_or_none,
 )
 from .cli_context import (  # noqa: F401
-    _LARGE_CORPUS_FILES,
     _cmd_bootstrap,
     _cmd_context,
     _cmd_paste_context,
     _cmd_search_context,
-    _count_indexable_files,
     select_card_ids_for_text,
 )
 from .cli_chat import (  # noqa: F401
-    RESUME_PICK,
-    _check_chat_prerequisites,
     _cmd_chat,
-    resume_command,
 )
 from .cli_quest import (  # noqa: F401
-    _QUEST_READ_EXACT,
-    _QUEST_READ_PREFIXES,
     _cmd_create_goal,
     _cmd_reconcile_plan,
     _cmd_send,
     _cmd_sync_quest_folder,
-    _parse_kw,
-    _quest_callable_methods,
     _quest_method_is_read_only,
     _run_quest_command,
 )

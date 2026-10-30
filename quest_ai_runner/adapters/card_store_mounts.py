@@ -52,7 +52,7 @@ import posixpath
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from hubofhubs.ports.context import VectorHit
 from ..core.adapters_bases import VectorStoreBase

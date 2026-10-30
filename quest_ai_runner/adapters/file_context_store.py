@@ -50,51 +50,25 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from esoi import implementation
 from ..core.adapters_bases import ContextAssemblerBase
-from ._walk import effective_skip_dirs
 from .card_content_render import (
-    MAX_CARD_CONTENT_ITEMS as _MAX_CARD_CONTENT_ITEMS,
     MAX_CARD_REF_CHARS as _MAX_CARD_REF_CHARS,
-    MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_CHARS,
     MAX_CARD_REFS as _MAX_CARD_REFS,
-    content_item_text as _content_item_text,
-    dedupe_content as _dedupe_content,
-    mark_items_used as _mark_items_used,
-    normalize_content as _normalize_content,
-    rank_content_by_recency_relevance as _rank_content_by_recency_relevance,
     tokenize as _tokenize,
 )
 from . import card_limit as card_limit_policy
 from .card_repository import CardRepository, FilesystemCardRepository
-from .card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
 from .card_store_mounts import MODE_MOUNT, Mount, MountedCardRepository, mount_mode_from_env
-from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms
 
 from .context_bootstrap_support import (
-    _BOOTSTRAP_MAX_BYTES,
     _BOOTSTRAP_META_FILE,
     _BOOTSTRAP_VERSION,
-    _BOOTSTRAP_WORKERS_DEFAULT,
-    _MAX_MERGED_KEYWORDS,
     _SOURCE_EXTS,
     _TFDFIDF_VERSION,
     _bootstrap_max_cards,
     _bootstrap_max_files,
-    _bootstrap_workers,
-    _card_file_paths,
     _log,
-    _merge_card_group,
     _read_bootstrap_meta,
-    _select_representative_files,
     _write_bootstrap_meta,
-)
-from .context_card_ceilings import (
-    _FILE_SET_DEDUP_JACCARD,
-    apply_card_ceilings,
-    card_folder_key,
-    card_is_too_thin,
-    card_preference_key,
-    collapse_cards_by_file_set,
-    path_is_data_file,
 )
 from .context_folder_review import (
     _FOLDER_REVIEW_FILE,
@@ -105,29 +79,10 @@ from .context_folder_review import (
     _has_kept_child,
     _is_excluded_folder,
     _nested_vcs_dirs,
-    _prune_dead_cards,
-    drop_verdicts_under_final_exclusions,
-    final_exclusion_covering,
-    verdict_is_final,
-    verdict_is_pinned,
 )
 from .context_card_extraction import (
     _RECENCY_BOOST_MAX_DEFAULT,
-    _build_rich_summary,
-    _card_slug,
-    _extract_file_snippet,
-    _extract_leading_comment,
-    _extract_symbols,
-    _extract_text_description,
-    _managed_names,
-    _numbered_tree,
-    _read_head,
-    _read_whole_if_small,
-    _resolve_file_refs,
-    _summarize_snippet,
-    _trim_content_by_recency,
 )
-from .context_card_dedup import _is_prompt_echo, _record_summary
 from .context_store_origins import OriginsMixin
 from .context_store_cards import CardsMixin
 from .context_store_assembly import AssemblyMixin

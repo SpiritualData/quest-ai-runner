@@ -26,13 +26,12 @@ message, a deep run, or a Quest decision-request.
 from __future__ import annotations
 
 import threading
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any, Callable, Dict, List, Optional
 
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.ports.context import ContextAssembler, ConversationStore
 from hubofhubs.ports.model import ModelProvider
-from .adapters_events import EVENT_CONTEXT, EVENT_PARTIAL, EVENT_READ, Mode
+from .adapters_events import EVENT_CONTEXT, EVENT_PARTIAL, Mode
 from .adapters_deep import DeepRunner, EscalationSink
 from .adapters_guidance import GuidanceProvider
 from .adapters_values import PlanDecision, ProgressEvent
@@ -52,66 +51,39 @@ from .model_registry import ModelRegistry
 
 # Planner-context rendering lives in planner_context.py; re-exported so existing imports keep working.
 from .planner_context import (
-    _DISCOVERY_SPEC_KEYS,
     PLANNER_WEB_HEAD,
     PLANNER_LINKS_HEAD,
     PLANNER_LINKS_NO_READER,
     LINK_NOT_READ_MARKER,
     LINK_NOT_READ_ANSWER_RULE,
     planner_links_block,
-    planner_web_block,
-    _is_discovery_spec,
-    _render_gathered,
-    _summarize_observation,
-    _recent_conversation_turns,
-    _prior_escalation_lines,
-    declined_proposals_block,
     _render_gathered_for_planner,
 )
 # Auxiliary prompt text and tool schemas live in auxiliary_prompts.py; re-exported so existing imports keep working.
 from .auxiliary_prompts import (
     VERIFY_GOAL_TOOL,
     VERIFY_GOAL_PROMPT,
-    VERIFY_WEB_EVIDENCE_NOTE,
-    VERIFY_RUN_OBSERVATIONS_NOTE,
     MODE_RELEASE_TOOL,
     MODE_RELEASE_PROMPT,
     FUTURE_CONTEXT_DELIMITER,
-    DEEP_FUTURE_CONTEXT_INSTRUCTION,
     DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION,
     QUEST_DATA_WRITE_SURFACE_INSTRUCTION,
-    CARD_UPDATE_PROMPT,
-    CARD_UPDATE_NOTHING_LEARNABLE,
-    RESOLVE_REQUEST_PROMPT,
-    GOAL_CONDITION_SYSTEM,
     REPLY_VOICE_SYSTEM,
 )
 from .recent_context import RecentContextStore
 from .planner_prompt import (
     BRAINSTORM_HELD_WORK_ACK_NOTE,
     BRAINSTORM_NO_ACTION_ACK_NOTE,
-    DECLINED_PROPOSALS_NOTE,
     DEFERRED_DEEP_INLINE_SEMANTICS,
     DEFERRED_DEEP_QUEUED_SEMANTICS,
-    HOLD_OFF_NO_ACTION_ACK_NOTE,
-    MODEL_TIER_BLOCK,
-    NOT_QUEUED_NOTE,
-    PLANNER_BOUNDARY_EXAMPLES,
     PLANNER_DECISION_RUBRIC,
     PLANNER_PROFILES,
     PLANNER_PROMPT,
     PLANNER_PROMPT_COMPACT,
-    _RATIONALE_INSTRUCTION_NARRATE,
-    _RATIONALE_INSTRUCTION_NARRATE_REPLAN,
 )
 
 from .orchestrator_constants import (
-    CONTINUE_AFTER_DECISION_NOTE,
     DEEP_CONTINUATION_TURN_MULTIPLIER_CAP,
-    DEFAULT_CARD_MERGE_SIMILARITY,
-    DEFAULT_DEEP_MAX_TURNS,
-    NOT_STARTED_AFTER_DECISION_NOTE,
-    NO_DEEP_EXECUTOR_TEXT,
     log,
 )
 from .orchestrator_types import (  # noqa: F401
@@ -122,43 +94,21 @@ from .orchestrator_decide_tool import (
     DECIDE_TOOL,
     DECIDE_TOOL_WITH_MODE_SIGNAL,
     DEFERRED_RUNNER_KEY,
-    USER_INTENTS,
     decide_tool_for,
-    normalize_user_intent,
-    own_escalation_adds_nothing,
     planner_prompt_defaults,
-    planner_prompt_for_profile,
     render_planner_prompt,
-    strip_schema_descriptions,
 )
 from .orchestrator_decisions import (
-    VERIFY_OUTPUT_MAX_CHARS,
-    VERIFY_WEB_EVIDENCE_MAX_CHARS,
-    _format_now_block,
-    _gathered_has_web_evidence,
-    _normalize_card_edits,
-    _proposed_card_text,
     apply_quest_data_ladder_guard,
-    is_small_talk,
-    ladder_for_quest_data,
-    message_forbids_new_task,
     normalize_decision,
     parse_goal_condition_reply,
-    restates_meaningfully,
-    verify_output_view,
 )
 from .orchestrator_text import (  # noqa: F401
-    UNCONFIRMED_NO_CHANGE_LEAD,
-    _answer_describes_unexecuted_work,
     _card_update_store,
     _deep_future_context,
     _future_context_channel,
-    _future_context_for_display,
     _normalize_future_context,
-    _parse_future_context,
     _strip_future_context,
-    clip_head_and_tail,
-    ellipsize,
     sentence,
     unconfirmed_no_change_text,
 )
@@ -167,18 +117,12 @@ from .orchestrator_events import (
     _oversee_worth_a_look,
     _project_card_metadata_for_event,
     _project_sources_for_event,
-    _safe_event_title,
     grounding_answer_tail,
-    grounding_context_layer,
 )
 from .orchestrator_capabilities import (
     context_assembly_timeout_seconds,
-    describe_read_spec,
     guidance_selection_timeout_seconds,
-    provider_call_accepts_tier,
     read_op_timeout_seconds,
-    read_spec_key,
-    split_repeated_reads,
     truncate_verify_context,
     verify_context_max_chars,
 )

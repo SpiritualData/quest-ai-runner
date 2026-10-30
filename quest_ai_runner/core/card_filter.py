@@ -117,13 +117,6 @@ def _memo_put(provider: Any, key: str, value: Any) -> None:
             memo.popitem(last=False)
 
 
-def clear_selection_memo() -> None:
-    """Drop every memoized selection verdict (also safe to call in production). Tests do NOT need
-    to call this: isolation is automatic because each provider's entries die with the provider."""
-    with _selection_memo_lock:
-        _selection_memos.clear()
-
-
 def _copy_consolidation(verdict: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Deep-ish copy of a consolidation verdict so a cached value can never be mutated by a caller."""
     return [

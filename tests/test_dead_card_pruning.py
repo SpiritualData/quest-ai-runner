@@ -209,7 +209,7 @@ def test_a_dedup_merge_across_new_and_stored_cards_yields_plain_paths():
     raised TypeError: unhashable type: 'dict' -- after all the model work was done, reported as
     "Cards created: 0". It only bites on a RE-bootstrap, which is why a first run looked fine.
     """
-    from quest_ai_runner.adapters.file_context_store import _merge_card_group, _card_file_paths
+    from quest_ai_runner.adapters.context_bootstrap_support import _merge_card_group, _card_file_paths
 
     fresh = {"id": "a", "name": "A", "keywords": ["k1"], "files": ["src/a.py"]}
     stored = {"id": "b", "name": "B", "keywords": ["k2"],
@@ -229,7 +229,7 @@ def test_a_dedup_merge_across_new_and_stored_cards_yields_plain_paths():
 
 
 def test_a_prompt_echo_summary_is_recognised():
-    from quest_ai_runner.adapters.file_context_store import _is_prompt_echo
+    from quest_ai_runner.adapters.context_card_dedup import _is_prompt_echo
     # Every persona run carries the same scaffolding, so a summary made of it cannot distinguish
     # one card from another and does no work in retrieval.
     assert _is_prompt_echo("Act as Batman.\n\nQuest outcome: I've completed my dissertation") is True
@@ -240,7 +240,7 @@ def test_a_prompt_echo_summary_is_recognised():
 
 
 def test_a_recorded_card_summarises_what_happened_not_what_was_asked():
-    from quest_ai_runner.adapters.file_context_store import _record_summary
+    from quest_ai_runner.adapters.context_card_dedup import _record_summary
     task = "Act as Bailey.\n\nQuest outcome: PhD\n\nScope: this week's target."
     # The run's own result describes the work; the prompt only describes the ask.
     assert _record_summary(task, {"response": "Chose the ITRS ranking formula and recorded why."}) \
@@ -271,7 +271,7 @@ def test_a_nameless_card_whose_summary_is_only_scaffolding_is_degenerate():
 def test_merging_cards_does_not_grow_keywords_without_bound():
     # Merges compound: one real store held a card with 2,174 keywords where the prompt asks for
     # 5 to 12. That card matches almost any query and crowds out the ones that actually answer it.
-    from quest_ai_runner.adapters.file_context_store import _merge_card_group, _MAX_MERGED_KEYWORDS
+    from quest_ai_runner.adapters.context_bootstrap_support import _merge_card_group, _MAX_MERGED_KEYWORDS
 
     group = [{"id": f"c{i}", "name": f"C{i}", "files": [f"f{i}.py"],
               "keywords": [f"kw{i}_{j}" for j in range(20)]} for i in range(10)]

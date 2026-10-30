@@ -262,10 +262,6 @@ class AssemblyMixin:
         self._df_cache = (key, df)
         return maps, df
 
-    def _card_searchable_terms(self, card: Dict[str, Any]) -> Set[str]:
-        """Return the set of all terms in a card (for DF computation)."""
-        return set(self._card_term_weights(card).keys())
-
     # Hard cap on this fallback, independent of any gating a consumer wires (see
     # ``_assemble_inner``'s ``skip_corpus_fallback`` meta key below). Halved from the original
     # 20 files walked / 12 shown / 6 lines each (2026-10-06): this path fires precisely when NO

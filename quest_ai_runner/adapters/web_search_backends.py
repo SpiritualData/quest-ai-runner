@@ -17,10 +17,7 @@ from hubofhubs.ports.search import SearchBackendError, SearchHit, SearchResponse
 from hubofhubs.seats import SearchBackend  # noqa: F401
 from hubofhubs.websearch import backends as hub_backends
 from hubofhubs.websearch.backends import (  # noqa: F401
-    ConfiguredJsonBackend,
     FallbackSearchBackend,
-    HttpCallable,
-    backend_class_for,
     dotted,
     fill,
     gemini_api_key_from_env,

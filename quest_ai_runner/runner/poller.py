@@ -63,7 +63,6 @@ from .state_store import StateStore
 from .poller_schedule import (
     CLAIM_RETRY_COOLDOWN_SECONDS,
     _due_now_locally,
-    _foreign_series_looks_alive,
     _task_signature,
     log,
 )

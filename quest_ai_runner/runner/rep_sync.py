@@ -60,7 +60,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 from ._managed_sections import extract_between, replace_between, strip_managed_blocks
 

@@ -63,23 +63,14 @@ import time
 import uuid as _uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from .interactive_session_render import (  # noqa: F401
-    _BLUE,
     _BOLD,
-    _BRIGHT_CYAN,
     _CYAN,
     _Console,
     _DIM,
-    _GOLD,
-    _GREEN,
-    _MAGENTA,
     _RESET,
-    _YELLOW,
-    _a,
-    _bullet,
-    _highlight_ansi,
     _model_display,
     _model_label,
     _parse_skill_frontmatter,
@@ -100,9 +91,6 @@ from .interactive_session_store import (  # noqa: F401
     ChatSessionStore,
 )
 from .interactive_session_persona import (  # noqa: F401
-    _BACKGROUND_BOOTSTRAP_LOGGER_NAMES,
-    _PERSONA_RESOLUTION_MAX_CHARS,
-    _PERSONA_RESOLUTION_PROMPT,
     _PERSONA_RESOLUTION_TIMEOUT_SECONDS,
     _make_startup_notifier,
     _read_persona_file_in_corpus,

@@ -402,20 +402,6 @@ class TurnMixin:
 
         # done: terminal signal only.
 
-    def transcript_width(self) -> int:
-        """Columns a transcript line can use before it would wrap (80 when the size is unknown)."""
-        width = 0
-        try:
-            width = self._tlog.scrollable_content_region.width
-        except Exception:  # noqa: BLE001
-            pass
-        if not width:
-            try:
-                width = self.size.width - 4
-            except Exception:  # noqa: BLE001
-                pass
-        return width - 1 if width >= 21 else 80
-
     def _make_pending_drain(self, inbox: "InputInbox", sid: str) -> Callable[[], List[str]]:
         """Wrap the orchestrator's own ``pending_inputs`` drain so a mid-run pickup is VISIBLE.
 

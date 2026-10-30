@@ -73,7 +73,7 @@ def _channel_transport_from_env():
 
     Only "openclaw" is a built-in provider today (the reference bridge). A consumer that wants a
     different ``ChannelTransport`` builds ``RunnerConfig`` itself and sets ``channel_transport``
-    directly instead of going through this env-driven CLI path — see ``core.adapters_channels.ChannelTransport``.
+    directly instead of going through this env-driven CLI path (see ``core.adapters_channels.ChannelTransport``).
     """
     provider = (os.getenv("QAR_CHANNEL_PROVIDER") or "").strip().lower()
     if not provider:

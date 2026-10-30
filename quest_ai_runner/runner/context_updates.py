@@ -54,18 +54,13 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .context_update_types import (
-    BLOCK_END,
-    BLOCK_START,
     CACHE_TTL_SECONDS,
     ContextUpdate,
     DEFAULT_ALWAYS,
     FIRST_LOOK_DAYS,
-    MAX_BODY_CHARS,
     MAX_OPEN_PER_SOURCE,
-    MAX_PERSON_BODY_CHARS,
     MAX_UPDATES,
     OPEN_ITEM_MAX_AGE_DAYS,
-    PERSON_BODY_BUDGET,
     SourceGap,
     SourceReport,
     _as_utc,
@@ -73,15 +68,11 @@ from .context_update_types import (
     log,
 )
 from .context_update_receipts import (
-    append_receipt,
-    block_spans,
     parse_dispositions,
     parse_manifest,
     parse_usage_notes,
     render_receipt,
-    split_disposition,
     strip_usage_block,
-    usage_receipt_gate,
 )
 from .context_update_state import (  # noqa: F401
     CollectRequest,

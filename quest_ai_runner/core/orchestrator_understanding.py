@@ -9,8 +9,6 @@ from typing import Any, Dict, FrozenSet, Optional, Tuple
 from .auxiliary_prompts import (
     DERIVE_GOAL_CONDITION_PROMPT,
     GOAL_CONDITION_SYSTEM,
-    RESOLVE_REQUEST_PROMPT,
-    _CONDENSE_DECISION_PROMPT,
 )
 from hubofhubs.ports.model import STEP_SUMMARIZE, STEP_UNDERSTAND, answer_with_reasoning
 from .adapters_events import EVENT_DECISION, EVENT_DONE, EVENT_MILESTONE

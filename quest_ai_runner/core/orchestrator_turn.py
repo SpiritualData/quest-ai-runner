@@ -12,7 +12,7 @@ from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 
 from .prompt_specs import PromptSpec, register, render_prompt
 
-from hubofhubs.ports.model import STEP_NARRATION, STEP_REPLY, answer_with_reasoning
+from hubofhubs.ports.model import STEP_NARRATION, answer_with_reasoning
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .adapters_events import EVENT_PARTIAL, EVENT_STATUS, Mode
 from .adapters_values import ProgressEvent

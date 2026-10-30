@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 from ..core.tools import ToolContext
-from .action_catalog import KIND_CONNECTOR, KIND_TOOL, PUBLISHER_ID, find_published_action
+from .action_catalog import KIND_TOOL, PUBLISHER_ID, find_published_action
 
 log = logging.getLogger("quest-ai-runner.requested_action")
 

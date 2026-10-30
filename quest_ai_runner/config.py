@@ -34,7 +34,7 @@ from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .core.resolve import resolve
 from .core.runtime_settings import CoreSettings
 from .config_core_settings import install_for_config
-from .config_assembler import _resolve_context_assembler_base, resolve_context_assembler  # noqa: F401
+from .config_assembler import resolve_context_assembler  # noqa: F401
 from .config_orchestrator import default_guidance, wire_mcp_and_channels, wire_providers, wire_web_research
 from .resources import ResourceLimits
 
@@ -46,12 +46,10 @@ from .config_support import (  # noqa: F401
 from .adapters.context_card_updater import update_cards_from_deep_edits
 from .config_context_index import (
     _bootstrap_if_needed,
-    _build_qdrant_card_repo_from_env,
     _register_index_thread,
     shutdown_background_index,
 )
 from .config_resolvers import (
-    register_deepseek,
     resolve_anticipator,
     resolve_deep_runner,
     resolve_deep_runner_ladder,
@@ -70,14 +68,11 @@ from .config_environment import (
     load_quest_client,
     parse_decision_assignees,
     resolve_config_objects,
-    resolve_context_assembler_stack,
 )
 from .config_retrieval import (  # noqa: F401
-    _retrieval_has_web_search,
     apply_file_defaults,
     build_registry,
     derive_capabilities,
-    fold_into_retrieval,
     get_retrieval_adapter,
 )
 

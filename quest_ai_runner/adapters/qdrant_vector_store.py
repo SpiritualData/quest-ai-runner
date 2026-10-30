@@ -1011,7 +1011,6 @@ class QdrantVectorStore(VectorStoreBase):
 # The embedders live in their own module; these names stay importable from here.
 from .qdrant_embedders import (  # noqa: E402,F401
     EMBED_BATCH_DEFAULT,
-    EMBED_MAX_CHARS_DEFAULT,
     FASTEMBED_EMBEDDER_ID,
     embed_batch_size,
     embed_max_chars,
@@ -1019,6 +1018,5 @@ from .qdrant_embedders import (  # noqa: E402,F401
     make_openai_embedder,
     make_voyage_embedder,
     openai_embedder_id,
-    positive_int_env,
     voyage_embedder_id,
 )

@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from .tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env
 from .tools import quest_credentials_present
 from .tools_quest_ops import (NO_QUEST, QUEST_OPERATION_BUILDERS, QUEST_ID_PARAM, flat_goals, goal_line, goal_row, quest_id_of,
-                              read_failure_reason, words_of)
+                              words_of)
 
 #: How much of a proposed goal's title another goal must cover to be shown as "may already stand for it".
 SIMILAR_TITLE_COVERAGE = 0.7

@@ -10,7 +10,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
-from .auxiliary_prompts import CARD_UPDATE_NOTHING_LEARNABLE, CARD_UPDATE_PROMPT, CARD_UPDATE_TOOL
+from .auxiliary_prompts import CARD_UPDATE_NOTHING_LEARNABLE, CARD_UPDATE_TOOL
 from .card_learning import (
     OBSERVATIONS_HEADING,
     narrow_edits_to_removals,

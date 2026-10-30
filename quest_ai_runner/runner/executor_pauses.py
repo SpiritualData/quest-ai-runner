@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from ..core.orchestrator import OrchestratorResult
 from ..core import provider_outage, usage_limit
-from .executor_support import ExecutionOutcome, terminal_session_id, utc_stamp
+from .executor_support import ExecutionOutcome, utc_stamp
 from .executor_contracts import log
 
 

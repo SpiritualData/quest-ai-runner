@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Mapping, Sequence
 
-from .tools import (STANDARD_TOOL_BUILDERS, TOKEN_RE, ToolContext, ToolResult, ToolSpec, _ASKED_PARAM,
+from .tools import (STANDARD_TOOL_BUILDERS, TOKEN_RE, ToolContext, ToolResult, ToolSpec,
                     _NEVER_CODE, _QUEST_ID_PARAM, _quest_id, quest_client_from_env,
                     quest_credentials_present)
 

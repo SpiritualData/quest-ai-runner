@@ -70,7 +70,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ._walk import prune_dirnames
 from .files_index import VisibleIndex
-from .files_redaction import REDACTED, redact  # noqa: F401  (redact re-exported for callers and tests)
+from .files_redaction import redact
 from .files_adapter import (
     FilesAdapter,
     _BINARY_EXTS,

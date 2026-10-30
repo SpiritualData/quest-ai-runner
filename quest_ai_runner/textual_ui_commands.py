@@ -145,11 +145,6 @@ class CommandsMixin:
 
     # -- interactive pickers (Textual-native) ---------------------------------
 
-    def _ask_select(self, prompt: str, handler: Callable[[str], None]) -> None:
-        """Print a prompt and route the next submitted line to ``handler``."""
-        self._console.dim(prompt)
-        self._pending_select = handler
-
     choice_picker: Optional[dict] = None
 
     def pick(self, title: str, options: List[tuple], handle: Callable[[str], None]) -> None:
