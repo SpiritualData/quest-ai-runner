@@ -89,7 +89,8 @@ write the class, add the decorator, run `esoi records sync`, fill the text, add 
   startup in one place, `quest_ai_runner/hub.py`, and registers its parts there. For dev and tests keep the sibling checkout
   beside this repository (pytest `pythonpath` in `pyproject.toml`; `evaluation/components/hub_of_hubs` also puts it on the path)
   rather than pip-installing it. QAR keeps its bindings (`esoi/hub_seats.csv`), probes and Quest adapters; registry facts are
-  changed in the hub repository, never copied here (`docs/hub-of-hubs.md`).
+  changed in the hub repository, never copied here (`docs/hub-of-hubs.md`). Generic assembly, selection, cascade and checking
+  belong in the esoi library, not here or in the hub; see `evolvable-structure/docs/explanation/what-belongs-where.md`.
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
   when its metric wins on the same cases.
