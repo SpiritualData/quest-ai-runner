@@ -399,3 +399,43 @@ def test_resume_replays_what_the_turn_showed_not_the_note_behind_it(tmp_path):
 
     shown = asyncio.run(run())
     assert "The answer the screen showed." in shown and "Completed: the goal" not in shown
+
+
+def test_resume_replays_the_tasks_a_turn_ran_and_the_model_version_between_question_and_answer(tmp_path):
+    import asyncio
+    from quest_ai_runner.textual_ui import QuestAITerminal
+
+    path = write_conv(tmp_path, "abc123", [("a question", "Completed: the goal")])
+    conv = read_conversation(path)
+    conv.meta["rep_name"] = "Tester"
+    conv.meta["shown"] = ["The answer the screen showed."]
+    conv.meta["work"] = [[{"goal": "Check the proposal outline", "model": "opus",
+                           "resolved_model": "claude-opus-5-5", "met": True},
+                          {"goal": "Draft the ethics section", "model": "sonnet", "resolved_model": "", "met": False}]]
+
+    async def run():
+        app = QuestAITerminal(None, _config=None, resume=conv)
+        app._build_session_worker = lambda: None
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            return [str(line.text) for line in app._tlog.lines]
+
+    lines = asyncio.run(run())
+    text = "\n".join(lines)
+    assert "Check the proposal outline · on opus (claude-opus-5-5) · done" in text
+    assert "Draft the ethics section · on sonnet · not finished" in text
+    assert text.index("a question") < text.index("Check the proposal outline") < text.index("The answer the screen showed.")
+
+
+def test_the_tasks_of_a_turn_are_saved_with_their_models():
+    from types import SimpleNamespace
+    from quest_ai_runner.textual_ui_outcome import turn_work
+
+    deep = SimpleNamespace(kind="deep", goals=["one", "two"], deep_results=[
+        SimpleNamespace(model="opus", resolved_model="claude-opus-5-5", met=True),
+        SimpleNamespace(model="sonnet", resolved_model=None, met=False)])
+    assert turn_work(deep) == [{"goal": "one", "model": "opus", "resolved_model": "claude-opus-5-5", "met": True},
+                               {"goal": "two", "model": "sonnet", "resolved_model": "", "met": False}]
+    assert turn_work(SimpleNamespace(kind="answer", model="sonnet")) == [
+        {"goal": "", "model": "sonnet", "resolved_model": "", "met": None}]
+    assert turn_work(SimpleNamespace(kind="answer", model=None)) == []

@@ -7,8 +7,8 @@ from __future__ import annotations
 from rich.text import Text
 
 from .interactive_session import InteractiveSession, _BANNER, _BOLD, _CYAN, _DIM, _RESET
-from .textual_ui_helpers import _missing_model_provider_message, message_count, person_line, plural
-from .textual_ui_outcome import speaker_label
+from .textual_ui_helpers import _missing_model_provider_message, indented_line, message_count, person_line, plural
+from .textual_ui_outcome import speaker_label, work_lines
 
 
 class StartupMixin:
@@ -40,6 +40,9 @@ class StartupMixin:
             index = first + offset
             on_screen = saved_shown[index] if index < len(saved_shown) and isinstance(saved_shown[index], str) else ""
             asst_text = on_screen or asst_text      # what the turn showed, else the note the model reads back
+            saved_work = conv.meta.get("work") if isinstance(conv.meta.get("work"), list) else []
+            for line in work_lines(saved_work[index] if index < len(saved_work) else []):
+                self._tlog.write(indented_line(f"  {line}", "dim"))       # the tasks that ran, and on which model
             if asst_text:
                 self._tlog.write(Text(speaker_label(rep_name), style="bold cyan"))
                 self._console.markdown(asst_text)

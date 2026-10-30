@@ -163,6 +163,36 @@ def provider_error_lines(error: BaseException, *, message_restored: bool,
     return [what, again]
 
 
+def turn_work(final) -> list:
+    """The tasks a turn ran, to save with it: ``[{"goal", "model", "resolved_model", "met"}]``, one per deep task, or a
+    single entry naming the model that answered when no task ran. Plain data (it goes into the conversation file)."""
+    results = list(getattr(final, "deep_results", None) or [])
+    if getattr(final, "kind", "") == "deep" and results:
+        goals = list(getattr(final, "goals", None) or [])
+        return [{"goal": str(goals[i]) if len(goals) == len(results) else "",
+                 "model": str(getattr(r, "model", "") or ""), "resolved_model": str(getattr(r, "resolved_model", "") or ""),
+                 "met": getattr(r, "met", None)} for i, r in enumerate(results)]
+    model = str(getattr(final, "model", "") or "")
+    return [{"goal": "", "model": model, "resolved_model": "", "met": None}] if model else []
+
+
+def work_lines(work) -> list:
+    """The saved tasks of a turn as plain lines for a replay: what ran and on which model (the full id when known)."""
+    from .interactive_session_render import _model_display
+    lines = []
+    for item in work if isinstance(work, list) else []:
+        if not isinstance(item, dict):
+            continue
+        goal = " ".join(str(item.get("goal") or "").split())
+        goal = goal if len(goal) <= 160 else goal[:159] + "…"
+        model = _model_display(item.get("model") or None, item.get("resolved_model") or None)
+        mark = {True: "done", False: "not finished"}.get(item.get("met"))
+        text = " · ".join(part for part in (goal or ("answered" if model else ""), model and f"on {model}", mark) if part)
+        if text:
+            lines.append(f"▸ {text}")
+    return lines
+
+
 def model_text(labels: Sequence[Tuple[Optional[str], Optional[str]]], verbose: bool) -> str:
     """The model(s) a turn ran on, once each: the short alias (``sonnet``), or with ``-v`` the full
     ``sonnet (claude-sonnet-5-5)``. ``labels`` are (model, resolved model) pairs."""

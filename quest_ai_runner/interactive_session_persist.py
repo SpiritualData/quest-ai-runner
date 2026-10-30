@@ -41,6 +41,8 @@ class PersistenceMixin:
                 "rep_name": self._rep_name,
                 # What each turn showed on screen, by turn (see ``_shown_by_turn``): `chat --resume` replays it.
                 "shown": [self._shown_by_turn.get(i, "") for i in range(len(self._session_history))],
+                # The tasks each turn ran, with the model that ran each, in the same order.
+                "work": [self._work_by_turn.get(i, []) for i in range(len(self._session_history))],
                 "updated_at": time.time(),
             }
             self._session_file.write_text(

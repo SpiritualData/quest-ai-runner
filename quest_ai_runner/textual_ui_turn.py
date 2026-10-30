@@ -36,6 +36,7 @@ from .textual_ui_outcome import (
     provider_error_lines,
     speaker_label,
     turn_outcome,
+    turn_work,
 )
 
 
@@ -568,8 +569,14 @@ class TurnMixin:
                 # final.text instead of the actual user-facing response.
                 s._last_assistant = final.text or "\n".join(self._answer_parts).strip()
             s._session_history.append((user_text, s._last_assistant))
-            if answer:
-                s._shown_by_turn[len(s._session_history) - 1] = answer
+            # What this turn showed and ran, saved with it for `chat --resume` (a session without the stores, such as
+            # a test double, simply keeps nothing).
+            turn_index = len(s._session_history) - 1
+            if answer and isinstance(getattr(s, "_shown_by_turn", None), dict):
+                s._shown_by_turn[turn_index] = answer
+            work = turn_work(final)
+            if work and isinstance(getattr(s, "_work_by_turn", None), dict):
+                s._work_by_turn[turn_index] = work
             s._write_session_file()
             s._turn_count += 1
             # A turn that executed work and left some unfinished refreshes the quest folder's
