@@ -54,12 +54,14 @@ dependencies = [
     # Quest's connector and the production consumer: quest_ai_runner/hub.py imports it at startup and registers QAR's parts.
     # Required, not an extra. Its own dependency is `esoi` (bare), met by the esoi line above. Dev and tests may use the
     # sibling checkout `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
-    "hubofhubs[locks] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main",
+    "hubofhubs[locks,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main",
 ]
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.40"]
 gemini = ["google-genai>=2.0"]
+# OpenAIProvider and DeepSeekProvider (an OpenAI-compatible endpoint): the hub arms import the SDK lazily.
+openai = ["openai>=1.0"]
 qdrant = ["qdrant-client>=1.7", "fastembed>=0.3"]
 bm25 = ["bm25s>=0.2"]
 # AcpDeepRunner: the opt-in DeepRunner that drives Claude over the Agent Client Protocol instead
@@ -86,12 +88,15 @@ drive = ["pypdf>=4.0"]
 all = [
     "anthropic>=0.40",
     "google-genai>=2.0",
+    "openai>=1.0",
+    "httpx",
     "google-auth>=2.0",
     "pypdf>=4.0",
     "qdrant-client>=1.7",
     "fastembed>=0.3",
     "bm25s>=0.2",
     "mcp==2.0.0",
+    "trafilatura",   # the hub's page extraction (optional there: without it page text degrades)
 ]
 # esoi (a core dependency, pinned above) also checks esoi/ and runs and records the evaluation components
 # (`esoi check`, `esoi run`, `esoi hygiene`), so dev and test need nothing more of it.
