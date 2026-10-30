@@ -15,8 +15,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from quest_ai_runner.adapters import card_limit, card_store_hygiene as hygiene
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall import card_limit, card_store_hygiene as hygiene
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
@@ -411,7 +411,7 @@ class TestOnlyWhatIsNeededIsRead:
         (tmp_path / "cards" / "bootstrap_meta.json").write_text(json.dumps({"completed_at": "2026-10-22T00:00:00+00:00"}))
         walks = []
         real = hygiene.indexable_folders
-        monkeypatch.setattr(hygiene, "indexable_folders", lambda r: walks.append(r) or real(r))
+        monkeypatch.setattr(hygiene, "indexable_folders", lambda r, extra=(): walks.append(r) or real(r, extra))
         for _ in range(3):
             s = FileContextStore(str(tmp_path / "cards"), repo_root=str(root), auto_bootstrap=False,
                                  mount_mode="copy", max_cards=0, self_heal=True)
@@ -431,11 +431,11 @@ class TestOnlyWhatIsNeededIsRead:
             (root / f"more{i}" / "n.md").write_text("x")
         topics = {f"t{i}": card(f"t{i}", [f"x{i}/a.md"], provenance={"created_by_task": "bootstrap"}) for i in range(40)}
         hygiene.remember_folder_count(cards, root, 10)            # a count from when the corpus was small
-        check = hygiene.inflation_check(cards, root, topics)
+        check = hygiene.inflation_check(cards, root, topics, per_folder=1)
         assert check.over is False and check.folders > 40, "the old count said inflated; the fresh walk did not"
         assert hygiene.cached_folder_count(cards, root) == check.folders
         small = {f"t{i}": card(f"t{i}", [f"x{i}/a.md"], provenance={"created_by_task": "bootstrap"}) for i in range(500)}
-        assert hygiene.inflation_check(cards, root, small).over is True
+        assert hygiene.inflation_check(cards, root, small, per_folder=1).over is True
 
 
 class TestWhatTheIndexWroteAndWhatSomebodyChanged:
@@ -455,7 +455,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         return root / ".quest-context"
 
     def test_the_pass_records_what_it_wrote_and_the_card_is_free_to_move_while_it_matches(self, tmp_path):
-        from quest_ai_runner.adapters import card_origin
+        from hubofhubs.recall import card_origin
         cards = self.indexed(tmp_path)
         card_a = FilesystemCardRepository(str(cards)).read("a-topic")
         assert card_a["provenance"]["index_hash"] == card_origin.index_fingerprint(card_a)
@@ -466,7 +466,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         {"notes": "a custom field a person added"}, {"description": "a better description"},
     ], ids=["summary", "keywords", "links", "custom notes field", "description"])
     def test_an_edit_by_hand_protects_the_card(self, tmp_path, change):
-        from quest_ai_runner.adapters import card_origin
+        from hubofhubs.recall import card_origin
         cards = self.indexed(tmp_path)
         edited = FilesystemCardRepository(str(cards)).read("a-topic")
         edited.update(change)
@@ -474,7 +474,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         assert card_origin.protection(edited, check_edits=False) == "", "the quick look does not hash"
 
     def test_the_heat_and_usage_the_machine_leaves_are_not_an_edit_but_a_retrieval_is_a_use(self, tmp_path):
-        from quest_ai_runner.adapters import card_origin
+        from hubofhubs.recall import card_origin
         cards = self.indexed(tmp_path)
         card_a = FilesystemCardRepository(str(cards)).read("a-topic")
         card_a["files"][0]["sha256"] = "changed"
@@ -485,7 +485,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         assert card_origin.protection(card_a) == "has been used"
 
     def test_a_refresh_does_not_turn_the_pass_own_repair_into_an_edit(self, tmp_path):
-        from quest_ai_runner.adapters import card_origin
+        from hubofhubs.recall import card_origin
         cards = self.indexed(tmp_path)
         before = FilesystemCardRepository(str(cards)).read("a-topic")
         files = {"a/n0.md", "a/n1.md"}
@@ -500,7 +500,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         assert before["provenance"]["index_hash"] or True
 
     def test_the_tidy_keeps_a_duplicate_somebody_edited(self, tmp_path):
-        from quest_ai_runner.adapters import card_origin
+        from hubofhubs.recall import card_origin
         cards = self.indexed(tmp_path)
         original = FilesystemCardRepository(str(cards)).read("a-topic")
         twin = json.loads(json.dumps(original))
@@ -680,7 +680,7 @@ class TestHealth:
             card("q", managed_by="sync"), copy, card(f"{SD}--{PRODUCT}--z", ["z/a.md"]),
             card("card:strayed", provenance={"created_by_task": "a run"}),
         ])
-        health = hygiene.store_health(tmp_path / "cards", root=root)
+        health = hygiene.store_health(tmp_path / "cards", per_folder=8, root=root)
         assert (health.total, health.imported, health.own) == (7, 1, 6)
         assert (health.topic, health.learned, health.managed) == (3, 2, 1)
         assert health.compounded_ids == 1 and health.item_id_cards == 1

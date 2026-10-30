@@ -48,7 +48,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
 from esoi import implementation
-from . import card_origin
+from hubofhubs.recall import card_origin
 
 _log = logging.getLogger("quest-ai-runner.quest_api_cards")
 

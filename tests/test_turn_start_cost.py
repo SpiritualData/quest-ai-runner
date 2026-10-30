@@ -181,7 +181,7 @@ def test_startup_refresh_is_skipped_when_the_store_was_refreshed_recently(tmp_pa
 
 
 def test_one_card_write_reparses_and_reweights_only_that_card(tmp_path, monkeypatch):
-    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+    from hubofhubs.recall.card_repository import FilesystemCardRepository
 
     repo = FilesystemCardRepository(str(tmp_path))
     for i in range(3):
@@ -207,7 +207,7 @@ def test_one_card_write_reparses_and_reweights_only_that_card(tmp_path, monkeypa
 
 
 def test_repository_revision_sees_a_write_without_statting_every_card(tmp_path):
-    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+    from hubofhubs.recall.card_repository import FilesystemCardRepository
 
     repo = FilesystemCardRepository(str(tmp_path))
     repo.write("a", {"id": "a"})
@@ -220,7 +220,7 @@ def test_repository_revision_sees_a_write_without_statting_every_card(tmp_path):
 
 def test_concurrent_first_loads_parse_the_store_once(tmp_path):
     import threading
-    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+    from hubofhubs.recall.card_repository import FilesystemCardRepository
 
     repo = FilesystemCardRepository(str(tmp_path))
     for i in range(5):
@@ -244,7 +244,7 @@ def test_concurrent_first_loads_parse_the_store_once(tmp_path):
 
 
 def test_prewarm_builds_the_cache_the_first_turn_uses(tmp_path, monkeypatch):
-    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+    from hubofhubs.recall.card_repository import FilesystemCardRepository
 
     repo = FilesystemCardRepository(str(tmp_path))
     repo.write("c0", {"id": "c0", "name": "Grants due soon", "keywords": ["grants", "deadline"]})

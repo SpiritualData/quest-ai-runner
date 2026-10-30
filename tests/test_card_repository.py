@@ -244,7 +244,7 @@ class TestRepoTextSearchHook:
         assert ac.card_ids[0] == "alpha", "in-app IDF fallback did not rank the matching card first"
 
     def test_filesystem_repo_has_no_search_cards(self):
-        from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+        from hubofhubs.recall.card_repository import FilesystemCardRepository
         fs = FilesystemCardRepository("/tmp/does-not-matter")
         assert not hasattr(fs, "search_cards"), (
             "FilesystemCardRepository must NOT implement search_cards so it always uses in-app IDF"

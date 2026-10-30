@@ -15,8 +15,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from quest_ai_runner.adapters import card_store_tidy as tidy
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall import card_store_tidy as tidy
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
@@ -406,7 +406,7 @@ def test_merge_topics_on_a_local_folder_and_undo_restores_the_files_byte_for_byt
 # --- a lane with only Quest credentials sees what the tidy does or would do -------------------------------------
 
 def test_the_plan_notice_reaches_the_next_task_feed_with_the_command_and_the_opt_in(tmp_path):
-    from quest_ai_runner.adapters import card_limit
+    from hubofhubs.recall import card_limit
     card_limit.reset_announcements()
     repo = backend_with(inflated_cards())
     store = backend_store(tmp_path, repo, max_cards=5)
@@ -451,7 +451,7 @@ def test_apply_takes_the_second_step_while_the_store_is_over_its_limit_and_undo_
 
 
 def test_the_limit_notice_of_a_backend_store_leads_with_the_tidy_and_says_why_learned_cards_come_in(tmp_path):
-    from quest_ai_runner.adapters import card_limit
+    from hubofhubs.recall import card_limit
     card_limit.reset_announcements()
     repo = backend_with(inflated_cards())
     store = backend_store(tmp_path, repo, max_cards=3)

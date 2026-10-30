@@ -228,7 +228,7 @@
  "persist-cards": {
   "default": "quest_api",
   "modules": {
-   "filesystem": "quest_ai_runner.adapters.card_repository",
+   "filesystem": "quest_ai_runner.config_assembler",
    "qdrant": "quest_ai_runner.adapters.qdrant_card_repository",
    "quest_api": "quest_ai_runner.adapters.quest_api_card_repository"
   }
@@ -260,7 +260,7 @@
  "repair-a-card-store": {
   "default": "repository_tidy",
   "modules": {
-   "local_folder_tidy": "quest_ai_runner.adapters.card_store_hygiene",
+   "local_folder_tidy": "quest_ai_runner.adapters.context_store_heal",
    "repository_tidy": "quest_ai_runner.adapters.card_store_tidy"
   }
  },

@@ -6,6 +6,6 @@ world,gather-evidence,notion;google_chat;openclaw,quest_ai_runner/adapters/notio
 context_assembly,select-context;index-by-meaning,qdrant;bm25;fastembed,quest_ai_runner/adapters/bm25_content_store.py;quest_ai_runner/adapters/qdrant_vector_store.py;quest_ai_runner/adapters/hybrid_context_assembler.py
 science,know-the-world,openalex;arxiv;semantic scholar;pubmed,
 model_providers,call-a-model,anthropic;openai;gemini;deepseek;claude;gpt,quest_ai_runner/providers.py
-memory,persist-cards,mem0;letta;graphiti;cognee,quest_ai_runner/adapters/file_context_store.py;quest_ai_runner/adapters/card_repository.py
+memory,persist-cards,mem0;letta;graphiti;cognee,quest_ai_runner/adapters/file_context_store.py;quest_ai_runner/config_assembler.py
 evals,evolve-by-metric,promptfoo;deepeval;ragas;inspect,evaluation/components;esoi.toml
 voice,,pipecat;livekit;whisper,

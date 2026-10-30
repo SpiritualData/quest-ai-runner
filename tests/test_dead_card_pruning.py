@@ -89,7 +89,7 @@ def test_bootstrap_never_indexes_a_claude_code_state_file(tmp_path):
 
 
 def test_prune_is_opt_outable(monkeypatch):
-    from quest_ai_runner.adapters.context_folder_review import _prune_dead_cards
+    from quest_ai_runner.adapters.card_store_settings import prune_dead_cards as _prune_dead_cards
     monkeypatch.delenv("QAR_PRUNE_DEAD_CARDS", raising=False)
     assert _prune_dead_cards() is True          # default ON
     for off in ("0", "false", "no", "FALSE"):
@@ -209,7 +209,7 @@ def test_a_dedup_merge_across_new_and_stored_cards_yields_plain_paths():
     raised TypeError: unhashable type: 'dict' -- after all the model work was done, reported as
     "Cards created: 0". It only bites on a RE-bootstrap, which is why a first run looked fine.
     """
-    from quest_ai_runner.adapters.context_bootstrap_support import _merge_card_group, _card_file_paths
+    from hubofhubs.recall.context_bootstrap_support import _merge_card_group, _card_file_paths
 
     fresh = {"id": "a", "name": "A", "keywords": ["k1"], "files": ["src/a.py"]}
     stored = {"id": "b", "name": "B", "keywords": ["k2"],
@@ -271,7 +271,7 @@ def test_a_nameless_card_whose_summary_is_only_scaffolding_is_degenerate():
 def test_merging_cards_does_not_grow_keywords_without_bound():
     # Merges compound: one real store held a card with 2,174 keywords where the prompt asks for
     # 5 to 12. That card matches almost any query and crowds out the ones that actually answer it.
-    from quest_ai_runner.adapters.context_bootstrap_support import _merge_card_group, _MAX_MERGED_KEYWORDS
+    from hubofhubs.recall.context_bootstrap_support import _merge_card_group, _MAX_MERGED_KEYWORDS
 
     group = [{"id": f"c{i}", "name": f"C{i}", "files": [f"f{i}.py"],
               "keywords": [f"kw{i}_{j}" for j in range(20)]} for i in range(10)]

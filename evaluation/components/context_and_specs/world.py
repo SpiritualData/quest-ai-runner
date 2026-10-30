@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 import common  # noqa: F401  (sets sys.path for the repo)
-from quest_ai_runner.adapters.card_repository import card_embed_text
+from hubofhubs.recall.card_repository import card_embed_text
 from quest_ai_runner.core.spec_selection import card_line
 from quest_ai_runner.core.unified_search import TagTable, views_from_cards, views_from_spec_index, weighted_terms
 

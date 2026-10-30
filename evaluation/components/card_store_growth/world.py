@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 from unittest.mock import patch
 
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 MERGE_RENAME = re.compile(r"--m[0-9a-f]{8}$")      # ``merge-into`` renames a colliding card <id>--m<8 hex>
@@ -265,7 +265,7 @@ class World:
 
     def apply(self, op: str, i: int) -> None:
         """Do ``op`` at level ``i``. Anything it raises is for the caller to report."""
-        from quest_ai_runner.adapters import card_store_identity as ident
+        from hubofhubs.recall import card_store_identity as ident
         from quest_ai_runner.adapters.card_store_merge import apply_merge
         if op == "bootstrap":
             self.index(i)

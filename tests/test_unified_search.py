@@ -168,7 +168,7 @@ def test_the_repository_fixture_index_answers_a_spec_only_request_with_kinds():
 
 
 def test_card_views_come_from_a_card_repository_without_writing(tmp_path):
-    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+    from hubofhubs.recall.card_repository import FilesystemCardRepository
     from quest_ai_runner.adapters.card_views import card_views
     repo = FilesystemCardRepository(str(tmp_path))
     repo.write("backup-keys", {"id": "backup-keys", **CARDS["backup-keys"]})

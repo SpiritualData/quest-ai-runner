@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 from typing import Any, List
 
 from esoi import implementation
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from hubofhubs.recall.composite_assembler import CompositeContextAssembler
 from hubofhubs.recall.reference_resolver import NoteResolver
 
@@ -35,6 +36,12 @@ if TYPE_CHECKING:  # typing only: config imports this module, not the other way 
 def composite(assemblers: List[Any]) -> CompositeContextAssembler:
     """QAR's ``select-context`` arm that runs several assemblers in order as one: the hub's composite assembler."""
     return CompositeContextAssembler(assemblers)
+
+
+@implementation("persist-cards", "filesystem")
+def filesystem_card_repository(cards_dir: str) -> FilesystemCardRepository:
+    """QAR's ``persist-cards`` arm that keeps one JSON file per card in a folder: the hub's filesystem card repository."""
+    return FilesystemCardRepository(cards_dir)
 
 
 @implementation("resolve-references", "note")
@@ -169,7 +176,7 @@ def _resolve_context_assembler_base(
     from .adapters.quest_api_card_repository import CardScopeError
     try:
         from .adapters import FileContextStore
-        from .adapters import card_limit
+        from .adapters.card_store_settings import max_cards_from_env
         root = cfg.corpus_root or os.getcwd()
         cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
         # auto_bootstrap=False: we manage the lifecycle ourselves via
@@ -218,7 +225,7 @@ def _resolve_context_assembler_base(
             tidy_mode=cfg.card_tidy,
             # The card limit is the runner's policy (QAR_MAX_CARDS, 1,000 when unset, 0 for none); the
             # library itself applies no limit unless its caller passes one.
-            max_cards=card_limit.max_cards_from_env(),
+            max_cards=max_cards_from_env(),
         )
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.

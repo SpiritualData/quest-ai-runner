@@ -13,7 +13,7 @@ from hubofhubs.recall.text_sampling import keywords_from_text, select_representa
 def scope_tags_for(meta: Optional[Dict[str, Any]]) -> List[str]:
     """The scope tags a turn carries: its explicit ``scope_tags``, else its quest ids as tags."""
     from .recent_context import quest_scope_key
-    from .scope_tags import as_tag_list, union_scope_tags
+    from hubofhubs.recall.scope_tags import as_tag_list, union_scope_tags
     m = meta or {}
     explicit = as_tag_list(m.get("scope_tags"))
     if explicit:
@@ -137,7 +137,7 @@ class TurnContextStore:
             # own rule, so history recorded before turns carried tags is not lost.
             turn_tags = (meta or {}).get("scope_tags")
             if turn_tags:
-                from .scope_tags import scope_tags_allow
+                from hubofhubs.recall.scope_tags import scope_tags_allow
                 cards = [c for c in cards if scope_tags_allow(c.get("scope_tags"), turn_tags)]
             # NOT ITS OWN THREAD. A thread's earlier runs reach its brief already, through the
             # thread's own run history and last result; retrieving them here as "past

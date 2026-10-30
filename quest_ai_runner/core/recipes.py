@@ -55,7 +55,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .runtime_settings import process_environment
 from .prompt_specs import declare, render_prompt
-from .scope_tags import as_tag_list, scope_tags_allow
+from hubofhubs.recall.scope_tags import as_tag_list, scope_tags_allow
 
 log = logging.getLogger(__name__)
 

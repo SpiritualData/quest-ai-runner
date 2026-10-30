@@ -4,6 +4,8 @@ A mixin of ``FileContextStore`` (see ``file_context_store.py``): methods only, s
 """
 from __future__ import annotations
 
+import logging
+
 import math
 import os
 import re
@@ -22,12 +24,12 @@ from hubofhubs.recall.card_content_render import (
     render_card_content_blocks,
     tokenize as _tokenize,
 )
-from . import card_origin
+from hubofhubs.recall import card_origin
 from hubofhubs.recall.walk import prune_dirnames
 from .walk_settings import effective_skip_dirs
-from ..core.scope_tags import scope_tags_allow
-from .context_card_extraction import (
-    _QUEST_FOLDER_BOOST,
+from hubofhubs.recall.scope_tags import scope_tags_allow
+from hubofhubs.recall.context_card_extraction import (
+    _LINKED_FOLDER_BOOST,
     _RECENCY_BOOST_HALF_LIFE_DAYS,
     _RECENCY_BOOST_USAGE_CAP,
     _SOURCE_FILE_WEIGHT,
@@ -35,7 +37,9 @@ from .context_card_extraction import (
     _card_covered_paths,
     _card_display_title,
 )
-from .context_bootstrap_support import _BOOTSTRAP_MAX_BYTES, _SOURCE_EXTS, _log, _run_parallel
+from hubofhubs.recall.context_bootstrap_support import _BOOTSTRAP_MAX_BYTES, _SOURCE_EXTS, _run_parallel
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 class AssemblyMixin:
@@ -454,10 +458,10 @@ class AssemblyMixin:
             # Apply test-file penalty.
             card_weight = float(card.get("weight", _SOURCE_FILE_WEIGHT))
             score = base_score * card_weight
-            # QUEST-FOLDER BOOST (pre-gate; see _QUEST_FOLDER_BOOST for why this differs from the
+            # QUEST-FOLDER BOOST (pre-gate; see _LINKED_FOLDER_BOOST for why this differs from the
             # post-gate recency/usage boost below).
             if folder_prefix and self._card_pins_folder(card, folder_prefix):
-                score *= _QUEST_FOLDER_BOOST
+                score *= _LINKED_FOLDER_BOOST
             # CONFIDENCE GATE: only a match that clears the threshold is injected. A weak match
             # contributes NOTHING, so an uncertain query yields an empty context view and the run
             # falls back to plain Claude Code (never worse). This is what makes the layer dominate:

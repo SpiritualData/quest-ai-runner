@@ -259,7 +259,7 @@ def test_selected_quest_binds_every_turn_like_quest_ai_chat(monkeypatch, corpus,
 # -- shared-corpus file permissions ----------------------------------------------------------
 
 def test_atomic_card_write_is_readable_by_others(tmp_path):
-    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+    from hubofhubs.recall.card_repository import FilesystemCardRepository
     old = os.umask(0o022)
     try:
         repo = FilesystemCardRepository(str(tmp_path))

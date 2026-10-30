@@ -23,9 +23,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quest_ai_runner.adapters import card_store_identity as ident
+from hubofhubs.recall import card_store_identity as ident
 from quest_ai_runner.adapters import card_store_mounts as mounts
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore, _write_bootstrap_meta
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
 

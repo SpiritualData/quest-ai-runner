@@ -11,7 +11,7 @@ import pytest
 
 import quest_ai_runner.adapters as adapters_mod
 from quest_ai_runner import config as config_mod
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.quest_api_card_repository import (
     QuestApiCardRepository, QuestApiCardVectorStore, quest_card_settings_from_env)

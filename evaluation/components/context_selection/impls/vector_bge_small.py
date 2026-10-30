@@ -9,7 +9,7 @@ ALTERNATIVE = True
 
 def build(meter):  # noqa: ARG001
     import numpy as np
-    from quest_ai_runner.adapters.card_repository import card_embed_text
+    from hubofhubs.recall.card_repository import card_embed_text
     embed = embedder()
     index = {}
 

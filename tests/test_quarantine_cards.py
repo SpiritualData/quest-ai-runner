@@ -320,7 +320,7 @@ def test_apply_moves_cards_instead_of_deleting_them(store: Path):
 def test_the_quarantine_dir_is_invisible_to_the_card_store(store: Path):
     # The whole approach rests on this: if the store still loaded quarantined cards, moving them
     # would shrink nothing.
-    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+    from hubofhubs.recall.card_repository import FilesystemCardRepository
 
     write_card(store, "state-card", files=["app/runner_state.json"])
     write_card(store, "keeper", files=["docs/a.md", "docs/b.md"])

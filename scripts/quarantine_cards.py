@@ -39,7 +39,7 @@ what already happened, for the ways it happened:
                   ``--covered-by``. ``--covered-prefix-strip PATH`` drops a leading folder from
                   paths before comparing, when one store is rooted a level above the other.
 
-The plan itself (every reason above) is ``plan_cards`` in ``quest_ai_runner/adapters/card_store_tidy_plan.py``,
+The plan itself (every reason above) is ``plan_cards`` in ``hubofhubs/recall/card_store_tidy_plan.py``,
 the one the runner makes for any card repository (a local folder, the Quest backend, Qdrant) and applies through the
 repository port (``card_store_tidy``); which cards are protected is ``card_origin.protection``. This tool is that plan
 over a local folder, by hand, and a way of looking at a store: a dry run starts with the store's health (cards by kind, ids that stack import prefixes,
@@ -85,9 +85,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from quest_ai_runner.adapters.card_origin import card_id_of_item, compounding_evidence  # noqa: E402,F401
-from quest_ai_runner.adapters.card_repository import QUARANTINE_DIR_NAME  # noqa: E402
-from quest_ai_runner.adapters.card_store_hygiene import (  # noqa: E402,F401  (re-exported)
+from hubofhubs.recall.card_origin import card_id_of_item, compounding_evidence  # noqa: E402,F401
+from hubofhubs.recall.card_repository import QUARANTINE_DIR_NAME  # noqa: E402
+from hubofhubs.recall.card_store_hygiene import (  # noqa: E402,F401  (re-exported)
     card_paths,
     fold_card,
     jaccard,
@@ -105,8 +105,9 @@ from quest_ai_runner.adapters.card_store_hygiene import (  # noqa: E402,F401  (r
     store_id_of,
 )
 from hubofhubs.recall.card_store_lock import StoreLock  # noqa: E402
-from quest_ai_runner.adapters.card_store_hygiene import in_quarantine  # noqa: E402
-from quest_ai_runner.adapters.card_store_tidy_plan import (  # noqa: E402,F401  (re-exported)
+from quest_ai_runner.adapters.card_store_settings import max_cards_per_folder, skip_dirs_from_env  # noqa: E402
+from hubofhubs.recall.card_store_hygiene import in_quarantine  # noqa: E402
+from hubofhubs.recall.card_store_tidy_plan import (  # noqa: E402,F401  (re-exported)
     ALL_REASONS,
     DEFAULT_REASONS,
     excluded_prefixes_from_review,
@@ -114,7 +115,7 @@ from quest_ai_runner.adapters.card_store_tidy_plan import (  # noqa: E402,F401  
     strip_prefix,
     under_any_prefix,
 )
-from quest_ai_runner.adapters.context_card_ceilings import _FILE_SET_DEDUP_JACCARD  # noqa: E402
+from hubofhubs.recall.context_card_ceilings import _FILE_SET_DEDUP_JACCARD  # noqa: E402
 
 SKIP_FILES = {"bootstrap_meta.json", "folder_review.json"}
 
@@ -339,8 +340,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     print_report(cards_dir, len(cards), entries, skipped, excluded, args.apply)
     print("")
-    print(render_health_report(cards_dir, entries, root=Path(os.path.expanduser(args.root)).resolve()
-                               if args.root else None))
+    print(render_health_report(cards_dir, entries, per_folder=max_cards_per_folder(), skip_extra=skip_dirs_from_env(),
+                               root=Path(os.path.expanduser(args.root)).resolve() if args.root else None))
 
     if args.apply and entries:
         moved, failed = move_entries(cards_dir, entries, own_store_id)

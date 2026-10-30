@@ -42,6 +42,8 @@ THIS source used), which is what lets a card's cold sources sink below its hot o
 """
 from __future__ import annotations
 
+import logging
+
 import os
 import subprocess
 import threading
@@ -55,22 +57,20 @@ from hubofhubs.recall.card_content_render import (
     MAX_CARD_REFS as _MAX_CARD_REFS,
     tokenize as _tokenize,
 )
-from . import card_limit as card_limit_policy
-from .card_repository import CardRepository, FilesystemCardRepository
+from hubofhubs.recall import card_limit as card_limit_policy
+from hubofhubs.recall.card_repository import CardRepository, FilesystemCardRepository
+from .card_limit_report import announce_full
 from .card_store_mounts import MODE_MOUNT, Mount, MountedCardRepository, mount_mode_from_env
 
-from .context_bootstrap_support import (
+from hubofhubs.recall.context_bootstrap_support import (
     _BOOTSTRAP_META_FILE,
     _BOOTSTRAP_VERSION,
     _SOURCE_EXTS,
     _TFDFIDF_VERSION,
-    _bootstrap_max_cards,
-    _bootstrap_max_files,
-    _log,
     _read_bootstrap_meta,
     _write_bootstrap_meta,
 )
-from .context_folder_review import (
+from hubofhubs.recall.context_folder_review import (
     _FOLDER_REVIEW_FILE,
     _ai_instruction_files_in,
     _dir_file_counts,
@@ -80,7 +80,7 @@ from .context_folder_review import (
     _is_excluded_folder,
     _nested_vcs_dirs,
 )
-from .context_card_extraction import (
+from hubofhubs.recall.context_card_extraction import (
     _RECENCY_BOOST_MAX_DEFAULT,
 )
 from .context_store_origins import OriginsMixin
@@ -91,6 +91,8 @@ from .context_store_bootstrap_walk import BootstrapWalkMixin
 from .context_store_heal import HealMixin
 
 
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 @implementation("select-context", "file")
@@ -249,6 +251,7 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
             str(cards_dir),
             max_cards or 0,
             repo=self._own_repo, cards=self._own_cards, revision=self._repo.revision,
+            announcer=announce_full,
         )
         # Precompute {quest_id: repo-root-relative POSIX prefix} once, so per-assemble() lookup is
         # a plain dict get. A folder outside repo_root can't be matched against card file paths

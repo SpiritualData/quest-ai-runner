@@ -23,7 +23,7 @@ topic, and two cards are duplicates only when they pin the same files AND name t
 """
 import json
 
-from quest_ai_runner.adapters.context_card_extraction import _path_slug
+from hubofhubs.recall.context_card_extraction import _path_slug
 
 OUTER_ROOT, INNER_ROOT = "corpus", "corpus/org"
 INNER_TOPICS = ("poller", "executor", "ledger", "planner", "router", "budget")

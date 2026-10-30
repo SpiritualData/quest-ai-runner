@@ -31,7 +31,8 @@ from .anticipation_learner import (
     update_weight,
 )
 from .anticipation_store import FilePredictionStore
-from .scope_tags import scope_tags_allow, scope_tags_from_keys, union_scope_tags
+from hubofhubs.recall.scope_tags import scope_tags_allow, union_scope_tags
+from .scope_tags import scope_tags_from_keys
 
 log = logging.getLogger("quest-ai-runner.anticipation")
 

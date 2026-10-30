@@ -8,8 +8,8 @@ import json
 import pytest
 
 from quest_ai_runner import store_cli
-from quest_ai_runner.adapters import card_store_identity as ident
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall import card_store_identity as ident
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.card_store_upload import REASON_IMPORTED, plan_upload
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.quest_api_card_repository import (

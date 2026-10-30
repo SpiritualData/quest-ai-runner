@@ -58,10 +58,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
-from . import card_limit, card_origin
-from .card_repository import QUARANTINE_DIR_NAME, FilesystemCardRepository
+from hubofhubs.recall import card_limit, card_origin
+from hubofhubs.recall.card_repository import QUARANTINE_DIR_NAME, FilesystemCardRepository
 from .card_store_mounts import copy_origin_root
-from .card_store_identity import (
+from .card_store_settings import ENV_MAX_CARDS, max_cards_from_env
+from hubofhubs.recall.card_store_identity import (
     SCHEME_LEGACY,
     SCHEME_QUALIFIED,
     identity_of,
@@ -360,13 +361,13 @@ def plan_merge(narrow_dir: str, wide_dir: str, *, vector_store: Any = None,
                 plan.moves.append(CardMove(old_id, new_id, STATUS_ALREADY, incoming))
             else:
                 plan.moves.append(CardMove(old_id, new_id, STATUS_UNRESOLVED, incoming))
-    limit = card_limit.max_cards_from_env() if max_cards is None else max_cards
+    limit = max_cards_from_env() if max_cards is None else max_cards
     arriving = plan.count(STATUS_MOVE, STATUS_RENAMED)
     leaving = len(plan.wide_copies) if prune_source else 0
     if limit and len(wide_cards) + arriving - leaving > limit:
         plan.problems.append(
             f"the wide store would hold {len(wide_cards) + arriving - leaving:,} cards after the merge, over "
-            f"its limit of {limit:,} ({card_limit.ENV_MAX_CARDS}); raise the limit first, or tidy the wide store")
+            f"its limit of {limit:,} ({ENV_MAX_CARDS}); raise the limit first, or tidy the wide store")
     for mv in plan.moves:
         if mv.status in (STATUS_MOVE, STATUS_RENAMED):
             for p in card_paths(mv.card):

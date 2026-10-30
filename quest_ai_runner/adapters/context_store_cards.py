@@ -5,27 +5,26 @@ A mixin of ``FileContextStore`` (see ``file_context_store.py``): methods only, s
 from __future__ import annotations
 
 import heapq
+import logging
 import json
 import os
-from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
-from . import card_origin
-from . import card_limit as limit_mod
-from .card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
+from hubofhubs.recall import card_limit as limit_mod
+from hubofhubs.recall import card_origin
+from hubofhubs.recall.card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
 from hubofhubs.recall.card_content_render import (
     dedupe_content as _dedupe_content,
     normalize_content as _normalize_content,
     render_card_content,
     tokenize as _tokenize,
 )
-from .card_repository import card_embed_text
+from hubofhubs.recall.card_repository import card_embed_text
 from hubofhubs.recall.background_pacing import Pacer
-from ..core.scope_tags import union_scope_tags
+from hubofhubs.recall.scope_tags import union_scope_tags
 from ..core.vector_scopes import SeedItems
-from .context_card_extraction import _card_slug, _managed_names, _trim_content_by_recency
+from hubofhubs.recall.context_card_extraction import _card_slug, _managed_names, _trim_content_by_recency
 from .context_card_dedup import _record_summary
-from .context_bootstrap_support import _log
 
 # How many cards an edit may be passed on through when the card it was meant for has been moved out and the card
 # that stood for it was moved too.
@@ -35,35 +34,7 @@ MOVED_CARD_HOPS = 3
 # about 80 ms in a single call, and the interpreter's lock is held for all of it.
 RANK_SLICE = 200
 
-
-def card_last_touched(card: Dict[str, Any]) -> float:
-    """Newest time anything on ``card`` was used, learned or changed; 0.0 when it carries none.
-
-    Reads only what the card already holds, so it does no I/O: the ``last_used_ts`` and ``ts`` of
-    its content items, the ``last_used_ts`` and ``mtime`` of its pinned files (when that file last
-    changed, as of the card's last refresh), and ``provenance.last_verified_at``. Never raises.
-    """
-    newest = 0.0
-    try:
-        # Compared as stored (seconds since the epoch): a card is a few dozen stamps and a store can
-        # hold hundreds of thousands, so this loop converts and allocates nothing.
-        for entries in (card.get("content"), card.get("files")):
-            for entry in entries or ():
-                if isinstance(entry, dict):
-                    for field in ("last_used_ts", "ts", "mtime"):
-                        stamp = entry.get(field)
-                        if stamp and stamp > newest:
-                            newest = stamp
-        provenance = card.get("provenance")
-        verified = provenance.get("last_verified_at") if isinstance(provenance, dict) else None
-        if verified:
-            try:
-                newest = max(newest, float(verified))
-            except ValueError:
-                newest = max(newest, datetime.fromisoformat(str(verified)).timestamp())
-    except (TypeError, ValueError, OverflowError):
-        pass
-    return newest
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 def card_seed_key(card_id: str, card: Dict[str, Any]) -> Tuple[int, float, int, str]:
@@ -73,7 +44,7 @@ def card_seed_key(card_id: str, card: Dict[str, Any]) -> Tuple[int, float, int, 
     are what a quest turn is grounded in, they are few, and they carry no timestamps of their own,
     so ranking them by recency alone would put them last. Then cards that earned their place by
     being used (``usage_count``), then the rest. Within each group the card used, learned or
-    changed most recently comes first (``card_last_touched``), then the more used, then the id, so
+    changed most recently comes first (``card_origin.last_touched``), then the more used, then the id, so
     the choice is the same on every run and on every filesystem.
     """
     try:
@@ -81,7 +52,7 @@ def card_seed_key(card_id: str, card: Dict[str, Any]) -> Tuple[int, float, int, 
     except (TypeError, ValueError):
         used = 0
     tier = 0 if card.get("managed_by") else (1 if used > 0 else 2)
-    return (tier, -card_last_touched(card), -used, card_id)
+    return (tier, -card_origin.last_touched(card), -used, card_id)
 
 
 def cards_in_seed_order(cards: Dict[str, Dict[str, Any]]) -> Iterator[Tuple[str, Dict[str, Any]]]:
@@ -453,7 +424,7 @@ class CardsMixin:
         """An edit meant for a card that now sits in ``_quarantine/``: send it to the card that stands for it
         (recorded in the manifest of the move that took it out), bring back a card the card limit moved out
         to make room, or, when neither is possible, log the edit in full at WARNING. Caller holds the lock."""
-        from . import card_store_hygiene as hygiene
+        from hubofhubs.recall import card_store_hygiene as hygiene
         keeper = hygiene.keeper_of_moved(self._cards_dir, card_id)
         edit = dict(add=add, replace=replace, remove=remove, fields=fields, scope_tags=scope_tags)
         if keeper and keeper != card_id and hops < MOVED_CARD_HOPS and not card_origin.is_store_qualified(keeper):

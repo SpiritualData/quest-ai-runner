@@ -548,7 +548,7 @@ ids, 2,116 about nested repositories the folder review excludes, 1,062 duplicate
 tidies through the `CardRepository` port itself (`adapters/card_store_tidy.py`), the same way on a local folder,
 the Quest backend and Qdrant.
 
-**What it removes.** The plan is `plan_cards` (`adapters/card_store_tidy_plan.py`), the rules that were
+**What it removes.** The plan is `plan_cards` (`hubofhubs.recall.card_store_tidy_plan`), the rules that were
 `scripts/quarantine_cards.py` and that the script now imports: a card stored under a vector point id (its notes
 join the card it names), a compounded copy that has a surviving card with the same or more files, a card with
 more than half of its files under folders the folder review excludes for good, a surplus card pinning the same

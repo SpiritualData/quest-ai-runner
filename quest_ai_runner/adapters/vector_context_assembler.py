@@ -77,7 +77,7 @@ from hubofhubs.ports.context import AssembledContext, VectorHit, VectorStore
 from hubofhubs.ports.model import STEP_SELECT, STEP_SUMMARIZE, answer_with_reasoning
 from ..core.adapters_bases import ContextAssemblerBase
 from ..core.card_filter import _memo_get, _memo_put, _selection_key
-from ..core.scope_tags import scope_tags_allow
+from hubofhubs.recall.scope_tags import scope_tags_allow
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from hubofhubs.recall.card_content_render import (
     render_card_content,

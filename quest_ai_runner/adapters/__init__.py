@@ -33,7 +33,7 @@ from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .session_file_conversation_store import SessionFileConversationStore
 from .conversation_card_builder import ConversationCardBuilder
 from .feedback_processor import FeedbackProcessor
-from .card_repository import (
+from hubofhubs.recall.card_repository import (
     CardRepository,
     FilesystemCardRepository,
     card_embed_text,

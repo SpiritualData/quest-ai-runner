@@ -34,7 +34,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from hubofhubs.ports.context import VectorHit
 from ..core.vector_scopes import CARD_SEED_SCOPE
-from .card_store_identity import EMBEDDED
+from hubofhubs.recall.card_store_identity import EMBEDDED
 
 log = logging.getLogger("quest-ai-runner.card-vectors")
 

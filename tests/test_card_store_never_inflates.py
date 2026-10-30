@@ -31,7 +31,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
@@ -440,7 +440,7 @@ def test_a_card_written_before_dates_were_kept_stays_undated(tmp_path):
 def test_a_card_a_person_wrote_stays_theirs_through_a_refresh_that_regenerates_it(tmp_path):
     """Found by the review fuzz: a card with no author (written by hand) pinning files that changed was regenerated
     and labelled as an index-pass card, which made it movable by the tidy and the card limit."""
-    from quest_ai_runner.adapters.card_origin import protection
+    from hubofhubs.recall.card_origin import protection
     root = notes(tmp_path / "top", ["auth", "chat"])
     index(root)
     mine = open_store(root)

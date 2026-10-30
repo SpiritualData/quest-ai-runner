@@ -24,7 +24,7 @@ from .orchestrator_capabilities import (
 )
 from .orchestrator_decide_tool import DEFERRED_RUNNER_KEY
 from .orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
-from .scope_tags import as_tag_list
+from hubofhubs.recall.scope_tags import as_tag_list
 
 # Said when a deep run's own context could not be had in time, so the person is not left thinking
 # the worker was given it. The log WARNING carries the detail.

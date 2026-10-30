@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import List
 
 from ..core.unified_search import CARD_SOURCE, RecordView, views_from_cards
-from .card_repository import CardRepository, card_embed_text
+from hubofhubs.recall.card_repository import CardRepository, card_embed_text
 
 
 def card_views(repository: CardRepository, source: str = CARD_SOURCE) -> List[RecordView]:

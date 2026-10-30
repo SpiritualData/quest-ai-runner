@@ -273,7 +273,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `select-context:idf_hint` | Offline warm-hint builder | evaluation/components/claude_code_ab/impls/idf_hint.py |  |
 | `select-context:cold_claude` | Agent without hint | evaluation/components/claude_code_ab/impls/cold_claude.py |  |
 | `select-context:warm_claude` | Agent with hint | evaluation/components/claude_code_ab/impls/warm_claude.py |  |
-| `persist-cards:filesystem` | Atomic JSON file repository | quest_ai_runner/adapters/card_repository.py |  |
+| `persist-cards:filesystem` | Atomic JSON file repository | quest_ai_runner/config_assembler.py |  |
 | `persist-cards:qdrant` | Vector database repository | quest_ai_runner/adapters/qdrant_card_repository.py |  |
 | `persist-cards:quest_api` | Hosted card API repository | quest_ai_runner/adapters/quest_api_card_repository.py |  |
 | `index-by-meaning:qdrant` | Qdrant-backed vector store | quest_ai_runner/adapters/qdrant_vector_store.py |  |
@@ -398,7 +398,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `choose-what-to-index:review_only` | Model-judged folder review before the gate | evaluation/components/choose_what_to_index/impls/review_only.py |  |
 | `choose-what-to-index:index_everything` | Index everything (broken baseline) | evaluation/components/choose_what_to_index/broken/index_everything.py |  |
 | `repair-a-card-store:repository_tidy` | Repository tidy | quest_ai_runner/adapters/card_store_tidy.py |  |
-| `repair-a-card-store:local_folder_tidy` | Tidy at open of a local folder | quest_ai_runner/adapters/card_store_hygiene.py |  |
+| `repair-a-card-store:local_folder_tidy` | Tidy at open of a local folder | quest_ai_runner/adapters/context_store_heal.py |  |
 | `repair-a-card-store:no_cleanup` | Store as copy mode leaves it | evaluation/components/card_growth/impls/no_cleanup.py |  |
 | `keep-a-working-stream:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | quest_ai_runner/core/orchestrator_planning.py |  |
 | `keep-a-working-stream:rebuilt_full_context` | Rebuilt prompt per step with the context re-sent from cache | quest_ai_runner/core/orchestrator_planning.py |  |

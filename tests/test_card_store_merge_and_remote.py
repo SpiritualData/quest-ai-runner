@@ -17,11 +17,11 @@ import pytest
 pytest.importorskip("qdrant_client")
 
 from quest_ai_runner import store_cli  # noqa: E402
-from quest_ai_runner.adapters import card_store_identity as ident  # noqa: E402
+from hubofhubs.recall import card_store_identity as ident  # noqa: E402
 from quest_ai_runner.adapters import card_store_merge as merge  # noqa: E402
 from quest_ai_runner.adapters import card_store_mounts as mounts  # noqa: E402
 from quest_ai_runner.adapters import card_store_vectors as vectors  # noqa: E402
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository  # noqa: E402
+from hubofhubs.recall.card_repository import FilesystemCardRepository  # noqa: E402
 from quest_ai_runner.adapters.file_context_store import FileContextStore  # noqa: E402
 from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore  # noqa: E402
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE  # noqa: E402
@@ -579,7 +579,7 @@ class TestRemoteMountVectors:
     def test_an_embedded_location_elsewhere_is_never_opened(self, tmp_path, caplog):
         s = RemoteSetup(tmp_path, with_record=False)
         ident.update_identity(str(s.owner_dir), vector_location=ident.vector_location_record(
-            "embedded", vector_size=VEC, embedder=EMBEDDER) | {"path": str(tmp_path / "somewhere" / "qdrant")})
+            "embedded", collection_prefix="qar_ctx", vector_size=VEC, embedder=EMBEDDER) | {"path": str(tmp_path / "somewhere" / "qdrant")})
         with caplog.at_level(logging.WARNING):
             assert s.fenced.search("alpha billing", top_k=5) == []
         assert "embedded Qdrant" in caplog.text
@@ -627,7 +627,7 @@ class TestDefaultsUnchanged:
         top = tmp_path / "x"
         d = make_store(top, [real_card("alpha", top, ["a.py"])])
         before = store_over(d, top).export_for_embedding()
-        ident.update_identity(str(d), vector_location=ident.vector_location_record(SERVER_URL))
+        ident.update_identity(str(d), vector_location=ident.vector_location_record(SERVER_URL, collection_prefix="qar_ctx"))
         assert store_over(d, top).export_for_embedding() == before
 
     def test_plain_vector_search_signature_still_works_without_a_fence(self, tmp_path, qdrant):

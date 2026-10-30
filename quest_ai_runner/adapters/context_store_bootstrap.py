@@ -4,6 +4,8 @@ A mixin of ``FileContextStore`` (see ``file_context_store.py``): methods only, s
 """
 from __future__ import annotations
 
+import logging
+
 import hashlib
 import json
 import os
@@ -12,17 +14,18 @@ import tempfile
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
-from .card_repository import FilesystemCardRepository
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from .card_store_mounts import MODE_MOUNT, resolve_mounts
 from hubofhubs.recall.card_content_render import MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_CHARS
 from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames, skip_subtrees
+from .card_store_settings import STORE_DIR_NAME, max_cards_per_folder
 from .walk_settings import effective_skip_dirs
-from .card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
-from . import card_origin
+from hubofhubs.recall.card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
+from hubofhubs.recall import card_origin
 from .bootstrap_reporter import mark_bootstrap_completed
 from hubofhubs.recall.background_pacing import Pacer
 from hubofhubs.filemodes import match_umask
-from .context_bootstrap_support import (
+from hubofhubs.recall.context_bootstrap_support import (
     _BOOTSTRAP_MAX_BYTES,
     _BOOTSTRAP_META_FILE,
     _DISCOVERED_FILE,
@@ -31,13 +34,14 @@ from .context_bootstrap_support import (
     _SOURCE_EXTS,
     _TFDFIDF_VERSION,
     _card_file_paths,
-    _log,
     _write_bootstrap_meta,
 )
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
-from .context_card_ceilings import _MIN_FILES_PER_CARD, apply_card_ceilings, card_is_too_thin
-from .context_folder_review import _dir_file_counts
+from hubofhubs.recall.context_card_ceilings import _MIN_FILES_PER_CARD, apply_card_ceilings, card_is_too_thin
+from hubofhubs.recall.context_folder_review import _dir_file_counts
 from .context_risk_gate import folder_gate
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 class BootstrapMixin:
@@ -514,7 +518,7 @@ class BootstrapMixin:
         onto ``survivor_id``, the card that stands for it now (``card_store_hygiene.fold_card``). With no
         survivor, or when it cannot be joined without loss, the copy stays where it is.
         """
-        from . import card_store_hygiene as hygiene
+        from hubofhubs.recall import card_store_hygiene as hygiene
         repo = getattr(self, "_own_repo", self._repo)
         quarantine = getattr(repo, "quarantine", None)
         with self.folder_lock():
@@ -607,7 +611,7 @@ class BootstrapMixin:
         # these re-seeded the corpus below it on every bootstrap, silently undoing each prune.
         if self._card_is_degenerate(card):
             return None
-        origin = card_origin.exported_origin(card, source_ref, source_root)
+        origin = card_origin.exported_origin(card, source_ref, source_root, STORE_DIR_NAME)
         if origin is None or origin.store in own_refs:
             return None
         origin_root = card_origin.origin_relative_to(origin, source_root, walk_root)
@@ -802,7 +806,7 @@ class BootstrapMixin:
             # card of its own: record it, so its mounts (and its own cards, later) have a home.
             _write_bootstrap_meta(str(self._cards_dir), 0, root=str(walk_root))
         if not self._dry_run and read_store_meta(str(self._cards_dir)):
-            from .card_store_identity import update_identity
+            from hubofhubs.recall.card_store_identity import update_identity
             update_identity(str(self._cards_dir),
                             mounts=[m.as_record() for m in outcome.mounts])
         self._mounts = list(outcome.mounts)
@@ -833,7 +837,7 @@ class BootstrapMixin:
             inside = os.path.realpath(str(self._cards_dir)) == os.path.realpath(str(walk_root / ".quest-context"))
             if os.path.isdir(recorded) and not inside:
                 return False
-            from .card_store_identity import apply_move_root
+            from hubofhubs.recall.card_store_identity import apply_move_root
             apply_move_root(str(self._cards_dir), str(walk_root), force=True)
             _log.info("context index: the corpus folder moved from %s to %s; its card store now records the new "
                       "root (the cards name files relative to it, so nothing else changes)", recorded, walk_root)
@@ -899,7 +903,7 @@ class BootstrapMixin:
             # This is normal filtering, not an issue. Suppress the log noise.
             pass
 
-        return apply_card_ceilings(kept, existing_cards, max_cards=max_cards)
+        return apply_card_ceilings(kept, existing_cards, max_cards=max_cards, per_folder=max_cards_per_folder())
 
     def _read_discovered(self) -> Dict[str, float]:
         """The discovered-files record (see ``_DISCOVERED_FILE``). Never raises."""

@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.context_card_extraction import _managed_names
+from hubofhubs.recall.context_card_extraction import _managed_names
 
 
 def _store(tmp_path: Path) -> FileContextStore:

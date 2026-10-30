@@ -58,8 +58,8 @@ from hubofhubs.ports.context import VectorHit
 from ..core.adapters_bases import VectorStoreBase
 from hubofhubs.recall.walk import prune_dirnames
 from .walk_settings import effective_skip_dirs
-from .card_repository import CardRepository, FilesystemCardRepository
-from .card_store_identity import (
+from hubofhubs.recall.card_repository import CardRepository, FilesystemCardRepository
+from hubofhubs.recall.card_store_identity import (
     BOOTSTRAP_META_FILE,
     check_readable,
     EMBEDDED,

@@ -4,18 +4,21 @@ Split out of ``file_context_store.py`` by definition; that module re-exports eve
 """
 from __future__ import annotations
 
+import logging
+
 from typing import Any, Dict, List
 from pathlib import Path
 
-from .context_card_extraction import _discover_areas, _extract_topic_cards
-from .context_bootstrap_support import (
+from hubofhubs.recall.context_card_extraction import _discover_areas, _extract_topic_cards
+from hubofhubs.recall.context_bootstrap_support import (
     _CHUNK_SIZE,
-    _bootstrap_workers,
-    _log,
     _run_parallel,
     _select_representative_files,
 )
+from .card_store_settings import bootstrap_workers
 from .context_card_dedup import _dedup_topic_cards
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk_root=None):
@@ -52,7 +55,7 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
         areas: List[Dict[str, Any]] = []
         for result in _run_parallel(
             [lambda c=chunk: _discover_areas(c, provider, model) for chunk in chunks],
-            max_workers=_bootstrap_workers(),
+            max_workers=bootstrap_workers(),
         ):
             if result:
                 areas.extend(result)
@@ -67,7 +70,7 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
         walk_root_path = Path(walk_root).resolve() if walk_root else None
         for result in _run_parallel(
             [lambda a=area: _extract_topic_cards(a, allowed, provider, model, walk_root=walk_root_path) for area in areas],
-            max_workers=_bootstrap_workers(),
+            max_workers=bootstrap_workers(),
         ):
             if result:
                 raw_cards.extend(result)

@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.adapters import card_store_identity as ident
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall import card_store_identity as ident
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.card_store_upload import plan_upload
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
@@ -274,7 +274,7 @@ def test_context_upload_stamps_the_uploading_stores_origin(tmp_path):
 # --- legacy cards are corrected once, never left for a later backfill ---------------------------
 
 def test_local_refresh_stamps_the_origin_on_legacy_cards_once_without_changing_embed_text(tmp_path):
-    from quest_ai_runner.adapters.card_repository import card_embed_text
+    from hubofhubs.recall.card_repository import card_embed_text
     root = tmp_path / "local"
     root.mkdir()
     (root / "keep.md").write_text("# keep\n")

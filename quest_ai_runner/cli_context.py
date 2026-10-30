@@ -203,7 +203,7 @@ def _cmd_context(args, log) -> int:
 
 def _cmd_bootstrap(args, log) -> int:
     """Run the `bootstrap` subcommand; returns the process exit code."""
-    from .adapters.card_limit import max_cards_from_env
+    from .adapters.card_store_settings import max_cards_from_env
     from .adapters.file_context_store import FileContextStore
     from hubofhubs.recall.walk import prune_dirnames
     from .adapters.walk_settings import effective_skip_dirs
@@ -497,7 +497,7 @@ def _cmd_paste_context(args, log) -> int:
         card["goal_id"] = args.goal_id
 
     # Write through the card repository, the one place that refuses an id that may never be stored.
-    from .adapters.card_repository import FilesystemCardRepository
+    from hubofhubs.recall.card_repository import FilesystemCardRepository
     card_path = Path(cards_dir) / f"{card_id}.json"
     if not FilesystemCardRepository(str(cards_dir)).write(card_id, card):
         log.error("failed to write card %s (see the error above if the id was refused)", card_id)

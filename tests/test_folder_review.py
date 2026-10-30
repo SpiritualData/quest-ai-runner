@@ -87,7 +87,7 @@ def test_a_small_corpus_is_never_sent_to_the_model(tmp_path):
         def answer(self, *a, **k):
             raise AssertionError("a small corpus must not reach the model")
 
-    assert fcs._folder_review(tmp_path, set(), Boom(), None, tmp_path / "cards") == set()
+    assert fcs._folder_review(tmp_path, set(), Boom(), None, tmp_path / "cards", store_dir_name=".quest-context") == set()
 
 
 def test_verdicts_are_cached_and_human_editable(tmp_path):
@@ -399,7 +399,7 @@ def _live_corpus(root: Path) -> None:
 
 def _snapshot(root: Path, name: str, *, recorded_root=None, layout=(), store_id=None):
     """One backup folder with a card store, optionally recording another root or the live layout."""
-    from quest_ai_runner.adapters.card_store_identity import update_identity
+    from hubofhubs.recall.card_store_identity import update_identity
     snap = root / "backups" / name
     make_owner(snap, [card(f"snap-{name}", ["hq/docs/a.py", "hq/docs/b.py"])])
     for sub in layout:
@@ -432,7 +432,7 @@ def test_a_lone_backup_copy_of_the_corpus_is_neither_indexed_nor_imported(tmp_pa
     _live_corpus(tmp_path)
     own_cards = tmp_path / "cards_elsewhere"
     if how == "own_store_id":
-        from quest_ai_runner.adapters.card_store_identity import write_meta
+        from hubofhubs.recall.card_store_identity import write_meta
         own_cards.mkdir()
         write_meta(str(own_cards), {"store_id": "st_live"})
     kwargs = {"recorded_root": tmp_path} if how == "recorded_root" else \

@@ -4,37 +4,36 @@ A mixin of ``FileContextStore`` (see ``file_context_store.py``): methods only, s
 """
 from __future__ import annotations
 
+import logging
+
 import hashlib
 import math
 import os
 from typing import Any, Dict, List, Optional, Set
 from pathlib import Path
 
-from . import card_origin
+from hubofhubs.recall import card_origin
 from .card_store_mounts import MODE_MOUNT
 from hubofhubs.recall.background_pacing import Pacer
 from hubofhubs.recall.card_content_render import tokenize as _tokenize
 from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
 from .walk_settings import effective_skip_dirs
-from .context_bootstrap_support import (
+from hubofhubs.recall.context_bootstrap_support import (
     _BOOTSTRAP_MAX_BYTES,
     _SOURCE_EXTS,
     _TFDFIDF_VERSION,
-    _bootstrap_max_cards,
-    _bootstrap_max_files,
     _card_file_paths,
-    _log,
     _run_parallel,
 )
-from .context_card_extraction import _extract_topic_cards
-from .context_folder_review import (
-    _is_excluded_folder,
-    _prune_dead_cards,
-)
+from hubofhubs.recall.context_card_extraction import _extract_topic_cards
+from hubofhubs.recall.context_folder_review import _is_excluded_folder
+from .card_store_settings import bootstrap_max_cards, bootstrap_max_files, prune_dead_cards
 from .context_risk_gate import FolderGate, folder_gate
-from .context_card_ceilings import folders_for_room
+from hubofhubs.recall.context_card_ceilings import folders_for_room
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
 from .context_topic_cards import _llm_topic_cards
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 class BootstrapWalkMixin:
@@ -97,9 +96,9 @@ class BootstrapWalkMixin:
         excluded_folders: Set[str] = gate.excluded
 
         if max_files is None:
-            max_files = _bootstrap_max_files()
+            max_files = bootstrap_max_files()
         if max_cards is None:
-            max_cards = _bootstrap_max_cards()
+            max_cards = bootstrap_max_cards()
         file_paths: List[str] = []
         file_count = 0
         truncated = False
@@ -215,10 +214,10 @@ class BootstrapWalkMixin:
             # and a dead own card does not shadow a live copy of the same files.
             walked_now = set(file_paths)
             dead_now = set(self.dead_card_ids(existing_cards, walked_now, walk_root, skip_dirs)) \
-                if _prune_dead_cards() else set()
+                if prune_dead_cards() else set()
             imported_cards = [
                 ic for ic in imported_cards
-                if not _prune_dead_cards()
+                if not prune_dead_cards()
                 or not all(self._file_entry_is_dead(p, walked_now, walk_root, skip_dirs)
                            for p in ic.get("files", []))]
             # One copy per id and per file set, whichever routes offered it (see card_origin).
@@ -311,7 +310,7 @@ class BootstrapWalkMixin:
         # still being paid for on every run.
         # ``--dry-run`` promises to estimate WITHOUT running the bootstrap, so it must not
         # delete either: an estimate that mutates the thing it is estimating is not an estimate.
-        if _prune_dead_cards() and existing_cards and not self._dry_run:
+        if prune_dead_cards() and existing_cards and not self._dry_run:
             dead_ids = self.dead_card_ids(existing_cards, set(file_paths), walk_root, skip_dirs)
             survivors = [c for c in existing_cards if c.get("id") not in set(dead_ids)]
             if dead_ids:
@@ -328,7 +327,7 @@ class BootstrapWalkMixin:
                     "remain", removed, len(survivors),
                 )
                 existing_cards = survivors
-        elif _prune_dead_cards() and existing_cards and self._dry_run:
+        elif prune_dead_cards() and existing_cards and self._dry_run:
             walked_now = set(file_paths)
             would = sum(
                 1 for card in existing_cards

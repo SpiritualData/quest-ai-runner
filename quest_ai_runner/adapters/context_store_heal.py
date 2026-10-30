@@ -7,17 +7,22 @@ redundant, and why it is safe, is ``card_store_hygiene``.
 """
 from __future__ import annotations
 
+import logging
 import json
 from pathlib import Path
 from typing import Callable, Optional
 
+from hubofhubs.recall import card_limit as limit_mod
+from hubofhubs.recall import card_store_hygiene as hygiene
+from hubofhubs.recall import card_store_tidy as tidy
 from hubofhubs.recall.background_pacing import Pacer
-from . import card_limit as limit_mod
-from . import card_store_hygiene as hygiene
-from . import card_store_tidy as tidy
-from .card_repository import FilesystemCardRepository
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from hubofhubs.recall.card_store_lock import TIDY_LOCK_FILE, StoreLock
-from .context_bootstrap_support import _log
+
+from . import card_store_tidy as tidy_words
+from .card_store_settings import max_cards_per_folder, skip_dirs_from_env
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 class HealMixin:
@@ -141,8 +146,8 @@ class HealMixin:
             if run.removed:
                 self.inflation_verdict = None
                 seconds = {e["key"] for e in tidy.split_steps(plan)[1]}
-                message = tidy.tidied_message(
-                    run, f"quest-ai-runner cards tidy --undo {run.manifest} {tidy.lane_args(repo, self._cards_dir)}",
+                message = tidy_words.tidied_message(
+                    run, f"quest-ai-runner cards tidy --undo {run.manifest} {tidy_words.lane_args(repo, self._cards_dir)}",
                     joined=len(seconds & set(run.removed_keys)))
                 _log.warning("%s Because %s. By reason: %s.", message, why, plan.summary())
                 self.say(message, notify)
@@ -202,8 +207,8 @@ class HealMixin:
                                      "entries": seconds, "cards_after": total - len(plan.entries)}
         tidy.write_private(target, json.dumps(record, indent=1, default=str) + "\n")
         repo = self._own_repo
-        message = tidy.planned_message(plan, tidy.apply_command(repo, self._cards_dir), total=total,
-                                       merge_hint=tidy.apply_command(repo, self._cards_dir, merge_topics=True))
+        message = tidy_words.planned_message(plan, tidy_words.apply_command(repo, self._cards_dir), total=total,
+                                             merge_hint=tidy_words.apply_command(repo, self._cards_dir, merge_topics=True))
         if previous == fingerprint:
             _log.info("%s", message)
             return
@@ -216,7 +221,8 @@ class HealMixin:
             root = self._effective_root()
             if not root or not Path(root).is_dir():
                 return False
-            return hygiene.inflation_check(self._cards_dir, Path(root), cards).over
+            return hygiene.inflation_check(self._cards_dir, Path(root), cards, per_folder=max_cards_per_folder(),
+                                          skip_extra=skip_dirs_from_env()).over
         except Exception:  # noqa: BLE001
             _log.debug("context index: folder budget check failed", exc_info=True)
             return False
@@ -240,7 +246,8 @@ class HealMixin:
             root = self._effective_root()
             if not root or not Path(root).is_dir():
                 return False
-            check = hygiene.inflation_check(self._cards_dir, Path(root), self._own_cards())
+            check = hygiene.inflation_check(self._cards_dir, Path(root), self._own_cards(), per_folder=max_cards_per_folder(),
+                                            skip_extra=skip_dirs_from_env())
             self.inflation_verdict = check.over
             if check.over:
                 _log.error(

@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 import quest_ai_runner.adapters.context_store_cards as store_cards
+from hubofhubs.recall.card_origin import last_touched as card_last_touched
 from quest_ai_runner.adapters.context_store_cards import (
-    card_last_touched,
     card_seed_key,
     cards_in_seed_order,
 )

@@ -10,7 +10,7 @@ editor-written field; a task id or a multi-paragraph request as provenance), nev
 import json
 from pathlib import Path
 
-from quest_ai_runner.adapters import card_origin
+from hubofhubs.recall import card_origin
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 BRIEF = ("Act as Someone.\n\nQuest outcome: ship the widgets\n\nStanding instructions for this quest. "

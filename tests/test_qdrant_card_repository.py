@@ -16,7 +16,7 @@ import pytest
 
 qdrant_client = pytest.importorskip("qdrant_client", reason="qdrant-client not installed")
 
-from quest_ai_runner.adapters.card_repository import card_embed_text
+from hubofhubs.recall.card_repository import card_embed_text
 from quest_ai_runner.adapters.qdrant_card_repository import (
     QdrantCardRepository,
     QdrantCardVectorStore,

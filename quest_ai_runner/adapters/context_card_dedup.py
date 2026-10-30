@@ -4,11 +4,15 @@ Split out of ``file_context_store.py`` by definition; that module re-exports eve
 """
 from __future__ import annotations
 
+import logging
+
 import json
 from typing import Any, Dict, List, Optional, Set
 
-from .context_bootstrap_support import _extract_json_array, _jaccard, _log, _merge_card_group
-from .context_card_ceilings import collapse_cards_by_file_set
+from hubofhubs.recall.context_bootstrap_support import _extract_json_array, _jaccard, _merge_card_group
+from hubofhubs.recall.context_card_ceilings import collapse_cards_by_file_set
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 _DEDUP_MIN_SHARED_KEYWORDS = 2

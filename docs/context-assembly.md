@@ -193,7 +193,7 @@ description or summary, each content item's `why` and note text, keywords), so t
   digest. It is a function of the origin alone (`origin_store`, `origin_id`, `origin_root`), so a card
   that reaches a store by two routes (straight from its store, or through a store between) is one id,
   an id never grows by hop, and a store never imports a card whose origin is itself, whichever way it
-  came back and whatever happened to its `imported_from` on the way (`adapters/card_origin.py`). Copies
+  came back and whatever happened to its `imported_from` on the way (`hubofhubs.recall.card_origin`). Copies
   made before origins were kept were `<namespace>--<id in the store it was read from>`, which stacked a
   prefix per hop; they are no longer offered, so the next refresh moves them out
   (`_quarantine/superseded-import/`).
@@ -338,7 +338,7 @@ Then:
 - a plan that would terminate in `answer` while one of those fetches has **not run this turn** is
   turned into one `read` step that runs it, and the loop re-plans with the full text in GATHERED
   (`OrchestratorConfig.full_read_before_answer`, on by default). "Has it run" is judged against the
-  read specs that actually executed, the same way `core/guard.ExecutionRecord` judges an answer's
+  read specs that actually executed, the same way `hubofhubs.act.execution_record.ExecutionRecord` judges an answer's
   completion claims against what actually executed. It fires at most **once** per turn.
 
 Inert unless an item declares `full_ref`: no declaration means nothing to fetch, no notice, and a

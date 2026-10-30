@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import common  # noqa: F401  (puts the repo root on sys.path)
-from quest_ai_runner.adapters.context_card_extraction import (
+from hubofhubs.recall.context_card_extraction import (
     _SOURCE_FILE_WEIGHT, _TEST_FILE_WEIGHT, _build_rich_summary, _extract_symbols, _is_test_path, _path_slug,
 )
 

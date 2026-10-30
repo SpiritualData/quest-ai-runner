@@ -20,15 +20,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quest_ai_runner.adapters import card_limit
-from quest_ai_runner.adapters.card_limit_report import REPORT_NAME, breakdown, notice_lines, report_for
-from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+from hubofhubs.recall import card_limit
+from hubofhubs.recall.card_limit_report import REPORT_NAME, breakdown
+from quest_ai_runner.adapters import card_store_settings
+from quest_ai_runner.adapters.card_limit_report import VOICE, notice_lines, report_for
+from hubofhubs.recall.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
 from card_store_growth.world import DiskProvider  # noqa: E402
 
-LOGGER = "quest-ai-runner.card-limit"
+LOGGER = "hubofhubs.recall.card_limit"
 
 
 @pytest.fixture(autouse=True)
@@ -84,16 +86,16 @@ def card_ids(cards_dir: Path) -> List[str]:
 
 class TestTheKnob:
     def test_the_default_is_a_thousand(self):
-        assert card_limit.max_cards_from_env({}) == 1000
+        assert card_store_settings.max_cards_from_env({}) == 1000
 
     @pytest.mark.parametrize("raw,expected", [("2500", 2500), ("2,500", 2500), (" 40 ", 40), ("0", 0),
                                               ("unlimited", 0), ("None", 0), ("off", 0)])
     def test_the_environment_sets_it_and_zero_or_a_word_means_none(self, raw, expected):
-        assert card_limit.max_cards_from_env({"QAR_MAX_CARDS": raw}) == expected
+        assert card_store_settings.max_cards_from_env({"QAR_MAX_CARDS": raw}) == expected
 
     def test_a_value_that_is_not_a_number_falls_back_loudly(self, caplog):
         with caplog.at_level(logging.WARNING, logger=LOGGER):
-            assert card_limit.max_cards_from_env({"QAR_MAX_CARDS": "lots"}) == 1000
+            assert card_store_settings.max_cards_from_env({"QAR_MAX_CARDS": "lots"}) == 1000
         assert "QAR_MAX_CARDS" in caplog.text and "0 for no limit" in caplog.text
 
     def test_the_library_applies_no_limit_unless_its_caller_passes_one(self, tmp_path, monkeypatch):
@@ -363,7 +365,7 @@ class TestAStaleWriterDoesNotUndoTheLimit:
         assert "is back in the index" in caplog.text
 
     def test_a_note_for_a_copy_that_was_moved_out_lands_on_the_card_that_stands_for_it(self, tmp_path, caplog):
-        from quest_ai_runner.adapters import card_store_hygiene as hygiene
+        from hubofhubs.recall import card_store_hygiene as hygiene
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
         seed(cards, [card("topic", files=files, name="a topic"),
@@ -617,10 +619,10 @@ class TestTheNotice:
         assert not any("card_limit_report" in line or "/" in line for line in shown), "the path is in the log only"
 
     def test_the_counts_fit_one_80_column_line_even_for_the_incident_sized_store(self):
-        from quest_ai_runner.adapters.card_limit_report import Breakdown, count_line
+        from hubofhubs.recall.card_limit_report import Breakdown, count_line
         for numbers in ((1000, 1000, 812, 150, 30, 8), (1000, 1430, 1200, 200, 25, 5),
                         (1000, 142781, 130000, 10000, 2000, 781)):
-            line = count_line(Breakdown(*numbers))
+            line = count_line(Breakdown(*numbers), VOICE)
             assert len(line) <= 72 and "topic" in line and "imported" in line and "learned" in line and "quest" in line
             assert ". " not in line, "the terminal ends a warning at the first full stop"
 
@@ -731,7 +733,7 @@ class TestTheNotice:
 # --- the other writers -------------------------------------------------------------------------------
 
 def test_a_merge_that_would_pass_the_limit_is_a_problem_and_applies_nothing(tmp_path):
-    from quest_ai_runner.adapters import card_store_identity as ident
+    from hubofhubs.recall import card_store_identity as ident
     from quest_ai_runner.adapters.card_store_merge import apply_merge
     wide, narrow = tmp_path / "wide" / ".quest-context", tmp_path / "wide" / "sub" / ".quest-context"
     seed(wide, [card(f"w{i}", files=[f"w{i}/a.md", f"w{i}/b.md"]) for i in range(3)])

@@ -22,12 +22,13 @@ from typing import Any, Dict, List
 import pytest
 from unittest.mock import MagicMock
 
-from quest_ai_runner.adapters.card_repository import (
+from hubofhubs.recall.card_repository import (
     QUARANTINE_DIR_NAME,
     FilesystemCardRepository,
 )
-from quest_ai_runner.adapters.file_context_store import FileContextStore, _folder_review
-from quest_ai_runner.adapters.context_card_ceilings import (
+from hubofhubs.recall.context_folder_review import _folder_review
+from quest_ai_runner.adapters.file_context_store import FileContextStore
+from hubofhubs.recall.context_card_ceilings import (
     apply_card_ceilings,
     card_folder_key,
     card_is_too_thin,
@@ -35,14 +36,14 @@ from quest_ai_runner.adapters.context_card_ceilings import (
     collapse_cards_by_file_set,
     path_is_data_file,
 )
-from quest_ai_runner.adapters.context_folder_review import (
+from hubofhubs.recall.context_folder_review import (
     drop_verdicts_under_final_exclusions,
     final_exclusion_covering,
     verdict_is_final,
     verdict_is_pinned,
     _is_excluded_folder,
 )
-from quest_ai_runner.adapters.walk_settings import effective_skip_dirs
+from quest_ai_runner.adapters.walk_settings import STORE_DIR_NAME, effective_skip_dirs
 
 
 def topic_provider(topics):
@@ -175,7 +176,8 @@ class TestFolderReviewKeepsNestedRepoExcluded:
         cards_dir = tmp_path / "cards"
         provider = self.keep_everything_provider()
 
-        excluded = _folder_review(corpus, effective_skip_dirs(corpus), provider, None, cards_dir)
+        excluded = _folder_review(corpus, effective_skip_dirs(corpus), provider, None, cards_dir,
+                                  store_dir_name=STORE_DIR_NAME)
 
         assert _is_excluded_folder("code/vendored", excluded), (
             "a nested repository must stay excluded however much the model likes its children"
@@ -222,7 +224,7 @@ class TestFolderReviewKeepsNestedRepoExcluded:
                 return json.dumps(answers)
 
         excluded = _folder_review(corpus, effective_skip_dirs(corpus), VolunteersExtra(), None,
-                                  cards_dir)
+                                  cards_dir, store_dir_name=STORE_DIR_NAME)
         cached = json.loads((cards_dir / "folder_review.json").read_text(encoding="utf-8"))
         assert "code/vendored/perspectives/alpha" not in cached["folders"]
         assert "a/folder/that/does/not/exist" not in cached["folders"]
@@ -245,7 +247,7 @@ class TestFolderReviewKeepsNestedRepoExcluded:
 
         # No provider: the cached verdicts plus the deterministic safeguards decide everything,
         # and the corpus is too small for the model arm anyway.
-        excluded = _folder_review(corpus, effective_skip_dirs(corpus), None, None, cards_dir)
+        excluded = _folder_review(corpus, effective_skip_dirs(corpus), None, None, cards_dir, store_dir_name=STORE_DIR_NAME)
         assert excluded == set(), "a corpus under the review's minimum size prunes nothing"
 
         # The rule itself, read off the same verdicts.
@@ -364,11 +366,10 @@ class TestCardCeilings:
         assert card_folder_key(make_card("c", ["top.py", "other.py"])) == "."
         assert card_folder_key(make_card("c", [])) == ""
 
-    def test_one_card_per_folder(self, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "1")   # the rule under test: one card per folder
+    def test_one_card_per_folder(self):
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
-        kept = apply_card_ceilings(cards, [])
+        kept = apply_card_ceilings(cards, [], per_folder=1)   # the rule under test: one card per folder
         assert [c["id"] for c in kept] == ["first"]
 
     def test_a_card_per_folder_scales_with_the_corpus_and_nothing_else(self):
@@ -392,7 +393,7 @@ class TestCardCeilings:
         # What is true now: the owner's number (QAR_MAX_CARDS, 1,000 unless set) is enforced where cards
         # are written, a new folder is refused, and the refusal is ANNOUNCED with what fills the store and
         # how to change the limit, so it is never the silent permanent refusal that was removed.
-        from quest_ai_runner.adapters import card_limit
+        from hubofhubs.recall import card_limit
         card_limit.reset_announcements()
         repo = tmp_path / "repo"
         (repo / "pkg").mkdir(parents=True)
@@ -413,11 +414,10 @@ class TestCardCeilings:
         assert sorted(FilesystemCardRepository(str(cards_dir)).load_all()) == ["old0", "old1", "old2"]
         assert "Context store full at 3: 3 topic" in caplog.text and "QAR_MAX_CARDS" in caplog.text
 
-    def test_existing_cards_hold_their_own_folder(self, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "1")   # the rule under test: one card per folder
+    def test_existing_cards_hold_their_own_folder(self):
         existing = [make_card("already", ["app/one.py", "app/two.py"])]
         fresh = [make_card("another", ["app/three.py", "app/four.py"])]
-        assert apply_card_ceilings(fresh, existing) == []
+        assert apply_card_ceilings(fresh, existing, per_folder=1) == []   # the rule under test: one card per folder
 
     def test_a_card_with_no_files_never_counts_and_is_never_dropped(self):
         # A store full of genuinely learned conversation cards must not refuse to index a corpus.
@@ -434,31 +434,32 @@ class TestCardCeilings:
             "refusing a refresh leaves the store stale without making it any smaller"
         )
 
-    def test_truncation_is_logged_with_the_numbers_and_never_silent(self, caplog, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "1")   # the rule under test: one card per folder
+    def test_truncation_is_logged_with_the_numbers_and_never_silent(self, caplog):
         # DEBUG, not WARNING: dropping a second card for a folder is the expected outcome (fca3b8d).
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
-        with caplog.at_level(logging.DEBUG, logger="quest-ai-runner.context"):
-            apply_card_ceilings(cards, [])
-        logged = [r for r in caplog.records if r.name == "quest-ai-runner.context"]
+        with caplog.at_level(logging.DEBUG, logger="hubofhubs.recall.context_bootstrap_support"):
+            apply_card_ceilings(cards, [], per_folder=1)   # the rule under test: one card per folder
+        logged = [r for r in caplog.records if r.name == "hubofhubs.recall.context_bootstrap_support"]
         assert logged, "a ceiling nobody can see is indistinguishable from a bug"
         assert "folder" in logged[0].getMessage()
         assert not [r for r in logged if r.levelno >= logging.WARNING], "expected behavior is not warning noise"
 
     def test_the_per_folder_knob_raises_or_removes_the_limit(self, monkeypatch):
+        from quest_ai_runner.adapters.card_store_settings import max_cards_per_folder
         cards = [make_card(f"c{i}", [f"app/one{i}.py", f"app/two{i}.py"]) for i in range(7)]
         monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "3")
-        assert len(apply_card_ceilings(cards, [])) == 3
+        assert len(apply_card_ceilings(cards, [], per_folder=max_cards_per_folder())) == 3
         monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
-        assert len(apply_card_ceilings(cards, [])) == 7
+        assert len(apply_card_ceilings(cards, [], per_folder=max_cards_per_folder())) == 7
+        monkeypatch.delenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER")
+        assert max_cards_per_folder() == 8
 
-    def test_an_operator_max_cards_still_caps_one_pass(self, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
+    def test_an_operator_max_cards_still_caps_one_pass(self):
         cards = [make_card(f"c{i}", [f"app/one{i}.py", f"app/two{i}.py"]) for i in range(5)]
-        assert len(apply_card_ceilings(cards, [], max_cards=2)) == 2
+        assert len(apply_card_ceilings(cards, [], max_cards=2, per_folder=0)) == 2
         # Opt-in only: with no cap passed, nothing limits the pass but the folder rule.
-        assert len(apply_card_ceilings(cards, [])) == 5
+        assert len(apply_card_ceilings(cards, [], per_folder=0)) == 5
 
 
 # ---------------------------------------------------------------------------

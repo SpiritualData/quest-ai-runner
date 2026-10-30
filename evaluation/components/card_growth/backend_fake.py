@@ -12,7 +12,7 @@ import copy
 import itertools
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from quest_ai_runner.adapters import card_origin
+from hubofhubs.recall import card_origin
 
 SERVER_FIELDS = ("updated_at", "revision", "owner_user_id", "user_id", "card_id")
 

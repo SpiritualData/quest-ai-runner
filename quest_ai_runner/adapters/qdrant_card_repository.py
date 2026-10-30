@@ -59,8 +59,8 @@ from typing import Any, Callable, Dict, List, Optional
 from esoi import implementation
 from hubofhubs.ports.context import VectorHit
 from ..core.adapters_bases import VectorStoreBase
-from . import card_origin
-from .card_repository import card_embed_text
+from hubofhubs.recall import card_origin
+from hubofhubs.recall.card_repository import card_embed_text
 
 logger = logging.getLogger(__name__)
 

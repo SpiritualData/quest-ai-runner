@@ -32,6 +32,7 @@ answer and no per-path copy of it:
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass, field
@@ -39,22 +40,21 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from hubofhubs.recall.walk import prune_dirnames, skip_subtrees
-from .card_store_identity import BOOTSTRAP_META_FILE, is_merged, read_meta
-from .context_bootstrap_support import _log
-from .context_folder_review import (
+from hubofhubs.recall.card_store_identity import BOOTSTRAP_META_FILE, is_merged, read_meta
+from hubofhubs.recall.context_folder_review import (
     _FOLDER_REVIEW_FILE,
     _FOLDER_REVIEW_MIN_FILES,
     _FOLDER_REVIEW_START_DEPTH,
     HARD_RISK_KINDS,
     _dir_file_counts,
-    _folder_review_enabled,
     _is_excluded_folder,
     _roll_up_to_depth,
     load_verdicts,
     review_corpus,
 )
+from .card_store_settings import STORE_DIR_NAME, folder_review_enabled, skip_nested_repos
 
-_CARDS_DIR = ".quest-context"
+_CARDS_DIR = STORE_DIR_NAME
 
 # Three card stores under one folder is a pattern (copies of a tree), one is a normal nested
 # corpus, two can be a coincidence. Three dated siblings is a series, two is a pair.
@@ -84,6 +84,8 @@ _SERIAL_NAME = re.compile(
 _SERIAL_NAME_MAX = 80
 
 Signals = Dict[str, List[Tuple[str, str]]]
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 
 def name_looks_serial(name: str) -> bool:
@@ -394,11 +396,12 @@ def folder_gate(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[
         risk = risk_signals(facts.stores, facts.series, counts, facts.copies)
         risk.update(scan_ancestors(walk_root, skip_dirs))
         verdicts: Dict[str, Dict] = load_verdicts(cards_dir)
-        if _folder_review_enabled():
+        if folder_review_enabled():
             try:
                 gate.excluded, verdicts = review_corpus(walk_root, skip_dirs, provider, model,
                                                         cards_dir, risk=risk, counts=counts,
-                                                        persist=persist)
+                                                        persist=persist, store_dir_name=STORE_DIR_NAME,
+                                                        skip_nested_repos=skip_nested_repos())
             except Exception:  # noqa: BLE001 -- the ordinary corpus is indexed in full
                 _log.info("context index: folder review failed; ordinary folders stay indexed",
                           exc_info=True)
