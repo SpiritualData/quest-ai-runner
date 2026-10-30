@@ -219,8 +219,10 @@ python -m quest_ai_runner.tools call send_quest_email \
 python -m quest_ai_runner.tools call send_quest_email --args '{"subject": "Weekly plan", "body": "..."}'
 ```
 
-`--args-file PATH` (or `-` for stdin) takes the JSON from a file. Exit code 0 is success, 1 a failed
-call (the reason on stderr), 2 bad arguments.
+`--args-file PATH` (or `-` for stdin) takes the JSON from a file. Exit code 0 means the request was taken (applied,
+no change needed, or held for a person's approval: a held write is waiting, not failed, so do not retry it), 1 means it was
+refused, failed or its outcome is unknown (the reason on stderr), 2 means bad arguments. The line `status: <word>` follows
+the text for every status but applied.
 
 `--quest`, `--task` and `--run` (or `QAR_TOOL_QUEST_ID`, `QAR_TOOL_TASK_ID`, `QAR_TOOL_RUN_ID`) fill the
 context a tool takes from the turn. One standard tool is listed in every deep brief whatever the brief says,

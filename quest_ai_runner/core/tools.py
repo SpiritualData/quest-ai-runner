@@ -73,7 +73,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from .requester import apply_requester_env, requester_from_meta
 from .runtime_settings import process_environment
-from .tools_status import DONE_STATUSES, ToolStatus, as_status, status_of_error, write_status_of
+from .tools_status import ACCEPTED_STATUSES, DONE_STATUSES, ToolStatus, as_status, status_of_error, write_status_of
 from hubofhubs.act.tool_ledger import FileToolLedger, outcome_from_result
 
 log = logging.getLogger(__name__)
@@ -572,7 +572,7 @@ class ToolRegistry:
         if self.ledger is not None:
             # By the task, else by the run: a deep run with no task is read back under its run id.
             self.ledger.record(ctx.task_id or ctx.value("run_id"),
-                               outcome_from_result(name, result.ok, result.text, spec.mutates))
+                               outcome_from_result(name, result.status in ACCEPTED_STATUSES, result.text, spec.mutates))
         return result
 
 

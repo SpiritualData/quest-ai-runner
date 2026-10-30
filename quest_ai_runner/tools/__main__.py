@@ -14,7 +14,9 @@ tools, ``QAR_TOOLS_FILE`` for custom ones), so a deep run sees exactly what the 
 ``--spec-root FOLDER`` (before the subcommand, or ``QAR_SPEC_ROOT``) is the repository whose specification records the
 ``find_specs`` family reads; those tools exist only where a root is found, and a worker's shell may start in another folder.
 ``--quest``/``--task``/``--run`` (or ``QAR_TOOL_QUEST_ID``/``QAR_TOOL_TASK_ID``/``QAR_TOOL_RUN_ID``) fill a
-tool's context args the way the in-process loop does. Exit codes: 0 success, 1 failure (reason printed), 2 usage.
+tool's context args the way the in-process loop does. Exit codes: 0 when the request was taken (applied, noop, or held for a person's approval; a held write is
+waiting, not failed, so do not retry or file it again), 1 when it was refused, failed or its outcome is unknown (reason
+printed), 2 usage. A line `status: <word>` follows the text for every status but applied.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ import sys
 from typing import Optional
 
 from ..core.tools import ToolContext, build_tool_registry
+from ..core.tools_status import ACCEPTED_STATUSES, ToolStatus
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -100,8 +103,12 @@ def main(argv: Optional[list] = None) -> int:
     result = registry.invoke(args.name, call_args,
                              ToolContext(quest_id=args.quest, task_id=args.task,
                                          meta={"run_id": args.run} if args.run else {}))
-    print(result.text, file=sys.stdout if result.ok else sys.stderr)
-    return 0 if result.ok else 1
+    accepted = result.status in ACCEPTED_STATUSES
+    stream = sys.stdout if accepted else sys.stderr
+    print(result.text, file=stream)
+    if result.status is not ToolStatus.APPLIED:
+        print(f"status: {result.status.value}", file=stream)
+    return 0 if accepted else 1
 
 
 if __name__ == "__main__":

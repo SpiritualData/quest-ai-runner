@@ -355,3 +355,42 @@ def test_create_goal_tool_in_ops_maps_noop_and_unknown():
     noop = create_goal_spec({}, client_factory=with_client(Client({"id": "g1", "already_existed": True}))).handler(
         {"quest_id": "q1", "title": "Run", "period": "2026_W41"}, ToolContext())
     assert noop.status is ToolStatus.NOOP
+
+
+# --- the shell: a held write is not a failed command, and the ledger agrees ----------------------
+
+def shell_with_tool(tmp_path, monkeypatch, status):
+    """A custom tool that answers with ``status``, reachable through ``python -m quest_ai_runner.tools``."""
+    (tmp_path / f"status_tool_{status}.py").write_text(
+        "from quest_ai_runner.core.tools import ToolResult\n"
+        f"def run(args, ctx):\n    return ToolResult(ok=False, status={status!r}, text='it said {status}')\n")
+    (tmp_path / "tools.toml").write_text(
+        f'[[tool]]\nname = "do_it"\ndescription = "Do it."\nwhen_to_use = "Testing."\nwhen_not_to_use = "Never."\n'
+        f'handler = "status_tool_{status}:run"\nmutates = true\n[tool.parameters]\ntype = "object"\n')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("QAR_TOOLS_FILE", str(tmp_path / "tools.toml"))
+    monkeypatch.setenv("QAR_STANDARD_TOOLS", "0")
+
+
+@pytest.mark.parametrize("status,code", [("applied", 0), ("noop", 0), ("held", 0),
+                                         ("refused", 1), ("failed", 1), ("unknown", 1)])
+def test_the_tools_command_exits_zero_for_applied_noop_and_held_and_prints_the_status(tmp_path, monkeypatch, capsys, status, code):
+    """A deep worker reads a non-zero exit as a broken command and retries it; a write held for approval is not that."""
+    from quest_ai_runner.tools.__main__ import main
+    shell_with_tool(tmp_path, monkeypatch, status)
+    assert main(["call", "do_it"]) == code
+    out = capsys.readouterr()
+    seen = out.out + out.err
+    assert f"it said {status}" in seen
+    assert (f"status: {status}" in seen) is (status != "applied")
+
+
+@pytest.mark.parametrize("status,ok", [("applied", True), ("noop", True), ("held", True),
+                                       ("refused", False), ("failed", False), ("unknown", False)])
+def test_the_tool_ledger_records_a_held_write_as_ok(tmp_path, status, ok):
+    from hubofhubs.act.tool_ledger import FileToolLedger
+    ledger = FileToolLedger(str(tmp_path / "ledger"))
+    spec = ToolSpec(name="do_it", description="d", mutates=True,
+                    handler=lambda args, c: ToolResult(ok=False, status=status, text=f"it said {status}"))
+    ToolRegistry([spec], ledger=ledger).invoke("do_it", {}, ToolContext(task_id="t1"))
+    assert [row.ok for row in ledger.since("t1", 0)] == [ok]
