@@ -23,7 +23,7 @@ from .anticipation_learner import (
     Pattern,
     Prediction,
 )
-from .file_modes import match_umask
+from hubofhubs.filemodes import match_umask
 
 log = logging.getLogger("quest-ai-runner.anticipation")
 

@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 from esoi import implementation
-from ..core.file_modes import match_umask
+from hubofhubs.filemodes import match_umask
 from . import card_origin
 
 # Name of the bootstrap meta sidecar written next to cards on the filesystem. The filesystem repo

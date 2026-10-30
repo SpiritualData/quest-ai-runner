@@ -85,7 +85,7 @@ from esoi import implementation
 from .date_bounds import parse_date_bound, timestamp_in_range
 from .text_sampling import keywords_from_text
 from quest_ai_runner.core.scope_tags import scope_tags_allow, scope_tags_from_keys
-from .file_modes import match_umask
+from hubofhubs.filemodes import match_umask
 
 log = logging.getLogger("quest-ai-runner.recent_context")
 

@@ -293,12 +293,6 @@ def metric_entry_parts(lead: Mapping[str, Any], other: Optional[Mapping[str, Any
                   else "The measured numbers differ.")
 
 
-def metric_entry_text(lead: Mapping[str, Any], other: Optional[Mapping[str, Any]] = None) -> str:
-    """One metric as one plain sentence (``metric_entry_parts`` joined), wrapped by the transcript and never cut."""
-    text, note = metric_entry_parts(lead, other)
-    return f"{text}. {note}" if note else text
-
-
 def natural_key(text: str) -> list:
     """A sort key that puts ``check 2`` before ``check 10``: digits compare as numbers, words ignoring case."""
     return [(0, int(part)) if part.isdigit() else (1, part.lower()) for part in re.split(r"(\d+)", text) if part]

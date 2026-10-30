@@ -20,7 +20,7 @@ from .card_store_identity import is_merged as is_merged_store, read_meta as read
 from . import card_origin
 from .bootstrap_reporter import mark_bootstrap_completed
 from ..core.background_pacing import Pacer
-from ..core.file_modes import match_umask
+from hubofhubs.filemodes import match_umask
 from .context_bootstrap_support import (
     _BOOTSTRAP_MAX_BYTES,
     _BOOTSTRAP_META_FILE,

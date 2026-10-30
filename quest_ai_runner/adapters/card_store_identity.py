@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from ..core.file_modes import match_umask
+from hubofhubs.filemodes import match_umask
 
 log = logging.getLogger("quest-ai-runner.card-store")
 

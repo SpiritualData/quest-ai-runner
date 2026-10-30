@@ -36,7 +36,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 from . import card_limit, card_origin
 from ..core.scope_tags import union_scope_tags
@@ -206,18 +206,6 @@ def read_card(path: Path) -> Optional[Dict[str, Any]]:
     except Exception:  # noqa: BLE001
         return None
     return card if isinstance(card, dict) else None
-
-
-def read_facts(files: Iterable[Path], pace: Pace = no_pace,
-               should_stop: Callable[[], bool] = lambda: False) -> Iterator[Facts]:
-    """Stream the facts of each card file; a card that cannot be read is skipped, and left alone."""
-    for path in files:
-        if should_stop():
-            return
-        card = read_card(path)
-        if card is not None:
-            yield facts_of(path, card)
-        pace()
 
 
 # --------------------------------------------------------------------------------------------

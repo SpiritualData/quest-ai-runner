@@ -42,7 +42,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 from . import card_origin
 from .card_store_lock import StoreLock
-from ..core.file_modes import match_umask
+from hubofhubs.filemodes import match_umask
 
 log = logging.getLogger("quest-ai-runner.card-limit")
 

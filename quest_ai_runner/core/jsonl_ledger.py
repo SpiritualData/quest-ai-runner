@@ -8,7 +8,7 @@ This module is that, once. A ledger built on it adds only its own record type.
 
 An append is one ``os.write`` of the whole line on an ``O_APPEND`` descriptor, under an exclusive ``flock`` where the
 platform has one, so two writers never produce a torn or interleaved line; the file is created with mode 0666 minus the
-umask, the same permissions an ordinary ``open(path, "a")`` gives it (``file_modes`` explains why that matters on a corpus
+umask, the same permissions an ordinary ``open(path, "a")`` gives it (``hubofhubs.filemodes`` explains why that matters on a corpus
 shared by two accounts). Appends never raise: a ledger that cannot be written must not break the work it records.
 """
 from __future__ import annotations

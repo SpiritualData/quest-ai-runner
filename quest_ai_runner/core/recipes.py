@@ -199,7 +199,7 @@ class RecipeStore:
                     json.dump({"recipes": [r.to_dict() for r in self._recipes.values()]}, fh,
                               indent=1, default=str)
                 try:
-                    from .file_modes import match_umask
+                    from hubofhubs.filemodes import match_umask
                     with open(tmp, "rb") as fh2:
                         match_umask(fh2.fileno())
                 except Exception:  # noqa: BLE001
