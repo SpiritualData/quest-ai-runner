@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .quest_client_support import QuestApiError, QuestNotConfigured, log
+from .quest_client_support import QuestApiError, QuestNotConfigured, WriteResult, log
 
 
 class RepsMixin:
@@ -52,13 +52,13 @@ class RepsMixin:
 
     def create_rep(self, display_name: str, *, team_id: Optional[str] = None,
                    persona: Optional[str] = None, area: Optional[str] = None,
-                   owner_user_id: Optional[str] = None) -> Dict[str, Any]:
+                   owner_user_id: Optional[str] = None) -> WriteResult:
         """POST /api/reps — register a new AI rep on a team.
 
         Omit ``owner_user_id`` for a PERSON-LESS rep (a character/persona that represents no real
         team member, just a named AI voice); pass it to attach the rep to a real person instead.
         ``persona`` is the rep's seed instructions/voice; ``area`` is a short human label for what
-        it's for. Raises ``QuestApiError``/``QuestNotConfigured`` on failure rather than swallowing
+        it's for. Returns a ``WriteResult`` or raises ``QuestWriteError`` on failure rather than swallowing
         it: a caller that stores the returned ``rep_id`` must know it actually exists.
         """
         self._require()
@@ -72,7 +72,7 @@ class RepsMixin:
             body["area"] = area
         if owner_user_id is not None:
             body["owner_user_id"] = owner_user_id
-        return self._request("POST", "/api/reps", body=body) or {}
+        return self._write("POST", "/api/reps", body=body, label="Creating the rep")
 
     # --- AI-rep profile (the rep <-> skill-file sync surface) -----------------
 
@@ -103,39 +103,33 @@ class RepsMixin:
     def update_ai_profile(self, user_id: str, *, display_name: Optional[str] = None,
                           persona: Optional[str] = None,
                           learned_notes: Optional[list] = None,
-                          team_id: Optional[str] = None) -> Dict[str, Any]:
+                          team_id: Optional[str] = None) -> WriteResult:
         """PUT edits to a rep's profile (display_name and/or persona).
 
         NOTE: learned_notes are no longer stored on the rep profile. Feedback/corrections
         are stored as guidance cards (via add_rep_correction) and loaded via list_guidance_cards.
 
         Only the fields you pass are sent, so a local edit to just the persona pushes up only the
-        persona. Returns the updated profile. ``team_id`` defaults to the client's configured team.
+        persona. Returns a ``WriteResult`` holding the updated profile; a failure raises ``QuestWriteError``.
+        ``team_id`` defaults to the client's configured team.
         """
-        try:
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to update an AI-rep profile")
-            body: Dict[str, Any] = {}
-            if display_name is not None:
-                body["display_name"] = display_name
-            if persona is not None:
-                body["persona"] = persona
-            if learned_notes is not None:
-                body["learned_notes"] = learned_notes
-            return self._request(
-                "PUT", f"/api/teams/{tid}/members/{user_id}/ai-profile", body=body) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            if getattr(e, "status", None) == 404:
-                log.debug("no ai-profile to edit for user %s on team: %s", user_id, e)
-            else:
-                log.warning("update_ai_profile failed for user %s: %s", user_id, e)
-            return {}
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to update an AI-rep profile")
+        body: Dict[str, Any] = {}
+        if display_name is not None:
+            body["display_name"] = display_name
+        if persona is not None:
+            body["persona"] = persona
+        if learned_notes is not None:
+            body["learned_notes"] = learned_notes
+        return self._write("PUT", f"/api/teams/{tid}/members/{user_id}/ai-profile", body=body,
+                           label="Updating the rep profile")
 
     def add_rep_correction(self, user_id: str, correction: str, *,
                            message_id: Optional[str] = None,
                            task_type: Optional[str] = None,
-                           team_id: Optional[str] = None) -> Dict[str, Any]:
+                           team_id: Optional[str] = None) -> WriteResult:
         """POST a rep correction as a guidance card (not as rep.learned_notes).
 
         Feedback is stored as guidance cards in the Quest guidance collection,
@@ -150,27 +144,19 @@ class RepsMixin:
             team_id: Team ID (defaults to client's configured team).
 
         Returns:
-            The created guidance card dict {id, title, body, tags, ...}.
+            A ``WriteResult`` holding the created guidance card dict {id, title, body, tags, ...}; a failure raises
+            ``QuestWriteError``.
         """
-        try:
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to add a rep correction")
-
-            body: Dict[str, Any] = {"correction": correction}
-            if message_id is not None:
-                body["message_id"] = message_id
-            if task_type is not None:
-                body["task_type"] = task_type
-
-            return self._request(
-                "POST",
-                f"/api/teams/{tid}/members/{user_id}/corrections",
-                body=body,
-            ) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("add_rep_correction failed for user %s: %s", user_id, e)
-            return {}
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to add a rep correction")
+        body: Dict[str, Any] = {"correction": correction}
+        if message_id is not None:
+            body["message_id"] = message_id
+        if task_type is not None:
+            body["task_type"] = task_type
+        return self._write("POST", f"/api/teams/{tid}/members/{user_id}/corrections", body=body,
+                           label="Saving the correction")
 
     def list_guidance_cards(self, *, rep_id: Optional[str] = None,
                             source: Optional[str] = None,

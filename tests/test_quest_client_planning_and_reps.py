@@ -8,6 +8,7 @@ call, no network.
 import pytest
 
 from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient, QuestNotConfigured
+from quest_ai_runner.runner.quest_client_support import QuestWriteError
 
 
 def client_capturing_call():
@@ -118,49 +119,53 @@ def test_carry_over_day_plan_posts_to_the_right_route():
     assert result == {"carried_over": 3}
 
 
-def test_carry_over_day_plan_returns_empty_dict_on_failure():
+def test_carry_over_day_plan_raises_a_typed_error_on_failure():
     client = client_failing_request()
-    assert client.carry_over_day_plan() == {}
+    with pytest.raises(QuestWriteError):
+        client.carry_over_day_plan()
 
 
 # --- delete_goal ---------------------------------------------------------------------------
 
-def test_delete_goal_sends_delete_and_returns_true():
+def test_delete_goal_sends_delete_and_returns_a_result():
     client, captured = client_capturing_call()
-    assert client.delete_goal("goal_1") is True
+    assert client.delete_goal("goal_1").status.value == "applied"
     assert captured["method"] == "DELETE"
     assert captured["path"] == "/api/planning/goals/goal_1"
 
 
-def test_delete_goal_returns_false_on_failure():
+def test_delete_goal_raises_on_failure():
     client = client_failing_request()
-    assert client.delete_goal("goal_1") is False
+    with pytest.raises(QuestWriteError):
+        client.delete_goal("goal_1")
 
 
 # --- archive_quest / unarchive_quest ----------------------------------------------------------
 
-def test_archive_quest_posts_to_the_right_route_and_returns_true():
+def test_archive_quest_posts_to_the_right_route_and_returns_a_result():
     client, captured = client_capturing_call()
-    assert client.archive_quest("quest_1") is True
+    assert client.archive_quest("quest_1").status.value == "applied"
     assert captured["method"] == "POST"
     assert captured["path"] == "/api/quests/quest_1/archive"
 
 
-def test_archive_quest_returns_false_on_failure():
+def test_archive_quest_raises_on_failure():
     client = client_failing_request()
-    assert client.archive_quest("quest_1") is False
+    with pytest.raises(QuestWriteError):
+        client.archive_quest("quest_1")
 
 
-def test_unarchive_quest_posts_to_the_right_route_and_returns_true():
+def test_unarchive_quest_posts_to_the_right_route_and_returns_a_result():
     client, captured = client_capturing_call()
-    assert client.unarchive_quest("quest_1") is True
+    assert client.unarchive_quest("quest_1").status.value == "applied"
     assert captured["method"] == "POST"
     assert captured["path"] == "/api/quests/quest_1/unarchive"
 
 
-def test_unarchive_quest_returns_false_on_failure():
+def test_unarchive_quest_raises_on_failure():
     client = client_failing_request()
-    assert client.unarchive_quest("quest_1") is False
+    with pytest.raises(QuestWriteError):
+        client.unarchive_quest("quest_1")
 
 
 # --- list_team_reps ----------------------------------------------------------------------------

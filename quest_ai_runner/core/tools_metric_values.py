@@ -75,7 +75,7 @@ def propose_metric_value_spec(env: Mapping[str, str], client_factory=None) -> To
                 confidence_reason=str(args.get("confidence_reason") or ""), could_not_see=str(args.get("could_not_see") or ""),
                 period_start=args.get("period_start"), note=str(args.get("note") or ""))
         except Exception as e:  # a refusal says why: fix the values or the evidence, never retry unchanged
-            return write_failed(e, "Not done")
+            return write_failed(e, "")
         proposal = data_of(proposal)
         # A proposal is an ask for the person: nothing is recorded until they confirm it.
         return ToolResult(ok=False, status=ToolStatus.HELD, data=proposal, text=(

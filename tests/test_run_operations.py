@@ -111,7 +111,7 @@ def test_create_decision_tells_the_ai_when_the_person_already_passed_on_it():
                     "message": "Not asked: the person already passed on this same question."}
 
     result = run(ops.create_decision_spec, Answered(), {"summary": "Approve the outline note?"})
-    assert result.ok and "already passed on" in result.text
+    assert result.status.value == "refused" and "already passed on" in result.text
     assert "NOT been asked" not in result.text
 
 
@@ -187,7 +187,8 @@ def test_progress_passes_the_outcome_by_words_and_reports_a_pending_approval_hon
             return {"pending_approval": True, "decision_id": "dec_4"}
     pending = run(ops.update_outcome_progress_spec, Pending(),
                   {"outcome_id": "out_a", "progress_pct": 5, "note": "Two partners signed today"})
-    assert pending.ok and "waiting for a person" in pending.text and "Do not report" in pending.text
+    assert pending.status.value == "held" and not pending.ok
+    assert "waiting for a person" in pending.text and "Do not report" in pending.text
 
 
 def test_progress_refusal_text_reaches_the_run_verbatim():

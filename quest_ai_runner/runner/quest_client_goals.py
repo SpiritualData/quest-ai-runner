@@ -6,15 +6,19 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from ..core.tools_status import ToolStatus
 from .quest_client_support import (
     GOAL_UPDATE_FANOUT_CAP,
     QuestApiError,
     QuestNotConfigured,
+    QuestWriteError,
+    WriteResult,
     _PERIOD_RE,
     SCHEDULE_DAY_RE,
     SCHEDULE_TIME_RE,
     log,
 )
+from .quest_client_transport import new_idempotency_key
 
 
 class GoalsMixin:
@@ -132,23 +136,19 @@ class GoalsMixin:
             self.last_error = str(e)   # a tool reports why, so a repeat of it can be recognised
             return {}
 
-    def update_goal(self, goal_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    def update_goal(self, goal_id: str, fields: Dict[str, Any]) -> WriteResult:
         """PUT /api/planning/goals/{goal_id} — edit one goal's own fields.
 
         The endpoint accepts ``title``/``name``, ``description``, ``criteria``, ``period``,
         ``timeScope``, ``deadline``-adjacent scheduling fields and the assignee/aiHelp pair. Send
         only what changed; anything omitted keeps its value.
 
-        Returns {} on failure rather than raising: a goal edit is one item in a sync that has
-        others to finish, and one rejected rename must not abort the rest.
+        Returns a ``WriteResult`` or raises ``QuestWriteError`` (never ``{}``). A sync with other goals to
+        finish catches the error per goal, so one rejected rename does not abort the rest.
         """
-        try:
-            return self._request("PUT", f"/api/planning/goals/{goal_id}", body=dict(fields)) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("update_goal failed for %s: %s", goal_id, e)
-            return {}
+        return self._write("PUT", f"/api/planning/goals/{goal_id}", body=dict(fields), label="Updating the goal")
 
-    def schedule_goal(self, goal_id: str, *, date: str, time: str) -> Dict[str, Any]:
+    def schedule_goal(self, goal_id: str, *, date: str, time: str) -> WriteResult:
         """Set a goal's day AND time of day: PUT /api/planning/goals/{goal_id} with ``scheduledStart``.
 
         ``update_goal(goal_id, {"scheduled_time": ...})`` is accepted and changes nothing: the
@@ -161,18 +161,20 @@ class GoalsMixin:
         day-scoped goal's period and deadline to that date, so this one call both moves the goal
         to the day and times it.
 
-        Returns the updated Goal dict. Raises ``QuestApiError``/``QuestNotConfigured`` on failure
-        (unlike ``update_goal``): a caller that reports the goal as scheduled must know it was.
+        Returns a ``WriteResult`` holding the updated Goal dict. Raises ``QuestWriteError`` on failure: a caller
+        that reports the goal as scheduled must know it was.
         """
         if not SCHEDULE_DAY_RE.match(date or ""):
-            raise QuestApiError(f"Invalid date {date!r}: must be YYYY-MM-DD, e.g. '2026-10-26'.")
+            raise QuestWriteError(f"Invalid date {date!r}: must be YYYY-MM-DD, e.g. '2026-10-26'.",
+                                  write_status=ToolStatus.REFUSED)
         if not SCHEDULE_TIME_RE.match(time or ""):
-            raise QuestApiError(f"Invalid time {time!r}: must be 24-hour HH:MM, e.g. '18:35'.")
+            raise QuestWriteError(f"Invalid time {time!r}: must be 24-hour HH:MM, e.g. '18:35'.",
+                                  write_status=ToolStatus.REFUSED)
         body = {"scheduled_start": f"{date}T{time}:00", "scheduled_date": date}
-        return self._request("PUT", f"/api/planning/goals/{goal_id}", body=body) or {}
+        return self._write("PUT", f"/api/planning/goals/{goal_id}", body=body, label="Scheduling the goal")
 
     def assign_goal(self, goal_id: str, assigned_to_user_id: Optional[str], *,
-                    reason: Optional[str] = None, next_step: Optional[str] = None) -> Dict[str, Any]:
+                    reason: Optional[str] = None, next_step: Optional[str] = None) -> WriteResult:
         """PUT /api/planning/goals/{goal_id}/assign: hand a goal to a quest member (``None`` clears
         it back to shared).
 
@@ -187,23 +189,19 @@ class GoalsMixin:
             body["reason"] = reason
         if next_step:
             body["next_step"] = next_step
-        return self._request("PUT", f"/api/planning/goals/{goal_id}/assign", body=body) or {}
+        return self._write("PUT", f"/api/planning/goals/{goal_id}/assign", body=body, label="Handing over the goal")
 
-    def set_goal_completed(self, goal_id: str, *, completed: bool = True) -> Dict[str, Any]:
+    def set_goal_completed(self, goal_id: str, *, completed: bool = True) -> WriteResult:
         """POST /api/planning/goals/{goal_id}/complete — tick or untick one goal.
 
         Separate from ``update_goal`` because completion is its own endpoint server-side, and
         because it is the one goal edit that changes what the plan MEANS rather than how it reads.
         """
-        try:
-            return self._request(
-                "POST", f"/api/planning/goals/{goal_id}/complete",
-                body={"goalId": goal_id, "completed": bool(completed)}) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("set_goal_completed failed for %s: %s", goal_id, e)
-            return {}
+        return self._write("POST", f"/api/planning/goals/{goal_id}/complete",
+                           body={"goalId": goal_id, "completed": bool(completed)},
+                           label="Marking the goal done" if completed else "Marking the goal not done")
 
-    def complete_goal(self, goal_id: str, *, completed: bool = True) -> Dict[str, Any]:
+    def complete_goal(self, goal_id: str, *, completed: bool = True) -> WriteResult:
         """Tick or untick a goal: the name the registry's ``complete_goal`` operation wraps."""
         return self.set_goal_completed(goal_id, completed=completed)
 
@@ -221,7 +219,8 @@ class GoalsMixin:
                     target_unit: Optional[str] = None,
                     ai_help: Optional[bool] = None,
                     assignee_rep_id: Optional[str] = None,
-                    assigned_to_user_id: Optional[str] = None) -> Dict[str, Any]:
+                    assigned_to_user_id: Optional[str] = None,
+                    idempotency_key: Optional[str] = None) -> WriteResult:
         """POST a new Goal to /api/planning/goals.
 
         This is the REAL, typed Goal object shown on a quest's plan (period-scoped, with a
@@ -250,16 +249,19 @@ class GoalsMixin:
         it, or the request is refused with no goal created. Requires ``quest_id`` -- a standalone
         goal has no quest membership to check the assignee against.
 
-        Returns the created Goal dict (camelCase fields: id, questId, title, period, deadline,
-        ...). Raises ``QuestApiError``/``QuestNotConfigured`` on failure rather than swallowing
-        it, same contract as ``create_task``: a caller that tells the user "goal added" must know
-        it actually was.
+        Returns a ``WriteResult`` whose data is the created Goal dict (camelCase fields: id, questId, title,
+        period, deadline, ...); its status is ``noop`` when Quest says the goal already existed and ``held`` when
+        Quest is waiting for a person. Raises ``QuestWriteError`` on failure rather than swallowing it: a caller that
+        tells the user "goal added" must know it actually was.
+
+        Every call sends an ``Idempotency-Key`` (``idempotency_key``, default a fresh one per call), so a retry of
+        the same logical write cannot create a second goal on a backend that honours it.
         """
         if not _PERIOD_RE.match(period):
-            raise QuestApiError(
+            raise QuestWriteError(
                 f"Invalid period {period!r}: must be YYYY-MM-DD (day), YYYY_W## (week), "
-                f"YYYY_MM (month), YYYY_Q# (quarter), or YYYY (year)."
-            )
+                f"YYYY_MM (month), YYYY_Q# (quarter), or YYYY (year).",
+                write_status=ToolStatus.REFUSED)
         body: Dict[str, Any] = {"title": title, "period": period}
         if quest_id is not None:
             body["quest_id"] = quest_id
@@ -285,7 +287,8 @@ class GoalsMixin:
             body["assignee_rep_id"] = assignee_rep_id
         if assigned_to_user_id is not None:
             body["assigned_to_user_id"] = assigned_to_user_id
-        return self._request("POST", "/api/planning/goals", body=body) or {}
+        return self._write("POST", "/api/planning/goals", body=body, label="Creating the goal",
+                           idempotency_key=idempotency_key or new_idempotency_key())
 
     def list_assignable_members(self, quest_id: str) -> List[Dict[str, Any]]:
         """GET /api/planning/quests/{quest_id}/assignable-members: the humans a goal on this quest
@@ -301,14 +304,15 @@ class GoalsMixin:
 
     def set_goal_ai_handling(self, goal_id: str, handling: str, *,
                              rep_id: Optional[str] = None,
-                             decided_by: str = "rep") -> Dict[str, Any]:
+                             decided_by: str = "rep") -> WriteResult:
         """PUT /api/planning/goals/{goal_id}/ai-handling: hand a human-assigned goal to the
         assignee's AI rep (``handling="rep"``) or keep it with the person (``"me"``). The backend
         applies the assignee's own preference (auto, ask, never) and may answer ``proposed``."""
         body: Dict[str, Any] = {"handling": handling, "decided_by": decided_by}
         if rep_id is not None:
             body["rep_id"] = rep_id
-        return self._request("PUT", f"/api/planning/goals/{goal_id}/ai-handling", body=body) or {}
+        return self._write("PUT", f"/api/planning/goals/{goal_id}/ai-handling", body=body,
+                           label="Setting who handles the goal")
 
     def get_goal(self, goal_id: str, *, quest_id: Optional[str] = None,
                  team_id: Optional[str] = None) -> Dict[str, Any]:
@@ -420,37 +424,27 @@ class GoalsMixin:
             log.warning("list_goal_updates failed for goal %s: %s", goal_id, e)
             return []
 
-    def add_goal_update(self, goal_id: str, note: str, *, shared: bool = False) -> Dict[str, Any]:
+    def add_goal_update(self, goal_id: str, note: str, *, shared: bool = False) -> WriteResult:
         """POST /api/planning/goals/{goal_id}/updates {"note", "shared"} — write a check-in.
 
         ``note`` must be 1..2000 non-blank characters; the server rejects a blank note (422/400)
         or one over 2000 chars, not validated client-side here so the caller sees the real
         backend error. ``shared`` marks the update visible beyond the goal owner (``shareTarget``/
         ``shareRefId`` are server-set, not settable here). Returns the created update dict (same
-        wire shape as ``list_goal_updates``), or {} on failure.
+        wire shape as ``list_goal_updates``) in a ``WriteResult``; a failure raises ``QuestWriteError``.
         """
-        try:
-            return self._request(
-                "POST", f"/api/planning/goals/{goal_id}/updates",
-                body={"note": note, "shared": bool(shared)}) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("add_goal_update failed for goal %s: %s", goal_id, e)
-            return {}
+        return self._write("POST", f"/api/planning/goals/{goal_id}/updates",
+                           body={"note": note, "shared": bool(shared)}, label="Posting the goal update")
 
-    def delete_goal_update(self, goal_id: str, update_id: str) -> bool:
+    def delete_goal_update(self, goal_id: str, update_id: str) -> WriteResult:
         """DELETE /api/planning/goals/{goal_id}/updates/{update_id} — soft-delete one check-in.
 
         Allowed for the update's own author or an admin of the goal's quest (server-enforced).
-        Returns True only on success; False on any failure (unconfigured client, network, not
+        Returns a ``WriteResult`` on success; raises ``QuestWriteError`` otherwise (network, not
         permitted, already deleted).
         """
-        try:
-            self._request("DELETE", f"/api/planning/goals/{goal_id}/updates/{update_id}")
-            return True
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("delete_goal_update failed for goal %s update %s: %s",
-                       goal_id, update_id, e)
-            return False
+        return self._write("DELETE", f"/api/planning/goals/{goal_id}/updates/{update_id}",
+                           label="Deleting the goal update")
 
     def list_quest_goal_updates(self, quest_id: str, *, limit_per_goal: int = 20,
                                 limit: int = 200,
@@ -590,28 +584,17 @@ class GoalsMixin:
             log.warning("list_all_plans failed: %s", e)
             return []
 
-    def carry_over_day_plan(self) -> Dict[str, Any]:
+    def carry_over_day_plan(self) -> WriteResult:
         """POST /api/daily-plan/carry-over — roll yesterday's unfinished goals into today's plan.
 
-        Returns the response dict. Returns {} on any error.
+        Returns a ``WriteResult`` holding the response dict; a failure raises ``QuestWriteError``.
         """
-        try:
-            self._require()
-            return self._request("POST", "/api/daily-plan/carry-over") or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("carry_over_day_plan failed: %s", e)
-            return {}
+        return self._write("POST", "/api/daily-plan/carry-over", label="Carrying over the day plan")
 
-    def delete_goal(self, goal_id: str) -> bool:
+    def delete_goal(self, goal_id: str) -> WriteResult:
         """DELETE /api/planning/goals/{goal_id} — permanently remove one goal.
 
-        Returns True only when the delete succeeded. Irreversible: a caller acting on a person's
-        behalf must have their explicit go-ahead before calling this.
+        Returns a ``WriteResult`` when the delete succeeded and raises ``QuestWriteError`` otherwise. Irreversible:
+        a caller acting on a person's behalf must have their explicit go-ahead before calling this.
         """
-        try:
-            self._require()
-            self._request("DELETE", f"/api/planning/goals/{goal_id}")
-            return True
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("delete_goal failed for %s: %s", goal_id, e)
-            return False
+        return self._write("DELETE", f"/api/planning/goals/{goal_id}", label="Deleting the goal")

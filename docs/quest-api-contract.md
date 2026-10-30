@@ -16,6 +16,62 @@ never pass the actor in a request body. Targets (a decision assignee, etc.) are 
 Task **discovery is owner-scoped**: a `GET` returns only tasks in the queue of the user the `qsk_`
 key authenticates as. Keep each lane on its own key/owner so lanes stay isolated.
 
+## The client contract
+
+`QuestClient` is an HTTP client for this API, and it follows one contract so a caller never has to guess what a
+return value means. The in-process (embedded) access point and this one share the same operations; the client's job is to be a
+good client of them.
+
+### Writes return a typed result or raise, never an empty value
+
+Every write that changes a person's data (goals, notes, asks, quest fields, strategies, habits, tasks, email, experiments,
+profile and context entries) returns a `WriteResult` or raises `QuestWriteError`. It never returns `{}`, `[]` or `False`.
+
+| `status` | Meaning | Returned or raised |
+|---|---|---|
+| `applied` | the change was made | returned |
+| `held` | Quest took it but it waits for a person's approval (HTTP 202, `applied: false`, `pending_approval`, `pending`); nothing changed yet. `id` is the ask that holds it | returned |
+| `noop` | it already existed or already held (`already_existed`, `duplicate`) | returned |
+| `refused` | Quest said no (a 4xx other than 429): not allowed, invalid, a conflict. The message is Quest's reason | raised |
+| `failed` | it did not happen: a 429 (`retry_after` is set), a 5xx, or Quest could not be reached (nothing was sent) | raised |
+| `unknown` | the request was sent and no answer came back (a read timeout, a reset after sending): it MAY have been applied. Look before trying again | raised |
+
+A `WriteResult` carries `status`, `id`, `detail` (Quest's own words) and `data` (the raw answer), and reads like the answer it wraps
+(`get`, `[]`, `in`, `==`). `QuestWriteError` subclasses `QuestApiError`, so an existing `except QuestApiError` still catches it, and carries
+`write_status`, `status` (the HTTP status when there was one), `retry_after`, `outcome_unknown` and `detail`. A held, refused, failed or unknown write
+is never done: the tools turn each into a receipt that says so, and the answer step reports only an `applied` receipt as done
+(`docs/tools.md`).
+
+Two kinds of call keep a different rule, on purpose:
+
+* **Terminal task reports** (`report_done`, `report_failed`, `report_needs_you`, `report_incomplete`) never raise, because the lane must go on to its
+  next task. They return a `WriteResult` that is falsy when the report did not land (`refused`, `failed` or `unknown`, with the reason in `detail`).
+* **Reads where absence is normal** (`list_quests`, `get_quest`, `list_quest_notes`, `get_goal`, the reflection and insight reads, ...) return an empty value
+  on a failure and log the reason, because the caller treats "nothing there" as an ordinary case. Reads that must tell "none" from "could not read"
+  raise instead (`list_experiments`, `get_metric_card`) or return `None` (`list_asks`, `list_intents`). Task-lifecycle bookkeeping that is
+  fail-open by design (`claim`, `is_task_cancelled`, `report_progress`, the heartbeat) keeps returning `None`, `False` or `{}`.
+
+### Retry, backoff and idempotency
+
+* A GET is retried up to `QAR_QUEST_READ_RETRIES` times (default 2, at most 5) on a transport error, a 429 or a 5xx, waiting 0.5 s, 1 s, 2 s ... capped at
+  `QAR_QUEST_RETRY_MAX_DELAY_SECONDS` (default 30), with jitter. A 4xx other than 429 is a final answer and is never retried. `Retry-After` (seconds or an HTTP
+  date) is honoured; one longer than the cap is reported on the error (`retry_after`) instead of waited out. The long-poll wait channel and the capability probe are never retried.
+* Goal, note and ask creation (`POST /api/planning/goals`, `POST /api/quests/{id}/notes`, `POST /api/teams/{team}/decisions`) send an
+  `Idempotency-Key` header: a fresh UUID per logical call, reused by every attempt of that call (pass `idempotency_key=` to choose it). A server that honours the key
+  must return the first result for a repeat of the same key instead of creating a second record.
+* A write is retried only when it carries a key AND write retry is on. `QAR_QUEST_WRITE_RETRY` is `auto` (the default), `on` or `off`. `auto` turns it on only when the
+  backend lists `idempotency-key` under `capabilities` (see below); `on` forces it; `off` forbids it. A backend that ignores the header would make a second record
+  per retry, so with no evidence of support a write is attempted once and a timeout is reported as `unknown`. Email sends, task creation and every other write carry no key and are
+  never retried.
+* The request timeout is `QAR_QUEST_TIMEOUT_SECONDS` (default 30).
+
+### Version skew: the capability probe
+
+On the first write that carries a key (under `auto`), the client reads `GET /api/health` once, caches the answer and looks for a `capabilities` list
+(at the top of the body or inside `data`). It reads nothing else from the server about its version. A backend that lists none, answers an error or does not
+answer is treated as supporting nothing optional: the client logs one line at INFO ("does not advertise idempotent writes; write retry is off") and carries on. It is never an error.
+A backend advertises support by adding `"idempotency-key"` to that list.
+
 ## Endpoints
 
 ### Discover due tasks

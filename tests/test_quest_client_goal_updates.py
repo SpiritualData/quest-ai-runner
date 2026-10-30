@@ -13,7 +13,10 @@ This file also covers the resulting fallbacks in ``get_goal`` (scans ``list_ques
 Same fake-transport pattern as test_quest_client_create_goal.py / test_quest_client_planning_and_
 reps.py: a fake ``_request`` captures/answers the call, no network, no real ids.
 """
+import pytest
+
 from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.runner.quest_client_support import QuestWriteError
 
 
 def client_capturing_call():
@@ -98,23 +101,25 @@ def test_add_goal_update_passes_shared_true():
     assert captured["body"] == {"note": "sharing this one", "shared": True}
 
 
-def test_add_goal_update_returns_empty_dict_on_failure():
+def test_add_goal_update_raises_a_typed_error_on_failure():
     client = client_failing_request()
-    assert client.add_goal_update("goal_test1", "note text") == {}
+    with pytest.raises(QuestWriteError):
+        client.add_goal_update("goal_test1", "note text")
 
 
 # --- delete_goal_update ------------------------------------------------------------------------
 
-def test_delete_goal_update_sends_delete_and_returns_true():
+def test_delete_goal_update_sends_delete_and_returns_a_result():
     client, captured = client_capturing_call()
-    assert client.delete_goal_update("goal_test1", "gupd_1") is True
+    assert client.delete_goal_update("goal_test1", "gupd_1").status.value == "applied"
     assert captured["method"] == "DELETE"
     assert captured["path"] == "/api/planning/goals/goal_test1/updates/gupd_1"
 
 
-def test_delete_goal_update_returns_false_on_failure():
+def test_delete_goal_update_raises_on_failure():
     client = client_failing_request()
-    assert client.delete_goal_update("goal_test1", "gupd_1") is False
+    with pytest.raises(QuestWriteError):
+        client.delete_goal_update("goal_test1", "gupd_1")
 
 
 # --- list_quest_goal_updates -------------------------------------------------------------------

@@ -6,7 +6,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .quest_client_support import QuestApiError, QuestNotConfigured, QuestPendingApproval, log
+from ..core.tools_status import ToolStatus
+from .quest_client_support import (
+    QuestApiError,
+    QuestNotConfigured,
+    QuestPendingApproval,
+    QuestWriteError,
+    WriteResult,
+    log,
+)
+from .quest_client_transport import new_idempotency_key
 
 #: Newest notes a pull fetches by default, and the page size it asks the server for (the server
 #: caps a page at 100 whatever is asked).
@@ -69,7 +78,7 @@ class QuestsMixin:
 
     def edit_quest_field(self, quest_id: str, fields: Dict[str, Any], *,
                          actor: str = "ai", user_requested: bool = False,
-                         human_statement: Optional[str] = None) -> Dict[str, Any]:
+                         human_statement: Optional[str] = None) -> WriteResult:
         """PATCH /api/quests/{quest_id}/field — owner-scoped edit of AI-determined quest fields.
 
         The OTHER write path, and the one to reach for when a field the team route refuses needs
@@ -84,8 +93,10 @@ class QuestsMixin:
         body, not a batch -- an earlier version of this method sent ``{"fields": {...}}``, which
         the handler silently never read, so every call through it wrote nothing). This method
         sends one PATCH per entry in ``fields`` and returns the LAST response (each individual
-        PATCH returns the full updated quest). Returns {} the moment any field fails to write, so
-        a partial failure is never reported as a full success.
+        PATCH returns the full updated quest) as a ``WriteResult``: ``held`` the moment a field is
+        answered with ``applied: false`` or a 202 (the change is an ask for the owner, nothing was
+        written), ``applied`` otherwise. Raises ``QuestWriteError`` the moment any field fails to
+        write, so a partial failure is never reported as a full success.
 
         Prefer ``write_quest_fields`` when a team ROLE should govern the write (an AI service
         member must not silently rewrite intent). Use this when the caller is acting as the owner.
@@ -117,23 +128,18 @@ class QuestsMixin:
         measurement), never tasks or a restatement of the latest request; ``current_state`` is the problems and the solutions
         already tried, not a task log.
         """
-        result: Dict[str, Any] = {}
+        result = WriteResult({}, ToolStatus.APPLIED)
         for field_name, value in fields.items():
             body: Dict[str, Any] = {"field_name": field_name, "value": value,
                                     "actor": actor, "userRequested": bool(user_requested)}
             if (human_statement or "").strip():
                 body["humanStatement"] = human_statement
-            try:
-                result = self._request(
-                    "PATCH", f"/api/quests/{quest_id}/field", body=body) or {}
-            except (QuestApiError, QuestNotConfigured) as e:
-                log.warning("edit_quest_field failed for quest %s field %s: %s",
-                           quest_id, field_name, e)
-                return {}
-            if isinstance(result, dict) and result.get("applied") is False:
+            result = self._write("PATCH", f"/api/quests/{quest_id}/field", body=body,
+                                 label=f"Changing the quest's {field_name}")
+            if result.status is ToolStatus.HELD:
                 log.info("edit_quest_field: %s on quest %s was not applied (%s); it is an ask for "
                          "the owner to approve (decision %s)",
-                         field_name, quest_id, result.get("reason"), result.get("decision_id"))
+                         field_name, quest_id, result.detail, result.id)
                 return result
         return result
 
@@ -164,7 +170,7 @@ class QuestsMixin:
                     start_date: Optional[str] = None,
                     category_ids: Optional[List[str]] = None,
                     creation_mode: str = "quick",
-                    human_statement: Optional[str] = None) -> Dict[str, Any]:
+                    human_statement: Optional[str] = None) -> WriteResult:
         """POST /api/quests/start — create a brand-new top-level Quest under the caller's account.
 
         ``category_id`` is required (a string like "cat_career"; no server-side enum enforced at
@@ -219,8 +225,8 @@ class QuestsMixin:
             body["start_date"] = start_date
         if category_ids is not None:
             body["category_ids"] = category_ids
-        result = self._request("POST", "/api/quests/start", body=body) or {}
-        if result.get("pending_approval"):
+        result = self._write("POST", "/api/quests/start", body=body, label="Creating the quest")
+        if result.get("pending_approval") or result.status is ToolStatus.HELD:
             decision_id = result.get("decision_id")
             raise QuestPendingApproval(
                 f"The quest was NOT created. Quest filed ask {decision_id} and is waiting for a "
@@ -229,18 +235,17 @@ class QuestsMixin:
                 decision_id=decision_id)
         return result
 
-    def attach_quest_to_team(self, team_id: str, quest_id: str) -> Dict[str, Any]:
+    def attach_quest_to_team(self, team_id: str, quest_id: str) -> WriteResult:
         """POST /api/teams/{team_id}/quest — attach an account-wide quest to a team's board.
 
         Requires the caller be that team's admin. Raises on failure (same contract as
         ``start_quest``): a caller reporting "attached" must know it landed.
         """
-        self._require()
-        return self._request("POST", f"/api/teams/{team_id}/quest",
-                             body={"quest_id": quest_id}) or {}
+        return self._write("POST", f"/api/teams/{team_id}/quest", body={"quest_id": quest_id},
+                           label="Attaching the quest to the team")
 
     def write_quest_fields(self, quest_id: str, fields: Dict[str, Any], *,
-                           team_id: Optional[str] = None) -> Dict[str, Any]:
+                           team_id: Optional[str] = None) -> WriteResult:
         """POST /api/teams/{team_id}/write — role-scoped write of QuestState fields.
 
         The server decides what the CALLER's role may write and returns
@@ -255,17 +260,20 @@ class QuestsMixin:
         ``achievements``, ...); a plain member only progress; the AI service member progress and
         strategy, never intent or completion. ``current_state`` is in no role scope HERE; it is
         written by the owner through ``edit_quest_field`` instead, not unwritable.
+
+        Returns a ``WriteResult`` (status ``refused`` when the body says ``ok`` is false, with the body still in
+        ``data``) or raises ``QuestWriteError``.
         """
-        try:
-            self._require()
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to write quest fields")
-            return self._request("POST", f"/api/teams/{tid}/write",
-                                 body={"quest_id": quest_id, "fields": dict(fields)}) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("write_quest_fields failed for quest %s: %s", quest_id, e)
-            return {}
+        self._require()
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to write quest fields")
+        result = self._write("POST", f"/api/teams/{tid}/write",
+                             body={"quest_id": quest_id, "fields": dict(fields)}, label="Writing the quest fields")
+        if isinstance(result.data, dict) and result.data.get("ok") is False:
+            return WriteResult(result.data, ToolStatus.REFUSED,
+                               detail=str(result.data.get("held") or result.data.get("blocked") or ""))
+        return result
 
     def list_quest_workflows(self, quest_id: str) -> Optional[List[Dict[str, Any]]]:
         """GET /api/quests/{quest_id}/workflows: every workflow touching this quest the caller may
@@ -286,19 +294,19 @@ class QuestsMixin:
 
     def create_quest_workflow(self, quest_id: str, title: str, steps: List[Dict[str, Any]], *,
                               edges: Optional[List[Dict[str, str]]] = None,
-                              status: Optional[str] = None) -> Dict[str, Any]:
+                              status: Optional[str] = None) -> WriteResult:
         """POST /api/quests/{quest_id}/workflows: create a workflow on a quest.
 
         ``steps`` and ``edges`` are already in the wire shape (camelCase; see the backend's
         ``docs/QUEST_WORKFLOWS.md``). Quest derives the owner from the quest (the owning team's
         workflow, else the quest's own) and refuses anyone who may not edit it, so this raises
-        ``QuestApiError`` with the server's reason instead of returning ``{}``: a caller must be able
+        ``QuestWriteError`` with the server's reason instead of returning ``{}``: a caller must be able
         to tell "refused" from "created".
         """
         body: Dict[str, Any] = {"title": title, "steps": steps, "edges": edges or []}
         if status:
             body["status"] = status
-        return self._request("POST", f"/api/quests/{quest_id}/workflows", body=body) or {}
+        return self._write("POST", f"/api/quests/{quest_id}/workflows", body=body, label="Creating the workflow")
 
     def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
         """GET /api/teams/{team_id}/quests/{quest_id} — fetch a single quest by ID.
@@ -366,7 +374,7 @@ class QuestsMixin:
     def add_quest_strategy(self, quest_id: str, title: str, approach: str = "", *,
                            actor: str = "ai", user_requested: bool = False,
                            problem_ids: Optional[List[str]] = None, purpose: str = "",
-                           description: str = "") -> Dict[str, Any]:
+                           description: str = "") -> WriteResult:
         """POST /api/quests/{quest_id}/strategies/add -- add one strategy to a quest.
 
         A strategy is a stored Solution record. ``approach`` is the strategy statement (how it solves
@@ -378,32 +386,28 @@ class QuestsMixin:
 
         ``actor``/``user_requested`` mean exactly what they mean on ``edit_quest_field``: a backend
         that gates AI strategy writes answers 202 ``{"applied": False, "reason": ...}`` instead of
-        adding it, which is returned as-is so the caller can report it honestly. Returns {} on
-        failure rather than raising.
+        adding it, which comes back as a ``held`` ``WriteResult`` so the caller can report it honestly. A
+        failure raises ``QuestWriteError``.
         """
-        try:
-            body: Dict[str, Any] = {"title": title, "approach": approach or "",
-                                    "actor": actor, "userRequested": bool(user_requested)}
-            if purpose:
-                body["purpose"] = purpose
-            if description:
-                body["description"] = description
-            if problem_ids:
-                body["problem_ids"] = [str(i) for i in problem_ids]
-            return self._request(
-                "POST", f"/api/quests/{quest_id}/strategies/add", body=body) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("add_quest_strategy failed for quest %s: %s", quest_id, e)
-            return {}
+        body: Dict[str, Any] = {"title": title, "approach": approach or "",
+                                "actor": actor, "userRequested": bool(user_requested)}
+        if purpose:
+            body["purpose"] = purpose
+        if description:
+            body["description"] = description
+        if problem_ids:
+            body["problem_ids"] = [str(i) for i in problem_ids]
+        return self._write("POST", f"/api/quests/{quest_id}/strategies/add", body=body,
+                           label="Adding the strategy")
 
     def create_habit(self, quest_id: str, strategy_id: str, name: str, *,
                      frequency: str = "daily", start_date: Optional[str] = None,
-                     **fields: Any) -> Dict[str, Any]:
+                     **fields: Any) -> WriteResult:
         """POST /api/planning/habits -- create one habit under a quest strategy.
 
         ``fields`` passes the endpoint's optional keys through in snake_case (``description``,
         ``days``, ``time``, ``duration``, ``linked_goal_id`` ...); ``start_date`` defaults to today.
-        Raises ``QuestApiError``/``QuestNotConfigured`` like ``create_goal``: a caller that says
+        Returns a ``WriteResult`` or raises ``QuestWriteError`` like ``create_goal``: a caller that says
         "habit added" must know it was.
         """
         from datetime import date
@@ -411,7 +415,7 @@ class QuestsMixin:
                                 "frequency": frequency,
                                 "start_date": start_date or date.today().isoformat()}
         body.update({k: v for k, v in fields.items() if v is not None})
-        return self._request("POST", "/api/planning/habits", body=body) or {}
+        return self._write("POST", "/api/planning/habits", body=body, label="Creating the habit")
 
     def list_experiments(self, quest_id: str) -> List[Dict[str, Any]]:
         """GET /api/quests/{quest_id}/research-questions: the quest's experiments.
@@ -423,7 +427,7 @@ class QuestsMixin:
         rows = resp.get("research_questions") if isinstance(resp, dict) else resp
         return [r for r in (rows or []) if isinstance(r, dict)]
 
-    def create_experiment(self, quest_id: str, question: str, **fields: Any) -> Dict[str, Any]:
+    def create_experiment(self, quest_id: str, question: str, **fields: Any) -> WriteResult:
         """POST /api/quests/{quest_id}/research-questions: create one experiment.
 
         ``fields`` are the endpoint's optional keys: ``context``, ``hypotheses`` (``[{statement, sub_question_id?}]``),
@@ -433,10 +437,11 @@ class QuestsMixin:
         """
         body: Dict[str, Any] = {"question": question}
         body.update({k: v for k, v in fields.items() if v is not None})
-        return self._request("POST", f"/api/quests/{quest_id}/research-questions", body=body) or {}
+        return self._write("POST", f"/api/quests/{quest_id}/research-questions", body=body,
+                           label="Creating the experiment")
 
     def update_experiment(self, quest_id: str, research_question_id: str,
-                          **changes: Any) -> Dict[str, Any]:
+                          **changes: Any) -> WriteResult:
         """PATCH /api/quests/{quest_id}/research-questions/{id}: change only the keys given.
 
         Keys: ``question``, ``context``, ``hypotheses`` (``[{statement, sub_question_id?}]``), ``purpose``, ``sub_questions`` and
@@ -444,18 +449,17 @@ class QuestsMixin:
         ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date`` (``""`` clears
         a date), ``conditions``. Raises like ``create_habit``.
         """
-        return self._request(
-            "PATCH", f"/api/quests/{quest_id}/research-questions/{research_question_id}",
-            body=changes) or {}
+        return self._write("PATCH", f"/api/quests/{quest_id}/research-questions/{research_question_id}",
+                           body=changes, label="Changing the experiment")
 
-    def delete_experiment(self, quest_id: str, research_question_id: str) -> bool:
+    def delete_experiment(self, quest_id: str, research_question_id: str) -> WriteResult:
         """DELETE /api/quests/{quest_id}/research-questions/{id}: permanently remove one experiment.
 
         Irreversible, and the backend refuses the quest's default question. A caller acting for a
         person needs their explicit confirmation first. Raises like ``create_habit``.
         """
-        self._request("DELETE", f"/api/quests/{quest_id}/research-questions/{research_question_id}")
-        return True
+        return self._write("DELETE", f"/api/quests/{quest_id}/research-questions/{research_question_id}",
+                           label="Deleting the experiment")
 
     def get_my_quest(self, quest_id: str) -> Dict[str, Any]:
         """GET /api/quests/{quest_id}/state — fetch one account-wide quest's full state.
@@ -471,34 +475,22 @@ class QuestsMixin:
             log.warning("get_my_quest failed for quest %s: %s", quest_id, e)
             return {}
 
-    def archive_quest(self, quest_id: str) -> bool:
+    def archive_quest(self, quest_id: str) -> WriteResult:
         """POST /api/quests/{quest_id}/archive — archive one of the caller's own quests.
 
         Owner-only (the endpoint enforces it server-side): makes the quest inactive without
         deleting it, freeing a slot within the account's quest limit. ``unarchive_quest`` reverses
-        it. Returns True only when the archive succeeded.
+        it. Returns a ``WriteResult`` when the archive succeeded; raises ``QuestWriteError`` otherwise.
         """
-        try:
-            self._require()
-            self._request("POST", f"/api/quests/{quest_id}/archive")
-            return True
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("archive_quest failed for quest %s: %s", quest_id, e)
-            return False
+        return self._write("POST", f"/api/quests/{quest_id}/archive", label="Archiving the quest")
 
-    def unarchive_quest(self, quest_id: str) -> bool:
+    def unarchive_quest(self, quest_id: str) -> WriteResult:
         """POST /api/quests/{quest_id}/unarchive — restore an archived quest to active.
 
-        Owner-only; fails if the account has no room left within its quest limit. Returns True
-        only when the unarchive succeeded.
+        Owner-only; fails if the account has no room left within its quest limit. Returns a
+        ``WriteResult`` when the unarchive succeeded; raises ``QuestWriteError`` otherwise.
         """
-        try:
-            self._require()
-            self._request("POST", f"/api/quests/{quest_id}/unarchive")
-            return True
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("unarchive_quest failed for quest %s: %s", quest_id, e)
-            return False
+        return self._write("POST", f"/api/quests/{quest_id}/unarchive", label="Restoring the quest")
 
     def list_quest_notes(self, quest_id: str, limit: int = DEFAULT_NOTES_LIMIT) -> List[Dict[str, Any]]:
         """GET /api/quests/{quest_id}/notes — the goal's freeform notes, oldest -> newest.
@@ -539,18 +531,18 @@ class QuestsMixin:
             return NotesList([], total=0)
 
     def update_outcome_progress(self, quest_id: str, outcome_id: str, progress_pct: Any,
-                                note: str, current_value: Any = None) -> Dict[str, Any]:
+                                note: str, current_value: Any = None) -> WriteResult:
         """POST /api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress
 
         Record how far one measurable outcome has come, as the AI. The backend applies the evidence
         rules (a generic, thin or repeated note is refused; a rise over 25 points or any drop needs
-        a longer note saying what changed) and logs the writer as ``ai:<user id>``. Returns the
-        stored outcome. Only progress fields change; the outcome's text and done flag never do.
-        When the user's permission for this is "ask first" the backend answers 202 and the return
-        value is ``{"pending_approval": True, "decision_id", "message"}``: nothing was written yet.
+        a longer note saying what changed) and logs the writer as ``ai:<user id>``. Returns a ``WriteResult``
+        holding the stored outcome. Only progress fields change; the outcome's text and done flag never do.
+        When the user's permission for this is "ask first" the backend answers 202 and the result is ``held``
+        with data ``{"pending_approval": True, "decision_id", "message"}``: nothing was written yet.
 
         ``progress_pct`` and ``current_value`` may arrive as strings (the shell CLI passes
-        positionals as text); they are converted here. A refused write RAISES ``QuestApiError``
+        positionals as text); they are converted here. A refused write RAISES ``QuestWriteError``
         whose message is ``Not done: <the backend's reason, verbatim>``, so the caller (a model,
         through ``quest-ai-runner quest update_outcome_progress ... --write``) reads exactly why and
         can rewrite the note with new specifics instead of resending it.
@@ -560,27 +552,22 @@ class QuestsMixin:
             if current_value is not None:
                 body["current_value"] = float(current_value)
         except (TypeError, ValueError):
-            raise QuestApiError("Not done: progress_pct and current_value must be numbers "
-                                "(progress_pct is 0 to 100)")
+            raise QuestWriteError("Not done: progress_pct and current_value must be numbers "
+                                  "(progress_pct is 0 to 100)", write_status=ToolStatus.REFUSED)
         try:
             result = self.post_outcome_progress(quest_id, outcome_id, body)
-        except QuestApiError as e:
-            if e.status not in (400, 403, 404, 422):
-                raise
+        except QuestWriteError as e:
             if e.status == 404:
                 # The AI usually holds an outcome's WORDS, not its id. Resolve them against the
                 # quest's own outcomes once, so the call that named the outcome in words works;
                 # when nothing (or several things) match, say which outcomes there are.
                 resolved, why = self.resolve_outcome_id(quest_id, outcome_id)
                 if resolved and resolved != outcome_id:
-                    try:
-                        result = self.post_outcome_progress(quest_id, resolved, body)
-                        return self.progress_result(result)
-                    except QuestApiError as retry_error:
-                        e = retry_error
-                elif why:
-                    raise QuestApiError(f"Not done: {why}", status=e.status) from e
-            raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
+                    return self.progress_result(self.post_outcome_progress(quest_id, resolved, body))
+                if why:
+                    raise QuestWriteError(f"Not done: {why}", write_status=ToolStatus.REFUSED,
+                                          status=e.status, detail=why) from e
+            raise
         return self.progress_result(result)
 
     def get_metric_card(self, collection_id: str) -> Dict[str, Any]:
@@ -596,7 +583,7 @@ class QuestsMixin:
             raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
 
     def propose_metric_value(self, collection_id: str, values: Dict[str, Any], evidence: List[Dict[str, Any]], confidence: str = "medium",
-                             confidence_reason: str = "", could_not_see: str = "", period_start: Optional[str] = None, note: str = "") -> Dict[str, Any]:
+                             confidence_reason: str = "", could_not_see: str = "", period_start: Optional[str] = None, note: str = "") -> WriteResult:
         """POST /api/metric-values/proposals
 
         Draft a value for a metric's period. It becomes an Ask for the person, who confirms or corrects it; nothing is written into their
@@ -608,15 +595,13 @@ class QuestsMixin:
                                 "confidenceReason": confidence_reason, "couldNotSee": could_not_see, "note": note}
         if period_start:
             body["periodStart"] = period_start
-        try:
-            return self._request("POST", "/api/metric-values/proposals", body=body) or {}
-        except QuestApiError as e:
-            raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
+        return self._write("POST", "/api/metric-values/proposals", body=body, label="Proposing the value",
+                           not_done=True)
 
-    def post_outcome_progress(self, quest_id: str, outcome_id: str, body: Dict[str, Any]) -> Any:
-        return self._request(
+    def post_outcome_progress(self, quest_id: str, outcome_id: str, body: Dict[str, Any]) -> WriteResult:
+        return self._write(
             "POST", f"/api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress",
-            body=body)
+            body=body, label="Recording the progress", not_done=True)
 
     def resolve_outcome_id(self, quest_id: str, outcome: str):
         """``(outcome_id, problem)`` for an outcome named by id OR by (part of) its text.
@@ -648,21 +633,29 @@ class QuestsMixin:
         return None, f"{outcome!r} {what}. Use one of these ids: {listing}"
 
     @staticmethod
-    def progress_result(result: Any) -> Dict[str, Any]:
-        if (result or {}).get("pending_approval"):
+    def progress_result(result: Any) -> WriteResult:
+        payload = result.data if isinstance(result, WriteResult) else result
+        if (payload or {}).get("pending_approval") or (isinstance(result, WriteResult) and result.status is ToolStatus.HELD):
             # The user's permission for this is "ask first": the write is parked on a decision and has
             # NOT happened. Say so; never hand back an empty outcome that reads like a silent success.
-            return {"pending_approval": True, "decision_id": result.get("decision_id"),
-                    "message": result.get("message") or "Waiting for a person to approve this change."}
-        return (result or {}).get("outcome") or {}
+            message = (payload or {}).get("message") or "Waiting for a person to approve this change."
+            decision_id = (payload or {}).get("decision_id")
+            return WriteResult({"pending_approval": True, "decision_id": decision_id, "message": message},
+                               ToolStatus.HELD, id=str(decision_id or ""), detail=str(message))
+        outcome = (payload or {}).get("outcome") or {}
+        return WriteResult(outcome, ToolStatus.APPLIED, id=str(outcome.get("id") or ""))
 
     def add_quest_note(self, quest_id: str, text: str,
                        *, author_label: Optional[str] = None,
-                       relayed_author_email: Optional[str] = None) -> List[Dict[str, Any]]:
-        """POST /api/quests/{quest_id}/notes — append a note; returns the updated notes list.
+                       relayed_author_email: Optional[str] = None,
+                       idempotency_key: Optional[str] = None) -> WriteResult:
+        """POST /api/quests/{quest_id}/notes: append a note; returns a ``WriteResult`` whose data is the
+        updated notes list (oldest to newest) when Quest sends one.
 
         Attribution is derived server-side from the caller: an API-key caller (this client) is
-        recorded ``author_kind: "ai"``. Returns [] on failure.
+        recorded ``author_kind: "ai"``. A failure raises ``QuestWriteError`` (it used to return ``[]``, which a 2xx
+        with an unexpected body also produced, so a note that landed could read as "not saved"). Each call sends an
+        ``Idempotency-Key`` (``idempotency_key``, default a fresh one) so a retry cannot post the note twice.
 
         ``author_label`` names the PERSONA that wrote it ("Bailey"), for a quest several personas
         work. The backend honors it only for API-key callers and falls back to a plain "AI
@@ -681,19 +674,13 @@ class QuestsMixin:
         (``local@domain.tld``); a non-blank value that fails that shape is rejected by the backend
         (HTTP 400) with NOTHING saved, so pass a clean address or leave this None.
         """
-        try:
-            self._require()
-            body: Dict[str, Any] = {"text": text}
-            if author_label and str(author_label).strip():
-                body["author_label"] = str(author_label).strip()[:60]
-            if relayed_author_email and str(relayed_author_email).strip():
-                body["relayed_author_email"] = str(relayed_author_email).strip().lower()[:320]
-            resp = self._request(
-                "POST", f"/api/quests/{quest_id}/notes", body=body) or []
-            return resp if isinstance(resp, list) else []
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("add_quest_note failed for quest %s: %s", quest_id, e)
-            return []
+        body: Dict[str, Any] = {"text": text}
+        if author_label and str(author_label).strip():
+            body["author_label"] = str(author_label).strip()[:60]
+        if relayed_author_email and str(relayed_author_email).strip():
+            body["relayed_author_email"] = str(relayed_author_email).strip().lower()[:320]
+        return self._write("POST", f"/api/quests/{quest_id}/notes", body=body, label="Saving the note",
+                           idempotency_key=idempotency_key or new_idempotency_key())
 
     def list_quest_events(self, quest_id: str, *, since: Optional[str] = None,
                           limit: int = 20, actor: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -765,7 +752,7 @@ class QuestsMixin:
             return {}
 
     def update_quest_autopilot(self, quest_id: str,
-                              fields: Dict[str, Any]) -> Dict[str, Any]:
+                              fields: Dict[str, Any]) -> WriteResult:
         """PATCH a quest's autopilot settings -- ``PATCH /api/quests/{quest_id}/autopilot``.
 
         The route is QUEST-scoped (no team id) and its body is FLAT (``{"mode": ..., "cadence":
@@ -790,13 +777,9 @@ class QuestsMixin:
         when a field it wrote did not stick, rather than letting the cadence gate silently never
         advance).
 
-        Returns the endpoint's response (``{"quest_id": ..., "autopilot": {...}}``), or ``{}`` on
-        failure. Never raises: a bookkeeping write failing must not break the pass that produced
-        the work.
+        Returns a ``WriteResult`` holding the endpoint's response (``{"quest_id": ..., "autopilot": {...}}``) or
+        raises ``QuestWriteError``. The bookkeeping caller catches it: a bookkeeping write failing must not break
+        the pass that produced the work.
         """
-        try:
-            return self._request("PATCH", f"/api/quests/{quest_id}/autopilot",
-                                 body=dict(fields)) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("update_quest_autopilot failed for quest %s: %s", quest_id, e)
-            return {}
+        return self._write("PATCH", f"/api/quests/{quest_id}/autopilot", body=dict(fields),
+                           label="Updating the autopilot settings")

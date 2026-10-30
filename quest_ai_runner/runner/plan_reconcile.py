@@ -281,10 +281,14 @@ def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
     applied: List[Dict[str, Any]] = []
     for a in actions:
         if a["kind"] == "roll":
-            client.update_goal(a["goal_id"], {
-                "period": a["new_period"],
-                "description": ROLL_NOTE.format(old=a["old"]) + " " + _description_of(goals, a["goal_id"]),
-            })
+            try:
+                client.update_goal(a["goal_id"], {
+                    "period": a["new_period"],
+                    "description": ROLL_NOTE.format(old=a["old"]) + " " + _description_of(goals, a["goal_id"]),
+                })
+            except Exception as error:  # noqa: BLE001 -- QuestWriteError: report it, go on with the other actions
+                applied.append({**a, "kind": "failed", "reason": f"the goal was not rolled: {error}"})
+                continue
             if a.get("parent_goal_id") and a["new_scope"] == "day":
                 client._request("PUT", f"/api/planning/goals/{a['goal_id']}/parent",
                                 body={"parent_goal_id": a["parent_goal_id"]})
@@ -294,8 +298,12 @@ def reconcile_quest(client, quest_id: str, today: dt.date, write: bool = False,
         elif a["kind"] == "handoff":
             applied.append(_hand_off(client, a))
         elif a["kind"] == "stall":
-            client.update_goal(a["goal_id"], {"description": STALL_NOTE.format(rolls=a["rolls"]) + " "
-                                              + _description_of(goals, a["goal_id"])})
+            try:
+                client.update_goal(a["goal_id"], {"description": STALL_NOTE.format(rolls=a["rolls"]) + " "
+                                                  + _description_of(goals, a["goal_id"])})
+            except Exception as error:  # noqa: BLE001 -- QuestWriteError: report it, go on with the other actions
+                applied.append({**a, "kind": "failed", "reason": f"the stall note was not saved: {error}"})
+                continue
             applied.append(_escalate_stall(client, a, notify_stall, quest_id))
         else:
             applied.append(a)

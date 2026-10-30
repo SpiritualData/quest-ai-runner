@@ -38,7 +38,9 @@ def refusal_of(error: Exception) -> Dict[str, Any]:
             detail = {}
     return {"refused": True, "status": status, "code": detail.get("code") or "",
             "message": detail.get("message") or text,
-            "lockedFields": list(detail.get("lockedFields") or [])}
+            "lockedFields": list(detail.get("lockedFields") or []),
+            # The request was sent and never answered: the change may have been made (not a refusal at all).
+            "outcomeUnknown": bool(getattr(error, "outcome_unknown", False))}
 
 
 class IntentsMixin:

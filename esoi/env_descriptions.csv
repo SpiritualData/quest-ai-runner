@@ -43,6 +43,10 @@ QAR_PRUNE_DEAD_CARDS,Default on; 0/false/no keeps cards whose source folder disa
 QAR_QDRANT_API_KEY,Qdrant API key (falls back to QAR_VECTOR_QDRANT_API_KEY).
 QAR_QDRANT_URL,"Qdrant server URL for the card/vector index (falls back to QAR_VECTOR_QDRANT_URL, then QDRANT_URL)."
 QAR_QUEST_JUDGE_TIMEOUT_SECONDS,Budget for the quest-selection judgment (default 8). CoreSettings.quest_judge_timeout_seconds.
+QAR_QUEST_READ_RETRIES,"Retries the Quest client makes for a GET after a transport error, 429 or 5xx, with exponential backoff and jitter (default 2, at most 5, 0 turns retry off). A 4xx other than 429 is never retried."
+QAR_QUEST_RETRY_MAX_DELAY_SECONDS,"Longest the Quest client waits between retries (default 30). A Retry-After longer than this is reported to the caller instead of waited out."
+QAR_QUEST_TIMEOUT_SECONDS,"Socket timeout in seconds for one Quest API request (default 30). The long-poll wait channel keeps its own longer timeout."
+QAR_QUEST_WRITE_RETRY,"Whether the Quest client retries a write that carries an Idempotency-Key: auto (the default) retries only if the backend lists idempotency-key under capabilities on GET /api/health, on forces it, off forbids it. Without server support a retried write could create a duplicate, so a write is attempted once."
 QAR_READ_OP_TIMEOUT_SECONDS,Per-operation budget for one mid-loop read (default 60). CoreSettings.read_op_timeout_seconds.
 QAR_RECONCILE_HANDOFF,0 turns off the AI handoff judgment during goal reconcile (default on).
 QAR_REFRESH_MIN_INTERVAL_SECONDS,Shortest gap between two startup context refreshes (default 1800).

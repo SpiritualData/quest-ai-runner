@@ -158,7 +158,7 @@ def test_edit_quest_field_sends_one_patch_per_field():
     assert {"field_name": "current_state", "value": "New state"} in bodies
 
 
-def test_edit_quest_field_stops_and_returns_empty_on_first_failure():
+def test_edit_quest_field_stops_and_raises_on_first_failure():
     client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
     seen = []
 
@@ -169,8 +169,9 @@ def test_edit_quest_field_stops_and_returns_empty_on_first_failure():
         raise QuestApiError("Quest API PATCH /api/quests/quest_1/field -> 400: bad field")
 
     client._request = failing_after_first  # type: ignore[assignment]
-    result = client.edit_quest_field("quest_1", {"outcome": "A", "current_state": "B"})
-    assert result == {}
+    with pytest.raises(QuestApiError) as caught:
+        client.edit_quest_field("quest_1", {"outcome": "A", "current_state": "B"})
+    assert caught.value.write_status.value == "failed"  # the fake raised with no HTTP status
     # Never silently reports the earlier successful write as the whole call's result.
     assert len(seen) == 2
 

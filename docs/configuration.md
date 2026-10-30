@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-224 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+228 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -164,6 +164,10 @@ the docs and `.env.example` that describe what it does.
 | `QAR_QUEST_FOLDER_MAP` |  | `cli_config.py` | `docs/tutorial-your-first-lane.md` |
 | `QAR_QUEST_FOLDER_SYNC_DIRECTION` |  | `cli_config.py` | `docs/tutorial-your-first-lane.md` |
 | `QAR_QUEST_JUDGE_TIMEOUT_SECONDS` | Budget for the quest-selection judgment (default 8). CoreSettings.quest_judge_timeout_seconds. | `config_core_settings.py` | `.env.example` |
+| `QAR_QUEST_READ_RETRIES` | Retries the Quest client makes for a GET after a transport error, 429 or 5xx, with exponential backoff and jitter (default 2, at most 5, 0 turns retry off). A 4xx other than 429 is never retried. | `runner/quest_client_transport.py` | `docs/quest-api-contract.md` |
+| `QAR_QUEST_RETRY_MAX_DELAY_SECONDS` | Longest the Quest client waits between retries (default 30). A Retry-After longer than this is reported to the caller instead of waited out. | `runner/quest_client_transport.py` | `docs/quest-api-contract.md` |
+| `QAR_QUEST_TIMEOUT_SECONDS` | Socket timeout in seconds for one Quest API request (default 30). The long-poll wait channel keeps its own longer timeout. | `runner/quest_client_transport.py` | `docs/quest-api-contract.md` |
+| `QAR_QUEST_WRITE_RETRY` | Whether the Quest client retries a write that carries an Idempotency-Key: auto (the default) retries only if the backend lists idempotency-key under capabilities on GET /api/health, on forces it, off forbids it. Without server support a retried write could create a duplicate, so a write is attempted once. | `runner/quest_client_transport.py` | `docs/quest-api-contract.md` |
 | `QAR_READ_OP_TIMEOUT_SECONDS` | Per-operation budget for one mid-loop read (default 60). CoreSettings.read_op_timeout_seconds. | `config_core_settings.py` | `.env.example` |
 | `QAR_READ_REACH_SUMMARY` |  | `cli_config.py` | `docs/cheap-model-routing.md` |
 | `QAR_READ_REACH_SUMMARY_FILE` |  | `cli_config.py` | `docs/cheap-model-routing.md` |

@@ -13,7 +13,10 @@ from quest_ai_runner.runner.insights import (
     block_header,
     collect_quest_insights,
 )
+import pytest
+
 from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.runner.quest_client_support import QuestWriteError
 
 NOW = datetime(2026, 8, 12, 9, 0, 0, tzinfo=timezone.utc)
 
@@ -84,10 +87,12 @@ def test_mark_insight_acted_on_reports_failure_rather_than_swallowing_it():
     client, _ = client_capturing_calls({
         "/api/data/insights/mark-acted-on": QuestApiError("entry not found", status=404),
     })
-    assert client.mark_insight_acted_on("entry_1", "coll_1", "did the thing") is False
+    with pytest.raises(QuestWriteError):
+        client.mark_insight_acted_on("entry_1", "coll_1", "did the thing")
     # And a half-specified call never reaches the network at all.
     client2, calls2 = client_capturing_calls({})
-    assert client2.mark_insight_acted_on("", "coll_1") is False
+    with pytest.raises(QuestWriteError):
+        client2.mark_insight_acted_on("", "coll_1")
     assert calls2 == []
 
 

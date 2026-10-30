@@ -64,9 +64,6 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Sequence
 
@@ -78,9 +75,13 @@ from .quest_client_support import (
     QAR_DECISION_DEFAULT_DEADLINE_HOURS_ENV_VAR,
     QuestApiError,
     QuestNotConfigured,
+    QuestPendingApproval,
+    QuestWriteError,
+    WriteResult,
     _PERIOD_RE,
     log,
 )
+from .quest_client_transport import TransportMixin
 from .quest_client_tasks import TasksMixin
 from .quest_client_decisions import DecisionsMixin
 from .quest_client_goals import GoalsMixin
@@ -92,21 +93,31 @@ from .quest_client_intents import IntentsMixin
 
 
 
-class QuestClient(TasksMixin, DecisionsMixin, GoalsMixin, QuestsMixin, ContextEntriesMixin, RepsMixin, IntentsMixin):
-    """Thin urllib client for the Quest task + decision API. No third-party deps."""
+class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, QuestsMixin, ContextEntriesMixin, RepsMixin,
+                  IntentsMixin):
+    """Thin urllib client for the Quest task + decision API. No third-party deps.
+
+    The contract every method follows is in ``docs/quest-api-contract.md`` ("Client contract"): a content write returns a
+    ``WriteResult`` or raises a ``QuestWriteError`` and never returns an empty value; the lifecycle reports return a
+    falsy ``WriteResult`` instead of raising; reads where absence is normal return an empty value."""
 
     def __init__(self, base_url: str, api_key: str, *, team_id: Optional[str] = None,
-                 timeout: float = 30.0,
+                 timeout: Optional[float] = None,
                  decision_assignees: Optional[Dict[str, str]] = None,
                  default_assignee_user_id: Optional[str] = None,
-                 env_id: Optional[str] = None):
+                 env_id: Optional[str] = None,
+                 read_retries: Optional[int] = None,
+                 write_retry: Optional[str] = None,
+                 retry_max_delay: Optional[float] = None):
         self.base_url = (base_url or "").rstrip("/")
         self.api_key = api_key or ""
         self.team_id = team_id or ""
         # Which of the team's environments this runner is (None = the default env). Used to read that
         # environment's work-model configuration when a task does not name its own env_id.
         self.env_id = env_id or ""
-        self.timeout = timeout
+        # Timeout, retry and write-retry settings: an argument wins, else QAR_QUEST_* from the environment.
+        self.init_transport(timeout=timeout, read_retries=read_retries, write_retry=write_retry,
+                            retry_max_delay=retry_max_delay)
         # {role name -> user id} for ``create_decision(assignee="...")``. WHO a decision goes to is
         # deployment policy, not client logic: one deployment routes money to an owner and errands
         # to an operator, another has a single approver. Naming the roles in config (RunnerConfig.
@@ -127,38 +138,6 @@ class QuestClient(TasksMixin, DecisionsMixin, GoalsMixin, QuestsMixin, ContextEn
         if not self.configured:
             raise QuestNotConfigured(
                 "Quest base URL and API key (qsk_...) are required. Supply them via RunnerConfig.")
-
-    def _request(self, method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
-                 body: Optional[Dict[str, Any]] = None,
-                 timeout_override: Optional[float] = None) -> Any:
-        self._require()
-        url = f"{self.base_url}{path}"
-        if params:
-            clean = {k: v for k, v in params.items() if v is not None}
-            if clean:
-                url += "?" + urllib.parse.urlencode(clean)
-        data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(url, data=data, method=method)
-        req.add_header("Authorization", f"Bearer {self.api_key}")
-        req.add_header("Content-Type", "application/json")
-        # timeout_override lets a caller ask for a LONGER socket timeout than the client default
-        # (e.g. the long-poll wait channel, which asks the server to hold the request for up to
-        # ~25-30s and must not have its own transport cut that short).
-        try:
-            with urllib.request.urlopen(req, timeout=(timeout_override or self.timeout)) as resp:
-                raw = resp.read()
-                return json.loads(raw) if raw else None
-        except urllib.error.HTTPError as e:
-            detail = e.read().decode(errors="replace")
-            raise QuestApiError(f"Quest API {method} {path} -> {e.code}: {detail}", status=e.code) from e
-        except urllib.error.URLError as e:
-            raise QuestApiError(f"Quest API {method} {path} unreachable: {e.reason}") from e
-        except (TimeoutError, OSError) as e:
-            # A socket-level timeout/reset during the read escapes urlopen as a raw TimeoutError/
-            # OSError, NOT a URLError — without this wrap it would blow through every "never
-            # raises" caller contract (e.g. wait_for_interactive) and spam the poller with
-            # tracebacks instead of a calm retry.
-            raise QuestApiError(f"Quest API {method} {path} transport error: {e}") from e
 
     # --- identity ------------------------------------------------------------
 
@@ -206,11 +185,14 @@ class QuestClient(TasksMixin, DecisionsMixin, GoalsMixin, QuestsMixin, ContextEn
         text = str(error)
         body = text.split(" -> ", 1)[1].partition(": ")[2] if " -> " in text else text
         try:
-            detail = json.loads(body).get("detail")
+            payload = json.loads(body)
+            detail = payload.get("detail")
         except (ValueError, AttributeError):
             return body
         if isinstance(detail, str):
             return detail
+        if detail is None and isinstance(payload, dict) and isinstance(payload.get("message"), str):
+            return payload["message"]
         return json.dumps(detail) if detail is not None else body
 
 

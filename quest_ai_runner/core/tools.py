@@ -129,10 +129,11 @@ def data_of(write: Any) -> Any:
 
 def write_failed(error: BaseException, nothing_text: str) -> ToolResult:
     """The result of a write that raised. A client write error names its own status (refused, failed, unknown) and its
-    message already says what happened and why, so it is passed on as written; any other error is a plain failure."""
+    message already says what happened and why, so it is passed on as written; any other error is a plain failure
+    (``nothing_text`` is then the lead-in, or empty to pass the error's own words on as they are)."""
     typed = getattr(error, "write_status", None) is not None
     return ToolResult(ok=False, status=status_of_error(error),
-                      text=str(error) if typed else f"{nothing_text}: {error}")
+                      text=str(error) if typed or not nothing_text else f"{nothing_text}: {error}")
 
 
 def result_of_write(write: Any, applied: str, *, held: Optional[str] = None, noop: Optional[str] = None,

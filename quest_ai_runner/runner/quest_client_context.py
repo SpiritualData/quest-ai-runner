@@ -7,7 +7,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from datetime import timezone
 
-from .quest_client_support import QuestApiError, QuestNotConfigured, log
+from ..core.tools_status import ToolStatus
+from .quest_client_support import QuestApiError, QuestNotConfigured, QuestWriteError, WriteResult, log
 
 
 class ContextEntriesMixin:
@@ -16,7 +17,7 @@ class ContextEntriesMixin:
     def send_quest_email(self, quest_id: str, *, subject: str, body: str,
                          rep_id: Optional[str] = None,
                          task_id: Optional[str] = None,
-                         recipients: Optional[List[str]] = None) -> Dict[str, Any]:
+                         recipients: Optional[List[str]] = None) -> WriteResult:
         """POST /api/quests/{quest_id}/email — mail this quest's people, as the persona that wrote it.
 
         THE way a run sends mail. Not a local mail script: going through Quest is what gives the
@@ -34,8 +35,10 @@ class ContextEntriesMixin:
         quest (which is also what mints the reply address); without it the backend answers 400 and
         nothing is sent.
 
-        RAISES on failure rather than returning a falsy value: a run that believes it has told
-        someone something, when it has not, will go on to act as though the message landed.
+        Returns a ``WriteResult`` or RAISES ``QuestWriteError`` (``unknown`` when the request was sent and not
+        answered: the mail may have gone, so never send it again blind): a run that believes it has told someone
+        something, when it has not, will go on to act as though the message landed. A send carries no idempotency
+        key and is never retried by the client.
         """
         self._require()
         body_payload: Dict[str, Any] = {"subject": subject, "body": body}
@@ -45,11 +48,11 @@ class ContextEntriesMixin:
             body_payload["task_id"] = task_id
         if recipients:
             body_payload["recipients"] = recipients
-        return self._request("POST", f"/api/quests/{quest_id}/email", body=body_payload) or {}
+        return self._write("POST", f"/api/quests/{quest_id}/email", body=body_payload, label="Sending the email")
 
     def create_email_draft(self, *, recipient: str, subject: str, body: str,
                            cc: Optional[List[str]] = None,
-                           task_id: Optional[str] = None) -> Dict[str, Any]:
+                           task_id: Optional[str] = None) -> WriteResult:
         """POST /api/email-drafts - file an email draft into the key owner's Approval Queue.
 
         NOTHING is sent. The draft waits in the Quest app's Approval Queue (status
@@ -59,7 +62,8 @@ class ContextEntriesMixin:
         from the body. The account's standing Always CC is added by the backend, so callers do
         not add it. ``task_id`` is recorded as the draft's ``source_task_id`` for tracing.
 
-        RAISES on failure, so a run never believes a draft is waiting when it is not.
+        Returns a ``WriteResult`` or RAISES ``QuestWriteError``, so a run never believes a draft is waiting when it
+        is not.
         """
         self._require()
         payload: Dict[str, Any] = {"recipient": recipient, "subject": subject, "body": body}
@@ -67,7 +71,7 @@ class ContextEntriesMixin:
             payload["cc"] = cc
         if task_id:
             payload["sourceTaskId"] = task_id
-        return self._request("POST", "/api/email-drafts", body=payload) or {}
+        return self._write("POST", "/api/email-drafts", body=payload, label="Filing the email draft")
 
     # --- quest context entries (the quest's own documents; UPDATABLE, unlike notes) ------------
 
@@ -87,44 +91,33 @@ class ContextEntriesMixin:
             log.warning("list_context_entries failed for quest %s: %s", quest_id, e)
             return []
 
-    def create_context_entry(self, quest_id: str, name: str, content: str) -> Dict[str, Any]:
+    def create_context_entry(self, quest_id: str, name: str, content: str) -> WriteResult:
         """POST /api/quests/{quest_id}/context-entries — add one named context document.
 
         The server creates the quest's context collection on first use, so no setup call is needed.
-        Empty ``content`` is rejected server-side (422). Returns {} on failure.
+        Empty ``content`` is rejected server-side (422). Returns a ``WriteResult``; a failure raises
+        ``QuestWriteError``.
         """
-        try:
-            self._require()
-            resp = self._request("POST", f"/api/quests/{quest_id}/context-entries",
-                                 body={"name": name, "content": content}) or {}
-            return resp if isinstance(resp, dict) else {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("create_context_entry failed for quest %s: %s", quest_id, e)
-            return {}
+        return self._write("POST", f"/api/quests/{quest_id}/context-entries",
+                           body={"name": name, "content": content}, label="Saving the context entry")
 
     def update_context_entry(self, quest_id: str, entry_id: str, *,
                              name: Optional[str] = None,
-                             content: Optional[str] = None) -> Dict[str, Any]:
+                             content: Optional[str] = None) -> WriteResult:
         """PUT /api/quests/{quest_id}/context-entries/{entry_id} — replace an entry's name/content.
 
         This is what makes an upsert possible: re-publishing a document that refreshes (a quest's
         current next steps, say) replaces the one entry instead of piling up a new object per
-        refresh. Only the fields given are changed. Returns {} on failure.
+        refresh. Only the fields given are changed. Returns a ``WriteResult``; a failure raises
+        ``QuestWriteError``.
         """
         body: Dict[str, Any] = {}
         if name is not None:
             body["name"] = name
         if content is not None:
             body["content"] = content
-        try:
-            self._require()
-            resp = self._request(
-                "PUT", f"/api/quests/{quest_id}/context-entries/{entry_id}", body=body) or {}
-            return resp if isinstance(resp, dict) else {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("update_context_entry failed for quest %s entry %s: %s",
-                        quest_id, entry_id, e)
-            return {}
+        return self._write("PUT", f"/api/quests/{quest_id}/context-entries/{entry_id}", body=body,
+                           label="Updating the context entry")
 
     # --- the person's own reflections (USER-scoped; no team_id, no quest_id) -------------------
     # Quest asks a person two standing questions and keeps their answers verbatim: the daily plan's
@@ -246,27 +239,23 @@ class ContextEntriesMixin:
             return {}
 
     def add_context_pref(self, user_id: str, pref: str, *,
-                         team_id: Optional[str] = None, source: str = "auto") -> bool:
+                         team_id: Optional[str] = None, source: str = "auto") -> WriteResult:
         """POST /api/teams/{team_id}/members/{user_id}/context-prefs -- teach a rep where it works.
 
         One short sentence naming what a run actually consulted ("Consults the funding spreadsheet
         and donor list for this kind of task."), so the rep's next run starts where its last one
         ended up. ``source: "auto"`` marks it as learned rather than typed by a person.
 
-        Returns True when it landed. Best-effort like every other write here: learning is worth
-        having and never worth failing a run over.
+        Returns a ``WriteResult`` when it landed and raises ``QuestWriteError`` otherwise; a caller that treats
+        learning as never worth failing a run over catches it.
         """
-        try:
-            self._require()
-            tid = team_id or self.team_id
-            if not (tid and user_id and str(pref or "").strip()):
-                return False
-            self._request("POST", f"/api/teams/{tid}/members/{user_id}/context-prefs",
-                          body={"pref": str(pref).strip(), "source": source})
-            return True
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("add_context_pref failed for %s: %s", user_id, e)
-            return False
+        self._require()
+        tid = team_id or self.team_id
+        if not (tid and user_id and str(pref or "").strip()):
+            raise QuestWriteError("No context preference was saved: it needs a team, a member and a sentence.",
+                                  write_status=ToolStatus.REFUSED)
+        return self._write("POST", f"/api/teams/{tid}/members/{user_id}/context-prefs",
+                           body={"pref": str(pref).strip(), "source": source}, label="Saving the context preference")
 
     def list_collections(self) -> List[Dict[str, Any]]:
         """GET /api/data/collections -- every collection the caller owns.
@@ -315,14 +304,14 @@ class ContextEntriesMixin:
             return {}
 
     def mark_insight_acted_on(self, entry_id: str, collection_id: str,
-                              action_taken_description: str = "") -> bool:
+                              action_taken_description: str = "") -> WriteResult:
         """PATCH /api/data/insights/mark-acted-on — tick one insight's ``acted_on`` box.
 
         ``action_taken_description`` fills the entry's "Action Taken" field, and is what the person
         sees next to the tick when they review their captures. Write it as a statement of what
         actually exists now ("created the goal 'Draft chapter two'"), not what was intended.
 
-        Returns True only when the write succeeded. This is a WRITE on the person's own data with a
+        Returns a ``WriteResult`` only when the write succeeded (``QuestWriteError`` otherwise). This is a WRITE on the person's own data with a
         visible consequence — a ticked insight drops out of every unacted list, including the one
         their weekly review is built from — so a failure is logged and reported rather than
         swallowed, and a caller must not treat "I asked" as "it is done". By the same token, do not
@@ -331,14 +320,9 @@ class ContextEntriesMixin:
         the person's list without anything having happened.
         """
         if not (entry_id and collection_id):
-            log.warning("mark_insight_acted_on needs both entry_id and collection_id")
-            return False
-        try:
-            self._require()
-            self._request("PATCH", "/api/data/insights/mark-acted-on",
-                          body={"entry_id": entry_id, "collection_id": collection_id,
-                                "action_taken_description": action_taken_description or ""})
-            return True
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("mark_insight_acted_on failed for entry %s: %s", entry_id, e)
-            return False
+            raise QuestWriteError("The insight was not marked: it needs both entry_id and collection_id.",
+                                  write_status=ToolStatus.REFUSED)
+        return self._write("PATCH", "/api/data/insights/mark-acted-on",
+                           body={"entry_id": entry_id, "collection_id": collection_id,
+                                 "action_taken_description": action_taken_description or ""},
+                           label="Marking the insight acted on")

@@ -656,11 +656,18 @@ def push_folder_to_quest(client: Any, quest_id: str, folder: str,
             bullet_text = (m.group("text") or "").strip()
             if not bullet_text:
                 continue
-            updated_notes = client.add_quest_note(quest_id, bullet_text) or []
+            try:
+                posted = client.add_quest_note(quest_id, bullet_text)
+            except Exception as error:  # noqa: BLE001 -- QuestWriteError: refused, failed, or sent and not answered
+                # The note may or may not have landed (an unknown outcome), but without an id we can't mark the
+                # bullet. Leave it un-synced for the next push and DON'T count it: logging here beats silently
+                # claiming it was pushed.
+                log.warning("push of bullet %r to quest %s failed (%s); left un-synced",
+                            bullet_text[:80], quest_id, error)
+                continue
+            updated_notes = list(getattr(posted, "data", posted) or []) if isinstance(
+                getattr(posted, "data", posted), list) else []
             if not updated_notes:
-                # add_quest_note returns [] on API failure: the note may or may not have landed,
-                # but without an id we can't mark the bullet. Leave it un-synced for the next push
-                # and DON'T count it — logging here beats silently claiming it was pushed.
                 log.warning("push of bullet %r to quest %s got no notes back; left un-synced",
                             bullet_text[:80], quest_id)
                 continue
@@ -797,7 +804,13 @@ def push_quest_state(client: Any, quest_id: str, folder: str,
         result["blocked"] = sorted(changed)
         return result
 
-    resp = write(quest_id, changed) or {}
+    try:
+        resp = write(quest_id, changed) or {}
+    except Exception as error:  # noqa: BLE001 -- QuestWriteError: nothing was confirmed written
+        log.warning("pushing quest state for %s failed: %s", quest_id, error)
+        result["blocked"] = sorted(changed)
+        result["held"] = str(error)
+        return result
     # The endpoint reports a partial refusal in the BODY rather than by status, so a caller that
     # only checks for an exception believes every field landed. Surface both keys.
     if resp.get("ok"):

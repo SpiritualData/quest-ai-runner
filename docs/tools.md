@@ -181,6 +181,20 @@ and to know that a tool that acts has changed something (`docs/metric-results.md
 **Python tools.** `handler = "package.module:function"` instead of `command`. The function takes
 `(args: dict, ctx: ToolContext)` and returns a `ToolResult`, a dict, or a string.
 
+## Tool status: what a call came to
+
+Every `ToolResult` has a typed `status` (`core/tools_status.py`): `applied` (done, or a read that ran), `held` (taken but waiting for a person's approval; nothing
+changed yet), `noop` (it already existed), `refused` (Quest said no; the text says why), `failed` (it did not happen) or `unknown` (a write was sent and never
+answered, so it may have happened). `ok` follows the status: only `applied` and `noop` are ok. A handler that returns a plain `ToolResult(ok=True)` or `ok=False` is
+`applied` or `failed`; a write whose end state is not reached returns `status=ToolStatus.HELD` (or `REFUSED`, `UNKNOWN`). A mutating tool that times out is `unknown`; a handler
+that lets a `QuestWriteError` escape keeps the status the error carries. The standard tools map Quest's answer (HTTP 202, `applied: false`, `pending_approval`,
+`already_existed`) to the status from the structured fields of the answer, never from words in it.
+
+The loop writes each receipt as `TOOL <name> <WORD> (args ...)` with the word for the status (`SUCCEEDED`, `NO CHANGE NEEDED`, `HELD FOR APPROVAL`, `REFUSED`, `FAILED`,
+`OUTCOME UNKNOWN`) and carries the status as data (`tool_status` on the gathered observation). The answer step reports only an `applied` receipt as done; it tells the
+person a held write is waiting for approval, a no-op already existed, a refusal's reason, a failure did not happen, and an unknown outcome may or may not have happened.
+A held, no-op or applied call is not run again in the same turn.
+
 ## Adjusting a standard tool
 
 A `[standard.<name>]` table tunes a standard tool without redefining it:

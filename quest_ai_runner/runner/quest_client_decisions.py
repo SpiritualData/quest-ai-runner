@@ -9,7 +9,9 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from .quest_experiments import EXPERIMENT_PROPOSAL_KIND
-from .quest_client_support import DECISION_KIND_RE, QuestApiError, QuestNotConfigured, log
+from ..core.tools_status import ToolStatus
+from .quest_client_support import DECISION_KIND_RE, QuestApiError, QuestNotConfigured, WriteResult, log
+from .quest_client_transport import new_idempotency_key
 
 
 class DecisionsMixin:
@@ -84,7 +86,13 @@ class DecisionsMixin:
                         team_id: Optional[str] = None,
                         deadline: Optional[datetime] = None,
                         executable: Optional[Dict[str, Any]] = None,
-                        review_url: Optional[str] = None) -> Dict[str, Any]:
+                        review_url: Optional[str] = None,
+                        idempotency_key: Optional[str] = None) -> WriteResult:
+        """POST /api/teams/{team}/decisions: raise one ask for a person. A ``WriteResult`` (applied, with the ask's id; noop
+        when an equal open experiment proposal already stood) or a raised ``QuestWriteError`` (refused: the person
+        already answered this question, or Quest said no; failed; unknown: sent but not answered, so look at the
+        quest's open asks before raising it again). ``idempotency_key`` (default: a fresh one per call) is sent as the
+        ``Idempotency-Key`` header so a retry cannot raise the ask twice."""
         # ``assignee`` names a ROLE from config; ``assignee_user_id`` is the raw id. An explicit id
         # wins, so an existing caller is unaffected. Resolution happens OUTSIDE the try/except
         # below on purpose: a misspelled role must raise, not degrade into an unassigned decision.
@@ -102,55 +110,50 @@ class DecisionsMixin:
                 if str(open_decision.get("kind") or "") == EXPERIMENT_PROPOSAL_KIND:
                     log.info("create_decision: quest %s already has an open experiment proposal; "
                              "not raising another", quest_id)
-                    return open_decision
-        try:
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to raise a decision-request")
-            # Quest stores a decision's summary as a goal CONDITION, capped at 4000 chars server-side.
-            # A verbose planner question/clarification (or any caller) can exceed that and the POST is
-            # rejected with "Goal condition is limited to 4000 characters". Cap here at the single
-            # boundary to Quest so an over-long summary is truncated (never dropped or errored),
-            # regardless of which caller built it.
-            if isinstance(summary, str) and len(summary) > 4000:
-                summary = summary[:3900].rstrip() + "\n\n[...truncated]"
-            # ``kind`` must satisfy Quest's ``^[a-z0-9_:-]{1,64}$`` or the POST 422s. A caller that
-            # built one from free-form planner output (or a hallucinated value) degrades to the
-            # generic "approve" here rather than losing the whole escalation to a rejected request.
-            if not isinstance(kind, str) or not DECISION_KIND_RE.match(kind):
-                log.warning("create_decision: kind %r does not match Quest's ^[a-z0-9_:-]+$ "
-                           "(max 64 chars); using 'approve' instead", kind)
-                kind = "approve"
-            body: Dict[str, Any] = {"kind": kind, "summary": summary,
-                                    "default_on_silence": default_on_silence}
-            if quest_id:
-                body["quest_id"] = quest_id
-            if assignee_user_id:
-                body["assigned_to_user_id"] = assignee_user_id
-            if deadline is not None:
-                # Accept either a real datetime (the normal case) or an already-ISO string, so a
-                # caller that pre-formatted one for some other reason is not rejected here.
-                body["deadline"] = deadline.isoformat() if hasattr(deadline, "isoformat") else str(deadline)
-            if review_url and re.match(r"^https?://\S+$", str(review_url)):
-                # The page the person should open to decide (draft / preview / doc / PR); Quest
-                # renders it as a prominent link on the ask. Dropped, not rejected, if malformed.
-                body["review_url"] = str(review_url)
-            if executable:
-                # An action to APPLY on approval. The server accepts only structured, data-shaped
-                # kinds here (see propose_field_change) and validates the payload at creation, so a
-                # proposal that could never apply is rejected now rather than becoming an ask the
-                # person answers into nothing.
-                body["executable"] = dict(executable)
-            return self._request("POST", f"/api/teams/{tid}/decisions", body=body)
-        except (QuestApiError, QuestNotConfigured) as e:
-            if isinstance(e, QuestApiError) and e.status == 409:
-                # Quest refused because the person already passed on, or declined, this same
-                # question recently. Hand its explanation to the caller instead of an empty dict,
-                # which would read as "Quest did not accept the ask" and invite another try.
-                log.info("create_decision not raised: %s", e)
-                return {"duplicate": "answered", "message": self.error_detail(e)}
-            log.warning("create_decision failed: %s", e)
-            return {}
+                    return WriteResult(open_decision, ToolStatus.NOOP,
+                                       id=str(open_decision.get("decision_id") or open_decision.get("id") or ""))
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to raise a decision-request")
+        # Quest stores a decision's summary as a goal CONDITION, capped at 4000 chars server-side.
+        # A verbose planner question/clarification (or any caller) can exceed that and the POST is
+        # rejected with "Goal condition is limited to 4000 characters". Cap here at the single
+        # boundary to Quest so an over-long summary is truncated (never dropped or errored),
+        # regardless of which caller built it.
+        if isinstance(summary, str) and len(summary) > 4000:
+            summary = summary[:3900].rstrip() + "\n\n[...truncated]"
+        # ``kind`` must satisfy Quest's ``^[a-z0-9_:-]{1,64}$`` or the POST 422s. A caller that
+        # built one from free-form planner output (or a hallucinated value) degrades to the
+        # generic "approve" here rather than losing the whole escalation to a rejected request.
+        if not isinstance(kind, str) or not DECISION_KIND_RE.match(kind):
+            log.warning("create_decision: kind %r does not match Quest's ^[a-z0-9_:-]+$ "
+                       "(max 64 chars); using 'approve' instead", kind)
+            kind = "approve"
+        body: Dict[str, Any] = {"kind": kind, "summary": summary,
+                                "default_on_silence": default_on_silence}
+        if quest_id:
+            body["quest_id"] = quest_id
+        if assignee_user_id:
+            body["assigned_to_user_id"] = assignee_user_id
+        if deadline is not None:
+            # Accept either a real datetime (the normal case) or an already-ISO string, so a
+            # caller that pre-formatted one for some other reason is not rejected here.
+            body["deadline"] = deadline.isoformat() if hasattr(deadline, "isoformat") else str(deadline)
+        if review_url and re.match(r"^https?://\S+$", str(review_url)):
+            # The page the person should open to decide (draft / preview / doc / PR); Quest
+            # renders it as a prominent link on the ask. Dropped, not rejected, if malformed.
+            body["review_url"] = str(review_url)
+        if executable:
+            # An action to APPLY on approval. The server accepts only structured, data-shaped
+            # kinds here (see propose_field_change) and validates the payload at creation, so a
+            # proposal that could never apply is rejected now rather than becoming an ask the
+            # person answers into nothing.
+            body["executable"] = dict(executable)
+        # A 409 is Quest refusing because the person already passed on, or declined, this same question
+        # recently: it comes back as a refusal carrying Quest's own explanation (what they decided and what to
+        # do instead), never as an empty value that would invite another try.
+        return self._write("POST", f"/api/teams/{tid}/decisions", body=body, label="Raising the ask",
+                           idempotency_key=idempotency_key or new_idempotency_key())
 
     def list_open_decisions_for_user(self, user_id: str) -> List[Dict[str, Any]]:
         try:
@@ -161,17 +164,15 @@ class DecisionsMixin:
             return []
 
     def resolve_decision(self, decision_id: str, resolution: str,
-                         human_statement: Optional[str] = None) -> Dict[str, Any]:
+                         human_statement: Optional[str] = None) -> WriteResult:
         """``human_statement``: the person's verbatim approving words, required to approve an AI
-        account's quest-creation ask through a key (never invent them)."""
+        account's quest-creation ask through a key (never invent them). A ``WriteResult`` or a raised
+        ``QuestWriteError``."""
         body: Dict[str, Any] = {"resolution": resolution}
         if human_statement is not None:
             body["human_statement"] = human_statement
-        try:
-            return self._request("POST", f"/api/teams/decisions/{decision_id}/resolve", body=body)
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("resolve_decision failed for decision %s: %s", decision_id, e)
-            return {}
+        return self._write("POST", f"/api/teams/decisions/{decision_id}/resolve", body=body,
+                           label="Resolving the ask")
 
     def list_decisions_for_quest(self, quest_id: str) -> List[Dict[str, Any]]:
         """GET every decision (open AND resolved) that references a specific quest.
@@ -256,22 +257,23 @@ class DecisionsMixin:
             log.warning("list_asks failed for quest %s: %s", quest_id, e)
             return None
 
-    def patch_ask(self, item_key: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    def patch_ask(self, item_key: str, fields: Dict[str, Any]) -> WriteResult:
         """PATCH /api/asks/{item_key} with ``kind`` and/or ``assignee_id`` (an empty string clears
-        the assignee). Raises ``QuestApiError`` on refusal; the caller decides whether to retry."""
-        return self._request("PATCH", f"/api/asks/{item_key}", body=fields) or {}
+        the assignee). Raises ``QuestWriteError`` on refusal; the caller decides whether to retry."""
+        return self._write("PATCH", f"/api/asks/{item_key}", body=fields, label="Changing the ask")
 
     def record_ask(self, quest_id: str, text: str, *, author_id: Optional[str] = None,
                    kind: Optional[str] = None, source: str = "ai_recorded",
-                   item_id: Optional[str] = None) -> Dict[str, Any]:
+                   item_id: Optional[str] = None) -> WriteResult:
         """POST /api/asks: file a request a person made of the AI on this quest (What You Asked).
 
         ``text`` is the person's exact words; ``author_id`` the person who asked (their email,
         default: the account this client runs as); ``kind`` is ``request`` (the server's default),
         ``standing``, ``context`` or ``question``. Recording the same words twice is the same ask
         (the server derives the id from them unless ``item_id`` is given), so a retry is safe.
-        Returns the ask row (its ``key`` is what ``update_ask`` takes), or ``{}`` on any failure
-        (logged), so a caller can tell the person was not heard rather than assume they were.
+        Returns a ``WriteResult`` whose data is the ask row (its ``key`` is what ``update_ask`` takes); a
+        failure raises ``QuestWriteError``, so a caller can tell the person was not heard rather than assume
+        they were.
         """
         body: Dict[str, Any] = {"quest_id": quest_id, "text": text, "source": source}
         if author_id:
@@ -280,26 +282,21 @@ class DecisionsMixin:
             body["kind"] = kind
         if item_id:
             body["item_id"] = item_id
-        try:
-            self._require()
-            return self._request("POST", "/api/asks", body=body) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("record_ask failed for quest %s: %s", quest_id, e)
-            return {}
+        return self._write("POST", "/api/asks", body=body, label="Recording the ask")
 
     def update_ask(self, item_key: str, state: Optional[str] = None, note: str = "", *,
-                   kind: Optional[str] = None, question: str = "") -> Dict[str, Any]:
+                   kind: Optional[str] = None, question: str = "") -> WriteResult:
         """PATCH /api/asks/{item_key} as a RUN's claim (``by_run``), never a person's decision.
 
         ``state`` is one of in progress, done, blocked, declined, noted, awaiting answer
         (underscores are accepted): ``done`` lands as "awaiting acceptance" until a person accepts
         it, and ``accepted`` is refused. ``kind`` (request, standing, context, question) sorts an
         ask without changing its state, and never overrides a kind a person set. Pass a state, a
-        kind, or both. Returns the updated ask row, or ``{}`` on any failure (logged).
+        kind, or both. Returns a ``WriteResult`` holding the updated ask row; a failure raises ``QuestWriteError``.
 
         ``awaiting answer`` needs ``question``: Quest raises it to the person as a decision-request
         (Asks for You) and sets the state in the same step; the returned row carries that
-        ``decision_id``. Without a question Quest refuses (logged, ``{}``).
+        ``decision_id``. Without a question Quest refuses (a ``QuestWriteError``).
         """
         body: Dict[str, Any] = {"by_run": True}
         if state:
@@ -310,9 +307,4 @@ class DecisionsMixin:
             body["note"] = note
         if question:
             body["question"] = question
-        try:
-            self._require()
-            return self._request("PATCH", f"/api/asks/{item_key}", body=body) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("update_ask failed for ask %s: %s", item_key, e)
-            return {}
+        return self._write("PATCH", f"/api/asks/{item_key}", body=body, label="Updating the ask")

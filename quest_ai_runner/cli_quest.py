@@ -167,11 +167,18 @@ def _run_quest_command(args) -> int:
         print(str(e), file=sys.stderr)
         return 1
 
-    print(json.dumps(result, indent=None if args.compact else 2, default=str))
-    if not result and not _quest_method_is_read_only(method_name):
-        # Most client writes swallow a refusal and hand back {} / [] / False (logging the reason),
-        # which read as success on a shell. An empty answer from a write is a write that did not
-        # happen, so say so and exit non-zero instead of letting a run report it as done.
+    typed = getattr(result, "status", None)
+    shown = getattr(result, "data", result)
+    print(json.dumps(shown, indent=None if args.compact else 2, default=str))
+    if typed is not None and typed.value not in ("applied", "noop"):
+        # A typed write that is waiting on a person (or was refused) is not done: say so and exit non-zero.
+        print(f"{method_name}: {typed.value.upper()}. {getattr(result, 'detail', '')} Treat it as NOT done.".strip(),
+              file=sys.stderr)
+        return 1
+    if typed is None and not result and not _quest_method_is_read_only(method_name):
+        # A write that hands back {} / [] / False wrote nothing the caller can see: say so and exit non-zero instead
+        # of letting a run report it as done. (Client writes raise a typed error or return a typed result; this
+        # catches only a method that does neither.)
         print(f"{method_name} returned nothing: Quest refused it or it failed (the reason is in the "
               f"log line above). Treat it as NOT done; "
               f"`quest-ai-runner quest --describe {method_name}` shows its arguments.", file=sys.stderr)

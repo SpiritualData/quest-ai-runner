@@ -121,6 +121,12 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
         data = data_of(row)
         status = write_status_of(row)
         ident = (data or {}).get("decision_id") or (data or {}).get("id") or getattr(row, "id", "")
+        if (data or {}).get("duplicate") == "answered":
+            # The person already passed on, or declined, this same question (a client that answers with the payload
+            # instead of raising). Quest's message says what they decided; repeating it in new words is the loop.
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, data=data, text=str(data.get("message") or (
+                "Not asked: the person already passed on or declined this question. Do not ask it "
+                "again in other words; use your own judgment or report what you could not do.")))
         if status is ToolStatus.NOOP:
             return ToolResult(ok=True, status=ToolStatus.NOOP, data=data, text=str((data or {}).get("message") or (
                 f"Already open as ask {ident}: not raised again. Point to it in your result instead of a second ask.")))
@@ -423,7 +429,7 @@ def update_outcome_progress_spec(env: Mapping[str, str], client_factory=None) ->
                 quest_id, outcome, args.get("progress_pct"), str(args["note"]),
                 current_value=args.get("current_value"))
         except Exception as e:  # the client's "Not done: <reason>" names what to change
-            return write_failed(e, "Not done")
+            return write_failed(e, "")
         result = data_of(written)
         if write_status_of(written) is ToolStatus.HELD:
             return ToolResult(ok=False, status=ToolStatus.HELD, data=result, text=(

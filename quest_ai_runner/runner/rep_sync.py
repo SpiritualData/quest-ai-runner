@@ -416,7 +416,12 @@ def push_skill_to_rep(client: Any, team_id: str, user_id: str, skill_dir: str) -
         result.notes.append("nothing to push")
         return result
 
-    response = client.update_ai_profile(user_id, team_id=team_id, **kwargs)
+    try:
+        response = client.update_ai_profile(user_id, team_id=team_id, **kwargs)
+    except Exception as e:  # noqa: BLE001 -- QuestWriteError / QuestNotConfigured: the baseline stays for a retry
+        log.warning("push of %s -> rep %s failed (%s); baseline kept for a retry", path, user_id, e)
+        result.notes.append("push failed")
+        return result
     if not response:
         log.warning("push of %s -> rep %s failed (empty response); baseline kept for a retry",
                     path, user_id)

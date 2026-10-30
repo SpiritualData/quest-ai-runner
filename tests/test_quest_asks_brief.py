@@ -144,8 +144,9 @@ def test_update_ask_sends_a_run_claim_and_never_an_acceptance():
     assert len(sent) == before
 
 
-def test_the_client_methods_return_empty_on_failure_and_omit_unset_fields():
-    from quest_ai_runner.runner.quest_client_support import QuestApiError
+def test_the_client_methods_raise_on_failure_and_omit_unset_fields():
+    import pytest
+    from quest_ai_runner.runner.quest_client_support import QuestApiError, QuestWriteError
     client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
     sent = []
 
@@ -154,8 +155,10 @@ def test_the_client_methods_return_empty_on_failure_and_omit_unset_fields():
         raise QuestApiError("not found")
 
     client._request = refuse  # type: ignore[assignment]
-    assert client.record_ask("q1", "words") == {}
-    assert client.update_ask("k1", "done") == {}
+    with pytest.raises(QuestWriteError):
+        client.record_ask("q1", "words")
+    with pytest.raises(QuestWriteError):
+        client.update_ask("k1", "done")
     assert sent == [{"quest_id": "q1", "text": "words", "source": "ai_recorded"},
                     {"by_run": True, "state": "done"}]
 

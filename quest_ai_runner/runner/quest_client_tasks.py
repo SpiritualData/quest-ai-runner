@@ -8,8 +8,9 @@ import urllib.request
 from typing import Any, Dict, List, Optional, Sequence
 from datetime import datetime, timezone
 
+from ..core.tools_status import ToolStatus
 from ..core.work_model import RUNNABLE_MODELS
-from .quest_client_support import QuestApiError, QuestNotConfigured, _as_task_list, log
+from .quest_client_support import QuestApiError, QuestNotConfigured, QuestWriteError, WriteResult, _as_task_list, log
 
 
 class TasksMixin:
@@ -219,36 +220,42 @@ class TasksMixin:
         return body
 
     def patch_terminal_report(self, name: str, task_id: str, body: Dict[str, Any],
-                              session_id: Optional[str]) -> Dict[str, Any]:
+                              session_id: Optional[str]) -> WriteResult:
         """PATCH one terminal report (``name`` is the report method, for the log). Never raises.
+
+        This is the one write that keeps "never raises": the lane that reports must go on to its next task. It still
+        never returns an empty value: the answer is a ``WriteResult`` whose ``status`` says what happened
+        (``applied``; or ``refused``, ``failed`` or ``unknown``, all falsy, with the reason in ``detail``), so a
+        report that did not land is a visible fact the caller can log or retry, not ``{}``.
 
         A backend that predates ``result_data`` refuses the whole PATCH (422, extra field), which
         left a finished task "in progress" forever. The structured payload (the outcome stamp, the
         metric facts) is an extra: report the task without it rather than not at all.
         """
+        path = f"/api/assistant-tasks/{task_id}"
         try:
-            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body=self._with_session(body, session_id))
-        except QuestApiError as e:
-            if getattr(e, "status", None) == 422 and "result_data" in body and "result_data" in str(e):
+            return self._write("PATCH", path, body=self._with_session(body, session_id), label=name)
+        except QuestWriteError as e:
+            if e.status == 422 and "result_data" in body and "result_data" in e.detail:
                 log.warning("backend does not accept result_data on a task report; reporting task "
                             "%s without it (%s)", task_id, name)
                 body.pop("result_data", None)
                 try:
-                    return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                         body=self._with_session(body, session_id))
-                except (QuestApiError, QuestNotConfigured) as e2:
-                    log.warning("%s failed for task %s: %s", name, task_id, e2)
-                    return {}
+                    return self._write("PATCH", path, body=self._with_session(body, session_id), label=name)
+                except QuestWriteError as retry_error:
+                    e = retry_error
+                except QuestNotConfigured as not_configured:
+                    log.warning("%s failed for task %s: %s", name, task_id, not_configured)
+                    return WriteResult.not_done(ToolStatus.FAILED, str(not_configured))
             log.warning("%s failed for task %s: %s", name, task_id, e)
-            return {}
+            return WriteResult.not_done(e.write_status, str(e))
         except QuestNotConfigured as e:
             log.warning("%s failed for task %s: %s", name, task_id, e)
-            return {}
+            return WriteResult.not_done(ToolStatus.FAILED, str(e))
 
     def report_done(self, task_id: str, result: str,
                     session_id: Optional[str] = None,
-                    result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                    result_data: Optional[Dict[str, Any]] = None) -> WriteResult:
         """PATCH done. ``result_data`` carries ``{"outcome": "done" | "nothing_done"}``: whether the
         run made at least one successful mutating call ("done") or only talked ("nothing_done"), so
         a consumer that needs the work done (a workflow step) can tell the two apart. It also
@@ -260,7 +267,7 @@ class TasksMixin:
 
     def report_needs_you(self, task_id: str, result: str, decision_id: str,
                          session_id: Optional[str] = None,
-                         result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                         result_data: Optional[Dict[str, Any]] = None) -> WriteResult:
         body: Dict[str, Any] = {"status": "needs_you", "result": result, "decision_id": decision_id}
         if result_data:
             body["result_data"] = result_data
@@ -268,7 +275,7 @@ class TasksMixin:
 
     def report_incomplete(self, task_id: str, result: str,
                           session_id: Optional[str] = None,
-                          result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                          result_data: Optional[Dict[str, Any]] = None) -> WriteResult:
         """PATCH ``incomplete``: the run WORKED but did not fully reach its goal (or could not be
         verified as having reached it). Distinct from ``failed``, which means a technical error.
 
@@ -284,7 +291,7 @@ class TasksMixin:
 
     def report_failed(self, task_id: str, result: str,
                       session_id: Optional[str] = None,
-                      result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                      result_data: Optional[Dict[str, Any]] = None) -> WriteResult:
         body: Dict[str, Any] = {"status": "failed", "result": result}
         if result_data:
             body["result_data"] = result_data
@@ -292,7 +299,7 @@ class TasksMixin:
 
     def report_done_with_data(self, task_id: str, result: str,
                               result_data: Optional[Dict[str, Any]] = None,
-                              session_id: Optional[str] = None) -> Dict[str, Any]:
+                              session_id: Optional[str] = None) -> WriteResult:
         """PATCH done with an OPTIONAL structured ``result_data`` payload alongside the plain text.
 
         Used by the context-request fast path (see ``poller._handle_context_request``) to carry
@@ -303,11 +310,7 @@ class TasksMixin:
         body: Dict[str, Any] = self._with_session({"status": "done", "result": result}, session_id)
         if result_data:
             body["result_data"] = result_data
-        try:
-            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("report_done_with_data failed for task %s: %s", task_id, e)
-            return {}
+        return self.patch_terminal_report("report_done_with_data", task_id, body, None)
 
     def requeue_for_usage_limit(self, task_id: str, *, start_at: datetime, detail: str,
                                 resume_session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -637,7 +640,7 @@ class TasksMixin:
                     model: Optional[str] = None,
                     deep_run_model: Optional[str] = None,
                     related_goal_id: Optional[str] = None,
-                    new_goal: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                    new_goal: Optional[Dict[str, Any]] = None) -> WriteResult:
         """POST a new queued AI task to /api/assistant-tasks.
 
         ``team_id`` routes the task to a specific team's runner (defaults to the client's
@@ -766,9 +769,9 @@ class TasksMixin:
             body["related_goal_id"] = related_goal_id
         if new_goal:
             body["new_goal"] = dict(new_goal)
-        return self._request("POST", "/api/assistant-tasks", body=body) or {}
+        return self._write("POST", "/api/assistant-tasks", body=body, label="Creating the task")
 
-    def update_task(self, task_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    def update_task(self, task_id: str, fields: Dict[str, Any]) -> WriteResult:
         """PATCH arbitrary updatable fields on a task (the generic write the report_* helpers wrap).
 
         The Quest API's task PATCH accepts ``status`` (queued|in_progress|done|needs_you|failed|
@@ -782,7 +785,7 @@ class TasksMixin:
         demoting it to ``suggested`` must know if that demotion failed, otherwise a proposal the
         user never approved would sit in the queue and RUN. Silent failure here is not acceptable.
         """
-        return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=dict(fields)) or {}
+        return self._write("PATCH", f"/api/assistant-tasks/{task_id}", body=dict(fields), label="Updating the task")
 
     def list_tasks(self, *, team_id: Optional[str] = None,
                   status: Optional[str] = None,
