@@ -39,6 +39,8 @@ class PersistenceMixin:
                 # The selected quest, so `chat --resume` comes back to it.
                 "goal_id": self.bound_quest_id() if hasattr(self, "pinned_quest") else self._goal_id,
                 "rep_name": self._rep_name,
+                # What each turn showed on screen, by turn (see ``_shown_by_turn``): `chat --resume` replays it.
+                "shown": [self._shown_by_turn.get(i, "") for i in range(len(self._session_history))],
                 "updated_at": time.time(),
             }
             self._session_file.write_text(

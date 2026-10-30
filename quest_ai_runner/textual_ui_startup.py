@@ -32,9 +32,14 @@ class StartupMixin:
         if len(history) > len(shown):
             c.dim(f"  {plural(message_count(history[:len(history) - len(shown)]), 'earlier message')} not shown.")
         c.line("")
-        for user_text, asst_text in shown:
+        saved_shown = conv.meta.get("shown") if isinstance(conv.meta.get("shown"), list) else []
+        first = len(history) - len(shown)
+        for offset, (user_text, asst_text) in enumerate(shown):
             self._tlog.write(person_line(user_text))
             self._tlog.write(Text(""))
+            index = first + offset
+            on_screen = saved_shown[index] if index < len(saved_shown) and isinstance(saved_shown[index], str) else ""
+            asst_text = on_screen or asst_text      # what the turn showed, else the note the model reads back
             if asst_text:
                 self._tlog.write(Text(speaker_label(rep_name), style="bold cyan"))
                 self._console.markdown(asst_text)

@@ -353,3 +353,49 @@ def test_saved_conversation_id_only_for_files_on_disk(tmp_path):
     assert saved_conversation_id(SimpleNamespace(sess=None), read_conversation(written)) \
         == "qar_chat_abc123"
     assert saved_conversation_id(None) is None
+
+
+def test_what_a_turn_showed_is_saved_beside_the_note_the_model_reads_back(monkeypatch, tmp_path):
+    """A deep run's history entry is a short "Completed: <goal>" note; the answer that was on screen is kept too."""
+    from quest_ai_runner import interactive_session as mod
+
+    class FakeOrch:
+        class cfg:
+            instant_ack = False
+
+    monkeypatch.setenv("QAR_CHAT_HISTORY_DIR", str(tmp_path))
+    monkeypatch.setattr("quest_ai_runner.config.build_orchestrator", lambda cfg, notify=None: FakeOrch())
+    for name in ("_load_session_state", "_build_model_tiers_menu", "_refresh_rep_name_from_skill"):
+        monkeypatch.setattr(mod.InteractiveSession, name, lambda self: None)
+    monkeypatch.setattr(mod.InteractiveSession, "_try_load_skill_by_name", lambda self, n: None)
+    path = write_conv(tmp_path, "abc123", [("first", "one")])
+    sess = mod.InteractiveSession(RunnerConfig(quest_base_url="", quest_api_key="", corpus_root=None),
+                                  resume=resolve_conversation("abc", tmp_path))
+    sess._session_history.append(("second", "Completed: the second thing"))
+    sess._shown_by_turn[1] = "The full answer the screen showed."
+    sess._write_session_file()
+    conv = read_conversation(path)
+    assert conv.history[-1] == ("second", "Completed: the second thing")
+    assert conv.meta["shown"] == ["", "The full answer the screen showed."]
+    again = mod.InteractiveSession(RunnerConfig(quest_base_url="", quest_api_key="", corpus_root=None), resume=conv)
+    assert again._shown_by_turn == {1: "The full answer the screen showed."}
+
+
+def test_resume_replays_what_the_turn_showed_not_the_note_behind_it(tmp_path):
+    import asyncio
+    from quest_ai_runner.textual_ui import QuestAITerminal
+
+    path = write_conv(tmp_path, "abc123", [("a question", "Completed: the goal")])
+    conv = read_conversation(path)
+    conv.meta["rep_name"] = "Tester"
+    conv.meta["shown"] = ["The answer the screen showed."]
+
+    async def run():
+        app = QuestAITerminal(None, _config=None, resume=conv)
+        app._build_session_worker = lambda: None
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            return "\n".join(str(line.text) for line in app._tlog.lines)
+
+    shown = asyncio.run(run())
+    assert "The answer the screen showed." in shown and "Completed: the goal" not in shown

@@ -158,6 +158,7 @@ class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMix
         self._conv_id: Optional[str] = None
         # `chat --resume`: the conversation this session continues, or None for a fresh one.
         self.resumed = resume
+        self._shown_by_turn: dict = {}
         if resume is not None:
             # Continue in the SAME file (one conversation stays one record) with its turns as
             # this session's history. Mutate in place: ChatSessionStore below holds this list.
@@ -166,6 +167,11 @@ class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMix
             self._session_history.extend(resume.history)
             self._turn_count = len(resume.history)
             self._last_user, self._last_assistant = resume.history[-1]
+            # What each turn SHOWED (the history holds what the model reads back, which for a deep run is a short
+            # "Completed: <goal>" note): resumed turns keep theirs, so a replay shows the answer that was on screen.
+            saved_shown = resume.meta.get("shown")
+            if isinstance(saved_shown, list):
+                self._shown_by_turn.update({i: t for i, t in enumerate(saved_shown) if isinstance(t, str) and t})
             if goal_id is None and isinstance(resume.meta.get("goal_id"), str):
                 self._goal_id = resume.meta["goal_id"]
         else:

@@ -568,6 +568,8 @@ class TurnMixin:
                 # final.text instead of the actual user-facing response.
                 s._last_assistant = final.text or "\n".join(self._answer_parts).strip()
             s._session_history.append((user_text, s._last_assistant))
+            if answer:
+                s._shown_by_turn[len(s._session_history) - 1] = answer
             s._write_session_file()
             s._turn_count += 1
             # A turn that executed work and left some unfinished refreshes the quest folder's
