@@ -4,6 +4,10 @@ The handoff page is generated, never hand-edited. `render_handoff.py` reads the 
 small private content file (decisions, unfinished work, notes, per-case splits) kept outside this repository. The lane's
 environment names it: `QAR_HANDOFF_CONTENT` (the content file; its `page` key names the page to write).
 
+Run every `esoi run` and `render_handoff.py` with the repository's virtual environment (`.venv/bin/esoi`, `.venv/bin/python`).
+It has the `hubofhubs` package installed, which the runner imports at startup; the system `python3` does not, so an arm that
+imports the runner fails there before it runs a single case.
+
 At the END of every pass, after re-recording and `esoi tracker build`:
 
 1. Commit the results and records first (the page states the commit it was built from).
