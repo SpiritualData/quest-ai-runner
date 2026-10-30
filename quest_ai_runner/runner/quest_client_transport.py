@@ -256,13 +256,23 @@ class TransportMixin:
     # --- the typed write path -------------------------------------------------------------------
 
     def write_error(self, label: str, error: QuestApiError, *, not_done: bool = False) -> QuestWriteError:
-        """Classify a failed write: 4xx (except 429) is ``refused``, 429 and 5xx are ``failed``, a request that was
-        sent and never answered is ``unknown``, and one that never left is ``failed``."""
+        """Classify a failed write: 4xx (except 429) is ``refused``; 429 and 503 are ``failed`` (the request was not
+        processed); any other 5xx (a 500, 502 or 504 may follow a commit) and a request that was sent and never answered are
+        ``unknown``; one that never left is ``failed``."""
         status = error.status
         detail = self.error_detail(error)
         if status is not None and 400 <= status < 500 and status != 429:
             kind = ToolStatus.REFUSED
             message = f"Not done: {detail}" if not_done else f"{label} was refused by Quest ({status}): {detail}"
+        elif status is not None and status >= 500 and status != 503:
+            # A write the server (or a gateway in front of it) answered 500, 502 or 504 to may have been applied before the
+            # error: a proxy times out while the backend commits, a handler fails after its insert. Only 503 (unavailable)
+            # says the request was not processed. A write is never a GET, so this is the write path's reading of a 5xx.
+            kind = ToolStatus.UNKNOWN
+            message = (f"{label}: OUTCOME UNKNOWN. Quest answered {status} ({detail}), which can come back after the write was "
+                       f"applied, so it may or may not have happened. Look before trying again.")
+            return QuestWriteError(message, write_status=kind, status=status, retry_after=error.retry_after,
+                                   outcome_unknown=True, detail=detail)
         elif status is not None:
             kind = ToolStatus.FAILED
             wait = f" Quest asked to wait {error.retry_after:.0f}s before trying again." if error.retry_after else ""

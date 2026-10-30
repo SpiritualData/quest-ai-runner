@@ -45,13 +45,33 @@ def test_a_refused_write_raises_a_typed_error_with_the_reason(monkeypatch, name)
 
 
 @pytest.mark.parametrize("name", sorted(CONTENT_WRITES))
-def test_a_server_error_is_failed_and_a_timeout_after_sending_is_unknown(monkeypatch, name):
-    failed, _ = make_client([(500, {"detail": "boom"})], monkeypatch)
+def test_a_503_is_failed_and_a_timeout_after_sending_is_unknown(monkeypatch, name):
+    failed, _ = make_client([(503, {"detail": "unavailable"})], monkeypatch)
     assert raising(failed, CONTENT_WRITES[name]).write_status is ToolStatus.FAILED
     unknown, _ = make_client([TimeoutError("The read operation timed out")], monkeypatch)
     error = raising(unknown, CONTENT_WRITES[name])
     assert error.write_status is ToolStatus.UNKNOWN and error.outcome_unknown is True
     assert "may or may not" in str(error)
+
+
+@pytest.mark.parametrize("code", [500, 502, 504])
+@pytest.mark.parametrize("name", sorted(CONTENT_WRITES))
+def test_a_gateway_or_server_error_on_a_write_is_unknown_because_it_may_have_been_applied(monkeypatch, name, code):
+    """A proxy answers 502 or 504 while the backend commits, and a handler can 500 after its insert: only a 503 says the
+    request was not processed. The same answer to a GET stays a retryable failure (nothing to have applied)."""
+    client, transport = make_client([(code, {"detail": "upstream"})], monkeypatch, write_retry="off")
+    error = raising(client, CONTENT_WRITES[name])
+    assert error.write_status is ToolStatus.UNKNOWN and error.outcome_unknown is True and error.status == code
+    assert "OUTCOME UNKNOWN" in str(error) and "Look before trying again" in str(error)
+    assert len(transport.requests) == 1                      # write retry is off: sent once
+
+
+def test_a_504_on_a_get_is_still_retried_and_then_a_plain_api_error(monkeypatch):
+    client, transport = make_client([(504, {"detail": "slow"})], monkeypatch)
+    with pytest.raises(QuestApiError) as caught:
+        client._request("GET", "/api/quests")
+    assert not hasattr(caught.value, "write_status") or caught.value.write_status is None
+    assert caught.value.transient and len(transport.requests) == 1 + client.read_retries
 
 
 def test_a_connection_that_never_opened_is_failed_because_nothing_was_sent(monkeypatch):
@@ -129,7 +149,7 @@ def test_a_write_result_is_never_an_empty_value():
 # --- the lifecycle reports keep their "never raises" rule, but the answer is typed, not {} -----------
 
 def test_a_terminal_report_that_fails_returns_a_falsy_typed_result_and_never_raises(monkeypatch):
-    client, _ = make_client([(500, {"detail": "boom"})], monkeypatch)
+    client, _ = make_client([(503, {"detail": "boom"})], monkeypatch)
     result = client.report_done("t1", "all done")
     assert isinstance(result, WriteResult) and not result and result.status is ToolStatus.FAILED
     unknown, _ = make_client([TimeoutError("slow")], monkeypatch)
