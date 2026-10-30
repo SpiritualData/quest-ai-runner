@@ -58,6 +58,11 @@ IDEMPOTENCY_HEADER = "Idempotency-Key"
 #: The capability a backend lists on its health route when it honours ``Idempotency-Key`` on creates.
 IDEMPOTENCY_CAPABILITY = "idempotency-key"
 HEALTH_PATH = "/api/health"
+#: The ``code`` in the 409 body Quest sends while a request with the same Idempotency-Key is still running (it also sends
+#: ``Retry-After``). Distinct from the 409 for a question the person already answered, which has neither and stays refused.
+IDEMPOTENCY_IN_PROGRESS_CODE = "idempotency_in_progress"
+#: The response header that says a created goal already existed (the body's ``already_existed`` is read first).
+GOAL_ALREADY_EXISTED_HEADER = "x-goal-already-existed"
 
 
 def new_idempotency_key() -> str:
@@ -89,6 +94,18 @@ def never_reached(error: BaseException) -> bool:
         isinstance(error, OSError) and error.errno in (errno.ECONNREFUSED, errno.ENETUNREACH, errno.EHOSTUNREACH))
 
 
+def error_code_of(body: str) -> str:
+    """The machine ``code`` in a JSON error body (at the top, or inside ``detail``), else an empty string."""
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError):
+        return ""
+    for holder in (payload, payload.get("detail") if isinstance(payload, dict) else None):
+        if isinstance(holder, dict) and isinstance(holder.get("code"), str):
+            return holder["code"].strip().lower()
+    return ""
+
+
 def parse_capabilities(payload: Any) -> FrozenSet[str]:
     """The capability names a health answer lists (``capabilities`` at the top or inside ``data``), else none."""
     for holder in (payload, (payload or {}).get("data") if isinstance(payload, dict) else None):
@@ -106,6 +123,7 @@ class ExchangeState(threading.local):
     def __init__(self) -> None:
         self.write_key: Optional[str] = None
         self.last_status: Optional[int] = None
+        self.last_headers: Dict[str, str] = {}
         self.probing = False
 
 
@@ -198,14 +216,17 @@ class TransportMixin:
                     payload = json.loads(raw) if raw else None
                 except ValueError:
                     payload = None  # a 2xx whose body is not JSON: the request itself was answered
+                self.exchange_state.last_headers = {str(k).lower(): str(v) for k, v in dict(getattr(resp, "headers", None) or {}).items()}
                 return int(getattr(resp, "status", 200) or 200), payload
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")
             retry_after = parse_retry_after((e.headers or {}).get("Retry-After") if e.headers is not None else None)
-            # A 409 that carries Retry-After is Quest saying a request with this Idempotency-Key is still running: retry later.
-            busy = e.code == 409 and retry_after is not None
-            raise QuestApiError(f"Quest API {method} {path} -> {e.code}: {detail}", status=e.code,
-                                retry_after=retry_after, transient=e.code == 429 or e.code >= 500 or busy) from e
+            code = error_code_of(detail)
+            # A 409 coded idempotency_in_progress (it carries Retry-After too) is Quest saying a request with this
+            # Idempotency-Key is still running: retry later with the same key.
+            busy = e.code == 409 and (code == IDEMPOTENCY_IN_PROGRESS_CODE or retry_after is not None)
+            raise QuestApiError(f"Quest API {method} {path} -> {e.code}: {detail}", status=e.code, retry_after=retry_after,
+                                transient=e.code == 429 or e.code >= 500 or busy, code=code) from e
         except urllib.error.URLError as e:
             raise QuestApiError(f"Quest API {method} {path} unreachable: {e.reason}", transient=True,
                                 outcome_unknown=not never_reached(e)) from e
@@ -264,7 +285,7 @@ class TransportMixin:
         ``unknown``; one that never left is ``failed``."""
         status = error.status
         detail = self.error_detail(error)
-        busy = status == 409 and error.retry_after is not None
+        busy = status == 409 and (error.code == IDEMPOTENCY_IN_PROGRESS_CODE or error.retry_after is not None)
         if busy:
             # Another request with this Idempotency-Key is still running (a retry that overlapped its first attempt). Quest
             # has not said no: try again shortly, which returns the first request's result.
@@ -303,7 +324,7 @@ class TransportMixin:
         """One content write: a ``WriteResult`` (applied, held or noop) or a raised ``QuestWriteError``; never an empty
         value. ``idempotency_key`` is sent as the ``Idempotency-Key`` header (and is what makes a retry safe)."""
         state = self.exchange_state
-        state.write_key, state.last_status = idempotency_key or None, None
+        state.write_key, state.last_status, state.last_headers = idempotency_key or None, None, {}
         try:
             payload = self._request(method, path, params=params, body=body)
         except QuestApiError as e:
@@ -312,4 +333,10 @@ class TransportMixin:
             raise self.write_error(label, e, not_done=not_done) from e
         finally:
             state.write_key = None
-        return WriteResult.from_payload({} if payload is None else payload, state.last_status)
+        result = WriteResult.from_payload({} if payload is None else payload, state.last_status)
+        header = state.last_headers.get(GOAL_ALREADY_EXISTED_HEADER)
+        body_says = isinstance(payload, dict) and "already_existed" in payload
+        if header is not None and not body_says and result.status is ToolStatus.APPLIED and header.strip().lower() == "true":
+            # The body is read first (classify_payload); a backend that signals a repeat only in the header is read here.
+            result.status = ToolStatus.NOOP
+        return result

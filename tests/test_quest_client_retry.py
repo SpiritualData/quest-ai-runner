@@ -174,6 +174,48 @@ def test_write_retry_never_retries_a_4xx_or_a_held_answer(monkeypatch):
     assert len(transport.requests) == 1
 
 
+IN_PROGRESS = (409, {"code": "idempotency_in_progress", "detail": "A request with this Idempotency-Key is still running"},
+               {"Retry-After": "2"})
+
+
+def test_an_in_progress_409_is_retried_with_the_same_key_honouring_retry_after(monkeypatch):
+    client, transport = make_client([IN_PROGRESS, IN_PROGRESS, GOAL], monkeypatch, write_retry="on")
+    result = client.create_goal("Run", period="2026-08-18", quest_id="q1")
+    assert result.status.value == "applied" and len(transport.requests) == 3
+    assert len({r[2]["idempotency-key"] for r in transport.requests}) == 1
+    assert client.sleeps == [2.0, 2.0]
+
+
+def test_an_in_progress_409_that_never_clears_is_a_retryable_failure_not_a_refusal(monkeypatch):
+    client, transport = make_client([IN_PROGRESS], monkeypatch, write_retry="on")
+    with pytest.raises(QuestWriteError) as caught:
+        client.create_goal("Run", period="2026-08-18", quest_id="q1")
+    assert caught.value.write_status.value == "failed" and len(transport.requests) == 3
+
+
+def test_an_in_progress_409_with_the_code_alone_is_still_transient(monkeypatch):
+    client, transport = make_client([(409, {"code": "idempotency_in_progress", "detail": "busy"}), GOAL], monkeypatch,
+                                    write_retry="on")
+    assert client.create_goal("Run", period="2026-08-18", quest_id="q1").status.value == "applied"
+    assert len(transport.requests) == 2
+
+
+def test_an_already_answered_409_stays_refused_and_is_never_retried(monkeypatch):
+    client, transport = make_client([(409, {"detail": "The person already declined this"})], monkeypatch, write_retry="on")
+    with pytest.raises(QuestWriteError) as caught:
+        client.create_decision("Approve?", quest_id="q1")
+    assert caught.value.write_status.value == "refused" and len(transport.requests) == 1
+
+
+def test_a_reused_key_with_a_different_body_is_a_422_refusal_and_never_retried(monkeypatch):
+    client, transport = make_client([(422, {"detail": "This Idempotency-Key was already used with a different request"})],
+                                    monkeypatch, write_retry="on")
+    with pytest.raises(QuestWriteError) as caught:
+        client.create_goal("Run", period="2026-08-18", quest_id="q1")
+    assert caught.value.write_status.value == "refused" and "different request" in str(caught.value)
+    assert len(transport.requests) == 1
+
+
 def test_write_retry_off_wins_even_when_the_backend_advertises_support(monkeypatch):
     client, transport = make_client([(503, {})], monkeypatch, write_retry="off")
     client.capabilities = frozenset({"idempotency-key"})  # even a backend that says it honours the key

@@ -130,6 +130,32 @@ def test_a_goal_the_server_says_already_existed_is_a_noop(monkeypatch):
     assert result.status is ToolStatus.NOOP and result.id == "g1"
 
 
+GOAL_BODY = {"id": "g1", "title": "Run"}
+
+
+def test_the_goal_header_is_the_fallback_when_the_body_does_not_say_already_existed(monkeypatch):
+    """The contract: ``already_existed`` in the body first (above), ``X-Goal-Already-Existed: true`` as the fallback."""
+    client, _ = make_client([(200, GOAL_BODY, {"X-Goal-Already-Existed": "true"})], monkeypatch, write_retry="off")
+    result = client.create_goal("Run", period="2026-08-18", quest_id="q1")
+    assert result.status is ToolStatus.NOOP and result.id == "g1"
+    fresh, _ = make_client([(201, GOAL_BODY)], monkeypatch, write_retry="off")
+    assert fresh.create_goal("Run", period="2026-08-18", quest_id="q1").status is ToolStatus.APPLIED
+
+
+def test_a_body_that_says_not_already_existed_wins_over_the_header(monkeypatch):
+    client, _ = make_client([(200, {**GOAL_BODY, "already_existed": False}, {"X-Goal-Already-Existed": "true"})], monkeypatch)
+    assert client.create_goal("Run", period="2026-08-18", quest_id="q1").status is ToolStatus.APPLIED
+    both, _ = make_client([(200, {**GOAL_BODY, "already_existed": True}, {"X-Goal-Already-Existed": "true"})], monkeypatch)
+    assert both.create_goal("Run", period="2026-08-18", quest_id="q1").status is ToolStatus.NOOP
+
+
+def test_the_goal_header_of_one_write_does_not_leak_into_the_next(monkeypatch):
+    client, _ = make_client([(200, GOAL_BODY, {"X-Goal-Already-Existed": "true"}), (201, GOAL_BODY)], monkeypatch,
+                            write_retry="off")
+    assert client.create_goal("Run", period="2026-08-18", quest_id="q1").status is ToolStatus.NOOP
+    assert client.create_goal("Walk", period="2026-08-18", quest_id="q1").status is ToolStatus.APPLIED
+
+
 def test_a_decision_the_person_already_answered_is_a_refusal_with_the_servers_words(monkeypatch):
     client, _ = make_client([(409, {"detail": "They declined this on Monday"})], monkeypatch)
     error = raising(client, CONTENT_WRITES["create_decision"])

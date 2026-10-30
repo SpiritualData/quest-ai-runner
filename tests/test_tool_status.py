@@ -387,7 +387,7 @@ def test_an_ask_the_person_already_answered_is_refused_and_says_not_to_ask_again
 
 def test_a_409_that_carries_retry_after_is_a_request_in_progress_not_a_refusal(monkeypatch):
     """Quest's idempotency guard answers 409 with Retry-After while the first request is still running: retryable, so failed."""
-    busy = {"detail": "A request with this Idempotency-Key is still running"}
+    busy = {"code": "idempotency_in_progress", "detail": "A request with this Idempotency-Key is still running"}
     result, transport = raise_ask(monkeypatch, [(409, busy, {"Retry-After": "2"})], write_retry="off")
     assert result.status is ToolStatus.FAILED and "Do not ask it again" not in result.text
     assert "still handling an earlier request" in result.text
@@ -395,7 +395,7 @@ def test_a_409_that_carries_retry_after_is_a_request_in_progress_not_a_refusal(m
 
 
 def test_an_in_progress_409_is_retried_with_the_same_key_when_write_retry_is_on(monkeypatch):
-    busy = {"detail": "still running"}
+    busy = {"code": "idempotency_in_progress", "detail": "still running"}
     result, transport = raise_ask(monkeypatch, [(409, busy, {"Retry-After": "2"}), (200, {"decision_id": "d5"})],
                                   write_retry="on")
     assert result.status is ToolStatus.APPLIED and "d5" in result.text

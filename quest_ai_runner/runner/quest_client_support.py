@@ -50,11 +50,13 @@ class QuestApiError(RuntimeError):
     ``status`` is the HTTP status when Quest answered at all. ``retry_after`` is the seconds Quest asked the caller to
     wait (a 429 or 503). ``outcome_unknown`` is True when the request may have reached Quest but no answer came back
     (a read timeout, a reset after sending): for a write that means it MAY have been applied. ``transient`` marks a
-    failure worth retrying (a transport error, 429 or 5xx); a 4xx other than 429 is a final answer."""
+    failure worth retrying (a transport error, 429 or 5xx, or the 409 ``idempotency_in_progress``); a 4xx other than
+    429 is a final answer. ``code`` is the machine code in the error body (``code``), when Quest sent one."""
 
     def __init__(self, message: str, *, status: Optional[int] = None, retry_after: Optional[float] = None,
-                 outcome_unknown: bool = False, transient: bool = False):
+                 outcome_unknown: bool = False, transient: bool = False, code: str = ""):
         super().__init__(message)
+        self.code = code
         self.status = status
         self.retry_after = retry_after
         self.outcome_unknown = outcome_unknown
