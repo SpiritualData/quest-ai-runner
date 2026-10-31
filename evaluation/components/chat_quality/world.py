@@ -544,6 +544,23 @@ def card_ids():
     return {c.get("id") for c in cards if c.get("id")}
 
 
+EVAL_CONVERSATION_CARD_PREFIX = "conv-qaconv_"   # the card a chat turn learns for one of the eval's own conversations
+
+
+def purge_eval_conversation_cards():
+    """Delete the conversation cards earlier eval runs left on the account, and drop them from the saved baseline. They carry
+    no quest tag (they predate the fence), so the fence rightly leaves them usable in a quest-pinned turn, and a later
+    isolation case then reads another quest's history from them. Returns how many were removed. Run by ``reset``."""
+    gone = [cid for cid in card_ids() if str(cid).startswith(EVAL_CONVERSATION_CARD_PREFIX)]
+    for cid in gone:
+        api("DELETE", f"/api/cards/{cid}")
+    if gone and STATE_PATH.exists():
+        state = json.loads(STATE_PATH.read_text())
+        state["cards_baseline"] = [c for c in state.get("cards_baseline", []) if c not in set(gone)]
+        STATE_PATH.write_text(json.dumps(state, indent=1))
+    return len(gone)
+
+
 def cards_created_since(baseline, current=None):
     """The card ids that exist now but were not in ``baseline``, sorted.
 
@@ -1183,6 +1200,7 @@ def reset():
     build_contents(state, list(QUESTS))
     stripped = reset_world_quest_cards(state)
     print(f"stripped learned content from {stripped} world quest card(s)")
+    print(f"deleted {purge_eval_conversation_cards()} leftover eval conversation card(s)")
 
 
 def show():

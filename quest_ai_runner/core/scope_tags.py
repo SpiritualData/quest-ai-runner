@@ -54,7 +54,7 @@ SCOPE_FENCE_NOTE = (
     "the person's own records mean the records of {those}. Records that belong to a different quest are private to "
     "it: never state, count or use them to answer, even when a read returned them (compare the quest id on a record "
     "with {the_id} above). When the answer exists only in another quest, say it is not recorded in this quest and "
-    "offer to look there if they name it. Things that belong to no quest (team agreements, general notes) stay usable.")
+    "offer to look there if they name it, without naming that quest or quoting anything from it yourself (its title is as private as its records). Things that belong to no quest (team agreements, general notes) stay usable.")
 
 
 def scope_fence_block(quest_ids: ScopeTags) -> str:
