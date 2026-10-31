@@ -4,6 +4,7 @@ The arms differ only in the model at the boundary and build their own orchestrat
 decisions, or the way production builds it on the claude CLI backend); ``run_terminal`` runs the real ``send`` command. A fresh orchestrator, scratch corpus and world per case, so no case sees
 another's turns."""
 from assist_a_terminal_session import arms as terminal_arms
+from end_to_end.clock import fill_calendar
 from end_to_end.world import World
 from hubofhubs.ports.deep import DeepResult
 from scripted_brain import ScriptedProvider
@@ -16,7 +17,7 @@ class IdealPlanner(ScriptedProvider):
 
     def __init__(self, decisions, reply):
         super().__init__(decisions)
-        self.reply = reply
+        self.reply = fill_calendar(reply)
 
     def answer(self, messages, *, model, system=None):  # noqa: ARG002
         return self.reply

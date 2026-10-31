@@ -13,6 +13,7 @@ import common
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.tools import ToolResult
 from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT
+from end_to_end.clock import world_today
 from end_to_end.docs_mode_rules import DOCS_MODE_RULES
 
 SPEC = json.loads((Path(__file__).resolve().parent / "world.json").read_text(encoding="utf-8"))
@@ -138,7 +139,7 @@ class World:
 
     def __init__(self, pinned=None, web=None, docs=None, docs_only=False, science=False, bulk=None, history=None):
         self.quests = copy.deepcopy(SPEC["quests"])
-        self.today = SPEC["today"]
+        self.today = world_today().isoformat()
         self.pinned = pinned
         self.docs = [dict(SPEC["docs"][d], id=d) for d in docs or []]
         self.docs_only = docs_only

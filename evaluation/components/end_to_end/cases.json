@@ -316,16 +316,7 @@
    "route_in": [
     "answer"
    ],
-   "reply_has": [
-    [
-     "24 days",
-     "3 weeks",
-     "three weeks",
-     "3.4 weeks",
-     "3 and a half weeks",
-     "3 1/2 weeks"
-    ]
-   ]
+   "reply_days_to": "2026-11-22"
   },
   "ideal": {
    "decisions": [
@@ -335,7 +326,7 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "The Riverside 10K is on 22 Nov, which is 24 days away, a little over 3 weeks."
+   "reply": "The Riverside 10K is on 22 Nov, which is {days_until:2026-11-22} days away, about {weeks_until:2026-11-22} weeks."
   },
   "source": "chat_quality implicit IMP-002 (weeks left for the race, no pinned quest)"
  },

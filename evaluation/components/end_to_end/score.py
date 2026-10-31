@@ -11,6 +11,7 @@ A case's ``expect`` may state:
   route_in           the turn's one route (``interface.py``) is among these
   web_min            at least this many web queries
   reply_has          a list of groups; each group is a list of alternatives, one of which must appear (case-insensitive)
+  reply_days_to      an ISO date: the reply states the right days (or weeks) from the world's today (``clock.py``) to it
   reply_has_n        {"n": k, "groups": [group, ...]}: at least k of the groups are matched (a reply that ties k features to the ask)
   reply_lacks_regex  patterns the reply must not match
   reply_dois         {"allowed": [doi, ...], "min": k}: every DOI the reply names is one of the allowed (the works a tool returned),
@@ -30,6 +31,7 @@ stays free.
 import re
 
 from assist_a_terminal_session import score as terminal_score
+from end_to_end.clock import countdown_problems
 
 
 DENIES_A_LANDED_WRITE = re.compile(
@@ -45,6 +47,8 @@ def reply_problems(reply, expect):
     for group in expect.get("reply_has", []):
         if not any(alt.lower() in low for alt in group):
             problems.append(f"reply lacks any of {group}")
+    if expect.get("reply_days_to"):
+        problems += countdown_problems(reply, expect["reply_days_to"])
     spec = expect.get("reply_has_n")
     if spec:
         hit = sum(1 for group in spec["groups"] if any(alt.lower() in low for alt in group))

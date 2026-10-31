@@ -518,3 +518,21 @@ def test_the_docs_only_view_carries_the_backend_standard_and_asks_for_no_page_na
     assert "No page paths." in view and "name the page" not in view.lower()
     assert not any(d["source"] in view for d in world.World(docs=case["world"]["docs"]).docs)   # the page path is kept for the transcript, not shown to the model
     assert not re.search(r"[—–]", docs_mode_rules.DOCS_MODE_RULES)
+
+
+def test_the_race_countdown_is_computed_from_the_worlds_today_and_rejects_a_wrong_day_count(monkeypatch):
+    import datetime
+    from end_to_end import clock
+    case = BY_ID["E2E-IMPL-02"]
+    monkeypatch.setenv("E2E_TODAY", "2026-10-31")
+    assert clock.days_until("2026-11-22") == 22 and world.World().today == "2026-10-31"
+    assert score.reply_problems("The race is 22 days away, about 3.1 weeks.", case["expect"]) == []
+    assert score.reply_problems("That is about 3 weeks.", case["expect"]) == []
+    assert score.reply_problems("The race is 24 days away, about 3.4 weeks.", case["expect"]) != []
+    assert score.reply_problems("You have 122 days.", case["expect"]) != []
+    assert score.reply_problems("Plenty of time.", case["expect"]) != []
+    assert score.reply_problems(clock.fill_calendar(case["ideal"]["reply"]), case["expect"]) == []
+    monkeypatch.setenv("E2E_TODAY", "2026-10-29")
+    assert score.reply_problems("The race is 24 days away, a little over 3 weeks.", case["expect"]) == []
+    assert score.reply_problems("The race is 22 days away, about 3.1 weeks.", case["expect"]) != []
+    assert score.reply_problems(clock.fill_calendar(case["ideal"]["reply"]), case["expect"]) == []
