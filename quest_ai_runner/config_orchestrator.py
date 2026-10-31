@@ -15,7 +15,7 @@ from hubofhubs.models.gemini import GeminiProvider
 from hubofhubs.models.openai import OpenAIProvider
 
 from .hub import make_provider
-from .providers import routed, route_extra_model_prefixes
+from .providers import failover_models, routed, route_extra_model_prefixes
 from .config_retrieval import _retrieval_has_web_search, build_registry, fold_into_retrieval
 from .config_resolvers import register_deepseek
 from .config_support import _log
@@ -34,7 +34,8 @@ def wire_providers(cfg: Any) -> None:
         cfg.model_providers = all_providers
         _log.info(f"Multi-provider routing enabled with: {list(all_providers.keys())}")
         original_provider = cfg.model_provider
-        cfg.model_provider = routed(original_provider, all_providers, cfg.usage_tracker)
+        cfg.model_provider = routed(original_provider, all_providers, cfg.usage_tracker,
+                                    fallback_models=failover_models(all_providers, original_provider, cfg.model_fallback or {}, os.environ))
         # A quota or rate-limit error on a tier-resolved model steps down to the next cheaper tier; the registry is built after the
         # wrap so it sees the full multi-provider model list.
         try:

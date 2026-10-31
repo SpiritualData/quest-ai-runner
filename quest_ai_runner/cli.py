@@ -238,6 +238,9 @@ Env it reads:
   QAR_MODEL_BACKEND (optional)                   — "anthropic" | "claude_cli". Default: auto —
                                                    "anthropic" if ANTHROPIC_API_KEY is set, else
                                                    "claude_cli" (keyless, via the subscription login).
+  QAR_FALLBACK_MODELS (optional)                 — ordered, comma separated model ids the router asks next, on any
+                                                   vendor, when a model has no credit, is over quota, times out or
+                                                   is down. Default: one model per other configured vendor.
   DEEPSEEK_API_KEY (optional)                    — registers the DeepSeek provider (OpenAI-compatible
                                                    API); model ids starting "deepseek" route to it.
                                                    Never auto-bucketed into a tier: pin it with

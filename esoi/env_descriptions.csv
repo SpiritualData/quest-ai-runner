@@ -91,3 +91,4 @@ QAR_CALL_LOG_PATH,"Path of the JSON-lines call log where the runner persists eve
 OPENALEX_API_KEY,"OpenAlex API key (free; the account owner activates it from an emailed link). Set it and the standard tool search_scientific_literature is offered; unset (the default) the tool is absent and the planner is told it cannot search research papers."
 OPENALEX_MAILTO,"Contact address sent to OpenAlex with each scholarly search (optional, a courtesy; use a team address, not a person's)."
 QAR_SCIENCE_DAILY_LIMIT,"Real scholarly searches one process may make per UTC day (default 300, 0 for no cap). OpenAlex bills about $1 per 1,000 searches against a $1 a day free allowance."
+QAR_FALLBACK_MODELS,"Ordered, comma separated model ids the router asks next, on any vendor, when a model has no credit, is over quota, times out or is down. Unset: one model per other configured vendor."

@@ -8,23 +8,21 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-230 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+229 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` |  | `adapters/claude_cli_provider.py`, `cli_chat.py`, `cli_config.py` +2 | `.env.example`, `docs/acp-deep-runner.md`, `docs/deployment.md` +4 |
+| `ANTHROPIC_API_KEY` |  | `adapters/claude_cli_provider.py`, `cli_chat.py`, `cli_config.py` +1 | `.env.example`, `docs/acp-deep-runner.md`, `docs/deployment.md` +4 |
 | `ANTHROPIC_AUTH_TOKEN` |  | `adapters/claude_cli_provider.py` | `docs/acp-deep-runner.md` |
 | `CLAUDE_CONFIG_DIR` | Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir. | `adapters/claude_live_models.py`, `config_core_settings.py` | - |
-| `DEEPSEEK_API_KEY` |  | `config_resolvers.py`, `providers.py` | `docs/adapters.md` |
-| `DEEPSEEK_BASE_URL` |  | `providers.py` | `docs/adapters.md` |
+| `DEEPSEEK_API_KEY` |  | `config_resolvers.py` | `docs/adapters.md` |
 | `FASTEMBED_CACHE_PATH` | Folder for the local embedding model the spec search uses when fastembed is installed (default /tmp/fastembed_cache). | `core/repo_specs.py` | - |
-| `GOOGLE_API_KEY` |  | `cli_chat.py`, `cli_config.py`, `providers.py` +1 | `docs/web-search.md` |
+| `GOOGLE_API_KEY` |  | `cli_chat.py`, `cli_config.py`, `textual_ui_helpers.py` | `docs/web-search.md` |
 | `HF_HUB_OFFLINE` | Set to 1 by the spec search (unless already set) so a cached embedding model loads without network calls. | `core/repo_specs.py` | - |
 | `HF_HUB_VERBOSITY` | Hugging Face hub log level; the CLI sets it to error (unless already set) so its unauthenticated-request warning never reaches the chat. | `cli.py` | - |
 | `MAX_THINKING_TOKENS` | Claude Code variable the CLI provider sets to cap extended thinking on plan() calls (0 turns thinking off). | `adapters/claude_cli_provider.py` | - |
-| `OPENAI_API_KEY` | OpenAI key: registers the OpenAI provider and the OpenAI embedder. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `cli_config.py` +2 | - |
-| `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible endpoint (a LiteLLM proxy, vLLM, Ollama or a gateway) the OpenAI provider calls instead of the OpenAI service; no key is needed for a self-hosted one. Pair with QAR_OPENAI_MODEL_PREFIXES so its model ids route to this provider. | `providers.py` | `docs/hub-of-hubs.md` |
+| `OPENAI_API_KEY` | OpenAI key: registers the OpenAI provider and the OpenAI embedder. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `cli_config.py` +1 | - |
 | `OPENALEX_API_KEY` | OpenAlex API key (free; the account owner activates it from an emailed link). Set it and the standard tool search_scientific_literature is offered; unset (the default) the tool is absent and the planner is told it cannot search research papers. | `core/tools_science.py` | `docs/tools.md` |
 | `OPENALEX_MAILTO` | Contact address sent to OpenAlex with each scholarly search (optional, a courtesy; use a team address, not a person's). | `core/tools_science.py` | `docs/tools.md` |
 | `QAR_ACP_AGENT_COMMAND` |  | `adapters/acp_deep_runner_protocol.py` | `docs/acp-deep-runner.md`, `docs/hub-of-hubs.md` |
@@ -32,7 +30,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_ANSWER_TIMEOUT` |  | `cli_config.py` | `.env.example` |
 | `QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD` | Monthly prepaid Anthropic credit in USD that the hub tier selector counts as cost-lowering when it ranks measured arms; unset or 0 counts no credit. The hub ships no allowance, this is the deployment's own. | `providers.py` | - |
 | `QAR_ANTHROPIC_CREDIT_VALUE` | What an Anthropic credit is worth if not used here, 0 to 1 (lower when it expires unused); unset counts it at face value (1), the reading that never understates cost. | `providers.py` | - |
-| `QAR_ANTHROPIC_THINKING` |  | `providers.py` | `.env.example` |
+| `QAR_ANTHROPIC_THINKING` |  | `hub.py` | `.env.example` |
 | `QAR_ANTICIPATION` |  | `cli_config.py` | `docs/README.md`, `docs/anticipation.md` |
 | `QAR_ANTICIPATION_LLM` |  | `cli_config.py` | `docs/anticipation.md` |
 | `QAR_ASYNC_CARD_UPDATE` | Default on; 0/false/off disables updating cards from a deep run's edits in the background. | `cli_config.py` | - |
@@ -104,6 +102,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_ENV_ID` |  | `adapters/quest_api_card_repository.py`, `cli_config.py` | `.env.example`, `docs/context-card-stores.md` |
 | `QAR_EXPLAIN_ANSWER` |  | `cli_config.py` | `docs/answer-explanation.md` |
 | `QAR_EXPLAIN_TIER` |  | `cli_config.py` | `docs/answer-explanation.md` |
+| `QAR_FALLBACK_MODELS` | Ordered, comma separated model ids the router asks next, on any vendor, when a model has no credit, is over quota, times out or is down. Unset: one model per other configured vendor. | `providers.py` | - |
 | `QAR_FEEDBACK_LEDGER` |  | `cli_config.py` | `docs/feedback-ledger.md` |
 | `QAR_FEEDBACK_LEDGER_PATH` |  | `cli_config.py` | `docs/feedback-ledger.md` |
 | `QAR_FILES_ALLOW_DOT` |  | `cli_serve_files.py` | `docs/file-server.md` |

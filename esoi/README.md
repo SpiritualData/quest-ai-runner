@@ -268,10 +268,6 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `search-the-web:web_research` | Snippet-first research with page extraction | quest_ai_runner/adapters/web_research.py |  |
 | `search-the-web:provider_web_search` | Model-native search | quest_ai_runner/adapters/provider_web_search_adapter.py |  |
 | `search-the-web:serper` | Pluggable search backends with fallback | quest_ai_runner/adapters/web_search_backends.py |  |
-| `call-a-model:anthropic` | Anthropic SDK provider | quest_ai_runner/providers.py |  |
-| `call-a-model:gemini` | Gemini provider | quest_ai_runner/providers.py |  |
-| `call-a-model:openai` | OpenAI provider | quest_ai_runner/providers.py |  |
-| `call-a-model:deepseek` | DeepSeek provider | quest_ai_runner/providers.py |  |
 | `call-a-model:claude_cli` | Keyless command-line provider | quest_ai_runner/adapters/claude_cli_provider.py |  |
 | `call-a-model:multi_provider` | Prefix-routing multi-provider | quest_ai_runner/providers.py |  |
 | `call-a-model:single_provider` | Single flat provider floor | evaluation/components/model_providers/impls/single_provider.py |  |

@@ -6,12 +6,13 @@ table, usage limit message and spend tagging.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from esoi import implementation
-from hubofhubs.models.family import MODEL_PREFIX_PROVIDERS
+from hubofhubs.models.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
 from hubofhubs.models.router import MultiProvider
 
+from .core.model_registry import DEFAULT_FALLBACK_TOP, configured_providers
 from .usage import active_spec, limit_message
 
 MODEL_PREFIXES: Dict[str, str] = dict(MODEL_PREFIX_PROVIDERS)       # process-wide, like the config that extends it
@@ -24,6 +25,32 @@ def route_extra_model_prefixes(provider_name: str, env: Mapping[str, str]) -> li
     added = [p.strip().lower() for p in raw.split(",") if p.strip()]
     MODEL_PREFIXES.update({prefix: provider_name for prefix in added})
     return added
+
+
+FAILOVER_ORDER = ("gemini", "openai", "anthropic", "deepseek")      # which configured vendor answers next when a model cannot answer now
+
+
+def failover_models(providers: Mapping[str, Any], primary: Any, pins: Mapping[str, str], env: Mapping[str, str]) -> list:
+    """The ordered models the router asks next, on any vendor, when a model has no credit, is over quota, times out or is down
+    (the hub's ``fallback_models``): one per CONFIGURED vendor (a key, or a keyless endpoint) other than the one serving ``primary``,
+    in ``FAILOVER_ORDER``. A model pinned in ``QAR_MODEL_<TIER>`` that the vendor serves is preferred, else the vendor's own
+    default (QAR's last-known tier map for gemini and anthropic, the provider's listed fallback for the OpenAI-compatible ones).
+    ``QAR_FALLBACK_MODELS`` (comma separated, ordered) replaces all of this. No other configured vendor means an empty list."""
+    explicit = [m.strip() for m in (env.get("QAR_FALLBACK_MODELS") or "").split(",") if m.strip()]
+    if explicit:
+        return explicit
+    configured = configured_providers(providers) - {name for name, p in providers.items() if p is primary or type(p) is type(primary)}
+    defaults = {"gemini": DEFAULT_FALLBACK_TOP["quality"], "anthropic": DEFAULT_FALLBACK_TOP["best"]}
+    found = []
+    for name in FAILOVER_ORDER:
+        if name not in configured:
+            continue
+        pinned = next((m for m in pins.values() if provider_name_for_model(m, [name], MODEL_PREFIXES) == name), None)
+        listed = getattr(providers[name], "fallback_models", ())
+        model = pinned or defaults.get(name) or (listed[0] if listed else None)
+        if model and model not in found:
+            found.append(model)
+    return found
 
 
 def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
@@ -42,7 +69,9 @@ def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
 
 
 @implementation("call-a-model", "multi_provider")
-def routed(primary: Any, providers: Optional[Dict[str, Any]] = None, usage_tracker: Any = None, registry: Any = None) -> MultiProvider:
-    """The hub's router with QAR's prefix table, the daily-limit message that names the variable to raise, and spend tagging by spec."""
+def routed(primary: Any, providers: Optional[Dict[str, Any]] = None, usage_tracker: Any = None, registry: Any = None,
+           fallback_models: Sequence[str] = ()) -> MultiProvider:
+    """The hub's router with QAR's prefix table, the daily-limit message that names the variable to raise, spend tagging by spec,
+    and the ordered ``fallback_models`` that keep a turn answered when one vendor cannot (see ``failover_models``)."""
     return MultiProvider(primary, providers, usage_tracker, registry, prefixes=MODEL_PREFIXES,
-                         limit_message=limit_message(usage_tracker), spec_of=active_spec)
+                         limit_message=limit_message(usage_tracker), spec_of=active_spec, fallback_models=fallback_models)
