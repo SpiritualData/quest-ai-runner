@@ -119,3 +119,14 @@ def test_workflow_dispatched_task_text_is_offered_the_goals_tool_with_send_email
             "quest whose text begins with the line 'Owner: Zee Godswill.'")
     shown = {s.name for s in registry.select(text)}
     assert {"list_quest_goals", "send_quest_email"} <= shown
+
+
+@pytest.mark.parametrize("message", [
+    "Good morning. What should I focus on today?",
+    "What should I start with this morning?",
+])
+def test_a_focus_question_is_shown_the_goals_tool(message):
+    """The quests in CONTEXT carry only their outcome, so an open-ended 'what should I focus on' needs the goals
+    read; the tool must be in the planner's narrowed block for it, not hidden behind a search."""
+    registry = build_tool_registry(CREDS)
+    assert "list_quest_goals" in [s.name for s in registry.select(message)]

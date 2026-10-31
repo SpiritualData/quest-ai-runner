@@ -653,7 +653,10 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
                      "one page at a time."),
         when_to_use=("You need the real goals of a quest: to remind someone of their open goals, "
                      "report what is due, find the goals a person owns, or look a goal up by its "
-                     "words. Read it BEFORE writing any message that lists goals."),
+                     "words. Also when the person asks what to focus on, do next or start with today or "
+                     "this week: the quests in CONTEXT name only their outcome, so call this once per "
+                     "quest that bears on it (soonest due first) before you advise. Read it BEFORE "
+                     "writing any message that lists goals."),
         when_not_to_use=("Whole-portfolio views across quests. A write to a goal (update_goal, "
                          "create_goal). Never write goal lines into a message without reading them here."),
         parameters={"type": "object", "properties": {
@@ -673,7 +676,8 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
             "offset": {"type": "integer", "description": "Skip this many matches (next page)."}}},
         mutates=False, workflow_step=False, origin="standard",
         keywords=("goals", "goal", "list", "read", "due", "open", "assigned", "owner", "tasks",
-                  "week", "reminder", "deadline", "assignee", "plan", "items"),
+                  "week", "reminder", "deadline", "assignee", "plan", "items",
+                  "focus", "today", "priority", "priorities", "morning", "briefing", "next", "agenda"),
         context_args={"quest_id": "quest_id"})
 
 
