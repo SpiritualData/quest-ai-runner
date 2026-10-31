@@ -312,6 +312,8 @@ def structure_reading(rule, choose_current=current):
     current and no rival beats it. QS1 itself is left out (its own metric would count itself)."""
     reg = load_registry(CONFIG)
     log = history()
+    per_case = leaderboard.per_case_rows(CONFIG)
+    policy_of = leaderboard.policies(CONFIG, reg, per_case)
     latest = {c: {i: h[-1] for i, h in impls.items()} for c, impls in log.items()}
     measured = [r for r in reg.solutions if r["solution_id"] != SELF]
     specs = [r for r in reg.specifications if r["solution_id"] != SELF]
@@ -320,7 +322,7 @@ def structure_reading(rule, choose_current=current):
         comp, sel = first_arm(CONFIG, r.get("metric_command", ""))
         rows = latest.get(comp, {})
         why = choose_current(comp, rows.get(sel))
-        beaten = [] if why else [x["impl"] for x in leaderboard.challengers(rows, sel, CONFIG.evaluation, log.get(comp))]
+        beaten = [] if why else [x["impl"] for x in leaderboard.challengers(rows, sel, CONFIG.evaluation, log.get(comp), per_case, policy_of.get(comp))]
         if not why and not beaten:
             good.append(r["solution_id"])
         else:

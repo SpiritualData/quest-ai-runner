@@ -206,6 +206,7 @@ terminal's metric lines are pinned in `tests/test_deep_output_ui.py` and `tests/
 
 Decision `teamdec_96793b0729b9`, approved by Payal as recommended (no per-option note was recorded): keep the no-model template
 (`explain-an-answer:trace_template`) as the preferred arm and do not add readability to `metric-explain-an-answer`. The metric
-ties the template and the model call inside its margin, so the metric stays as it is. Unconfirmed: for Payal to confirm that
+records the template at 0.809 and the model call at 0.802 with no case counts, so no test is possible and the difference is a best guess,
+not a shown gain; the metric stays as it is. Unconfirmed: for Payal to confirm that
 reading of her bare "approve". The template is not yet a registered implementation with code behind it, so `selected` in
 `esoi/solutions.csv` still names `model_explanation` and no runtime behaviour changed.

@@ -2,24 +2,28 @@
  {
   "id": "EBM-01",
   "kind": "challenger",
-  "area": "switch_on_a_win",
+  "area": "significant_paired_win_switches",
   "args": {
    "selected": "a",
    "rows": {
     "a": {
-     "passed": 6,
-     "cases": 10,
+     "passed": 30,
+     "cases": 40,
      "cases_sha": "s1",
      "model_calls": 0,
      "tokens": 0
     },
     "b": {
-     "passed": 9,
-     "cases": 10,
+     "passed": 35,
+     "cases": 40,
      "cases_sha": "s1",
      "model_calls": 0,
      "tokens": 0
     }
+   },
+   "per_case": {
+    "a": "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPFFFFFFFFFF",
+    "b": "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPFFFFF"
    }
   },
   "expect": {
@@ -32,7 +36,7 @@
  {
   "id": "EBM-02",
   "kind": "challenger",
-  "area": "keep_on_a_tie",
+  "area": "tie_keeps_incumbent",
   "args": {
    "selected": "a",
    "rows": {
@@ -62,7 +66,7 @@
  {
   "id": "EBM-03",
   "kind": "challenger",
-  "area": "keep_on_other_cases",
+  "area": "rival_on_other_cases_keeps",
   "args": {
    "selected": "a",
    "rows": {
@@ -92,7 +96,7 @@
  {
   "id": "EBM-04",
   "kind": "challenger",
-  "area": "switch_on_cheaper",
+  "area": "cost_difference_at_equal_quality_keeps",
   "args": {
    "selected": "a",
    "rows": {
@@ -110,19 +114,23 @@
      "model_calls": 0,
      "tokens": 100
     }
+   },
+   "per_case": {
+    "a": "PPPPPPPPPF",
+    "b": "PPPPPPPPPF"
    }
   },
   "expect": {
    "eq": {
-    "switch_to": "b",
-    "status": "switch"
+    "switch_to": null,
+    "status": "keep"
    }
   }
  },
  {
   "id": "EBM-05",
   "kind": "challenger",
-  "area": "keep_cheaper_but_worse",
+  "area": "worse_rival_keeps",
   "args": {
    "selected": "a",
    "rows": {
@@ -175,27 +183,27 @@
  {
   "id": "EBM-07",
   "kind": "challenger",
-  "area": "best_of_two_rivals",
+  "area": "best_of_two_rivals_when_both_significant",
   "args": {
    "selected": "a",
    "rows": {
     "a": {
      "passed": 5,
-     "cases": 10,
+     "cases": 20,
      "cases_sha": "s1",
      "model_calls": 0,
      "tokens": 0
     },
     "b": {
-     "passed": 8,
-     "cases": 10,
+     "passed": 14,
+     "cases": 20,
      "cases_sha": "s1",
      "model_calls": 0,
      "tokens": 0
     },
     "c": {
-     "passed": 10,
-     "cases": 10,
+     "passed": 19,
+     "cases": 20,
      "cases_sha": "s1",
      "model_calls": 0,
      "tokens": 0
@@ -211,6 +219,195 @@
  },
  {
   "id": "EBM-08",
+  "kind": "challenger",
+  "area": "non_significant_paired_gap_keeps",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 30,
+     "cases": 40,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 34,
+     "cases": 40,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   },
+   "per_case": {
+    "a": "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPFFFFFFFFFF",
+    "b": "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPFFFFFF"
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": null,
+    "status": "keep"
+   }
+  }
+ },
+ {
+  "id": "EBM-09",
+  "kind": "challenger",
+  "area": "aggregate_only_significant_gap_switches_by_fisher",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 5,
+     "cases": 20,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 15,
+     "cases": 20,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": "b",
+    "status": "switch"
+   }
+  }
+ },
+ {
+  "id": "EBM-10",
+  "kind": "challenger",
+  "area": "aggregate_only_small_gap_keeps_by_fisher",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 6,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": null,
+    "status": "keep"
+   }
+  }
+ },
+ {
+  "id": "EBM-11",
+  "kind": "challenger",
+  "area": "solution_requirement_blocks_a_default_switch",
+  "args": {
+   "selected": "a",
+   "rows": {
+    "a": {
+     "passed": 30,
+     "cases": 40,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 35,
+     "cases": 40,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   },
+   "per_case": {
+    "a": "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPFFFFFFFFFF",
+    "b": "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPFFFFF"
+   },
+   "policy": {
+    "alpha": 0.01
+   }
+  },
+  "expect": {
+   "eq": {
+    "switch_to": null,
+    "status": "keep"
+   }
+  }
+ },
+ {
+  "id": "EBM-12",
+  "kind": "first_selection",
+  "area": "first_selection_is_a_best_guess",
+  "args": {
+   "rows": {
+    "a": {
+     "passed": 8,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "selected": "b",
+    "basis": "best guess"
+   }
+  }
+ },
+ {
+  "id": "EBM-13",
+  "kind": "first_selection",
+  "area": "first_selection_tie_selects_nothing",
+  "args": {
+   "rows": {
+    "a": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    },
+    "b": {
+     "passed": 9,
+     "cases": 10,
+     "cases_sha": "s1",
+     "model_calls": 0,
+     "tokens": 0
+    }
+   }
+  },
+  "expect": {
+   "eq": {
+    "selected": null,
+    "basis": "best guess"
+   }
+  }
+ },
+ {
+  "id": "EBM-14",
   "kind": "drift",
   "area": "snapshot_drift",
   "args": {
@@ -232,7 +429,7 @@
   }
  },
  {
-  "id": "EBM-09",
+  "id": "EBM-15",
   "kind": "drift",
   "area": "snapshot_in_step",
   "args": {
@@ -250,7 +447,7 @@
   }
  },
  {
-  "id": "EBM-10",
+  "id": "EBM-16",
   "kind": "drift",
   "area": "snapshot_missing_solution",
   "args": {
@@ -271,7 +468,7 @@
   }
  },
  {
-  "id": "EBM-11",
+  "id": "EBM-17",
   "kind": "repo_drift",
   "area": "this_repository",
   "args": {},
