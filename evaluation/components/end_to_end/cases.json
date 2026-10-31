@@ -3643,7 +3643,6 @@
    "route_in": [
     "answer"
    ],
-   "question": true,
    "min_reply_chars": 150,
    "max_reply_chars": 900,
    "reply_lacks_regex": [

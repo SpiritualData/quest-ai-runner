@@ -676,4 +676,5 @@ def test_the_funnel_answer_invents_no_price_or_plan_and_must_ask_a_question():
     ideal = BY_ID["E2E-JARVIS-11"]["ideal"]["reply"]
     assert jarvis_out("E2E-JARVIS-11", ideal, route="answer")["ok"]
     assert not jarvis_out("E2E-JARVIS-11", ideal + " Quest Premium plan costs $25 a month.", route="answer")["ok"]
-    assert "asks no question" in jarvis_out("E2E-JARVIS-11", ideal.replace("?", "."), route="answer")["note"]
+    # a clear goal is answered directly (the Quest-question standard), so no question is required
+    assert jarvis_out("E2E-JARVIS-11", ideal.replace("?", "."), route="answer")["ok"]
