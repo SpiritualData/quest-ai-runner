@@ -181,7 +181,7 @@
   "id": "CTX-032",
   "area": "symptom",
   "task": "Qdrant collection stores embedded cards and answers nearest-neighbour search, which class?",
-  "target": "quest_ai_runner/adapters/qdrant_vector_store.py"
+  "target": "hubofhubs/recall/qdrant_store.py"
  },
  {
   "id": "CTX-033",
@@ -315,7 +315,7 @@
   "id": "CTX-053",
   "area": "hard",
   "task": "reorder or drop the cards that were found by both search arms in one consolidated pass",
-  "target": "quest_ai_runner/adapters/hybrid_context_assembler.py",
+  "target": "hubofhubs/recall/hybrid_assembler.py",
   "heldout": true
  },
  {
