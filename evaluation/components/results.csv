@@ -4099,3 +4099,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-31,end_to_end,qar_live,10,10,10/10,0/0,63,470069,26038,0.539,245.3,f4dfda2,505f0f2e,claude-code-subscription,,sample:10,0.7887
 2026-10-31,end_to_end,qar_live,30,25,25/30,0/0,220,1649738,84221,1.9983,823.3,f4dfda2,505f0f2e,claude-code-subscription,,sample:30,0.6647
 2026-10-31,end_to_end,qar_live,3,3,3/3,0/0,18,128453,7675,0.1091,69.7,30d9016,b03a249e,claude-code-subscription,,sample:3,0.8328
+2026-10-31,end_to_end,qar_live,1,1,1/1,0/0,8,67123,3051,0.0598,31.1,2753944-dirty,30575f37,claude-code-subscription,,only:E2E-GOAL-01,0.7722
