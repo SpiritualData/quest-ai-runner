@@ -4107,3 +4107,7 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-31,context_selection,vector_bge_small,63,35,24/38,11/25,0,0,0,0.0,5.0,508a6e2-dirty,0023f387,none,,,
 2026-10-31,context_selection,solutions_and_problems_with_links,63,46,29/38,17/25,0,0,0,0.0,94.9,75df821,0023f387,none,,,
 2026-10-31,chat_quality,dev_quest_chat,1,1,1/1,0/0,15,72658,2113,0.0083,42.6,e6d13a5,b4bb7acc,claude-haiku-5-5,,only:WEB-001,
+2026-10-31,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.8,75dcbd5,ae7e2b22,none,,,
+2026-10-31,deep_runner,subprocess_runner,11,11,11/11,0/0,0,0,0,0.0,6.1,75dcbd5,61d37336,none,,,
+2026-10-31,write_through_mcp,allowlist_writer,15,15,15/15,0/0,0,0,0,0.0,0.0,75dcbd5,5f3dda75,none,,,
+2026-10-31,expose_the_public_api,live_surface,101,101,101/101,0/0,0,0,0,0.0,4.6,75dcbd5,ee353081,none,,,
