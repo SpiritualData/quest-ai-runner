@@ -58,8 +58,9 @@ class FakeOpenAlex:
 class FakeWeb:
     """The ``WebResearch`` port over a fixture: every query gets the case's canned results, every page fetch fails."""
 
-    def __init__(self, results):
+    def __init__(self, results, pages=None):
         self.results, self.queries, self.trace = results or [], [], []
+        self.pages = dict(pages or {})   # url -> text of the pages whose fetch succeeds; any other fetch still fails
 
     @property
     def backend_name(self):
@@ -82,6 +83,8 @@ class FakeWeb:
         return Observation(kind="query", rel_path=f"web_search:{asked[0][:80]}", text="\n".join(lines), hits=hits)
 
     def fetch(self, url, *, focus=None, fresh=False, full=False, part=None):  # noqa: ARG002
+        if url in self.pages:
+            return Observation(kind="query", rel_path=url, text=self.pages[url])
         return Observation(kind="error", rel_path=url, error="page fetch is not available in this evaluation")
 
 
@@ -139,7 +142,8 @@ class World:
     tools and the web did, kept so a transcript can show the steps; nothing reads it for scoring. ``jarvis_tools`` offers the two
     ask-first chat tools (a calendar block and an email draft); each call is kept in ``asks``, never in ``writes``."""
 
-    def __init__(self, pinned=None, web=None, docs=None, docs_only=False, science=False, bulk=None, history=None, jarvis_tools=False):
+    def __init__(self, pinned=None, web=None, docs=None, docs_only=False, science=False, bulk=None, history=None, jarvis_tools=False, context_lines=None, pages=None):
+        self.context_lines = list(context_lines or [])
         self.quests = copy.deepcopy(SPEC["quests"])
         self.today = world_today().isoformat()
         self.pinned = pinned
@@ -152,7 +156,7 @@ class World:
                                    "goals": [], "notes": []}
         self.history = list(history or [])
         self.trace = []
-        self.web = FakeWeb(web)
+        self.web = FakeWeb(web, pages)
         self.web.trace = self.trace
         self.writes, self.reads, self.asks = [], [], []
         self.jarvis_tools = jarvis_tools
@@ -250,6 +254,7 @@ class World:
         else:
             lines.append("No quest is pinned to this conversation. The person's quests (ask or look one up before acting on it):")
             lines += [f"- {k}: {q['name']}. Outcome: {q['outcome']}" for k, q in self.quests.items()]
+        lines += self.context_lines
         for d in self.docs:
             lines += ["", f"Documentation excerpt ({d['title']}):", d["text"]]
         return "\n".join(lines)

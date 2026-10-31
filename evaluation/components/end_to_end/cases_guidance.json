@@ -1,0 +1,441 @@
+[
+ {
+  "id": "E2E-GUIDE-01",
+  "kind": "two_part_ask",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "Add a goal to book the tiler by Friday, and tell me what else is still open on this quest.",
+  "world": {
+   "pinned": "q_home"
+  },
+  "expect": {
+   "route_in": [
+    "act"
+   ],
+   "writes": [
+    {
+     "tool": "create_quest_goal",
+     "args_contain": {
+      "title": "tiler"
+     },
+     "quest_id": "q_home"
+    }
+   ],
+   "allowed_tools": [],
+   "reply_has": [
+    [
+     "plumber"
+    ]
+   ],
+   "min_reply_chars": 40,
+   "max_reply_chars": 700,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "\\?",
+    "(one (thing|task|step) at a time|break (it|this|that) (down|into|up)|split (it|this|that) (up|into)|separate (messages|requests)|step by step|in (two|separate) (steps|messages))"
+   ]
+  },
+  "quality_rubric": [
+   "Does the write part and the question part in one reply",
+   "Asks no question and does not ask to split the request",
+   "Names the plumber goal as still open"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): Zee's two-part ask failed because the chat asked her to break it into steps; both parts are clear, so both are done in one turn.",
+  "ideals": [
+   "ideal-continuous-mind",
+   "ideal-asks-only-what-is-theirs",
+   "ideal-verified-completion"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-02",
+  "kind": "two_part_ask",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "How many days until my Riverside 10K, and how much of my candle launch budget is left?",
+  "world": {
+   "pinned": null
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_days_to": "2026-11-22",
+   "reply_has": [
+    [
+     "1,245",
+     "1245"
+    ]
+   ],
+   "min_reply_chars": 40,
+   "max_reply_chars": 700,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "\\?",
+    "(one (thing|task|step) at a time|break (it|this|that) (down|into|up)|split (it|this|that) (up|into)|separate (messages|requests)|step by step|in (two|separate) (steps|messages))",
+    "which (quest|one)"
+   ]
+  },
+  "quality_rubric": [
+   "Answers both parts",
+   "Asks no question",
+   "Gives the figures plainly"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): Same failure at the read side: two clear questions about two named quests, no quest pinned. Each part names its own subject, so nothing is missing and nothing is asked.",
+  "ideals": [
+   "ideal-continuous-mind",
+   "ideal-asks-only-what-is-theirs"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-03",
+  "kind": "two_part_ask",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "Save a note on my bathroom quest that grout must cure for two days before painting, and add a goal to buy grout this weekend.",
+  "world": {
+   "pinned": "q_home"
+  },
+  "expect": {
+   "route_in": [
+    "act"
+   ],
+   "writes": [
+    {
+     "tool": "add_quest_note",
+     "args_contain": {
+      "text": "grout"
+     },
+     "quest_id": "q_home"
+    },
+    {
+     "tool": "create_quest_goal",
+     "args_contain": {
+      "title": "grout"
+     },
+     "quest_id": "q_home"
+    }
+   ],
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "\\?",
+    "(one (thing|task|step) at a time|break (it|this|that) (down|into|up)|split (it|this|that) (up|into)|separate (messages|requests)|step by step|in (two|separate) (steps|messages))"
+   ]
+  },
+  "quality_rubric": [
+   "Both changes made",
+   "No question"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): Two writes in one message, both clear: do both, ask nothing.",
+  "ideals": [
+   "ideal-continuous-mind",
+   "ideal-asks-only-what-is-theirs",
+   "ideal-exact-change"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-04",
+  "kind": "no_start",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "I don't know where to start on my bathroom quest.",
+  "world": {
+   "pinned": "q_home"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "plumber"
+    ]
+   ],
+   "min_reply_chars": 40,
+   "max_reply_chars": 600,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "\\?[^?]*\\?",
+    "(what would you like|how can i help|tell me more|what do you want|which (one )?(do you|would you)|where would you like)",
+    "here are (\\w+ )?(some )?(options|questions)",
+    "(?m)^\\s*(1\\.|\\*|-)\\s"
+   ]
+  },
+  "quality_rubric": [
+   "Gives one concrete first step taken from the quest",
+   "Does not ask a list of open questions",
+   "Plain words"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): The ops lead was asked questions that left her more confused, where the command center just says the step. The records hold the next step (book the plumber), so the reply gives that one step and at most one short question.",
+  "ideals": [
+   "ideal-asks-only-what-is-theirs",
+   "ideal-moves-me-forward"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-05",
+  "kind": "no_start",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "I have no idea what to do first for my candle shop launch.",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "photograph",
+     "scent"
+    ]
+   ],
+   "min_reply_chars": 40,
+   "max_reply_chars": 600,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "\\?[^?]*\\?",
+    "(what would you like|how can i help|tell me more|what do you want|which (one )?(do you|would you)|where would you like)",
+    "here are (\\w+ )?(some )?(options|questions)",
+    "(?m)^\\s*(1\\.|\\*|-)\\s"
+   ]
+  },
+  "quality_rubric": [
+   "Gives one concrete first step taken from the quest",
+   "Does not ask a list of open questions"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): Same, on a quest whose open goal is photographing the six scents, due soonest.",
+  "ideals": [
+   "ideal-asks-only-what-is-theirs",
+   "ideal-moves-me-forward"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-06",
+  "kind": "app_howto",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "How do I add a stretching habit every morning to my fitness quest?",
+  "world": {
+   "pinned": "q_fit",
+   "docs": [
+    "habit_howto",
+    "habit_intro"
+   ]
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "habit"
+    ],
+    [
+     "today"
+    ],
+    [
+     "schedule"
+    ]
+   ],
+   "min_reply_chars": 80,
+   "max_reply_chars": 900,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "/guide/",
+    "\\.md\\b"
+   ]
+  },
+  "quality_rubric": [
+   "Gives the steps from the documentation",
+   "Says where the habit will show up",
+   "Names no page path"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): The product owner: the AI should guide users through the whole app from quest-docs. A how-do-I question gets the documented steps, in the person's terms.",
+  "ideals": [
+   "ideal-self-explaining-app"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-07",
+  "kind": "app_howto",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "How do I get my Google Calendar into Quest so it plans around my meetings?",
+  "world": {
+   "pinned": null,
+   "docs": [
+    "calendar_howto",
+    "calendar_google"
+   ]
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "settings"
+    ],
+    [
+     "calendar sync",
+     "calendar"
+    ]
+   ],
+   "min_reply_chars": 80,
+   "max_reply_chars": 900,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "/guide/",
+    "\\.md\\b"
+   ]
+  },
+  "quality_rubric": [
+   "Gives the documented path in Settings",
+   "Invents no step"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): Same, for a settings path the person cannot guess.",
+  "ideals": [
+   "ideal-self-explaining-app"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-08",
+  "kind": "small_ask",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "Quick check: is my knee okay for easy running this week?",
+  "world": {
+   "pinned": "q_fit"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "easy"
+    ],
+    [
+     "physio",
+     "pain"
+    ]
+   ],
+   "min_reply_chars": 30,
+   "max_reply_chars": 450,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "(10k|sub-50|riverside)[^.!?]*[.!?][^.!?]*(10k|sub-50|riverside)",
+    "\\b(journey|big picture|stay focused|never give up|remember why)\\b"
+   ]
+  },
+  "quality_rubric": [
+   "Answers the knee question first and directly",
+   "At most one short line ties it to the race",
+   "Not preachy"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): Founder: keep the larger goal in sight while doing small things, without preaching. The small ask is answered directly; the larger goal may appear in at most one short line.",
+  "ideals": [
+   "ideal-moves-me-forward"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-09",
+  "kind": "show_file",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "Show me the launch summary file from the server and make it clickable.",
+  "world": {
+   "pinned": null,
+   "context_lines": [
+    "",
+    "Readable file sources (read-only): team server.",
+    "File: reports/launch-summary.md. Address (already checked, it opens in a browser): https://files.example.test/reports/launch-summary.md"
+   ],
+   "trusted_link_hosts": [
+    "files.example.test"
+   ],
+   "pages": {
+    "https://files.example.test/reports/launch-summary.md": "Launch summary. Soft launch on 3 Nov. Goal: 100 orders in 60 days. Budget cap 2,000 USD."
+   }
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "](https://files.example.test/reports/launch-summary.md)"
+    ]
+   ],
+   "min_reply_chars": 20,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "(can(no|')t|unable to|not able to) (access|open|link|share|provide)",
+    "https?://(?!files\\.example\\.test/reports/launch-summary\\.md)"
+   ]
+  },
+  "quality_rubric": [
+   "Gives a clickable markdown link to the listed address",
+   "Invents no other address"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): Zee asked the chat to present a server file as a clickable link and it could not. When the context lists the file's address, the reply gives it as a markdown link.",
+  "ideals": [
+   "ideal-known-reach"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-10",
+  "kind": "show_file",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "Show me the launch summary file from the server and make it clickable.",
+  "world": {
+   "pinned": null,
+   "context_lines": [
+    "",
+    "Readable file sources (read-only): team server.",
+    "File: reports/launch-summary.md. No public address is known for it. Its first lines: Soft launch on 3 Nov. Goal: 100 orders in 60 days. Budget cap 2,000 USD."
+   ]
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "reports/launch-summary.md"
+    ],
+    [
+     "soft launch",
+     "3 nov"
+    ]
+   ],
+   "min_reply_chars": 40,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "https?://",
+    "(can(no|')t|unable to|not able to) (access|open|read)"
+   ]
+  },
+  "quality_rubric": [
+   "Invents no link",
+   "Names the file and shows its content",
+   "Says plainly that no public link is known"
+  ],
+  "source": "Written from the product owner's feedback in the accountability meeting of 2026-10-27 (transcript spiritual_data_funding/human_context/meetings/transcripts/2026-10-27-accountability-meeting-1JByS08XMyrA7HJk5rVpRQaRJqG29wMyzUk9QfHMba8k.txt): The honest side of the same ask: with no address known, the reply must not invent a link; it names the file and shows what it says.",
+  "ideals": [
+   "ideal-known-reach",
+   "ideal-grounded-reply"
+  ]
+ }
+]

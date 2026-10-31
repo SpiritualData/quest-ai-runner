@@ -58,7 +58,7 @@ def new_world(case):
     spec = case.get("world") or {}
     return World(pinned=spec.get("pinned"), web=case.get("web"), docs=spec.get("docs"), docs_only=bool(spec.get("docs_only")),
                  science=bool(spec.get("science")), bulk=spec.get("bulk"), history=spec.get("history"),
-                 jarvis_tools=bool(spec.get("jarvis_tools")))
+                 jarvis_tools=bool(spec.get("jarvis_tools")), context_lines=spec.get("context_lines"), pages=spec.get("pages"))
 
 
 def run_with(case, world, orchestrator):
