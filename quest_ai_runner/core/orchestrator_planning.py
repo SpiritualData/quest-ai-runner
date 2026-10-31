@@ -55,10 +55,15 @@ from .reach_judge import (
 )
 from .prompt_layers import compose_layers
 from .orchestrator_constants import log
+from .tools_status import ToolStatus
 from .orchestrator_events import _REPLAN_CONTEXT_REF, _REPLAN_TRANSCRIPT_REF
 from .orchestrator_capabilities import provider_call_accepts_layers, provider_call_accepts_tier
 from .orchestrator_decisions import normalize_decision
 from .orchestrator_decide_tool import decide_tool_for, planner_prompt_for_profile
+
+
+#: The ``tool_status`` values of a tool call that did not take effect and may be retried with better arguments.
+_UNLANDED_TOOL_STATUSES = frozenset({ToolStatus.FAILED.value, ToolStatus.REFUSED.value})
 
 
 class PlanningMixin:
@@ -79,7 +84,10 @@ class PlanningMixin:
         # observations, not to re-read context it already saw. The ANSWER path is untouched.
         plan_transcript = transcript
         plan_context = context_view
-        if step > 0 and self.cfg.planner_abbreviate_repeat_context:
+        # A tool call that did not land is the one re-plan that must still see the context: the fix for it (a missing quest id,
+        # a wrong target) is a fact the context holds, and a planner told it is "unchanged since step 1" asks the person instead.
+        tool_call_failed = any(str(item.get("tool_status") or "") in _UNLANDED_TOOL_STATUSES for item in gathered or [])
+        if step > 0 and self.cfg.planner_abbreviate_repeat_context and not tool_call_failed:
             if transcript:
                 plan_transcript = _REPLAN_TRANSCRIPT_REF
             if context_view:
