@@ -1,3 +1,4 @@
 solution_id,reason_ids
 card-store,prob-context-drifts-from-its-source;ideal-current-knowledge;metric-persist-cards
 call-a-model,prob-vendor-outage-halts-work;ideal-right-sized-model;metric-call-a-model
+choose-a-model-tier,prob-big-model-for-easy-work;ideal-right-sized-model;metric-choose-a-model-tier

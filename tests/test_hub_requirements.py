@@ -153,8 +153,6 @@ def test_env_descriptions_do_not_repeat_hub_variables():
     assert not own & set(hub_requirements.hub_env_names())
 
 
-@pytest.mark.xfail(reason="the selected arm of choose-a-model-tier (qar_selection) is an evaluation arm no code declares, so the "
-                          "selection does not resolve; a decision for the owner (esoi select), see the how-to", strict=False)
 def test_selected_implementations_are_coherent_offline():
     result = subprocess.run([str(Path(sys.executable).parent / "esoi"), "requirements", "--package", "quest_ai_runner", "--coherence", "--offline"],
                             capture_output=True, text=True, cwd=ROOT, timeout=120)
