@@ -1,5 +1,5 @@
 """QAR's own rules: S15 (environment variables are documented), Q1 (solution tags come from the maintained list and
-link the problems they mitigate) Q2 (every metric's first cascading stage is model-free) and Q3 (no generic code left in QAR). Q1 and the tag lookup live in ``esoi_tags.py`` (the solution tag-solutions); they
+link the problems they mitigate) Q2 (every metric's first cascading stage is model-free), Q4 (its second stage is one real case) and Q3 (no generic code left in QAR). Q1 and the tag lookup live in ``esoi_tags.py`` (the solution tag-solutions); they
 are registered and re-exported here, so ``python scripts/esoi_rules.py <id> ...`` still runs the lookup.
 
 It depends on QAR's naming convention (``QAR_*``) and its generated configuration page, and sits beside
@@ -85,6 +85,38 @@ def model_free_first_stage(ctx: Context) -> list:
     return bad
 
 
+def single_case_problems(metrics: list, waived) -> tuple:
+    """Q4 core: the problems and the (scanned, with_one, waived) counts for a list of metric rows. ``waived`` is a
+    callable taking a metric id. A metric with no readable cascade is Q2's and S32's to report, not counted here."""
+    bad, scanned, with_one, skipped = [], 0, 0, 0
+    for metric in metrics:
+        metric_id = metric.get("metric_id", "")
+        stages, errors = cascade.parse(metric.get("cascading_conditionals", ""))
+        if errors or not stages:
+            continue
+        scanned += 1
+        second = stages[1] if len(stages) > 1 else None
+        if second is not None and second.name == "one" and second.sample == "sample:1" and second.real is True:
+            with_one += 1
+        elif waived(metric_id):
+            skipped += 1
+        else:
+            found = f"its second stage is {second.name}" if second else "it has no second stage"
+            bad.append(f"Q4 metrics.csv {metric_id}: {found}; right after the model-free stage put "
+                       "`one [sample=sample:1 | real=yes | gate=all-pass | when=a single real case runs end to end and is hand-read]` "
+                       "so one real input is tried end to end before 3, 10 and 30; or waive naming the metric, why no arm "
+                       "can run a real case, and what would make one possible")
+    return bad, (scanned, with_one, skipped)
+
+
+def single_case_second_stage(ctx: Context) -> list:
+    """Q4: after the model-free first stage, the next stage of a metric's cascade is ``one`` (sample=sample:1, real=yes), a single
+    real case run end to end and hand-read, before the larger samples."""
+    bad, (scanned, with_one, skipped) = single_case_problems(ctx.registry.metrics, lambda metric_id: ctx.waived("Q4", metric_id))
+    print(f"Q4: {scanned} metrics scanned, {with_one} with a one stage, {skipped} waived")
+    return bad
+
+
 # Q3: words that only Quest-specific code uses. A module with none of them, and no binding to hubofhubs, is generic.
 # Visible on purpose: add a word here when a Quest-specific module is flagged by mistake.
 QUEST_DOMAIN_WORDS = ("quest", "goal", "habit", "ask", "backend", "questclient", "collection", "decision request",
@@ -130,6 +162,10 @@ RULES = [RuleGroup({"S15": "Every environment variable read in the package is a 
          RuleGroup({"Q1": "Every solution tag is a row of esoi/tags.csv with a meaning and the problems it mitigates "
                           "(problem_ids that resolve), and every listed tag is used by some solution and not by all."},
                    solution_tags),
+         RuleGroup({"Q4": "After its model-free first stage, every metric's cascading_conditionals has a second stage named `one` "
+                          "(sample=sample:1, real=yes): a single real case run end to end and hand-read before 3, 10 and 30; or a "
+                          "waiver in esoi/waivers.csv names the metric, why no arm can run a real case and what would make one possible."},
+                   single_case_second_stage),
          RuleGroup({"Q2": "Every metric's cascading_conditionals starts with a model-free stage (real=no) backed by an arm that "
                           "calls no model (the no-model floor, a scripted ideal, a structure check), or a waiver in "
                           "esoi/waivers.csv names the metric and the build it needs."}, model_free_first_stage),
