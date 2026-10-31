@@ -68,6 +68,17 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-long-view-scope-not-hierarchical`: A representative's high-level view legitimately spans its assigned quests and the intents above them, but the library's fence compares flat tag sets: an item is visible to a turn only when their tags intersect, or everywhere when it has none. Nothing can say visible to this representative's assigned quests and their ancestor intents, never to another representative's quests, a sibling intent or another person; and a representative's learned notes and context preferences carry no scope at all, so what it learned on one quest reaches every other.
 - `prob-wrong-or-inconsistent-rep`: Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative. A quest can have several representatives, each with its own higher mind, so a wrong choice also grounds the request in the wrong view.
 - `prob-long-term-goal-goes-quiet`: The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply, nags, hijacks a simple question or lands on a person who is in a hurry or upset.
+- `prob-quest-answer-not-tied-to-my-goal`: unconfirmed: for Payal to confirm.
+- `prob-quest-feature-why-unexplained`: unconfirmed: for Payal to confirm.
+- `prob-assistant-not-jarvis-from-the-users-seat`: unconfirmed: for Payal to confirm.
+- `prob-goal-condition-restated-not-evidence`: unconfirmed: for Payal to confirm.
+- `prob-work-not-planned-backwards-from-done`: unconfirmed: for Payal to confirm.
+- `prob-partial-coverage-reported-as-complete`: unconfirmed: for Payal to confirm.
+- `prob-long-run-silent-until-the-end`: unconfirmed: for Payal to confirm.
+- `prob-two-access-points-to-quest-diverge`: unconfirmed: for Payal to confirm.
+- `prob-evaluation-not-staged-on-real-inputs`: unconfirmed: for Payal to confirm.
+- `prob-science-search-duplicates-research-chat`: unconfirmed: for Payal to confirm.
+- `prob-harness-dear-and-slow-on-the-subscription`: unconfirmed: for Payal to confirm.
 
 ## Ideals
 
@@ -123,6 +134,31 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-hierarchy-contained-scope`, Hierarchy-Contained Scope: What a representative learns reaches its own assigned quests and the intents above them, and never another representative's quests, a sibling intent or another person.
 - `ideal-right-rep`, Right Representative: Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
 - `ideal-moves-me-forward`, Moves Me Forward Without Nagging: Unconfirmed, from the call: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
+- `ideal-quest-answer-fits-my-goal`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-quest-feature-why-explained`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-from-the-users-seat`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j01-always-there-and-fast`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j02-knows-my-context`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j03-nudges-at-the-right-moment`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j04-does-things-and-asks-first`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j05-multi-step-with-conditions`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j06-background-work-with-notice`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j07-honest-about-limits-and-actions`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j08-good-questions-when-vague`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j09-same-assistant-across-sessions`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j10-stable-adjustable-personality`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j11-treats-my-team-appropriately`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j12-gets-better-over-time`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j13-cheap-and-reliable-all-day`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-jarvis-j14-accurate-brief-personal-quest-answers`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-done-standard-evidenced`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-plan-from-the-done-standard`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-coverage-met-or-gap-stated`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-incremental-output-while-working`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-one-implementation-two-access-points`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-staged-evaluation-on-real-inputs`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-science-through-one-search`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-cheap-fast-harness-with-ideal-context`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
 
 ## Solutions
 
@@ -135,12 +171,12 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `gather-evidence` | Multi-source evidence retriever | composite | Retrieval recall of the right document over handbook questions |
 | `search-the-web` | Bounded web research | web_research | Right-passage rate and search spend over public factual questions |
 | `call-a-model` | Tiered model provider layer | multi_provider | Provider routing, fallback, retry and cost correctness |
-| `run-deep-work` | Bounded autonomous work runner | subprocess | Outcome reporting correctness across deep runners |
+| `run-deep-work` | Bounded autonomous work runner | subprocess | Outcome reporting correctness across deep runners;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm. |
 | `detect-a-stalled-run` | Run liveness reviewer | evaluation/components/deep_review/impls/live_reviewer.py | Stop-or-continue verdict accuracy with false stops counted apart |
 | `write-files` | Bounded reversible file writer | files | Write boundary and reversibility over the scratch-tree cases |
 | `write-through-mcp` | Allowlisted operation writer | mcp | Allowlist enforcement and exactly-once execution |
 | `escalate-to-a-human` | Human decision escalation channel | quest_decision | Escalation delivery and detail completeness |
-| `show-progress` | Mode-aware progress surfacing | stream | Surfaced-event policy by mode |
+| `show-progress` | Mode-aware progress surfacing | stream | Surfaced-event policy by mode;unconfirmed: for Payal to confirm. |
 | `remember-conversations` | Cross-conversation recall store | session_file | Past-conversation recall and isolation over synthetic cases |
 | `select-context` | Context card selector | hybrid | Context selection ranking accuracy and card-quality outcome |
 | `persist-cards` | Context card persistence backend | quest_api | Card repository conformance across backends |
@@ -174,7 +210,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `explain-qar` | Documentation coverage and voice check | evaluation/components/explain_qar/impls/shipped_docs.py | Documentation coverage and voice conformance |
 | `persist-predictions` | Scoped prediction store | file | Prediction store contract pass rate |
 | `gate-an-autopilot-pass` | Autopilot run-or-skip gate | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py | Autopilot gate decision correctness |
-| `evolve-by-metric` | Evolve by metric | structure-library | Parts selected by measurement |
+| `evolve-by-metric` | Evolve by metric | structure-library | Parts selected by measurement;unconfirmed: for Payal to confirm. |
 | `ground-in-intent` | Intent frame for quest-scoped prompts | frame-line | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit;Runs that leave a durable, attributed record of what they changed |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation | message-route-family | Accuracy of core ML tasks over labelled cases |
@@ -200,9 +236,10 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `label-context-cards` | Card categories and metadata | fast_model_labels | Retrieval hits and category precision per unit of cost |
 | `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
 | `justify-model-calls` | Justified model calls | spec_registry | Justified share of model spend |
-| `answer-end-to-end` | Whole-path answer check | qar_live | Whole-path turns right on a small mixed set |
+| `answer-end-to-end` | Whole-path answer check | qar_live | Whole-path turns right on a small mixed set;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm. |
 | `guide-toward-the-long-term-goal` | Guidance toward the long-term goal | guided_v2 | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
 | `use-open-source-hubs` | Open-source hubs before bespoke integrations | registry_scan | Hub of hubs: coverage, integration by configuration, research freshness, code structure |
+| `access-quest-operations` | unconfirmed: for Payal to confirm. access-quest-operations |  | unconfirmed: for Payal to confirm. |
 
 ## Implementations
 
@@ -556,3 +593,12 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-guide-toward-the-long-term-goal`, Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere: `esoi run proactive_guidance --impl guided_v2`
 - `metric-hub-of-hubs`, Hub of hubs: coverage, integration by configuration, research freshness, code structure: `esoi run hub_of_hubs --impl registry_scan`
 - `QME9`, Hub of hubs: `esoi run hub_of_hubs --impl registry_scan`
+- `metric-quest-answer-tied-to-goal-and-circumstance`, unconfirmed: for Payal to confirm.: `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-ness`, unconfirmed: for Payal to confirm.: `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-floor-consent`, unconfirmed: for Payal to confirm.: `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-floor-honesty`, unconfirmed: for Payal to confirm.: `esoi run end_to_end --impl qar_live`
+- `metric-goal-met-by-evidence-and-coverage`, unconfirmed: for Payal to confirm.: `esoi run deep_run --impl goal_contract`
+- `metric-incremental-output-and-still-working`, unconfirmed: for Payal to confirm.: `esoi run show_progress --impl progress_sinks`
+- `metric-quest-operations-parity`, unconfirmed: for Payal to confirm.: `none`
+- `metric-metric-earns-its-run`, unconfirmed: for Payal to confirm.: `esoi run evolve_by_metric --impl structure_library`
+- `metric-harness-context-subagents-recursion-ranked`, unconfirmed: for Payal to confirm.: `esoi run deep_runner --impl subprocess_runner`
