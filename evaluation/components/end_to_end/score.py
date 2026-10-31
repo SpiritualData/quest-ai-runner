@@ -19,6 +19,8 @@ A case's ``expect`` may state:
   reply_days_to      an ISO date: the reply states the right days (or weeks) from the world's today (``clock.py``) to it
   reply_has_n        {"n": k, "groups": [group, ...]}: at least k of the groups are matched (a reply that ties k features to the ask)
   reply_lacks_regex  patterns the reply must not match
+  reply_lacks_regex_unquoted  patterns the reply must not match outside double quotes: a figure inside a quoted sample request
+                     that the documentation itself shows ("research desks under $400") is the person's example, not a price Quest charges
   reply_dois         {"allowed": [doi, ...], "min": k}: every DOI the reply names is one of the allowed (the works a tool returned),
                      and at least k of them appear; a DOI the tools never returned is an invented citation
   reads_has          read-only tools that must have been called (the turn searched instead of answering from memory)
@@ -44,6 +46,9 @@ DENIES_A_LANDED_WRITE = re.compile(
     r"|\bnot (?:yet )?been (?:made|added|created|saved)\b|\b(?:add|do) (?:it|this|that) yourself\b|\bbefore (?:adding|you add) (?:it )?again\b", re.I)
 
 
+QUOTED_SPAN = re.compile(r'"[^"\n]*"|\u201c[^\u201d\n]*\u201d')
+
+
 def reply_problems(reply, expect):
     problems = []
     low = reply.lower()
@@ -66,6 +71,10 @@ def reply_problems(reply, expect):
     for pattern in expect.get("reply_lacks_regex", []):
         if re.search(pattern, reply, re.I):
             problems.append(f"reply matches {pattern!r}")
+    unquoted = QUOTED_SPAN.sub(" ", reply)
+    for pattern in expect.get("reply_lacks_regex_unquoted", []):
+        if re.search(pattern, unquoted, re.I):
+            problems.append(f"reply matches {pattern!r} outside a quoted example")
     if expect.get("reply_dois"):
         problems += doi_problems(reply, expect["reply_dois"])
     return problems

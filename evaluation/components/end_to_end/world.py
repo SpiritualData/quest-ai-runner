@@ -12,6 +12,7 @@ from pathlib import Path
 import common
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.tools import ToolResult
+from quest_ai_runner.core.tools_quest_ops import NO_QUEST
 from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT
 from end_to_end.clock import world_today
 from end_to_end.docs_mode_rules import DOCS_MODE_RULES
@@ -214,6 +215,8 @@ class World:
 
     def read(self, name, args, qid):
         quest = self.quests.get(qid or "")
+        if name in ("list_quest_notes", "list_quest_goals") and not quest:
+            return NO_QUEST.text  # the production handler's answer when no quest is open and none was named
         if name == "list_quest_notes" and quest:
             return "\n".join(f"- {n}" for n in quest["notes"]) or "no notes"
         if name == "list_quest_goals" and quest:

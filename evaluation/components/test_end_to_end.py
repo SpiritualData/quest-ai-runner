@@ -678,3 +678,35 @@ def test_the_funnel_answer_invents_no_price_or_plan_and_must_ask_a_question():
     assert not jarvis_out("E2E-JARVIS-11", ideal + " Quest Premium plan costs $25 a month.", route="answer")["ok"]
     # a clear goal is answered directly (the Quest-question standard), so no question is required
     assert jarvis_out("E2E-JARVIS-11", ideal.replace("?", "."), route="answer")["ok"]
+
+
+def test_a_quoted_sample_request_with_a_dollar_figure_is_not_an_invented_price_but_a_real_price_still_fails():
+    quoted = 'Example: "Overnight, research three standing desks under $400 and report back" becomes a Web search task.'
+    for case in ("E2E-QUEST-18", "E2E-QUEST-20"):
+        assert "reply_lacks_regex_unquoted" in BY_ID[case]["expect"]
+        assert not any("outside a quoted example" in p for p in score.reply_problems(quoted, BY_ID[case]["expect"]))
+        for invented in ("A paid plan costs $25 a month.", 'It is "free forever" but Quest Pro is $400.', "Quest AI is $9 per month."):
+            assert any("outside a quoted example" in p for p in score.reply_problems(invented, BY_ID[case]["expect"])), invented
+
+
+def test_the_why_of_creating_a_quest_accepts_where_you_start_and_still_needs_the_why():
+    good = ("You can skip most of them. If you just want to write your goal down, choose Continue without AI to make a quick quest. "
+            "The longer version asks a lot on purpose: a big, long-term goal is worth finding good strategies for, and the right ones "
+            "depend on where you start, what you've tried, and your time, budget and limits. " * 1)
+    assert not [p for p in score.reply_problems(good, BY_ID["E2E-QUEST-03"]["expect"]) if "lacks" in p or "covers" in p]
+    thin = "Tap Continue without AI to make a quick quest and write your goal down. " * 3
+    assert any("lacks" in p or "covers" in p for p in score.reply_problems(thin, BY_ID["E2E-QUEST-03"]["expect"]))
+
+
+def test_the_daily_reflection_question_accepts_a_reply_that_describes_the_daily_look_back_but_not_one_that_skips_it():
+    expect = BY_ID["E2E-QUEST-04"]["expect"]
+    ok = "You look back at the last day, then write the next day's plan. The weekly and monthly review show your stats."
+    assert not [p for p in score.reply_problems(ok, expect) if "lacks any of ['reflection'" in p]
+    assert any("lacks any of" in p for p in score.reply_problems("The weekly and monthly review show your stats and completed work.", expect))
+
+
+def test_a_goals_or_notes_read_with_no_quest_open_gets_the_production_no_quest_answer_not_an_empty_one():
+    w = world.World(pinned=None)
+    for name in ("list_quest_goals", "list_quest_notes"):
+        assert "pass quest_id" in w.read(name, {}, None)
+    assert "Book the plumber" in world.World(pinned=None).read("list_quest_goals", {}, "q_home")

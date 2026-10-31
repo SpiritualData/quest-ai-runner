@@ -670,10 +670,12 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "\\b(premium|pro|plus|starter|basic|business|enterprise|family|student|lifetime)\\s+(plan|tier|subscription)\\b",
     "\\bquest\\s+(pro|plus|premium|max|ultra|lite|basic|starter)\\b",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -728,11 +730,13 @@
    ],
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "\\b(premium|pro|plus|starter|basic|business|enterprise|family|student|lifetime)\\s+(plan|tier|subscription)\\b",
     "\\bquest\\s+(pro|plus|premium|max|ultra|lite|basic|starter)\\b",
     "[\\u2014\\u2013]",
     "\\b(since|because|as) you (work|are|have|live|struggle|said|mentioned)\\b"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -786,11 +790,15 @@
      "where you are",
      "starting point",
      "already tried",
-     "what you have tried"
+     "what you have tried",
+     "where you start",
+     "what you've tried",
+     "what you’ve tried",
+     "what you have already tried"
     ]
    ],
    "reply_has_n": {
-    "n": 3,
+    "n": 1,
     "groups": [
      [
       "plan"
@@ -815,8 +823,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -862,7 +872,10 @@
    "max_reply_chars": 1400,
    "reply_has": [
     [
-     "reflection"
+     "reflection",
+     "look back at the last day",
+     "looks back at the last day",
+     "look back at yesterday"
     ],
     [
      "review"
@@ -904,8 +917,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -975,10 +990,12 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "\\b(premium|pro|plus|starter|basic|business|enterprise|family|student|lifetime)\\s+(plan|tier|subscription)\\b",
     "\\bquest\\s+(pro|plus|premium|max|ultra|lite|basic|starter)\\b",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -1035,9 +1052,11 @@
    ],
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\b(rating|slider|photo|location|gps)\\s+(habit|type)"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -1113,8 +1132,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -1198,8 +1219,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -1605,8 +1628,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -1700,11 +1725,13 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\bsms\\b",
     "(?<!n't )(?<!not )(?<!cannot )(?<!no )(?<!to )\\b(set|schedule|enable|turn on) (up )?(a |your )?(scheduled )?quiet hours\\b",
     "(?<!n't )(?<!not )(?<!cannot )(?<!no )(?<!to )\\b(set|change|choose|adjust|limit) (how often|the frequency|notification frequency)"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -1802,8 +1829,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -1867,7 +1896,6 @@
    ],
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "(also|and|plus|including)\\s+(french|german|portuguese|italian|chinese|japanese|hindi|arabic)",
     "in the language you (write|type|message|use)"
@@ -1895,7 +1923,10 @@
       "all your devices"
      ]
     ]
-   }
+   },
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
+   ]
   },
   "quality_rubric": [
    "Gives concrete steps in the app's own words (Settings > Language, pick Español)",
@@ -1955,7 +1986,6 @@
    ],
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\b(export|download)\\s+(all of\\s+)?your\\s+(entire|whole|full)\\s+(account|data)\\b",
     "(?<!n't )(?<!not )(?<!no )(?<!cannot )(?<!to )\\b(export|exports|send|sync|save)\\s+(it |them |your [a-z ]{0,20})?(directly )?(to|into) google sheets"
@@ -1991,7 +2021,10 @@
       "30 days"
      ]
     ]
-   }
+   },
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
+   ]
   },
   "quality_rubric": [
    "Gives concrete steps in the app's own words (Settings, Account, Delete Account)",
@@ -2061,8 +2094,10 @@
     "\\b(does not|doesn't|do not|don't|cannot|can't|no)\\s+(currently\\s+)?(sync|integrate|support|connect)",
     "\\b(connect|link|pair)\\s+(your\\s+)?(apple watch|fitbit)",
     "\\b(go to|open|tap)\\s+settings\\b[^.]*\\b(apple|fitbit|watch|device)",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2131,8 +2166,10 @@
     "^\\s*(yes|yep|absolutely|of course)\\b",
     "\\b(does not|doesn't|do not|don't|cannot|can't|no)\\s+(currently\\s+)?(sync|integrate|support|connect)",
     "(?<!whether\\s)(?<!if\\s)\\b(sms|text messages?)\\s+(reminders?\\s+)?(are|is)\\s+(available|supported|on)\\b",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2213,12 +2250,14 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "\\b(premium|pro|plus|starter|basic|business|enterprise|family|student|lifetime)\\s+(plan|tier|subscription)\\b",
     "\\bquest\\s+(pro|plus|premium|max|ultra|lite|basic|starter)\\b",
     "(?<!n't )(?<!not )(?<!cannot )(?<!to )\\b(i|quest ai|it) (can|will) (set up|turn|queue|run|make|create|build)[^.]{0,50}(staged|ordered|multi-step) plan",
     "\\b(yes|sure)[,.!]? (i|quest ai) (can|will)",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2299,8 +2338,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2382,8 +2423,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2447,11 +2490,13 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\bscience (task|search) type\\b",
     "docs lookup (answers|is|means|looks up)[^.;]{0,60}(how quest works|quest's (own )?documentation|product documentation)",
     "\\bscience (is|counts as|are) (a|an) (ai )?(task )?(type|kind)\\b"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2547,12 +2592,14 @@
    ],
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\b(chain|link)\\s+(your\\s+)?tasks?\\b",
     "\\bdepends? on\\b[^.]*\\btask",
     "\\bwaits? (for|until) (the )?(first|previous) task",
     "(will|can) (automatically )?(start|create|launch) (a|another|the next) (new )?task"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2633,8 +2680,10 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2728,9 +2777,11 @@
    },
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\bwithout (asking|your approval|asking you)\\b"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2788,9 +2839,11 @@
    ],
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
     "\\b(share link|public link|qr code|invite code)\\b"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2864,8 +2917,10 @@
     "can't search",
     "cannot search",
     "\\bpmid\\b",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -2956,11 +3011,13 @@
    "reply_lacks_regex": [
     "\\b[A-Z][a-z]+ (et al\\.?|and [A-Z][a-z]+)\\W{0,3}\\(?(19|20)\\d\\d",
     "\\bdoi\\s*:|10\\.\\d{4,}/|\\bpmid\\b",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
    ],
    "reads_lack": [
     "search_scientific_literature"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
@@ -3647,9 +3704,11 @@
    "max_reply_chars": 900,
    "reply_lacks_regex": [
     "free to start",
-    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "\\b(premium|pro|plus|starter|basic|business|enterprise|family|student|lifetime)\\s+(plan|tier|subscription)\\b",
     "[\\u2014\\u2013]"
+   ],
+   "reply_lacks_regex_unquoted": [
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+"
    ]
   },
   "quality_rubric": [
