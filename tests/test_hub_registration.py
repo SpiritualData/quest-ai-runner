@@ -61,7 +61,7 @@ def test_the_hub_default_is_untouched_by_qar():
 
 def test_the_assembly_reports_what_the_hub_could_not_build_alone():
     system = qar_hub.assemble(DictRepository())
-    assert qar_hub.CARD_STORE not in system.pending and "pass provided=" in system.pending["model-call"]
+    assert qar_hub.CARD_STORE not in system.pending and "needs call-a-model" in system.pending["model-call"]
 
 
 def test_the_card_store_override_comes_from_qars_records_and_cites_its_own_ids():

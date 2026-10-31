@@ -2,7 +2,7 @@
 and a cycle or an unmet need fails with a named error. Test-only arms, typed with the hub's Protocols; offline, no model call."""
 import pytest
 from esoi.assemble import AssemblyConfig, AssemblyError
-from hubofhubs.seats import CardStore, ContextAssembling, ModelCall
+from hubofhubs.seats import CardStore, ContextAssembling, SearchBackend
 
 import quest_ai_runner.hub as qar_hub
 
@@ -26,7 +26,7 @@ class DictRepository:
 DEPENDENT = "context-assembler"
 ARM = "test-needs-a-card-store"
 CYCLE_STORE = "test-store-needs-an-assembler"
-UNMET_STORE = "test-store-needs-a-model"
+UNMET_STORE = "test-store-needs-a-search"
 
 
 class NeedsAStore:
@@ -39,16 +39,16 @@ class StoreNeedsAnAssembler:
         self.assembler = assembler
 
 
-class StoreNeedsAModel:
-    def __init__(self, model: ModelCall):
-        self.model = model
+class StoreNeedsASearch:
+    def __init__(self, search: SearchBackend):
+        self.search = search
 
 
 @pytest.fixture(autouse=True)
 def arms():
     child = qar_hub.child()
     for solution, name, target in ((DEPENDENT, ARM, NeedsAStore), (qar_hub.CARD_STORE, CYCLE_STORE, StoreNeedsAnAssembler),
-                                   (qar_hub.CARD_STORE, UNMET_STORE, StoreNeedsAModel)):
+                                   (qar_hub.CARD_STORE, UNMET_STORE, StoreNeedsASearch)):
         child.register(solution, name, target, replace=True)
 
 
@@ -76,14 +76,14 @@ def test_a_cycle_between_seats_is_named():
 
 
 def test_an_unmet_need_names_the_seat_and_the_chain():
-    with pytest.raises(AssemblyError, match=r"card-store \(test-store-needs-a-model\) needs model-call: no arm, not provided"):
+    with pytest.raises(AssemblyError, match=r"card-store \(test-store-needs-a-search\) needs search-backend: no arm, not provided"):
         build({DEPENDENT: ARM, qar_hub.CARD_STORE: UNMET_STORE})
 
 
 def test_providing_the_missing_seat_resolves_the_need():
-    class Model:
-        def complete(self, prompt, tier=""):
-            return ""
-    model = Model()
-    system = qar_hub.child().assemble(AssemblyConfig(solutions=(qar_hub.CARD_STORE,), selections={qar_hub.CARD_STORE: UNMET_STORE}), {"model-call": model})
-    assert system[qar_hub.CARD_STORE].model is model
+    class Search:
+        def search(self, query, max_results=5):
+            return []
+    search = Search()
+    system = qar_hub.child().assemble(AssemblyConfig(solutions=(qar_hub.CARD_STORE,), selections={qar_hub.CARD_STORE: UNMET_STORE}), {"search-backend": search})
+    assert system[qar_hub.CARD_STORE].search is search
