@@ -451,10 +451,40 @@ def strip_schema_descriptions(schema: Any) -> Any:
     return schema
 
 
+#: The values of ``PlanDecision.work_shape``.
+WORK_SHAPES = ("lookup", "action", "analysis", "conversation")
+WORK_SHAPE_ANALYSIS = "analysis"
+
+
+def normalize_work_shape(raw: Any) -> Optional[str]:
+    """The planner's ``work_shape`` as one of ``WORK_SHAPES``, or None for anything else. Never raises."""
+    if isinstance(raw, str) and raw.strip().lower() in WORK_SHAPES:
+        return raw.strip().lower()
+    return None
+
+
+# The two opt-in fields of the done-evidence feature (OrchestratorConfig.done_evidence_enabled). They ride the
+# planning call the orchestrator already makes, so classifying the work adds ZERO model calls, and a consumer that
+# never opted in exposes no such vocabulary. Their descriptions are the only place the planner learns what they
+# mean, so they survive the compact schema.
+_DONE_EVIDENCE_TOOL_FIELDS: Dict[str, Any] = {
+    "work_shape": {
+        "type": ["string", "null"], "enum": ["lookup", "action", "analysis", "conversation", None],
+        "description": "analysis = answered only by examining a whole set of records, or needing a method.",
+    },
+    "done_evidence": {
+        "type": "array", "items": {"type": "string"},
+        "description": "analysis only: up to 4 checkable done requirements (covers all N records, method "
+                       "fits, limits stated).",
+    },
+}
+
+
 def decide_tool_for(mode_signals: bool, deferred_queued: bool,
                     card_thread: bool = False, tools: bool = False,
                     compact: bool = False, web: bool = False,
-                    staged_plans: bool = False) -> Dict[str, Any]:
+                    staged_plans: bool = False,
+                    done_evidence: bool = False) -> Dict[str, Any]:
     """Return the decide-tool schema variant for this run's configuration.
 
     ``mode_signals`` adds the opt-in ``mode_signal`` field; ``card_thread`` adds the opt-in
@@ -468,9 +498,18 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
     required list, which is the whole contract a response has to satisfy.
     """
     base = DECIDE_TOOL_WITH_MODE_SIGNAL if mode_signals else DECIDE_TOOL
-    if not deferred_queued and not card_thread and not tools and not web and not staged_plans:
+    if not deferred_queued and not card_thread and not tools and not web and not staged_plans \
+            and not done_evidence:
         return compact_decide_schema(base) if compact else base
     tool = copy.deepcopy(base)
+    if done_evidence:
+        props = tool["input_schema"]["properties"]
+        props.update(copy.deepcopy(_DONE_EVIDENCE_TOOL_FIELDS))
+        if not compact:
+            # Offset for the two new fields: these two descriptions repeat what the full planner prompt body already
+            # states (DEEP TARGET and DEEP DIFFICULTY), exactly as the compact schema already assumes.
+            for name in ("deep_target", "deep_difficulty"):
+                props[name].pop("description", None)
     if staged_plans:
         tool["input_schema"]["properties"]["deep_subtasks"] = copy.deepcopy(STAGED_DEEP_SUBTASKS_FIELD)
     if tools:
@@ -497,6 +536,9 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
     if not compact:
         return tool
     compacted = compact_decide_schema(tool)
+    if done_evidence:
+        for name, spec in _DONE_EVIDENCE_TOOL_FIELDS.items():
+            compacted["input_schema"]["properties"][name]["description"] = spec["description"]
     if staged_plans:
         # The staged field is the one place the planner learns that an entry may be a sequence and what
         # run_when means, so its description survives the compact schema (and only when the feature is on).

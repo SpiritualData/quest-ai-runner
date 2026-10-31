@@ -17,7 +17,9 @@ from .deep_model_selection import normalize_difficulty
 from .orchestrator_types import OrchestratorConfig
 from .orchestrator_staged_plan import normalize_staged_subtasks
 from .orchestrator_constants import log
-from .orchestrator_decide_tool import USER_INTENT_ACT, normalize_user_intent
+from hubofhubs.critique.done_evidence import clean_requirements
+from .orchestrator_decide_tool import (
+    USER_INTENT_ACT, WORK_SHAPE_ANALYSIS, normalize_user_intent, normalize_work_shape)
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +246,12 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         if deferred_deep is not None:
             deferred_deep["brief"] = f"{deferred_deep.get('brief') or user_message}\n\n{block}".strip()
 
+    # Work shape and done evidence: read only when the consumer opted in (the fields are not in the schema
+    # otherwise). Evidence is kept for an analysis alone; anything unknown normalizes to "not given".
+    work_shape = normalize_work_shape(raw.get("work_shape")) if cfg.done_evidence_enabled else None
+    done_evidence = (clean_requirements(raw.get("done_evidence"))
+                     if work_shape == WORK_SHAPE_ANALYSIS else [])
+
     return PlanDecision(
         action=action,
         reads=clean_reads,
@@ -274,6 +282,8 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         user_intent=normalize_user_intent(raw.get("user_intent")),
         pending_read=pending_read,
         facts_read=facts_read,
+        work_shape=work_shape,
+        done_evidence=done_evidence,
     )
 
 

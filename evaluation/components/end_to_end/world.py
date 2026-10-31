@@ -83,17 +83,71 @@ class FakeWeb:
         return Observation(kind="error", rel_path=url, error="page fetch is not available in this evaluation")
 
 
+class Bulk:
+    """A generated collection served the way a capped data helper serves it: ``find`` returns at most ``page_cap`` rows from
+    ``skip`` and says nothing about the rest, ``count`` is the uncapped total. Deterministic from ``synthetic_seed``; keeps a log of
+    every call so a case can ask what was read. ``best_month_only_in_entries_after`` plants the highest-growth entries beyond
+    that index, so a capped read gives a confident wrong month."""
+
+    def __init__(self, spec):
+        import random
+        self.spec = dict(spec)
+        self.page_cap = int(spec.get("page_cap", 200))
+        rng = random.Random(spec.get("synthetic_seed", 0))
+        boost_after = spec.get("best_month_only_in_entries_after")
+        self.rows = []
+        for i in range(int(spec["records"])):
+            day = 1 + i
+            year, ordinal = 2024 + (day - 1) // 360, (day - 1) % 360
+            growth = round(rng.uniform(1.0, 3.0) + (5.0 if boost_after is not None and i >= boost_after else 0.0), 2)
+            self.rows.append({"entry_date": f"{year}-{ordinal // 30 + 1:02d}-{ordinal % 30 + 1:02d}", "watering": rng.choice(["daily", "weekly", "sparse"]),
+                              "light_hours": rng.randint(2, 12), "notes": f"note {i}", "growth_cm": growth})
+        self.log = []
+
+    def count(self):
+        self.log.append({"call": "count"})
+        return len(self.rows)
+
+    def find(self, skip=0):
+        page = self.rows[skip:skip + self.page_cap]
+        self.log.append({"call": "find", "skip": skip, "returned": len(page)})
+        return page
+
+    def truth_month(self):
+        """The month with the highest mean growth over EVERY record (the ground truth a capped read misses)."""
+        by_month = {}
+        for row in self.rows:
+            by_month.setdefault(row["entry_date"][:7], []).append(row["growth_cm"])
+        return max(by_month, key=lambda m: sum(by_month[m]) / len(by_month[m]))
+
+    def covered(self):
+        """How many distinct records the find calls returned, and how many find calls were made."""
+        seen = set()
+        pages = 0
+        for entry in self.log:
+            if entry["call"] == "find":
+                pages += 1
+                seen.update(range(entry["skip"], entry["skip"] + entry["returned"]))
+        return len(seen), pages
+
+
 class World:
     """``docs`` names the documentation excerpts of ``world.json`` shown to the planner; ``docs_only`` makes the view the
     documentation-only chat a free plan gets (no quests, only the excerpts). ``trace`` is the ordered log of what the
     tools and the web did, kept so a transcript can show the steps; nothing reads it for scoring."""
 
-    def __init__(self, pinned=None, web=None, docs=None, docs_only=False, science=False):
+    def __init__(self, pinned=None, web=None, docs=None, docs_only=False, science=False, bulk=None, history=None):
         self.quests = copy.deepcopy(SPEC["quests"])
         self.today = SPEC["today"]
         self.pinned = pinned
         self.docs = [dict(SPEC["docs"][d], id=d) for d in docs or []]
         self.docs_only = docs_only
+        self.bulk = Bulk(bulk) if bulk else None
+        if self.bulk and pinned and pinned not in self.quests:
+            # The pinned quest of a bulk case lives only in this world, so the shared world.json (and every other case) is untouched.
+            self.quests[pinned] = {"name": "Garden", "outcome": "Grow healthier plants", "current_state": "Keeping a Field Log of daily entries.",
+                                   "goals": [], "notes": []}
+        self.history = list(history or [])
         self.trace = []
         self.web = FakeWeb(web)
         self.web.trace = self.trace
@@ -159,6 +213,10 @@ class World:
                     if not words or any(w in (q["name"] + " " + q["outcome"]).lower() for w in words)]
             return "\n".join(rows) or "no quest matches"
         return f"{name}: nothing to show in this evaluation"
+
+    def transcript(self):
+        """The prior turns of ``history`` as the transcript text a host passes (empty when the case has none)."""
+        return "\n".join(f"{'User' if t['role'] == 'user' else 'Assistant'}: {t['text']}" for t in self.history)
 
     # ---- the record a host passes as context_view
     def context_view(self):

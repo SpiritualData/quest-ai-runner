@@ -20,7 +20,10 @@ from hubofhubs.ports.deep import (
     runner_starts_background_work,
     runner_uses_deep_model,
 )
-from hubofhubs.ports.events import EVENT_EXEC, EVENT_MILESTONE, EVENT_STATUS
+from hubofhubs.critique.done_evidence import (
+    CONTINUE, continue_decision, coverage_gap, coverage_progress, interim_data, parse_coverage,
+    render_continue_plan, render_coverage_line)
+from hubofhubs.ports.events import EVENT_EXEC, EVENT_INTERIM, EVENT_MILESTONE, EVENT_STATUS
 from .adapters_values import PlanDecision
 from .deep_model_selection import start_status_text
 from .goal_metrics import GoalMetrics, run_hint, working_dir_of
@@ -67,6 +70,15 @@ from hubofhubs.act.tool_ledger import (
     STUCK_OUTPUT_ALIKE, STUCK_REASON_ALIKE, ToolOutcome, alike, changed_something,
     describe_failure, repeated_failure, unrecovered_failures)
 from .orchestrator_types import OrchestratorResult
+
+
+def interim_text(output: str, coverage: Any, next_step: str) -> str:
+    """The text of an interim event: the partial output, the coverage line, and a code-written "still working" line."""
+    parts = [_strip_future_context(output).strip(), render_coverage_line(coverage)]
+    step = (next_step or "").strip().rstrip(".")
+    parts.append("This is a partial result and the goal is not met yet. Still working"
+                 + (f": {step}." if step else "."))
+    return "\n\n".join(p for p in parts if p)
 
 
 class DeepRunMixin:
@@ -709,6 +721,19 @@ class DeepRunMixin:
             # next AND ESCALATE to a stronger model, then re-run — WHILE under the overall token
             # budget (bounded by a hard attempt cap). More token-efficient than /goal (no per-turn
             # self-check inside the worker), the brain steers each retry, and the model auto-escalates.
+            # PRE-FLIGHT PLAN CHECK (core/orchestrator_preflight.py): for an ANALYSIS only, the brief is final and no
+            # attempt has been spent. One balanced-tier call compares the approach with the done evidence and the
+            # consumer's stated limits; the brief is improved, the person is asked, or the scope is stated.
+            # Every other kind of turn skips this block entirely: no call, no prompt text.
+            if self.preflight_applies(plan):
+                if emit is not None:
+                    emit.status("Checking the plan against what the answer needs.")
+                checked = self._preflight_plan(plan, goal, brief)
+                if checked.question:
+                    return DeepResult(met=False, output=checked.question, needs_person=checked.question,
+                                      verdict_reason="; ".join(checked.gaps))
+                brief = checked.brief
+            done_requirements = list(getattr(plan, "done_evidence", None) or [])
             base_brief = brief
             current_brief = brief
             # At least one attempt PER RUNG, so a ladder can always reach its terminal runner even
@@ -787,6 +812,7 @@ class DeepRunMixin:
             ledger_task = (ctx_meta or {}).get("task_id") or task_uuid
             prior_failures: Dict[str, ToolOutcome] = {}
             prior_gap: Optional[Tuple[str, str]] = None
+            prior_coverage: Optional[Dict[str, Any]] = None
             for attempt in range(1, max_iters + 1):
                 # Cooperative cancellation, checked before starting each new attempt (a retry can be
                 # a full agentic subprocess run, so this is the natural point to stop rather than
@@ -972,7 +998,40 @@ class DeepRunMixin:
                                             context_layer=per_goal_context,
                                             observations=getattr(res, "observations", None),
                                             observations_reported=bool(
-                                                getattr(res, "observations_reported", False)))
+                                                getattr(res, "observations_reported", False)),
+                                            done_evidence=done_requirements,
+                                            coverage=getattr(res, "coverage", None))
+                # THE STRUCTURAL COVERAGE GATE. A run that declared it covered only part of a set is not met,
+                # whatever the verifier or its own words say, while the budget allows another attempt and the last
+                # one advanced; when it does not, the run stops honestly with the gap and how to continue it.
+                # Decided on the declared numbers only (``DeepResult.coverage``), never on any text. Inert for a
+                # runner that declares nothing.
+                coverage_advancing = False
+                gap = coverage_gap(getattr(res, "coverage", None)) if verdict is not None else None
+                if gap is not None:
+                    progressed = coverage_progress(prior_coverage, res.coverage)
+                    prior_coverage = res.coverage
+                    left = None if budget is None else budget - tokens_used
+                    choice, why = continue_decision(gap, attempts_left=max_iters - attempt,
+                                                    budget_left=left, progressed=progressed)
+                    plan_text = render_continue_plan(res.coverage)
+                    if choice == CONTINUE:
+                        coverage_advancing = True
+                        verdict = dict(
+                            verdict, met=False, blocker="more_work", need_more_context=False,
+                            reason=(verdict.get("reason") if not verdict.get("met") and verdict.get("reason")
+                                    else "only part of the set is covered so far: "
+                                    + render_coverage_line(res.coverage)),
+                            next_action=((verdict.get("next_action") + " ") if not verdict.get("met")
+                                         and verdict.get("next_action") else "") + plan_text)
+                    else:
+                        res.met = False
+                        res.verdict_reason = "only part of the set was covered: " + why
+                        res.verdict_next_action = plan_text
+                        res.error = res.error or ("Partial: " + render_coverage_line(res.coverage))
+                        if emit is not None:
+                            emit.status("Stopping with partial coverage (" + why + ").")
+                        break
                 if verdict is None:
                     reason = verify_error or "verification did not run for an unknown reason"
                     res.met = False
@@ -1043,7 +1102,7 @@ class DeepRunMixin:
                 # the same thing, and changed nothing the runner can see (no write receipt, no
                 # successful tool that acts). Another attempt, on a stronger model or not, would
                 # repeat it: stop and say so instead of escalating.
-                stuck = (prior_gap is not None and _blocker == "more_work"
+                stuck = (prior_gap is not None and _blocker == "more_work" and not coverage_advancing
                          and alike(reason, prior_gap[0], STUCK_REASON_ALIKE)
                          and alike(res.output or "", prior_gap[1], STUCK_OUTPUT_ALIKE)
                          and not changed_something(window)
@@ -1131,12 +1190,32 @@ class DeepRunMixin:
                     if emit is not None:
                         emit.status(f"The budget for this work is used up ({tokens_used}/{budget} tokens); stopping.")
                     break
+                # INTERIM OUTPUT: the run has partial results, the goal is not met and the loop is about to
+                # continue, so the reader sees what exists now, labelled by code as still in progress, and the
+                # final answer follows. Sourced from the run's output and its declared coverage, never from a
+                # claim; only for an analysis or a run that declared coverage (a bare retry is not a result).
+                if (emit is not None and getattr(self.cfg, "done_evidence_enabled", False)
+                        and _blocker == "more_work" and (res.output or "").strip()
+                        and (getattr(plan, "work_shape", None) == "analysis"
+                             or parse_coverage(getattr(res, "coverage", None)) is not None)):
+                    emit.emit(ProgressEvent(
+                        type=EVENT_INTERIM,
+                        text=interim_text(res.output, getattr(res, "coverage", None),
+                                          verdict.get("next_action") or reason),
+                        data=interim_data(getattr(res, "coverage", None), attempt=attempt)))
                 current_brief = self._augment_brief(base_brief, res.output or "", verdict)
                 verified_not_met = True
 
             # The metric record closes: the arm reads the metric again, the ledger's rows are reconciled and
             # ride on the result (``DeepResult.metric_results``), with one plain line in its text.
             metrics.finish(res)
+            # THE FINAL ANSWER STATES ITS COVERAGE: one code-written line from the run's declared numbers (and how to
+            # pick the rest up when part of the set is missing), so the statement never rests on a model's wording.
+            if getattr(res, "coverage", None) and not res.decision_id:
+                tail = "\n\n".join(t for t in (render_coverage_line(res.coverage),
+                                               render_continue_plan(res.coverage)) if t)
+                if tail:
+                    res.output = ((res.output or "").rstrip() + "\n\n" + tail).lstrip()
             # This subgoal parked on a human decision: tell siblings so none of them starts a new
             # attempt after this (see ``fanout_parked`` above; checked at the aggregation step too,
             # which is what actually keeps a second ask out of the reply regardless of timing).

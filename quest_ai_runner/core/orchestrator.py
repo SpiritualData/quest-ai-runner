@@ -64,6 +64,9 @@ from .planner_context import (
 from .auxiliary_prompts import (
     VERIFY_GOAL_TOOL,
     VERIFY_GOAL_PROMPT,
+    VERIFY_DONE_EVIDENCE_NOTE,
+    PREFLIGHT_PLAN_PROMPT,
+    PREFLIGHT_PLAN_TOOL,
     MODE_RELEASE_TOOL,
     MODE_RELEASE_PROMPT,
     FUTURE_CONTEXT_DELIMITER,
@@ -133,6 +136,7 @@ from .orchestrator_recipes import RecipesMixin
 from .orchestrator_planning import PlanningMixin
 from .orchestrator_answering import AnsweringMixin
 from .orchestrator_judges import JudgesMixin
+from .orchestrator_preflight import PreflightMixin
 from .orchestrator_deep_models import DeepModelsMixin
 from .orchestrator_deep_context import DeepContextMixin
 from .orchestrator_deep_run import DeepRunMixin
@@ -142,7 +146,7 @@ from .orchestrator_understanding import UnderstandingMixin
 from .orchestrator_run import RunMixin
 
 
-class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, JudgesMixin, DeepModelsMixin, DeepContextMixin, DeepRunMixin, CardsMixin, OverseeMixin, UnderstandingMixin, RunMixin):
+class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, JudgesMixin, PreflightMixin, DeepModelsMixin, DeepContextMixin, DeepRunMixin, CardsMixin, OverseeMixin, UnderstandingMixin, RunMixin):
     """The domain-free brain. Construct with adapters; call ``run`` per request."""
 
     def __init__(

@@ -1,0 +1,432 @@
+[
+ {
+  "id": "E2E-COV-01",
+  "kind": "bulk_analysis",
+  "stratum": "coverage",
+  "group": "bulk-analysis",
+  "message": "Look at every entry in my Field Log over time and tell me which habits and conditions are most associated with my best weeks. I want your answer to the research question: what would make me most likely to improve my plant-growing results?",
+  "world": {
+   "pinned": "q_garden",
+   "docs": [],
+   "bulk": {
+    "collection": "field_log",
+    "records": 344,
+    "helper": "find",
+    "page_cap": 200,
+    "count_helper": "count",
+    "fields": [
+     "entry_date",
+     "watering",
+     "light_hours",
+     "notes",
+     "growth_cm"
+    ],
+    "synthetic_seed": 11
+   }
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "deep"
+   ],
+   "reads_has": [
+    "count"
+   ],
+   "reads_total_first": true,
+   "reads_cover_all": {
+    "records": 344,
+    "min_pages": 2
+   },
+   "reply_has": [
+    [
+     "344"
+    ],
+    [
+     "all",
+     "every"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "200 of 344",
+    "only the (first|latest|most recent) 200"
+   ],
+   "method_stated": true,
+   "method_not_keyword_only": true,
+   "interim_events_min": 0
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "deep",
+     "rationale": "an analysis over every entry; the done-standard needs all 344 entries processed and a stated method",
+     "model_tier": "sonnet",
+     "goal": "Answer the research question from every entry of the Field Log (all 344), with the method stated",
+     "deep_brief": "Look at every entry in my Field Log over time and tell me which habits and conditions are most associated with my best weeks. I want your answer to the research question: what would make me most likely to improve my plant-growing results?",
+     "work_shape": "analysis",
+     "done_evidence": [
+      "covers every entry of the Field Log, counted first",
+      "the method fits a research question, not only keyword counts",
+      "coverage and any gaps stated"
+     ]
+    }
+   ],
+   "reply": "I read all 344 entries (a count first, then two pages of up to 200). Method: I scored each entry's growth change against its watering and light settings, then compared the best and worst quartile of weeks. The strongest pattern is ... Coverage: 344 of 344 entries."
+  },
+  "quality_rubric": [
+   "Does the reply state that it covered all 344 entries (or exactly how many it covered and why)?",
+   "Does the reply name the method used to relate the entries to the question, and is that method more than counting keywords?",
+   "Does the reply answer the research question asked, not only describe the data?",
+   "Does the reply avoid describing itself as a read-only lookup or as partial when coverage was complete?"
+  ],
+  "source": "synthetic: modelled on a real longitudinal-analysis failure (200 of N rows analysed, keyword tags, honest but incomplete reply); no personal content"
+ },
+ {
+  "id": "E2E-COV-02",
+  "kind": "bulk_analysis",
+  "stratum": "honest_stop",
+  "group": "bulk-analysis",
+  "message": "Analyse every entry in my Field Log over time and answer: what would make my plants grow best?",
+  "world": {
+   "pinned": "q_garden",
+   "docs": [],
+   "bulk": {
+    "collection": "field_log",
+    "records": 5200,
+    "helper": "find",
+    "page_cap": 200,
+    "count_helper": "count",
+    "fields": [
+     "entry_date",
+     "watering",
+     "light_hours",
+     "notes",
+     "growth_cm"
+    ],
+    "synthetic_seed": 12,
+    "work_budget_pages": 6
+   }
+  },
+  "expect": {
+   "no_writes": true,
+   "reads_has": [
+    "count"
+   ],
+   "reads_total_first": true,
+   "reply_has": [
+    [
+     "5200",
+     "5,200"
+    ],
+    [
+     "continue",
+     "rest",
+     "remaining",
+     "next"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "(?i)all 5,?200 entries (were|have been) (read|analy[sz]ed)"
+   ],
+   "coverage_stated": {
+    "processed_max": 1200,
+    "total": 5200
+   },
+   "continue_plan_offered": true,
+   "interim_events_min": 1,
+   "interim_marked_partial": true
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "deep",
+     "rationale": "a bulk analysis larger than one turn's work budget; process in batches, report partial results labelled as partial, and offer to continue",
+     "model_tier": "sonnet",
+     "goal": "Answer from every entry of the Field Log (all 5200), or state the partial coverage and how to continue",
+     "deep_brief": "Analyse every entry in my Field Log over time and answer: what would make my plants grow best?",
+     "work_shape": "analysis",
+     "done_evidence": [
+      "covers every entry of the Field Log, or states the partial coverage",
+      "partial results labelled as partial, with how to continue"
+     ]
+    }
+   ],
+   "reply": "I counted 5,200 entries and processed 1,200 of them this turn (6 pages of 200), newest first. What the 1,200 show so far: ... This is a partial answer to your question. I can continue with the remaining 4,000 in batches; say 'continue' and I will pick up from entry 1,201."
+  },
+  "quality_rubric": [
+   "Does the reply give the true total (5,200) and the number actually processed?",
+   "Does it label what it says as partial rather than as the answer over everything?",
+   "Does it offer a concrete way to continue with the rest?",
+   "Does it avoid claiming the full set was analysed?"
+  ],
+  "source": "synthetic: the honest-stop branch when the work budget cannot reach N"
+ },
+ {
+  "id": "E2E-COV-03",
+  "kind": "bulk_analysis",
+  "stratum": "vague_followup",
+  "group": "bulk-analysis",
+  "message": "Thanks, that helps. Now do it over all my data instead of just the latest ones.",
+  "world": {
+   "pinned": "q_garden",
+   "docs": [],
+   "history": [
+    {
+     "role": "user",
+     "text": "What does my recent Field Log say about what helps my plants grow?"
+    },
+    {
+     "role": "assistant",
+     "text": "Your latest 20 entries show taller growth in weeks with more light hours and steady watering. Two themes: light and consistency."
+    }
+   ],
+   "bulk": {
+    "collection": "field_log",
+    "records": 344,
+    "helper": "find",
+    "page_cap": 200,
+    "count_helper": "count",
+    "fields": [
+     "entry_date",
+     "watering",
+     "light_hours",
+     "notes",
+     "growth_cm"
+    ],
+    "synthetic_seed": 13
+   }
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "deep"
+   ],
+   "reads_has": [
+    "count"
+   ],
+   "reads_total_first": true,
+   "reads_cover_all": {
+    "records": 344,
+    "min_pages": 2
+   },
+   "reply_has": [
+    [
+     "344"
+    ],
+    [
+     "light"
+    ],
+    [
+     "watering",
+     "water"
+    ]
+   ],
+   "goal_names_scope": [
+    "all",
+    "every",
+    "344"
+   ],
+   "reply_lacks_regex": [
+    "(?i)which data",
+    "(?i)what do you mean"
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "deep",
+     "rationale": "the follow-up resolves to: repeat the light and watering analysis over every Field Log entry, not just the latest",
+     "model_tier": "sonnet",
+     "goal": "Repeat the light and watering analysis over every Field Log entry (all 344), not only the latest",
+     "deep_brief": "Thanks, that helps. Now do it over all my data instead of just the latest ones.",
+     "work_shape": "analysis",
+     "done_evidence": [
+      "covers every Field Log entry, not only the latest",
+      "says whether the earlier finding held over the full set"
+     ]
+    }
+   ],
+   "reply": "I repeated the analysis over all 344 entries (not only the latest 20). The light and consistency pattern holds, and a third factor appears: ... Coverage: 344 of 344."
+  },
+  "quality_rubric": [
+   "Did the reply resolve 'it' and 'all my data' to the earlier question over the whole Field Log without asking what was meant?",
+   "Does the reply state the number of entries covered?",
+   "Does it say whether the earlier finding held over the full set?"
+  ],
+  "source": "synthetic: vague follow-up that widens scope; the done-standard must carry the word 'all' as a coverage requirement"
+ },
+ {
+  "id": "E2E-COV-04",
+  "kind": "bulk_analysis",
+  "stratum": "method_adequacy",
+  "group": "bulk-analysis",
+  "message": "Go through all my Field Log notes and tell me which kinds of problems keep coming back, and what I should do about them.",
+  "world": {
+   "pinned": "q_garden",
+   "docs": [],
+   "bulk": {
+    "collection": "field_log",
+    "records": 260,
+    "helper": "find",
+    "page_cap": 200,
+    "count_helper": "count",
+    "fields": [
+     "entry_date",
+     "notes"
+    ],
+    "synthetic_seed": 14,
+    "notes_paraphrase_rate": 0.7
+   }
+  },
+  "expect": {
+   "no_writes": true,
+   "reads_total_first": true,
+   "reads_cover_all": {
+    "records": 260,
+    "min_pages": 2
+   },
+   "method_stated": true,
+   "method_not_keyword_only": true,
+   "classification_step_used": [
+    "model",
+    "embedding"
+   ],
+   "reply_has": [
+    [
+     "260"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "(?i)keyword[- ]based",
+    "(?i)approximate because"
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "deep",
+     "rationale": "free-text notes written with varied wording need a meaning-based grouping, not word matching; cover all 260",
+     "model_tier": "sonnet",
+     "goal": "Group the recurring problems in every Field Log note (all 260) by meaning and say what to do",
+     "deep_brief": "Go through all my Field Log notes and tell me which kinds of problems keep coming back, and what I should do about them.",
+     "work_shape": "analysis",
+     "done_evidence": [
+      "covers every note",
+      "grouping by meaning, not exact words"
+     ]
+    }
+   ],
+   "reply": "I read all 260 notes and grouped them by meaning (not by exact words), which found 5 recurring problem types: ... Coverage: 260 of 260."
+  },
+  "quality_rubric": [
+   "Does the reply say the notes were grouped by meaning, not only by matching words?",
+   "Does it cover all 260 notes?",
+   "Does it give concrete actions tied to the recurring problems?"
+  ],
+  "source": "synthetic: 70 percent of notes paraphrase the same problems in different words, so a keyword tagger undercounts; the case rewards a model or embedding grouping step"
+ },
+ {
+  "id": "E2E-COV-05",
+  "kind": "bulk_analysis",
+  "stratum": "simple_no_overhead",
+  "group": "bulk-analysis",
+  "message": "How many entries are in my Field Log?",
+  "world": {
+   "pinned": "q_garden",
+   "docs": [],
+   "bulk": {
+    "collection": "field_log",
+    "records": 344,
+    "helper": "find",
+    "page_cap": 200,
+    "count_helper": "count",
+    "fields": [
+     "entry_date",
+     "watering",
+     "light_hours",
+     "notes",
+     "growth_cm"
+    ],
+    "synthetic_seed": 15
+   }
+  },
+  "expect": {
+   "no_writes": true,
+   "reply_has": [
+    [
+     "344"
+    ]
+   ],
+   "max_reply_chars": 300,
+   "preflight_calls_max": 0,
+   "interim_events_max": 0
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "a single count; no analysis, no pre-flight plan check",
+     "model_tier": "haiku",
+     "work_shape": "lookup"
+    }
+   ],
+   "reply": "Your Field Log has 344 entries."
+  },
+  "source": "synthetic: guard that the backwards-planning pre-flight does not run on a simple lookup (the planner's work_shape is 'lookup')"
+ },
+ {
+  "id": "E2E-COV-06",
+  "kind": "bulk_analysis",
+  "stratum": "silent_cap",
+  "group": "bulk-analysis",
+  "message": "Which month had the highest average growth in my Field Log?",
+  "world": {
+   "pinned": "q_garden",
+   "docs": [],
+   "bulk": {
+    "collection": "field_log",
+    "records": 344,
+    "helper": "find",
+    "page_cap": 200,
+    "count_helper": "count",
+    "fields": [
+     "entry_date",
+     "growth_cm"
+    ],
+    "synthetic_seed": 16,
+    "best_month_only_in_entries_after": 200
+   }
+  },
+  "expect": {
+   "no_writes": true,
+   "reads_total_first": true,
+   "reads_cover_all": {
+    "records": 344,
+    "min_pages": 2
+   },
+   "reply_has": [
+    [
+     "344"
+    ]
+   ],
+   "reply_matches_ground_truth": "month_with_highest_mean_growth"
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "deep",
+     "rationale": "an aggregate over every entry; the correct month is only visible beyond the first page of 200",
+     "model_tier": "haiku",
+     "goal": "Name the month with the highest mean growth across every Field Log entry (all 344)",
+     "deep_brief": "Which month had the highest average growth in my Field Log?",
+     "work_shape": "analysis",
+     "done_evidence": [
+      "covers every entry, counted first",
+      "the aggregate is computed over the whole set"
+     ]
+    }
+   ],
+   "reply": "Across all 344 entries, the month with the highest average growth is ..."
+  },
+  "source": "synthetic: a trap where the page cap silently hides the right answer; a capped read gives a confident wrong month"
+ }
+]

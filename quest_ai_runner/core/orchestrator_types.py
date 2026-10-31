@@ -146,6 +146,19 @@ class OrchestratorConfig:
     # grounding it needs, rather than the whole planner prompt again. The point is to buy the
     # strong model's judgment on the few percent of decisions that need it without paying its
     # input cost on all of them. See core/planner_cascade.py.
+    # FINISH THE JOB BEFORE REPORTING (opt-in). On: the planner classifies the work (``work_shape``) and, for an
+    # analysis, writes the checkable evidence that would show it done (``done_evidence``) on the planning call it
+    # already makes; one pre-flight plan-sufficiency call runs ONLY for an analysis (core/orchestrator_preflight.py);
+    # the goal verifier judges the evidence and the run's declared ``DeepResult.coverage``; and a run that has
+    # partial results and keeps going emits an ``interim`` event with them. A lookup, action or conversation turn
+    # makes no extra call and carries no extra prompt text. Off (default): none of this exists, and the planner
+    # prompt and schema are byte-identical to a build without it. (The structural coverage gate in the goal loop
+    # needs no flag: it reads only what a runner declares in ``DeepResult.coverage`` and is inert without it.)
+    done_evidence_enabled: bool = False
+    # What the consumer's data and code paths CANNOT do, in plain words, handed to the pre-flight plan check so a plan
+    # is judged against the real limits (for example: "a read returns at most 200 rows and a total is available by a
+    # separate count; generated code cannot call a model"). Free text, consumer-written, empty = no stated limits.
+    consumer_limits: str = ""
     planner_cascade: bool = False
     planner_cascade_tier: str = "balanced"
     # WHICH DECISIONS get reviewed. A comma list of confidence levels ("low", "low,medium") and

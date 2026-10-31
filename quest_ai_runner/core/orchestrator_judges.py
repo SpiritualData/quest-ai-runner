@@ -17,6 +17,7 @@ from .answer_explanation import (
     render_record_for_prompt,
 )
 from hubofhubs.act.execution_record import ExecutionRecord
+from hubofhubs.critique.done_evidence import render_coverage_line, render_requirements
 from .runtime_settings import core_settings
 from .auxiliary_prompts import (
     LANDED_WORK_DENIAL_TOOL,
@@ -25,6 +26,7 @@ from .auxiliary_prompts import (
     MODE_RELEASE_TOOL,
     VERIFY_CLAIMS_RULES,
     VERIFY_SUPPORT_RULES,
+    VERIFY_DONE_EVIDENCE_NOTE,
     VERIFY_GOAL_PROMPT,
     VERIFY_GOAL_TOOL,
     VERIFY_RUN_OBSERVATIONS_NOTE,
@@ -75,6 +77,8 @@ class JudgesMixin:
                      observations: Optional[List[str]] = None,
                      observations_reported: bool = False,
                      check_support: bool = False,
+                     done_evidence: Optional[List[str]] = None,
+                     coverage: Optional[Dict[str, Any]] = None,
                      ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Decide whether the worker's run met the done-standard AT THE QUALITY BAR.
 
@@ -132,6 +136,11 @@ class JudgesMixin:
         ``VERIFY_READ_EVIDENCE_MAX_CHARS``), so it can tell a claim the turn supports from one it
         does not: ``claims_unsupported`` comes back True for a reply that states facts or advice as
         certain with nothing behind them. No extra call.
+
+        ``done_evidence`` (the planner's requirements for an analysis) and ``coverage`` (the run's own
+        ``DeepResult.coverage``) are shown to the judge as its own block, with the rule that declared
+        coverage is the system's count and outranks the output's wording. Both default to None, which
+        leaves the prompt exactly as it was.
 
         Returns a ``(verdict, error)`` pair:
         - ``verdict`` is ``{"met": bool, "reason": str, "next_action": str, "need_more_context":
@@ -231,6 +240,18 @@ class JudgesMixin:
                 "--- THIS RUN'S OWN RECORD (INTERNAL: the system's log of what the run actually "
                 "did, built from its runner's own receipts, not the worker's claim in the output "
                 "below) ---\n" + rendered_obs + "\n\n" + VERIFY_RUN_OBSERVATIONS_NOTE + "\n")
+        # DONE EVIDENCE (planner-written requirements) and the run's DECLARED COVERAGE, in the same volatile tail
+        # as the run record: the requirements to judge, and the runner's own count of how much of a set it
+        # processed. Added only when either exists, so every other verify prompt is byte-for-byte unchanged.
+        requirements_text = render_requirements(done_evidence or [])
+        coverage_text = render_coverage_line(coverage)
+        if requirements_text or coverage_text:
+            evidence_block += "--- DONE EVIDENCE (INTERNAL: what shows this work done) ---\n"
+            if requirements_text:
+                evidence_block += requirements_text + "\n"
+            if coverage_text:
+                evidence_block += coverage_text + " (declared by the run's own records)\n"
+            evidence_block += VERIFY_DONE_EVIDENCE_NOTE + "\n"
         prompt = render_prompt("verify-goal.verdict", 
             persona=persona, standards=standards, claims_rules=claims_rules, context=context_block,
             evidence=evidence_block,

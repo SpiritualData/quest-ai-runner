@@ -181,6 +181,74 @@ VERIFY_RUN_OBSERVATIONS_NOTE = (
     "something, solely because the OUTPUT TEXT did not restate what the record already proves.\n"
 )
 
+# THE DONE-EVIDENCE RULES the verifier is given ONLY when the plan wrote requirements or the run declared its
+# coverage (``_verify_goal``'s ``done_evidence`` and ``coverage``); otherwise the verify prompt is byte-for-byte
+# what it was. The coverage line is the RUNNER's own count of how much of a set it processed, so it outranks
+# any claim in the output's wording, in either direction.
+VERIFY_DONE_EVIDENCE_NOTE = (
+    "\nDONE-EVIDENCE RULES: judge each requirement above against the output. A declared coverage line is "
+    "the system's own count, not the worker's claim: when it shows only part of a set, a requirement to "
+    "cover the whole set is NOT met, whatever the output says, and the blocker is more_work unless nothing "
+    "more can be done. A method weaker than the question needs, or limits the output leaves unstated, is "
+    "also not met. When coverage is complete or the requirements are all met, do not ask for more.\n"
+)
+
+# THE PRE-FLIGHT PLAN CHECK (core/orchestrator_preflight.py): run once, before an ANALYSIS goal's first attempt,
+# on a balanced tier. It compares the planned approach with the evidence the plan itself said would show the work
+# done and with what the consumer says its data and code paths cannot do, so an approach that cannot reach the
+# standard is improved before the work, not discovered after it.
+PREFLIGHT_PLAN_TOOL: Dict[str, Any] = {
+    "name": "plan_sufficiency",
+    "description": "Judge whether the planned approach can reach the done evidence given the stated limits.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "sufficient": {"type": "boolean",
+                           "description": "True when the plan as written can meet every requirement within the limits."},
+            "gaps": {"type": "array", "items": {"type": "string"},
+                     "description": "Each requirement the plan cannot meet as written, one short clause each."},
+            "revised_brief": {"type": "string",
+                              "description": "If not sufficient and fixable: the brief rewritten so the work meets the "
+                                             "requirements (for a large set: count first, then work in batches, then "
+                                             "combine). Empty otherwise."},
+            "question": {"type": "string",
+                         "description": "If only the person can settle it: ONE clarifying question. Empty otherwise."},
+            "honest_scope": {"type": "string",
+                             "description": "If the standard cannot be reached in one turn: one plain sentence on what "
+                                            "the work will cover and what the limits mean. Empty otherwise."},
+        },
+        "required": ["sufficient"],
+    },
+}
+
+PREFLIGHT_PLAN_PROMPT = """\
+You are checking a plan BEFORE any work starts, working backwards from the evidence that would show the
+work done. Decide whether the planned approach can meet every requirement within the stated limits.
+
+  - sufficient=true when it can. Nothing else is needed.
+  - Otherwise name each unmet requirement in gaps, then choose ONE way forward:
+      revised_brief: the approach can be improved within the limits (page through a large set, count it
+        first, use a method that fits the question). Rewrite the brief in full.
+      question: only the person can settle it (which source, which meaning of the request). Ask ONE
+        plain question.
+      honest_scope: the standard cannot be reached in one turn within the limits. Say in one plain
+        sentence what the work will cover and what the limits mean, so the final reply can state it.
+Never invent a capability the limits rule out. Do not add requirements the request did not imply.
+Do NOT use em dashes.
+
+--- GOAL ---
+{goal}
+
+--- REQUIREMENTS FOR DONE ---
+{evidence}
+
+--- LIMITS OF THE DATA AND CODE PATHS (stated by the system owner) ---
+{limits}
+
+--- PLANNED APPROACH (the brief) ---
+{brief}
+"""
+
 # The reply after a deferred run that REALLY changed something (the execution record shows a
 # mutation succeeded) is rewritten by a model from the run's own account and the pre-work proposal.
 # Live finding (2026-10-18, dev, 1 turn in about 8): the fast-tier rewrite took the proposal's
@@ -954,3 +1022,6 @@ CARD_UPDATE_SPEC = declare(
     "feed-context-sources.card-update", solution="feed-context-sources",
     metric="metric-feed-context-sources", tier="caller", cache_layer="tail",
     template=CARD_UPDATE_PROMPT)
+PREFLIGHT_PLAN_SPEC = declare(
+    "preflight.plan-sufficiency", solution="QS1", metric="QME2", tier="balanced", cache_layer="tail",
+    template=PREFLIGHT_PLAN_PROMPT, output_schema=PREFLIGHT_PLAN_TOOL)

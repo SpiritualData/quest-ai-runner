@@ -18,6 +18,9 @@ A case's ``expect`` may state:
   reads_has          read-only tools that must have been called (the turn searched instead of answering from memory)
   reads_lack         read-only tools that must not have been called
   question           true: the reply asks the person something (contains a question mark)
+  (bulk analysis)    reads_total_first, reads_cover_all, coverage_stated, continue_plan_offered, interim_events_min/max,
+                     interim_marked_partial, method_stated, method_not_keyword_only, classification_step_used, goal_names_scope,
+                     preflight_calls_max, reply_matches_ground_truth: see ``bulk_problems`` (cases_bulk.json)
   max_reply_chars    a reply longer than this is a feature dump, not an answer
   min_reply_chars    a blank or one-word reply fails
   terminal           for a terminal case: {"exit", "contract"} of the printed acknowledgement
@@ -101,6 +104,53 @@ def write_problems(writes, expect):
     return problems
 
 
+COVERAGE_LINE = re.compile(r"Coverage: ([\d,]+) of ([\d,]+)")
+
+
+def bulk_problems(got, expect):
+    """The structural checks of a bulk-analysis case, read from the world's read log and the run's own events and result, never
+    from a model: what was read and in what order, the coverage line the code wrote, the interim events, the goal and the
+    pre-flight call count. Keys a case does not state are not checked, and a turn that is not a bulk turn has none of them."""
+    problems = []
+    bulk, out, reads = got.get("bulk"), got.get("deep_output", ""), got.get("reads", [])
+    if expect.get("reads_total_first") and not (reads and reads[0] == "count"):
+        problems.append("the first read was not the count")
+    spec = expect.get("reads_cover_all")
+    if spec and bulk and (bulk["covered"] < spec["records"] or bulk["pages"] < spec.get("min_pages", 1)):
+        problems.append(f"read {bulk['covered']} of {spec['records']} records in {bulk['pages']} pages")
+    line = COVERAGE_LINE.search(out)
+    stated = expect.get("coverage_stated")
+    if stated:
+        if not line:
+            problems.append("no coverage line in the result")
+        elif isinstance(stated, dict):
+            processed, total = (int(g.replace(",", "")) for g in line.groups())
+            if processed > stated.get("processed_max", processed) or total != stated.get("total", total):
+                problems.append(f"coverage {processed} of {total}, labelled at most {stated.get('processed_max')} of {stated.get('total')}")
+    if expect.get("continue_plan_offered") and "continue from" not in out:
+        problems.append("no way to continue was offered")
+    interim = got.get("interim", [])
+    if len(interim) < expect.get("interim_events_min", 0):
+        problems.append(f"{len(interim)} interim events, labelled at least {expect['interim_events_min']}")
+    if len(interim) > expect.get("interim_events_max", len(interim)):
+        problems.append(f"{len(interim)} interim events, labelled at most {expect['interim_events_max']}")
+    if expect.get("interim_marked_partial") and not all((e.get("data") or {}).get("final") is False and "partial" in (e.get("text") or "").lower() for e in interim):
+        problems.append("an interim event is not marked partial")
+    if expect.get("method_stated") and "Method:" not in out:
+        problems.append("no method stated")
+    if expect.get("method_not_keyword_only") and bulk and bulk["method_kind"] == "keyword":
+        problems.append("the method was keyword counting only")
+    if expect.get("classification_step_used") and bulk and bulk["classification"] not in expect["classification_step_used"]:
+        problems.append("no meaning-based step was used")
+    if expect.get("goal_names_scope") and not any(w.lower() in got.get("goal", "").lower() for w in expect["goal_names_scope"]):
+        problems.append("the goal does not name the scope")
+    if "preflight_calls_max" in expect and got.get("preflight_calls", 0) > expect["preflight_calls_max"]:
+        problems.append(f"{got['preflight_calls']} pre-flight calls")
+    if expect.get("reply_matches_ground_truth") and bulk and bulk["truth_month"] not in out + got.get("reply", ""):
+        problems.append(f"the answer is not the true month {bulk['truth_month']}")
+    return problems
+
+
 def score_case(fn, case):
     return judge(fn(case), case)
 
@@ -119,7 +169,7 @@ def judge(got, case):
         return dict(ok=not problems, got=out["stdout"][:60], want="ack", kind=kind, unrequested=0,
                     note="ok" if not problems else "; ".join(problems))
     held = got["route"] in expect.get("held_by", [])
-    problems = write_problems(got["writes"], expect) + read_problems(got.get("reads", []), expect) + ([] if held else reply_problems(got["reply"], expect))
+    problems = write_problems(got["writes"], expect) + read_problems(got.get("reads", []), expect) + ([] if held else reply_problems(got["reply"], expect)) + bulk_problems(got, expect)
     if got["writes"] and not held and DENIES_A_LANDED_WRITE.search(got["reply"]):
         problems.append("reply denies a change the turn made")
     if expect.get("route_in") and got["route"] not in expect["route_in"]:

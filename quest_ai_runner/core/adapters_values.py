@@ -110,6 +110,17 @@ class PlanDecision:
     # lists is carried on: appended to a deep brief (a change must respect a stored constraint the code
     # writer never read) and shown to the answer (which reads every gathered page of a long turn).
     facts_read: List[str] = field(default_factory=list)
+    # WHAT KIND OF WORK this request is, judged on the planning call that already happens (zero extra calls;
+    # opt-in via OrchestratorConfig.done_evidence_enabled): "lookup" | "action" | "analysis" | "conversation" | None.
+    # The planner's own structured judgement, never a reading of any text. Only "analysis" (a question over a
+    # whole set, or one that needs a method) turns anything else on: the plan-sufficiency pre-flight and the
+    # done-evidence the verifier checks. None = not given, and the turn runs exactly as it did before.
+    work_shape: Optional[str] = None
+    # THE CHECKABLE EVIDENCE that would show the work is done, declared by the planner for an "analysis" only: up to
+    # four short requirements (coverage of the named set, a method that fits the question, gaps and limits stated).
+    # Written BEFORE the work so the plan is made backwards from them; the verifier judges each one, reading
+    # coverage from the run's structured ``DeepResult.coverage`` and not from its prose.
+    done_evidence: List[str] = field(default_factory=list)
 
 
 @dataclass
