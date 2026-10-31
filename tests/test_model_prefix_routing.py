@@ -1,7 +1,7 @@
 """QAR extends the hub's model-id prefix table from configuration: an OpenAI-compatible endpoint is configuration only."""
 from hubofhubs.models.family import provider_name_for_model
 from hubofhubs.models.router import MultiProvider
-from quest_ai_runner import providers
+from quest_ai_runner import hub, providers
 
 
 def test_an_extra_prefix_comes_from_configuration_and_the_router_uses_the_same_table(monkeypatch):
@@ -17,7 +17,7 @@ def test_an_extra_prefix_comes_from_configuration_and_the_router_uses_the_same_t
 
 
 def test_the_openai_provider_takes_an_endpoint_from_the_environment_and_deepseek_keeps_its_own():
-    p = providers.make_provider("openai", {"OPENAI_BASE_URL": "http://hub.invalid/v1"})
+    p = hub.make_provider("openai", {"OPENAI_BASE_URL": "http://hub.invalid/v1"})
     assert (p.base_url, p.keyless, p.api_key) == ("http://hub.invalid/v1", True, None)
-    ds = providers.make_provider("deepseek", {"OPENAI_BASE_URL": "http://hub.invalid/v1", "DEEPSEEK_API_KEY": "x"})
+    ds = hub.make_provider("deepseek", {"OPENAI_BASE_URL": "http://hub.invalid/v1", "DEEPSEEK_API_KEY": "x"})
     assert "hub.invalid" not in (ds.base_url or "")

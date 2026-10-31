@@ -40,12 +40,8 @@
  "call-a-model": {
   "default": "multi_provider",
   "modules": {
-   "anthropic": "quest_ai_runner.providers",
    "claude_cli": "quest_ai_runner.adapters.claude_cli_provider",
-   "deepseek": "quest_ai_runner.providers",
-   "gemini": "quest_ai_runner.providers",
-   "multi_provider": "quest_ai_runner.providers",
-   "openai": "quest_ai_runner.providers"
+   "multi_provider": "quest_ai_runner.providers"
   }
  },
  "card-store": {

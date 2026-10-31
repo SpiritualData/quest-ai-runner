@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, List
 from esoi import implementation
 
 from .core.model_registry import ModelRegistry
-from .providers import make_provider
+from .hub import make_provider
 from .config_support import _AUTO_DEEP_RUNNER, _log
 
 if TYPE_CHECKING:

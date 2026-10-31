@@ -4,7 +4,9 @@
 of the hub: ``child()`` is an ``esoi`` Assembler for scope ``quest_ai_runner`` whose parent is the hub's own. The layers, highest
 first: what the caller passes, QAR's own ``selected`` arms (``esoi/solutions.csv`` in a checkout, ``esoi_selection.json`` in an
 installed copy), then the hub's defaults. QAR states only what differs from the hub, and each difference carries the ids of QAR's
-own problems, ideals or metrics in ``esoi/overrides.csv`` (rule S35). Today the one difference is the ``card-store`` seat.
+own problems, ideals or metrics in ``esoi/overrides.csv`` (rule S35). The differences are the ``card-store`` seat and the
+``call-a-model`` seat, whose selected arm is QAR's router (``providers.routed``: the hub's MultiProvider with QAR's prefix table,
+limit message and spend tagging); the vendor arms under it are the hub's own, built by ``make_provider`` below.
 
 The model call and the web search backend are external seats the hub never provides, so QAR passes those in ``provided``.
 """
@@ -12,7 +14,9 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import os
 from pathlib import Path
+from typing import Any, Mapping, Optional
 
 import hubofhubs
 from esoi.assemble import Assembler, Assembly, AssemblyConfig
@@ -64,3 +68,28 @@ def card_repository_of(card_repository):
     arm; an arm swapped in that keeps cards elsewhere has no repository, so the one passed in stands."""
     store = child().assemble(AssemblyConfig(solutions=(CARD_STORE,), options={CARD_STORE: {"repository": card_repository}}))[CARD_STORE]
     return getattr(store, "repository", card_repository)
+
+
+CALL_A_MODEL = "call-a-model"
+VENDOR_KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "gemini": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
+THINKING_FLAGS = {"anthropic": "QAR_ANTHROPIC_THINKING", "deepseek": "DEEPSEEK_THINKING"}
+
+
+def flag(environ: Mapping[str, str], variable: str) -> bool:
+    return (environ.get(variable) or "").strip().lower() in ("on", "1", "true", "yes")
+
+
+def make_provider(name: str, environ: Optional[Mapping[str, str]] = None) -> Any:
+    """The hub's ``call-a-model`` arm ``name`` (anthropic, gemini, openai or deepseek), built by the hub assembly from ``environ``
+    (default: the process environment): the arm's own ``ENVIRON`` fills the key and endpoint, so QAR states only what is its own:
+    the thinking flags, and ``env_name``, which makes a missing key name its variable. A vendor with no key still comes back, and
+    fails when first used, as before."""
+    if name not in VENDOR_KEY_VARIABLES:
+        raise ValueError(f"unknown model vendor {name!r}; choose one of {', '.join(VENDOR_KEY_VARIABLES)}")
+    environ = os.environ if environ is None else environ
+    options: dict = {"env_name": VENDOR_KEY_VARIABLES[name]}
+    if name in THINKING_FLAGS:
+        options["thinking"] = flag(environ, THINKING_FLAGS[name])
+    config = AssemblyConfig(solutions=(CALL_A_MODEL,), selections={CALL_A_MODEL: name}, options={CALL_A_MODEL: options},
+                            consumer_environ=dict(environ))
+    return child().assemble(config)[CALL_A_MODEL]

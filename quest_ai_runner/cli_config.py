@@ -17,7 +17,7 @@ from .adapters import (
 from hubofhubs.ports.model import ModelProvider
 from .core.prompt_specs import PromptSpec, register, render_prompt
 from .adapters.claude_cli_provider import ClaudeCliProvider
-from .providers import make_provider
+from .hub import make_provider
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import (
     RunnerConfig,

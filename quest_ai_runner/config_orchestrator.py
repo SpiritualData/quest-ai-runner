@@ -14,7 +14,8 @@ from hubofhubs.models.anthropic import AnthropicProvider
 from hubofhubs.models.gemini import GeminiProvider
 from hubofhubs.models.openai import OpenAIProvider
 
-from .providers import make_provider, routed, route_extra_model_prefixes
+from .hub import make_provider
+from .providers import routed, route_extra_model_prefixes
 from .config_retrieval import _retrieval_has_web_search, build_registry, fold_into_retrieval
 from .config_resolvers import register_deepseek
 from .config_support import _log

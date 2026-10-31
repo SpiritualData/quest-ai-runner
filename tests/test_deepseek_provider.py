@@ -49,7 +49,7 @@ def test_registered_only_when_key_set(monkeypatch):
 
 
 def test_the_provider_is_built_from_the_environment(monkeypatch):
-    from quest_ai_runner.providers import make_provider
+    from quest_ai_runner.hub import make_provider
     env = {"DEEPSEEK_API_KEY": "k-test", "DEEPSEEK_BASE_URL": "https://example.invalid", "DEEPSEEK_THINKING": "1"}
     p = make_provider("deepseek", env)
     assert (p.api_key, p.base_url, p.create_kwargs) == ("k-test", "https://example.invalid", {})

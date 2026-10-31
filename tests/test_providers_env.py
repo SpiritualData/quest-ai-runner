@@ -1,7 +1,7 @@
 """QAR's wiring of the hub's providers: which environment variable feeds which argument, and that a missing key names its variable."""
 import pytest
 
-from quest_ai_runner.providers import make_provider
+from quest_ai_runner.hub import make_provider
 
 
 def test_each_vendor_key_variable_feeds_its_provider_and_empty_means_unset():
@@ -58,3 +58,32 @@ def test_the_environment_credit_reaches_the_tier_selector_the_way_the_hub_counts
     assert tiers.credit_of(model_registry.credit_source(), "anthropic") == (200.0, 0.5)
     monkeypatch.delenv("QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD")
     assert tiers.credit_of(model_registry.credit_source(), "anthropic") == (0.0, 1.0)
+
+
+def test_the_vendors_are_the_hubs_own_arms_built_by_the_hub_assembly_and_the_router_wraps_them(monkeypatch):
+    """No QAR re-declaration of a vendor: the object is the hub's class, QAR's flags and key variable names reach it, and the router
+    build_orchestrator makes (wire_providers) is QAR's arm over the hub's MultiProvider with the same vendor map."""
+    from hubofhubs.models.anthropic import AnthropicProvider
+    from hubofhubs.models.openai import DeepSeekProvider
+    from hubofhubs.models.router import MultiProvider
+    from quest_ai_runner import config_orchestrator, hub
+    from quest_ai_runner.config import RunnerConfig
+
+    anthropic = hub.make_provider("anthropic", {"ANTHROPIC_API_KEY": "k", "QAR_ANTHROPIC_THINKING": "1"})
+    assert type(anthropic) is AnthropicProvider and anthropic.thinking is True and anthropic.env_name == "ANTHROPIC_API_KEY"
+    assert hub.make_provider("deepseek", {"DEEPSEEK_API_KEY": "d", "DEEPSEEK_THINKING": "yes"}).create_kwargs == {}
+    assert type(hub.make_provider("deepseek", {})) is DeepSeekProvider
+    with pytest.raises(ValueError, match="unknown model vendor"):
+        hub.make_provider("nope", {})
+
+    for variable in ("ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "OPENAI_BASE_URL"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "d")
+    cfg = RunnerConfig()
+    cfg.model_provider = hub.make_provider("anthropic")
+    config_orchestrator.wire_providers(cfg)
+    assert type(cfg.model_provider) is MultiProvider and type(cfg.model_provider.primary) is AnthropicProvider
+    assert sorted(cfg.model_providers) == ["anthropic", "deepseek", "gemini", "openai"]
+    assert cfg.model_provider.providers is cfg.model_providers
+    assert cfg.model_provider.prefixes is config_orchestrator.routed.__globals__["MODEL_PREFIXES"]

@@ -48,23 +48,24 @@ def test_default_is_used_when_nothing_asks_for_another():
 
 
 def test_precedence_is_name_then_override_then_default():
-    over = {"call-a-model": "gemini"}
-    assert resolve("call-a-model", overrides=over).__name__ == "gemini"
-    assert resolve("call-a-model", "openai", overrides=over).__name__ == "openai"
+    over = {"call-a-model": "claude_cli"}
+    assert resolve("call-a-model", overrides=over).__name__ == "ClaudeCliProvider"
+    assert resolve("call-a-model", "multi_provider", overrides=over).__name__ == "routed"
     assert resolve("call-a-model", overrides={}).__name__ == "routed"
-    assert chosen_name("call-a-model", "  Anthropic ") == "anthropic"
+    assert chosen_name("call-a-model", "  Claude_CLI ") == "claude_cli"
 
 
 def test_the_environment_and_a_context_block_select_below_a_name(monkeypatch):
-    monkeypatch.setenv(runtime.env_name("call-a-model", resolve_mod.SCOPE), "gemini")
-    assert resolve("call-a-model").__name__ == "gemini"
-    assert resolve("call-a-model", "openai").__name__ == "openai"
-    with runtime.override("call-a-model", "deepseek", scope=resolve_mod.SCOPE):
-        assert resolve("call-a-model").__name__ == "deepseek"
+    monkeypatch.setenv(runtime.env_name("call-a-model", resolve_mod.SCOPE), "claude_cli")
+    assert resolve("call-a-model").__name__ == "ClaudeCliProvider"
+    assert resolve("call-a-model", "multi_provider").__name__ == "routed"
+    monkeypatch.delenv(runtime.env_name("call-a-model", resolve_mod.SCOPE))
+    with runtime.override("call-a-model", "claude_cli", scope=resolve_mod.SCOPE):
+        assert resolve("call-a-model").__name__ == "ClaudeCliProvider"
 
 
 def test_unknown_names_fail_loudly_with_the_choices():
-    with pytest.raises(ValueError, match="choices: .*anthropic"):
+    with pytest.raises(ValueError, match="choices: .*claude_cli"):
         resolve("call-a-model", "nope")
     with pytest.raises(ValueError, match="no implementation is selected.*call-a-model"):
         resolve("not-a-solution")
@@ -76,7 +77,7 @@ def test_an_unknown_solution_with_a_name_lists_the_solutions_that_can_be_chosen(
                  lambda: resolve("not-a-solution", overrides={"not-a-solution": "x"})):
         with pytest.raises(ValueError, match=r"unknown solution 'not-a-solution'.*call-a-model.*run-deep-work"):
             call()
-    with pytest.raises(ValueError, match="choices: .*anthropic"):
+    with pytest.raises(ValueError, match="choices: .*claude_cli"):
         resolve("call-a-model", "nope")
 
 
