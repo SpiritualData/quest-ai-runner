@@ -101,3 +101,14 @@ records = "../ai-hub-of-hubs-structure"
 
 [records]
 template_version = 1
+
+# Public evidence: others' measurements, shown beside our own results and never counted as one. The file is the hub's derived
+# export of its registry (the hub keeps the source of truth); aliases map a candidate to the QAR arm it measures, only where the
+# match is honest. for Payal to confirm.
+[evidence]
+file = "../ai-hub-of-hubs-structure/esoi/evidence.csv"
+
+[evidence.aliases]
+"bm25s" = "bm25"
+"bge-small-en-v1.5" = "vector_bge_small"
+"Claude Code CLI (claude -p stream-json)" = "stream_json"
