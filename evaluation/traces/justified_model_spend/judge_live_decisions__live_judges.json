@@ -3,25 +3,25 @@
   {
    "cost_usd": 3.364e-05,
    "critical_path": true,
-   "seconds": 3.122949723037891,
+   "seconds": 3.3453772659995593,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1296,
    "tokens_out": 41,
    "turn": 1
   },
   {
-   "cost_usd": 9.512e-05,
+   "cost_usd": 7.412e-05,
    "critical_path": true,
-   "seconds": 2.877364988962654,
+   "seconds": 1.9626515649724752,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1294,
-   "tokens_out": 164,
+   "tokens_out": 122,
    "turn": 2
   },
   {
    "cost_usd": 3.3650000000000005e-05,
    "critical_path": true,
-   "seconds": 4.3552060190122575,
+   "seconds": 2.1544074160046875,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1297,
    "tokens_out": 41,
@@ -30,34 +30,34 @@
   {
    "cost_usd": 3.361e-05,
    "critical_path": true,
-   "seconds": 2.2998734900029376,
+   "seconds": 2.4845336779835634,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1293,
    "tokens_out": 41,
    "turn": 4
   },
   {
-   "cost_usd": 3.258000000000002e-05,
+   "cost_usd": 3.257999999999999e-05,
    "critical_path": true,
-   "seconds": 2.0307245579897426,
+   "seconds": 2.104408056999091,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1290,
    "tokens_out": 39,
    "turn": 5
   },
   {
-   "cost_usd": 9.849000000000001e-05,
+   "cost_usd": 4.999000000000003e-05,
    "critical_path": true,
-   "seconds": 2.55793625197839,
+   "seconds": 2.2653762699919753,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1331,
-   "tokens_out": 170,
+   "tokens_out": 73,
    "turn": 6
   },
   {
    "cost_usd": 3.3529999999999986e-05,
    "critical_path": true,
-   "seconds": 1.8766572769964114,
+   "seconds": 2.157451178994961,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1635,
    "tokens_out": 34,
@@ -66,43 +66,43 @@
   {
    "cost_usd": 3.552999999999998e-05,
    "critical_path": true,
-   "seconds": 2.1677809199900366,
+   "seconds": 2.1031337290187366,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1635,
    "tokens_out": 38,
    "turn": 8
   },
   {
-   "cost_usd": 0.00011060000000000003,
+   "cost_usd": 0.0001541,
    "critical_path": true,
-   "seconds": 2.7023808660451323,
+   "seconds": 3.122106913011521,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1642,
-   "tokens_out": 188,
+   "tokens_out": 275,
    "turn": 9
   },
   {
-   "cost_usd": 3.307000000000006e-05,
+   "cost_usd": 3.307000000000001e-05,
    "critical_path": true,
-   "seconds": 2.117973009997513,
+   "seconds": 1.778347528015729,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1639,
    "tokens_out": 33,
    "turn": 10
   },
   {
-   "cost_usd": 0.00025854999999999997,
+   "cost_usd": 0.00027704999999999993,
    "critical_path": true,
-   "seconds": 4.519728687999304,
+   "seconds": 4.156074378988706,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1637,
-   "tokens_out": 484,
+   "tokens_out": 521,
    "turn": 11
   },
   {
-   "cost_usd": 3.348000000000001e-05,
+   "cost_usd": 0.0003428000000000001,
    "critical_path": true,
-   "seconds": 2.2525304689770564,
+   "seconds": 2.3307419319753535,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1630,
    "tokens_out": 34,
@@ -112,13 +112,14 @@
  "cases_sha": "5a83064b",
  "component": "judge_live_decisions",
  "defaulted_tags": 0,
- "git_sha": "b6e70b9",
+ "git_sha": "9f363a7",
  "impl": "live_judges",
  "label": "eval-trace",
  "summary": {
   "cases": 12,
-  "cli_reported_cost_usd": 0.0008,
+  "cli_reported_cost_usd": 0.0011,
   "component": "judge_live_decisions",
+  "details": "quest_rank 6/6, reach 6/6",
   "dev": "12/12",
   "heldout": "0/0",
   "impl": "live_judges",
@@ -126,9 +127,9 @@
   "model_calls": 12,
   "passed": 12,
   "sample": "",
-  "seconds": 32.9,
+  "seconds": 30.0,
   "tokens_in": 17619,
-  "tokens_out": 1307
+  "tokens_out": 1292
  },
  "turns": [
   {

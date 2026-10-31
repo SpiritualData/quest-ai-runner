@@ -3,7 +3,7 @@
  "cases_sha": "df729105",
  "component": "narrate_a_turn",
  "defaulted_tags": 0,
- "git_sha": "b6e70b9",
+ "git_sha": "9f363a7",
  "impl": "no_beat",
  "label": "eval-trace",
  "summary": {
@@ -13,6 +13,7 @@
   "cli_reported_cost_usd": 0.0,
   "component": "narrate_a_turn",
   "cost_per_case": 0.0,
+  "details": "value 2/13 supported specific beats (repeat 2/2, specific 0/11); quiet 2; contract breaks 7; unspecific 11; unsupported 0; time to first beat no beat arrived, later than 5s 0; cost 0.00 model calls per case, the grader's included",
   "dev": "2/13",
   "heldout": "0/0",
   "impl": "no_beat",

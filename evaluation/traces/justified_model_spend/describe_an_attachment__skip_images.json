@@ -1,120 +1,121 @@
 {
  "calls": [
   {
-   "cost_usd": 4.142e-05,
+   "cost_usd": 0.00018160000000000002,
    "critical_path": true,
-   "seconds": 3.4236580039723776,
+   "seconds": 2.7343986610067077,
    "spec_id": "eval.answer",
    "tokens_in": 724,
-   "tokens_out": 68,
+   "tokens_out": 74,
    "turn": 1
   },
   {
-   "cost_usd": 4.2010000000000006e-05,
+   "cost_usd": 0.0001784,
    "critical_path": true,
-   "seconds": 2.671642504981719,
+   "seconds": 2.282409887004178,
    "spec_id": "eval.answer",
    "tokens_in": 733,
-   "tokens_out": 69,
+   "tokens_out": 64,
    "turn": 2
   },
   {
-   "cost_usd": 4.3999999999999985e-05,
+   "cost_usd": 0.0001852,
    "critical_path": true,
-   "seconds": 4.4383103949949145,
+   "seconds": 2.549259247025475,
    "spec_id": "eval.answer",
    "tokens_in": 732,
-   "tokens_out": 73,
+   "tokens_out": 78,
    "turn": 3
   },
   {
-   "cost_usd": 4.6389999999999995e-05,
+   "cost_usd": 0.0001765,
    "critical_path": true,
-   "seconds": 2.2834457760327496,
+   "seconds": 2.230192855000496,
    "spec_id": "eval.answer",
    "tokens_in": 721,
-   "tokens_out": 78,
+   "tokens_out": 65,
    "turn": 4
   },
   {
-   "cost_usd": 4.601e-05,
+   "cost_usd": 0.00019039999999999997,
    "critical_path": true,
-   "seconds": 2.691436850989703,
+   "seconds": 1.8239893870195374,
    "spec_id": "eval.answer",
    "tokens_in": 733,
-   "tokens_out": 77,
+   "tokens_out": 88,
    "turn": 5
   },
   {
-   "cost_usd": 4.6510000000000014e-05,
+   "cost_usd": 0.00018640000000000009,
    "critical_path": true,
-   "seconds": 2.853958790015895,
+   "seconds": 2.4969862069701776,
    "spec_id": "eval.answer",
    "tokens_in": 733,
-   "tokens_out": 78,
+   "tokens_out": 80,
    "turn": 6
   },
   {
-   "cost_usd": 4.092000000000001e-05,
+   "cost_usd": 0.00018460000000000004,
    "critical_path": true,
-   "seconds": 2.0911463150405325,
+   "seconds": 2.3161969530046917,
    "spec_id": "eval.answer",
    "tokens_in": 724,
-   "tokens_out": 67,
+   "tokens_out": 80,
    "turn": 7
   },
   {
-   "cost_usd": 3.489999999999998e-05,
+   "cost_usd": 0.00018369999999999997,
    "critical_path": true,
-   "seconds": 1.8324906589696184,
+   "seconds": 2.300534237001557,
    "spec_id": "eval.answer",
    "tokens_in": 722,
-   "tokens_out": 55,
+   "tokens_out": 79,
    "turn": 8
   },
   {
-   "cost_usd": 7.625000000000004e-05,
+   "cost_usd": 0.00022119999999999996,
    "critical_path": true,
-   "seconds": 2.691035667026881,
+   "seconds": 3.061288741999306,
    "spec_id": "eval.answer",
    "tokens_in": 757,
-   "tokens_out": 137,
+   "tokens_out": 140,
    "turn": 9
   },
   {
-   "cost_usd": 0.00011346000000000001,
+   "cost_usd": 0.0003068999999999999,
    "critical_path": true,
-   "seconds": 3.9460965000325814,
+   "seconds": 3.7284340169862844,
    "spec_id": "eval.answer",
    "tokens_in": 728,
-   "tokens_out": 212,
+   "tokens_out": 323,
    "turn": 10
   }
  ],
  "cases_sha": "e57ae993",
  "component": "describe_an_attachment",
  "defaulted_tags": 0,
- "git_sha": "b6e70b9",
+ "git_sha": "9f363a7",
  "impl": "skip_images",
  "label": "eval-trace",
  "summary": {
-  "accuracy": 0.1,
-  "balanced": 0.3262,
+  "accuracy": 0.2,
+  "balanced": 0.4008,
   "cases": 10,
-  "cli_reported_cost_usd": 0.0005,
+  "cli_reported_cost_usd": 0.002,
   "component": "describe_an_attachment",
-  "cost_per_case": 5e-05,
-  "dev": "1/10",
+  "cost_per_case": 0.0002,
+  "details": "value 2/10 answered as labelled (control 2/2, needs_image 0/8); images described 0, of which on controls where the message alone answers 0, failed descriptions 0; cost 1.00 model calls per case (the description is awaited before the answer)",
+  "dev": "2/10",
   "heldout": "0/0",
   "impl": "skip_images",
   "model": "claude-haiku",
   "model_calls": 10,
-  "passed": 1,
+  "passed": 2,
   "sample": "",
-  "seconds": 29.1,
-  "seconds_per_case": 2.91,
+  "seconds": 25.7,
+  "seconds_per_case": 2.57,
   "tokens_in": 7307,
-  "tokens_out": 914
+  "tokens_out": 1071
  },
  "turns": [
   {
@@ -175,7 +176,7 @@
    "calls": 1,
    "id": "DAI-10",
    "kind": "control",
-   "ok": false
+   "ok": true
   }
  ]
 }

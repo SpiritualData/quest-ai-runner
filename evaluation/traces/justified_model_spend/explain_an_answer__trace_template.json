@@ -1,109 +1,110 @@
 {
  "calls": [
   {
-   "cost_usd": 0.0002999,
+   "cost_usd": 0.006050000000000001,
    "critical_path": true,
-   "seconds": 2.7937582340091467,
+   "seconds": 3.216587122005876,
    "spec_id": "eval.judge",
    "tokens_in": 1161,
-   "tokens_out": 18,
+   "tokens_out": 141,
    "turn": 1
   },
   {
-   "cost_usd": 0.00029060000000000007,
+   "cost_usd": 0.004448,
    "critical_path": true,
-   "seconds": 2.2747664009802975,
+   "seconds": 2.1254323159810156,
    "spec_id": "eval.judge",
    "tokens_in": 1068,
    "tokens_out": 18,
    "turn": 2
   },
   {
-   "cost_usd": 0.0026305,
+   "cost_usd": 0.006003999999999999,
    "critical_path": true,
-   "seconds": 4.119705598975997,
+   "seconds": 3.2827011390472762,
    "spec_id": "eval.judge",
    "tokens_in": 1067,
-   "tokens_out": 252,
+   "tokens_out": 174,
    "turn": 3
   },
   {
-   "cost_usd": 0.00029889999999999995,
+   "cost_usd": 0.0047799999999999995,
    "critical_path": true,
-   "seconds": 2.346399891015608,
+   "seconds": 2.2524517360143363,
    "spec_id": "eval.judge",
    "tokens_in": 1151,
    "tokens_out": 18,
    "turn": 4
   },
   {
-   "cost_usd": 0.0002918999999999999,
+   "cost_usd": 0.0045000000000000005,
    "critical_path": true,
-   "seconds": 2.466055321972817,
+   "seconds": 2.273938543978147,
    "spec_id": "eval.judge",
    "tokens_in": 1081,
    "tokens_out": 18,
    "turn": 5
   },
   {
-   "cost_usd": 0.0005206000000000004,
+   "cost_usd": 0.005038000000000001,
    "critical_path": true,
-   "seconds": 2.425935439998284,
+   "seconds": 2.4822362400009297,
    "spec_id": "eval.judge",
    "tokens_in": 1068,
-   "tokens_out": 41,
+   "tokens_out": 77,
    "turn": 6
   },
   {
-   "cost_usd": 0.00029109999999999987,
+   "cost_usd": 0.004468,
    "critical_path": true,
-   "seconds": 2.669022784975823,
+   "seconds": 2.3531974509824067,
    "spec_id": "eval.judge",
    "tokens_in": 1073,
    "tokens_out": 18,
    "turn": 7
   },
   {
-   "cost_usd": 0.00029739999999999975,
+   "cost_usd": 0.004720000000000002,
    "critical_path": true,
-   "seconds": 2.2996303740073927,
+   "seconds": 2.063652037002612,
    "spec_id": "eval.judge",
    "tokens_in": 1136,
    "tokens_out": 18,
    "turn": 8
   },
   {
-   "cost_usd": 0.0012908,
+   "cost_usd": 0.005615999999999996,
    "critical_path": true,
-   "seconds": 3.00121214997489,
+   "seconds": 2.8707076529972255,
    "spec_id": "eval.judge",
    "tokens_in": 1070,
-   "tokens_out": 118,
+   "tokens_out": 134,
    "turn": 9
   },
   {
-   "cost_usd": 0.0073511,
+   "cost_usd": 0.012817999999999996,
    "critical_path": true,
-   "seconds": 6.352984799013939,
+   "seconds": 7.536792564962525,
    "spec_id": "eval.judge",
    "tokens_in": 1273,
-   "tokens_out": 722,
+   "tokens_out": 773,
    "turn": 10
   }
  ],
  "cases_sha": "0fadbfec",
  "component": "explain_an_answer",
  "defaulted_tags": 0,
- "git_sha": "b6e70b9",
+ "git_sha": "9f363a7",
  "impl": "trace_template",
  "label": "eval-trace",
  "summary": {
   "accuracy": 0.8,
-  "balanced": 0.8092,
+  "balanced": 0.7943,
   "cases": 10,
-  "cli_reported_cost_usd": 0.0136,
+  "cli_reported_cost_usd": 0.0584,
   "component": "explain_an_answer",
-  "cost_per_case": 0.00136,
+  "cost_per_case": 0.00584,
+  "details": "value 8/10 faithful and complete (faithful 9/10, complete 9/10); readable apart from the metric 0/10; cost 1.00 model calls per case, the grader's included",
   "dev": "8/10",
   "heldout": "0/0",
   "impl": "trace_template",
@@ -111,10 +112,10 @@
   "model_calls": 10,
   "passed": 8,
   "sample": "",
-  "seconds": 30.8,
-  "seconds_per_case": 3.08,
+  "seconds": 30.5,
+  "seconds_per_case": 3.05,
   "tokens_in": 11148,
-  "tokens_out": 1241
+  "tokens_out": 1389
  },
  "turns": [
   {
