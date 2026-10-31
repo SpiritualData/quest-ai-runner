@@ -422,3 +422,8 @@ def test_buying_paying_or_ordering_for_the_person_is_declined_in_the_ordered_rub
     rule = PLANNER_DECISION_RUBRIC[PLANNER_DECISION_RUBRIC.index("5. INSTRUCTION TO ACT"):PLANNER_DECISION_RUBRIC.index("6. OTHERWISE")]
     rule = " ".join(rule.split())
     assert "NOT REACHABLE" in rule and "ordering from a supplier" in rule and 'choose "answer"' in rule
+
+
+def test_an_empty_read_of_the_persons_own_records_is_the_answer_not_a_hand_off():
+    from quest_ai_runner.core.planner_prompt import PLANNER_PROMPT
+    assert "that IS the answer" in PLANNER_PROMPT and "never hand it off to look again" in PLANNER_PROMPT

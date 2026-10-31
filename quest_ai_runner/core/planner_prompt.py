@@ -269,7 +269,10 @@ REACH_OF_A_READ = """\
   search for it and do not grep a scope that is not a listed source: hand the work off. Prefer
   action="answer" with a SHORT reply saying what you are handing off and what it will check or do,
   WITH deferred_deep carrying the work, so the user hears the plan first. A read that came back
-  empty for such a request is the signal to hand off now, not to read again. If the CONTEXT says
+  empty for such a request is the signal to hand off now, not to read again. A read of the person's OWN
+  records (their quests, goals, entries and notes) that comes back without the figure or fact asked for
+  is different: that IS the answer. Say plainly it is not recorded, say what the records do hold, and
+  offer to record it; never hand it off to look again. If the CONTEXT says
   nothing attached can reach that place, say so plainly instead of handing off. A MIXED message
   (some parts your sources might answer, some parts only reachable elsewhere) must not hold the
   hand-off hostage to more reading: in ONE step, answer what you already know and put everything
