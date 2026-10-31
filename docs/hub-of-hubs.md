@@ -107,7 +107,7 @@ Reading of the hub's scorer on QAR's bindings:
 - integration by configuration (share of wired hub connections that need no code): 0.38
 - research freshness: share of areas researched within 90 days 1.00; stale: none
 - reinvented integrations (single services hand-wired where a hub covers them, no waiver): 7 (3 more waived with a reason); areas free of them 0.97
-- code: of the 42 areas whose call is adopt or coexist, share with one seam 0.17 and selectable by metric 0.14; vendor branches in core 0
+- code: of the 42 areas whose call is adopt or coexist, share with one seam 0.17 and selectable by metric 0.17; vendor branches in core 0
 - real gaps (call adopt or coexist, no seam): agent_orchestration, answer_verification, assembly_observability, background_memory, browser_use, code_context, command_sandbox, config, deep_research, embeddings, evals, inbound_mail, injection_defense, intents, judging, mcp_registry, model_pricing, observability, page_extraction, prompt_optimization, prompts, reranking, science_graph, science_provenance, science_read_papers, science_run_analysis, science_statistics, science_verify_claims, secrets_hygiene, structured_output, subagents, tool_observability, tool_sandbox, tool_schema, vendor_mcp
-- score: 0.757
+- score: 0.758
 <!-- hub-table:end -->
