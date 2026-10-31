@@ -3454,7 +3454,8 @@
    "no_writes": true,
    "route_in": [
     "answer",
-    "clarify"
+    "clarify",
+    "confirm"
    ],
    "question": true,
    "min_reply_chars": 40,
