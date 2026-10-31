@@ -4088,3 +4088,7 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,spec_selection,lexical_vector,76,56,35/50,21/26,0,0,0,0.0,1.1,f25a977,0a2ef76a,none,,,0.8156
 2026-10-30,context_selection,blind_grep,63,21,17/38,4/25,0,0,0,0.0,7.3,580a05d,4be37dec,none,,,
 2026-10-30,verify_offline,collect_by_file,29,29,29/29,0/0,0,0,0,0.0,64.0,580a05d,9655800d,none,,,
+2026-10-30,context_selection,hybrid_union,63,46,28/38,18/25,0,0,0,0.0,8.0,08c3cc4,4be37dec,none,,,
+2026-10-30,context_selection,idf_docstrings,63,46,28/38,18/25,0,0,0,0.0,12.4,08c3cc4,4be37dec,none,,,
+2026-10-30,context_selection,solutions_and_problems_with_links,63,46,29/38,17/25,0,0,0,0.0,85.1,08c3cc4,4be37dec,none,,,
+2026-10-30,context_selection,vector_bge_small,63,35,24/38,11/25,0,0,0,0.0,4.7,08c3cc4,4be37dec,none,,,
