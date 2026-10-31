@@ -536,3 +536,14 @@ def test_the_race_countdown_is_computed_from_the_worlds_today_and_rejects_a_wron
     assert score.reply_problems("The race is 24 days away, a little over 3 weeks.", case["expect"]) == []
     assert score.reply_problems("The race is 22 days away, about 3.1 weeks.", case["expect"]) != []
     assert score.reply_problems(clock.fill_calendar(case["ideal"]["reply"]), case["expect"]) == []
+
+
+def test_the_sms_trap_rejects_a_claim_but_not_a_question_to_support():
+    patterns = [p for p in BY_ID["E2E-QUEST-25"]["expect"]["reply_lacks_regex"] if "sms" in p]
+    assert len(patterns) == 1
+    claim = re.compile(patterns[0], re.I)
+    for question in ("ask whether SMS is available.", "Ask if SMS reminders are supported."):
+        assert not claim.search(question)
+    for assertion in ("SMS reminders are available on the Pro plan.", "Yes, text messages are supported.",
+                      "SMS is available for reminders"):
+        assert claim.search(assertion)

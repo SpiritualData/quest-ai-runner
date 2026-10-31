@@ -2130,7 +2130,7 @@
    "reply_lacks_regex": [
     "^\\s*(yes|yep|absolutely|of course)\\b",
     "\\b(does not|doesn't|do not|don't|cannot|can't|no)\\s+(currently\\s+)?(sync|integrate|support|connect)",
-    "\\b(sms|text messages?)\\s+(reminders?\\s+)?(are|is)\\s+(available|supported|on)\\b",
+    "(?<!whether\\s)(?<!if\\s)\\b(sms|text messages?)\\s+(reminders?\\s+)?(are|is)\\s+(available|supported|on)\\b",
     "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]"
    ]
