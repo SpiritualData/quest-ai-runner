@@ -4208,3 +4208,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-31,write_files,bounded_writer,20,20,20/20,0/0,0,0,0,0.0,0.0,423a166,5a1bc756,none,,,
 2026-10-31,write_through_mcp,allowlist_writer,15,15,15/15,0/0,0,0,0,0.0,0.0,423a166,5f3dda75,none,,,
 2026-10-31,card_store_growth,live_store,28,28,19/19,9/9,0,0,0,0.0,16.6,423a166-dirty,15f5a2eb,none,,,
+2026-10-31,card_store_growth,live_store,28,28,19/19,9/9,0,0,0,0.0,16.5,c5d54ef,15f5a2eb,none,,,
