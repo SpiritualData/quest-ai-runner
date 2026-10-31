@@ -4100,3 +4100,9 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-31,end_to_end,qar_live,30,25,25/30,0/0,220,1649738,84221,1.9983,823.3,f4dfda2,505f0f2e,claude-code-subscription,,sample:30,0.6647
 2026-10-31,end_to_end,qar_live,3,3,3/3,0/0,18,128453,7675,0.1091,69.7,30d9016,b03a249e,claude-code-subscription,,sample:3,0.8328
 2026-10-31,end_to_end,qar_live,1,1,1/1,0/0,8,67123,3051,0.0598,31.1,2753944-dirty,30575f37,claude-code-subscription,,only:E2E-GOAL-01,0.7722
+2026-10-31,context_selection,hybrid_union,63,46,28/38,18/25,0,0,0,0.0,8.3,508a6e2,0023f387,none,,,
+2026-10-31,context_selection,idf_docstrings,63,46,28/38,18/25,0,0,0,0.0,13.2,508a6e2,0023f387,none,,,
+2026-10-31,context_selection,idf_paths_only,63,32,21/38,11/25,0,0,0,0.0,16.8,508a6e2-dirty,0023f387,none,,,
+2026-10-31,context_selection,blind_grep,63,21,17/38,4/25,0,0,0,0.0,7.5,508a6e2-dirty,0023f387,none,,,
+2026-10-31,context_selection,vector_bge_small,63,35,24/38,11/25,0,0,0,0.0,5.0,508a6e2-dirty,0023f387,none,,,
+2026-10-31,context_selection,solutions_and_problems_with_links,63,46,29/38,17/25,0,0,0,0.0,94.9,75df821,0023f387,none,,,
