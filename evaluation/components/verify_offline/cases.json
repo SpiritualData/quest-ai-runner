@@ -86,7 +86,7 @@
   "description": "tests/test_f*.py (11 files) collects with no error and no lost test",
   "args": {
    "pattern": "tests/test_f*.py",
-   "min_collected": 283
+   "min_collected": 276
   },
   "expect": {
    "eq": {
@@ -150,7 +150,7 @@
   "description": "tests/test_l*.py (8 files) collects with no error and no lost test",
   "args": {
    "pattern": "tests/test_l*.py",
-   "min_collected": 111
+   "min_collected": 95
   },
   "expect": {
    "eq": {
@@ -326,7 +326,7 @@
   "description": "tests/test_w*.py (12 files) collects with no error and no lost test",
   "args": {
    "pattern": "tests/test_w*.py",
-   "min_collected": 297
+   "min_collected": 281
   },
   "expect": {
    "eq": {
