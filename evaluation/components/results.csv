@@ -4086,3 +4086,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,hand_off_a_goal,creator_keeps_it,18,8,8/18,0/0,0,0,0,0.0,0.0,f25a977,5c67e9c3,none,,,
 2026-10-30,draft_a_metric,ask_owner,10,4,4/10,0/0,0,0,0,0.0,0.0,f25a977,b64ac4bc,none,,,
 2026-10-30,spec_selection,lexical_vector,76,56,35/50,21/26,0,0,0,0.0,1.1,f25a977,0a2ef76a,none,,,0.8156
+2026-10-30,context_selection,blind_grep,63,21,17/38,4/25,0,0,0,0.0,7.3,580a05d,4be37dec,none,,,
+2026-10-30,verify_offline,collect_by_file,29,29,29/29,0/0,0,0,0,0.0,64.0,580a05d,9655800d,none,,,
