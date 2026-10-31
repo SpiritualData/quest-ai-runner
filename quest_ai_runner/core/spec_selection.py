@@ -70,7 +70,7 @@ def run(strategy: str, task: str, index: Dict[str, Any], provider: Any, model: O
     return search_lib.search(prompt_budget.decision_excerpt(task), search_lib.views_from_index(index),
                             judge=model_judge(provider, model) if provider is not None else None, vector_search=vector_search,
                             strategy=strategy, k_lexical=k_lexical, k_vector=k_vector, batch_size=batch_size, max_workers=max_workers,
-                            expand=expand, ranked_kinds=kinds, gate=GATE)
+                            expand=expand, ranked_kinds=kinds, gate=GATE, line_text=None)
 
 
 @solution("spec-selection")

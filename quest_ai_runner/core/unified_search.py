@@ -71,7 +71,7 @@ def solutions_and_problems_with_links(task: str, views: Sequence[search_lib.View
                             judge=model_judge(provider, model) if provider is not None else None, vector_search=vector_search,
                             strategy="gated", k_lexical=k_lexical, k_vector=k_vector, max_ranked=max_ranked, expand=expand,
                             ranked_kinds=ranked_kinds, link_kinds=LINKED_KINDS, tags=tags, tag_table=tag_table,
-                            tag_mode=tag_mode, gate=GATE)
+                            tag_mode=tag_mode, gate=GATE, line_text=None)
 
 
 @implementation("search-cards-and-specs", "two_pipelines")
@@ -96,7 +96,7 @@ def two_pipelines(task: str, views: Sequence[search_lib.View], *, provider: Any 
     specs = search_lib.gated(prompt_budget.decision_excerpt(task), records,
                              judge=model_judge(provider, model) if provider is not None else None, vector_search=vector_search,
                              k_lexical=k_lexical, k_vector=k_vector, expand=FIND_SPECS_EXPAND,
-                             ranked_kinds=search_lib.RECORD_CANDIDATE_KINDS, gate=GATE)
+                             ranked_kinds=search_lib.RECORD_CANDIDATE_KINDS, gate=GATE, line_text=None)
     result = search_lib.Selection(candidates=list(specs.candidates), sources=dict(specs.sources), calls=specs.calls,
                                   failed_batches=specs.failed_batches, route=f"cards {len(card_ids)}, records {specs.route}")
     for cid in card_ids:
