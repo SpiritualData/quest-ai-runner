@@ -25,7 +25,7 @@ def block():
         f"The registry's {len(facts)} areas are research categories, mostly arms or tools inside the hub's seats; the seam, selectable, "
         "by-configuration and fake-hub checks are made once per seat, and only for the "
         f"{numbers['seats_to_connect']} seats with an adopt or coexist area. QAR's arms cover {len(covered)} areas today. An adopt or coexist area "
-        "no arm covers is an arm gap: research to build or connect through the hub's defaults, not a missing binding (the hub's `docs/registry.md` lists every area).",
+        "no arm covers is an arm gap: research to build or connect through the hub's defaults, not a missing binding (the hub's `docs/reference/registry.md` lists every area).",
         render_docs.seat_reading(seat_facts),
         "The areas QAR's arms cover:\n\n" + render_docs.seat_table(facts=facts, areas=covered),
         "Reading of the hub's scorer on QAR:\n\n" + render_docs.metric_lines(numbers, facts)])

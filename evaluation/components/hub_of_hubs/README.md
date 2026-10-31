@@ -22,6 +22,6 @@ python3 evaluation/components/hub_of_hubs/render_docs.py            # rewrite th
 
 ## Autopilot backlog item
 
-Research one area a day, oldest first, with no paid model calls, following the hub's `docs/refresh.md`. The registry rows for QAR
+Research one area a day, oldest first, with no paid model calls, following the hub's `docs/how-to/refresh-the-registry.md`. The registry rows for QAR
 (`consumer` is `quest-ai-runner`) and `esoi/hub_seats.csv` are the only files changed here; then run the render command above,
 the component test and `esoi hygiene` in both repositories, and commit by explicit path in each repository.
