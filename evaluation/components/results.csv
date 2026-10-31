@@ -3916,3 +3916,13 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,label_context_cards,path_rules,11,5,5/11,0/0,0,0,0,0.0,0.0,9f4793b,3d0f3720,none,,,
 2026-10-30,judge_live_decisions,no_call_floor,12,5,5/12,0/0,0,0,0,0.0,0.0,9f4793b,5a83064b,none,,,
 2026-10-30,narrate_a_turn,no_beat,13,2,2/13,0/0,0,0,0,0.0,0.0,9f4793b,df729105,grader-only,,,0.4077
+2026-10-30,run_queued_tasks,qar_runner,43,43,43/43,0/0,0,0,0,0.0,14.7,303a078,00f3bf83,none,,,
+2026-10-30,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,0.4,303a078,ae7e2b22,none,,,
+2026-10-30,deep_runner,subprocess_runner,11,11,11/11,0/0,0,0,0,0.0,6.0,303a078,61d37336,none,,,
+2026-10-30,escalate_to_a_human,quest_decision_sink,15,15,15/15,0/0,0,0,0,0.0,0.0,303a078,597d556f,none,,,
+2026-10-30,write_through_mcp,allowlist_writer,15,15,15/15,0/0,0,0,0,0.0,0.0,303a078,5f3dda75,none,,,
+2026-10-30,write_files,bounded_writer,20,20,20/20,0/0,0,0,0,0.0,0.0,303a078,5a1bc756,none,,,
+2026-10-30,conversation_recall,session_files,10,9,9/10,0/0,0,0,0,0.0,0.0,303a078,91ee126a,none,,,
+2026-10-30,recent_context,file_store_filter,10,9,9/10,0/0,0,0,0,0.0,0.0,303a078,ef2ec0ff,none,,,
+2026-10-30,expose_the_public_api,live_surface,101,101,101/101,0/0,0,0,0,0.0,4.5,303a078,ee353081,none,,,
+2026-10-30,chat_quality,reference_replies,331,331,331/331,0/0,0,0,0,0.0,0.0,303a078,8c27caa9,none,,,
