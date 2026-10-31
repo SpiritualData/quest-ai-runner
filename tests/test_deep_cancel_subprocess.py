@@ -85,7 +85,7 @@ def runner_for(tmp_path: Path, ignore: tuple = (), grace: float = 0.4) -> Subpro
 @pytest.fixture(autouse=True)
 def quick_poll(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "fake-home"))
-    monkeypatch.setattr("quest_ai_runner.core.goal_runner.CANCEL_POLL_SECONDS", 0.1, raising=False)
+    monkeypatch.setattr("hubofhubs.deep.subprocess_runner.CANCEL_POLL_SECONDS", 0.1)
 
 
 def cancel_once_started(tmp_path: Path):

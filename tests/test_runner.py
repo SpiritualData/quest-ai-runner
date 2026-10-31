@@ -2,6 +2,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
+from hubofhubs.deep import session as hub_session, subprocess_runner as hub_runner
 from hubofhubs.ports.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorResult
@@ -931,7 +932,7 @@ def test_deep_run_has_no_fixed_kill_and_reviews_on_an_interval(monkeypatch):
 
     monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
     killed = {}
-    monkeypatch.setattr(gr, "kill_process_group", lambda proc: killed.setdefault("k", True))
+    monkeypatch.setattr(hub_runner, "kill_process_group", lambda proc: killed.setdefault("k", True))
     procs = []
     monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: procs.append(_hung_popen(killed, finish_after=2)) or procs[-1])
     prompts = []
@@ -963,7 +964,7 @@ def test_deep_run_stopped_only_when_reviewer_says_so_and_reason_is_in_output(mon
     def fake_kill(proc):
         killed["pid"] = proc.pid
 
-    monkeypatch.setattr(gr, "kill_process_group", fake_kill)
+    monkeypatch.setattr(hub_runner, "kill_process_group", fake_kill)
     monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _hung_popen(killed))
     runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(
         working_dir="/w", claude_path="/usr/bin/claude", review_interval_seconds=300.0,
@@ -983,7 +984,7 @@ def test_deep_run_review_failure_fails_open(monkeypatch):
 
     monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
     killed = {}
-    monkeypatch.setattr(gr, "kill_process_group", lambda proc: killed.setdefault("k", True))
+    monkeypatch.setattr(hub_runner, "kill_process_group", lambda proc: killed.setdefault("k", True))
     monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _hung_popen(killed, finish_after=2))
 
     calls = []
@@ -1014,7 +1015,7 @@ def test_subprocess_runner_optional_hard_timeout_kills_process_group_and_fails_c
     from quest_ai_runner.core import goal_runner as gr
 
     killed = {}
-    monkeypatch.setattr(gr, "kill_process_group", lambda proc: killed.setdefault("pid", proc.pid))
+    monkeypatch.setattr(hub_runner, "kill_process_group", lambda proc: killed.setdefault("pid", proc.pid))
     monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _hung_popen(killed))
     runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(
         working_dir="/w", claude_path="/usr/bin/claude", timeout_seconds=5.0,
@@ -1078,7 +1079,7 @@ def test_monitor_binds_to_explicit_session_id_ignores_other_sessions(tmp_path, m
     # Isolate project-dir DISCOVERY from this test (real hosts may already have a real
     # ~/.claude/projects with jsonl files, which _find_claude_project_dir would otherwise prefer)
     # so this test exercises only the session-binding behavior under test.
-    monkeypatch.setattr(gr, "_find_claude_project_dir", lambda working_dir: project_dir)
+    monkeypatch.setattr(hub_session, "find_claude_project_dir", lambda working_dir, config_dir=None: project_dir)
 
     bound_session_id = "11111111-1111-1111-1111-111111111111"
     other_session_file = project_dir / "22222222-2222-2222-2222-222222222222.jsonl"
@@ -1124,7 +1125,7 @@ def test_monitor_heartbeats_and_never_gives_up_early_while_waiting(monkeypatch):
     from quest_ai_runner.core import goal_runner as gr
     from quest_ai_runner.core import goal_runner_session as gr_session
 
-    monkeypatch.setattr(gr_session, "_find_claude_project_dir", lambda working_dir: None)
+    monkeypatch.setattr(hub_session, "find_claude_project_dir", lambda working_dir, config_dir=None: None)
 
     real_time = _time.time
     state = {"t": real_time()}
@@ -1133,7 +1134,7 @@ def test_monitor_heartbeats_and_never_gives_up_early_while_waiting(monkeypatch):
         state["t"] += 1.0  # each call advances the virtual clock by a full second
         return state["t"]
 
-    monkeypatch.setattr(gr.time, "time", fake_time)
+    monkeypatch.setattr(_time, "time", fake_time)
 
     events = []
     stop_event = _threading.Event()
@@ -2065,7 +2066,7 @@ def test_monitor_says_which_model_the_worker_runs_on_once_while_it_runs(tmp_path
 
     project_dir = tmp_path / ".claude" / "projects" / "proj"
     project_dir.mkdir(parents=True)
-    monkeypatch.setattr(gr, "_find_claude_project_dir", lambda working_dir: project_dir)
+    monkeypatch.setattr(hub_session, "find_claude_project_dir", lambda working_dir, config_dir=None: project_dir)
     session_id = "33333333-3333-3333-3333-333333333333"
     events = []
     stop_event = _threading.Event()

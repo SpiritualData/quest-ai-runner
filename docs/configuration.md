@@ -13,8 +13,8 @@ the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` |  | `adapters/acp_deep_runner.py`, `adapters/claude_cli_provider.py`, `cli_chat.py` +4 | `.env.example`, `docs/acp-deep-runner.md`, `docs/deployment.md` +4 |
-| `ANTHROPIC_AUTH_TOKEN` |  | `adapters/acp_deep_runner.py`, `adapters/claude_cli_provider.py`, `core/goal_runner.py` | `docs/acp-deep-runner.md` |
+| `ANTHROPIC_API_KEY` |  | `adapters/claude_cli_provider.py`, `cli_chat.py`, `cli_config.py` +2 | `.env.example`, `docs/acp-deep-runner.md`, `docs/deployment.md` +4 |
+| `ANTHROPIC_AUTH_TOKEN` |  | `adapters/claude_cli_provider.py` | `docs/acp-deep-runner.md` |
 | `CLAUDE_CONFIG_DIR` | Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir. | `adapters/claude_live_models.py`, `config_core_settings.py` | - |
 | `DEEPSEEK_API_KEY` |  | `config_resolvers.py`, `providers.py` | `docs/adapters.md` |
 | `DEEPSEEK_BASE_URL` |  | `providers.py` | `docs/adapters.md` |
@@ -205,7 +205,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_TOOLS_FILE` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_TOOL_LEDGER_DIR` |  | `core/tools.py` | `docs/tools.md` |
 | `QAR_TOOL_QUEST_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/tools.md` |
-| `QAR_TOOL_RUN_ID` | This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command. | `adapters/acp_deep_runner.py`, `core/goal_runner.py`, `core/tools.py` +1 | `docs/metric-results.md`, `docs/tools.md` |
+| `QAR_TOOL_RUN_ID` | This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command. | `core/goal_runner_contract.py`, `core/tools.py`, `tools/__main__.py` | `docs/hub-of-hubs.md`, `docs/metric-results.md`, `docs/tools.md` |
 | `QAR_TOOL_TASK_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/tools.md` |
 | `QAR_USER_ID` |  | `adapters/quest_api_card_repository.py` | `docs/context-card-stores.md` |
 | `QAR_VECTOR_BACKEND` |  | `config_assembler.py`, `runner/lane.py` | `docs/vector-context.md` |

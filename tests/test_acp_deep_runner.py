@@ -26,8 +26,9 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
+from hubofhubs.deep import acp_runner as hub_acp_runner
 from quest_ai_runner.adapters import acp_deep_runner as acp
-from quest_ai_runner.adapters import acp_deep_runner_config as acp_config
+from hubofhubs.deep import acp_config
 from hubofhubs.ports.deep import DeepRunner
 from hubofhubs.ports.events import EVENT_EXEC
 from quest_ai_runner.core.adapters_values import Escalation
@@ -136,7 +137,7 @@ def install_fake_connection(monkeypatch, conn: FakeConn, *, spawn_error: Optiona
         client.on_connect(conn)
         yield conn, None
 
-    monkeypatch.setattr(acp, "open_agent_connection", fake_open)
+    monkeypatch.setattr(hub_acp_runner, "open_agent_connection", fake_open)
     return conn
 
 

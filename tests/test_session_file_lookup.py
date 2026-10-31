@@ -1,6 +1,7 @@
 """The live deep-run monitor must find the worker's session file under any Claude config base."""
 from pathlib import Path
 
+from hubofhubs.deep import session as hub_session
 from quest_ai_runner.core import goal_runner
 
 
@@ -81,7 +82,7 @@ def test_a_resumed_session_does_not_replay_what_the_person_already_saw(tmp_path,
 
     project = tmp_path / ".claude" / "projects" / "proj"
     project.mkdir(parents=True)
-    monkeypatch.setattr(goal_runner, "_find_claude_project_dir", lambda working_dir: project)
+    monkeypatch.setattr(hub_session, "find_claude_project_dir", lambda working_dir, config_dir=None: project)
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "nohome"))
     session = project / "11111111-1111-1111-1111-111111111111.jsonl"

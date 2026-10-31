@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
+from hubofhubs.deep import stream_runner as hub_stream
 from quest_ai_runner.core import goal_runner_stream
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.goal_runner_stream import StreamJsonGoalRunner
@@ -169,8 +170,8 @@ def test_a_resumed_worker_is_watched_from_where_the_last_one_stopped(tmp_path, m
     def watch(*args, **kwargs):
         started.append(kwargs)
 
-    monkeypatch.setattr(goal_runner_stream, "_monitor_claude_session", watch)
-    monkeypatch.setattr(goal_runner_stream, "session_file_size", lambda working_dir, session_id: 321)
+    monkeypatch.setattr(hub_stream, "monitor_claude_session", watch)
+    monkeypatch.setattr(hub_stream, "session_file_size", lambda working_dir, session_id, config_dir=None: 321)
     first = make_claude(tmp_path, {"steps": [{"name": "a", "seconds": 0.1}]}, "claude")
     fresh = make_runner(first, tmp_path).run_goal(goal="g", brief="b", emit=lambda event: None,
                                                   control=ScriptedControl().control)

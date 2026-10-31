@@ -35,6 +35,7 @@ from hubofhubs.act.mcp_operations import MCPOperationRunner
 from hubofhubs.ports.deep import WriteResult
 from quest_ai_runner.adapters import acp_deep_runner as acp
 from quest_ai_runner.adapters.files_writer import FilesWriter
+from hubofhubs.deep import stream_runner as hub_stream
 from quest_ai_runner.core import goal_runner_stream
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
@@ -278,7 +279,7 @@ def terminal_runner(world: ScriptedWorld, work_dir: Path, monkeypatch, *, stream
     cfg = SubprocessConfig(working_dir=str(work_dir), claude_path="/usr/bin/claude", review_interval_seconds=0,
                            cancel_grace_seconds=0.5)
     if stream:
-        monkeypatch.setattr(goal_runner_stream, "cli_version", lambda binary, env: (2, 1, 300))
+        monkeypatch.setattr(hub_stream, "cli_version", lambda binary, env: (2, 1, 300))
         runner = StreamJsonGoalRunner(cfg)
         runner.echo_wait_seconds = 0.2
         monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: StreamProcess(world, cmd))

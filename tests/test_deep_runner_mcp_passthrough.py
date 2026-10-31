@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
+from hubofhubs.deep import acp_runner as hub_acp_runner
 from quest_ai_runner.adapters import acp_deep_runner as acp
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
@@ -106,7 +107,7 @@ def install_fake_connection(monkeypatch, conn: FakeConn):
         client.on_connect(conn)
         yield conn, None
 
-    monkeypatch.setattr(acp, "open_agent_connection", fake_open)
+    monkeypatch.setattr(hub_acp_runner, "open_agent_connection", fake_open)
 
 
 def acp_config(**overrides: Any) -> acp.AcpConfig:
