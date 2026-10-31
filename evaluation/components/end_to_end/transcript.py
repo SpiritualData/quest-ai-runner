@@ -89,6 +89,8 @@ def event_line(event):
         return {"type": "web search", "query": cut(event["query"], 160), "found": cut(event.get("out", ""), 200)}
     if kind == "read":
         return {"type": "read", "tool": event["tool"], "args": short_args(event["args"]), "found": cut(event.get("out", ""), 200)}
+    if kind == "ask":
+        return {"type": "ask filed for approval (nothing changed)", "tool": event["tool"], "args": short_args(event["args"]), "quest_id": event.get("quest_id")}
     return {"type": "write", "tool": event["tool"], "args": short_args(event["args"]), "quest_id": event.get("quest_id")}
 
 
@@ -174,6 +176,7 @@ def build(case, world, got, decisions, calls, cost_usd):
         context_used=context_used(case, world, got, decisions),
         writes=[{"tool": w["tool"], "args": short_args(w["args"]), "quest": (world.quests.get(w["quest_id"]) or {}).get("name")}
                 for w in got.get("writes", [])],
+        asks=[{"tool": a["tool"], "args": short_args(a["args"])} for a in got.get("asks", [])],
         web=[cut(q, 160) for q in got.get("web", [])], route=got.get("route", ""),
         reply=cut(got.get("reply", ""), 700), reply_full=str(got.get("reply", "")), verdict=dict(ok=bool(verdict["ok"]), note=cut(verdict.get("note", ""), 240)),
         calls=calls, cost_usd=round(cost_usd, 6))

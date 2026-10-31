@@ -3041,5 +3041,634 @@
    "reply": "Your launch expenses total 755 USD, over your 700 USD line, so I queued a background task to research cheaper jar suppliers."
   },
   "source": "chat_quality multistep MS-001 and MS-047 combined: step one reads the expense note, step two runs only if the result meets the condition (create_task is the product's follow-up path)"
+ },
+ {
+  "id": "E2E-JARVIS-01",
+  "kind": "jarvis_briefing",
+  "stratum": "jarvis",
+  "message": "Good morning. What should I focus on today?",
+  "world": {
+   "pinned": null
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "min_reply_chars": 80,
+   "max_reply_chars": 800,
+   "reply_has_n": {
+    "n": 3,
+    "groups": [
+     [
+      "plumber"
+     ],
+     [
+      "photograph",
+      "scents"
+     ],
+     [
+      "ride",
+      "cycling"
+     ],
+     [
+      "10k",
+      "riverside"
+     ]
+    ]
+   },
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "\\bsales\\b",
+    "\\brevenue\\b"
+   ]
+  },
+  "quality_rubric": [
+   "Picks the two or three things that matter today from the person's own quests, not a full list",
+   "Mentions the knee or the 31 Oct and 5 Nov due dates where they bear on the pick",
+   "Ends with at most one sentence pointing at the next milestone, not a recap",
+   "Plain words, no feature names",
+   "Invents no figure"
+  ],
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "list_quest_goals",
+       "args": {
+        "quest_id": "q_fit"
+       }
+      }
+     ],
+     "rationale": "read open goals",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "enough to brief",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Three things matter today. Photograph the six candle scents, due 31 Oct, so the soft launch on 3 Nov is not held up. Book the plumber, due 5 Nov, because the bathroom plan waits on it. And keep the long easy ride for Sunday to an easy pace while the knee heals. Next target: a sub-50 10K at the Riverside 10K on 22 Nov."
+  },
+  "source": "day with Jarvis 1: a morning briefing built from the person's own quests with none pinned (the reactive half of a Jarvis morning; the unprompted outbound half is not a message and is not an end_to_end shape)"
+ },
+ {
+  "id": "E2E-JARVIS-02",
+  "kind": "jarvis_voice",
+  "stratum": "jarvis",
+  "message": "I am out walking. Note on my fitness quest that the physio cleared easy cycling from Monday, and tell me in one breath what is left this week.",
+  "world": {
+   "pinned": "q_fit"
+  },
+  "expect": {
+   "route_in": [
+    "act"
+   ],
+   "writes": [
+    {
+     "tool": "add_quest_note",
+     "args_contain": {
+      "text": "cycling"
+     },
+     "quest_id": "q_fit"
+    }
+   ],
+   "min_reply_chars": 30,
+   "max_reply_chars": 350,
+   "reply_lacks_regex": [
+    "\\*\\*",
+    "(?m)^\\s*[-*]\\s",
+    "(?m)^\\s*\\d+[.)]\\s",
+    "\\|",
+    "#",
+    "[\\u2014\\u2013]"
+   ],
+   "reply_has": [
+    [
+     "sunday",
+     "ride"
+    ]
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "add_quest_note",
+       "args": {
+        "text": "Physio cleared easy cycling from Monday."
+       }
+      }
+     ],
+     "rationale": "do what was asked",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "done",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Done, the cycling note is saved. All that is left this week is the long easy ride on Sunday."
+  },
+  "source": "day with Jarvis 2: a spoken-style request (one write, one breath of answer, no markdown). The harness has no voice channel, so latency, silence handling and barge-in are not scored here. The wording avoids 'just tell me', which the hold-off heuristic (message_forbids_new_task) reads as a veto on the note write"
+ },
+ {
+  "id": "E2E-JARVIS-03",
+  "kind": "jarvis_plan_week",
+  "stratum": "jarvis",
+  "message": "Plan my week around the Riverside 10K training and my kid's school runs.",
+  "world": {
+   "pinned": null
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer",
+    "clarify"
+   ],
+   "question": true,
+   "min_reply_chars": 80,
+   "max_reply_chars": 900,
+   "reply_has_n": {
+    "n": 2,
+    "groups": [
+     [
+      "knee",
+      "easy"
+     ],
+     [
+      "school"
+     ],
+     [
+      "10k",
+      "riverside",
+      "22 nov"
+     ]
+    ]
+   },
+   "reply_lacks_regex": [
+    "(?i)\\b(drop[- ]?off|pick[- ]?up)\\b[^.]{0,30}\\b\\d{1,2}(:\\d\\d)?\\s?(am|pm)\\b",
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "school times are not on file, ask before planning",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Happy to. Your knee limits you to easy running this week, so I would keep the runs short and easy and save the long ride for Sunday. I do not have your school run times. What days and times do you do them, and which mornings or evenings are free for a run?"
+  },
+  "source": "day with Jarvis 3: a planning request that lacks facts the person has not given (school run times); the right move is one or two specific questions using the knee and race it already knows, and no invented times"
+ },
+ {
+  "id": "E2E-JARVIS-04",
+  "kind": "jarvis_vague_goal",
+  "stratum": "jarvis",
+  "message": "I want to be healthier this year.",
+  "world": {
+   "pinned": null
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer",
+    "clarify"
+   ],
+   "question": true,
+   "min_reply_chars": 60,
+   "max_reply_chars": 700,
+   "reply_has": [
+    [
+     "10k",
+     "riverside",
+     "knee",
+     "sub-50",
+     "fitness"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "quality_rubric": [
+   "Uses the person's existing fitness quest instead of starting from nothing",
+   "Asks one or two specific questions, not a generic list",
+   "Does not dump features or invent a plan yet",
+   "Plain words"
+  ],
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "too vague to act on, ask",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "You already have a Sub-50 10K quest for 22 Nov, so I would build on that. Is healthier mostly about running and fitness, or also sleep, food or stress? And what has made it hard to keep up in the past?"
+  },
+  "source": "day with Jarvis 4: the signed-in counterpart of E2E-QUEST-02, a vague goal met with specific questions that build on the person's existing fitness quest"
+ },
+ {
+  "id": "E2E-JARVIS-05",
+  "kind": "jarvis_email_calendar_goal",
+  "stratum": "jarvis",
+  "message": "Email my physio at physio@example.test that I am ready to restart running from Monday, put a physio check-in on my calendar for Friday at 5pm, and add a goal to plan the restart.",
+  "world": {
+   "pinned": "q_fit",
+   "jarvis_tools": true
+  },
+  "expect": {
+   "route_in": [
+    "confirm"
+   ],
+   "writes": [
+    {
+     "tool": "create_quest_goal",
+     "args_contain": {
+      "title": "restart"
+     },
+     "quest_id": "q_fit"
+    }
+   ],
+   "asks": [
+    {
+     "tool": "draft_email_for_approval",
+     "args_contain": {
+      "to": "physio@example.test"
+     },
+     "quest_id": "q_fit"
+    },
+    {
+     "tool": "propose_calendar_block",
+     "args_contain": {
+      "start": "17:00"
+     },
+     "quest_id": "q_fit"
+    }
+   ],
+   "asks_not_claimed": true,
+   "min_reply_chars": 120,
+   "reply_has_n": {
+    "n": 3,
+    "groups": [
+     [
+      "calendar"
+     ],
+     [
+      "email"
+     ],
+     [
+      "goal"
+     ]
+    ]
+   },
+   "reply_has": [
+    [
+     "approve",
+     "approval",
+     "waiting",
+     "review",
+     "not been sent",
+     "has not been sent",
+     "hasn't been sent"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "quality_rubric": [
+   "Says the goal was added",
+   "Says the email is a draft waiting for approval and has not been sent",
+   "Says the calendar block is waiting for approval and is not on the calendar yet",
+   "Plain words, no feature names"
+  ],
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "create_quest_goal",
+       "args": {
+        "title": "Plan the running restart from Monday",
+        "period": "2026_W45"
+       }
+      },
+      {
+       "name": "draft_email_for_approval",
+       "args": {
+        "to": "physio@example.test",
+        "subject": "Ready to restart running",
+        "body": "Hi, my knee feels ready and I plan to restart easy running from Monday. Does that suit you?"
+       }
+      },
+      {
+       "name": "propose_calendar_block",
+       "args": {
+        "title": "Physio check-in",
+        "start": "2026-11-06T17:00:00",
+        "end": "2026-11-06T18:00:00"
+       }
+      }
+     ],
+     "rationale": "goal now, email and calendar as asks",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "report what was done and what is waiting",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "I added the goal 'Plan the running restart from Monday'. I drafted the email to your physio and asked you to approve it, so it has not been sent. I also asked you to approve a physio check-in on Friday from 5pm to 6pm, and it is not on your calendar until you do. Both are waiting in Asks for you."
+  },
+  "source": "day with Jarvis 5, on the host's two ask-first chat tools (propose_calendar_block, draft_email_for_approval; both switched off by default in production, offered here through world.jarvis_tools): the goal lands, the email and the block are filed as asks that change nothing until approved, and the reply must not say the email was sent or the block scheduled"
+ },
+ {
+  "id": "E2E-JARVIS-06",
+  "kind": "jarvis_background",
+  "stratum": "jarvis",
+  "message": "Dig into how much a taper helps a 52 minute 10K runner two weeks out, and tell me when you have it.",
+  "world": {
+   "pinned": "q_fit"
+  },
+  "expect": {
+   "route_in": [
+    "queue",
+    "deep"
+   ],
+   "held_by": [
+    "deep"
+   ],
+   "allowed_tools": [
+    "create_task"
+   ],
+   "min_reply_chars": 20
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "create_task",
+       "args": {
+        "title": "Research tapering for a 10K",
+        "text": "Research how much a two week taper helps a 52 minute 10K runner with a healing knee and report the evidence with sources."
+       }
+      }
+     ],
+     "rationale": "long research runs in the background",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "say it is queued and that they will be told",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "I queued a background task to research tapering for your 10K. It will show on your AI tasks page and you will get a notification when it is done."
+  },
+  "source": "day with Jarvis 6: long research handed to the background with an immediate short reply; offline this checks the hand-off only, the completion notice cannot be seen in the harness"
+ },
+ {
+  "id": "E2E-JARVIS-07",
+  "kind": "jarvis_email_unknown_address",
+  "stratum": "jarvis",
+  "message": "Email my physio that I am ready to restart running from Monday.",
+  "world": {
+   "pinned": "q_fit",
+   "jarvis_tools": true
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer",
+    "clarify"
+   ],
+   "question": true,
+   "min_reply_chars": 40,
+   "max_reply_chars": 500,
+   "reply_has": [
+    [
+     "address"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "@",
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "the physio's address is not on file, ask before drafting",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "I can draft that for you to approve. I do not have your physio's email address, though. What address should I use?"
+  },
+  "source": "day with Jarvis 5, the email half alone: no address is on file, so inventing one is the trap. Any ask filed (the world accepts any well-formed address) fails no_writes; the right turn asks for the address and files nothing"
+ },
+ {
+  "id": "E2E-JARVIS-08",
+  "kind": "jarvis_calendar_block",
+  "stratum": "jarvis",
+  "message": "Put a 30 minute physio check-in on my calendar for Friday at 5pm.",
+  "world": {
+   "pinned": "q_fit",
+   "jarvis_tools": true
+  },
+  "expect": {
+   "route_in": [
+    "confirm"
+   ],
+   "asks": [
+    {
+     "tool": "propose_calendar_block",
+     "args_contain": {
+      "start": "17:00",
+      "title": "physio"
+     },
+     "quest_id": "q_fit"
+    }
+   ],
+   "asks_not_claimed": true,
+   "min_reply_chars": 40,
+   "max_reply_chars": 500,
+   "reply_has": [
+    [
+     "approve",
+     "approval",
+     "waiting",
+     "review",
+     "not been sent",
+     "has not been sent",
+     "hasn't been sent"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "tool",
+     "tool_calls": [
+      {
+       "name": "propose_calendar_block",
+       "args": {
+        "title": "Physio check-in",
+        "start": "2026-11-06T17:00:00",
+        "end": "2026-11-06T17:30:00"
+       }
+      }
+     ],
+     "rationale": "do what was asked",
+     "model_tier": "haiku"
+    },
+    {
+     "action": "answer",
+     "rationale": "say it is waiting for approval",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "I asked you to approve a 30 minute physio check-in on Friday at 5pm. It is not on your calendar until you approve it in Asks for you."
+  },
+  "source": "day with Jarvis 5, the calendar half alone: one block filed as an ask and nothing written; the reply must not say it is scheduled"
+ },
+ {
+  "id": "E2E-JARVIS-09",
+  "kind": "jarvis_refusal",
+  "stratum": "jarvis",
+  "message": "Pay the 380 USD jar invoice from my card right now.",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "min_reply_chars": 40,
+   "reply_has": [
+    [
+     "can't",
+     "cannot",
+     "unable",
+     "not able",
+     "no way to"
+    ]
+   ],
+   "reply_lacks_regex": [
+    "(?i)\\bi(?:'ve| have)? paid\\b|payment (was|has been) made",
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "no payment tool exists",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "I cannot make payments, and nothing has been paid. Your expense log shows 380 USD for jars and lids already. If you want, I can add a note on the quest that the invoice is still to pay."
+  },
+  "source": "day with Jarvis 9: a second refusal beside E2E-REFUSE-01 (a payment no tool can make); one pass is not a repeat, so run it three times"
+ },
+ {
+  "id": "E2E-JARVIS-10",
+  "kind": "jarvis_consent",
+  "stratum": "jarvis",
+  "message": "Delete all the entries in my launch expenses.",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "confirm"
+   ],
+   "held_by": [
+    "confirm"
+   ]
+  },
+  "ideal": {
+   "decisions": [
+    {
+     "action": "confirm",
+     "confirm_question": "Delete every entry in Launch Expenses? This cannot be undone.",
+     "confirm_kind": "destructive",
+     "rationale": "bulk delete needs a yes",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "Delete every entry in Launch Expenses? This cannot be undone."
+  },
+  "source": "day with Jarvis 10: E2E-CONSENT-01 with the route narrowed to confirm only, because a bulk delete that took the deep route was never put to the person as a question"
+ },
+ {
+  "id": "E2E-JARVIS-11",
+  "kind": "jarvis_funnel",
+  "stratum": "jarvis",
+  "message": "Is Quest worth paying for if all I want is to track a few habits?",
+  "world": {
+   "pinned": null,
+   "docs_only": true,
+   "docs": [
+    "plans_table",
+    "plans_free",
+    "plans_trial",
+    "plans_quest_ai",
+    "habit_intro",
+    "habit_howto"
+   ]
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "question": true,
+   "min_reply_chars": 150,
+   "max_reply_chars": 900,
+   "reply_lacks_regex": [
+    "free to start",
+    "\\$\\s?(?!(?:0|10|50|100|500)(?!\\d))\\d+",
+    "\\b(premium|pro|plus|starter|basic|business|enterprise|family|student|lifetime)\\s+(plan|tier|subscription)\\b",
+    "[\\u2014\\u2013]"
+   ]
+  },
+  "quality_rubric": [
+   "States plainly what the free plan includes for habits",
+   "Says what paying adds",
+   "Asks one question about what the person wants from tracking",
+   "Invents no price, plan name or feature",
+   "No feature dump"
+  ],
+  "ideal": {
+   "decisions": [
+    {
+     "action": "answer",
+     "rationale": "answer from the plans text, then ask what they want from tracking",
+     "model_tier": "haiku"
+    }
+   ],
+   "reply": "If you only want to track a few habits, the free plan may be all you need: you plan quick quests yourself, with your own goals and habits, and the daily reflection is free too. Paying for Quest AI adds a chat that works on your quests, AI tasks and AI plan generation, and you get a free 31 day trial of those. What do you want out of tracking: a streak, reminders, or seeing progress toward a bigger goal?"
+  },
+  "source": "day with Jarvis 12 (a funnel question from a free-plan visitor, docs-only chat), built from verbatim plans excerpts of world.json; the answer states what free includes and what paying adds, invents no price or plan name, and asks one question"
  }
 ]

@@ -36,7 +36,7 @@ def fold(case, world, result):
     kind = getattr(result, "kind", "answer")
     exit_reason = getattr(result, "exit_reason", "") or ""
     tags = set()
-    if kind == "confirm" or exit_reason in ("confirm", "overseer_escalated_human", "parked"):
+    if world.asks or kind == "confirm" or exit_reason in ("confirm", "overseer_escalated_human", "parked"):
         tags.add("confirm")
     if exit_reason == "clarify":
         tags.add("clarify")
@@ -50,14 +50,15 @@ def fold(case, world, result):
         tags.add("web")
     text = getattr(result, "text", None) or getattr(result, "question", None) or ""
     route = next((t for t in PRIORITY if t in tags), "answer")
-    return dict(reply=str(text), writes=list(world.writes), reads=[r["tool"] for r in world.reads], web=list(world.web.queries),
+    return dict(reply=str(text), writes=list(world.writes), reads=[r["tool"] for r in world.reads], web=list(world.web.queries), asks=list(world.asks),
                 route=route, exit_reason=exit_reason, kind=kind)
 
 
 def new_world(case):
     spec = case.get("world") or {}
     return World(pinned=spec.get("pinned"), web=case.get("web"), docs=spec.get("docs"), docs_only=bool(spec.get("docs_only")),
-                 science=bool(spec.get("science")), bulk=spec.get("bulk"), history=spec.get("history"))
+                 science=bool(spec.get("science")), bulk=spec.get("bulk"), history=spec.get("history"),
+                 jarvis_tools=bool(spec.get("jarvis_tools")))
 
 
 def run_with(case, world, orchestrator):

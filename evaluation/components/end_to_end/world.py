@@ -135,9 +135,10 @@ class Bulk:
 class World:
     """``docs`` names the documentation excerpts of ``world.json`` shown to the planner; ``docs_only`` makes the view the
     documentation-only chat a free plan gets (no quests, only the excerpts). ``trace`` is the ordered log of what the
-    tools and the web did, kept so a transcript can show the steps; nothing reads it for scoring."""
+    tools and the web did, kept so a transcript can show the steps; nothing reads it for scoring. ``jarvis_tools`` offers the two
+    ask-first chat tools (a calendar block and an email draft); each call is kept in ``asks``, never in ``writes``."""
 
-    def __init__(self, pinned=None, web=None, docs=None, docs_only=False, science=False, bulk=None, history=None):
+    def __init__(self, pinned=None, web=None, docs=None, docs_only=False, science=False, bulk=None, history=None, jarvis_tools=False):
         self.quests = copy.deepcopy(SPEC["quests"])
         self.today = world_today().isoformat()
         self.pinned = pinned
@@ -152,7 +153,8 @@ class World:
         self.trace = []
         self.web = FakeWeb(web)
         self.web.trace = self.trace
-        self.writes, self.reads = [], []
+        self.writes, self.reads, self.asks = [], [], []
+        self.jarvis_tools = jarvis_tools
         self.science = science
         self.openalex = FakeOpenAlex(SCIENCE_WORKS)
         self.registry = self.build_registry()
@@ -166,6 +168,14 @@ class World:
         for name in registry.names():
             spec = registry.get(name)
             spec.handler = self.handler(name, bool(getattr(spec, "mutates", False)), "quest_id" in (spec.properties() or {}))
+        if self.jarvis_tools:
+            # The chat a person uses has no mail send and no outside draft tool of the runner's; it has the two ask-first tools, which
+            # file an ask and change nothing until the person approves (``jarvis_tools.py``).
+            from end_to_end import jarvis_tools
+            for name in ("send_quest_email", "file_email_draft"):
+                registry.unregister(name)
+            for spec in jarvis_tools.specs(self):
+                registry.register(spec)
         if self.science:
             # The real tool over the hub's OpenAlex arm, with the HTTP call replaced by the fake: only the network is stubbed.
             from quest_ai_runner.core.tools_science import science_literature_spec
