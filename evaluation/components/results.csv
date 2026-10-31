@@ -4096,3 +4096,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,recipe_fast_path,recipe_replay_offline,30,30,30/30,0/0,47,0,0,0.0,0.1,aecbbf0,c6c91720,simulated,,,
 2026-10-30,assist_a_terminal_session,fast_model_helpers,32,30,30/32,0/0,30,5359,704,0.0,0.0,aecbbf0,882af363,simulated,,,0.9563
 2026-10-30,justified_model_spend,spec_registry_ablation,15,0,0/15,0/0,0,0,0,0.0,1.2,aecbbf0,f4536c6e,none,,,
+2026-10-31,end_to_end,qar_live,10,10,10/10,0/0,63,470069,26038,0.539,245.3,f4dfda2,505f0f2e,claude-code-subscription,,sample:10,0.7887
+2026-10-31,end_to_end,qar_live,30,25,25/30,0/0,220,1649738,84221,1.9983,823.3,f4dfda2,505f0f2e,claude-code-subscription,,sample:30,0.6647
