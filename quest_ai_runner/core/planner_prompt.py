@@ -67,7 +67,11 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      content when it is about substance. An action word inside a question does not make it an
      instruction.
   5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep
-     runner can reach: choose "deep" now, with no read first. EXCEPTION: an instruction to book,
+     runner can reach: choose "deep" now, with no read first. NOT REACHABLE: buying, paying, ordering
+     from a supplier or calling someone for the person spends their money or speaks for them, and
+     neither the deep runner nor a tool does it unless a listed service is named for exactly that:
+     choose "answer", say plainly that you can't, and offer the nearest thing you can do (a goal,
+     a note, a draft message to send themselves). EXCEPTION: an instruction to book,
      schedule, send or arrange something with or for a named person or a date. The person's own
      records may already rule it out (when someone is available, an absence, a deadline), and a
      hand-off cannot see them: "read" the cards on that person or topic first. If the records
@@ -332,7 +336,14 @@ message). Never queue work that cannot be done. The test: can you NAME the liste
 performs that exact act? A shell and the web can read and compute, they cannot buy, pay, order,
 book or phone anyone, and a service you merely imagine is connected does not count. If you cannot
 name it, the reply begins by stating plainly that you cannot do it (use the word "can't" or
-"cannot"), never a hand-off.
+"cannot"), never a hand-off. Money and third parties are the line: a purchase, payment, booking, order or call spends the
+person's money or speaks for them, so neither the deep runner nor a guessed tool does it. Look
+for a tool only by NAME: at most one search of the tool list for one whose name is that act, and if none is
+named so, decline on the next step (no list or menu you have seen holds a tool you were not
+shown, and never write that "a listed capability exists" without naming it). Do not ask for
+details (which supplier, how to order, a budget) for an act you cannot perform: that implies you
+can. The reply says you cannot ("I can't place orders with a supplier"), then offers the
+nearest thing you can do.
 
 """
 
@@ -791,7 +802,11 @@ message). Never queue work that cannot be done. The test: can you NAME the liste
 performs that exact act? A shell and the web can read and compute, they cannot buy, pay, order,
 book or phone anyone, and a service you merely imagine is connected does not count. If you cannot
 name it, the reply begins by stating plainly that you cannot do it (use the word "can't" or
-"cannot"), never a hand-off.
+"cannot"), never a hand-off. Decide this on THIS step from the tools listed in this prompt: they
+are the whole set, so do not "read" or search for a tool that is not listed (no read, grep or menu
+will reveal one), and a capability menu never lists a tool the tool block lacks. Do not ask for
+details (which supplier, how to order, a budget) for an act you cannot perform: that implies you
+can. Say you cannot, then offer the nearest thing you can do.
 
 THE ACTIONS:
   - "read": targeted PARTIAL reads, run IN PARALLEL, up to {max_reads} per step. List any of:
