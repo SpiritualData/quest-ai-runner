@@ -21,7 +21,7 @@ def register_with_hub() -> None:
 
 
 def assemble(card_repository, *, provided=None):
-    """QAR's hub assembly: the ``card-store`` seat is QAR's card repository, with the hub reading it under QAR's selections."""
-    config = hubofhubs.AssemblyConfig(solutions=(CARD_STORE,), selections={CARD_STORE: CARD_REPOSITORY},
-                                      options={CARD_STORE: {"repository": card_repository}})
-    return hubofhubs.assemble(config, provided=provided)
+    """QAR's whole hub assembly: the hub's defaults for every seat, and the ``card-store`` seat is QAR's card repository.
+    ``system.pending`` lists the seats the hub could not build alone (QAR provides the model call itself)."""
+    return hubofhubs.assemble(arms={CARD_STORE: CARD_REPOSITORY}, options={CARD_STORE: {"repository": card_repository}},
+                              provided=provided)

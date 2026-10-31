@@ -56,3 +56,8 @@ def test_assembly_gives_a_card_store_over_the_repository_and_names_the_layer():
 def test_the_hub_default_is_untouched_by_qar():
     default = hubofhubs.assemble(hubofhubs.AssemblyConfig(solutions=(qar_hub.CARD_STORE,)))
     assert "local_card_store" in default.reasons[0]
+
+
+def test_the_assembly_reports_what_the_hub_could_not_build_alone():
+    system = qar_hub.assemble(DictRepository())
+    assert qar_hub.CARD_STORE not in system.pending and "pass provided=" in system.pending["model-call"]
