@@ -2,6 +2,7 @@
 (``QAR_MODEL_BACKEND``, default claude_cli; model ``QAR_EVAL_MODEL``, default haiku), one small call per
 scenario (16 calls). Needs a model backend; it cannot run, and so cannot be recorded, on a host without one
 (waivers.csv S10 watch-a-run:unmeasured). Run it with --record where a backend exists."""
+PAID = True
 import os
 
 import common
