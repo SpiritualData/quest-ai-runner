@@ -47,7 +47,7 @@ class CoreSettings:
     claude_config_dir: Optional[str] = None  # [CLAUDE_CONFIG_DIR]
     # How the deep worker is launched: the lean flags, a spend ceiling and a turn override. The default adds no flag, so it is
     # today's launch [QAR_DEEP_TOOLS, QAR_DEEP_SETTING_SOURCES, QAR_DEEP_STRICT_MCP, QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS,
-    # QAR_DEEP_MAX_BUDGET_USD]
+    # QAR_DEEP_MAX_BUDGET_USD, QAR_DEEP_LAUNCH_PROFILE]
     deep_launch: DeepLaunchSettings = DeepLaunchSettings()
     # Which meters read a metric's value, in the order tried (core/metric_meter.py) [QAR_METRIC_METERS]
     metric_meters: str = "recorded_row,offline_arm"

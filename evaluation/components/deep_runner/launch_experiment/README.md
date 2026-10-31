@@ -69,3 +69,37 @@ An arm that met nothing, or arms run on different case counts, never replaces. R
 met goal, wall seconds, and false-done counts (an arm with more false-done than A is flagged for a human to read before any
 change). The rule is not changed after seeing results; a different rule is a new experiment. If B passes and C does not, B alone
 becomes the default; the default changes by setting the `QAR_DEEP_*` names or the config, and never by editing the launch code.
+
+## First live check and safety review (2026-10-31, single cases; not a recorded metric row)
+
+Seven single runs of one small deterministic task through the real runner (`SubprocessGoalRunner`, one `claude -p` call each, the
+same model, the same prompt and environment): create a file with exact content, run `wc -c` on it into a second file, read it back.
+Success = both files exact. Nothing was recorded in `results.csv`; the staged ladder above has not been run.
+
+| Arm | Run | Seconds | Prompt tokens (input + cache read + cache create) | Output | Turns | Cost (USD) | Succeeded |
+|---|---|---|---|---|---|---|---|
+| A (today) | 1 | 8.5 | 79,309 | 402 | 2 | 0.1225 | yes |
+| A | 2 | 7.1 | 79,367 | 311 | 2 | 0.1218 | yes |
+| B (spec) | 1 | 7.5 | 30,456 | 398 | 2 | 0.0467 | yes |
+| B | 2 | 6.4 | 30,456 | 298 | 2 | 0.0433 | yes |
+| D (B with `--setting-sources user`) | 1 | 8.0 | 32,816 | 399 | 2 | 0.0491 | yes |
+| D | 2 | 8.0 | 32,816 | 410 | 2 | 0.0492 | yes |
+| E (`lean_guarded`, below) | 1 | 8.3 | 34,903 | 453 | 2 | 0.0531 | yes |
+
+Prompt tokens fell about 60 percent and cost 57 to 60 percent for B, D and E; seconds are within run-to-run noise (6 to 8.5 s, the
+model call dominates a two-turn task). Success was 7 of 7. This is one task, two runs per arm, in a directory without project
+context files, so the saving on a real goal is not measured.
+
+What the review found, which arm B as specified does not survive:
+
+1. `--setting-sources ""` removes the USER settings, not only project ones. On the deployment the session transcripts show the
+   SessionStart hook of the user settings running in A and D and not in B. The same user settings hold the worker's PreToolUse
+   guards (write confinement, destructive delete, owner-only repositories) and its model overrides, and the worker runs with
+   `--dangerously-skip-permissions`, so under B those guards are gone. Arm D keeps them.
+2. `--tools` without the web tools makes WebSearch and WebFetch unreachable while `SubprocessConfig.web_enabled()` still reports
+   True (no allowlist pinned). Arm E keeps both tools. Dropped by E (a named cost): subagent, todo, notebook and skill tools, the
+   installed-skills listing, and ambient MCP servers. Quest operations go through the shell, so no MCP server is needed for them.
+3. `--max-budget-usd 3` is a new way for a long goal to stop. E sets none; `QAR_DEEP_MAX_BUDGET_USD` adds one.
+
+Arm E is the `lean_guarded` profile (`core/deep_launch.PROFILES`), selected only by `QAR_DEEP_LAUNCH_PROFILE=lean_guarded`. The
+default is unchanged and `esoi select --promote` was not run. The offline tests are `tests/test_deep_launch_safety.py`.

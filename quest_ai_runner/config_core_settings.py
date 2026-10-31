@@ -8,11 +8,12 @@ call so a running process can be retuned without a restart, exactly as before.
 """
 from __future__ import annotations
 
+import dataclasses
 import os
 from typing import Mapping, Optional
 
 from .config_support import _log
-from .core.deep_launch import DeepLaunchSettings
+from .core.deep_launch import PROFILES, DeepLaunchSettings
 from .core.runtime_settings import (
     DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS,
     CoreSettings,
@@ -55,18 +56,30 @@ def deep_launch_from_env(env: Mapping[str, str]) -> DeepLaunchSettings:
     ``QAR_DEEP_SETTING_SOURCES``: comma-separated ``user``, ``project``, ``local`` (``--setting-sources``); ``none`` loads none.
     ``QAR_DEEP_STRICT_MCP`` and ``QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS``: ``1`` adds ``--strict-mcp-config`` and
     ``--exclude-dynamic-system-prompt-sections``. ``QAR_DEEP_MAX_BUDGET_USD``: a positive number (``--max-budget-usd``).
+    ``QAR_DEEP_LAUNCH_PROFILE``: a named bundle of these (``core.deep_launch.PROFILES``, today ``lean_guarded``); a name that is
+    not known is logged and ignored, and any ``QAR_DEEP_*`` name above that is set overrides the profile's field.
     The turn cap is the existing ``QAR_DEEP_MAX_TURNS`` (``OrchestratorConfig.deep_max_turns``), not a second variable.
     """
+    profile_name = (env.get("QAR_DEEP_LAUNCH_PROFILE") or "").strip().lower()
+    base = DeepLaunchSettings()
+    if profile_name:
+        if profile_name in PROFILES:
+            base = PROFILES[profile_name]
+        else:
+            _log.warning("QAR_DEEP_LAUNCH_PROFILE=%r is not one of %s, using today's launch", profile_name, sorted(PROFILES))
     tools_raw = (env.get("QAR_DEEP_TOOLS") or "").strip()
-    tools = None if not tools_raw else (() if tools_raw.lower() == "none" else
-                                         tuple(t.strip() for t in tools_raw.split(",") if t.strip()))
+    tools = base.tools if not tools_raw else (() if tools_raw.lower() == "none" else
+                                               tuple(t.strip() for t in tools_raw.split(",") if t.strip()))
     sources_raw = (env.get("QAR_DEEP_SETTING_SOURCES") or "").strip()
-    sources = None if not sources_raw else ("" if sources_raw.lower() == "none" else sources_raw)
-    return DeepLaunchSettings(
-        tools=tools, setting_sources=sources,
-        strict_mcp=(env.get("QAR_DEEP_STRICT_MCP") or "").strip().lower() in _TRUE,
-        exclude_dynamic_sections=(env.get("QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS") or "").strip().lower() in _TRUE,
-        max_budget_usd=_optional_positive(env.get("QAR_DEEP_MAX_BUDGET_USD"), "QAR_DEEP_MAX_BUDGET_USD"))
+    sources = base.setting_sources if not sources_raw else ("" if sources_raw.lower() == "none" else sources_raw)
+    strict_raw = (env.get("QAR_DEEP_STRICT_MCP") or "").strip().lower()
+    dynamic_raw = (env.get("QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS") or "").strip().lower()
+    budget = _optional_positive(env.get("QAR_DEEP_MAX_BUDGET_USD"), "QAR_DEEP_MAX_BUDGET_USD")
+    return dataclasses.replace(
+        base, tools=tools, setting_sources=sources,
+        strict_mcp=(strict_raw in _TRUE) if strict_raw else base.strict_mcp,
+        exclude_dynamic_sections=(dynamic_raw in _TRUE) if dynamic_raw else base.exclude_dynamic_sections,
+        max_budget_usd=budget if budget is not None else base.max_budget_usd)
 
 
 def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSettings:

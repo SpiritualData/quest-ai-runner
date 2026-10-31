@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-229 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+230 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -83,6 +83,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_AUTO_MODEL` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS` | 1 adds --exclude-dynamic-system-prompt-sections to the deep worker launch, which moves per-machine text out of the cached prefix; unset leaves the launch as it was. CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_DEEP_INSTRUCTIONS_FILES` |  | `config_core_settings.py`, `core/standing_instructions.py` | `.env.example`, `docs/acp-deep-runner.md` |
+| `QAR_DEEP_LAUNCH_PROFILE` | Names a bundle of deep worker launch settings (today only lean_guarded: fewer built-in tools with web kept, user settings kept, no ambient MCP servers, per-machine prompt text out of the cached prefix); unset or unknown leaves the launch as it was. A QAR_DEEP_* name set beside it overrides the profile's field. CoreSettings.deep_launch. | `config_core_settings.py` | - |
 | `QAR_DEEP_MAX_BUDGET_USD` | A positive number adds --max-budget-usd to the deep worker launch as its spend ceiling; unset adds none. CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/writing-a-consumer.md` |
 | `QAR_DEEP_MAX_TURNS` |  | `cli_config.py` | `docs/writing-a-consumer.md` |
 | `QAR_DEEP_MODELS` |  | `cli_config.py` | `docs/writing-a-consumer.md` |

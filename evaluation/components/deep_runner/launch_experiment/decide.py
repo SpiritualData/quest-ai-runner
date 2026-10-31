@@ -17,6 +17,11 @@ ARMS: Dict[str, dict] = {
           "exclude_dynamic_sections": True, "max_budget_usd": 3.0},
     "C": {"tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep"], "setting_sources": "", "strict_mcp": True,
           "exclude_dynamic_sections": True, "max_budget_usd": 3.0, "max_turns": 6, "cards_in_brief": True},
+    # E (added after the 2026-10-31 safety review, outside the pre-registered A to C): B's lean flags that keep the user settings
+    # (the worker's write and delete guard hooks, model overrides) and the web tools, with no spend ceiling. It is the
+    # ``lean_guarded`` profile of core/deep_launch.py.
+    "E": {"tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebSearch", "WebFetch"], "setting_sources": "user",
+          "strict_mcp": True, "exclude_dynamic_sections": True},
 }
 
 # The rule. An arm replaces the default launch only if BOTH hold.

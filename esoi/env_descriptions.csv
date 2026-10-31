@@ -21,6 +21,7 @@ QAR_CLI_HAIKU_THINKING_TOKENS,Thinking-token cap for Haiku completions through t
 QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS,Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds.
 QAR_CONVERSATION_SEARCH,false/0/off disables searching past conversations as context.
 QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS,"1 adds --exclude-dynamic-system-prompt-sections to the deep worker launch, which moves per-machine text out of the cached prefix; unset leaves the launch as it was. CoreSettings.deep_launch."
+QAR_DEEP_LAUNCH_PROFILE,"Names a bundle of deep worker launch settings (today only lean_guarded: fewer built-in tools with web kept, user settings kept, no ambient MCP servers, per-machine prompt text out of the cached prefix); unset or unknown leaves the launch as it was. A QAR_DEEP_* name set beside it overrides the profile's field. CoreSettings.deep_launch."
 QAR_DEEP_MAX_BUDGET_USD,"A positive number adds --max-budget-usd to the deep worker launch as its spend ceiling; unset adds none. CoreSettings.deep_launch."
 QAR_DEEP_PROMPT_TOKEN_BUDGET,"Token budget for one deep prompt, capped at the model's window. CoreSettings.deep_prompt_token_budget."
 QAR_DEEP_SETTING_SOURCES,"Adds --setting-sources to the deep worker launch: a comma-separated list of user, project, local, or none to load none; unset adds no flag. CoreSettings.deep_launch."
