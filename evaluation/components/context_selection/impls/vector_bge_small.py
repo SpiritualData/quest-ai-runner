@@ -14,7 +14,7 @@ def build(meter):  # noqa: ARG001
     index = {}
 
     def select(task, corpus):
-        key = str(corpus.root)
+        key = corpus.key
         if key not in index:
             ids = list(corpus.cards)
             texts = [card_embed_text(corpus.cards[i]) or corpus.cards[i]["files"][0]["path"] for i in ids]

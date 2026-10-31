@@ -10,7 +10,7 @@ def build(meter):  # noqa: ARG001
     stores = {}
 
     def select(task, corpus):
-        key = str(corpus.root)
+        key = corpus.key
         if key not in stores:
             cards_dir = tempfile.mkdtemp(prefix="qar_ctxsel_")
             store = FileContextStore(cards_dir, repo_root=str(corpus.root), auto_bootstrap=False,

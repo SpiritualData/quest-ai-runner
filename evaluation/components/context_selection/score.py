@@ -2,18 +2,17 @@
 returned ranking? ``top1`` = first file, ``top3`` = within the first 3, ``ok`` = within the solution's
 declared ``budget`` (3 unless it sets ``select.budget``, as the hybrid union does). No model judge.
 
-The corpus is the repo checkout itself (read-only; override with ``QAR_EVAL_CORPUS_ROOT``). It has grown
+The corpus is the repo checkout itself (read-only; override with ``QAR_EVAL_CORPUS_ROOT``; add roots, such as the sibling hub package, with
+``QAR_EVAL_CORPUS_EXTRA_ROOTS``). It has grown
 since the labels were written, so absolute numbers shift with the tree; compare implementations to each
 other on the same checkout."""
-import os
-
 import common
-from context_selection.corpus import corpus_for
+from context_selection.corpus import configured_corpus
 from context_selection.interface import TOP_K
 
 
 def score_case(fn, case):
-    corpus = corpus_for(os.environ.get("QAR_EVAL_CORPUS_ROOT") or common.REPO)
+    corpus = configured_corpus(common.REPO)
     ranked = fn(case["task"], corpus)
     target, budget = case["target"], getattr(fn, "budget", TOP_K)
     rank = ranked.index(target) + 1 if target in ranked else None

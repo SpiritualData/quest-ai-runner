@@ -123,11 +123,34 @@ def test_context_selection_offline_impls_rank_a_toy_corpus(tmp_path):
     assert idf_docstrings.build(common.CallMeter())(task, corpus)[0] == "pkg/poller.py"
 
 
+def test_context_selection_extra_root_is_prefixed_and_default_is_unchanged(tmp_path):
+    from context_selection.corpus import build_corpus
+    from context_selection.impls import blind_grep
+    primary, sibling = tmp_path / "main", tmp_path / "sibpkg"
+    (primary / "pkg").mkdir(parents=True)
+    sibling.mkdir()
+    (primary / "pkg" / "a.py").write_text('"""Reads the wall clock."""\n\ndef now(): pass\n')
+    (sibling / "scorer.py").write_text('"""Scores how specifically a candidate matches a request."""\n\ndef score(): pass\n')
+    alone = build_corpus(primary)
+    both = build_corpus(primary, [sibling])
+    assert alone.files == ["pkg/a.py"] and alone.extra_roots == {}
+    assert both.files == ["pkg/a.py", "sibpkg/scorer.py"]
+    assert both.path_of("sibpkg/scorer.py") == sibling.resolve() / "scorer.py"
+    assert both.key != alone.key
+    task = "score how specifically a candidate matches a request"
+    assert blind_grep.build(common.CallMeter())(task, both)[0] == "sibpkg/scorer.py"
+    assert "sibpkg/scorer.py" not in blind_grep.build(common.CallMeter())(task, alone)
+    with pytest.raises(ValueError):
+        build_corpus(primary, [primary / "pkg"])
+
+
 def test_context_selection_cases_point_at_real_files():
     import json
     cases = json.loads((Path(__file__).parent / "context_selection" / "cases.json").read_text())
     assert len(cases) >= 60 and len({c["id"] for c in cases}) == len(cases)
-    assert all((common.REPO / c["target"]).is_file() for c in cases)
+    hub = common.REPO.parent / "ai-hub-of-hubs-structure"
+    assert all((common.REPO / c["target"]).is_file() or c["target"].startswith("hubofhubs/") and (hub / c["target"]).is_file()
+               for c in cases)
 
 
 def test_staleness_scorer_separates_sha256_from_mtime_size():

@@ -57,7 +57,7 @@ def build(meter):  # noqa: ARG001
     live = {}
 
     def assembler_for(corpus):
-        key = str(corpus.root)
+        key = corpus.key
         if key not in live:
             keyword = FileContextStore(tempfile.mkdtemp(prefix="qar_ctxsel_"), repo_root=str(corpus.root),
                                        auto_bootstrap=False, confidence_threshold=0.0, max_cards_in_view=ARM_CARDS)

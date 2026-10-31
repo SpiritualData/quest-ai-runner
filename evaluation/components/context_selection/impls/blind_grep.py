@@ -8,9 +8,9 @@ def build(meter):  # noqa: ARG001
     texts = {}
 
     def select(task, corpus):
-        key = str(corpus.root)
+        key = corpus.key
         if key not in texts:
-            texts[key] = {rel: (corpus.root / rel).read_text(encoding="utf-8", errors="replace").lower()
+            texts[key] = {rel: corpus.path_of(rel).read_text(encoding="utf-8", errors="replace").lower()
                           for rel in corpus.files}
         tokens = tokenize(task)
         scores = {rel: sum(1 for t in tokens if t in text) for rel, text in texts[key].items()}

@@ -17,7 +17,7 @@ def build(meter):  # noqa: ARG001
     built = {}
 
     def world_for(corpus):
-        key = str(corpus.root)
+        key = corpus.key
         if key not in built:
             views = spec_search.views_from_items(corpus.cards, kind="card", source="cards", text_of=card_embed_text)
             keys = [v.key for v in views]
