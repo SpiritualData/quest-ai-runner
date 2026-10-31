@@ -45,18 +45,20 @@ class Captured(logging.Handler):
         self.lines = []
 
     def emit(self, record):
-        if getattr(record, "in_transcript", True):
-            self.lines.append(record.getMessage())
+        self.lines.append(record.getMessage())   # the log-only full text too: it is what an AI asked to change the limit reads
 
 
 def with_notice(work):
     handler = Captured()
-    logger = logging.getLogger("quest-ai-runner.card-limit")
+    logger = logging.getLogger()   # the notice is logged by the hub's card limit and propagates to the root, as it does in a lane
     logger.addHandler(handler)
+    before = logger.level
+    logger.setLevel(logging.WARNING)
     try:
         work()
     finally:
         logger.removeHandler(handler)
+        logger.setLevel(before)
     text = " ".join(handler.lines)
     return all(part in text for part in ("topic", "imported", "learned", "quest", "QAR_MAX_CARDS", "ask the AI"))
 
