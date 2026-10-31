@@ -9,7 +9,7 @@ upserts a card keyed by a stable slug of the task and re-pins file fingerprints.
 No LLM calls, no third-party imports -- stdlib only (json, hashlib, os, re, subprocess,
 pathlib, ast, math, etc.).
 
-Card JSON schema (matches docs/context-assembly.md exactly):
+Card JSON schema (matches docs/explanation/context-assembly.md exactly):
   {
     "id": "subsystem-or-hash",
     "keywords": ["chat", "ai", "conversation"],

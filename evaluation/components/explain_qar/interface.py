@@ -9,7 +9,7 @@ name. Everything is offline, no model. Kinds:
   links           {file}      -> {"broken": relative link targets that do not exist}
   em_dash         {file}      -> {"count": em dashes in the file} (house voice rule: none)
   indexed         {file}      -> {"indexed": docs/README.md links the file}
-  env_documented  {variable}  -> {"row": has a row in docs/configuration.md, "described": its "What it does" is filled}
+  env_documented  {variable}  -> {"row": has a row in docs/reference/configuration.md, "described": its "What it does" is filled}
   cli_documented  {command}   -> {"documented": the subcommand of the live argparse tree is named in the docs}
   api_documented  {name}      -> {"documented": the name in quest_ai_runner.__all__ is named in README or docs}
   coverage        {}          -> {"uncovered": documents or variables with no case (regenerate the cases)}

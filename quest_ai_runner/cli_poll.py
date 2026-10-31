@@ -29,7 +29,7 @@ def _cmd_channel(args, log) -> int:
         return 1
     if cfg.channel_transport is None:
         log.error("no channel transport configured — set QAR_CHANNEL_PROVIDER=openclaw and "
-                 "QAR_OPENCLAW_TOKEN_FILE (see docs/live-channels.md)")
+                 "QAR_OPENCLAW_TOKEN_FILE (see docs/how-to/live-channels.md)")
         return 1
     if not cfg.channel_allowed_senders:
         log.warning("QAR_CHANNEL_ALLOWED_SENDERS is empty — every sender will be REJECTED "

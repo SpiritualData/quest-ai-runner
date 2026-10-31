@@ -165,7 +165,7 @@ def metric_facts(metrics: Any, missing: Any) -> Dict[str, Any]:
     """The metric facts a report or a progress post carries: ``{"metrics": [...], "metric_missing": True}``.
 
     Only the keys that have something to say are present, so a run with neither adds nothing to what is sent. The
-    entries are the runner's own (``MetricResult.to_dict()``, shape in ``docs/metric-results.md``), copied and capped
+    entries are the runner's own (``MetricResult.to_dict()``, shape in ``docs/explanation/metric-results.md``), copied and capped
     at the payload's size, never edited; anything that is not a list of dicts, and any ``missing`` other than the
     boolean ``True``, says nothing."""
     listed = metrics if isinstance(metrics, (list, tuple)) else []

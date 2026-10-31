@@ -470,7 +470,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         # FileContextStore's quest_folder_map boost — would otherwise never see it.
         #
         # The task id travels the same way: a direct tool's ToolContext is built from this meta,
-        # and docs/tools.md promises every command tool QAR_TOOL_TASK_ID. Without it here a tool
+        # and docs/how-to/tools.md promises every command tool QAR_TOOL_TASK_ID. Without it here a tool
         # that needs to know which task it serves (who asked, what they replied) got nothing.
         context_meta: Optional[Dict[str, Any]] = {"goal_id": goal_id} if goal_id else None
         if task_id:

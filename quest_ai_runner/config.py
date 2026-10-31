@@ -227,7 +227,7 @@ class RunnerConfig:
     # contract over the Agent Client Protocol, which buys MID-TURN STEERING (a message queued while
     # the deep turn runs is injected into that turn instead of waiting for the next attempt); it
     # needs the [acp] extra and Node >= 22. Selecting one is just this field — see
-    # docs/acp-deep-runner.md.
+    # docs/how-to/acp-deep-runner.md.
     #   * leave UNSET (the _AUTO sentinel) → the default SubprocessGoalRunner is built and used
     #     (or, if ``claude`` isn't on PATH, a loud warning and no runner);
     #   * pass an INSTANCE → that runner is used (AcpDeepRunner, a queue worker, a fake in tests);
@@ -241,7 +241,7 @@ class RunnerConfig:
     # write access, and it does exactly one thing: it puts an in-process ``FastEditRunner`` at the
     # front of the deep-runner ladder, so a bounded edit can be landed in one model call instead of
     # spawning a full agent, escalating to the normal deep worker whenever that is not enough.
-    # See docs/fast-edit-runner.md for the containment/backup guarantees and the opt-in model.
+    # See docs/how-to/fast-edit-runner.md for the containment/backup guarantees and the opt-in model.
     file_writer: Optional[FileWriter] = None
     # Named deep-runner registry. When non-empty and a ``deep_runner_classifier`` is
     # also provided, the orchestrator calls the classifier to SELECT which runner handles
@@ -275,7 +275,7 @@ class RunnerConfig:
     # consumer should gitignore this path (the runner repo gitignores ``.quest-context/``).
     context_cards_dir: Optional[str] = None
     # What the automatic card tidy does when a store is over its card limit or holds copies its ids prove
-    # (adapters/card_store_tidy, docs/context-card-stores.md "Tidying a store on any backend"):
+    # (adapters/card_store_tidy, docs/how-to/context-card-stores.md "Tidying a store on any backend"):
     #   "apply" -> carry the plan out (a local folder moves cards into _quarantine; any other repository deletes
     #              them, after a full local export that `cards tidy --undo` restores from);
     #   "plan"  -> write the plan beside the cards and say once what it would do and how to apply it;
@@ -431,7 +431,7 @@ class RunnerConfig:
     # Given a task dict, return ``(user_id, skill_dir)`` to sync that rep, or ``None`` to skip.
     rep_sync_resolver: Optional[Callable[[Dict[str, Any]], Optional[Tuple[str, str]]]] = None
     # DECLARATIVE alternative to writing ``rep_sync_resolver`` by hand (see ``runner/personas.py``
-    # and ``docs/personas.md``). Two independent consumers each hand-wrote the same persona-
+    # and ``docs/how-to/personas.md``). Two independent consumers each hand-wrote the same persona-
     # resolution machinery (a registry of ids -> skill folders, plus a policy for picking one from a
     # task) before this existed; set ``personas`` instead and ``resolve_rep_sync_resolver`` (called
     # by ``Poller.__init__``) composes the equivalent callable for you. An EXPLICIT
@@ -740,7 +740,7 @@ class RunnerConfig:
           * a top-level key that IS a real field name but holds a live adapter/callable/sentinel
             (a ``ModelProvider``, a ``DeepRunner`` instance, ``rep_sync_resolver``, ...) that cannot
             be expressed as TOML data — wire that one in Python, or via its matching ``QAR_*``
-            environment variable, instead (see ``docs/writing-a-consumer.md``);
+            environment variable, instead (see ``docs/how-to/writing-a-consumer.md``);
           * an invalid ``[personas]`` table (its keys must be ``PersonaResolverConfig`` fields).
 
         Uses the stdlib ``tomllib`` (Python 3.11+; this repo targets 3.12) — no new dependency.

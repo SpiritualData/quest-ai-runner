@@ -194,7 +194,7 @@ class ControlMixin:
         control = self._run_control
         if control is None or not control.in_use:
             c.dim("  This work cannot be paused right now. Pause needs the stream_json runner "
-                  "(see docs/stream-json-runner.md). Esc stops it.")
+                  "(see docs/how-to/stream-json-runner.md). Esc stops it.")
             return
         if control.pause_event.is_set():
             c.dim("  Already pausing.")

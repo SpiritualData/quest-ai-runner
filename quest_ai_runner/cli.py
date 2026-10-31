@@ -47,7 +47,7 @@ Env it reads:
                                                    flag does the same thing. File values are a
                                                    BASELINE only: any env var above that also sets a
                                                    field wins over the file. See
-                                                   docs/writing-a-consumer.md.
+                                                   docs/how-to/writing-a-consumer.md.
   QAR_DISCOVERY_TEAM_ID (optional)               — separate team scope for task DISCOVERY only
                                                    (heartbeat/escalation keep using QUEST_TEAM_ID).
                                                    Unset = fall back to QUEST_TEAM_ID; set to "" for
@@ -75,7 +75,7 @@ Env it reads:
   QAR_FILES_ROOT / QAR_FILES_HOST / QAR_FILES_PORT (optional)
                                                  - `serve-files` only: the directory tree to serve
                                                    (also --root), the bind address (default 127.0.0.1)
-                                                   and the port (default 8765). See docs/file-server.md
+                                                   and the port (default 8765). See docs/how-to/file-server.md
   QAR_DEEP_MAX_TURNS (optional)                  — hard per-attempt turn cap for the deep goal loop
                                                    (OrchestratorConfig.deep_max_turns; library
                                                    default 30 — raise it for a lane whose tasks
@@ -93,7 +93,7 @@ Env it reads:
                                                    (default, one-shot) or "stream_json" (a live
                                                    session; in `chat` it lets a typed message steer
                                                    the running worker and /pause and /resume work;
-                                                   see docs/stream-json-runner.md)
+                                                   see docs/how-to/stream-json-runner.md)
   QAR_REP_SYNC_DIRECTION (optional)              — "pull" (default) | "push" | "both"; sets
                                                    RunnerConfig.rep_sync_direction. Only takes
                                                    effect once a rep_sync_resolver or a personas
@@ -109,7 +109,7 @@ Env it reads:
                                                    both are set.
   QAR_TOOLS_FILE (optional)                      - ':'-separated TOML file(s) of custom direct
                                                    tools and standard-tool overrides the brain
-                                                   calls with no deep run (docs/tools.md).
+                                                   calls with no deep run (docs/how-to/tools.md).
   QAR_STANDARD_TOOLS (optional)                  - "0" turns off the standard direct tools
                                                    (send_quest_email). Default on.
   QAR_AUTOPILOT_PASS_TIME (optional)             — default daily local time ("HH:MM") for an
@@ -147,7 +147,7 @@ Env it reads:
                                                    with no measured accuracy cost, which is why a
                                                    deployment running routing on a cheap model wants
                                                    it. An unknown value degrades to "full". See
-                                                   docs/cheap-model-routing.md.
+                                                   docs/explanation/cheap-model-routing.md.
   QAR_TASK_DIRECT_DEEP (optional)               : "1"/"true"/"on" sends a queued task's first run
                                                    straight to a deep run: no planner call and no
                                                    turn-start context search (default: off). The
@@ -261,7 +261,7 @@ Env it reads:
                                                    or above the corpus IN PLACE and read-only (no copy,
                                                    no re-embedding, the reader indexes nothing under
                                                    them); "copy" (default) is the legacy copy-import.
-                                                   See docs/context-card-stores.md.
+                                                   See docs/how-to/context-card-stores.md.
   QAR_VECTOR_SPACE (optional)                    — names the vector server/collection this lane uses,
                                                    to match the owners' declared space (mount mode).
   QAR_VECTOR_UNATTRIBUTED (optional)             — "1" also serves pre-fence task associations that
@@ -281,7 +281,7 @@ Env it reads:
   WEB_SEARCH_ENABLED (optional)                 — web search is ON by default and needs NO extra
                                                    key (falls back to the model provider's native
                                                    tool). Set to "false" to disable it entirely.
-                                                   See docs/web-search.md.
+                                                   See docs/how-to/web-search.md.
   QAR_WEB_SEARCH_BACKEND (optional)             — which search backend to use: "auto" (default;
                                                    picks the first of serper/brave/tavily/searxng
                                                    whose key/URL is set, else falls back to the
@@ -338,11 +338,11 @@ Env it reads:
                                                    Written by QAR; read back by QAR in future sessions,
                                                    and reopened by `chat --resume` (picker),
                                                    `chat --resume last|ID` or `chat --continue`.
-                                                   See docs/chat.md.
+                                                   See docs/how-to/chat.md.
   QAR_CHAT_LOG_FILE (optional)                 : `chat`: the file the full diagnostic log is written to
                                                    (default: logs/chat.log beside the conversations dir;
                                                    rotated and size capped). The transcript shows only
-                                                   one short line per distinct warning. See docs/chat.md.
+                                                   one short line per distinct warning. See docs/how-to/chat.md.
   QAR_QUEST_AUTO_MATCH (optional)             — `chat`: 0 makes "no quest" the default instead of
                                                    matching each message to a synced quest (a
                                                    person's own /quest choice still wins).
@@ -365,7 +365,7 @@ Env it reads:
                                                    ever read (default 14).
 
 channel-specific env vars (all optional; read by the `channel` subcommand only, see
-docs/live-channels.md for the full picture including the OpenClaw operator checklist):
+docs/how-to/live-channels.md for the full picture including the OpenClaw operator checklist):
   QAR_CHANNEL_PROVIDER (optional)              — "openclaw" wires an OpenClawChannel from the vars
                                                    below. Unset (default) = no channel transport;
                                                    `channel` then logs an error and exits.

@@ -364,7 +364,7 @@ class RunAnswerMixin:
         # ``redirect``/``escalate_deep`` (best-effort telemetry for a consumer to fold into next
         # turn's ``prior_escalations``); it deliberately does NOT auto-launch a new deep execution
         # with no one left to receive its result. See ``_finish_oversee_in_background``'s docstring
-        # and docs/overseer.md for the full tradeoff. A FAST-resolving consult (the common case for a
+        # and docs/explanation/overseer.md for the full tradeoff. A FAST-resolving consult (the common case for a
         # quick model) still corrects the SAME answer before it ships, exactly as before.
         if cfg.overseer and rs.overseer_submitted < cfg.overseer_max_signals:
             try:

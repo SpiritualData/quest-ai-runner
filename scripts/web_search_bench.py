@@ -8,7 +8,7 @@ planner), total REAL backend calls (cache hits excluded), and an estimated dolla
 ``--cost-per-1k``.
 
 The backend is whatever ``build_web_research_from_env()`` picks from the process environment
-(see ``docs/web-search.md`` for the env vars) -- this script is generic, consumer-agnostic
+(see ``docs/how-to/web-search.md`` for the env vars) -- this script is generic, consumer-agnostic
 tooling, the same as any other script in ``scripts/``.
 
 Input is either a JSON file:

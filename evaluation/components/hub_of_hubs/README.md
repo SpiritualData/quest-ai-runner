@@ -16,7 +16,7 @@ repository; this folder only says how QAR meets them.
 ```
 esoi run hub_of_hubs --impl registry_scan --record                  # the live reading
 esoi run hub_of_hubs --impl hub_of_hubs.broken.vendor_grep:build    # the floor
-python3 evaluation/components/hub_of_hubs/render_docs.py            # rewrite the generated table in docs/hub-of-hubs.md
+python3 evaluation/components/hub_of_hubs/render_docs.py            # rewrite the generated table in docs/explanation/hub-of-hubs.md
 .venv/bin/python3 -m pytest evaluation/components/test_hub_of_hubs.py
 ```
 

@@ -4,7 +4,7 @@ Every command here is a DRY RUN unless ``--apply`` is given, and prints what it 
 None of them embeds anything: they touch ``bootstrap_meta.json`` and (migrate-imports, merge-into) the
 card files and vector points of the stores you point them at; ``upload`` copies a local store's cards
 and existing vectors to the Quest backend (read-only on the local store). See
-``docs/context-card-stores.md``.
+``docs/how-to/context-card-stores.md``.
 """
 from __future__ import annotations
 

@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 
-TAG_PROCEDURE = "see docs/spec-selection.md, Solution tags: a tag links the problems it mitigates and is back-filled"
+TAG_PROCEDURE = "see docs/explanation/spec-selection.md, Solution tags: a tag links the problems it mitigates and is back-filled"
 
 
 def split(cell) -> list:

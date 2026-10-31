@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A minimal quest-ai-runner lane, see docs/tutorial-your-first-lane.md for the walkthrough.
+"""A minimal quest-ai-runner lane, see docs/tutorials/tutorial-your-first-lane.md for the walkthrough.
 
 This is deliberately small. The point is the CONTRAST with a hand-rolled consumer: three separate
 consumers of this library each wrote their own ~40-line ``--check``/``--once``/loop-forever driver
@@ -7,7 +7,7 @@ around ``Poller`` (two of them then extracted a shared copy, but OUTSIDE the lib
 had nowhere to find it), and the biggest of the three also wrote ~250 lines of persona-resolution
 machinery from scratch. None of that is a lane's job any more: the driver is
 ``runner.lane.run_lane``, and persona resolution is ``RunnerConfig.personas`` (see
-``docs/personas.md``). What is left, below, is what is ACTUALLY specific to this lane, which for
+``docs/how-to/personas.md``). What is left, below, is what is ACTUALLY specific to this lane, which for
 the minimal case is nothing beyond "read config from a file plus the environment".
 
 Config comes from ``qar.toml`` (in this directory) layered under whatever ``QUEST_*``/``QAR_*``
@@ -42,7 +42,7 @@ def main(argv=None) -> int:
     return run_lane(
         argv,
         prog="minimal-lane",
-        description="A minimal quest-ai-runner lane (see docs/tutorial-your-first-lane.md).",
+        description="A minimal quest-ai-runner lane (see docs/tutorials/tutorial-your-first-lane.md).",
         lane_label="minimal-lane",
         log_name="minimal-lane",
         build_config=build_config,

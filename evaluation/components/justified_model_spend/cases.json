@@ -117,7 +117,7 @@
    "seconds_per_call": 2.5,
    "tokens": null
   },
-  "budget_source": "docs/overseer.md: the answer checkpoint waits at most overseer_answer_checkpoint_timeout_seconds (default 2.5s) for the verdict and then ships the draft, so a verdict slower than that cannot change the answer. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
+  "budget_source": "docs/explanation/overseer.md: the answer checkpoint waits at most overseer_answer_checkpoint_timeout_seconds (default 2.5s) for the verdict and then ships the draft, so a verdict slower than that cannot change the answer. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
   "source": "owner metric metric-watch-a-run; owner cases evaluation/components/overseer_signals/cases.json (all 16 hand-labelled scenarios, the same for both arms)"
  },
  {

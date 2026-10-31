@@ -23,6 +23,6 @@ class ConfigFileError(ValueError):
     Every one of these is intentionally LOUD — raised, never logged-and-quietly-ignored. This repo
     has scar tissue about a config field that silently did nothing because nobody validated the key
     that set it (see the quest-backend ``UpdateAutopilotRequest`` incident referenced in
-    ``docs/writing-a-consumer.md``): a typo'd key in a config file must fail the process at
+    ``docs/how-to/writing-a-consumer.md``): a typo'd key in a config file must fail the process at
     startup, loudly naming the mistake, not quietly run with a default nobody chose.
     """

@@ -60,7 +60,7 @@ def _model_provider_from_env() -> ModelProvider:
     # conservative default rather than failing the run.
     if os.getenv("QAR_ANSWER_TIMEOUT"):
         kwargs["timeout_seconds"] = float(os.environ["QAR_ANSWER_TIMEOUT"])
-    # Cap extended thinking on routing decisions only (see ClaudeCliProvider and docs/cheap-model-routing.md): "0" turns it off,
+    # Cap extended thinking on routing decisions only (see ClaudeCliProvider and docs/explanation/cheap-model-routing.md): "0" turns it off,
     # which measured 11x faster on haiku at the same accuracy. Unset leaves the CLI default.
     if (os.getenv("QAR_CLI_PLAN_THINKING_TOKENS") or "").strip().isdigit():
         kwargs["plan_thinking_tokens"] = int(os.environ["QAR_CLI_PLAN_THINKING_TOKENS"].strip())
@@ -268,7 +268,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     optionally layered on top of a TOML config file.
 
     ``config_path`` (or ``QAR_CONFIG_FILE`` when the argument is omitted) names a file read via
-    ``RunnerConfig.from_file`` — see ``docs/writing-a-consumer.md``. Precedence: the FILE supplies
+    ``RunnerConfig.from_file`` — see ``docs/how-to/writing-a-consumer.md``. Precedence: the FILE supplies
     a baseline for whichever fields it sets; an environment variable that also sets a field always
     wins (``config.apply_file_defaults``, applied once at the end, only fills fields no env var
     touched). A bad file (missing, invalid TOML, an unknown or non-file-expressible key) raises
@@ -374,7 +374,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         cfg.orchestrator.max_parallel = int(os.environ["QAR_MAX_PARALLEL"])
     if os.getenv("QAR_POLL_INTERVAL"):
         cfg.poll_interval_seconds = float(os.environ["QAR_POLL_INTERVAL"])
-    # Routing cost and small-model reliability (see docs/cheap-model-routing.md). Both live on
+    # Routing cost and small-model reliability (see docs/explanation/cheap-model-routing.md). Both live on
     # OrchestratorConfig, like QAR_MAX_PARALLEL above. The reach judge is left inert unless the
     # consumer also supplies ``read_reach_summary``: the library cannot write that statement for a
     # deployment it knows nothing about, and a judge given a generic guess is worse than none.
@@ -515,7 +515,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     if planner_tier:
         cfg.orchestrator.planner_tier = planner_tier
     # QAR_PLANNER_MODEL pins the ROUTING DECISION alone to one model id, leaving everything else
-    # on QAR_PLANNER_TIER's model (docs/cheap-model-routing.md).
+    # on QAR_PLANNER_TIER's model (docs/explanation/cheap-model-routing.md).
     planner_model = (os.getenv("QAR_PLANNER_MODEL") or "").strip()
     if planner_model:
         cfg.orchestrator.planner_model = planner_model

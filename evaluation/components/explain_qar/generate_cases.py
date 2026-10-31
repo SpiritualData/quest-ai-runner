@@ -34,10 +34,10 @@ def main():
         add("links", f"{f}: every relative link resolves", {"file": f}, {"eq": {"broken": []}})
     for f in docs:
         add("em_dash", f"{f}: no em dash", {"file": f}, {"eq": {"count": 0}})
-    for f in [d for d in docs if d.startswith("docs/") and d.count("/") == 1 and d != "docs/README.md"]:
+    for f in [d for d in docs if d.startswith("docs/") and d != "docs/README.md"]:
         add("indexed", f"{f}: linked from docs/README.md", {"file": f}, {"eq": {"indexed": True}})
     for var in env_vars.env_vars_in_code(REPO):
-        add("env_documented", f"{var}: has a described row in docs/configuration.md", {"variable": var},
+        add("env_documented", f"{var}: has a described row in docs/reference/configuration.md", {"variable": var},
             {"eq": {"row": True, "described": True}})
     parser = cli_parser._build_parser()
     for action in parser._actions:

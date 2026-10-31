@@ -137,7 +137,7 @@ class OrchestratorConfig:
     # routing decision on a different model from everything else that shares ``planner_tier``
     # (card updates, request understanding, summaries, fallbacks). Routing is mostly input
     # tokens, so it is the call most worth moving to a cheap model, and it is the only one that
-    # was measured there (docs/cheap-model-routing.md).
+    # was measured there (docs/explanation/cheap-model-routing.md).
     planner_model: str = ""
     # THE OVERSEER CASCADE for routing decisions. Off by default. When on, the planner also
     # reports how sure it is of each decision (one extra enum field on the call it already makes,
@@ -378,7 +378,7 @@ class OrchestratorConfig:
     overseer_max_signals: int = 3        # hard cap on overseer consultations per run (both hooks)
     overseer_min_step: int = 1           # earliest plan step (1-based) the overseer may run
     overseer_digest_char_budget: int = 1600  # hard cap on the digest string fed to the overseer
-    # NON-BLOCKING overseer (hooks A and B; see docs/overseer.md). The overseer's provider call runs
+    # NON-BLOCKING overseer (hooks A and B; see docs/explanation/overseer.md). The overseer's provider call runs
     # in a BACKGROUND thread and its result is polled with this timeout, so consulting it never
     # stalls the loop or the answer. 0.0 = a pure, non-blocking ``future.done()`` check (the design
     # default: never block). A small positive value lets the poll briefly WAIT for a still-running
@@ -582,7 +582,7 @@ class OrchestratorResult:
     link_checks: List[Dict[str, Any]] = field(default_factory=list)
     # The metric record of the turn's deep goals, for a consumer that reads the result and not the events: the
     # ``metrics`` payload entries of every deep result in order (``DeepResult.metric_results``; shape in
-    # docs/metric-results.md), and whether any goal changed something and ended with no metric result recorded.
+    # docs/explanation/metric-results.md), and whether any goal changed something and ended with no metric result recorded.
     # Written by the loop when it finishes, from the deep results alone. Empty/False for a turn with no deep goal.
     metric_results: List[Dict[str, Any]] = field(default_factory=list)
     metric_missing: bool = False

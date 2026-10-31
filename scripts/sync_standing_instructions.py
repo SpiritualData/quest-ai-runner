@@ -10,7 +10,7 @@ feedback-recording instructions, Background, Diving Deeper) are left out of both
 
 * ``quest_ai_runner/prompts/evolvable_structure.md``: the standing instructions every deep run
   receives, with one runner line added to the Purpose.
-* ``docs/evolvable-structure.md``: the public, reader-facing page the Quest AI "Explain how I got
+* ``docs/reference/evolvable-structure.md``: the public, reader-facing page the Quest AI "Explain how I got
   this" panel links to, with a short reader introduction instead of the runner line.
 
 The library ships the copies so it never depends on the skill's path; this script and
@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parent.parent
 # Where the skill sits relative to this checkout in the maintainers' corpus; elsewhere set the env.
 DEFAULT_SKILL = REPO.parent.parent / ".claude" / "skills" / "evolvable-structure" / "SKILL.md"
 OUTPUT = REPO / "quest_ai_runner" / "prompts" / "evolvable_structure.md"
-PUBLIC_OUTPUT = REPO / "docs" / "evolvable-structure.md"
+PUBLIC_OUTPUT = REPO / "docs" / "reference" / "evolvable-structure.md"
 TAG = "Evolvable Structure that Optimizes Intent"
 RUNNER_LINE = ("In whatever work you do (unless the human tells you otherwise), ensure that ESOI is generally "
                "applied, resulting in the effective creation of collaborative innovation tools, and the "

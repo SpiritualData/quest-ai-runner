@@ -42,7 +42,7 @@ Wire it into a CompositeRetrievalAdapter alongside the local corpus::
     )
     retrieval = CompositeRetrievalAdapter([FilesAdapter(corpus_root), notion])
 
-Or declaratively, with a ``[notion]`` block in the lane's TOML (see ``docs/adapters.md``).
+Or declaratively, with a ``[notion]`` block in the lane's TOML (see ``docs/how-to/adapters.md``).
 """
 from __future__ import annotations
 

@@ -497,7 +497,7 @@ def test_tools_block_comes_after_the_planner_body():
 
 
 def test_executor_hands_the_task_id_to_direct_tools_and_the_deep_brief():
-    """docs/tools.md promises every command tool QAR_TOOL_TASK_ID: the executor must put the
+    """docs/how-to/tools.md promises every command tool QAR_TOOL_TASK_ID: the executor must put the
     task's id in the turn's context so ToolContext.task_id (and the deep brief) carry it."""
     from quest_ai_runner.runner.executor import TaskExecutor
     from .test_runner import MockQuestClient

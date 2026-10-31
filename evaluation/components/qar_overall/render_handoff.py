@@ -45,7 +45,7 @@ ROOT = Path(common.CONFIG.root)
 COMPONENTS = ROOT / "evaluation" / "components"
 DEFAULT_OUT = "handoff.html"
 
-# Each conceptual part of the anatomy (docs/anatomy.md) and the solution that specifies it.
+# Each conceptual part of the anatomy (docs/explanation/anatomy.md) and the solution that specifies it.
 PARTS = [
     ("Mind", "keep-a-working-stream"), ("Subconscious (includes Intuition)", "admit-to-the-mind"),
     ("Science", "know-the-world"), ("Critical thinking", "think-critically"), ("World", "act-in-the-world"),

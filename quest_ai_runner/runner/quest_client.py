@@ -97,7 +97,7 @@ class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, Quests
                   IntentsMixin):
     """Thin urllib client for the Quest task + decision API. No third-party deps.
 
-    The contract every method follows is in ``docs/quest-api-contract.md`` ("Client contract"): a content write returns a
+    The contract every method follows is in ``docs/reference/quest-api-contract.md`` ("Client contract"): a content write returns a
     ``WriteResult`` or raises a ``QuestWriteError`` and never returns an empty value; the lifecycle reports return a
     falsy ``WriteResult`` instead of raising; reads where absence is normal return an empty value."""
 

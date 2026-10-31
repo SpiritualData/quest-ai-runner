@@ -58,7 +58,7 @@ def load_runner_config_file(cls: Type[Any], path: Union[str, "os.PathLike[str]"]
             f"config file {p} sets key(s) RunnerConfig cannot take from a file: "
             f"{', '.join(sorted(unsupported))} (each holds a live adapter, callable, or "
             f"object, not plain data). Wire it in Python, or via its matching QAR_* "
-            f"environment variable, instead — see docs/writing-a-consumer.md."
+            f"environment variable, instead — see docs/how-to/writing-a-consumer.md."
         )
 
     kwargs: Dict[str, Any] = dict(data)

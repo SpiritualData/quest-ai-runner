@@ -11,7 +11,7 @@ wording, data this library owns) and its prompt spec stay here, and the seat is 
 and signatures. Any internal failure degrades to the safe default ``OverseerSignal("proceed", degraded=True)``.
 
 The five signals (``proceed``, ``redirect``, ``answer_now``, ``escalate_deep``, ``escalate_human``) are defined in
-``hubofhubs.risk``; their meaning for this library is in ``OVERSEER_PROMPT`` below. See ``docs/overseer.md``.
+``hubofhubs.risk``; their meaning for this library is in ``OVERSEER_PROMPT`` below. See ``docs/explanation/overseer.md``.
 """
 from __future__ import annotations
 

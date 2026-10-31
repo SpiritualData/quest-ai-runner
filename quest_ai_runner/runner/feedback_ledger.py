@@ -38,7 +38,7 @@ TWO KINDS OF ASK, WHICH IS THE WHOLE REASON THIS IS NOT SIMPLY A DONE FLAG.
   ``needs reapplying`` when it has lapsed or the person has had to say it twice.
 
 AND STANDING RULES ARE GUIDANCE. A rule that governs future work is precisely what a guidance card
-is (``adapters/guidance_card_manager.py``, ``docs/guidance-cards.md``), so an item the run marks
+is (``adapters/guidance_card_manager.py``, ``docs/how-to/guidance-cards.md``), so an item the run marks
 standing is offered to whatever guidance writer the deployment wired, in the person's own words,
 with the item id on it. The two halves then do different jobs and stop duplicating each other: the
 CARD carries the rule into every future run through retrieval, and the LEDGER carries whether it is

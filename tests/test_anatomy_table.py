@@ -1,4 +1,4 @@
-"""docs/anatomy.md stays true: its table is generated from the ESOI records, its modules exist, and the README
+"""docs/explanation/anatomy.md stays true: its table is generated from the ESOI records, its modules exist, and the README
 carries the same diagram A."""
 import importlib.util
 import re

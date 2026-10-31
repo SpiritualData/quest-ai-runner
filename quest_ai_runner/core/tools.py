@@ -30,7 +30,7 @@ Deep runs get the same catalog: ``render_deep_block`` writes the relevant tools,
 shell command that calls each one (``python -m quest_ai_runner.tools call <name> --args '{..}'``),
 into the deep brief, so a run that does happen calls the tool instead of reinventing it.
 
-TOML shape (full reference: docs/tools.md)::
+TOML shape (full reference: docs/how-to/tools.md)::
 
     [[tool]]
     name = "queue_email_for_review"

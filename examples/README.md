@@ -8,7 +8,7 @@ or paths**. Every specific is read from the environment. Copy `.env.example` (at
 
 | File | What it shows |
 |---|---|
-| `minimal_lane.py` + `qar.toml` | The SMALLEST real lane: a TOML config file layered under the environment, and `runner.lane.run_lane` as the entire entry point. Start here (see [`docs/tutorial-your-first-lane.md`](../docs/tutorial-your-first-lane.md) for the walkthrough: a persona roster, a corpus, a deep-run preamble, a folder map, each added as a few lines of config). |
+| `minimal_lane.py` + `qar.toml` | The SMALLEST real lane: a TOML config file layered under the environment, and `runner.lane.run_lane` as the entire entry point. Start here (see [`docs/tutorials/tutorial-your-first-lane.md`](../docs/tutorials/tutorial-your-first-lane.md) for the walkthrough: a persona roster, a corpus, a deep-run preamble, a folder map, each added as a few lines of config). |
 | `custom_consumer.py` | Build a `RunnerConfig` for one lane entirely from environment variables: the adapter wiring (`FilesAdapter` + `AnthropicProvider` + `SubprocessGoalRunner`), the deep-run context preamble, and decision routing. Copy and adapt this for your team. |
 | `run_lane.py` | Run that lane's `Poller`: `--check` (validate key), `--once` (cron), or loop forever (service). **Predates `runner.lane.run_lane`** (this repo's own shared driver, moved in from what used to be an external, hand-maintained copy) and is kept for reference alongside `custom_consumer.py`'s from-scratch adapter wiring; `minimal_lane.py` above is the recommended starting point for a new lane's entry point. |
 | `composite_retrieval_example.py` | Offline demo of `CompositeRetrievalAdapter`: a temporary corpus with docs and Claude conversations, searched through one adapter. No model, no server. |
@@ -27,7 +27,7 @@ python examples/minimal_lane.py --once    # run one scan
 
 Prefer zero code? The installed console entry point does the same thing from env alone (optionally
 layered under a TOML file via `--config`/`QAR_CONFIG_FILE`, see
-[`docs/tutorial-your-first-lane.md`](../docs/tutorial-your-first-lane.md)):
+[`docs/tutorials/tutorial-your-first-lane.md`](../docs/tutorials/tutorial-your-first-lane.md)):
 
 ```bash
 quest-ai-runner --check

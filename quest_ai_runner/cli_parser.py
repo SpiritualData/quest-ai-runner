@@ -33,7 +33,7 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="start with this quest selected for the conversation (same as "
                              "/quest <id> inside the chat)")
     chat_p.add_argument("--config", default=None, metavar="PATH",
-                        help="TOML config file (see docs/writing-a-consumer.md); "
+                        help="TOML config file (see docs/how-to/writing-a-consumer.md); "
                              "QAR_CONFIG_FILE also works. Environment variables always win over "
                              "a value the file also sets.")
     chat_p.add_argument("--check", action="store_true",
@@ -186,7 +186,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ctx_p.add_argument("--json", action="store_true", dest="as_json",
                        help="print the bundle as JSON (updates, per-source reports, the block)")
     ctx_p.add_argument("--config", default=None, metavar="PATH",
-                       help="TOML config file (see docs/writing-a-consumer.md); QAR_CONFIG_FILE "
+                       help="TOML config file (see docs/how-to/writing-a-consumer.md); QAR_CONFIG_FILE "
                             "also works. Environment variables always win over the file.")
 
     # --- cards subcommand: look at a context card store ----------------------------
@@ -246,7 +246,7 @@ def _build_parser() -> argparse.ArgumentParser:
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
     poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")
     poll_p.add_argument("--config", default=None, metavar="PATH",
-                        help="TOML config file (see docs/writing-a-consumer.md); "
+                        help="TOML config file (see docs/how-to/writing-a-consumer.md); "
                              "QAR_CONFIG_FILE also works. Environment variables always win over "
                              "a value the file also sets.")
 
@@ -258,7 +258,7 @@ def _build_parser() -> argparse.ArgumentParser:
     channel_p.add_argument("--check", action="store_true",
                            help="validate the channel config (provider, allowed senders), then exit")
     channel_p.add_argument("--config", default=None, metavar="PATH",
-                           help="TOML config file (see docs/writing-a-consumer.md); "
+                           help="TOML config file (see docs/how-to/writing-a-consumer.md); "
                                 "QAR_CONFIG_FILE also works. Environment variables always win over "
                                 "a value the file also sets.")
 

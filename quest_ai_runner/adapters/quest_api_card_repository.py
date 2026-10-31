@@ -1,7 +1,7 @@
 """QuestApiCardRepository -- CardRepository backed by the Quest backend's card API.
 
 The Quest backend is the DEFAULT source of truth for context cards and their vectors whenever a lane
-has Quest credentials (see ``docs/context-card-stores.md``). ``QAR_CARDS_BACKEND=local`` is the opt-out.
+has Quest credentials (see ``docs/how-to/context-card-stores.md``). ``QAR_CARDS_BACKEND=local`` is the opt-out.
 Cards are embedded ONCE, server-side, and searched server-side, so a lane under this backend never
 embeds a card and never builds a local vector index of cards.
 

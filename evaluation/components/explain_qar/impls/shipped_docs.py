@@ -1,5 +1,5 @@
 """CURRENT: the documentation as shipped, checked against the live repository. Relative links are resolved on disk,
-em dashes counted, ``docs/README.md`` and ``docs/configuration.md`` read, and the live package consulted for its
+em dashes counted, ``docs/README.md`` and ``docs/reference/configuration.md`` read, and the live package consulted for its
 public names (``quest_ai_runner.__all__``) and its real argparse tree. Zero model calls."""
 import json
 import re
@@ -26,12 +26,12 @@ def broken_links(path):
 
 
 def prose():
-    return "\n".join(p.read_text() for p in [REPO / "README.md", *sorted((REPO / "docs").glob("*.md"))])
+    return "\n".join(p.read_text() for p in [REPO / "README.md", *sorted((REPO / "docs").rglob("*.md"))])
 
 
 def config_rows():
     rows = {}
-    for line in (REPO / "docs/configuration.md").read_text().splitlines():
+    for line in (REPO / "docs/reference/configuration.md").read_text().splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if line.startswith("| `") and len(cells) >= 2:
             rows[cells[0].strip("`")] = cells[1] if cells[1] else ("explained in docs" if len(cells) > 3 and cells[3] != "-" else "")

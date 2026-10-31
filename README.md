@@ -43,9 +43,9 @@ flowchart TB
 ```
 A request flows from the world through the Subconscious, Mind and Critical thinking (which enforces ESOI on every request), then the Overseer's risk check, and the Body or World acts. The Higher mind (the AI rep and its intents) sits above. Each box names its real solution and module.
 
-The outside tools QAR builds on, and which part uses each, are in [QAR as a hub of hubs](docs/anatomy.md#b-qar-as-a-hub-of-hubs). The parts table is in [docs/anatomy.md](docs/anatomy.md).
+The outside tools QAR builds on, and which part uses each, are in [QAR as a hub of hubs](docs/explanation/anatomy.md#b-qar-as-a-hub-of-hubs). The parts table is in [docs/explanation/anatomy.md](docs/explanation/anatomy.md).
 
-Why QAR sits on open-source hubs instead of building each integration, how to add a tool server, agent, model vendor or search backend by configuration, and where each area stands: [Hub of hubs](docs/hub-of-hubs.md). QAR imports the hub package `hubofhubs` at startup (a required dependency) and registers its own parts with it.
+Why QAR sits on open-source hubs instead of building each integration, how to add a tool server, agent, model vendor or search backend by configuration, and where each area stands: [Hub of hubs](docs/explanation/hub-of-hubs.md). QAR imports the hub package `hubofhubs` at startup (a required dependency) and registers its own parts with it.
 
 ## What Quest is, and where this fits
 
@@ -118,7 +118,7 @@ print(orch.run("What does the pricing doc say?").text)   # grounded answer
 ```
 
 To run the **executor** lane (poll Quest for due tasks and run them), see
-[`docs/quickstart.md`](docs/quickstart.md) and [`examples/`](examples/), or just:
+[`docs/tutorials/quickstart.md`](docs/tutorials/quickstart.md) and [`examples/`](examples/), or just:
 
 ```bash
 QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --once
@@ -144,7 +144,7 @@ QAR_CORPUS_ROOT=/path/to/docs quest-ai-runner chat
   quest in the Quest AI chat app. With none selected, each message is matched to the quest it is
   about automatically; `/quest none` turns that off.
 
-Full reference: [The terminal chat](docs/chat.md).
+Full reference: [The terminal chat](docs/how-to/chat.md).
 
 ## Scripting the Quest API
 
@@ -182,38 +182,41 @@ name and prints the JSON result. Read-only methods (`whoami`, `get_*`, `list_*`,
 
 ## Features
 
-- **Smart Context Selection (TF-DF-IDF sampling)**: Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) for details.
+- **Smart Context Selection (TF-DF-IDF sampling)**: Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/explanation/TF_DF_IDF_SAMPLING.md) for details.
 - **Multi-source retrieval**: Composite retrieval adapter lets you query files, databases, Claude conversations, vector stores, etc., all in one orchestrator.
-- **Web search (default, no extra key)**: the runner grounds answers on the live web using the model provider's own tool (Claude's `web_search` / Gemini's Google Search grounding), reusing the LLM key, so tasks like "find marathons near Portland" return current, cited results with no separate search key and no Claude Code subprocess. A dedicated Tavily key is supported as an alternative. See [Web search](docs/web-search.md).
-- **Direct tools**: "email me today's plan" runs in one planner step with no deep run. Standard tools (Quest email) sit alongside your own, declared in a TOML file with when to use and when not to; the planner only sees the ones relevant to the request, and a deep run calls the same tools by shell. See [Direct tools](docs/tools.md).
-- **Terminal chat with resume and a `/` command menu**: talk to the brain in your terminal, resume any past conversation (`--resume`, `--continue`) like Claude Code, pick commands and options from menus, and choose the quest a conversation is about. See [The terminal chat](docs/chat.md).
+- **Web search (default, no extra key)**: the runner grounds answers on the live web using the model provider's own tool (Claude's `web_search` / Gemini's Google Search grounding), reusing the LLM key, so tasks like "find marathons near Portland" return current, cited results with no separate search key and no Claude Code subprocess. A dedicated Tavily key is supported as an alternative. See [Web search](docs/how-to/web-search.md).
+- **Direct tools**: "email me today's plan" runs in one planner step with no deep run. Standard tools (Quest email) sit alongside your own, declared in a TOML file with when to use and when not to; the planner only sees the ones relevant to the request, and a deep run calls the same tools by shell. See [Direct tools](docs/how-to/tools.md).
+- **Terminal chat with resume and a `/` command menu**: talk to the brain in your terminal, resume any past conversation (`--resume`, `--continue`) like Claude Code, pick commands and options from menus, and choose the quest a conversation is about. See [The terminal chat](docs/how-to/chat.md).
 - **Streaming & live events**: LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
 - **Extensible adapters**: Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
 - **Discovery-driven planning**: The brain learns source structure at runtime, never needing a static schema blob in the prompt.
-- **Minimal-intervention overseer**: An **on-by-default** watcher (set `overseer=False` / `QAR_OVERSEER=false` to opt out): a high-quality model reads a tiny capped digest of the run (never the full gathered text) and almost always says nothing, occasionally sending one small signal (redirect / answer now / escalate) that corrects course. Fails safe on any error. See [The minimal-intervention overseer](docs/overseer.md).
+- **Minimal-intervention overseer**: An **on-by-default** watcher (set `overseer=False` / `QAR_OVERSEER=false` to opt out): a high-quality model reads a tiny capped digest of the run (never the full gathered text) and almost always says nothing, occasionally sending one small signal (redirect / answer now / escalate) that corrects course. Fails safe on any error. See [The minimal-intervention overseer](docs/explanation/overseer.md).
 
 ## Documentation
 
-- [Quickstart tutorial](docs/quickstart.md): install, ground the brain, run the executor lane.
-- [The terminal chat](docs/chat.md): `quest-ai-runner chat`, resuming conversations (`--resume`,
+The docs follow the four Diataxis categories (tutorials, how-to guides, explanation, reference); the index is [docs/README.md](docs/README.md). A GitHub wiki generated from the same folder (`esoi docs wiki`, never edited by hand) is planned once the repository's wiki is enabled; until then, read the docs in the repository.
+
+- [Run it in the terminal against a folder in ten minutes](docs/tutorials/terminal-chat-in-ten-minutes.md): install, point the chat at a folder, ask, resume.
+- [Quickstart tutorial](docs/tutorials/quickstart.md): install, ground the brain, run the executor lane.
+- [The terminal chat](docs/how-to/chat.md): `quest-ai-runner chat`, resuming conversations (`--resume`,
   `--continue`), the `/` command menu and every command, choosing a quest, keys.
-- [Context assembly](docs/context-assembly.md): the context engine design of record, including the
+- [Context assembly](docs/explanation/context-assembly.md): the context engine design of record, including the
   principled test (not a vibe) for when a message stays on its current topic card vs. opens a new one.
-- [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md): smart context selection: 62% fewer tokens, zero external deps.
-- [Claude conversations integration](docs/claude-conversations-integration.md): grounding on past
+- [TF-DF-IDF Sampling](docs/explanation/TF_DF_IDF_SAMPLING.md): smart context selection: 62% fewer tokens, zero external deps.
+- [Claude conversations integration](docs/how-to/claude-conversations-integration.md): grounding on past
   Claude sessions, including how a cross-session recall hit is learned onto the active card and
   gains the same usage-recency boost files and collections already get.
-- [The minimal-intervention overseer](docs/overseer.md): a cheap, high-quality watcher that almost always stays silent.
-- [Guidance cards](docs/guidance-cards.md): standing rules (preferences, policies, house standards)
+- [The minimal-intervention overseer](docs/explanation/overseer.md): a cheap, high-quality watcher that almost always stays silent.
+- [Guidance cards](docs/how-to/guidance-cards.md): standing rules (preferences, policies, house standards)
   retrieved per message rather than pasted into one always-on prompt: tagging and scope, selection,
   one shared rules base across machines, and learning new rules from human corrections.
-- [Answer explanation](docs/answer-explanation.md): the opt-in, user-facing "Explain how I got this" panel, and why half of it is a record of the run rather than prose about it.
-- [Architecture Standards](docs/ARCHITECTURE_STANDARDS.md): brain / runner / adapters, why `core` is `core`, and the standards code here must follow.
-- [Writing a consumer](docs/writing-a-consumer.md): wire the library to your own Quest backend.
-- [Implementing adapters](docs/adapters.md): the four interfaces and how to build your own.
-- [Streaming & modes](docs/streaming-and-modes.md): LIVE vs BACKGROUND, sinks, the handoff.
-- [Deployment](docs/deployment.md): cron and systemd.
-- [Quest API contract](docs/quest-api-contract.md): the endpoints the runner speaks.
+- [Answer explanation](docs/explanation/answer-explanation.md): the opt-in, user-facing "Explain how I got this" panel, and why half of it is a record of the run rather than prose about it.
+- [Architecture Standards](docs/reference/ARCHITECTURE_STANDARDS.md): brain / runner / adapters, why `core` is `core`, and the standards code here must follow.
+- [Writing a consumer](docs/how-to/writing-a-consumer.md): wire the library to your own Quest backend.
+- [Implementing adapters](docs/how-to/adapters.md): the four interfaces and how to build your own.
+- [Streaming & modes](docs/explanation/streaming-and-modes.md): LIVE vs BACKGROUND, sinks, the handoff.
+- [Deployment](docs/how-to/deployment.md): cron and systemd.
+- [Quest API contract](docs/reference/quest-api-contract.md): the endpoints the runner speaks.
 
 ## The three consumers
 
@@ -332,12 +335,12 @@ Auth: `Authorization: Bearer qsk_<hex>` (the executor identity).
   assignee: explicit assignee → configured default (`QAR_DECISION_ASSIGNEE`) → the quest's own
   owner, or it raises instead of filing an unaddressed decision. A deep worker that raises one
   itself reports it back by printing `QAR-ESCALATED: <decision_id>` in its output (see
-  [`docs/adapters.md`](docs/adapters.md#escalationsink)); a missing marker is recovered
+  [`docs/how-to/adapters.md`](docs/how-to/adapters.md#escalationsink)); a missing marker is recovered
   automatically when the sink supports it, so a decision is never silently orphaned.
 - **Read a quest's decisions**: `GET /api/teams/decisions/for-quest?quest_id=` (open and
   resolved), rendered into quest context (`QuestRetrievalAdapter`) so a rep sees what's already
   been asked/answered and doesn't duplicate or re-ask it. See
-  [`docs/quest-api-contract.md`](docs/quest-api-contract.md).
+  [`docs/reference/quest-api-contract.md`](docs/reference/quest-api-contract.md).
 - **Loop-close**: `GET /api/teams/decisions/for-user`, `POST /api/teams/decisions/{id}/resolve`.
 - **Identity**: `GET /api/teams/whoami` (validate the key; `quest-ai-runner --check`).
 

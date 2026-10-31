@@ -67,7 +67,7 @@ bm25 = ["bm25s>=0.2"]
 # The Voyage AI embedder (hubofhubs.recall.embedders.make_voyage_embedder, imported lazily when a lane selects it).
 voyage = ["voyageai"]
 # AcpDeepRunner: the opt-in DeepRunner that drives Claude over the Agent Client Protocol instead
-# of a one-shot `claude -p` subprocess (see docs/acp-deep-runner.md). The default deep runner needs
+# of a one-shot `claude -p` subprocess (see docs/how-to/acp-deep-runner.md). The default deep runner needs
 # none of this. The Python side is this package; the agent side is the separate Node program
 # `@agentclientprotocol/claude-agent-acp` (npm, requires Node >= 22), which pip cannot install.
 acp = ["agent-client-protocol>=0.12"]

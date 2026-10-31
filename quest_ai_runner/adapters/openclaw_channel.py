@@ -22,7 +22,7 @@ It knows exactly six OpenClaw MCP tools, and DELIBERATELY never calls a seventh:
     EVENT_DECISION), never the gateway's. There is no method on this class that could call it.
 
 SECURITY -- non-negotiable lockdown requirements for how OpenClaw ITSELF must be run (this module
-does not install or operate OpenClaw; see ``docs/live-channels.md`` for the full checklist an
+does not install or operate OpenClaw; see ``docs/how-to/live-channels.md`` for the full checklist an
 operator must verify before pointing this bridge at a real Gateway):
 
   * OpenClaw pinned at or above v2026.1.29 (fixes CVE-2026-25253, CVSS 8.8: auth-token

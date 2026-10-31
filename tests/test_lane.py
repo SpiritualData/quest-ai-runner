@@ -1,5 +1,5 @@
 """``runner.lane.run_lane`` — the shared --check/--once/loop driver every executor lane's ``main()``
-should be nothing more than a call to (see docs/tutorial-your-first-lane.md).
+should be nothing more than a call to (see docs/tutorials/tutorial-your-first-lane.md).
 
 Three separate consumers of this library hand-rolled this same glue before it moved into the
 library (see CHANGELOG.md, Unreleased, and ``lane.py``'s own module docstring); these tests cover

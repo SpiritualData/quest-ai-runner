@@ -25,7 +25,7 @@ from .prompt_layers import language_instruction
 # {gathered}, {max_reads}, ...), JSON-example braces are {{...}}; the gates from context_doctrine carry no braces.
 
 # The ORDERED DECISION PROCEDURE, and the first thing the planner reads: stop at the first rule that applies.
-# Priority, not content, was the measured failure (docs/cheap-model-routing.md). Keep it SHORT and FIRST.
+# Priority, not content, was the measured failure (docs/explanation/cheap-model-routing.md). Keep it SHORT and FIRST.
 PLANNER_DECISION_RUBRIC: str = """\
 DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below only refines it.
   0. NAMED ROUTE. The user asks for the work to run as a deep run, a task, or in the background
@@ -651,7 +651,7 @@ out loud, not a release, so answer it without acting on it.
 
 # Folded into the grounding of EVERY reply a latched turn produces (zero extra LLM calls): the HONESTY FLOOR (a held
 # turn ran nothing, so no reply may say or imply that it did) and the NO-ACTION ACKNOWLEDGMENT, guidance with explicit
-# permission to skip, deliberately not gated on an intent detector (docs/cheap-model-routing.md). No em dashes.
+# permission to skip, deliberately not gated on an intent detector (docs/explanation/cheap-model-routing.md). No em dashes.
 BRAINSTORM_NO_ACTION_ACK_NOTE = """\
 --- BRAINSTORM MODE: NOTHING WAS EXECUTED THIS TURN ---
 This conversation is on hold: nothing was executed, changed, sent, scheduled, or queued this turn,
@@ -793,7 +793,7 @@ _PLANNER_TAIL = PARALLEL_SUBQUESTIONS + DEEP_FAN_OUT + TAIL_FRAME
 
 # THE COMPACT PLANNER PROFILE: the same doctrine without the parts a PLANNER does not use (the answer-grounding gates,
 # the prose behind the rubric). Opt in (``OrchestratorConfig.planner_prompt_profile``, default "full"); what it
-# drops and what it measured are in docs/cheap-model-routing.md.
+# drops and what it measured are in docs/explanation/cheap-model-routing.md.
 
 _PLANNER_COMPACT_HEAD = """\
 You are the PLANNER for an AI assistant answering a request. Decide the NEXT step, fast. You do
@@ -867,7 +867,7 @@ THE ACTIONS:
     act. When there is something to look at, put its full https URL in `confirm_review_url`.
 """
 
-# The rubric goes first, and that was measured (docs/cheap-model-routing.md, "What did not work").
+# The rubric goes first, and that was measured (docs/explanation/cheap-model-routing.md, "What did not work").
 PLANNER_PROMPT_COMPACT = (
     _PLANNER_COMPACT_HEAD
     + PLANNER_DECISION_RUBRIC

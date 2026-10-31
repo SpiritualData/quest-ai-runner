@@ -16,7 +16,7 @@ re-embedding anything. Pure planning plus a thin apply step over ``QuestApiCardR
   embedded here.
 * Every uploaded card is stamped with the uploading store's writer ``origin`` (its ``store_id``, else
   an id derived from the runner environment and corpus root), so the lane that owns the store is the
-  one that manages these cards on the shared backend afterwards (see docs/context-card-stores.md).
+  one that manages these cards on the shared backend afterwards (see docs/how-to/context-card-stores.md).
 * Idempotent: ids are kept, so a re-run upserts the same cards.
 """
 from __future__ import annotations

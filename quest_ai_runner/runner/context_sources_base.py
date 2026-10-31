@@ -56,7 +56,7 @@ class _BaseSource:
     judge_admission = False
     # Whether an admitted item from this source should be posted onto the card it arrived for, as
     # a note, so the account's own asks record (not this library's local feedback ledger, which is
-    # a different thing -- see docs/feedback-ledger.md) sees it under the sender's own name. Only
+    # a different thing -- see docs/explanation/feedback-ledger.md) sees it under the sender's own name. Only
     # a source whose items are things a REAL PERSON outside the account sent in wants this: a
     # quest note or a Drive comment already has its own answer channel and its own place in the
     # product surface, and relaying it as a SECOND note would just be noise.

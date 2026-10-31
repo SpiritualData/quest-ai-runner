@@ -1,7 +1,7 @@
 """A finished task reports the run's metric facts to the Quest backend, as data the loop kept and not as words.
 
 ``OrchestratorResult.metric_results`` / ``.metric_missing`` (written by the goal loop from its metric ledger,
-``docs/metric-results.md``) ride in ``result_data`` on every terminal report the executor makes, and a milestone that
+``docs/explanation/metric-results.md``) ride in ``result_data`` on every terminal report the executor makes, and a milestone that
 carries them passes them on as the progress post's ``data``. A client or a test double that does not declare
 ``result_data`` is called exactly as before, and a run with no metric facts reports exactly as before.
 """

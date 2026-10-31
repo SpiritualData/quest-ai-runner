@@ -15,7 +15,7 @@ genuinely specific to that lane) and calls ``run_lane`` with it:
         return run_lane(argv, prog="my-lane", description="...", lane_label="my-lane",
                         log_name="my-lane", build_config=build_config)
 
-That is the whole entry point. See ``docs/tutorial-your-first-lane.md`` for a walkthrough and
+That is the whole entry point. See ``docs/tutorials/tutorial-your-first-lane.md`` for a walkthrough and
 ``examples/minimal_lane.py`` for a runnable one.
 """
 from __future__ import annotations

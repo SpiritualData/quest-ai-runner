@@ -1,4 +1,4 @@
-"""Rewrites the generated block of ``docs/hub-of-hubs.md`` from the hub's registry and QAR's reading, in place (never appended).
+"""Rewrites the generated block of ``docs/explanation/hub-of-hubs.md`` from the hub's registry and QAR's reading, in place (never appended).
 Run: ``python3 evaluation/components/hub_of_hubs/render_docs.py`` (add ``--check`` to exit 1 when the file is out of date).
 Day counts are left out on purpose, so the file changes only when a fact changes."""
 import sys
@@ -36,7 +36,7 @@ def main(argv):
     new = render_docs.rewrite(text, BEGIN, END, block())
     if "--check" in argv:
         if new != text:
-            print("docs/hub-of-hubs.md is out of date: run python3 evaluation/components/hub_of_hubs/render_docs.py")
+            print("docs/explanation/hub-of-hubs.md is out of date: run python3 evaluation/components/hub_of_hubs/render_docs.py")
             return 1
         return 0
     DOC.write_text(new, encoding="utf-8")

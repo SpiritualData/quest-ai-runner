@@ -125,7 +125,7 @@ class RelayedItems:
     it, so unlike a watermark (which only says how far a read has gotten, and where a re-offered
     line costs nothing but a person's patience), losing this record turns a restart or a second
     pass over the same mail into a duplicate ask. Keyed by (card_id, source, item_id), the same
-    triple the feedback ledger keys its own rows by (see ``docs/feedback-ledger.md``), because
+    triple the feedback ledger keys its own rows by (see ``docs/explanation/feedback-ledger.md``), because
     "have I done this already" and "what became of it" are the same identity asked two different
     questions -- kept as a SEPARATE store anyway, since the local feedback ledger is optional
     (``RunnerConfig.feedback_ledger``) and idempotent relay must hold regardless of whether a

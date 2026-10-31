@@ -24,7 +24,7 @@ half of the same section (what would change or improve the answer next time); it
 1 key so a version 1 consumer still renders it.
 
 ``metrics`` (version 3) is what the relevant metric was before and after the turn's change, one entry
-per metric, copied from ``OrchestratorResult.metric_results`` (shape and meaning: ``docs/metric-results.md``),
+per metric, copied from ``OrchestratorResult.metric_results`` (shape and meaning: ``docs/explanation/metric-results.md``),
 with ``metric_missing`` when a change ended with no metric result recorded. The values come from the
 runner's ledger and meters, so the model-written half never touches them: it is told the values are
 shown separately and must not state them, and the record it is constrained to carries them so it cannot
@@ -72,7 +72,7 @@ EVOLVABLE_KEYS = ("ideal", "metric", "structure")
 # the payload is persisted on the message, so it stays small on purpose.
 MAX_ITEMS_PER_KIND = 12
 
-# The keys of one ``metrics`` entry: exactly ``MetricResult.to_dict()`` (``docs/metric-results.md``).
+# The keys of one ``metrics`` entry: exactly ``MetricResult.to_dict()`` (``docs/explanation/metric-results.md``).
 METRIC_KEYS = ("solution_id", "metric_id", "name", "milestone", "before", "after", "delta", "source", "reason",
                 "disagrees")
 METRIC_NUMBER_KEYS = ("before", "after", "delta")

@@ -4,7 +4,7 @@ Quest AI (or any QAR brain) normally reads files through ``FilesAdapter``, which
 the same machine. When the brain runs somewhere else (a hosted backend), the team runs this server
 on the machine that HAS the files and the brain reaches it with ``RemoteFilesAdapter``
 (``adapters/remote_files_adapter.py``). Start it with ``quest-ai-runner serve-files`` (see
-``docs/file-server.md``).
+``docs/how-to/file-server.md``).
 
 Why a plain JSON-over-HTTP API and not MCP (decision recorded here so it is not re-litigated):
 the planner's own read vocabulary is ``grep(pattern, scope)`` and ``read_section(path, lines|heading)``,

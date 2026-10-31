@@ -10,7 +10,7 @@ dependency; `quest_ai_runner/hub.py` imports it at startup and registers QAR's p
 orchestrator **brain** (`quest_ai_runner.core`) plus the queued-task **executor** (`quest_ai_runner.runner`) for Quest AI
 tasks. It is published as open source (Apache-2.0) and is meant to run for *any* org, not one specific deployment. The
 brain (`core/`) stays free of Quest; the Quest-specific parts are the adapters, the runner and the config. Generic engines
-are moving into the hub seat by seat (`docs/hub-of-hubs.md`); QAR keeps what knows Quest.
+are moving into the hub seat by seat (`docs/explanation/hub-of-hubs.md`); QAR keeps what knows Quest.
 - `core/`: the brain, a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
   nothing about Quest, any database, any org, or any user. Depends only on the adapter
   *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; `esoi/solutions.csv` lists them all.
@@ -51,11 +51,11 @@ are moving into the hub seat by seat (`docs/hub-of-hubs.md`); QAR keeps what kno
   current list.
 - `config.py`: `RunnerConfig`, the single place a consumer supplies everything specific.
 - `examples/`: runnable reference consumers (env-driven, no real data).
-- `docs/`: tutorial + how-tos + architecture.
+- `docs/`: four Diataxis folders (`tutorials/`, `how-to/`, `explanation/`, `reference/`), indexed by `docs/README.md`; `esoi docs check` enforces them and `esoi docs wiki` generates the wiki from them (never edit the wiki). A new page goes in exactly one folder and in the index.
 
 Module names describe **architectural role**, not domain. "core" is the stable center everything
 depends on; "runner" is the executor; "adapters" are the swappable implementations. See
-`docs/ARCHITECTURE_STANDARDS.md` for the full architecture and the standards code here must follow.
+`docs/reference/ARCHITECTURE_STANDARDS.md` for the full architecture and the standards code here must follow.
 
 ## Evolvable structure (ESOI): the registry and the check
 
@@ -80,7 +80,7 @@ write the class, add the decorator, run `esoi records sync`, fill the text, add 
 `evaluation/components/esoi_behavior/` scores whether an AI's replies follow ESOI (`cases.csv` is reviewed as a sheet).
 
 - **Before you commit:** `.venv/bin/esoi check` (it also runs as `tests/test_structure_registry.py`; `esoi check --write-docs`
-  regenerates `COMPONENTS.md`, `docs/configuration.md` and `tracker/*.csv`) and `.venv/bin/esoi hygiene`. Each problem line
+  regenerates `COMPONENTS.md`, `docs/reference/configuration.md` and `tracker/*.csv`) and `.venv/bin/esoi hygiene`. Each problem line
   starts with the id of the rule it breaks. After committing measured code or cases (`quest_ai_runner/`,
   `evaluation/components/`), run `esoi run --stale` and commit `evaluation/components/results.csv`, then `esoi check --strict`.
   Offline arms only: a live arm (model calls) is run only by decision, per `esoi/metric-run-policy.md`.
@@ -89,7 +89,7 @@ write the class, add the decorator, run `esoi records sync`, fill the text, add 
   startup in one place, `quest_ai_runner/hub.py`, and registers its parts there. For dev and tests keep the sibling checkout
   beside this repository (pytest `pythonpath` in `pyproject.toml`; `evaluation/components/hub_of_hubs` also puts it on the path)
   rather than pip-installing it. QAR keeps its bindings (`esoi/hub_seats.csv`), probes and Quest adapters; registry facts are
-  changed in the hub repository, never copied here (`docs/hub-of-hubs.md`). Generic assembly, selection, cascade and checking
+  changed in the hub repository, never copied here (`docs/explanation/hub-of-hubs.md`). Generic assembly, selection, cascade and checking
   belong in the esoi library, not here or in the hub; see `evolvable-structure/docs/explanation/what-belongs-where.md`.
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
@@ -152,7 +152,7 @@ and keep the tests green.
    ```
    (`[0-9a-f]{24}` catches Mongo-style ObjectIds. A hit isn't always a problem. Review it.)
    The scan is also a command, with placeholders (`qsk_...`, `/home/user/`, `name@example.org`) let through:
-   `.venv/bin/esoi hygiene --staged` (see `docs/public-hygiene.md`).
+   `.venv/bin/esoi hygiene --staged` (see `docs/how-to/public-hygiene.md`).
 3. Never commit a real `.env`, `qar_state.json`, or any `*_state.json` (all gitignored).
 4. Keep `CHANGELOG.md` (Unreleased) and docs in sync with behavior changes.
 
@@ -246,10 +246,10 @@ it is a gap in this library, and the fix is here:
 
 - A shared entry-point shape, loop, or process-lifecycle concern → `runner/lane.py` (or a new
   module next to it), not a copy in your consumer. Start from
-  [`docs/tutorial-your-first-lane.md`](docs/tutorial-your-first-lane.md).
+  [`docs/tutorials/tutorial-your-first-lane.md`](docs/tutorials/tutorial-your-first-lane.md).
 - A policy for deciding WHO or WHAT handles a task, expressible as data rather than one lane's
   bespoke code → a `RunnerConfig` field with a resolver function beside it (see
-  `runner/personas.py`), documented in [`docs/personas.md`](docs/personas.md), not a hand-written
+  `runner/personas.py`), documented in [`docs/how-to/personas.md`](docs/how-to/personas.md), not a hand-written
   callable duplicated across consumers.
 - Anything else generic → an adapter interface (hard rule #2) or a new `RunnerConfig` field, per
   the usual rule.

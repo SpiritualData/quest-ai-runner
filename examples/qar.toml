@@ -1,4 +1,4 @@
-# Example TOML config for examples/minimal_lane.py, see docs/tutorial-your-first-lane.md.
+# Example TOML config for examples/minimal_lane.py, see docs/tutorials/tutorial-your-first-lane.md.
 #
 # Keys mirror RunnerConfig field names (RunnerConfig.from_file). This file has NO secrets and NO
 # real ids: the Quest connection (QUEST_BASE_URL / QUEST_API_KEY / QUEST_TEAM_ID) stays in the
@@ -13,11 +13,11 @@ runner_label = "minimal-lane-example"
 # (QAR_CORPUS_ROOT does the same thing from the environment instead):
 # corpus_root = "/path/to/your/corpus"
 
-# Uncomment for a one-line deep-run preamble (see docs/tutorial-your-first-lane.md for the
+# Uncomment for a one-line deep-run preamble (see docs/tutorials/tutorial-your-first-lane.md for the
 # file-based QAR_CONTEXT_PREAMBLE_FILE alternative once this grows past a sentence or two):
 # context_preamble = "You are executing a task for this team. Ground on the corpus; surface any human-only step as a decision-request."
 
-# Uncomment to add a declarative persona roster (see docs/personas.md for the full reference):
+# Uncomment to add a declarative persona roster (see docs/how-to/personas.md for the full reference):
 # [personas]
 # skills_root = "/path/to/skills"
 # registry_file = "/path/to/skills/registry.json"

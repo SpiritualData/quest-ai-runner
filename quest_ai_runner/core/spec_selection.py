@@ -28,7 +28,7 @@ SpecSelection = search_lib.Selection   # ids, candidates, linked, calls, failed_
 # Records that state intent are candidates; implementations are reached through their solution's links (there are several per
 # solution and they would crowd the candidates).
 CANDIDATE_KINDS = search_lib.RECORD_CANDIDATE_KINDS
-# The gate (documented in docs/spec-selection.md): tuned on the dev split of the evaluation cases only.
+# The gate (documented in docs/explanation/spec-selection.md): tuned on the dev split of the evaluation cases only.
 GATE = search_lib.Gate(sure_vector=0.72, sure_lexical=60.0, nothing_vector=0.52, nothing_lexical=12.0, agree_rank=3, pool=20)
 
 SELECT_PROMPT = """You choose which project specifications a new request concerns.

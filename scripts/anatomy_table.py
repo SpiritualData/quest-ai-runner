@@ -1,4 +1,4 @@
-"""Generate the parts table in docs/anatomy.md from the ESOI records.
+"""Generate the parts table in docs/explanation/anatomy.md from the ESOI records.
 
     python scripts/anatomy_table.py          # print the table
     python scripts/anatomy_table.py --write  # rewrite it in place between the markers
@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DOC = ROOT / "docs" / "anatomy.md"
+DOC = ROOT / "docs" / "explanation" / "anatomy.md"
 BEGIN, END = "<!-- anatomy-table:begin -->", "<!-- anatomy-table:end -->"
 
 # part -> (module, solution id). The module is the entry file; the solution id keys the records.

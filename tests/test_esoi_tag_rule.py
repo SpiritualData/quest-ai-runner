@@ -33,7 +33,7 @@ def test_unused_and_universal_tags_fail_and_name_the_procedure():
     lines = rules.tag_problems(LISTED, solutions("spending", "spending"), PROBLEMS)
     assert any("prompt: used by no solution" in line for line in lines)
     assert any("spending: on every solution" in line for line in lines)
-    assert all("docs/spec-selection.md, Solution tags" in line for line in lines)
+    assert all("docs/explanation/spec-selection.md, Solution tags" in line for line in lines)
 
 
 def test_a_tag_on_one_solution_is_a_note_not_a_failure():

@@ -24,7 +24,7 @@ env_vars.env_vars_in_code = functools.lru_cache(maxsize=2)(env_vars.env_vars_in_
 
 def scan_env_docs(root: Path) -> dict:
     """The expensive part: every variable the package reads, and whether the configuration page is current."""
-    doc_path = root / "docs" / "configuration.md"
+    doc_path = root / "docs" / "reference" / "configuration.md"
     doc_text = doc_path.read_text() if doc_path.exists() else ""
     described = env_vars.descriptions(root)
     found = env_vars.env_vars_in_code(root)
@@ -50,17 +50,17 @@ def env_docs(ctx: Context) -> list:
     bad = []
     for var, where in result["missing"]:
         if var not in waived:
-            bad.append(f"S15 {var}: read in {where} but missing from docs/configuration.md (run `esoi check --write-docs`)")
+            bad.append(f"S15 {var}: read in {where} but missing from docs/reference/configuration.md (run `esoi check --write-docs`)")
     for var, where in result["unexplained"]:
         if var not in waived:
             bad.append(f"S15 {var}: read in {where} but explained nowhere; add a line to esoi/env_descriptions.csv")
     if result["stale"]:
-        bad.append("S15 docs/configuration.md: out of date (run `esoi check --write-docs`)")
+        bad.append("S15 docs/reference/configuration.md: out of date (run `esoi check --write-docs`)")
     return bad
 
 
 def write_docs(ctx: Context) -> None:
-    (Path(ctx.root) / "docs" / "configuration.md").write_text(env_vars.render_env_doc(Path(ctx.root)))
+    (Path(ctx.root) / "docs" / "reference" / "configuration.md").write_text(env_vars.render_env_doc(Path(ctx.root)))
 
 
 def model_free_first_stage(ctx: Context) -> list:
@@ -157,7 +157,7 @@ def no_generic_code(ctx: Context) -> list:
 
 
 
-RULES = [RuleGroup({"S15": "Every environment variable read in the package is a row of docs/configuration.md "
+RULES = [RuleGroup({"S15": "Every environment variable read in the package is a row of docs/reference/configuration.md "
                            "(generated from the code, described in env_descriptions.csv)."}, env_docs),
          RuleGroup({"Q1": "Every solution tag is a row of esoi/tags.csv with a meaning and the problems it mitigates "
                           "(problem_ids that resolve), and every listed tag is used by some solution and not by all."},

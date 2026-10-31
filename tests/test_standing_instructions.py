@@ -89,14 +89,14 @@ def test_shipped_default_matches_the_skill_it_is_generated_from():
 
 
 def test_public_doc_matches_the_skill_it_is_generated_from():
-    """docs/evolvable-structure.md (the page the explanation panel links to) is the same source."""
+    """docs/reference/evolvable-structure.md (the page the explanation panel links to) is the same source."""
     sync = _sync_module()
     skill = sync.skill_path()
     if not skill.is_file():
         pytest.skip(f"skill not on this machine: {skill}")
     expected = sync.build_public(skill.read_text(encoding="utf-8"))
     assert sync.PUBLIC_OUTPUT.read_text(encoding="utf-8") == expected, (
-        "docs/evolvable-structure.md drifted from the skill: run scripts/sync_standing_instructions.py")
+        "docs/reference/evolvable-structure.md drifted from the skill: run scripts/sync_standing_instructions.py")
 
 
 def test_public_doc_carries_no_runner_or_skill_only_text():

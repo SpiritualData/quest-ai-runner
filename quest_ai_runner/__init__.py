@@ -94,8 +94,8 @@ def load_config(config_path: Optional[str] = None) -> "RunnerConfig":
     """Build a ``RunnerConfig`` from a TOML file layered under the environment.
 
     THE front door for a consumer: a lane is ``load_config()`` plus
-    ``quest_ai_runner.runner.lane.run_lane`` (see ``docs/tutorial-your-first-lane.md``). Every
-    field a file can set is listed in ``docs/writing-a-consumer.md``; an environment variable
+    ``quest_ai_runner.runner.lane.run_lane`` (see ``docs/tutorials/tutorial-your-first-lane.md``). Every
+    field a file can set is listed in ``docs/how-to/writing-a-consumer.md``; an environment variable
     always wins over the same field in the file.
 
     ``config_path`` (or ``QAR_CONFIG_FILE`` when omitted) names the file; omit both to build from

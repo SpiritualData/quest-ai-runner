@@ -281,7 +281,7 @@ class TasksMixin:
 
         ``result_data`` on this and the other terminal reports is the structured payload next to
         ``result``: ``{"metrics": [...], "metric_missing": true}``, what the relevant metric was
-        before and after the run's change (``docs/metric-results.md``). Omitted when the run has
+        before and after the run's change (``docs/explanation/metric-results.md``). Omitted when the run has
         none, and then the body is exactly what it always was.
         """
         body: Dict[str, Any] = {"status": "incomplete", "result": result}

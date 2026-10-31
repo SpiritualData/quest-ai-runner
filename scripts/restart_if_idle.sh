@@ -11,7 +11,7 @@
 #
 # The obvious fix -- restart on a timer -- has its own failure: a deep run can take many minutes,
 # and a blind `systemctl restart` in the middle of one throws that work away. This script is the
-# safe version of the same idea, and is what `docs/deployment.md` ("Upgrading a running lane")
+# safe version of the same idea, and is what `docs/how-to/deployment.md` ("Upgrading a running lane")
 # tells you to schedule.
 #
 # IDLE TEST
@@ -27,7 +27,7 @@
 #   restart_if_idle.sh my-lane.service              # a `systemctl --user` unit (the default)
 #   restart_if_idle.sh my-lane.service --system     # a system unit (needs privileges)
 #
-# Schedule it from a systemd timer or cron; see docs/deployment.md for both.
+# Schedule it from a systemd timer or cron; see docs/how-to/deployment.md for both.
 #
 # EXIT CODES
 #   0  restarted, or deliberately skipped because a deep run was in flight

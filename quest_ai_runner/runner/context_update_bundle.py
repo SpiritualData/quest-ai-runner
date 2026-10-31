@@ -289,7 +289,7 @@ class ContextUpdates:
 
         Posts through ``QuestClient.add_quest_note(..., relayed_author_email=...)``, which is the
         one write path that lets an API-key caller attribute a note to a real person's address
-        rather than to the AI (see that method's own docstring and ``docs/feedback-ledger.md`` on
+        rather than to the AI (see that method's own docstring and ``docs/explanation/feedback-ledger.md`` on
         why the account's own asks record -- not this library's local feedback ledger -- is what
         the person's name has to reach). Idempotent by (card_id, source, item_id) via
         ``relay_log``: a restart, or a "still owed" re-offer of the same mail item on a later pass,
