@@ -65,7 +65,7 @@ lists its rules, so they are not restated here, and the steps and the philosophy
 evolvable-structure skill, not copied here). `esoi/`
 holds `components.csv` (placement only), `intent.csv` (the top intent: why this project exists, in its own words) beside the five intent record files,
 `waivers.csv` and `metric-run-policy.md`; `esoi.toml` configures esoi for this repo and
-`scripts/esoi_rules.py` adds QAR's one rule (S15, environment variables are documented). Nothing lives outside a solution:
+`scripts/esoi_rules.py` adds QAR's own rules: S15 (environment variables are documented), Q1 (solution tags), Q2 (every metric starts model-free) and Q3 (no generic code left in QAR: a module under `quest_ai_runner/` with no Quest-domain word from `QUEST_DOMAIN_WORDS` and no `hubofhubs` binding is generic and belongs in the hub; the `Q3` rows of `esoi/waivers.csv` are the hub-migration backlog, and each check prints the waived count). Nothing lives outside a solution:
 a component that serves none (S19), or a solution with no current recorded run (S20), fails the check, and the code is
 removed rather than waived.
 **Swappable parts are declared once, beside their code.** An implementation of a port is a class with

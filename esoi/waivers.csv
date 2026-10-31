@@ -51,3 +51,12 @@ S33,repair-a-card-store,"unconfirmed: for Payal to confirm. The arms tie or near
 S33,hand-off-a-goal,"unconfirmed: for Payal to confirm. The selected arm was recorded on a different sample than the fast rival, so the live stage cannot compare them. Pending decision: record both on the same cases."
 S33,label-context-cards,"unconfirmed: for Payal to confirm. The selected arm was recorded on a different sample than the fast rival, so the live stage cannot compare them. Pending decision: record both on the same cases."
 S33,justify-model-calls,unconfirmed: for Payal to confirm. The registry-only arm scores top on the offline stage without making the metric's checks (see the S10 waiver for it). Pending decision for the owner.
+Q3,quest_ai_runner/adapters/conversation_card_builder.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
+Q3,quest_ai_runner/adapters/files_redaction.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
+Q3,quest_ai_runner/cli_serve_files.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
+Q3,quest_ai_runner/core/prompt_specs.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
+Q3,quest_ai_runner/core/signature_probe.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
+Q3,quest_ai_runner/interactive_session_render.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
+Q3,quest_ai_runner/interactive_session_store.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
+Q3,quest_ai_runner/textual_ui_prompt.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
+Q3,quest_ai_runner/textual_ui_transcript.py,generic candidate for the hub: unconfirmed: for Payal to confirm.
