@@ -5,6 +5,7 @@ A mixin of ``Orchestrator`` (see ``orchestrator.py``): methods only, state lives
 from __future__ import annotations
 
 import copy
+import json
 import threading
 from typing import Any, Dict, List, Optional, Sequence
 from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
@@ -409,8 +410,11 @@ class PlanningMixin:
             kwargs: Dict[str, Any] = {"model": model, "tool_schema": REACH_JUDGE_TOOL}
             if provider_call_accepts_tier(provider.plan):
                 kwargs["tier"] = self.cfg.planner_reach_judge_tier
-            raw = plan_with_step(provider, judge_prompt(user_message, summary,
-                                                        web_configured=self.web is not None),
+            # A provider without forced tool use (Gemini ignores ``tool_schema``) answers in whatever keys it likes; live, flash-lite put
+            # the verdict "world" under ``covered_by`` and sent no ``reach``, six times in six. State the shape in the prompt too.
+            shape = json.dumps(REACH_JUDGE_TOOL["input_schema"]["properties"], separators=(",", ":"))
+            raw = plan_with_step(provider, judge_prompt(user_message, summary, web_configured=self.web is not None)
+                                 + f"\nReply with one JSON object whose keys are exactly these properties: {shape}\n",
                                  step=STEP_JUDGE, **kwargs)
             verdict = normalize_verdict(raw) or parse_judge_text(raw)
         except Exception as e:  # noqa: BLE001

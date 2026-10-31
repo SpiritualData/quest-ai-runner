@@ -316,3 +316,14 @@ def test_the_loop_searches_the_web_before_an_answer_the_reach_judge_called_world
     assert run(None, [answer]) == []
     searched = {"action": "read", "reads": [{"web": "super plan price"}], "user_intent": "ask", "rationale": "look it up"}
     assert len(run(WORLD, [searched, answer])) == 1    # the planner searched itself: the code adds none
+
+
+def test_the_reach_judge_prompt_names_its_keys_so_a_provider_without_forced_tool_use_answers_in_them():
+    from quest_ai_runner.core.orchestrator import OrchestratorConfig
+
+    provider = StubProvider([{"reach": "world"}])
+    config = OrchestratorConfig()
+    config.read_reach_summary = "Reads reach the person's quests."
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config)
+    assert orch.judge_reach("What does it cost right now?")["reach"] == "world"
+    assert '"reach"' in provider.last_plan_prompt and "exactly these properties" in provider.last_plan_prompt
