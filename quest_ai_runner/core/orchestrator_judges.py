@@ -509,7 +509,7 @@ class JudgesMixin:
             return None
         return bool(result.get("denies_landed_work"))
 
-    def judge_execution_directive(self, user_message: str, answer_text: str) -> Tuple[bool, str]:
+    def directive_verdict(self, user_message: str, answer_text: str) -> Tuple[Optional[bool], str]:
         """ONE structured LLM judgment of whether the user ordered work, used ONLY when the
         planner gave no usable ``user_intent`` verdict this turn (the verdict decides every other
         turn). Design: HANDS_FREE_QUEST_AI_DESIGN.md section 4 -- intent calls belong to a
@@ -518,11 +518,11 @@ class JudgesMixin:
         Runs at ``cfg.intent_judge_tier`` (default "balanced"): this is a routing decision, not the
         run's outcome gate (``verify_tier``/``_verify_goal`` is that), so it does not need the
         strong tier. Hard-capped by ``intent_judge_timeout_seconds()`` so a slow/hung provider can
-        NEVER block the turn. On ANY failure, timeout, or unusable response, falls back to False
-        (open no work nobody clearly asked for) and returns that with a clear reason so the caller
+        NEVER block the turn. On ANY failure, timeout, or unusable response, returns None with a clear reason so the caller
         can log why. Never raises.
 
-        Returns ``(is_execution_directive, reason)``.
+        Returns ``(verdict, reason)``; the verdict is None when no judgment could be made (a caller that must fail OPEN needs
+        to tell that from a real "no"; ``judge_execution_directive`` reads it as False).
         """
         fallback_reason = "no directive assumed (LLM judgment unavailable)"
         try:
@@ -530,9 +530,9 @@ class JudgesMixin:
         except Exception as e:  # noqa: BLE001 — an unresolvable tier just means no judgment
             log.warning("Intent-directive judge: could not resolve tier %r (%s); assuming no directive.",
                        self.cfg.intent_judge_tier, e)
-            return False, fallback_reason
+            return None, fallback_reason
         if not model:
-            return False, fallback_reason
+            return None, fallback_reason
         prompt = render_prompt("judge-a-decision.intent-directive", 
             message=clip_head_and_tail(user_message or "", 1000),
             answer=(answer_text or "").strip()[:1500] or "(no answer produced yet)",
@@ -555,19 +555,55 @@ class JudgesMixin:
             log.warning("Intent-directive judge timed out after %.0fs "
                        "(QAR_INTENT_JUDGE_TIMEOUT_SECONDS to adjust); assuming no directive.",
                        timeout)
-            return False, fallback_reason
+            return None, fallback_reason
         except Exception as e:  # noqa: BLE001 — the judgment call must never break the turn
             log.warning("Intent-directive judge failed (%s: %s); assuming no directive.",
                        type(e).__name__, e)
-            return False, fallback_reason
+            return None, fallback_reason
         finally:
             pool.shutdown(wait=False)
         if not isinstance(result, dict) or "is_execution_directive" not in result:
             log.warning("Intent-directive judge returned no usable verdict; assuming no directive.")
-            return False, fallback_reason
+            return None, fallback_reason
         is_directive = bool(result.get("is_execution_directive"))
         reason = str(result.get("reason") or "").strip() or "LLM intent judgment"
         return is_directive, reason
+
+    def judge_execution_directive(self, user_message: str, answer_text: str) -> Tuple[bool, str]:
+        """``directive_verdict`` read the cautious way: no judgment means no directive (open no work nobody clearly asked for)."""
+        verdict, reason = self.directive_verdict(user_message, answer_text)
+        return bool(verdict), reason
+
+    def turn_evidence(self, rs: Any) -> str:
+        """What this turn has SEEN, for the tool guards: the user's words, the transcript, the context the planner was shown,
+        and every tool or read result, but NOT the ``(args ...)`` header of a tool receipt, which is the model's own choice
+        (an invented id echoed there would otherwise vouch for itself on the next try)."""
+        parts: List[str] = [str(getattr(rs, "user_message", "") or ""), str(getattr(rs, "transcript", "") or ""),
+                            str(getattr(rs, "context_view", "") or ""), str(getattr(rs, "rep_preamble", "") or "")]
+        for entry in (getattr(rs, "gathered", None) or []):
+            text = str(entry.get("text") or "") if isinstance(entry, dict) else ""
+            if str(entry.get("locator") or "").startswith("tool:") and "):\n" in text[:2000]:
+                text = text.split("):\n", 1)[1]
+            parts.append(text)
+        extra = (getattr(rs, "context_meta", None) or {}).get("link_evidence")
+        parts.extend([extra] if isinstance(extra, str) else [str(x) for x in (extra or [])])
+        return "\n".join(parts)
+
+    def change_was_ordered(self, rs: Any) -> Optional[bool]:
+        """False when this turn's message is a QUESTION the intent judge says orders no change (so a write the planner proposed
+        is not run); None when the gate does not apply or no judgment could be made, and then the planner's decision stands.
+        Applies only to a person's own typed turn whose text asks (holds a question mark): an instruction is never judged, so the
+        gate costs one small call on a question-shaped message that proposed a change, once per turn, and nothing else."""
+        if not getattr(self.cfg, "order_gate", True) or not getattr(rs, "message_is_user_turn", False):
+            return None
+        message = str(getattr(rs, "user_message", "") or "")
+        if "?" not in message:
+            return None
+        if not hasattr(rs, "order_verdict"):
+            verdict, why = self.directive_verdict(message, "")
+            rs.order_verdict = verdict
+            log.info("Order gate: message judged %s (%s)", {True: "an order", False: "a question", None: "unjudged"}[verdict], why)
+        return rs.order_verdict
 
     def judge_quest_for_turn(self, user_message: str, previous_message: str,
                              quests: List[Dict[str, str]],

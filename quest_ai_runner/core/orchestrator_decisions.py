@@ -88,7 +88,7 @@ def facts_block(head: str, facts: List[str]) -> str:
 
 def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
                        tools_enabled: bool = False, web_enabled: bool = False,
-                       user_message: str = "") -> PlanDecision:
+                       user_message: str = "", infer_tool_action: bool = True) -> PlanDecision:
     # A provider's structured output is not guaranteed to be a dict: some models/SDKs return a LIST
     # (e.g. multiple tool calls, or a JSON array). Coerce to a dict so a stray shape degrades to a
     # safe "answer" instead of raising 'list' object has no attribute 'get' from the planner.
@@ -97,7 +97,13 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
             raw = next((x for x in raw if isinstance(x, dict)), {})
         else:
             raw = {}
-    action = (raw.get("action") or "answer").strip().lower()
+    action = (raw.get("action") or "").strip().lower()
+    if not action:
+        # A planner that filled ``tool_calls`` and left ``action`` empty (measured on the cheapest tier: 3 of 4 turns of one
+        # two-write request) meant to call them; the structured field says so, and "answer" would drop the writes unrun.
+        # Only before any tool has run this turn (``infer_tool_action``): afterwards the same omission is a planner that has
+        # finished, and its leftover calls would be extra writes.
+        action = "tool" if (tools_enabled and infer_tool_action and isinstance(raw.get("tool_calls"), list) and raw.get("tool_calls")) else "answer"
     if action not in ("read", "answer", "deep", "confirm", "clarify") and not (
             action == "tool" and tools_enabled):
         action = "answer"

@@ -275,7 +275,9 @@ class PlanningMixin:
                 plan_kwargs.pop("layers", None)
             raw = plan_with_step(provider, prompt, step=STEP_PLAN, **plan_kwargs)
         decision = normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None,
-                                      web_enabled=self.web is not None, user_message=user_message)
+                                      web_enabled=self.web is not None, user_message=user_message,
+                                      infer_tool_action=not any(str(g.get("locator") or "").startswith("tool:")
+                                                                for g in (gathered or [])))
         return self.cascade_review(decision, user_message, plan_context, gathered)
 
     # --- the reach judge (opt in; see core/reach_judge.py) --------------------

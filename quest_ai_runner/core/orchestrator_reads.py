@@ -13,6 +13,7 @@ from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_EXEC
 from hubofhubs.ports.deep import ProgressEvent
 from .adapters_values import Observation
 from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
+from . import tool_guards
 from .tools import ToolContext
 from .tools_status import DONE_STATUSES, RECEIPT_WORDS, SETTLED_STATUSES, ToolStatus, as_status
 from .planner_context import _is_discovery_spec
@@ -400,18 +401,45 @@ class ReadsMixin:
     def run_tool_calls(self, calls: List[Dict[str, Any]], *, gathered: List[Dict[str, Any]],
                         exec_record: ExecutionRecord, tool_ok_signatures: set,
                         emit: "_Emitter", steps: int, ctx: ToolContext,
-                        on_success: Optional[Callable[[str, Dict[str, Any]], None]] = None) -> None:
+                        on_success: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+                        evidence: Optional[Callable[[], str]] = None,
+                        order_gate: Optional[Callable[[], Optional[bool]]] = None) -> None:
         """Run the planner's direct tool calls in order, in-process (no deep run).
 
         Each outcome lands twice: in ``gathered`` (so the re-plan and the answer see the receipt)
         and, for a tool that ACTS, in ``exec_record`` (so the claim verifier backs "sent" with a
         real success, and the answer->deep nets see that work already ran this turn). A call
         identical to one that already succeeded is skipped, never repeated.
+
+        Before a call runs, the code checks it (``core/tool_guards.py``): a quest id the turn never saw is mapped to the one quest
+        it plainly means or refused back with the valid ids (``evidence`` is everything the turn saw), and a change is not made
+        when ``order_gate`` says the person asked a question and ordered nothing. After a read that declares companions, the
+        companion reads for the same quest run too. None of this reads the model's prose.
         """
-        for call in calls[: self.cfg.max_reads_per_step]:
+        work = list(calls[: self.cfg.max_reads_per_step])
+        read_pairs = set()
+        for entry in gathered:
+            locator = str(entry.get("locator") or "")
+            if locator.startswith("tool:"):
+                read_pairs.update((locator[5:], q) for q in tool_guards.quests_in_receipt(entry.get("text") or ""))
+        index = 0
+        while index < len(work):
+            call = work[index]
+            index += 1
             name = call.get("name") or ""
-            args = call.get("args") or {}
+            args = dict(call.get("args") or {})
             spec = self.tools.get(name) if self.tools is not None else None
+            if spec is not None and not call.get("companion"):
+                checked = tool_guards.check_quest_ids(spec, args, evidence() if evidence is not None else "", ctx.quest_id)
+                args = checked.args
+                if checked.refusal:
+                    gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": ToolStatus.REFUSED.value,
+                                     "text": checked.refusal})
+                    emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}: unknown quest id",
+                                            data={"phase": "failed", "tool": name, "status": ToolStatus.REFUSED.value}))
+                    continue
+                for wrote, used in checked.mapped:
+                    log.info("tool %s: quest id %r is not one this turn saw; used %r", name, wrote, used)
             sig = (name, json.dumps(args, sort_keys=True, default=str))
             if sig in tool_ok_signatures:
                 settled = as_status(tool_ok_signatures[sig] if isinstance(tool_ok_signatures, dict) else None,
@@ -421,6 +449,16 @@ class ReadsMixin:
                                           f"again. Answer with its receipt." if settled is ToolStatus.APPLIED else
                                           f"TOOL {name}: {RECEIPT_WORDS[settled]} earlier this turn with these args; "
                                           f"not run again. Answer with its receipt.")})
+                continue
+            if order_gate is not None and (spec is None or spec.mutates) and order_gate() is False:
+                # The person asked a question; they did not order this change. Settled for the turn, so a re-plan that
+                # proposes it again is told it was not run, not run again.
+                if isinstance(tool_ok_signatures, dict):
+                    tool_ok_signatures[sig] = ToolStatus.REFUSED
+                gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": ToolStatus.REFUSED.value,
+                                 "text": tool_guards.ORDER_REFUSAL.format(name=name)})
+                emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}: not ordered",
+                                        data={"phase": "failed", "tool": name, "status": ToolStatus.REFUSED.value}))
                 continue
             emit.status(f"Calling {name}…")
             emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}",
@@ -461,3 +499,9 @@ class ReadsMixin:
                                     data={"phase": "done" if done else "held" if held else "failed", "tool": name,
                                           "status": status.value}))
             log.info("tool %s %s: %s", name, status.value, text[:200])
+            if ok and spec is not None:
+                quest = str(args.get("quest_id") or ctx.quest_id or "")
+                read_pairs.add((name, quest))
+                for extra in tool_guards.companion_calls(spec, args, ctx.quest_id, read_pairs):
+                    work.append(dict(extra, companion=True))
+                    read_pairs.add((extra["name"], extra["args"]["quest_id"]))

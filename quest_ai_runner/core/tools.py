@@ -207,6 +207,10 @@ class ToolSpec:
     # that can find that repository (an ``esoi.toml`` above its working folder, or ``QAR_SPEC_ROOT``), and a worker's
     # shell is a new process that may start somewhere else, so ``render_deep_block`` hands such a tool's command the root.
     needs_spec_root: bool = False
+    # Reads that hold the rest of what this read is a part of (``list_quest_goals`` -> ``list_quest_notes``: a quest's figures
+    # and constraints live in its notes). The orchestrator runs them once per quest per turn, so an answer is never written from
+    # half a quest (``core/tool_guards.py``). Only a read declares any.
+    read_companions: Sequence[str] = ()
 
     def required(self) -> List[str]:
         return list((self.parameters or {}).get("required") or [])

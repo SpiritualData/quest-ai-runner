@@ -680,7 +680,7 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
                   "week", "reminder", "deadline", "assignee", "plan", "items",
                   "focus", "today", "priority", "priorities", "morning", "briefing", "next", "agenda",
                   "left", "remaining", "outstanding"),
-        context_args={"quest_id": "quest_id"})
+        context_args={"quest_id": "quest_id"}, read_companions=("list_quest_notes",))
 
 
 #: ``list_quest_workflows`` output cap: a workflow can hold dozens of steps, so a call shows one page.

@@ -42,6 +42,7 @@ from .orchestrator_text import _future_context_for_display, unconfirmed_no_chang
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
 from .scope_tags import scope_fence_block
+from . import tool_guards
 from .tools import ToolContext
 
 
@@ -611,6 +612,26 @@ class RunLoopMixin:
                     rs.plan.reads = _owed
                     emit.status("Reading before answering…")
 
+            # --- DETAIL-READ GATE: a quest the person NAMED is read in full before it is answered about ------
+            # The context lists a quest as its outcome only; a figure, a budget or a constraint the person asks about lives in
+            # its notes. A cheap planner often answers from the listing. When the answer or first read step is reached and the message names
+            # a listed quest (shares content words with its listing) whose notes were not read this turn, the code reads them
+            # (``core/tool_guards.py``): once a turn, at most three quests, the pinned quest excepted (its context carries them).
+            if (rs.plan and rs.plan.action in ("answer", "read") and self.tools is not None and message_is_user_turn
+                    and not getattr(rs, "detail_reads_done", False) and step + 1 < cfg.max_steps and not budget_exhausted()):
+                rs.detail_reads_done = True
+                _detail_tools = tool_guards.detail_reads(self.tools)
+                _seen_text = self.turn_evidence(rs)
+                _named = [q for q in tool_guards.named_quests(rs.user_message, _seen_text) if q != quest_id]
+                _calls = [{"name": t, "args": {"quest_id": q}} for q in _named for t in _detail_tools
+                          if not any(str(g.get("locator")) == f"tool:{t}" and f'"quest_id": "{q}"' in str(g.get("text"))[:400]
+                                     for g in gathered)]
+                if _calls:
+                    log.info("Detail-read gate: the message names %s; reading their notes before answering.", _named)
+                    rs.plan.action = "tool"
+                    rs.plan.tool_calls = _calls
+                    emit.status("Reading the quest before answering…")
+
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if rs.plan and rs.plan.action == "read":
                 rs.consecutive_reads += 1
@@ -693,7 +714,9 @@ class RunLoopMixin:
                                          meta=dict(_ctx_meta)),
                                      on_success=self._recipe_learner(
                                          rs.user_message, _ctx_meta.get("scope_tags"),
-                                         learnable=message_is_user_turn))
+                                         learnable=message_is_user_turn),
+                                     evidence=lambda: self.turn_evidence(rs),
+                                     order_gate=lambda: self.change_was_ordered(rs))
                 rs.tool_calls_ran = True
                 executed_reads.clear()
                 rs.repeat_only_steps = 0

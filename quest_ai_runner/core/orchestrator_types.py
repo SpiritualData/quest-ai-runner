@@ -270,6 +270,10 @@ class OrchestratorConfig:
     # and falls back to "not a directive" on any failure/timeout/parse miss, so it can never block
     # the turn.
     intent_judge_tier: str = "balanced"
+    # Before a tool call that CHANGES something runs on a person's question-shaped message, the intent judge is asked once whether
+    # it orders a change; "no" refuses the call back to the planner (a "how do I add a habit?" is answered, not done).
+    # None or a failed judgment lets the call through. Off with False.
+    order_gate: bool = True
     # BRAINSTORM-RELEASE JUDGE TIER. The tier ``judge_brainstorm_release`` (does THIS message lift
     # the no-action hold?) resolves its model from. Deliberately NOT the planner tier: the planner
     # is cheap by design, and a cheap model reads any imperative -- including one purely about the
