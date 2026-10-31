@@ -171,11 +171,16 @@ def entries_of(collection_id):
 def goals_of(quest_id):
     """Every goal on a quest (the only list route is team-scoped)."""
     status, body = api("GET", f"/api/teams/{QUEST_TEAM}/quests/{quest_id}/goals")
-    if status != 200 or not isinstance(body, dict):
-        return []
     out = []
-    for group in body.get("period_groups") or []:
-        out.extend(group.get("goals") or [])
+    if status == 200 and isinstance(body, dict):
+        for group in body.get("period_groups") or []:
+            out.extend(group.get("goals") or [])
+    if not out:
+        # A quest kept off the team (world_spec.PRIVATE_QUEST_KEYS) has no team listing: read the
+        # goals of its current periods instead.
+        status, body = api("GET", f"/api/planning/quests/{quest_id}/goals/current")
+        if status == 200 and isinstance(body, dict):
+            out = [{**g, "scheduled_date": g.get("scheduledDate")} for g in body.get("goals") or []]
     return out
 
 

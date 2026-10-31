@@ -44,7 +44,7 @@ FALLBACK_CATEGORY = "cat_df82187e53c0"  # a known dev category ("Fitness"); used
 AUTOPILOT_PASS_KIND = "autopilot"  # task_kind of the lane's recurring pass (runner/autopilot.py)
 
 from world_spec import (  # noqa: E402,F401  (re-exported: the datasets and tests read these from world)
-    AUTOPILOT_BY_QUEST, COLLECTIONS, MONTH_PERIOD, PIVOTS, QUESTS, TEAM_CONTEXT, TODAY, ago, ahead, habit_spec, resolve_date_tokens,
+    AUTOPILOT_BY_QUEST, COLLECTIONS, MONTH_PERIOD, PIVOTS, QUESTS, PRIVATE_QUEST_KEYS, TEAM_CONTEXT, TODAY, ago, ahead, habit_spec, resolve_date_tokens,
     week_period)
 
 
@@ -213,7 +213,10 @@ def build_contents(state, quest_keys):
     out = state
     for key in quest_keys:
         spec, qid = QUESTS[key], out["quests"][key]
-        api("POST", f"/api/teams/{QUEST_TEAM}/quest", {"quest_id": qid})  # lets Quest AI read goals
+        if key not in PRIVATE_QUEST_KEYS:
+            api("POST", f"/api/teams/{QUEST_TEAM}/quest", {"quest_id": qid})  # lets Quest AI read goals
+        else:
+            api("DELETE", f"/api/teams/{QUEST_TEAM}/quests/{qid}")  # a private quest: off the team, whatever an earlier build did
         api("PUT", f"/api/quests/{qid}/measurable-outcomes", {
             "outcomes": [{"text": t, "completed": False} for t in spec["measurable_outcomes"]]})
         out["goals"][key] = {}

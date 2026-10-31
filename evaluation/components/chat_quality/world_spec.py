@@ -41,6 +41,12 @@ def day_range(first, last):
 # on the fixed 20 Nov (the race and the other quests keep their calendar dates). The usable tiling
 # window is the day after the plumber to the day before Sam leaves. Dataset text refers to these
 # through ``{TOKEN}`` placeholders (``resolve_date_tokens``) so rubric and world always agree.
+# World quests that stay OFF the test team. A quest on a team is shared, and the backend withholds
+# a personal or health note from a run on a shared quest (shared_context_guard), so the fitness
+# quest's Run Log injury note (KNEE_INJURY) would never reach the chat. These stay one person's
+# own quests, as a real runner's training log is.
+PRIVATE_QUEST_KEYS = frozenset({"fitness"})
+
 PLUMBER_FIRST = TODAY + datetime.timedelta(days=2)
 PLUMBER_LAST = TODAY + datetime.timedelta(days=4)
 TILING_FIRST = PLUMBER_LAST + datetime.timedelta(days=1)
