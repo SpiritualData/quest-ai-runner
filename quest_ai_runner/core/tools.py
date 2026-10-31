@@ -467,7 +467,8 @@ class ToolRegistry:
         rules = (
             "- Choose \"tool\" whenever a listed tool does what the user asked (e.g. sending an "
             "email a tool covers). Prefer it to \"deep\": a deep run for a job one tool call does "
-            "is minutes wasted.\n"
+            "is minutes wasted. Not when they ask HOW to do it (\"how do I add a habit?\"): that wants the "
+            "steps in words, and no tool runs.\n"
             "- Read each tool's USE WHEN / DO NOT USE WHEN and pick the one whose USE WHEN fits; "
             "two tools can do similar things for different audiences.\n"
             "- Put calls in \"tool_calls\": [{\"name\": \"<tool>\", \"args\": {...}}]. Write "
@@ -482,7 +483,9 @@ class ToolRegistry:
             "\"tool_calls\" list, then answer after both ran. Never answer first and leave a write a listed "
             "tool performs to \"deep\" or deferred_deep: deep is for work no listed tool does.\n"
             "- A call already in GATHERED is settled: never repeat it, give its receipt (HELD FOR APPROVAL = "
-            "waiting, not done). If it failed, say so or try another way once.")
+            "waiting, not done). If it failed, say so or try another way once.\n"
+            "- Two things asked is two calls, one per thing: never the same item twice in other words. A "
+            "quest_id is one CONTEXT lists or find_quest returned, never made up.")
         body = self.render_catalog(shown) if shown else "(no tool matched this request)"
         body += "".join(f"\nNOT AVAILABLE HERE: {note}" for note in self.unavailable_notes(query))
         tail = (f"\n({hidden} more tool(s) not shown. Search them with a read spec "

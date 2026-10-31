@@ -107,8 +107,9 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         for c in (raw.get("tool_calls") or []):
             if isinstance(c, dict) and isinstance(c.get("name"), str) and c["name"].strip():
                 args = c.get("args")
-                tool_calls.append({"name": c["name"].strip(),
-                                   "args": args if isinstance(args, dict) else {}})
+                call = {"name": c["name"].strip(), "args": args if isinstance(args, dict) else {}}
+                if call not in tool_calls:  # the same call twice in one step would run (and write) twice
+                    tool_calls.append(call)
     if action == "tool" and not tool_calls:
         # "tool" with nothing to call is not an action: answer from what was gathered.
         action = "answer"
@@ -270,8 +271,8 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         deferred_deep=deferred_deep,
         answer_contains_work_to_execute=bool(raw.get("answer_contains_work_to_execute", False)),
         act_declined=raw.get("act_declined") is True,
-        clarification=clarification,
         asks_first=raw.get("asks_first") is True,
+        clarification=clarification,
         mode_signal=mode_signal,
         card_thread=card_thread_raw,
         confirm_kind=confirm_kind_raw,

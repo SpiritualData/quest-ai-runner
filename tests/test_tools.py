@@ -521,3 +521,14 @@ def test_executor_hands_the_task_id_to_direct_tools_and_the_deep_brief():
     TaskExecutor(MockQuestClient([]), make_orch(provider, tools, deep_runner=deep)).execute(
         {"id": "atask_t2", "text": "who asked"})
     assert deep.calls and "--task atask_t2" in deep.calls[0]["brief"]
+
+
+def test_the_same_tool_call_twice_in_one_step_is_kept_once():
+    """A planner that lists one write twice must not write twice; two different calls are both kept."""
+    from quest_ai_runner.core.orchestrator import OrchestratorConfig
+    from quest_ai_runner.core.orchestrator_decisions import normalize_decision
+    add = {"name": "create_quest_goal", "args": {"title": "Plumbing visit"}}
+    other = {"name": "create_quest_goal", "args": {"title": "Tile the walls"}}
+    plan = normalize_decision({"action": "tool", "tool_calls": [add, dict(add), other]}, OrchestratorConfig(),
+                              tools_enabled=True)
+    assert [c["args"]["title"] for c in plan.tool_calls] == ["Plumbing visit", "Tile the walls"]

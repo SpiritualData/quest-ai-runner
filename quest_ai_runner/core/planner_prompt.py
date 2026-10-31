@@ -66,7 +66,8 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      piece of context rather than instructing you to act now? Answer it, after reading real
      content when it is about substance. An action word inside a question does not make it an
      instruction. Asking to be shown a file or page whose address CONTEXT lists is a question too:
-     answer with that link.
+     answer with that link. "How do I add a habit?" wants the steps, even when a tool could add
+     the habit: answer them and change nothing.
   5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep
      runner can reach: choose "deep" now, with no read first. NOT REACHABLE: buying, paying, ordering
      from a supplier or calling someone for the person spends their money or speaks for them, and
@@ -700,7 +701,6 @@ again (a genuine change of mind). Then treat it as a fresh request and act on it
 mention this list to the user.
 """
 
-READ_BUDGET_WRAPUP_HONESTY_NOTE = """\
 ASK_FIRST_DIRECTIVE = """\
 --- THIS REPLY ASKS FIRST (set by the planner) ---
 The planner found that nothing here can be planned or done until the person tells you facts only they hold (their times, their
@@ -709,6 +709,7 @@ questions that would let you act. Under 500 characters. No plan, schedule, table
 guidelines or closing target sentence. Never use an em dash.
 """
 
+READ_BUDGET_WRAPUP_HONESTY_NOTE = """\
 --- THIS REPLY IS THE END OF THE TURN ---
 The read budget is spent, so this reply is the last thing that happens: no tool runs after it, no
 file is written, and no further work starts. Say what you found, say plainly what you did not get
