@@ -1,159 +1,159 @@
 {
  "calls": [
   {
-   "cost_usd": 0.0007178,
+   "cost_usd": 5.9730000000000006e-05,
    "critical_path": true,
-   "seconds": 2.530116348993033,
+   "seconds": 2.930891203985084,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3455,
-   "tokens_out": 54,
+   "tokens_out": 50,
    "turn": 1
   },
   {
-   "cost_usd": 0.0008048,
+   "cost_usd": 6.727999999999999e-05,
    "critical_path": true,
-   "seconds": 3.032979470968712,
+   "seconds": 1.8273603369598277,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3560,
-   "tokens_out": 186,
+   "tokens_out": 63,
    "turn": 2
   },
   {
-   "cost_usd": 0.0008382999999999999,
+   "cost_usd": 0.00016458,
    "critical_path": true,
-   "seconds": 2.980557966977358,
+   "seconds": 3.8744183980161324,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3540,
-   "tokens_out": 261,
+   "tokens_out": 258,
    "turn": 3
   },
   {
-   "cost_usd": 0.0007444999999999999,
+   "cost_usd": 0.00012609000000000003,
    "critical_path": true,
-   "seconds": 2.342893244989682,
+   "seconds": 2.31674193701474,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3491,
-   "tokens_out": 93,
+   "tokens_out": 182,
    "turn": 4
   },
   {
-   "cost_usd": 0.0008186000000000005,
+   "cost_usd": 0.00020467,
    "critical_path": true,
-   "seconds": 3.1528662929777056,
+   "seconds": 3.1413920070044696,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3499,
-   "tokens_out": 238,
+   "tokens_out": 339,
    "turn": 5
   },
   {
-   "cost_usd": 0.0008231999999999996,
+   "cost_usd": 0.00010544999999999999,
    "critical_path": true,
-   "seconds": 3.285695743979886,
+   "seconds": 2.5651887350250036,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3577,
-   "tokens_out": 216,
+   "tokens_out": 139,
    "turn": 6
   },
   {
-   "cost_usd": 0.0009902999999999995,
+   "cost_usd": 0.00020098000000000002,
    "critical_path": true,
-   "seconds": 4.1667993839946575,
+   "seconds": 3.5410544549813494,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3580,
-   "tokens_out": 549,
+   "tokens_out": 330,
    "turn": 7
   },
   {
-   "cost_usd": 0.0008063000000000002,
+   "cost_usd": 9.87300000000001e-05,
    "critical_path": true,
-   "seconds": 2.4031362349633127,
+   "seconds": 2.6742467199801467,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3605,
-   "tokens_out": 171,
+   "tokens_out": 125,
    "turn": 8
   },
   {
-   "cost_usd": 0.0008320000000000003,
+   "cost_usd": 0.00022024000000000002,
    "critical_path": true,
-   "seconds": 3.2149858500342816,
+   "seconds": 3.69047412998043,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3556,
-   "tokens_out": 242,
+   "tokens_out": 369,
    "turn": 9
   },
   {
-   "cost_usd": 0.0007396999999999994,
+   "cost_usd": 0.00010445000000000007,
    "critical_path": true,
-   "seconds": 2.8222789759747684,
+   "seconds": 2.1761680400231853,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3577,
-   "tokens_out": 49,
+   "tokens_out": 137,
    "turn": 10
   },
   {
-   "cost_usd": 0.0007962999999999998,
+   "cost_usd": 8.317999999999997e-05,
    "critical_path": true,
-   "seconds": 2.555192908970639,
+   "seconds": 2.4856131720007397,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3600,
-   "tokens_out": 153,
+   "tokens_out": 94,
    "turn": 11
   },
   {
-   "cost_usd": 0.0008360999999999993,
+   "cost_usd": 7.492000000000002e-05,
    "critical_path": true,
-   "seconds": 3.1796721760183573,
+   "seconds": 2.472801298950799,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3574,
-   "tokens_out": 243,
+   "tokens_out": 78,
    "turn": 12
   },
   {
-   "cost_usd": 0.0009966999999999997,
+   "cost_usd": 0.0002354500000000001,
    "critical_path": true,
-   "seconds": 4.595525177021045,
+   "seconds": 3.6632385079865344,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3577,
-   "tokens_out": 563,
+   "tokens_out": 399,
    "turn": 13
   },
   {
-   "cost_usd": 0.0007454000000000002,
+   "cost_usd": 7.335999999999996e-05,
    "critical_path": true,
-   "seconds": 2.2596601429977454,
+   "seconds": 2.6586747670080513,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3568,
-   "tokens_out": 64,
+   "tokens_out": 75,
    "turn": 14
   },
   {
-   "cost_usd": 0.0008062,
+   "cost_usd": 0.00011085000000000001,
    "critical_path": true,
-   "seconds": 2.2620314829982817,
+   "seconds": 2.6761330279987305,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3567,
-   "tokens_out": 186,
+   "tokens_out": 150,
    "turn": 15
   },
   {
-   "cost_usd": 0.0008646000000000001,
+   "cost_usd": 0.00022416999999999988,
    "critical_path": true,
-   "seconds": 3.0158923940034583,
+   "seconds": 3.5127257449785247,
    "spec_id": "watch-a-run.overseer",
    "tokens_in": 3699,
-   "tokens_out": 250,
+   "tokens_out": 374,
    "turn": 16
   }
  ],
  "cases_sha": "5d29c4ef",
  "component": "overseer_signals",
  "defaulted_tags": 0,
- "git_sha": "ddcb8af",
+ "git_sha": "b6e70b9",
  "impl": "live_model",
  "label": "eval-trace",
  "summary": {
   "cases": 16,
-  "cli_reported_cost_usd": 0.0132,
+  "cli_reported_cost_usd": 0.0022,
   "component": "overseer_signals",
   "dev": "15/16",
   "heldout": "0/0",
@@ -162,9 +162,9 @@
   "model_calls": 16,
   "passed": 15,
   "sample": "",
-  "seconds": 47.8,
+  "seconds": 46.2,
   "tokens_in": 57025,
-  "tokens_out": 3518
+  "tokens_out": 3162
  },
  "turns": [
   {
@@ -189,13 +189,13 @@
    "calls": 1,
    "id": "OVS-004",
    "kind": "",
-   "ok": false
+   "ok": true
   },
   {
    "calls": 1,
    "id": "OVS-005",
    "kind": "",
-   "ok": true
+   "ok": false
   },
   {
    "calls": 1,

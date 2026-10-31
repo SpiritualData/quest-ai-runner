@@ -1,108 +1,108 @@
 {
  "calls": [
   {
-   "cost_usd": 0.0002795,
+   "cost_usd": 3.364e-05,
    "critical_path": true,
-   "seconds": 2.8026154530234635,
+   "seconds": 3.122949723037891,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1296,
    "tokens_out": 41,
    "turn": 1
   },
   {
-   "cost_usd": 0.0003266,
+   "cost_usd": 9.512e-05,
    "critical_path": true,
-   "seconds": 2.6494986439938657,
+   "seconds": 2.877364988962654,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1294,
-   "tokens_out": 136,
+   "tokens_out": 164,
    "turn": 2
   },
   {
-   "cost_usd": 0.0002797,
+   "cost_usd": 3.3650000000000005e-05,
    "critical_path": true,
-   "seconds": 3.1466071259928867,
+   "seconds": 4.3552060190122575,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1297,
    "tokens_out": 41,
    "turn": 3
   },
   {
-   "cost_usd": 0.0002789,
+   "cost_usd": 3.361e-05,
    "critical_path": true,
-   "seconds": 2.6007689039688557,
+   "seconds": 2.2998734900029376,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1293,
    "tokens_out": 41,
    "turn": 4
   },
   {
-   "cost_usd": 0.00027730000000000007,
+   "cost_usd": 3.258000000000002e-05,
    "critical_path": true,
-   "seconds": 2.4033752809627913,
+   "seconds": 2.0307245579897426,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1290,
    "tokens_out": 39,
    "turn": 5
   },
   {
-   "cost_usd": 0.00030250000000000003,
+   "cost_usd": 9.849000000000001e-05,
    "critical_path": true,
-   "seconds": 2.5733849640237167,
+   "seconds": 2.55793625197839,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1331,
-   "tokens_out": 73,
+   "tokens_out": 170,
    "turn": 6
   },
   {
-   "cost_usd": 0.0003438000000000002,
+   "cost_usd": 3.3529999999999986e-05,
    "critical_path": true,
-   "seconds": 2.505691622965969,
+   "seconds": 1.8766572769964114,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1635,
    "tokens_out": 34,
    "turn": 7
   },
   {
-   "cost_usd": 0.00034579999999999984,
+   "cost_usd": 3.552999999999998e-05,
    "critical_path": true,
-   "seconds": 2.6199342949548736,
+   "seconds": 2.1677809199900366,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1635,
    "tokens_out": 38,
    "turn": 8
   },
   {
-   "cost_usd": 0.00034519999999999993,
+   "cost_usd": 0.00011060000000000003,
    "critical_path": true,
-   "seconds": 2.2817991680349223,
+   "seconds": 2.7023808660451323,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1642,
-   "tokens_out": 34,
+   "tokens_out": 188,
    "turn": 9
   },
   {
-   "cost_usd": 0.00034409999999999996,
+   "cost_usd": 3.307000000000006e-05,
    "critical_path": true,
-   "seconds": 1.7818149160011671,
+   "seconds": 2.117973009997513,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1639,
    "tokens_out": 33,
    "turn": 10
   },
   {
-   "cost_usd": 0.0005926999999999998,
+   "cost_usd": 0.00025854999999999997,
    "critical_path": true,
-   "seconds": 4.039231545990333,
+   "seconds": 4.519728687999304,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1637,
-   "tokens_out": 531,
+   "tokens_out": 484,
    "turn": 11
   },
   {
-   "cost_usd": 0.0003427999999999999,
+   "cost_usd": 3.348000000000001e-05,
    "critical_path": true,
-   "seconds": 2.5087090239976533,
+   "seconds": 2.2525304689770564,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1630,
    "tokens_out": 34,
@@ -112,12 +112,12 @@
  "cases_sha": "5a83064b",
  "component": "judge_live_decisions",
  "defaulted_tags": 0,
- "git_sha": "ddcb8af",
+ "git_sha": "b6e70b9",
  "impl": "live_judges",
  "label": "eval-trace",
  "summary": {
   "cases": 12,
-  "cli_reported_cost_usd": 0.0041,
+  "cli_reported_cost_usd": 0.0008,
   "component": "judge_live_decisions",
   "dev": "12/12",
   "heldout": "0/0",
@@ -126,9 +126,9 @@
   "model_calls": 12,
   "passed": 12,
   "sample": "",
-  "seconds": 31.9,
+  "seconds": 32.9,
   "tokens_in": 17619,
-  "tokens_out": 1075
+  "tokens_out": 1307
  },
  "turns": [
   {
