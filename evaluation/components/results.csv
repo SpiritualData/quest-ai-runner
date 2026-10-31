@@ -4366,3 +4366,5 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-31,intent_grounding,frame_line,3,3,3/3,0/0,6,16894,4356,0.0669,34.8,4fb978f,f38af8bc,claude-haiku,,sample:3,
 2026-10-31,task_replay,slice_and_writeback,9,7,7/9,0/0,29,44734,1667,0.0,202.3,4fb978f,b3ca71f7,claude-code-subscription,,,0.8257
 2026-10-31,proactive_guidance,guided_v2,10,9,9/10,0/0,20,46667,7283,0.0787,78.8,4fb978f,b27633e9,claude-haiku,,sample:10,
+2026-10-31,evolve_by_metric,structure_library,17,17,17/17,0/0,0,0,0,0.0,0.0,98d312f-dirty,e25c0a4f,none,,,
+2026-10-31,evolve_by_metric,keep_current,17,10,10/17,0/0,0,0,0,0.0,0.0,98d312f-dirty,e25c0a4f,none,,,
