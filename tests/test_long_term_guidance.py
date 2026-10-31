@@ -13,3 +13,8 @@ def test_the_guidance_decides_first_and_asks_for_one_grounded_sentence():
                  "Never put the sentence before the answer", "When in doubt, write the answer alone"):
         assert must in text
     assert "—" not in text and "–" not in text
+
+
+def test_long_term_guidance_lets_a_stated_length_win_over_the_closing_sentence():
+    from quest_ai_runner.core.auxiliary_prompts import LONG_TERM_GUIDANCE
+    assert "in one breath" in LONG_TERM_GUIDANCE and "that length wins" in LONG_TERM_GUIDANCE

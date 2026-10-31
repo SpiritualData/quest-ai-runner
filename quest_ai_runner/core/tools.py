@@ -82,6 +82,7 @@ log = logging.getLogger(__name__)
 # the catalog is big enough that listing it every turn would crowd the prompt.
 SHOW_ALL_AT_OR_BELOW = 8
 DEFAULT_SELECT_K = 5
+NAME_MATCH_BONUS = 2.0
 PINNED_RUN_EXTRAS = 2
 DEFAULT_TIMEOUT_SECONDS = 60.0
 # A tool's result text is observation context, not a document: cap it so one chatty command
@@ -386,11 +387,17 @@ class ToolRegistry:
             for t in d:
                 tf[t] = tf.get(t, 0) + 1
             score = 0.0
+            named = set(tokenize(spec.name))
             for t in q:
                 if t not in tf or df[t] > common_above:
                     continue
                 idf = math.log(1 + (n - df[t] + 0.5) / (df[t] + 0.5))
                 score += idf * tf[t] * (k1 + 1) / (tf[t] + k1 * (1 - b + b * len(d) / avgdl))
+                if t in named:
+                    # A word the person said that is IN the tool's own name ("note" in add_quest_note) is the
+                    # strongest sign it is the tool: in a long message several loose words ("out", "week") otherwise
+                    # outrank it, and the planner is never shown the tool the request names.
+                    score += idf * NAME_MATCH_BONUS
             if score > 0:
                 scored.append((score, spec))
         scored.sort(key=lambda x: -x[0])
@@ -466,8 +473,14 @@ class ToolRegistry:
             "- Put calls in \"tool_calls\": [{\"name\": \"<tool>\", \"args\": {...}}]. Write "
             "the real content into the args (the full email body, not a placeholder). If a "
             "REQUIRED value is unknown and cannot be read, ask with \"clarify\" instead.\n"
+            "- A READ never runs a tool: naming a listed tool in a \"read\" gathers nothing. To get what a "
+            "read-only tool returns (a quest's goals, its notes), the action is \"tool\" with that call.\n"
             "- Calls run ONLY when action is \"tool\". With action \"answer\" nothing runs, so an "
             "answer saying it was sent would be false: to act this step, the action is \"tool\".\n"
+            "- One message may hold a write and a question (\"note X on my quest, and tell me what is left\"). "
+            "When a listed tool does the write, put that write and any read call you need in the SAME "
+            "\"tool_calls\" list, then answer after both ran. Never answer first and leave a write a listed "
+            "tool performs to \"deep\" or deferred_deep: deep is for work no listed tool does.\n"
             "- A call already in GATHERED is settled: never repeat it, give its receipt (HELD FOR APPROVAL = "
             "waiting, not done). If it failed, say so or try another way once.")
         body = self.render_catalog(shown) if shown else "(no tool matched this request)"

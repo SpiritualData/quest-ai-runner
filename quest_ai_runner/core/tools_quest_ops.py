@@ -677,7 +677,8 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         mutates=False, workflow_step=False, origin="standard",
         keywords=("goals", "goal", "list", "read", "due", "open", "assigned", "owner", "tasks",
                   "week", "reminder", "deadline", "assignee", "plan", "items",
-                  "focus", "today", "priority", "priorities", "morning", "briefing", "next", "agenda"),
+                  "focus", "today", "priority", "priorities", "morning", "briefing", "next", "agenda",
+                  "left", "remaining", "outstanding"),
         context_args={"quest_id": "quest_id"})
 
 

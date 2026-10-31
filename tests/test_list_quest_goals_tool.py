@@ -130,3 +130,24 @@ def test_a_focus_question_is_shown_the_goals_tool(message):
     read; the tool must be in the planner's narrowed block for it, not hidden behind a search."""
     registry = build_tool_registry(CREDS)
     assert "list_quest_goals" in [s.name for s in registry.select(message)]
+
+
+def test_a_compound_note_and_what_is_left_message_shows_both_the_note_and_goals_tools():
+    """A spoken 'note X and tell me what is left this week' needs the note write AND the goals read in one
+    block: the word 'note' is in add_quest_note's name, and 'left' is a keyword of the goals tool."""
+    registry = build_tool_registry(CREDS)
+    shown = [s.name for s in registry.select(
+        "I am out walking. Note on my fitness quest that the physio cleared easy cycling from Monday, "
+        "and tell me in one breath what is left this week.")]
+    assert "add_quest_note" in shown and "list_quest_goals" in shown
+
+
+def test_the_planner_tool_rules_put_a_write_and_its_question_in_one_call_list():
+    block = build_tool_registry(CREDS).render_planner_block("note this on my quest and tell me what is left")
+    assert "SAME \"tool_calls\" list" in block
+    assert "Never answer first and leave a write a listed tool performs" in block
+
+
+def test_the_planner_tool_rules_say_a_read_never_runs_a_tool():
+    block = build_tool_registry(CREDS).render_planner_block("what should I focus on today")
+    assert "A READ never runs a tool" in block
