@@ -30,6 +30,7 @@ DEV ONLY (devclient refuses to load otherwise).
 import datetime
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -544,14 +545,14 @@ def card_ids():
     return {c.get("id") for c in cards if c.get("id")}
 
 
-EVAL_CONVERSATION_CARD_PREFIX = "conv-qaconv_"   # the card a chat turn learns for one of the eval's own conversations
+EVAL_CONVERSATION_CARD_ID = re.compile(r"^conv-qaconv_[0-9a-f]{12}$")   # the card a chat turn learns for one of the eval's own conversations (an exact id, never a prefix match)
 
 
 def purge_eval_conversation_cards():
     """Delete the conversation cards earlier eval runs left on the account, and drop them from the saved baseline. They carry
     no quest tag (they predate the fence), so the fence rightly leaves them usable in a quest-pinned turn, and a later
     isolation case then reads another quest's history from them. Returns how many were removed. Run by ``reset``."""
-    gone = [cid for cid in card_ids() if str(cid).startswith(EVAL_CONVERSATION_CARD_PREFIX)]
+    gone = [str(cid) for cid in card_ids() if EVAL_CONVERSATION_CARD_ID.match(str(cid))]
     for cid in gone:
         api("DELETE", f"/api/cards/{cid}")
     if gone and STATE_PATH.exists():
