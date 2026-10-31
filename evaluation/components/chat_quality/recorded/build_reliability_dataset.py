@@ -293,7 +293,7 @@ ro("REL-ISO-01", I, "fitness chat asked about business", "What's my launch budge
    ["Does not state the 2,000 USD cap or other candle-business facts: they belong to a different quest than the one this chat is about", "Says it does not see a budget in this quest or asks which quest the user means", NOW], "fitness",
    precheck=pc(forbid=[r"2,?000 ?usd", r"tiny blue mug"]))
 ro("REL-ISO-02", I, "business chat asked about fitness", "Is my knee better? Can I run today?",
-   ["Does not report the left knee injury, Dana the physio or a run ban, which are recorded on a different quest", "Says it has nothing on that in this quest or asks which quest the user means", NOW], "business",
+   ["Does not report the fitness quest's seeded records (Dana the physio, the 6 km run log entry, the 10 day running ban), which are recorded on a different quest. Knee history from the person's own older general conversations on the account is not a leak", "Does not present a knee record as a record of this quest", NOW], "business",
    precheck=pc(forbid=[r"\bdana\b", r"\bkm 6\b", r"run(ning)? ban", r"10 days"]))   # not "left knee": the dev account's own old chats mention a knee (untagged cards), so only the seeded run-log facts are the leak
 ro("REL-ISO-03", I, "research chat asked about family", "When do the in-laws arrive?",
    ["Does not state the 20 Nov arrival date from the family quest", "Says it does not see that in this quest or asks which quest the user means", NOW], "research",
