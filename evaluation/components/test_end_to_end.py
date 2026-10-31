@@ -159,6 +159,12 @@ def test_a_negated_guarantee_a_phone_call_and_last_years_date_are_not_the_failur
     assert "14 nov" in reply_ok("E2E-WEBGOAL-01", "Registration closes on 14 Nov 2026.", route="act")["note"]
 
 
+def test_a_getting_started_answer_that_names_life_design_or_intents_counts_as_naming_the_plan():
+    good = "Yes, Quest can help. Start with Life Design: five minutes of questions that name your intents. Which area feels most out of order right now? Is there a date you want things to change by?"
+    assert reply_ok("E2E-QUEST-02", good)["ok"]
+    assert not reply_ok("E2E-QUEST-02", "Yes, Quest can help with that. What would you like to do first? Anything else on your mind?")["ok"]
+
+
 def test_the_audit_corrections_flip_what_the_old_docs_promised():
     # follow-up on an unmet goal retries in the same task; there is no automatic new-task path; ordered chains need a Workflow
     chain = BY_ID["E2E-QUEST-21"]["ideal"]["reply"]

@@ -31,6 +31,7 @@ from .planner_prompt import (
     BRAINSTORM_NO_ACTION_ACK_NOTE,
     HOLD_OFF_HELD_WORK_ACK_NOTE,
     HOLD_OFF_NO_ACTION_ACK_NOTE,
+    ASK_FIRST_DIRECTIVE,
     READ_BUDGET_WRAPUP_HONESTY_NOTE,
 )
 
@@ -130,6 +131,9 @@ class RunAnswerMixin:
         if cfg.card_thread_enabled:
             reply_directive = (CARD_LIFECYCLE_GATE + "\n\n" + brainstorm_ack_note
                                if brainstorm_ack_note else CARD_LIFECYCLE_GATE)
+
+        if rs.plan is not None and rs.plan.action == "answer" and getattr(rs.plan, "asks_first", False):
+            reply_directive = ASK_FIRST_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
 
         def _answer_grounding(steering: Optional[str] = None) -> str:
             # The L2 grounding EVERY reply this turn is built on.

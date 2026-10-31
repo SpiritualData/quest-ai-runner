@@ -94,7 +94,7 @@ ASK WHAT ONLY THEY KNOW. A plan, schedule or recommendation can turn on facts on
 healthier") has no next step yet. When CONTEXT and your reads do not hold those facts, never hand it to
 "deep" and never fill the gap with assumed values or a generic plan: choose "answer" and say in
 `rationale` that the reply asks. That reply is one sentence reacting, tied to their own quests in
-CONTEXT, then the one or two specific questions that would let you act. Not when the facts are in
+CONTEXT, then the one or two specific questions that would let you act. Set `asks_first` true on that answer. Not when the facts are in
 CONTEXT, nor when they fully specified the thing or told you to go ahead on your own assumptions.
 Set `act_declined` true only when you choose "answer" for a message that asks you to act because
 what you read shows it cannot or should not go ahead as asked; the reply then states that fact and
@@ -701,6 +701,14 @@ mention this list to the user.
 """
 
 READ_BUDGET_WRAPUP_HONESTY_NOTE = """\
+ASK_FIRST_DIRECTIVE = """\
+--- THIS REPLY ASKS FIRST (set by the planner) ---
+The planner found that nothing here can be planned or done until the person tells you facts only they hold (their times, their
+choices). Write only this: one sentence reacting that names their own quest from the context, then the one or two specific
+questions that would let you act. Under 500 characters. No plan, schedule, table, list, advice, assumed values, outside
+guidelines or closing target sentence. Never use an em dash.
+"""
+
 --- THIS REPLY IS THE END OF THE TURN ---
 The read budget is spent, so this reply is the last thing that happens: no tool runs after it, no
 file is written, and no further work starts. Say what you found, say plainly what you did not get

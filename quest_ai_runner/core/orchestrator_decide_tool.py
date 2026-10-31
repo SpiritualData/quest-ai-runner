@@ -245,6 +245,8 @@ DECIDE_TOOL: Dict[str, Any] = {
             # Whether an "answer" to an "act" message declines the act on the records read. The
             # rubric at the top of both planner profiles states it; optional, absent means false.
             "act_declined": {"type": "boolean"},
+            # Whether an "answer" must ask the person for facts only they hold before any plan; the rubric states it.
+            "asks_first": {"type": "boolean"},
             # The reads this decision still owes: what the planner itself says it has NOT yet
             # opened. Honored structurally by the loop (see ``PlanDecision.pending_read``). The
             # rubric at the top of both planner profiles states it, so the schema stays bare.
