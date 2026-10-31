@@ -7,6 +7,8 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, Optional
 
+from hubofhubs.orchestrate.schema import compact_schema, normalize_choice, strip_schema_descriptions  # noqa: F401
+
 from .planner_prompt import (
     DEFAULT_PLANNER_PROMPT_PROFILE,
     DEFERRED_DEEP_INLINE_SEMANTICS,
@@ -89,9 +91,7 @@ USER_INTENTS = (USER_INTENT_ACT, "ask", "inform", USER_INTENT_HOLD_OFF)
 def normalize_user_intent(raw: Any) -> Optional[str]:
     """The planner's ``user_intent`` as one of ``USER_INTENTS``, or None when it is missing or not
     one of them (a hallucinated value is "not given", never a guess). Never raises."""
-    if isinstance(raw, str) and raw.strip().lower() in USER_INTENTS:
-        return raw.strip().lower()
-    return None
+    return normalize_choice(raw, USER_INTENTS)
 
 
 # The structured decision schema the planner MUST return (forced tool use).
@@ -434,23 +434,6 @@ STAGED_DEEP_SUBTASKS_FIELD = {
 }
 
 
-def strip_schema_descriptions(schema: Any) -> Any:
-    """PUBLIC: a deep copy of ``schema`` with every ``description`` key removed.
-
-    A schema's field descriptions are instruction, and on a provider that renders the schema into
-    the prompt (every provider without native tool use) they are instruction the caller pays for
-    on EVERY call. Measured 2026-10-05: the decide schema is 1,897 tokens as rendered, 1,192
-    without its descriptions. Only worth doing when the prompt body already states the same thing,
-    which is what the compact planner profile does, so this is reached through
-    ``decide_tool_for(compact=True)`` rather than applied by default.
-    """
-    if isinstance(schema, dict):
-        return {k: strip_schema_descriptions(v) for k, v in schema.items() if k != "description"}
-    if isinstance(schema, list):
-        return [strip_schema_descriptions(v) for v in schema]
-    return schema
-
-
 #: The values of ``PlanDecision.work_shape``.
 WORK_SHAPES = ("lookup", "action", "analysis", "conversation")
 WORK_SHAPE_ANALYSIS = "analysis"
@@ -458,9 +441,7 @@ WORK_SHAPE_ANALYSIS = "analysis"
 
 def normalize_work_shape(raw: Any) -> Optional[str]:
     """The planner's ``work_shape`` as one of ``WORK_SHAPES``, or None for anything else. Never raises."""
-    if isinstance(raw, str) and raw.strip().lower() in WORK_SHAPES:
-        return raw.strip().lower()
-    return None
+    return normalize_choice(raw, WORK_SHAPES)
 
 
 # The two opt-in fields of the done-evidence feature (OrchestratorConfig.done_evidence_enabled). They ride the
@@ -556,11 +537,4 @@ COMPACT_SCHEMA_KEPT_DESCRIPTIONS = ("deferred_deep",)
 
 def compact_decide_schema(tool: Dict[str, Any]) -> Dict[str, Any]:
     """The decide schema with field descriptions stripped, except ``COMPACT_SCHEMA_KEPT_DESCRIPTIONS``."""
-    compact = strip_schema_descriptions(tool)
-    full_props = (tool.get("input_schema") or {}).get("properties") or {}
-    props = (compact.get("input_schema") or {}).get("properties") or {}
-    for name in COMPACT_SCHEMA_KEPT_DESCRIPTIONS:
-        desc = (full_props.get(name) or {}).get("description")
-        if desc and name in props:
-            props[name]["description"] = desc
-    return compact
+    return compact_schema(tool, COMPACT_SCHEMA_KEPT_DESCRIPTIONS)
