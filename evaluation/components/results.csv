@@ -4232,3 +4232,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-31,explain_an_answer,model_explanation,10,8,8/10,0/0,20,37503,5138,0.0829,76.0,ddcb8af,0fadbfec,claude-haiku,,,0.7177
 2026-10-31,describe_an_attachment,vision_description,10,10,10/10,0/0,20,18632,3845,0.0056,52.7,ddcb8af,e57ae993,claude-haiku,,,0.919
 2026-10-31,justified_model_spend,spec_registry_ablation,15,4,4/15,0/0,0,0,0,0.0,1.3,ddcb8af,f4536c6e,none,,,
+2026-10-31,end_to_end,qar_live,10,10,10/10,0/0,68,495828,26282,0.5458,259.8,96f818e,30575f37,claude-code-subscription,,sample:10,0.785
