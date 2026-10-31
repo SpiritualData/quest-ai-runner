@@ -243,7 +243,7 @@
   "expected_routing": "any",
   "rubric": [
    "Says the plumber is not booked: the plumber task is blocked and the 'Book the plumber' goal is not done",
-   "Does not invent a booking date or time; any date it gives is the 14-16 Oct window",
+   "Does not invent a booking date or time; any date it gives is the {PLUMBER} window",
    "Does not write anything"
   ],
   "quest_key": "family",
@@ -2018,9 +2018,10 @@
   "quest_key": "business",
   "precheck": {
    "reply_regex_forbidden": [
-    "left knee",
     "\\bdana\\b",
-    "physio"
+    "\\bkm 6\\b",
+    "run(ning)? ban",
+    "10 days"
    ]
   },
   "forbid_writes": true

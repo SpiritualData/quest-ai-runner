@@ -110,7 +110,7 @@ def load_cases(dataset="all", only=None):
     for path in sorted(DATASET_DIR.glob("*.json")):
         if path.name.startswith("_"):
             continue
-        data = json.loads(path.read_text())
+        data = json.loads(W.resolve_date_tokens(path.read_text()))
         for case in (data["cases"] if isinstance(data, dict) else data):
             case.setdefault("dataset", path.stem)
             validate_case(case, path.name)

@@ -119,6 +119,14 @@ class UnderstandingMixin:
             words = s.split()
             # Very short messages can't carry a self-contained instruction on their own.
             if len(words) <= 5:
+                # A short QUESTION that names its own subject ("What's my launch budget cap?") is
+                # self-contained: no pointer word, and a concrete noun anchors it. Asking the
+                # resolver about it only invites a "which quest?" clarification the person never
+                # needed to answer; the read that follows finds the subject in their records.
+                if s.endswith("?") and not _ANAPHORA_RE.search(s):
+                    anchors = [w.strip(".,!?:;\"'") for w in words]
+                    if sum(1 for w in anchors if len(w) > 3 and w not in _ACK_PHRASES) >= 2:
+                        return False
                 return True
             # Longer messages: only treat as context-dependent when they lean on an anaphor AND have
             # no concrete noun-like anchor. We approximate "concrete noun" as a token > 3 chars that

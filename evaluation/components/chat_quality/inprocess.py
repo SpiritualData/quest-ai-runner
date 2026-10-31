@@ -89,6 +89,23 @@ def record_llm_usage():
         json.dumps({"models": STATE["models"], "usage": usage}, indent=1)))
 
 
+def block_outbound_email():
+    """A case that parks a change creates a decision-request, and the backend mails its assignee
+    ("Decision needed: ...") through Resend with the real key its .env carries. An eval must never
+    mail anyone: replace the one Resend send call with a recorder (the sends are listed in
+    ``STATE["blocked_email"]``). ``QUAL_ALLOW_EMAIL=1`` puts real sending back."""
+    if os.environ.get("QUAL_ALLOW_EMAIL"):
+        return
+    import resend
+    STATE["blocked_email"] = blocked = []
+
+    def record_instead_of_sending(params, *args, **kwargs):
+        blocked.append({"to": params.get("to"), "subject": params.get("subject")})
+        return {"id": "blocked-by-chat-quality-eval"}
+
+    resend.Emails.send = record_instead_of_sending
+
+
 def usage_totals():
     """``(calls, prompt_tokens, completion_tokens)`` of every LLM call this process has made so far."""
     with USAGE_LOCK:
@@ -139,6 +156,7 @@ def client():
         except Exception as e:  # noqa: BLE001
             STATE["models"] = {"error": str(e)}
         record_llm_usage()
+        block_outbound_email()
         import faulthandler
         import signal
         faulthandler.register(signal.SIGUSR1, all_threads=True)  # kill -USR1 <pid>: dump stacks

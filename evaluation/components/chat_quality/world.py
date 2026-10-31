@@ -44,7 +44,7 @@ FALLBACK_CATEGORY = "cat_df82187e53c0"  # a known dev category ("Fitness"); used
 AUTOPILOT_PASS_KIND = "autopilot"  # task_kind of the lane's recurring pass (runner/autopilot.py)
 
 from world_spec import (  # noqa: E402,F401  (re-exported: the datasets and tests read these from world)
-    AUTOPILOT_BY_QUEST, COLLECTIONS, MONTH_PERIOD, PIVOTS, QUESTS, TEAM_CONTEXT, TODAY, ago, ahead, habit_spec,
+    AUTOPILOT_BY_QUEST, COLLECTIONS, MONTH_PERIOD, PIVOTS, QUESTS, TEAM_CONTEXT, TODAY, ago, ahead, habit_spec, resolve_date_tokens,
     week_period)
 
 

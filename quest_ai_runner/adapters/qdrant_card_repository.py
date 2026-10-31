@@ -61,6 +61,7 @@ from hubofhubs.ports.context import VectorHit
 from hubofhubs.ports.context import VectorStoreBase
 from hubofhubs.recall import card_origin
 from hubofhubs.recall.card_repository import card_embed_text
+from ..core.scope_tags import card_scope_tags
 
 logger = logging.getLogger(__name__)
 
@@ -657,7 +658,8 @@ class QdrantCardVectorStore(VectorStoreBase):
                     # The card's own scope_tags (see core/scope_tags.py), passed through verbatim
                     # so VectorContextAssembler can fence a hit written for one quest out of a
                     # search scoped to a different one. Empty/absent when the card carries none.
-                    "scope_tags": payload.get("scope_tags") or [],
+                    # A card derived from one quest is fenced by that quest alone (``card_scope_tags``).
+                    "scope_tags": card_scope_tags(payload),
                 }
                 hits.append(VectorHit(id=f"card:{card_id}", score=float(r.score), text=text, payload=hit_payload))
             return hits

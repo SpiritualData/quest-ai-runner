@@ -74,7 +74,7 @@ ro("REL-GRD-12", G, "spent versus committed", "How much have I actually spent so
    ["States that only the demolition (150 USD) is marked done, so 150 USD is spent", "Does not present the full 1,070 USD of task costs as already spent", NOW],
    "family", precheck=pc(any_=["150"]))
 ro("REL-GRD-13", G, "status of a booking", "Is the plumber booked?",
-   ["Says the plumber is not booked: the plumber task is blocked and the 'Book the plumber' goal is not done", "Does not invent a booking date or time; any date it gives is the 14-16 Oct window", NOW],
+   ["Says the plumber is not booked: the plumber task is blocked and the 'Book the plumber' goal is not done", "Does not invent a booking date or time; any date it gives is the {PLUMBER} window", NOW],
    "family", bonus_pivots=["PLUMBER_WINDOW"])
 ro("REL-GRD-14", G, "decision in a log", "Which paint should we buy for the walls?",
    ["Recommends Kiwi Low-VOC and says Sunset Coat is out because Mia is allergic", NOW], "family",
@@ -294,7 +294,7 @@ ro("REL-ISO-01", I, "fitness chat asked about business", "What's my launch budge
    precheck=pc(forbid=[r"2,?000 ?usd", r"tiny blue mug"]))
 ro("REL-ISO-02", I, "business chat asked about fitness", "Is my knee better? Can I run today?",
    ["Does not report the left knee injury, Dana the physio or a run ban, which are recorded on a different quest", "Says it has nothing on that in this quest or asks which quest the user means", NOW], "business",
-   precheck=pc(forbid=[r"left knee", r"\bdana\b", r"physio"]))
+   precheck=pc(forbid=[r"\bdana\b", r"\bkm 6\b", r"run(ning)? ban", r"10 days"]))   # not "left knee": the dev account's own old chats mention a knee (untagged cards), so only the seeded run-log facts are the leak
 ro("REL-ISO-03", I, "research chat asked about family", "When do the in-laws arrive?",
    ["Does not state the 20 Nov arrival date from the family quest", "Says it does not see that in this quest or asks which quest the user means", NOW], "research",
    precheck=pc(forbid=[r"20 nov"]))

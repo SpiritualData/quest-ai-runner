@@ -631,8 +631,8 @@
     "message": "When can we start the tiling?",
     "expected_routing": "inline",
     "rubric": [
-      "States that tiling must wait until the plumber finishes in the 14-16 Oct window, so earliest is 17 Oct",
-      "Notes Sam is away 26-30 Oct, so the usable window is roughly 17 to 25 Oct (and the tiles need buying before 25 Oct)",
+      "States that tiling must wait until the plumber finishes in the {PLUMBER} window, so earliest is {TILING_FIRST}",
+      "Notes Sam is away {SAM_AWAY}, so the usable window is roughly {TILING_WINDOW_TO} (and the tiles need buying before {TILING_LAST})",
       "Gives a recommended start date or range inside that window"
     ],
     "must_use_pivots": [
@@ -642,20 +642,20 @@
     "forbid_writes": true,
     "precheck": {
       "reply_contains_any": [
-        "17 Oct",
-        "Oct 17",
-        "16 Oct",
-        "October 17",
-        "October 16",
-        "Oct 16",
-        "2026-10-17",
-        "2026-10-16",
-        "17-25",
-        "17 to 25",
-        "17–25"
+        "{TILING_FIRST}",
+        "{TILING_FIRST_US}",
+        "{PLUMBER_END}",
+        "{TILING_FIRST_LONG}",
+        "{PLUMBER_END_LONG}",
+        "{PLUMBER_END_US}",
+        "{TILING_FIRST_ISO}",
+        "{PLUMBER_END_ISO}",
+        "{TILING_WINDOW}",
+        "{TILING_WINDOW_TO}",
+        "{TILING_WINDOW_EN}"
       ]
     },
-    "evidence_notes": "Two family quest notes plus the home_tasks entries. The answer's shape is a window 17-25 Oct. Using only the plumber fact is a partial pass. IMP_SAM_AWAY is a seeded note added for this dataset (Sam away 26-30 Oct). Rubric audit 2026-10-07: the hard pre-check missed several spellings of the very answer the notes describe ('October 17', ISO '2026-10-17', and the window written '17-25 Oct', which contains neither '17 Oct' nor 'Oct 17'); they are added. The rubric still requires the plumber window, Sam's absence and a date inside the window."
+    "evidence_notes": "Two family quest notes plus the home_tasks entries. The answer's shape is a window {TILING_WINDOW_TO}. Using only the plumber fact is a partial pass. IMP_SAM_AWAY is a seeded note added for this dataset (Sam away {SAM_AWAY}). Rubric audit 2026-10-07: the hard pre-check missed several spellings of the very answer the notes describe ('October 17', ISO '2026-10-17', and the window written '17-25 Oct', which contains neither '17 Oct' nor 'Oct 17'); they are added. The rubric still requires the plumber window, Sam's absence and a date inside the window."
   },
   {
     "id": "IMP-026",
@@ -666,8 +666,8 @@
     "message": "Can the plumber come on the 20th?",
     "expected_routing": "inline",
     "rubric": [
-      "Says no: the plumber is only available 14-16 Oct",
-      "Explains why that matters (tiling waits for the plumbing and the in-laws arrive 20 Nov) or suggests booking within 14-16 Oct",
+      "Says no: the plumber is only available {PLUMBER}",
+      "Explains why that matters (tiling waits for the plumbing and the in-laws arrive 20 Nov) or suggests booking within {PLUMBER}",
       "Does not claim to contact the plumber"
     ],
     "must_use_pivots": [
@@ -675,7 +675,7 @@
     ],
     "forbid_writes": true,
     "forbidden_side_effects": "Must not create tasks or change the plumber entry.",
-    "evidence_notes": "Family quest note and the home_tasks entry for the plumber. The 20th could be misread as 20 Nov (in-laws): a good answer treats it as 20 Oct and may note the ambiguity."
+    "evidence_notes": "Family quest note and the home_tasks entry for the plumber. The 20th could be misread as 20 Nov (in-laws): a good answer says no whichever month is meant (the window ends {PLUMBER_END}) and may note the ambiguity."
   },
   {
     "id": "IMP-027",
@@ -687,14 +687,14 @@
     "expected_routing": "inline",
     "rubric": [
       "Knows the in-laws currently arrive 20 Nov and a week early would be 13 Nov",
-      "Notes the target of finishing 3 days before arrival (so about 10 Nov), and that plumbing is limited to 14-16 Oct, so the schedule is feasible only if tiling and painting finish in time",
+      "Notes the target of finishing 3 days before arrival (so about 10 Nov), and that plumbing is limited to {PLUMBER}, so the schedule is feasible only if tiling and painting finish in time",
       "Gives a short, concrete recommendation (confirm the plumber slot, buy tiles and paint now)"
     ],
     "must_use_pivots": [
       "PLUMBER_WINDOW"
     ],
     "forbid_writes": true,
-    "evidence_notes": "Sufficiency check across the family quest: arrival 20 Nov, the 3-day buffer, plumber window, Sam's absence 26-30 Oct. PAINT_ALLERGY is optional here. Evidence: the family quest card and home_tasks collection.",
+    "evidence_notes": "Sufficiency check across the family quest: arrival 20 Nov, the 3-day buffer, plumber window, Sam's absence {SAM_AWAY}. PAINT_ALLERGY is optional here. Evidence: the family quest card and home_tasks collection.",
     "bonus_pivots": [
       "PAINT_ALLERGY"
     ]
@@ -836,7 +836,7 @@
     "expected_routing": "inline",
     "rubric": [
       "Chooses among the user's quests with reasons from their data, rather than listing generic options",
-      "Its pick is the research chapter (3 Nov deadline, about 3,600 words left, analysis plan not started), the family tiling prep (plumber 14-16 Oct) or the customer interviews, and the reason it gives is a seeded fact from that quest; any other pick, or a pick with no seeded fact behind it, fails",
+      "Its pick is the research chapter (3 Nov deadline, about 3,600 words left, analysis plan not started), the family tiling prep (plumber {PLUMBER}) or the customer interviews, and the reason it gives is a seeded fact from that quest; any other pick, or a pick with no seeded fact behind it, fails",
       "Does not recommend a run (knee ban) and does not pick launch work that depends on the wax shipment arriving 28 Oct without saying so"
     ],
     "must_use_pivots": [
@@ -1032,7 +1032,7 @@
     "expected_routing": "inline",
     "rubric": [
       "Acknowledges the new preference and connects it to the existing paint decision (Kiwi Low-VOC after the Sunset Coat allergy)",
-      "Is correct that the tile and grout purchase is still to do (tiles before 25 Oct)",
+      "Is correct that the tile and grout purchase is still to do (tiles before {TILING_LAST})",
       "If it records the fact it says exactly where, and it does not claim it added a quest note",
       "Adds no goal and no collection entry"
     ],

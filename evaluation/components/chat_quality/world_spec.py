@@ -23,6 +23,60 @@ def week_period(offset=0):
 
 MONTH_PERIOD = f"{TODAY.year}_{TODAY.month:02d}"
 
+
+def day_month(day):
+    """``5 Nov``: how the world's notes and entries write a date."""
+    return f"{day.day} {day:%b}"
+
+
+def day_range(first, last):
+    """``2-4 Nov``, or ``30 Oct-1 Nov`` when the range crosses a month."""
+    if first.month == last.month:
+        return f"{first.day}-{last.day} {last:%b}"
+    return f"{day_month(first)}-{day_month(last)}"
+
+
+# The family quest's schedule is relative to TODAY so it is never in the past: the plumber comes
+# in two to four days, Sam is away from twelve to sixteen days ahead, and the in-laws still arrive
+# on the fixed 20 Nov (the race and the other quests keep their calendar dates). The usable tiling
+# window is the day after the plumber to the day before Sam leaves. Dataset text refers to these
+# through ``{TOKEN}`` placeholders (``resolve_date_tokens``) so rubric and world always agree.
+PLUMBER_FIRST = TODAY + datetime.timedelta(days=2)
+PLUMBER_LAST = TODAY + datetime.timedelta(days=4)
+TILING_FIRST = PLUMBER_LAST + datetime.timedelta(days=1)
+SAM_FIRST = TODAY + datetime.timedelta(days=12)
+SAM_LAST = TODAY + datetime.timedelta(days=16)
+TILING_LAST = SAM_FIRST - datetime.timedelta(days=1)
+PLUMBER_WINDOW_TEXT = day_range(PLUMBER_FIRST, PLUMBER_LAST)
+SAM_AWAY_TEXT = day_range(SAM_FIRST, SAM_LAST)
+
+DATE_TOKENS = {
+    "PLUMBER": PLUMBER_WINDOW_TEXT,
+    "PLUMBER_END": day_month(PLUMBER_LAST),
+    "PLUMBER_END_US": f"{PLUMBER_LAST:%b} {PLUMBER_LAST.day}",
+    "PLUMBER_END_LONG": f"{PLUMBER_LAST:%B} {PLUMBER_LAST.day}",
+    "PLUMBER_END_ISO": PLUMBER_LAST.isoformat(),
+    "TILING_FIRST": day_month(TILING_FIRST),
+    "TILING_FIRST_US": f"{TILING_FIRST:%b} {TILING_FIRST.day}",
+    "TILING_FIRST_LONG": f"{TILING_FIRST:%B} {TILING_FIRST.day}",
+    "TILING_FIRST_ISO": TILING_FIRST.isoformat(),
+    "TILING_WINDOW": f"{TILING_FIRST.day}-{TILING_LAST.day}" if TILING_FIRST.month == TILING_LAST.month
+    else f"{day_month(TILING_FIRST)}-{day_month(TILING_LAST)}",
+    "TILING_WINDOW_TO": f"{TILING_FIRST.day} to {TILING_LAST.day}" if TILING_FIRST.month == TILING_LAST.month
+    else f"{day_month(TILING_FIRST)} to {day_month(TILING_LAST)}",
+    "TILING_WINDOW_EN": f"{TILING_FIRST.day}\u2013{TILING_LAST.day}" if TILING_FIRST.month == TILING_LAST.month
+    else f"{day_month(TILING_FIRST)}\u2013{day_month(TILING_LAST)}",
+    "TILING_LAST": day_month(TILING_LAST),
+    "SAM_AWAY": SAM_AWAY_TEXT,
+}
+
+
+def resolve_date_tokens(text):
+    """Fill the ``{TOKEN}`` date placeholders (``DATE_TOKENS``) in dataset text."""
+    for name, value in DATE_TOKENS.items():
+        text = text.replace("{" + name + "}", value)
+    return text
+
 # ---------------------------------------------------------------------------------------------
 # PIVOTS: name -> {quest_key, description, exact_values}. ``exact_values`` are strings/numbers a
 # correct answer should quote or compute from. Authors reference these by name in a case's
@@ -101,9 +155,9 @@ PIVOTS = {
     "PLUMBER_WINDOW": {
         "quest_key": "family",
         "where": "home_tasks entry for the plumber + family quest note",
-        "description": ("The plumber is only available 14-16 Oct. Tiling cannot start before the "
+        "description": (f"The plumber is only available {PLUMBER_WINDOW_TEXT}. Tiling cannot start before the "
                         "plumbing is done, and the in-laws arrive 20 Nov."),
-        "exact_values": {"window": "14-16 Oct", "in_laws_arrive": "20 Nov"},
+        "exact_values": {"window": PLUMBER_WINDOW_TEXT, "in_laws_arrive": "20 Nov"},
     },
     "PAINT_ALLERGY": {
         "quest_key": "family",
@@ -155,8 +209,8 @@ PIVOTS = {
         "quest_key": "family",
         "where": "family quest note",
         "description": ("A quest note says Sam, who does the tiling and painting, is away for work "
-                        "from 26 to 30 Oct, so nothing Sam does can be scheduled in that window."),
-        "exact_values": {"person": "Sam", "away": "26-30 Oct"},
+                        f"{SAM_AWAY_TEXT}, so nothing Sam does can be scheduled in that window."),
+        "exact_values": {"person": "Sam", "away": SAM_AWAY_TEXT},
     },
 }
 
@@ -267,8 +321,8 @@ QUESTS = {
             ("Paint the walls", MONTH_PERIOD, "month", "Two coats, low-VOC paint"),
         ],
         "notes": [
-            ("The plumber can only come 14-16 Oct. Tiling has to wait for that.", "PLUMBER_WINDOW"),
-            ("Heads up: Sam is away for work 26-30 Oct, so no tiling or painting those days.",
+            (f"The plumber can only come {PLUMBER_WINDOW_TEXT}. Tiling has to wait for that.", "PLUMBER_WINDOW"),
+            (f"Heads up: Sam is away for work {SAM_AWAY_TEXT}, so no tiling or painting those days.",
              "IMP_SAM_AWAY"),
         ],
     },
@@ -422,11 +476,11 @@ COLLECTIONS = {
         "entries": [
             (15, 12, {"task": "Demolition", "owner": "Sam", "status": "done", "cost_usd": 150, "due": "done"}),
             (9, 12, {"task": "Plumber: move the drain", "owner": "Sam", "status": "blocked",
-                     "cost_usd": 450, "due": "14-16 Oct, plumber available only then"}),
+                     "cost_usd": 450, "due": f"{PLUMBER_WINDOW_TEXT}, plumber available only then"}),
             (7, 12, {"task": "Buy tiles: matte green 4x4, 38 sq ft", "owner": "Mia", "status": "todo",
-                     "cost_usd": 380, "due": "before 25 Oct"}),
+                     "cost_usd": 380, "due": f"before {day_month(TILING_LAST)}"}),
             (5, 12, {"task": "Buy paint", "owner": "Sam", "status": "todo", "cost_usd": 90,
-                     "due": "before 1 Nov"}),
+                     "due": f"before {day_month(TODAY + datetime.timedelta(days=1))}"}),
             (3, 12, {"task": "Tile the walls", "owner": "Sam", "status": "todo", "cost_usd": 0,
                      "due": "after plumbing"}),
         ],

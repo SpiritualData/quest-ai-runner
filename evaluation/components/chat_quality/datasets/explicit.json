@@ -222,7 +222,7 @@
       "rubric": [
         "Marks exactly the 'Book the plumber' goal completed and no other goal",
         "Does not rewrite the current state ('Plumbing not started') on its own initiative; at most it offers to update it",
-        "Does not invent a booking date or time for the plumber; any date it gives for the plumber is inside the seeded 14-16 Oct window",
+        "Does not invent a booking date or time for the plumber; any date it gives for the plumber is inside the seeded {PLUMBER} window",
         "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
       ],
       "must_use_pivots": [],
@@ -1419,7 +1419,7 @@
       "rubric": [
         "Reads across all five quests (world scope), not just one",
         "Names one quest as most at risk and backs it with that quest's dated facts. Business is the expected pick (the 20 Oct soft launch is already impossible because the wax now ships 28 Oct); research (methods deadline pulled forward to 3 Nov with about 3,600 words and the analysis plan still to write) is also acceptable. Any other pick fails",
-        "Every date it cites for the other quests matches the ground truth (research 3 Nov, race 22 Nov, plumber 14-16 Oct, in-laws 20 Nov, Lisbon 12 Dec); none is the stale one (8 Nov race, 15 Nov deadline)",
+        "Every date it cites for the other quests matches the ground truth (research 3 Nov, race 22 Nov, plumber {PLUMBER}, in-laws 20 Nov, Lisbon 12 Dec); none is the stale one (8 Nov race, 15 Nov deadline)",
         "Does not write anything"
       ],
       "must_use_pivots": [
@@ -1609,7 +1609,7 @@
       "message": "Read me my notes for this quest. Read only, please.",
       "expected_routing": "inline",
       "rubric": [
-        "Reports both notes: the plumber can only come 14-16 Oct and tiling has to wait for that, and Sam is away for work 26-30 Oct so no tiling or painting those days",
+        "Reports both notes: the plumber can only come {PLUMBER} and tiling has to wait for that, and Sam is away for work {SAM_AWAY} so no tiling or painting those days",
         "Does not add, edit or delete anything and does not queue a task",
         "No invented notes"
       ],
@@ -2052,7 +2052,7 @@
       "message": "Give me my rundown for this week: what's done, what's in progress and what needs attention. Just read, don't change anything.",
       "rubric": [
         "Reads the person's real goals for the week (get_my_rundown or get_todays_actions or a goals read) and reports them by status",
-        "Names the family goal(s) whose period is the current ISO week in the ground truth (on a world built this week, 'Book the plumber') and flags something real as needing attention (for example the plumber window of 14-16 Oct)",
+        "Names the family goal(s) whose period is the current ISO week in the ground truth (on a world built this week, 'Book the plumber') and flags something real as needing attention (for example the plumber window of {PLUMBER})",
         "Every goal it names exists in the ground truth; nothing invented",
         "No writes of any kind"
       ],

@@ -82,3 +82,15 @@ def test_a_card_derived_from_one_quest_stays_with_that_quest_whatever_tags_later
     assert card_visible_to_turn(business, [])   # a turn bound to no quest sees it, as the fence always said
     learned = {"id": "learned", "scope_tags": ["quest:quest_biz", "quest:quest_fit"]}
     assert card_visible_to_turn(learned, ["quest:quest_fit"])   # a learned card used from two quests is shared
+
+
+def test_vector_hit_of_a_quest_card_is_fenced_by_its_quest_alone():
+    """The vector arm fences a hit by the payload's scope_tags, so a quest card whose stored tags grew
+    another quest's tag must still carry only its own quest's tag there (REL-ISO-01)."""
+    from quest_ai_runner.core.scope_tags import card_scope_tags
+    from hubofhubs.recall.scope_tags import scope_tags_allow
+    business = {"managed_by": "quest", "quest_id": "quest_biz", "scope_tags": ["quest:quest_biz", "quest:quest_fit"]}
+    assert card_scope_tags(business) == ["quest:quest_biz"]
+    assert not scope_tags_allow(card_scope_tags(business), ["quest:quest_fit"])
+    assert card_scope_tags({"scope_tags": ["global"]}) == ["global"]
+    assert card_scope_tags({}) == []
