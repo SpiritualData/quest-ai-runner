@@ -420,4 +420,5 @@ def test_an_act_in_the_outside_world_needs_a_named_service_or_the_reply_says_it_
 
 def test_buying_paying_or_ordering_for_the_person_is_declined_in_the_ordered_rubric_not_handed_to_deep():
     rule = PLANNER_DECISION_RUBRIC[PLANNER_DECISION_RUBRIC.index("5. INSTRUCTION TO ACT"):PLANNER_DECISION_RUBRIC.index("6. OTHERWISE")]
+    rule = " ".join(rule.split())
     assert "NOT REACHABLE" in rule and "ordering from a supplier" in rule and 'choose "answer"' in rule
