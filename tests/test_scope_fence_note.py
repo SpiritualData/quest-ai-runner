@@ -71,3 +71,14 @@ def test_a_turn_that_is_not_a_persons_message_gets_no_note():
     build(provider).run("Summarise the week", context_meta={"quest_ids": ["quest_fit"]},
                         message_is_user_turn=False)
     assert HEAD not in provider.plan_prompts[0]
+
+
+def test_a_card_derived_from_one_quest_stays_with_that_quest_whatever_tags_later_turns_added():
+    from quest_ai_runner.core.scope_tags import card_visible_to_turn
+    business = {"id": "quest-quest_biz", "managed_by": "quest", "quest_id": "quest_biz",
+                "scope_tags": ["quest:quest_biz", "quest:quest_fit"]}   # polluted by an earlier cross-quest touch
+    assert not card_visible_to_turn(business, ["quest:quest_fit"])
+    assert card_visible_to_turn(business, ["quest:quest_biz"])
+    assert card_visible_to_turn(business, [])   # a turn bound to no quest sees it, as the fence always said
+    learned = {"id": "learned", "scope_tags": ["quest:quest_biz", "quest:quest_fit"]}
+    assert card_visible_to_turn(learned, ["quest:quest_fit"])   # a learned card used from two quests is shared

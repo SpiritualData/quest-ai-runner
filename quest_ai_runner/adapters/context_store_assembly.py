@@ -27,7 +27,7 @@ from hubofhubs.recall.card_content_render import (
 from hubofhubs.recall import card_origin
 from hubofhubs.recall.walk import prune_dirnames
 from .walk_settings import effective_skip_dirs
-from hubofhubs.recall.scope_tags import scope_tags_allow
+from ..core.scope_tags import card_visible_to_turn
 from hubofhubs.recall.context_card_extraction import (
     LINKED_FOLDER_BOOST,
     RECENCY_BOOST_HALF_LIFE_DAYS,
@@ -406,7 +406,7 @@ class AssemblyMixin:
         own_task = str((meta or {}).get("task_id") or "")
         cards = {
             cid: c for cid, c in cards.items()
-            if scope_tags_allow(c.get("scope_tags"), turn_scope_tags)
+            if card_visible_to_turn(c, turn_scope_tags)
             and not card_origin.is_run_brief_record(c)
             and not (own_task and str(((c.get("provenance") or {}) if isinstance(
                 c.get("provenance"), dict) else {}).get("task_id") or "") == own_task)
@@ -423,8 +423,8 @@ class AssemblyMixin:
                     pcard = self._repo.read(str(pid))
                 except Exception:  # noqa: BLE001
                     pcard = None
-                if not isinstance(pcard, dict) or not scope_tags_allow(
-                        pcard.get("scope_tags"), turn_scope_tags):
+                if not isinstance(pcard, dict) or not card_visible_to_turn(
+                        pcard, turn_scope_tags):
                     pcard = None
             if pcard is not None and all(pcard is not c for c in priority_cards):
                 priority_cards.append(pcard)

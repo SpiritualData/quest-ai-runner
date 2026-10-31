@@ -137,8 +137,8 @@ class TurnContextStore:
             # own rule, so history recorded before turns carried tags is not lost.
             turn_tags = (meta or {}).get("scope_tags")
             if turn_tags:
-                from hubofhubs.recall.scope_tags import scope_tags_allow
-                cards = [c for c in cards if scope_tags_allow(c.get("scope_tags"), turn_tags)]
+                from .scope_tags import card_visible_to_turn
+                cards = [c for c in cards if card_visible_to_turn(c, turn_tags)]
             # NOT ITS OWN THREAD. A thread's earlier runs reach its brief already, through the
             # thread's own run history and last result; retrieving them here as "past
             # conversations" showed the run its own previous passes a second time, whole.

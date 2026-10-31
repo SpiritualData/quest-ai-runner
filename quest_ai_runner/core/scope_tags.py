@@ -9,9 +9,23 @@ from __future__ import annotations
 
 from typing import List, Sequence
 
-from hubofhubs.recall.scope_tags import ScopeTags, as_tag_list, scope_tags_from_keys as hub_scope_tags_from_keys
+from typing import Any, Mapping
+
+from hubofhubs.recall.scope_tags import ScopeTags, as_tag_list, scope_tags_allow, scope_tags_from_keys as hub_scope_tags_from_keys
 
 QUEST_KINDS = ("quest",)
+
+
+def card_visible_to_turn(card: Mapping[str, Any], turn_tags: ScopeTags) -> bool:
+    """Whether ``card`` may reach a turn carrying ``turn_tags``. A card the backend derived from ONE quest (``managed_by`` is
+    ``quest`` and it names a ``quest_id``) is about that quest alone, whatever tags later turns unioned onto it: it is
+    visible only to a turn scoped to that quest, or to no quest. Every other card follows its own tags. Never raises."""
+    try:
+        if card.get("managed_by") == "quest" and card.get("quest_id"):
+            return scope_tags_allow([f"quest:{card['quest_id']}"], turn_tags)
+        return scope_tags_allow(card.get("scope_tags"), turn_tags)
+    except Exception:  # noqa: BLE001
+        return True
 
 
 def scope_tags_from_keys(scope_keys: ScopeTags, kinds: Sequence[str] = QUEST_KINDS) -> List[str]:
