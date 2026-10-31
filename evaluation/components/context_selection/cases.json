@@ -194,7 +194,7 @@
   "id": "CTX-034",
   "area": "symptom",
   "task": "Score a candidate for how specifically it matches the request, no model involved",
-  "target": "quest_ai_runner/adapters/specificity.py"
+  "target": "hubofhubs/critique/specificity.py"
  },
  {
   "id": "CTX-035",
@@ -399,7 +399,7 @@
   "id": "CTX-065",
   "area": "hard",
   "task": "the seam where the agent connection is opened so tests can fake it",
-  "target": "quest_ai_runner/adapters/acp_deep_runner_session.py",
+  "target": "hubofhubs/deep/acp_session.py",
   "heldout": true
  }
 ]
