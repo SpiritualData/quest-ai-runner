@@ -4093,3 +4093,6 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,context_selection,solutions_and_problems_with_links,63,46,29/38,17/25,0,0,0,0.0,85.1,08c3cc4,4be37dec,none,,,
 2026-10-30,context_selection,vector_bge_small,63,35,24/38,11/25,0,0,0,0.0,4.7,08c3cc4,4be37dec,none,,,
 2026-10-30,hub_of_hubs,registry_scan,271,244,244/271,0/0,0,0,0,0.0,0.0,e58ef64,7bd4c802,none,,,
+2026-10-30,recipe_fast_path,recipe_replay_offline,30,30,30/30,0/0,47,0,0,0.0,0.1,aecbbf0,c6c91720,simulated,,,
+2026-10-30,assist_a_terminal_session,fast_model_helpers,32,30,30/32,0/0,30,5359,704,0.0,0.0,aecbbf0,882af363,simulated,,,0.9563
+2026-10-30,justified_model_spend,spec_registry_ablation,15,0,0/15,0/0,0,0,0,0.0,1.2,aecbbf0,f4536c6e,none,,,
