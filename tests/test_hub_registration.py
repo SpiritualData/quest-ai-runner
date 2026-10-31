@@ -66,9 +66,10 @@ def test_the_assembly_reports_what_the_hub_could_not_build_alone():
 
 def test_the_card_store_override_comes_from_qars_records_and_cites_its_own_ids():
     one = qar_hub.child().overrides()
-    assert [o.solution_id for o in one] == [qar_hub.CARD_STORE] and one[0].parent_default == "local_card_store"
-    assert one[0].chosen == qar_hub.CARD_REPOSITORY and one[0].justified
-    assert "prob-context-drifts-from-its-source" in one[0].reasons
+    card = next(o for o in one if o.solution_id == qar_hub.CARD_STORE)
+    assert card.parent_default == "local_card_store" and card.chosen == qar_hub.CARD_REPOSITORY and card.justified
+    assert "prob-context-drifts-from-its-source" in card.reasons
+    assert all(o.justified for o in one)
 
 
 def test_the_production_call_site_gets_the_same_repository_object_back():

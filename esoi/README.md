@@ -202,7 +202,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `run-queued-tasks` | Queued-task runner lane | evaluation/components/run_queued_tasks/impls/qar_runner.py | Task lifecycle correctness over offline cases |
 | `configure-a-lane` | Layered lane configuration loader | evaluation/components/configure_a_lane/impls/qar_config.py | Configuration precedence and validation correctness |
 | `operate-from-a-terminal` | Non-interactive command-line surface | evaluation/components/operate_from_a_terminal/impls/qar_main.py | Command-line parsing, refusal and output correctness |
-| `choose-a-model-tier` | Cost-ordered model tier selector with outage and allowance recovery | evaluation/components/choose_a_model_tier/impls/qar_selection.py | Model tier selection and limit-recognition correctness |
+| `choose-a-model-tier` | Cost-ordered model tier selector with outage and allowance recovery | model_registry | Model tier selection and limit-recognition correctness |
 | `track-usage-and-cost` | Cost estimation, daily budget and host load guard | evaluation/components/track_usage_and_cost/impls/qar_usage.py | Cost, budget and resource-guard correctness |
 | `verify-offline` |  | evaluation/components/verify_offline/impls/collect_by_file.py | none yet |
 | `keep-secrets-out` | Public-repository hygiene scanner | evaluation/components/keep_secrets_out/impls/live_scanner.py | Secret detection and placeholder tolerance |

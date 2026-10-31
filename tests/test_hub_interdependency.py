@@ -35,12 +35,12 @@ class NeedsAStore:
 
 
 class StoreNeedsAnAssembler:
-    def __init__(self, assembler: ContextAssembling):
+    def __init__(self, assembler: ContextAssembling, repository=None):
         self.assembler = assembler
 
 
 class StoreNeedsASearch:
-    def __init__(self, search: SearchBackend):
+    def __init__(self, search: SearchBackend, repository=None):
         self.search = search
 
 
@@ -75,9 +75,9 @@ def test_a_cycle_between_seats_is_named():
         build({DEPENDENT: ARM, qar_hub.CARD_STORE: CYCLE_STORE})
 
 
-def test_an_unmet_need_names_the_seat_and_the_chain():
-    with pytest.raises(AssemblyError, match=r"card-store \(test-store-needs-a-search\) needs search-backend: no arm, not provided"):
-        build({DEPENDENT: ARM, qar_hub.CARD_STORE: UNMET_STORE})
+def test_a_need_is_met_by_the_needed_seats_selected_arm():
+    system = build({DEPENDENT: ARM, qar_hub.CARD_STORE: UNMET_STORE})
+    assert type(system[qar_hub.CARD_STORE].search).__name__ == type(system["search-backend"]).__name__
 
 
 def test_providing_the_missing_seat_resolves_the_need():
