@@ -30,10 +30,13 @@ def test_doc_stays_bounded():
     assert len((REPO / "docs" / "hub-of-hubs.md").read_text().splitlines()) <= 120
 
 
-def test_every_registry_area_has_every_check_that_applies_to_it_as_a_case():
-    have = {(c["args"]["area"], c["kind"]) for c in CASES}
-    assert have == {(r["area"], k) for r in registry.read("hubs.csv") for k in KINDS
-                    if k not in registry.CONNECTION_KINDS or registry.should_connect(r)}
+def test_every_area_and_seat_has_every_check_that_applies_to_it_as_a_case():
+    have = {(c["args"].get("area") or c["args"]["seat"], c["kind"]) for c in CASES}
+    hubs = registry.read("hubs.csv")
+    want = {(r["area"], k) for r in hubs for k in registry.AREA_KINDS}
+    want |= {(s, k) for s in registry.seat_ids(hubs) for k in registry.SEAT_KINDS
+             if k not in registry.CONNECTION_KINDS or registry.seat_should_connect(hubs, s)}
+    assert have == want and set(KINDS) == set(registry.AREA_KINDS) | set(registry.SEAT_KINDS)
 
 
 def test_the_case_file_is_what_the_hub_generates():
@@ -54,7 +57,10 @@ def test_the_real_gaps_are_the_adopt_or_coexist_areas_with_no_seam():
     assert numbers["unconnected"] == sorted(a for a in wanted if not facts[a]["seam"])
     kept = {a for a in facts if a not in wanted}
     assert kept and not (kept & set(numbers["unconnected"]))
-    assert not {c["args"]["area"] for c in CASES if c["kind"] in registry.CONNECTION_KINDS} & kept
+    # the connection checks are made once per seat, never per area; an adopt or coexist area no arm covers is an arm gap
+    assert not {c["args"]["area"] for c in CASES if "area" in c["args"] and c["kind"] in registry.CONNECTION_KINDS}
+    assert numbers["arm_gaps"] == sorted(a for a in wanted if not facts[a]["covered"])
+    assert set(numbers["unconnected_seats"]) <= {f["seat"] for f in facts.seats.values() if f["expected"]}
 
 
 # THE BINDING RULE (corrected 2026-10-30). The registry now breaks each seat into sub-solution areas (72, from 12 broad ones), and

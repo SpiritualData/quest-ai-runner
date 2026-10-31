@@ -30,20 +30,6 @@
  {
   "id": "HUB-003",
   "area": "durable_jobs",
-  "kind": "core_clean",
-  "description": "durable_jobs: core_clean",
-  "args": {
-   "area": "durable_jobs"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-004",
-  "area": "durable_jobs",
   "kind": "no_reinvented",
   "description": "durable_jobs: no_reinvented",
   "args": {
@@ -56,7 +42,7 @@
   }
  },
  {
-  "id": "HUB-005",
+  "id": "HUB-004",
   "area": "browser_use",
   "kind": "registered",
   "description": "browser_use: registered",
@@ -70,21 +56,7 @@
   }
  },
  {
-  "id": "HUB-006",
-  "area": "browser_use",
-  "kind": "by_config",
-  "description": "browser_use: by_config",
-  "args": {
-   "area": "browser_use"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-007",
+  "id": "HUB-005",
   "area": "browser_use",
   "kind": "fresh",
   "description": "browser_use: fresh",
@@ -98,63 +70,7 @@
   }
  },
  {
-  "id": "HUB-008",
-  "area": "browser_use",
-  "kind": "seam",
-  "description": "browser_use: seam",
-  "args": {
-   "area": "browser_use"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-009",
-  "area": "browser_use",
-  "kind": "selectable",
-  "description": "browser_use: selectable",
-  "args": {
-   "area": "browser_use"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-010",
-  "area": "browser_use",
-  "kind": "core_clean",
-  "description": "browser_use: core_clean",
-  "args": {
-   "area": "browser_use"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-011",
-  "area": "browser_use",
-  "kind": "fake_hub",
-  "description": "browser_use: fake_hub",
-  "args": {
-   "area": "browser_use"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-012",
+  "id": "HUB-006",
   "area": "browser_use",
   "kind": "no_reinvented",
   "description": "browser_use: no_reinvented",
@@ -168,7 +84,7 @@
   }
  },
  {
-  "id": "HUB-013",
+  "id": "HUB-007",
   "area": "file_writers",
   "kind": "registered",
   "description": "file_writers: registered",
@@ -182,7 +98,7 @@
   }
  },
  {
-  "id": "HUB-014",
+  "id": "HUB-008",
   "area": "file_writers",
   "kind": "fresh",
   "description": "file_writers: fresh",
@@ -196,21 +112,7 @@
   }
  },
  {
-  "id": "HUB-015",
-  "area": "file_writers",
-  "kind": "core_clean",
-  "description": "file_writers: core_clean",
-  "args": {
-   "area": "file_writers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-016",
+  "id": "HUB-009",
   "area": "file_writers",
   "kind": "no_reinvented",
   "description": "file_writers: no_reinvented",
@@ -224,7 +126,7 @@
   }
  },
  {
-  "id": "HUB-017",
+  "id": "HUB-010",
   "area": "channels",
   "kind": "registered",
   "description": "channels: registered",
@@ -238,7 +140,7 @@
   }
  },
  {
-  "id": "HUB-018",
+  "id": "HUB-011",
   "area": "channels",
   "kind": "fresh",
   "description": "channels: fresh",
@@ -252,21 +154,7 @@
   }
  },
  {
-  "id": "HUB-019",
-  "area": "channels",
-  "kind": "core_clean",
-  "description": "channels: core_clean",
-  "args": {
-   "area": "channels"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-020",
+  "id": "HUB-012",
   "area": "channels",
   "kind": "no_reinvented",
   "description": "channels: no_reinvented",
@@ -280,7 +168,7 @@
   }
  },
  {
-  "id": "HUB-021",
+  "id": "HUB-013",
   "area": "inbound_mail",
   "kind": "registered",
   "description": "inbound_mail: registered",
@@ -294,21 +182,7 @@
   }
  },
  {
-  "id": "HUB-022",
-  "area": "inbound_mail",
-  "kind": "by_config",
-  "description": "inbound_mail: by_config",
-  "args": {
-   "area": "inbound_mail"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-023",
+  "id": "HUB-014",
   "area": "inbound_mail",
   "kind": "fresh",
   "description": "inbound_mail: fresh",
@@ -322,63 +196,7 @@
   }
  },
  {
-  "id": "HUB-024",
-  "area": "inbound_mail",
-  "kind": "seam",
-  "description": "inbound_mail: seam",
-  "args": {
-   "area": "inbound_mail"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-025",
-  "area": "inbound_mail",
-  "kind": "selectable",
-  "description": "inbound_mail: selectable",
-  "args": {
-   "area": "inbound_mail"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-026",
-  "area": "inbound_mail",
-  "kind": "core_clean",
-  "description": "inbound_mail: core_clean",
-  "args": {
-   "area": "inbound_mail"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-027",
-  "area": "inbound_mail",
-  "kind": "fake_hub",
-  "description": "inbound_mail: fake_hub",
-  "args": {
-   "area": "inbound_mail"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-028",
+  "id": "HUB-015",
   "area": "inbound_mail",
   "kind": "no_reinvented",
   "description": "inbound_mail: no_reinvented",
@@ -392,7 +210,7 @@
   }
  },
  {
-  "id": "HUB-029",
+  "id": "HUB-016",
   "area": "voice",
   "kind": "registered",
   "description": "voice: registered",
@@ -406,7 +224,7 @@
   }
  },
  {
-  "id": "HUB-030",
+  "id": "HUB-017",
   "area": "voice",
   "kind": "fresh",
   "description": "voice: fresh",
@@ -420,21 +238,7 @@
   }
  },
  {
-  "id": "HUB-031",
-  "area": "voice",
-  "kind": "core_clean",
-  "description": "voice: core_clean",
-  "args": {
-   "area": "voice"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-032",
+  "id": "HUB-018",
   "area": "voice",
   "kind": "no_reinvented",
   "description": "voice: no_reinvented",
@@ -448,7 +252,7 @@
   }
  },
  {
-  "id": "HUB-033",
+  "id": "HUB-019",
   "area": "answer_verification",
   "kind": "registered",
   "description": "answer_verification: registered",
@@ -462,21 +266,7 @@
   }
  },
  {
-  "id": "HUB-034",
-  "area": "answer_verification",
-  "kind": "by_config",
-  "description": "answer_verification: by_config",
-  "args": {
-   "area": "answer_verification"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-035",
+  "id": "HUB-020",
   "area": "answer_verification",
   "kind": "fresh",
   "description": "answer_verification: fresh",
@@ -490,63 +280,7 @@
   }
  },
  {
-  "id": "HUB-036",
-  "area": "answer_verification",
-  "kind": "seam",
-  "description": "answer_verification: seam",
-  "args": {
-   "area": "answer_verification"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-037",
-  "area": "answer_verification",
-  "kind": "selectable",
-  "description": "answer_verification: selectable",
-  "args": {
-   "area": "answer_verification"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-038",
-  "area": "answer_verification",
-  "kind": "core_clean",
-  "description": "answer_verification: core_clean",
-  "args": {
-   "area": "answer_verification"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-039",
-  "area": "answer_verification",
-  "kind": "fake_hub",
-  "description": "answer_verification: fake_hub",
-  "args": {
-   "area": "answer_verification"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-040",
+  "id": "HUB-021",
   "area": "answer_verification",
   "kind": "no_reinvented",
   "description": "answer_verification: no_reinvented",
@@ -560,7 +294,7 @@
   }
  },
  {
-  "id": "HUB-041",
+  "id": "HUB-022",
   "area": "link_checking",
   "kind": "registered",
   "description": "link_checking: registered",
@@ -574,7 +308,7 @@
   }
  },
  {
-  "id": "HUB-042",
+  "id": "HUB-023",
   "area": "link_checking",
   "kind": "fresh",
   "description": "link_checking: fresh",
@@ -588,21 +322,7 @@
   }
  },
  {
-  "id": "HUB-043",
-  "area": "link_checking",
-  "kind": "core_clean",
-  "description": "link_checking: core_clean",
-  "args": {
-   "area": "link_checking"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-044",
+  "id": "HUB-024",
   "area": "link_checking",
   "kind": "no_reinvented",
   "description": "link_checking: no_reinvented",
@@ -616,7 +336,7 @@
   }
  },
  {
-  "id": "HUB-045",
+  "id": "HUB-025",
   "area": "judging",
   "kind": "registered",
   "description": "judging: registered",
@@ -630,21 +350,7 @@
   }
  },
  {
-  "id": "HUB-046",
-  "area": "judging",
-  "kind": "by_config",
-  "description": "judging: by_config",
-  "args": {
-   "area": "judging"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-047",
+  "id": "HUB-026",
   "area": "judging",
   "kind": "fresh",
   "description": "judging: fresh",
@@ -658,63 +364,7 @@
   }
  },
  {
-  "id": "HUB-048",
-  "area": "judging",
-  "kind": "seam",
-  "description": "judging: seam",
-  "args": {
-   "area": "judging"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-049",
-  "area": "judging",
-  "kind": "selectable",
-  "description": "judging: selectable",
-  "args": {
-   "area": "judging"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-050",
-  "area": "judging",
-  "kind": "core_clean",
-  "description": "judging: core_clean",
-  "args": {
-   "area": "judging"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-051",
-  "area": "judging",
-  "kind": "fake_hub",
-  "description": "judging: fake_hub",
-  "args": {
-   "area": "judging"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-052",
+  "id": "HUB-027",
   "area": "judging",
   "kind": "no_reinvented",
   "description": "judging: no_reinvented",
@@ -728,7 +378,7 @@
   }
  },
  {
-  "id": "HUB-053",
+  "id": "HUB-028",
   "area": "metric_enforcement",
   "kind": "registered",
   "description": "metric_enforcement: registered",
@@ -742,7 +392,7 @@
   }
  },
  {
-  "id": "HUB-054",
+  "id": "HUB-029",
   "area": "metric_enforcement",
   "kind": "fresh",
   "description": "metric_enforcement: fresh",
@@ -756,21 +406,7 @@
   }
  },
  {
-  "id": "HUB-055",
-  "area": "metric_enforcement",
-  "kind": "core_clean",
-  "description": "metric_enforcement: core_clean",
-  "args": {
-   "area": "metric_enforcement"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-056",
+  "id": "HUB-030",
   "area": "metric_enforcement",
   "kind": "no_reinvented",
   "description": "metric_enforcement: no_reinvented",
@@ -784,7 +420,7 @@
   }
  },
  {
-  "id": "HUB-057",
+  "id": "HUB-031",
   "area": "injection_defense",
   "kind": "registered",
   "description": "injection_defense: registered",
@@ -798,21 +434,7 @@
   }
  },
  {
-  "id": "HUB-058",
-  "area": "injection_defense",
-  "kind": "by_config",
-  "description": "injection_defense: by_config",
-  "args": {
-   "area": "injection_defense"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-059",
+  "id": "HUB-032",
   "area": "injection_defense",
   "kind": "fresh",
   "description": "injection_defense: fresh",
@@ -826,63 +448,7 @@
   }
  },
  {
-  "id": "HUB-060",
-  "area": "injection_defense",
-  "kind": "seam",
-  "description": "injection_defense: seam",
-  "args": {
-   "area": "injection_defense"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-061",
-  "area": "injection_defense",
-  "kind": "selectable",
-  "description": "injection_defense: selectable",
-  "args": {
-   "area": "injection_defense"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-062",
-  "area": "injection_defense",
-  "kind": "core_clean",
-  "description": "injection_defense: core_clean",
-  "args": {
-   "area": "injection_defense"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-063",
-  "area": "injection_defense",
-  "kind": "fake_hub",
-  "description": "injection_defense: fake_hub",
-  "args": {
-   "area": "injection_defense"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-064",
+  "id": "HUB-033",
   "area": "injection_defense",
   "kind": "no_reinvented",
   "description": "injection_defense: no_reinvented",
@@ -896,7 +462,7 @@
   }
  },
  {
-  "id": "HUB-065",
+  "id": "HUB-034",
   "area": "guardrails",
   "kind": "registered",
   "description": "guardrails: registered",
@@ -910,7 +476,7 @@
   }
  },
  {
-  "id": "HUB-066",
+  "id": "HUB-035",
   "area": "guardrails",
   "kind": "fresh",
   "description": "guardrails: fresh",
@@ -924,21 +490,7 @@
   }
  },
  {
-  "id": "HUB-067",
-  "area": "guardrails",
-  "kind": "core_clean",
-  "description": "guardrails: core_clean",
-  "args": {
-   "area": "guardrails"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-068",
+  "id": "HUB-036",
   "area": "guardrails",
   "kind": "no_reinvented",
   "description": "guardrails: no_reinvented",
@@ -952,7 +504,7 @@
   }
  },
  {
-  "id": "HUB-069",
+  "id": "HUB-037",
   "area": "consent_gating",
   "kind": "registered",
   "description": "consent_gating: registered",
@@ -966,7 +518,7 @@
   }
  },
  {
-  "id": "HUB-070",
+  "id": "HUB-038",
   "area": "consent_gating",
   "kind": "fresh",
   "description": "consent_gating: fresh",
@@ -980,21 +532,7 @@
   }
  },
  {
-  "id": "HUB-071",
-  "area": "consent_gating",
-  "kind": "core_clean",
-  "description": "consent_gating: core_clean",
-  "args": {
-   "area": "consent_gating"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-072",
+  "id": "HUB-039",
   "area": "consent_gating",
   "kind": "no_reinvented",
   "description": "consent_gating: no_reinvented",
@@ -1008,7 +546,7 @@
   }
  },
  {
-  "id": "HUB-073",
+  "id": "HUB-040",
   "area": "run_supervision",
   "kind": "registered",
   "description": "run_supervision: registered",
@@ -1022,7 +560,7 @@
   }
  },
  {
-  "id": "HUB-074",
+  "id": "HUB-041",
   "area": "run_supervision",
   "kind": "fresh",
   "description": "run_supervision: fresh",
@@ -1036,21 +574,7 @@
   }
  },
  {
-  "id": "HUB-075",
-  "area": "run_supervision",
-  "kind": "core_clean",
-  "description": "run_supervision: core_clean",
-  "args": {
-   "area": "run_supervision"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-076",
+  "id": "HUB-042",
   "area": "run_supervision",
   "kind": "no_reinvented",
   "description": "run_supervision: no_reinvented",
@@ -1064,7 +588,7 @@
   }
  },
  {
-  "id": "HUB-077",
+  "id": "HUB-043",
   "area": "secrets_hygiene",
   "kind": "registered",
   "description": "secrets_hygiene: registered",
@@ -1078,21 +602,7 @@
   }
  },
  {
-  "id": "HUB-078",
-  "area": "secrets_hygiene",
-  "kind": "by_config",
-  "description": "secrets_hygiene: by_config",
-  "args": {
-   "area": "secrets_hygiene"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-079",
+  "id": "HUB-044",
   "area": "secrets_hygiene",
   "kind": "fresh",
   "description": "secrets_hygiene: fresh",
@@ -1106,63 +616,7 @@
   }
  },
  {
-  "id": "HUB-080",
-  "area": "secrets_hygiene",
-  "kind": "seam",
-  "description": "secrets_hygiene: seam",
-  "args": {
-   "area": "secrets_hygiene"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-081",
-  "area": "secrets_hygiene",
-  "kind": "selectable",
-  "description": "secrets_hygiene: selectable",
-  "args": {
-   "area": "secrets_hygiene"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-082",
-  "area": "secrets_hygiene",
-  "kind": "core_clean",
-  "description": "secrets_hygiene: core_clean",
-  "args": {
-   "area": "secrets_hygiene"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-083",
-  "area": "secrets_hygiene",
-  "kind": "fake_hub",
-  "description": "secrets_hygiene: fake_hub",
-  "args": {
-   "area": "secrets_hygiene"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-084",
+  "id": "HUB-045",
   "area": "secrets_hygiene",
   "kind": "no_reinvented",
   "description": "secrets_hygiene: no_reinvented",
@@ -1176,7 +630,7 @@
   }
  },
  {
-  "id": "HUB-085",
+  "id": "HUB-046",
   "area": "web_search",
   "kind": "registered",
   "description": "web_search: registered",
@@ -1190,21 +644,7 @@
   }
  },
  {
-  "id": "HUB-086",
-  "area": "web_search",
-  "kind": "by_config",
-  "description": "web_search: by_config",
-  "args": {
-   "area": "web_search"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-087",
+  "id": "HUB-047",
   "area": "web_search",
   "kind": "fresh",
   "description": "web_search: fresh",
@@ -1218,63 +658,7 @@
   }
  },
  {
-  "id": "HUB-088",
-  "area": "web_search",
-  "kind": "seam",
-  "description": "web_search: seam",
-  "args": {
-   "area": "web_search"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-089",
-  "area": "web_search",
-  "kind": "selectable",
-  "description": "web_search: selectable",
-  "args": {
-   "area": "web_search"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-090",
-  "area": "web_search",
-  "kind": "core_clean",
-  "description": "web_search: core_clean",
-  "args": {
-   "area": "web_search"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-091",
-  "area": "web_search",
-  "kind": "fake_hub",
-  "description": "web_search: fake_hub",
-  "args": {
-   "area": "web_search"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-092",
+  "id": "HUB-048",
   "area": "web_search",
   "kind": "no_reinvented",
   "description": "web_search: no_reinvented",
@@ -1288,7 +672,7 @@
   }
  },
  {
-  "id": "HUB-093",
+  "id": "HUB-049",
   "area": "page_extraction",
   "kind": "registered",
   "description": "page_extraction: registered",
@@ -1302,21 +686,7 @@
   }
  },
  {
-  "id": "HUB-094",
-  "area": "page_extraction",
-  "kind": "by_config",
-  "description": "page_extraction: by_config",
-  "args": {
-   "area": "page_extraction"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-095",
+  "id": "HUB-050",
   "area": "page_extraction",
   "kind": "fresh",
   "description": "page_extraction: fresh",
@@ -1330,63 +700,7 @@
   }
  },
  {
-  "id": "HUB-096",
-  "area": "page_extraction",
-  "kind": "seam",
-  "description": "page_extraction: seam",
-  "args": {
-   "area": "page_extraction"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-097",
-  "area": "page_extraction",
-  "kind": "selectable",
-  "description": "page_extraction: selectable",
-  "args": {
-   "area": "page_extraction"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-098",
-  "area": "page_extraction",
-  "kind": "core_clean",
-  "description": "page_extraction: core_clean",
-  "args": {
-   "area": "page_extraction"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-099",
-  "area": "page_extraction",
-  "kind": "fake_hub",
-  "description": "page_extraction: fake_hub",
-  "args": {
-   "area": "page_extraction"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-100",
+  "id": "HUB-051",
   "area": "page_extraction",
   "kind": "no_reinvented",
   "description": "page_extraction: no_reinvented",
@@ -1400,7 +714,7 @@
   }
  },
  {
-  "id": "HUB-101",
+  "id": "HUB-052",
   "area": "deep_research",
   "kind": "registered",
   "description": "deep_research: registered",
@@ -1414,21 +728,7 @@
   }
  },
  {
-  "id": "HUB-102",
-  "area": "deep_research",
-  "kind": "by_config",
-  "description": "deep_research: by_config",
-  "args": {
-   "area": "deep_research"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-103",
+  "id": "HUB-053",
   "area": "deep_research",
   "kind": "fresh",
   "description": "deep_research: fresh",
@@ -1442,63 +742,7 @@
   }
  },
  {
-  "id": "HUB-104",
-  "area": "deep_research",
-  "kind": "seam",
-  "description": "deep_research: seam",
-  "args": {
-   "area": "deep_research"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-105",
-  "area": "deep_research",
-  "kind": "selectable",
-  "description": "deep_research: selectable",
-  "args": {
-   "area": "deep_research"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-106",
-  "area": "deep_research",
-  "kind": "core_clean",
-  "description": "deep_research: core_clean",
-  "args": {
-   "area": "deep_research"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-107",
-  "area": "deep_research",
-  "kind": "fake_hub",
-  "description": "deep_research: fake_hub",
-  "args": {
-   "area": "deep_research"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-108",
+  "id": "HUB-054",
   "area": "deep_research",
   "kind": "no_reinvented",
   "description": "deep_research: no_reinvented",
@@ -1512,7 +756,7 @@
   }
  },
  {
-  "id": "HUB-109",
+  "id": "HUB-055",
   "area": "intents",
   "kind": "registered",
   "description": "intents: registered",
@@ -1526,21 +770,7 @@
   }
  },
  {
-  "id": "HUB-110",
-  "area": "intents",
-  "kind": "by_config",
-  "description": "intents: by_config",
-  "args": {
-   "area": "intents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-111",
+  "id": "HUB-056",
   "area": "intents",
   "kind": "fresh",
   "description": "intents: fresh",
@@ -1554,63 +784,7 @@
   }
  },
  {
-  "id": "HUB-112",
-  "area": "intents",
-  "kind": "seam",
-  "description": "intents: seam",
-  "args": {
-   "area": "intents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-113",
-  "area": "intents",
-  "kind": "selectable",
-  "description": "intents: selectable",
-  "args": {
-   "area": "intents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-114",
-  "area": "intents",
-  "kind": "core_clean",
-  "description": "intents: core_clean",
-  "args": {
-   "area": "intents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-115",
-  "area": "intents",
-  "kind": "fake_hub",
-  "description": "intents: fake_hub",
-  "args": {
-   "area": "intents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-116",
+  "id": "HUB-057",
   "area": "intents",
   "kind": "no_reinvented",
   "description": "intents: no_reinvented",
@@ -1624,7 +798,7 @@
   }
  },
  {
-  "id": "HUB-117",
+  "id": "HUB-058",
   "area": "evals",
   "kind": "registered",
   "description": "evals: registered",
@@ -1638,21 +812,7 @@
   }
  },
  {
-  "id": "HUB-118",
-  "area": "evals",
-  "kind": "by_config",
-  "description": "evals: by_config",
-  "args": {
-   "area": "evals"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-119",
+  "id": "HUB-059",
   "area": "evals",
   "kind": "fresh",
   "description": "evals: fresh",
@@ -1666,63 +826,7 @@
   }
  },
  {
-  "id": "HUB-120",
-  "area": "evals",
-  "kind": "seam",
-  "description": "evals: seam",
-  "args": {
-   "area": "evals"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-121",
-  "area": "evals",
-  "kind": "selectable",
-  "description": "evals: selectable",
-  "args": {
-   "area": "evals"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-122",
-  "area": "evals",
-  "kind": "core_clean",
-  "description": "evals: core_clean",
-  "args": {
-   "area": "evals"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-123",
-  "area": "evals",
-  "kind": "fake_hub",
-  "description": "evals: fake_hub",
-  "args": {
-   "area": "evals"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-124",
+  "id": "HUB-060",
   "area": "evals",
   "kind": "no_reinvented",
   "description": "evals: no_reinvented",
@@ -1736,7 +840,7 @@
   }
  },
  {
-  "id": "HUB-125",
+  "id": "HUB-061",
   "area": "model_pricing",
   "kind": "registered",
   "description": "model_pricing: registered",
@@ -1750,21 +854,7 @@
   }
  },
  {
-  "id": "HUB-126",
-  "area": "model_pricing",
-  "kind": "by_config",
-  "description": "model_pricing: by_config",
-  "args": {
-   "area": "model_pricing"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-127",
+  "id": "HUB-062",
   "area": "model_pricing",
   "kind": "fresh",
   "description": "model_pricing: fresh",
@@ -1778,63 +868,7 @@
   }
  },
  {
-  "id": "HUB-128",
-  "area": "model_pricing",
-  "kind": "seam",
-  "description": "model_pricing: seam",
-  "args": {
-   "area": "model_pricing"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-129",
-  "area": "model_pricing",
-  "kind": "selectable",
-  "description": "model_pricing: selectable",
-  "args": {
-   "area": "model_pricing"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-130",
-  "area": "model_pricing",
-  "kind": "core_clean",
-  "description": "model_pricing: core_clean",
-  "args": {
-   "area": "model_pricing"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-131",
-  "area": "model_pricing",
-  "kind": "fake_hub",
-  "description": "model_pricing: fake_hub",
-  "args": {
-   "area": "model_pricing"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-132",
+  "id": "HUB-063",
   "area": "model_pricing",
   "kind": "no_reinvented",
   "description": "model_pricing: no_reinvented",
@@ -1848,7 +882,7 @@
   }
  },
  {
-  "id": "HUB-133",
+  "id": "HUB-064",
   "area": "prompts",
   "kind": "registered",
   "description": "prompts: registered",
@@ -1862,21 +896,7 @@
   }
  },
  {
-  "id": "HUB-134",
-  "area": "prompts",
-  "kind": "by_config",
-  "description": "prompts: by_config",
-  "args": {
-   "area": "prompts"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-135",
+  "id": "HUB-065",
   "area": "prompts",
   "kind": "fresh",
   "description": "prompts: fresh",
@@ -1890,63 +910,7 @@
   }
  },
  {
-  "id": "HUB-136",
-  "area": "prompts",
-  "kind": "seam",
-  "description": "prompts: seam",
-  "args": {
-   "area": "prompts"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-137",
-  "area": "prompts",
-  "kind": "selectable",
-  "description": "prompts: selectable",
-  "args": {
-   "area": "prompts"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-138",
-  "area": "prompts",
-  "kind": "core_clean",
-  "description": "prompts: core_clean",
-  "args": {
-   "area": "prompts"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-139",
-  "area": "prompts",
-  "kind": "fake_hub",
-  "description": "prompts: fake_hub",
-  "args": {
-   "area": "prompts"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-140",
+  "id": "HUB-066",
   "area": "prompts",
   "kind": "no_reinvented",
   "description": "prompts: no_reinvented",
@@ -1960,7 +924,7 @@
   }
  },
  {
-  "id": "HUB-141",
+  "id": "HUB-067",
   "area": "observability",
   "kind": "registered",
   "description": "observability: registered",
@@ -1974,21 +938,7 @@
   }
  },
  {
-  "id": "HUB-142",
-  "area": "observability",
-  "kind": "by_config",
-  "description": "observability: by_config",
-  "args": {
-   "area": "observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-143",
+  "id": "HUB-068",
   "area": "observability",
   "kind": "fresh",
   "description": "observability: fresh",
@@ -2002,63 +952,7 @@
   }
  },
  {
-  "id": "HUB-144",
-  "area": "observability",
-  "kind": "seam",
-  "description": "observability: seam",
-  "args": {
-   "area": "observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-145",
-  "area": "observability",
-  "kind": "selectable",
-  "description": "observability: selectable",
-  "args": {
-   "area": "observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-146",
-  "area": "observability",
-  "kind": "core_clean",
-  "description": "observability: core_clean",
-  "args": {
-   "area": "observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-147",
-  "area": "observability",
-  "kind": "fake_hub",
-  "description": "observability: fake_hub",
-  "args": {
-   "area": "observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-148",
+  "id": "HUB-069",
   "area": "observability",
   "kind": "no_reinvented",
   "description": "observability: no_reinvented",
@@ -2072,7 +966,7 @@
   }
  },
  {
-  "id": "HUB-149",
+  "id": "HUB-070",
   "area": "config",
   "kind": "registered",
   "description": "config: registered",
@@ -2086,21 +980,7 @@
   }
  },
  {
-  "id": "HUB-150",
-  "area": "config",
-  "kind": "by_config",
-  "description": "config: by_config",
-  "args": {
-   "area": "config"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-151",
+  "id": "HUB-071",
   "area": "config",
   "kind": "fresh",
   "description": "config: fresh",
@@ -2114,63 +994,7 @@
   }
  },
  {
-  "id": "HUB-152",
-  "area": "config",
-  "kind": "seam",
-  "description": "config: seam",
-  "args": {
-   "area": "config"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-153",
-  "area": "config",
-  "kind": "selectable",
-  "description": "config: selectable",
-  "args": {
-   "area": "config"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-154",
-  "area": "config",
-  "kind": "core_clean",
-  "description": "config: core_clean",
-  "args": {
-   "area": "config"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-155",
-  "area": "config",
-  "kind": "fake_hub",
-  "description": "config: fake_hub",
-  "args": {
-   "area": "config"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-156",
+  "id": "HUB-072",
   "area": "config",
   "kind": "no_reinvented",
   "description": "config: no_reinvented",
@@ -2184,7 +1008,7 @@
   }
  },
  {
-  "id": "HUB-157",
+  "id": "HUB-073",
   "area": "agent_orchestration",
   "kind": "registered",
   "description": "agent_orchestration: registered",
@@ -2198,21 +1022,7 @@
   }
  },
  {
-  "id": "HUB-158",
-  "area": "agent_orchestration",
-  "kind": "by_config",
-  "description": "agent_orchestration: by_config",
-  "args": {
-   "area": "agent_orchestration"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-159",
+  "id": "HUB-074",
   "area": "agent_orchestration",
   "kind": "fresh",
   "description": "agent_orchestration: fresh",
@@ -2226,63 +1036,7 @@
   }
  },
  {
-  "id": "HUB-160",
-  "area": "agent_orchestration",
-  "kind": "seam",
-  "description": "agent_orchestration: seam",
-  "args": {
-   "area": "agent_orchestration"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-161",
-  "area": "agent_orchestration",
-  "kind": "selectable",
-  "description": "agent_orchestration: selectable",
-  "args": {
-   "area": "agent_orchestration"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-162",
-  "area": "agent_orchestration",
-  "kind": "core_clean",
-  "description": "agent_orchestration: core_clean",
-  "args": {
-   "area": "agent_orchestration"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-163",
-  "area": "agent_orchestration",
-  "kind": "fake_hub",
-  "description": "agent_orchestration: fake_hub",
-  "args": {
-   "area": "agent_orchestration"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-164",
+  "id": "HUB-075",
   "area": "agent_orchestration",
   "kind": "no_reinvented",
   "description": "agent_orchestration: no_reinvented",
@@ -2296,7 +1050,7 @@
   }
  },
  {
-  "id": "HUB-165",
+  "id": "HUB-076",
   "area": "structured_output",
   "kind": "registered",
   "description": "structured_output: registered",
@@ -2310,21 +1064,7 @@
   }
  },
  {
-  "id": "HUB-166",
-  "area": "structured_output",
-  "kind": "by_config",
-  "description": "structured_output: by_config",
-  "args": {
-   "area": "structured_output"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-167",
+  "id": "HUB-077",
   "area": "structured_output",
   "kind": "fresh",
   "description": "structured_output: fresh",
@@ -2338,63 +1078,7 @@
   }
  },
  {
-  "id": "HUB-168",
-  "area": "structured_output",
-  "kind": "seam",
-  "description": "structured_output: seam",
-  "args": {
-   "area": "structured_output"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-169",
-  "area": "structured_output",
-  "kind": "selectable",
-  "description": "structured_output: selectable",
-  "args": {
-   "area": "structured_output"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-170",
-  "area": "structured_output",
-  "kind": "core_clean",
-  "description": "structured_output: core_clean",
-  "args": {
-   "area": "structured_output"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-171",
-  "area": "structured_output",
-  "kind": "fake_hub",
-  "description": "structured_output: fake_hub",
-  "args": {
-   "area": "structured_output"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-172",
+  "id": "HUB-078",
   "area": "structured_output",
   "kind": "no_reinvented",
   "description": "structured_output: no_reinvented",
@@ -2408,7 +1092,7 @@
   }
  },
  {
-  "id": "HUB-173",
+  "id": "HUB-079",
   "area": "prompt_optimization",
   "kind": "registered",
   "description": "prompt_optimization: registered",
@@ -2422,21 +1106,7 @@
   }
  },
  {
-  "id": "HUB-174",
-  "area": "prompt_optimization",
-  "kind": "by_config",
-  "description": "prompt_optimization: by_config",
-  "args": {
-   "area": "prompt_optimization"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-175",
+  "id": "HUB-080",
   "area": "prompt_optimization",
   "kind": "fresh",
   "description": "prompt_optimization: fresh",
@@ -2450,63 +1120,7 @@
   }
  },
  {
-  "id": "HUB-176",
-  "area": "prompt_optimization",
-  "kind": "seam",
-  "description": "prompt_optimization: seam",
-  "args": {
-   "area": "prompt_optimization"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-177",
-  "area": "prompt_optimization",
-  "kind": "selectable",
-  "description": "prompt_optimization: selectable",
-  "args": {
-   "area": "prompt_optimization"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-178",
-  "area": "prompt_optimization",
-  "kind": "core_clean",
-  "description": "prompt_optimization: core_clean",
-  "args": {
-   "area": "prompt_optimization"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-179",
-  "area": "prompt_optimization",
-  "kind": "fake_hub",
-  "description": "prompt_optimization: fake_hub",
-  "args": {
-   "area": "prompt_optimization"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-180",
+  "id": "HUB-081",
   "area": "prompt_optimization",
   "kind": "no_reinvented",
   "description": "prompt_optimization: no_reinvented",
@@ -2520,7 +1134,7 @@
   }
  },
  {
-  "id": "HUB-181",
+  "id": "HUB-082",
   "area": "model_providers",
   "kind": "registered",
   "description": "model_providers: registered",
@@ -2534,21 +1148,7 @@
   }
  },
  {
-  "id": "HUB-182",
-  "area": "model_providers",
-  "kind": "by_config",
-  "description": "model_providers: by_config",
-  "args": {
-   "area": "model_providers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-183",
+  "id": "HUB-083",
   "area": "model_providers",
   "kind": "fresh",
   "description": "model_providers: fresh",
@@ -2562,63 +1162,7 @@
   }
  },
  {
-  "id": "HUB-184",
-  "area": "model_providers",
-  "kind": "seam",
-  "description": "model_providers: seam",
-  "args": {
-   "area": "model_providers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-185",
-  "area": "model_providers",
-  "kind": "selectable",
-  "description": "model_providers: selectable",
-  "args": {
-   "area": "model_providers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-186",
-  "area": "model_providers",
-  "kind": "core_clean",
-  "description": "model_providers: core_clean",
-  "args": {
-   "area": "model_providers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-187",
-  "area": "model_providers",
-  "kind": "fake_hub",
-  "description": "model_providers: fake_hub",
-  "args": {
-   "area": "model_providers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-188",
+  "id": "HUB-084",
   "area": "model_providers",
   "kind": "no_reinvented",
   "description": "model_providers: no_reinvented",
@@ -2632,7 +1176,7 @@
   }
  },
  {
-  "id": "HUB-189",
+  "id": "HUB-085",
   "area": "assembly_runtime",
   "kind": "registered",
   "description": "assembly_runtime: registered",
@@ -2646,7 +1190,7 @@
   }
  },
  {
-  "id": "HUB-190",
+  "id": "HUB-086",
   "area": "assembly_runtime",
   "kind": "fresh",
   "description": "assembly_runtime: fresh",
@@ -2660,21 +1204,7 @@
   }
  },
  {
-  "id": "HUB-191",
-  "area": "assembly_runtime",
-  "kind": "core_clean",
-  "description": "assembly_runtime: core_clean",
-  "args": {
-   "area": "assembly_runtime"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-192",
+  "id": "HUB-087",
   "area": "assembly_runtime",
   "kind": "no_reinvented",
   "description": "assembly_runtime: no_reinvented",
@@ -2688,7 +1218,7 @@
   }
  },
  {
-  "id": "HUB-193",
+  "id": "HUB-088",
   "area": "assembly_observability",
   "kind": "registered",
   "description": "assembly_observability: registered",
@@ -2702,21 +1232,7 @@
   }
  },
  {
-  "id": "HUB-194",
-  "area": "assembly_observability",
-  "kind": "by_config",
-  "description": "assembly_observability: by_config",
-  "args": {
-   "area": "assembly_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-195",
+  "id": "HUB-089",
   "area": "assembly_observability",
   "kind": "fresh",
   "description": "assembly_observability: fresh",
@@ -2730,63 +1246,7 @@
   }
  },
  {
-  "id": "HUB-196",
-  "area": "assembly_observability",
-  "kind": "seam",
-  "description": "assembly_observability: seam",
-  "args": {
-   "area": "assembly_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-197",
-  "area": "assembly_observability",
-  "kind": "selectable",
-  "description": "assembly_observability: selectable",
-  "args": {
-   "area": "assembly_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-198",
-  "area": "assembly_observability",
-  "kind": "core_clean",
-  "description": "assembly_observability: core_clean",
-  "args": {
-   "area": "assembly_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-199",
-  "area": "assembly_observability",
-  "kind": "fake_hub",
-  "description": "assembly_observability: fake_hub",
-  "args": {
-   "area": "assembly_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-200",
+  "id": "HUB-090",
   "area": "assembly_observability",
   "kind": "no_reinvented",
   "description": "assembly_observability: no_reinvented",
@@ -2800,7 +1260,7 @@
   }
  },
  {
-  "id": "HUB-201",
+  "id": "HUB-091",
   "area": "assembly_protocols",
   "kind": "registered",
   "description": "assembly_protocols: registered",
@@ -2814,7 +1274,7 @@
   }
  },
  {
-  "id": "HUB-202",
+  "id": "HUB-092",
   "area": "assembly_protocols",
   "kind": "fresh",
   "description": "assembly_protocols: fresh",
@@ -2828,21 +1288,7 @@
   }
  },
  {
-  "id": "HUB-203",
-  "area": "assembly_protocols",
-  "kind": "core_clean",
-  "description": "assembly_protocols: core_clean",
-  "args": {
-   "area": "assembly_protocols"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-204",
+  "id": "HUB-093",
   "area": "assembly_protocols",
   "kind": "no_reinvented",
   "description": "assembly_protocols: no_reinvented",
@@ -2856,7 +1302,7 @@
   }
  },
  {
-  "id": "HUB-205",
+  "id": "HUB-094",
   "area": "vector_store",
   "kind": "registered",
   "description": "vector_store: registered",
@@ -2870,7 +1316,7 @@
   }
  },
  {
-  "id": "HUB-206",
+  "id": "HUB-095",
   "area": "vector_store",
   "kind": "fresh",
   "description": "vector_store: fresh",
@@ -2884,21 +1330,7 @@
   }
  },
  {
-  "id": "HUB-207",
-  "area": "vector_store",
-  "kind": "core_clean",
-  "description": "vector_store: core_clean",
-  "args": {
-   "area": "vector_store"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-208",
+  "id": "HUB-096",
   "area": "vector_store",
   "kind": "no_reinvented",
   "description": "vector_store: no_reinvented",
@@ -2912,7 +1344,7 @@
   }
  },
  {
-  "id": "HUB-209",
+  "id": "HUB-097",
   "area": "embeddings",
   "kind": "registered",
   "description": "embeddings: registered",
@@ -2926,21 +1358,7 @@
   }
  },
  {
-  "id": "HUB-210",
-  "area": "embeddings",
-  "kind": "by_config",
-  "description": "embeddings: by_config",
-  "args": {
-   "area": "embeddings"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-211",
+  "id": "HUB-098",
   "area": "embeddings",
   "kind": "fresh",
   "description": "embeddings: fresh",
@@ -2954,63 +1372,7 @@
   }
  },
  {
-  "id": "HUB-212",
-  "area": "embeddings",
-  "kind": "seam",
-  "description": "embeddings: seam",
-  "args": {
-   "area": "embeddings"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-213",
-  "area": "embeddings",
-  "kind": "selectable",
-  "description": "embeddings: selectable",
-  "args": {
-   "area": "embeddings"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-214",
-  "area": "embeddings",
-  "kind": "core_clean",
-  "description": "embeddings: core_clean",
-  "args": {
-   "area": "embeddings"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-215",
-  "area": "embeddings",
-  "kind": "fake_hub",
-  "description": "embeddings: fake_hub",
-  "args": {
-   "area": "embeddings"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-216",
+  "id": "HUB-099",
   "area": "embeddings",
   "kind": "no_reinvented",
   "description": "embeddings: no_reinvented",
@@ -3024,7 +1386,7 @@
   }
  },
  {
-  "id": "HUB-217",
+  "id": "HUB-100",
   "area": "agent_harness",
   "kind": "registered",
   "description": "agent_harness: registered",
@@ -3038,21 +1400,7 @@
   }
  },
  {
-  "id": "HUB-218",
-  "area": "agent_harness",
-  "kind": "by_config",
-  "description": "agent_harness: by_config",
-  "args": {
-   "area": "agent_harness"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-219",
+  "id": "HUB-101",
   "area": "agent_harness",
   "kind": "fresh",
   "description": "agent_harness: fresh",
@@ -3066,63 +1414,7 @@
   }
  },
  {
-  "id": "HUB-220",
-  "area": "agent_harness",
-  "kind": "seam",
-  "description": "agent_harness: seam",
-  "args": {
-   "area": "agent_harness"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-221",
-  "area": "agent_harness",
-  "kind": "selectable",
-  "description": "agent_harness: selectable",
-  "args": {
-   "area": "agent_harness"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-222",
-  "area": "agent_harness",
-  "kind": "core_clean",
-  "description": "agent_harness: core_clean",
-  "args": {
-   "area": "agent_harness"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-223",
-  "area": "agent_harness",
-  "kind": "fake_hub",
-  "description": "agent_harness: fake_hub",
-  "args": {
-   "area": "agent_harness"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-224",
+  "id": "HUB-102",
   "area": "agent_harness",
   "kind": "no_reinvented",
   "description": "agent_harness: no_reinvented",
@@ -3136,7 +1428,7 @@
   }
  },
  {
-  "id": "HUB-225",
+  "id": "HUB-103",
   "area": "code_edit",
   "kind": "registered",
   "description": "code_edit: registered",
@@ -3150,7 +1442,7 @@
   }
  },
  {
-  "id": "HUB-226",
+  "id": "HUB-104",
   "area": "code_edit",
   "kind": "fresh",
   "description": "code_edit: fresh",
@@ -3164,21 +1456,7 @@
   }
  },
  {
-  "id": "HUB-227",
-  "area": "code_edit",
-  "kind": "core_clean",
-  "description": "code_edit: core_clean",
-  "args": {
-   "area": "code_edit"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-228",
+  "id": "HUB-105",
   "area": "code_edit",
   "kind": "no_reinvented",
   "description": "code_edit: no_reinvented",
@@ -3192,7 +1470,7 @@
   }
  },
  {
-  "id": "HUB-229",
+  "id": "HUB-106",
   "area": "code_search",
   "kind": "registered",
   "description": "code_search: registered",
@@ -3206,7 +1484,7 @@
   }
  },
  {
-  "id": "HUB-230",
+  "id": "HUB-107",
   "area": "code_search",
   "kind": "fresh",
   "description": "code_search: fresh",
@@ -3220,21 +1498,7 @@
   }
  },
  {
-  "id": "HUB-231",
-  "area": "code_search",
-  "kind": "core_clean",
-  "description": "code_search: core_clean",
-  "args": {
-   "area": "code_search"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-232",
+  "id": "HUB-108",
   "area": "code_search",
   "kind": "no_reinvented",
   "description": "code_search: no_reinvented",
@@ -3248,7 +1512,7 @@
   }
  },
  {
-  "id": "HUB-233",
+  "id": "HUB-109",
   "area": "deep_run_cost",
   "kind": "registered",
   "description": "deep_run_cost: registered",
@@ -3262,7 +1526,7 @@
   }
  },
  {
-  "id": "HUB-234",
+  "id": "HUB-110",
   "area": "deep_run_cost",
   "kind": "fresh",
   "description": "deep_run_cost: fresh",
@@ -3276,21 +1540,7 @@
   }
  },
  {
-  "id": "HUB-235",
-  "area": "deep_run_cost",
-  "kind": "core_clean",
-  "description": "deep_run_cost: core_clean",
-  "args": {
-   "area": "deep_run_cost"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-236",
+  "id": "HUB-111",
   "area": "deep_run_cost",
   "kind": "no_reinvented",
   "description": "deep_run_cost: no_reinvented",
@@ -3304,7 +1554,7 @@
   }
  },
  {
-  "id": "HUB-237",
+  "id": "HUB-112",
   "area": "command_sandbox",
   "kind": "registered",
   "description": "command_sandbox: registered",
@@ -3318,21 +1568,7 @@
   }
  },
  {
-  "id": "HUB-238",
-  "area": "command_sandbox",
-  "kind": "by_config",
-  "description": "command_sandbox: by_config",
-  "args": {
-   "area": "command_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-239",
+  "id": "HUB-113",
   "area": "command_sandbox",
   "kind": "fresh",
   "description": "command_sandbox: fresh",
@@ -3346,63 +1582,7 @@
   }
  },
  {
-  "id": "HUB-240",
-  "area": "command_sandbox",
-  "kind": "seam",
-  "description": "command_sandbox: seam",
-  "args": {
-   "area": "command_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-241",
-  "area": "command_sandbox",
-  "kind": "selectable",
-  "description": "command_sandbox: selectable",
-  "args": {
-   "area": "command_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-242",
-  "area": "command_sandbox",
-  "kind": "core_clean",
-  "description": "command_sandbox: core_clean",
-  "args": {
-   "area": "command_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-243",
-  "area": "command_sandbox",
-  "kind": "fake_hub",
-  "description": "command_sandbox: fake_hub",
-  "args": {
-   "area": "command_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-244",
+  "id": "HUB-114",
   "area": "command_sandbox",
   "kind": "no_reinvented",
   "description": "command_sandbox: no_reinvented",
@@ -3416,7 +1596,7 @@
   }
  },
  {
-  "id": "HUB-245",
+  "id": "HUB-115",
   "area": "subagents",
   "kind": "registered",
   "description": "subagents: registered",
@@ -3430,21 +1610,7 @@
   }
  },
  {
-  "id": "HUB-246",
-  "area": "subagents",
-  "kind": "by_config",
-  "description": "subagents: by_config",
-  "args": {
-   "area": "subagents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-247",
+  "id": "HUB-116",
   "area": "subagents",
   "kind": "fresh",
   "description": "subagents: fresh",
@@ -3458,63 +1624,7 @@
   }
  },
  {
-  "id": "HUB-248",
-  "area": "subagents",
-  "kind": "seam",
-  "description": "subagents: seam",
-  "args": {
-   "area": "subagents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-249",
-  "area": "subagents",
-  "kind": "selectable",
-  "description": "subagents: selectable",
-  "args": {
-   "area": "subagents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-250",
-  "area": "subagents",
-  "kind": "core_clean",
-  "description": "subagents: core_clean",
-  "args": {
-   "area": "subagents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-251",
-  "area": "subagents",
-  "kind": "fake_hub",
-  "description": "subagents: fake_hub",
-  "args": {
-   "area": "subagents"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-252",
+  "id": "HUB-117",
   "area": "subagents",
   "kind": "no_reinvented",
   "description": "subagents: no_reinvented",
@@ -3528,7 +1638,7 @@
   }
  },
  {
-  "id": "HUB-253",
+  "id": "HUB-118",
   "area": "agent_verify",
   "kind": "registered",
   "description": "agent_verify: registered",
@@ -3542,7 +1652,7 @@
   }
  },
  {
-  "id": "HUB-254",
+  "id": "HUB-119",
   "area": "agent_verify",
   "kind": "fresh",
   "description": "agent_verify: fresh",
@@ -3556,21 +1666,7 @@
   }
  },
  {
-  "id": "HUB-255",
-  "area": "agent_verify",
-  "kind": "core_clean",
-  "description": "agent_verify: core_clean",
-  "args": {
-   "area": "agent_verify"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-256",
+  "id": "HUB-120",
   "area": "agent_verify",
   "kind": "no_reinvented",
   "description": "agent_verify: no_reinvented",
@@ -3584,7 +1680,7 @@
   }
  },
  {
-  "id": "HUB-257",
+  "id": "HUB-121",
   "area": "agent_bench",
   "kind": "registered",
   "description": "agent_bench: registered",
@@ -3598,7 +1694,7 @@
   }
  },
  {
-  "id": "HUB-258",
+  "id": "HUB-122",
   "area": "agent_bench",
   "kind": "fresh",
   "description": "agent_bench: fresh",
@@ -3612,21 +1708,7 @@
   }
  },
  {
-  "id": "HUB-259",
-  "area": "agent_bench",
-  "kind": "core_clean",
-  "description": "agent_bench: core_clean",
-  "args": {
-   "area": "agent_bench"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-260",
+  "id": "HUB-123",
   "area": "agent_bench",
   "kind": "no_reinvented",
   "description": "agent_bench: no_reinvented",
@@ -3640,7 +1722,7 @@
   }
  },
  {
-  "id": "HUB-261",
+  "id": "HUB-124",
   "area": "context_assembly",
   "kind": "registered",
   "description": "context_assembly: registered",
@@ -3654,21 +1736,7 @@
   }
  },
  {
-  "id": "HUB-262",
-  "area": "context_assembly",
-  "kind": "by_config",
-  "description": "context_assembly: by_config",
-  "args": {
-   "area": "context_assembly"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-263",
+  "id": "HUB-125",
   "area": "context_assembly",
   "kind": "fresh",
   "description": "context_assembly: fresh",
@@ -3682,63 +1750,7 @@
   }
  },
  {
-  "id": "HUB-264",
-  "area": "context_assembly",
-  "kind": "seam",
-  "description": "context_assembly: seam",
-  "args": {
-   "area": "context_assembly"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-265",
-  "area": "context_assembly",
-  "kind": "selectable",
-  "description": "context_assembly: selectable",
-  "args": {
-   "area": "context_assembly"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-266",
-  "area": "context_assembly",
-  "kind": "core_clean",
-  "description": "context_assembly: core_clean",
-  "args": {
-   "area": "context_assembly"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-267",
-  "area": "context_assembly",
-  "kind": "fake_hub",
-  "description": "context_assembly: fake_hub",
-  "args": {
-   "area": "context_assembly"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-268",
+  "id": "HUB-126",
   "area": "context_assembly",
   "kind": "no_reinvented",
   "description": "context_assembly: no_reinvented",
@@ -3752,7 +1764,7 @@
   }
  },
  {
-  "id": "HUB-269",
+  "id": "HUB-127",
   "area": "code_context",
   "kind": "registered",
   "description": "code_context: registered",
@@ -3766,21 +1778,7 @@
   }
  },
  {
-  "id": "HUB-270",
-  "area": "code_context",
-  "kind": "by_config",
-  "description": "code_context: by_config",
-  "args": {
-   "area": "code_context"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-271",
+  "id": "HUB-128",
   "area": "code_context",
   "kind": "fresh",
   "description": "code_context: fresh",
@@ -3794,63 +1792,7 @@
   }
  },
  {
-  "id": "HUB-272",
-  "area": "code_context",
-  "kind": "seam",
-  "description": "code_context: seam",
-  "args": {
-   "area": "code_context"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-273",
-  "area": "code_context",
-  "kind": "selectable",
-  "description": "code_context: selectable",
-  "args": {
-   "area": "code_context"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-274",
-  "area": "code_context",
-  "kind": "core_clean",
-  "description": "code_context: core_clean",
-  "args": {
-   "area": "code_context"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-275",
-  "area": "code_context",
-  "kind": "fake_hub",
-  "description": "code_context: fake_hub",
-  "args": {
-   "area": "code_context"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-276",
+  "id": "HUB-129",
   "area": "code_context",
   "kind": "no_reinvented",
   "description": "code_context: no_reinvented",
@@ -3864,7 +1806,7 @@
   }
  },
  {
-  "id": "HUB-277",
+  "id": "HUB-130",
   "area": "reranking",
   "kind": "registered",
   "description": "reranking: registered",
@@ -3878,21 +1820,7 @@
   }
  },
  {
-  "id": "HUB-278",
-  "area": "reranking",
-  "kind": "by_config",
-  "description": "reranking: by_config",
-  "args": {
-   "area": "reranking"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-279",
+  "id": "HUB-131",
   "area": "reranking",
   "kind": "fresh",
   "description": "reranking: fresh",
@@ -3906,63 +1834,7 @@
   }
  },
  {
-  "id": "HUB-280",
-  "area": "reranking",
-  "kind": "seam",
-  "description": "reranking: seam",
-  "args": {
-   "area": "reranking"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-281",
-  "area": "reranking",
-  "kind": "selectable",
-  "description": "reranking: selectable",
-  "args": {
-   "area": "reranking"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-282",
-  "area": "reranking",
-  "kind": "core_clean",
-  "description": "reranking: core_clean",
-  "args": {
-   "area": "reranking"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-283",
-  "area": "reranking",
-  "kind": "fake_hub",
-  "description": "reranking: fake_hub",
-  "args": {
-   "area": "reranking"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-284",
+  "id": "HUB-132",
   "area": "reranking",
   "kind": "no_reinvented",
   "description": "reranking: no_reinvented",
@@ -3976,7 +1848,7 @@
   }
  },
  {
-  "id": "HUB-285",
+  "id": "HUB-133",
   "area": "memory",
   "kind": "registered",
   "description": "memory: registered",
@@ -3990,21 +1862,7 @@
   }
  },
  {
-  "id": "HUB-286",
-  "area": "memory",
-  "kind": "by_config",
-  "description": "memory: by_config",
-  "args": {
-   "area": "memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-287",
+  "id": "HUB-134",
   "area": "memory",
   "kind": "fresh",
   "description": "memory: fresh",
@@ -4018,63 +1876,7 @@
   }
  },
  {
-  "id": "HUB-288",
-  "area": "memory",
-  "kind": "seam",
-  "description": "memory: seam",
-  "args": {
-   "area": "memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-289",
-  "area": "memory",
-  "kind": "selectable",
-  "description": "memory: selectable",
-  "args": {
-   "area": "memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-290",
-  "area": "memory",
-  "kind": "core_clean",
-  "description": "memory: core_clean",
-  "args": {
-   "area": "memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-291",
-  "area": "memory",
-  "kind": "fake_hub",
-  "description": "memory: fake_hub",
-  "args": {
-   "area": "memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-292",
+  "id": "HUB-135",
   "area": "memory",
   "kind": "no_reinvented",
   "description": "memory: no_reinvented",
@@ -4088,7 +1890,7 @@
   }
  },
  {
-  "id": "HUB-293",
+  "id": "HUB-136",
   "area": "background_memory",
   "kind": "registered",
   "description": "background_memory: registered",
@@ -4102,21 +1904,7 @@
   }
  },
  {
-  "id": "HUB-294",
-  "area": "background_memory",
-  "kind": "by_config",
-  "description": "background_memory: by_config",
-  "args": {
-   "area": "background_memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-295",
+  "id": "HUB-137",
   "area": "background_memory",
   "kind": "fresh",
   "description": "background_memory: fresh",
@@ -4130,63 +1918,7 @@
   }
  },
  {
-  "id": "HUB-296",
-  "area": "background_memory",
-  "kind": "seam",
-  "description": "background_memory: seam",
-  "args": {
-   "area": "background_memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-297",
-  "area": "background_memory",
-  "kind": "selectable",
-  "description": "background_memory: selectable",
-  "args": {
-   "area": "background_memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-298",
-  "area": "background_memory",
-  "kind": "core_clean",
-  "description": "background_memory: core_clean",
-  "args": {
-   "area": "background_memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-299",
-  "area": "background_memory",
-  "kind": "fake_hub",
-  "description": "background_memory: fake_hub",
-  "args": {
-   "area": "background_memory"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-300",
+  "id": "HUB-138",
   "area": "background_memory",
   "kind": "no_reinvented",
   "description": "background_memory: no_reinvented",
@@ -4200,7 +1932,7 @@
   }
  },
  {
-  "id": "HUB-301",
+  "id": "HUB-139",
   "area": "context_compression",
   "kind": "registered",
   "description": "context_compression: registered",
@@ -4214,7 +1946,7 @@
   }
  },
  {
-  "id": "HUB-302",
+  "id": "HUB-140",
   "area": "context_compression",
   "kind": "fresh",
   "description": "context_compression: fresh",
@@ -4228,21 +1960,7 @@
   }
  },
  {
-  "id": "HUB-303",
-  "area": "context_compression",
-  "kind": "core_clean",
-  "description": "context_compression: core_clean",
-  "args": {
-   "area": "context_compression"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-304",
+  "id": "HUB-141",
   "area": "context_compression",
   "kind": "no_reinvented",
   "description": "context_compression: no_reinvented",
@@ -4256,7 +1974,7 @@
   }
  },
  {
-  "id": "HUB-305",
+  "id": "HUB-142",
   "area": "prompt_cache",
   "kind": "registered",
   "description": "prompt_cache: registered",
@@ -4270,7 +1988,7 @@
   }
  },
  {
-  "id": "HUB-306",
+  "id": "HUB-143",
   "area": "prompt_cache",
   "kind": "fresh",
   "description": "prompt_cache: fresh",
@@ -4284,21 +2002,7 @@
   }
  },
  {
-  "id": "HUB-307",
-  "area": "prompt_cache",
-  "kind": "core_clean",
-  "description": "prompt_cache: core_clean",
-  "args": {
-   "area": "prompt_cache"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-308",
+  "id": "HUB-144",
   "area": "prompt_cache",
   "kind": "no_reinvented",
   "description": "prompt_cache: no_reinvented",
@@ -4312,7 +2016,7 @@
   }
  },
  {
-  "id": "HUB-309",
+  "id": "HUB-145",
   "area": "graph_rag",
   "kind": "registered",
   "description": "graph_rag: registered",
@@ -4326,7 +2030,7 @@
   }
  },
  {
-  "id": "HUB-310",
+  "id": "HUB-146",
   "area": "graph_rag",
   "kind": "fresh",
   "description": "graph_rag: fresh",
@@ -4340,21 +2044,7 @@
   }
  },
  {
-  "id": "HUB-311",
-  "area": "graph_rag",
-  "kind": "core_clean",
-  "description": "graph_rag: core_clean",
-  "args": {
-   "area": "graph_rag"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-312",
+  "id": "HUB-147",
   "area": "graph_rag",
   "kind": "no_reinvented",
   "description": "graph_rag: no_reinvented",
@@ -4368,7 +2058,7 @@
   }
  },
  {
-  "id": "HUB-313",
+  "id": "HUB-148",
   "area": "context_benchmarks",
   "kind": "registered",
   "description": "context_benchmarks: registered",
@@ -4382,7 +2072,7 @@
   }
  },
  {
-  "id": "HUB-314",
+  "id": "HUB-149",
   "area": "context_benchmarks",
   "kind": "fresh",
   "description": "context_benchmarks: fresh",
@@ -4396,21 +2086,7 @@
   }
  },
  {
-  "id": "HUB-315",
-  "area": "context_benchmarks",
-  "kind": "core_clean",
-  "description": "context_benchmarks: core_clean",
-  "args": {
-   "area": "context_benchmarks"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-316",
+  "id": "HUB-150",
   "area": "context_benchmarks",
   "kind": "no_reinvented",
   "description": "context_benchmarks: no_reinvented",
@@ -4424,7 +2100,7 @@
   }
  },
  {
-  "id": "HUB-317",
+  "id": "HUB-151",
   "area": "science_find_evidence",
   "kind": "registered",
   "description": "science_find_evidence: registered",
@@ -4438,21 +2114,7 @@
   }
  },
  {
-  "id": "HUB-318",
-  "area": "science_find_evidence",
-  "kind": "by_config",
-  "description": "science_find_evidence: by_config",
-  "args": {
-   "area": "science_find_evidence"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-319",
+  "id": "HUB-152",
   "area": "science_find_evidence",
   "kind": "fresh",
   "description": "science_find_evidence: fresh",
@@ -4466,63 +2128,7 @@
   }
  },
  {
-  "id": "HUB-320",
-  "area": "science_find_evidence",
-  "kind": "seam",
-  "description": "science_find_evidence: seam",
-  "args": {
-   "area": "science_find_evidence"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-321",
-  "area": "science_find_evidence",
-  "kind": "selectable",
-  "description": "science_find_evidence: selectable",
-  "args": {
-   "area": "science_find_evidence"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-322",
-  "area": "science_find_evidence",
-  "kind": "core_clean",
-  "description": "science_find_evidence: core_clean",
-  "args": {
-   "area": "science_find_evidence"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-323",
-  "area": "science_find_evidence",
-  "kind": "fake_hub",
-  "description": "science_find_evidence: fake_hub",
-  "args": {
-   "area": "science_find_evidence"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-324",
+  "id": "HUB-153",
   "area": "science_find_evidence",
   "kind": "no_reinvented",
   "description": "science_find_evidence: no_reinvented",
@@ -4536,7 +2142,7 @@
   }
  },
  {
-  "id": "HUB-325",
+  "id": "HUB-154",
   "area": "science_read_papers",
   "kind": "registered",
   "description": "science_read_papers: registered",
@@ -4550,21 +2156,7 @@
   }
  },
  {
-  "id": "HUB-326",
-  "area": "science_read_papers",
-  "kind": "by_config",
-  "description": "science_read_papers: by_config",
-  "args": {
-   "area": "science_read_papers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-327",
+  "id": "HUB-155",
   "area": "science_read_papers",
   "kind": "fresh",
   "description": "science_read_papers: fresh",
@@ -4578,63 +2170,7 @@
   }
  },
  {
-  "id": "HUB-328",
-  "area": "science_read_papers",
-  "kind": "seam",
-  "description": "science_read_papers: seam",
-  "args": {
-   "area": "science_read_papers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-329",
-  "area": "science_read_papers",
-  "kind": "selectable",
-  "description": "science_read_papers: selectable",
-  "args": {
-   "area": "science_read_papers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-330",
-  "area": "science_read_papers",
-  "kind": "core_clean",
-  "description": "science_read_papers: core_clean",
-  "args": {
-   "area": "science_read_papers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-331",
-  "area": "science_read_papers",
-  "kind": "fake_hub",
-  "description": "science_read_papers: fake_hub",
-  "args": {
-   "area": "science_read_papers"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-332",
+  "id": "HUB-156",
   "area": "science_read_papers",
   "kind": "no_reinvented",
   "description": "science_read_papers: no_reinvented",
@@ -4648,7 +2184,7 @@
   }
  },
  {
-  "id": "HUB-333",
+  "id": "HUB-157",
   "area": "science_verify_claims",
   "kind": "registered",
   "description": "science_verify_claims: registered",
@@ -4662,21 +2198,7 @@
   }
  },
  {
-  "id": "HUB-334",
-  "area": "science_verify_claims",
-  "kind": "by_config",
-  "description": "science_verify_claims: by_config",
-  "args": {
-   "area": "science_verify_claims"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-335",
+  "id": "HUB-158",
   "area": "science_verify_claims",
   "kind": "fresh",
   "description": "science_verify_claims: fresh",
@@ -4690,63 +2212,7 @@
   }
  },
  {
-  "id": "HUB-336",
-  "area": "science_verify_claims",
-  "kind": "seam",
-  "description": "science_verify_claims: seam",
-  "args": {
-   "area": "science_verify_claims"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-337",
-  "area": "science_verify_claims",
-  "kind": "selectable",
-  "description": "science_verify_claims: selectable",
-  "args": {
-   "area": "science_verify_claims"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-338",
-  "area": "science_verify_claims",
-  "kind": "core_clean",
-  "description": "science_verify_claims: core_clean",
-  "args": {
-   "area": "science_verify_claims"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-339",
-  "area": "science_verify_claims",
-  "kind": "fake_hub",
-  "description": "science_verify_claims: fake_hub",
-  "args": {
-   "area": "science_verify_claims"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-340",
+  "id": "HUB-159",
   "area": "science_verify_claims",
   "kind": "no_reinvented",
   "description": "science_verify_claims: no_reinvented",
@@ -4760,7 +2226,7 @@
   }
  },
  {
-  "id": "HUB-341",
+  "id": "HUB-160",
   "area": "science_hypotheses",
   "kind": "registered",
   "description": "science_hypotheses: registered",
@@ -4774,7 +2240,7 @@
   }
  },
  {
-  "id": "HUB-342",
+  "id": "HUB-161",
   "area": "science_hypotheses",
   "kind": "fresh",
   "description": "science_hypotheses: fresh",
@@ -4788,21 +2254,7 @@
   }
  },
  {
-  "id": "HUB-343",
-  "area": "science_hypotheses",
-  "kind": "core_clean",
-  "description": "science_hypotheses: core_clean",
-  "args": {
-   "area": "science_hypotheses"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-344",
+  "id": "HUB-162",
   "area": "science_hypotheses",
   "kind": "no_reinvented",
   "description": "science_hypotheses: no_reinvented",
@@ -4816,7 +2268,7 @@
   }
  },
  {
-  "id": "HUB-345",
+  "id": "HUB-163",
   "area": "science_run_analysis",
   "kind": "registered",
   "description": "science_run_analysis: registered",
@@ -4830,21 +2282,7 @@
   }
  },
  {
-  "id": "HUB-346",
-  "area": "science_run_analysis",
-  "kind": "by_config",
-  "description": "science_run_analysis: by_config",
-  "args": {
-   "area": "science_run_analysis"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-347",
+  "id": "HUB-164",
   "area": "science_run_analysis",
   "kind": "fresh",
   "description": "science_run_analysis: fresh",
@@ -4858,63 +2296,7 @@
   }
  },
  {
-  "id": "HUB-348",
-  "area": "science_run_analysis",
-  "kind": "seam",
-  "description": "science_run_analysis: seam",
-  "args": {
-   "area": "science_run_analysis"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-349",
-  "area": "science_run_analysis",
-  "kind": "selectable",
-  "description": "science_run_analysis: selectable",
-  "args": {
-   "area": "science_run_analysis"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-350",
-  "area": "science_run_analysis",
-  "kind": "core_clean",
-  "description": "science_run_analysis: core_clean",
-  "args": {
-   "area": "science_run_analysis"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-351",
-  "area": "science_run_analysis",
-  "kind": "fake_hub",
-  "description": "science_run_analysis: fake_hub",
-  "args": {
-   "area": "science_run_analysis"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-352",
+  "id": "HUB-165",
   "area": "science_run_analysis",
   "kind": "no_reinvented",
   "description": "science_run_analysis: no_reinvented",
@@ -4928,7 +2310,7 @@
   }
  },
  {
-  "id": "HUB-353",
+  "id": "HUB-166",
   "area": "science_statistics",
   "kind": "registered",
   "description": "science_statistics: registered",
@@ -4942,21 +2324,7 @@
   }
  },
  {
-  "id": "HUB-354",
-  "area": "science_statistics",
-  "kind": "by_config",
-  "description": "science_statistics: by_config",
-  "args": {
-   "area": "science_statistics"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-355",
+  "id": "HUB-167",
   "area": "science_statistics",
   "kind": "fresh",
   "description": "science_statistics: fresh",
@@ -4970,63 +2338,7 @@
   }
  },
  {
-  "id": "HUB-356",
-  "area": "science_statistics",
-  "kind": "seam",
-  "description": "science_statistics: seam",
-  "args": {
-   "area": "science_statistics"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-357",
-  "area": "science_statistics",
-  "kind": "selectable",
-  "description": "science_statistics: selectable",
-  "args": {
-   "area": "science_statistics"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-358",
-  "area": "science_statistics",
-  "kind": "core_clean",
-  "description": "science_statistics: core_clean",
-  "args": {
-   "area": "science_statistics"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-359",
-  "area": "science_statistics",
-  "kind": "fake_hub",
-  "description": "science_statistics: fake_hub",
-  "args": {
-   "area": "science_statistics"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-360",
+  "id": "HUB-168",
   "area": "science_statistics",
   "kind": "no_reinvented",
   "description": "science_statistics: no_reinvented",
@@ -5040,7 +2352,7 @@
   }
  },
  {
-  "id": "HUB-361",
+  "id": "HUB-169",
   "area": "science_provenance",
   "kind": "registered",
   "description": "science_provenance: registered",
@@ -5054,21 +2366,7 @@
   }
  },
  {
-  "id": "HUB-362",
-  "area": "science_provenance",
-  "kind": "by_config",
-  "description": "science_provenance: by_config",
-  "args": {
-   "area": "science_provenance"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-363",
+  "id": "HUB-170",
   "area": "science_provenance",
   "kind": "fresh",
   "description": "science_provenance: fresh",
@@ -5082,63 +2380,7 @@
   }
  },
  {
-  "id": "HUB-364",
-  "area": "science_provenance",
-  "kind": "seam",
-  "description": "science_provenance: seam",
-  "args": {
-   "area": "science_provenance"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-365",
-  "area": "science_provenance",
-  "kind": "selectable",
-  "description": "science_provenance: selectable",
-  "args": {
-   "area": "science_provenance"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-366",
-  "area": "science_provenance",
-  "kind": "core_clean",
-  "description": "science_provenance: core_clean",
-  "args": {
-   "area": "science_provenance"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-367",
-  "area": "science_provenance",
-  "kind": "fake_hub",
-  "description": "science_provenance: fake_hub",
-  "args": {
-   "area": "science_provenance"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-368",
+  "id": "HUB-171",
   "area": "science_provenance",
   "kind": "no_reinvented",
   "description": "science_provenance: no_reinvented",
@@ -5152,7 +2394,7 @@
   }
  },
  {
-  "id": "HUB-369",
+  "id": "HUB-172",
   "area": "science_graph",
   "kind": "registered",
   "description": "science_graph: registered",
@@ -5166,21 +2408,7 @@
   }
  },
  {
-  "id": "HUB-370",
-  "area": "science_graph",
-  "kind": "by_config",
-  "description": "science_graph: by_config",
-  "args": {
-   "area": "science_graph"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-371",
+  "id": "HUB-173",
   "area": "science_graph",
   "kind": "fresh",
   "description": "science_graph: fresh",
@@ -5194,63 +2422,7 @@
   }
  },
  {
-  "id": "HUB-372",
-  "area": "science_graph",
-  "kind": "seam",
-  "description": "science_graph: seam",
-  "args": {
-   "area": "science_graph"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-373",
-  "area": "science_graph",
-  "kind": "selectable",
-  "description": "science_graph: selectable",
-  "args": {
-   "area": "science_graph"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-374",
-  "area": "science_graph",
-  "kind": "core_clean",
-  "description": "science_graph: core_clean",
-  "args": {
-   "area": "science_graph"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-375",
-  "area": "science_graph",
-  "kind": "fake_hub",
-  "description": "science_graph: fake_hub",
-  "args": {
-   "area": "science_graph"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-376",
+  "id": "HUB-174",
   "area": "science_graph",
   "kind": "no_reinvented",
   "description": "science_graph: no_reinvented",
@@ -5264,7 +2436,7 @@
   }
  },
  {
-  "id": "HUB-377",
+  "id": "HUB-175",
   "area": "science_estimate_truth",
   "kind": "registered",
   "description": "science_estimate_truth: registered",
@@ -5278,7 +2450,7 @@
   }
  },
  {
-  "id": "HUB-378",
+  "id": "HUB-176",
   "area": "science_estimate_truth",
   "kind": "fresh",
   "description": "science_estimate_truth: fresh",
@@ -5292,21 +2464,7 @@
   }
  },
  {
-  "id": "HUB-379",
-  "area": "science_estimate_truth",
-  "kind": "core_clean",
-  "description": "science_estimate_truth: core_clean",
-  "args": {
-   "area": "science_estimate_truth"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-380",
+  "id": "HUB-177",
   "area": "science_estimate_truth",
   "kind": "no_reinvented",
   "description": "science_estimate_truth: no_reinvented",
@@ -5320,7 +2478,7 @@
   }
  },
  {
-  "id": "HUB-381",
+  "id": "HUB-178",
   "area": "integration_aggregators",
   "kind": "registered",
   "description": "integration_aggregators: registered",
@@ -5334,21 +2492,7 @@
   }
  },
  {
-  "id": "HUB-382",
-  "area": "integration_aggregators",
-  "kind": "by_config",
-  "description": "integration_aggregators: by_config",
-  "args": {
-   "area": "integration_aggregators"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-383",
+  "id": "HUB-179",
   "area": "integration_aggregators",
   "kind": "fresh",
   "description": "integration_aggregators: fresh",
@@ -5362,63 +2506,7 @@
   }
  },
  {
-  "id": "HUB-384",
-  "area": "integration_aggregators",
-  "kind": "seam",
-  "description": "integration_aggregators: seam",
-  "args": {
-   "area": "integration_aggregators"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-385",
-  "area": "integration_aggregators",
-  "kind": "selectable",
-  "description": "integration_aggregators: selectable",
-  "args": {
-   "area": "integration_aggregators"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-386",
-  "area": "integration_aggregators",
-  "kind": "core_clean",
-  "description": "integration_aggregators: core_clean",
-  "args": {
-   "area": "integration_aggregators"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-387",
-  "area": "integration_aggregators",
-  "kind": "fake_hub",
-  "description": "integration_aggregators: fake_hub",
-  "args": {
-   "area": "integration_aggregators"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-388",
+  "id": "HUB-180",
   "area": "integration_aggregators",
   "kind": "no_reinvented",
   "description": "integration_aggregators: no_reinvented",
@@ -5432,7 +2520,7 @@
   }
  },
  {
-  "id": "HUB-389",
+  "id": "HUB-181",
   "area": "agent_auth",
   "kind": "registered",
   "description": "agent_auth: registered",
@@ -5446,7 +2534,7 @@
   }
  },
  {
-  "id": "HUB-390",
+  "id": "HUB-182",
   "area": "agent_auth",
   "kind": "fresh",
   "description": "agent_auth: fresh",
@@ -5460,21 +2548,7 @@
   }
  },
  {
-  "id": "HUB-391",
-  "area": "agent_auth",
-  "kind": "core_clean",
-  "description": "agent_auth: core_clean",
-  "args": {
-   "area": "agent_auth"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-392",
+  "id": "HUB-183",
   "area": "agent_auth",
   "kind": "no_reinvented",
   "description": "agent_auth: no_reinvented",
@@ -5488,7 +2562,7 @@
   }
  },
  {
-  "id": "HUB-393",
+  "id": "HUB-184",
   "area": "vendor_mcp",
   "kind": "registered",
   "description": "vendor_mcp: registered",
@@ -5502,21 +2576,7 @@
   }
  },
  {
-  "id": "HUB-394",
-  "area": "vendor_mcp",
-  "kind": "by_config",
-  "description": "vendor_mcp: by_config",
-  "args": {
-   "area": "vendor_mcp"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-395",
+  "id": "HUB-185",
   "area": "vendor_mcp",
   "kind": "fresh",
   "description": "vendor_mcp: fresh",
@@ -5530,63 +2590,7 @@
   }
  },
  {
-  "id": "HUB-396",
-  "area": "vendor_mcp",
-  "kind": "seam",
-  "description": "vendor_mcp: seam",
-  "args": {
-   "area": "vendor_mcp"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-397",
-  "area": "vendor_mcp",
-  "kind": "selectable",
-  "description": "vendor_mcp: selectable",
-  "args": {
-   "area": "vendor_mcp"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-398",
-  "area": "vendor_mcp",
-  "kind": "core_clean",
-  "description": "vendor_mcp: core_clean",
-  "args": {
-   "area": "vendor_mcp"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-399",
-  "area": "vendor_mcp",
-  "kind": "fake_hub",
-  "description": "vendor_mcp: fake_hub",
-  "args": {
-   "area": "vendor_mcp"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-400",
+  "id": "HUB-186",
   "area": "vendor_mcp",
   "kind": "no_reinvented",
   "description": "vendor_mcp: no_reinvented",
@@ -5600,7 +2604,7 @@
   }
  },
  {
-  "id": "HUB-401",
+  "id": "HUB-187",
   "area": "mcp_gateway",
   "kind": "registered",
   "description": "mcp_gateway: registered",
@@ -5614,7 +2618,7 @@
   }
  },
  {
-  "id": "HUB-402",
+  "id": "HUB-188",
   "area": "mcp_gateway",
   "kind": "fresh",
   "description": "mcp_gateway: fresh",
@@ -5628,21 +2632,7 @@
   }
  },
  {
-  "id": "HUB-403",
-  "area": "mcp_gateway",
-  "kind": "core_clean",
-  "description": "mcp_gateway: core_clean",
-  "args": {
-   "area": "mcp_gateway"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-404",
+  "id": "HUB-189",
   "area": "mcp_gateway",
   "kind": "no_reinvented",
   "description": "mcp_gateway: no_reinvented",
@@ -5656,7 +2646,7 @@
   }
  },
  {
-  "id": "HUB-405",
+  "id": "HUB-190",
   "area": "mcp_registry",
   "kind": "registered",
   "description": "mcp_registry: registered",
@@ -5670,21 +2660,7 @@
   }
  },
  {
-  "id": "HUB-406",
-  "area": "mcp_registry",
-  "kind": "by_config",
-  "description": "mcp_registry: by_config",
-  "args": {
-   "area": "mcp_registry"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-407",
+  "id": "HUB-191",
   "area": "mcp_registry",
   "kind": "fresh",
   "description": "mcp_registry: fresh",
@@ -5698,63 +2674,7 @@
   }
  },
  {
-  "id": "HUB-408",
-  "area": "mcp_registry",
-  "kind": "seam",
-  "description": "mcp_registry: seam",
-  "args": {
-   "area": "mcp_registry"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-409",
-  "area": "mcp_registry",
-  "kind": "selectable",
-  "description": "mcp_registry: selectable",
-  "args": {
-   "area": "mcp_registry"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-410",
-  "area": "mcp_registry",
-  "kind": "core_clean",
-  "description": "mcp_registry: core_clean",
-  "args": {
-   "area": "mcp_registry"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-411",
-  "area": "mcp_registry",
-  "kind": "fake_hub",
-  "description": "mcp_registry: fake_hub",
-  "args": {
-   "area": "mcp_registry"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-412",
+  "id": "HUB-192",
   "area": "mcp_registry",
   "kind": "no_reinvented",
   "description": "mcp_registry: no_reinvented",
@@ -5768,7 +2688,7 @@
   }
  },
  {
-  "id": "HUB-413",
+  "id": "HUB-193",
   "area": "mcp_client",
   "kind": "registered",
   "description": "mcp_client: registered",
@@ -5782,7 +2702,7 @@
   }
  },
  {
-  "id": "HUB-414",
+  "id": "HUB-194",
   "area": "mcp_client",
   "kind": "fresh",
   "description": "mcp_client: fresh",
@@ -5796,21 +2716,7 @@
   }
  },
  {
-  "id": "HUB-415",
-  "area": "mcp_client",
-  "kind": "core_clean",
-  "description": "mcp_client: core_clean",
-  "args": {
-   "area": "mcp_client"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-416",
+  "id": "HUB-195",
   "area": "mcp_client",
   "kind": "no_reinvented",
   "description": "mcp_client: no_reinvented",
@@ -5824,7 +2730,7 @@
   }
  },
  {
-  "id": "HUB-417",
+  "id": "HUB-196",
   "area": "openapi_tools",
   "kind": "registered",
   "description": "openapi_tools: registered",
@@ -5838,7 +2744,7 @@
   }
  },
  {
-  "id": "HUB-418",
+  "id": "HUB-197",
   "area": "openapi_tools",
   "kind": "fresh",
   "description": "openapi_tools: fresh",
@@ -5852,21 +2758,7 @@
   }
  },
  {
-  "id": "HUB-419",
-  "area": "openapi_tools",
-  "kind": "core_clean",
-  "description": "openapi_tools: core_clean",
-  "args": {
-   "area": "openapi_tools"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-420",
+  "id": "HUB-198",
   "area": "openapi_tools",
   "kind": "no_reinvented",
   "description": "openapi_tools: no_reinvented",
@@ -5880,7 +2772,7 @@
   }
  },
  {
-  "id": "HUB-421",
+  "id": "HUB-199",
   "area": "tool_schema",
   "kind": "registered",
   "description": "tool_schema: registered",
@@ -5894,21 +2786,7 @@
   }
  },
  {
-  "id": "HUB-422",
-  "area": "tool_schema",
-  "kind": "by_config",
-  "description": "tool_schema: by_config",
-  "args": {
-   "area": "tool_schema"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-423",
+  "id": "HUB-200",
   "area": "tool_schema",
   "kind": "fresh",
   "description": "tool_schema: fresh",
@@ -5922,63 +2800,7 @@
   }
  },
  {
-  "id": "HUB-424",
-  "area": "tool_schema",
-  "kind": "seam",
-  "description": "tool_schema: seam",
-  "args": {
-   "area": "tool_schema"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-425",
-  "area": "tool_schema",
-  "kind": "selectable",
-  "description": "tool_schema: selectable",
-  "args": {
-   "area": "tool_schema"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-426",
-  "area": "tool_schema",
-  "kind": "core_clean",
-  "description": "tool_schema: core_clean",
-  "args": {
-   "area": "tool_schema"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-427",
-  "area": "tool_schema",
-  "kind": "fake_hub",
-  "description": "tool_schema: fake_hub",
-  "args": {
-   "area": "tool_schema"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-428",
+  "id": "HUB-201",
   "area": "tool_schema",
   "kind": "no_reinvented",
   "description": "tool_schema: no_reinvented",
@@ -5992,7 +2814,7 @@
   }
  },
  {
-  "id": "HUB-429",
+  "id": "HUB-202",
   "area": "tool_discovery",
   "kind": "registered",
   "description": "tool_discovery: registered",
@@ -6006,7 +2828,7 @@
   }
  },
  {
-  "id": "HUB-430",
+  "id": "HUB-203",
   "area": "tool_discovery",
   "kind": "fresh",
   "description": "tool_discovery: fresh",
@@ -6020,21 +2842,7 @@
   }
  },
  {
-  "id": "HUB-431",
-  "area": "tool_discovery",
-  "kind": "core_clean",
-  "description": "tool_discovery: core_clean",
-  "args": {
-   "area": "tool_discovery"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-432",
+  "id": "HUB-204",
   "area": "tool_discovery",
   "kind": "no_reinvented",
   "description": "tool_discovery: no_reinvented",
@@ -6048,7 +2856,7 @@
   }
  },
  {
-  "id": "HUB-433",
+  "id": "HUB-205",
   "area": "tool_sandbox",
   "kind": "registered",
   "description": "tool_sandbox: registered",
@@ -6062,21 +2870,7 @@
   }
  },
  {
-  "id": "HUB-434",
-  "area": "tool_sandbox",
-  "kind": "by_config",
-  "description": "tool_sandbox: by_config",
-  "args": {
-   "area": "tool_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-435",
+  "id": "HUB-206",
   "area": "tool_sandbox",
   "kind": "fresh",
   "description": "tool_sandbox: fresh",
@@ -6090,63 +2884,7 @@
   }
  },
  {
-  "id": "HUB-436",
-  "area": "tool_sandbox",
-  "kind": "seam",
-  "description": "tool_sandbox: seam",
-  "args": {
-   "area": "tool_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-437",
-  "area": "tool_sandbox",
-  "kind": "selectable",
-  "description": "tool_sandbox: selectable",
-  "args": {
-   "area": "tool_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-438",
-  "area": "tool_sandbox",
-  "kind": "core_clean",
-  "description": "tool_sandbox: core_clean",
-  "args": {
-   "area": "tool_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-439",
-  "area": "tool_sandbox",
-  "kind": "fake_hub",
-  "description": "tool_sandbox: fake_hub",
-  "args": {
-   "area": "tool_sandbox"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-440",
+  "id": "HUB-207",
   "area": "tool_sandbox",
   "kind": "no_reinvented",
   "description": "tool_sandbox: no_reinvented",
@@ -6160,7 +2898,7 @@
   }
  },
  {
-  "id": "HUB-441",
+  "id": "HUB-208",
   "area": "tool_permissions",
   "kind": "registered",
   "description": "tool_permissions: registered",
@@ -6174,7 +2912,7 @@
   }
  },
  {
-  "id": "HUB-442",
+  "id": "HUB-209",
   "area": "tool_permissions",
   "kind": "fresh",
   "description": "tool_permissions: fresh",
@@ -6188,21 +2926,7 @@
   }
  },
  {
-  "id": "HUB-443",
-  "area": "tool_permissions",
-  "kind": "core_clean",
-  "description": "tool_permissions: core_clean",
-  "args": {
-   "area": "tool_permissions"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-444",
+  "id": "HUB-210",
   "area": "tool_permissions",
   "kind": "no_reinvented",
   "description": "tool_permissions: no_reinvented",
@@ -6216,7 +2940,7 @@
   }
  },
  {
-  "id": "HUB-445",
+  "id": "HUB-211",
   "area": "tool_observability",
   "kind": "registered",
   "description": "tool_observability: registered",
@@ -6230,21 +2954,7 @@
   }
  },
  {
-  "id": "HUB-446",
-  "area": "tool_observability",
-  "kind": "by_config",
-  "description": "tool_observability: by_config",
-  "args": {
-   "area": "tool_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-447",
+  "id": "HUB-212",
   "area": "tool_observability",
   "kind": "fresh",
   "description": "tool_observability: fresh",
@@ -6258,63 +2968,7 @@
   }
  },
  {
-  "id": "HUB-448",
-  "area": "tool_observability",
-  "kind": "seam",
-  "description": "tool_observability: seam",
-  "args": {
-   "area": "tool_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-449",
-  "area": "tool_observability",
-  "kind": "selectable",
-  "description": "tool_observability: selectable",
-  "args": {
-   "area": "tool_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-450",
-  "area": "tool_observability",
-  "kind": "core_clean",
-  "description": "tool_observability: core_clean",
-  "args": {
-   "area": "tool_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-451",
-  "area": "tool_observability",
-  "kind": "fake_hub",
-  "description": "tool_observability: fake_hub",
-  "args": {
-   "area": "tool_observability"
-  },
-  "expect": {
-   "eq": {
-    "holds": true
-   }
-  }
- },
- {
-  "id": "HUB-452",
+  "id": "HUB-213",
   "area": "tool_observability",
   "kind": "no_reinvented",
   "description": "tool_observability: no_reinvented",
@@ -6328,7 +2982,7 @@
   }
  },
  {
-  "id": "HUB-453",
+  "id": "HUB-214",
   "area": "inbound_events",
   "kind": "registered",
   "description": "inbound_events: registered",
@@ -6342,7 +2996,7 @@
   }
  },
  {
-  "id": "HUB-454",
+  "id": "HUB-215",
   "area": "inbound_events",
   "kind": "fresh",
   "description": "inbound_events: fresh",
@@ -6356,10 +3010,10 @@
   }
  },
  {
-  "id": "HUB-455",
+  "id": "HUB-216",
   "area": "inbound_events",
-  "kind": "core_clean",
-  "description": "inbound_events: core_clean",
+  "kind": "no_reinvented",
+  "description": "inbound_events: no_reinvented",
   "args": {
    "area": "inbound_events"
   },
@@ -6370,12 +3024,768 @@
   }
  },
  {
-  "id": "HUB-456",
-  "area": "inbound_events",
-  "kind": "no_reinvented",
-  "description": "inbound_events: no_reinvented",
+  "id": "HUB-217",
+  "seat": "act-in-the-world",
+  "kind": "by_config",
+  "description": "act-in-the-world: by_config",
   "args": {
-   "area": "inbound_events"
+   "seat": "act-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-218",
+  "seat": "act-in-the-world",
+  "kind": "seam",
+  "description": "act-in-the-world: seam",
+  "args": {
+   "seat": "act-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-219",
+  "seat": "act-in-the-world",
+  "kind": "selectable",
+  "description": "act-in-the-world: selectable",
+  "args": {
+   "seat": "act-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-220",
+  "seat": "act-in-the-world",
+  "kind": "core_clean",
+  "description": "act-in-the-world: core_clean",
+  "args": {
+   "seat": "act-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-221",
+  "seat": "act-in-the-world",
+  "kind": "fake_hub",
+  "description": "act-in-the-world: fake_hub",
+  "args": {
+   "seat": "act-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-222",
+  "seat": "take-in-the-world",
+  "kind": "by_config",
+  "description": "take-in-the-world: by_config",
+  "args": {
+   "seat": "take-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-223",
+  "seat": "take-in-the-world",
+  "kind": "seam",
+  "description": "take-in-the-world: seam",
+  "args": {
+   "seat": "take-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-224",
+  "seat": "take-in-the-world",
+  "kind": "selectable",
+  "description": "take-in-the-world: selectable",
+  "args": {
+   "seat": "take-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-225",
+  "seat": "take-in-the-world",
+  "kind": "core_clean",
+  "description": "take-in-the-world: core_clean",
+  "args": {
+   "seat": "take-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-226",
+  "seat": "take-in-the-world",
+  "kind": "fake_hub",
+  "description": "take-in-the-world: fake_hub",
+  "args": {
+   "seat": "take-in-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-227",
+  "seat": "think-critically",
+  "kind": "by_config",
+  "description": "think-critically: by_config",
+  "args": {
+   "seat": "think-critically"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-228",
+  "seat": "think-critically",
+  "kind": "seam",
+  "description": "think-critically: seam",
+  "args": {
+   "seat": "think-critically"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-229",
+  "seat": "think-critically",
+  "kind": "selectable",
+  "description": "think-critically: selectable",
+  "args": {
+   "seat": "think-critically"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-230",
+  "seat": "think-critically",
+  "kind": "core_clean",
+  "description": "think-critically: core_clean",
+  "args": {
+   "seat": "think-critically"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-231",
+  "seat": "think-critically",
+  "kind": "fake_hub",
+  "description": "think-critically: fake_hub",
+  "args": {
+   "seat": "think-critically"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-232",
+  "seat": "watch-for-risk",
+  "kind": "by_config",
+  "description": "watch-for-risk: by_config",
+  "args": {
+   "seat": "watch-for-risk"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-233",
+  "seat": "watch-for-risk",
+  "kind": "seam",
+  "description": "watch-for-risk: seam",
+  "args": {
+   "seat": "watch-for-risk"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-234",
+  "seat": "watch-for-risk",
+  "kind": "selectable",
+  "description": "watch-for-risk: selectable",
+  "args": {
+   "seat": "watch-for-risk"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-235",
+  "seat": "watch-for-risk",
+  "kind": "core_clean",
+  "description": "watch-for-risk: core_clean",
+  "args": {
+   "seat": "watch-for-risk"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-236",
+  "seat": "watch-for-risk",
+  "kind": "fake_hub",
+  "description": "watch-for-risk: fake_hub",
+  "args": {
+   "seat": "watch-for-risk"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-237",
+  "seat": "know-the-world",
+  "kind": "by_config",
+  "description": "know-the-world: by_config",
+  "args": {
+   "seat": "know-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-238",
+  "seat": "know-the-world",
+  "kind": "seam",
+  "description": "know-the-world: seam",
+  "args": {
+   "seat": "know-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-239",
+  "seat": "know-the-world",
+  "kind": "selectable",
+  "description": "know-the-world: selectable",
+  "args": {
+   "seat": "know-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-240",
+  "seat": "know-the-world",
+  "kind": "core_clean",
+  "description": "know-the-world: core_clean",
+  "args": {
+   "seat": "know-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-241",
+  "seat": "know-the-world",
+  "kind": "fake_hub",
+  "description": "know-the-world: fake_hub",
+  "args": {
+   "seat": "know-the-world"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-242",
+  "seat": "hold-the-intents",
+  "kind": "by_config",
+  "description": "hold-the-intents: by_config",
+  "args": {
+   "seat": "hold-the-intents"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-243",
+  "seat": "hold-the-intents",
+  "kind": "seam",
+  "description": "hold-the-intents: seam",
+  "args": {
+   "seat": "hold-the-intents"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-244",
+  "seat": "hold-the-intents",
+  "kind": "selectable",
+  "description": "hold-the-intents: selectable",
+  "args": {
+   "seat": "hold-the-intents"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-245",
+  "seat": "hold-the-intents",
+  "kind": "core_clean",
+  "description": "hold-the-intents: core_clean",
+  "args": {
+   "seat": "hold-the-intents"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-246",
+  "seat": "hold-the-intents",
+  "kind": "fake_hub",
+  "description": "hold-the-intents: fake_hub",
+  "args": {
+   "seat": "hold-the-intents"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-247",
+  "seat": "stay-current",
+  "kind": "by_config",
+  "description": "stay-current: by_config",
+  "args": {
+   "seat": "stay-current"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-248",
+  "seat": "stay-current",
+  "kind": "seam",
+  "description": "stay-current: seam",
+  "args": {
+   "seat": "stay-current"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-249",
+  "seat": "stay-current",
+  "kind": "selectable",
+  "description": "stay-current: selectable",
+  "args": {
+   "seat": "stay-current"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-250",
+  "seat": "stay-current",
+  "kind": "core_clean",
+  "description": "stay-current: core_clean",
+  "args": {
+   "seat": "stay-current"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-251",
+  "seat": "stay-current",
+  "kind": "fake_hub",
+  "description": "stay-current: fake_hub",
+  "args": {
+   "seat": "stay-current"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-252",
+  "seat": "keep-it-generic",
+  "kind": "by_config",
+  "description": "keep-it-generic: by_config",
+  "args": {
+   "seat": "keep-it-generic"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-253",
+  "seat": "keep-it-generic",
+  "kind": "seam",
+  "description": "keep-it-generic: seam",
+  "args": {
+   "seat": "keep-it-generic"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-254",
+  "seat": "keep-it-generic",
+  "kind": "selectable",
+  "description": "keep-it-generic: selectable",
+  "args": {
+   "seat": "keep-it-generic"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-255",
+  "seat": "keep-it-generic",
+  "kind": "core_clean",
+  "description": "keep-it-generic: core_clean",
+  "args": {
+   "seat": "keep-it-generic"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-256",
+  "seat": "keep-it-generic",
+  "kind": "fake_hub",
+  "description": "keep-it-generic: fake_hub",
+  "args": {
+   "seat": "keep-it-generic"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-257",
+  "seat": "reason-and-answer",
+  "kind": "by_config",
+  "description": "reason-and-answer: by_config",
+  "args": {
+   "seat": "reason-and-answer"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-258",
+  "seat": "reason-and-answer",
+  "kind": "seam",
+  "description": "reason-and-answer: seam",
+  "args": {
+   "seat": "reason-and-answer"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-259",
+  "seat": "reason-and-answer",
+  "kind": "selectable",
+  "description": "reason-and-answer: selectable",
+  "args": {
+   "seat": "reason-and-answer"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-260",
+  "seat": "reason-and-answer",
+  "kind": "core_clean",
+  "description": "reason-and-answer: core_clean",
+  "args": {
+   "seat": "reason-and-answer"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-261",
+  "seat": "reason-and-answer",
+  "kind": "fake_hub",
+  "description": "reason-and-answer: fake_hub",
+  "args": {
+   "seat": "reason-and-answer"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-262",
+  "seat": "assemble-the-whole",
+  "kind": "by_config",
+  "description": "assemble-the-whole: by_config",
+  "args": {
+   "seat": "assemble-the-whole"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-263",
+  "seat": "assemble-the-whole",
+  "kind": "seam",
+  "description": "assemble-the-whole: seam",
+  "args": {
+   "seat": "assemble-the-whole"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-264",
+  "seat": "assemble-the-whole",
+  "kind": "selectable",
+  "description": "assemble-the-whole: selectable",
+  "args": {
+   "seat": "assemble-the-whole"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-265",
+  "seat": "assemble-the-whole",
+  "kind": "core_clean",
+  "description": "assemble-the-whole: core_clean",
+  "args": {
+   "seat": "assemble-the-whole"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-266",
+  "seat": "assemble-the-whole",
+  "kind": "fake_hub",
+  "description": "assemble-the-whole: fake_hub",
+  "args": {
+   "seat": "assemble-the-whole"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-267",
+  "seat": "remember-and-recall",
+  "kind": "by_config",
+  "description": "remember-and-recall: by_config",
+  "args": {
+   "seat": "remember-and-recall"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-268",
+  "seat": "remember-and-recall",
+  "kind": "seam",
+  "description": "remember-and-recall: seam",
+  "args": {
+   "seat": "remember-and-recall"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-269",
+  "seat": "remember-and-recall",
+  "kind": "selectable",
+  "description": "remember-and-recall: selectable",
+  "args": {
+   "seat": "remember-and-recall"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-270",
+  "seat": "remember-and-recall",
+  "kind": "core_clean",
+  "description": "remember-and-recall: core_clean",
+  "args": {
+   "seat": "remember-and-recall"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-271",
+  "seat": "remember-and-recall",
+  "kind": "fake_hub",
+  "description": "remember-and-recall: fake_hub",
+  "args": {
+   "seat": "remember-and-recall"
   },
   "expect": {
    "eq": {
