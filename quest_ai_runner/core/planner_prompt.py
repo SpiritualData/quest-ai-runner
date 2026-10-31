@@ -441,7 +441,8 @@ DEEP_ACTION = """\
 CONFIRM_ACTION = """\
   - "confirm": reserved for a genuine FORK you cannot ground past -- the request is truly ambiguous
     (you cannot form a reasonable proposal even after reading), OR risky/irreversible enough that a
-    human must approve the DIRECTION first. Prefer "deep" with a concrete proposal whenever the
+    human must approve the DIRECTION first. Deleting many of the person's records at once (an "all"
+    or bulk delete) is irreversible: choose "confirm" and name what would be deleted. Prefer "deep" with a concrete proposal whenever the
     context lets you make a sensible one; choose "confirm" only when it genuinely doesn't. Put the
     question in `confirm_question`. Do NOT also act. When the answer depends on something the
     person has to LOOK at (a draft, a deployed preview, a doc, a PR), put its full https URL in
