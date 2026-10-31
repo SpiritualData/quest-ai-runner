@@ -188,6 +188,9 @@ def _resolve_context_assembler_base(
 
         _card_repository, _cards_vector_store, _quest_cards_active = build_card_repository(
             cfg, cards_dir, notify=notify)
+        if _card_repository is not None:   # the card-store seat, obtained through the hub assembly (the same repository object)
+            from .hub import card_repository_of
+            _card_repository = card_repository_of(_card_repository)
 
         # Auto-discover reference resolvers from any RESOLVABLE retrieval adapter the consumer wired
         # (structural: the adapter advertises a non-None ``reference_type`` + ``resolve_reference`` on

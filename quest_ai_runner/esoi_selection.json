@@ -48,6 +48,12 @@
    "openai": "quest_ai_runner.providers"
   }
  },
+ "card-store": {
+  "default": "qar-card-repository",
+  "modules": {
+   "qar-card-repository": "quest_ai_runner.adapters.hub_card_store"
+  }
+ },
  "choose-a-model-tier": {
   "default": "qar_selection",
   "modules": {
@@ -274,6 +280,7 @@
   "modules": {
    "acp": "quest_ai_runner.adapters.acp_deep_runner",
    "fast_edit": "quest_ai_runner.config_resolvers",
+   "lean_guarded": "quest_ai_runner.core.deep_launch",
    "mcp_write": "quest_ai_runner.config_resolvers",
    "stream_json": "quest_ai_runner.core.goal_runner_stream",
    "subprocess": "quest_ai_runner.core.goal_runner"

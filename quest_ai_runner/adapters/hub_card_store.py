@@ -3,7 +3,7 @@
 ``hubofhubs.seats.CardStore`` is the hub's simple seat: add, get, search, delete, count over ``hubofhubs.card.Card``. QAR keeps
 its cards as dicts behind ``CardRepository`` (``card_repository`` for files, ``quest_api_card_repository`` for the Quest API).
 This adapter lets any ``CardRepository`` stand in that hub seat, so a consumer of the hub (or QAR itself) can ask for a
-``card-store`` and get QAR's persistence. It is registered under the name ``qar-card-repository`` by ``quest_ai_runner.hub``.
+``card-store`` and get QAR's persistence. It is declared under the name ``qar-card-repository`` in QAR's own scope (a child of the hub's), and QAR's records select it.
 
 A hub ``Card`` maps onto the QAR card schema as: ``id`` to ``id``, ``text`` to ``summary``, ``tags`` to ``keywords`` and
 ``source`` to ``provenance.source``. Search matches every word of the query as a case-insensitive substring of the summary
@@ -13,9 +13,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation
 from hubofhubs.card import Card
 
 
+@implementation("card-store", "qar-card-repository", scope="quest_ai_runner")
 class CardRepositoryStore:
     """Keeps hub ``Card`` objects in a QAR ``CardRepository`` (the ``repository`` option of the ``card-store`` seat)."""
 

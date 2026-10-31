@@ -29,14 +29,15 @@ class DictRepository:
         return card_id in self.cards
 
 
-def test_the_qar_name_is_registered_at_import():
-    assert qar_hub.CARD_REPOSITORY in hubofhubs.names(qar_hub.CARD_STORE)
+def test_the_qar_name_is_declared_in_the_qar_scope_and_the_hub_never_sees_it():
+    assert qar_hub.CARD_REPOSITORY in qar_hub.child().names(qar_hub.CARD_STORE)
+    assert qar_hub.CARD_REPOSITORY not in hubofhubs.names(qar_hub.CARD_STORE)
 
 
 def test_importing_the_package_twice_is_safe():
     qar_hub.register_with_hub()
     qar_hub.register_with_hub()
-    assert hubofhubs.names(qar_hub.CARD_STORE).count(qar_hub.CARD_REPOSITORY) == 1
+    assert qar_hub.child().names(qar_hub.CARD_STORE).count(qar_hub.CARD_REPOSITORY) == 1
 
 
 def test_assembly_gives_a_card_store_over_the_repository_and_names_the_layer():
@@ -50,7 +51,7 @@ def test_assembly_gives_a_card_store_over_the_repository_and_names_the_layer():
     assert store.search("absent") == []
     assert store.count() == 1
     assert store.delete("a") and not store.delete("a")
-    assert qar_hub.CARD_REPOSITORY in system.reasons[0] and "consumer selections" in system.reasons[0]
+    assert qar_hub.CARD_REPOSITORY in system.reasons[0] and "quest_ai_runner default" in system.reasons[0]
 
 
 def test_the_hub_default_is_untouched_by_qar():
@@ -61,3 +62,15 @@ def test_the_hub_default_is_untouched_by_qar():
 def test_the_assembly_reports_what_the_hub_could_not_build_alone():
     system = qar_hub.assemble(DictRepository())
     assert qar_hub.CARD_STORE not in system.pending and "pass provided=" in system.pending["model-call"]
+
+
+def test_the_card_store_override_comes_from_qars_records_and_cites_its_own_ids():
+    one = qar_hub.child().overrides()
+    assert [o.solution_id for o in one] == [qar_hub.CARD_STORE] and one[0].parent_default == "local_card_store"
+    assert one[0].chosen == qar_hub.CARD_REPOSITORY and one[0].justified
+    assert "prob-context-drifts-from-its-source" in one[0].reasons
+
+
+def test_the_production_call_site_gets_the_same_repository_object_back():
+    repository = DictRepository()
+    assert qar_hub.card_repository_of(repository) is repository

@@ -94,5 +94,10 @@ QI4 = "One engine for every consumer is how QAR stays worth maintaining, but it 
 QI5 = "Selection by metric is the method that keeps the other ideals improving; it is a means, so it carries less than the outcomes it protects."
 QI6 = "Cost and quality known before they surprise anyone: spend is a real constraint (a daily cap), so it weighs as much as consent."
 
+# QAR builds on the hub of hubs: the hub's ESOI-informed defaults sit beneath QAR's own `selected` arms, and a solution whose
+# `selected` differs from the hub's default cites ids of QAR's own records in esoi/overrides.csv (rule S35).
+[parent]
+records = "../ai-hub-of-hubs-structure"
+
 [records]
 template_version = 1
