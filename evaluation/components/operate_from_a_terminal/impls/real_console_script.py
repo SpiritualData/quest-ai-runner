@@ -1,4 +1,4 @@
-"""REAL CONSOLE (the single-case arm of ``operate-from-a-terminal``): the commands as an operator types them. Each case starts the
+"""ALTERNATIVE, real console (the single-case arm of ``operate-from-a-terminal``): the commands as an operator types them. Each case starts the
 installed ``quest-ai-runner`` console script (the entry point the package declares; ``python -m quest_ai_runner.tools`` for the
 tools entry) as a real child process in a scratch folder with the hermetic environment of the component (the variables esoi.toml scrubs are gone, the
 case's are set, ``HOME`` is the scratch folder), so argument parsing, the process exit code and the real stdout and stderr streams are the ones a person gets. Nothing
