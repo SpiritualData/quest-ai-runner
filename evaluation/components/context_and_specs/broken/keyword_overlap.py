@@ -2,7 +2,7 @@
 order they are stored, with no ranking, no gate, no links and no "no solution yet". It returns a crowd for most requests
 and something for an unrelated one, so the cases must fail it. Zero model calls."""
 from context_and_specs.world import world
-from quest_ai_runner.core.spec_selection import tokens
+from esoi.spec_index import tokens
 
 
 def build(meter):  # noqa: ARG001

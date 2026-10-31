@@ -4,7 +4,7 @@ When a new request or input arrives, a run should act by the specifications that
 ideals that decide what "better" means, the solutions and metrics already defined. `core/spec_selection.py` finds them in an
 ESOI specification index. The index itself is built without AI by the `esoi` library (`esoi spec index --out spec_index.json`,
 see its `docs/explanation/finding-specifications.md`); this module is the AI system on top of it, because vector search and
-model calls belong here and not in the library.
+model calls belong here and not in the library. The generic stages themselves (lexical scoring, fusion, the gate, batching, links) are the library's `esoi.spec_search`; this module holds the prompt, the model call, the gate thresholds (`GATE`) and the declared implementations, each a thin call of the library.
 
 ## The pipeline
 
@@ -65,7 +65,7 @@ first implementation is below.
 ## Cards and records in one ranking (`core/unified_search.py`, built, not selected)
 
 `solutions_and_problems_with_links` ranks context cards and ESOI records in one list. It is not a third pipeline: it runs the
-stages above (`narrow_lexical_scored`, `semantic_scored`, `fuse`, `gate_decision`, `parse_ids`, `attach_links`) over a list of
+stages above (the library's `esoi.spec_search.search`, strategy `gated`) over a list of
 views instead of an index's entries. Nothing selects it: `find_specs` and the context assembler are unchanged. Its metric,
 `esoi run context_and_specs --impl solutions_and_problems_with_links` (and `--impl two_pipelines`, the two pipelines side by
 side), scores both offline on mixed requests over fixture cards and the spec_selection fixture index; the results log has the
@@ -76,12 +76,12 @@ the free `lexical_vector` arm (five ranked items break the ceiling of four, and 
 metric finds nothing, those being linked rather than ranked) and 49 of the 65 context_selection tasks against 50 for
 `hybrid_union` and `idf_docstrings`. So `two_pipelines` stays selected, though the merged arm leads the mixed cases.
 
-- **A view, never a copy.** `RecordView` (`kind`, `id`, `title`, `text`, `source`, `links`, `tags`) points at its item's own
-  fields and weighted terms. `views_from_spec_index(index)` makes one per record of every kind (source `esoi`);
+- **A view, never a copy.** `esoi.spec_search.View` (`kind`, `id`, `title`, `text`, `source`, `links`, `tags`) points at its item's own
+  fields and weighted terms. `views_from_index(index)` makes one per record of every kind (source `records`, shown as `esoi` by the tool);
   `adapters.card_views.card_views(repository)` makes one per card from any `CardRepository` (source `cards`, search text
   `card_embed_text`, key `card:<id>` so a card never shadows a record). Neither writes anything.
 - **What is ranked.** Cards, solutions and problems (`RANKED_KINDS`) compete in one field-weighted TF-IDF, an optional vector
-  search over the same keys, one fusion, the same gate, and at most one cheap model call over the best `GATE_POOL`. One item
+  search over the same keys, one fusion, the same gate, and at most one cheap model call over the best `GATE.pool`. One item
   budget, `max_ranked` (default 5), covers both sources; `render(result, budget)` caps the characters.
 - **What is linked.** Each ranked record brings up to `expand` (default 3) ideals, metrics, intents (its own `intent` field
   counts) and implementations, one of each kind before a second of any, marked `linked_from`.

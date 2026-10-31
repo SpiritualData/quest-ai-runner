@@ -12,7 +12,7 @@ sys.path.insert(0, str(HERE.parent))
 import common  # noqa: E402,F401
 from context_and_specs import score, world  # noqa: E402
 from context_and_specs.broken import keyword_overlap  # noqa: E402
-from quest_ai_runner.core.unified_search import served_by_solution  # noqa: E402
+from esoi.spec_search import served_by_solution  # noqa: E402
 
 
 def fixed(out):

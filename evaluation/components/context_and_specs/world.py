@@ -2,7 +2,7 @@
 problem no solution serves, an intent no solution serves), a fixture tag table, and one local vector search over all of it.
 
 Nothing here is real data. The index is ``spec_selection/fixture_index.json`` (the output of ``esoi spec index``); the
-extra records are folded in exactly as the index folds a record (``unified_search.weighted_terms``), with the document
+extra records are folded in exactly as the index folds a record (``esoi.spec_search.terms_of``), with the document
 frequencies recomputed, so both pipelines see the same records. The vector search is the local bge-small embedder the
 context-selection and spec-selection offline arms already use (``context_selection.embedder``, read offline from the
 fastembed cache, raising when the model is missing): no provider and no network.
@@ -15,7 +15,7 @@ from pathlib import Path
 import common  # noqa: F401  (sets sys.path for the repo)
 from hubofhubs.recall.card_repository import card_embed_text
 from quest_ai_runner.core.spec_selection import card_line
-from quest_ai_runner.core.unified_search import TagTable, views_from_cards, views_from_spec_index, weighted_terms
+from esoi.spec_search import TagTable, terms_of, views_from_index, views_from_items
 
 HERE = Path(__file__).resolve().parent
 FIXTURES = json.loads((HERE / "fixtures.json").read_text(encoding="utf-8"))
@@ -27,7 +27,7 @@ def spec_index():
     """The fixture index plus the extra records, document frequencies recomputed."""
     index = copy.deepcopy(BASE_INDEX)
     for extra in FIXTURES["extra_records"]:
-        entry = dict(extra, terms=weighted_terms(extra["title"], extra["summary"]))
+        entry = dict(extra, terms=terms_of(extra["title"], extra["summary"]))
         index["entries"].append(entry)
     df = Counter()
     for entry in index["entries"]:
@@ -71,8 +71,8 @@ class World:
         self.index = spec_index()
         self.cards = cards()
         self.tags = tag_table()
-        self.card_views = views_from_cards(self.cards, text_of=card_embed_text)
-        self.record_views = views_from_spec_index(self.index, self.tags)
+        self.card_views = views_from_items(self.cards, kind="card", source="cards", text_of=card_embed_text)
+        self.record_views = views_from_index(self.index, self.tags)
         self.views = self.card_views + self.record_views
         self.vector_search = self.make_vector_search() if vector else None
 

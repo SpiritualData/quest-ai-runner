@@ -22,8 +22,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .runtime_settings import process_environment
-from .spec_selection import (SpecSelection, VectorSearch, card_line, intent_specs, related_specs, select_specs)
-from .unified_search import RecordView, TagTable, UnifiedSelection, solutions_and_problems_with_links, views_from_spec_index
+from esoi import spec_index as spec_index_lib, spec_search as search_lib
+
+from .spec_selection import SpecSelection, VectorSearch, card_line, select_specs
+from .unified_search import solutions_and_problems_with_links
 
 log = logging.getLogger("quest-ai-runner.repo-specs")
 CONFIG_NAME = "esoi.toml"
@@ -111,7 +113,22 @@ def find(task: str, root: Optional[Path] = None, *, provider: Any = None, model:
     return select_specs(task, index, provider=provider, model=model, vector_search=local_vector_search(index), expand=expand), index
 
 
-def repo_tag_table(root: Path) -> TagTable:
+def related_records(index: Dict[str, Any], entry_id: str, depth: int = 1, limit: int = 30) -> List[Dict[str, Any]]:
+    """Records connected to ``entry_id``, nearest first, each ``{id, kind, title, depth, via}`` (the library's
+    ``spec_index.related`` gives no title; it is added from the entries). Raises KeyError for an unknown id."""
+    titles = {e["id"]: e["title"] for e in index["entries"]}
+    return [{"id": h["id"], "kind": h["kind"], "title": titles[h["id"]], "depth": h["depth"], "via": h["via"]}
+            for h in spec_index_lib.related(index, entry_id, depth, limit)]
+
+
+def intent_records(index: Dict[str, Any], intent_id: str = "") -> List[Dict[str, Any]]:
+    """Every record of one intent (empty id: all), problems first, as ``{id, kind, title}``."""
+    rank = {"intent": 0, "problem": 1, "ideal": 2, "solution": 3, "metric": 4, "implementation": 5}   # the intent's own record leads
+    mine = sorted(spec_index_lib.of_intent(index, intent_id), key=lambda e: (rank.get(e["kind"], 9), e["id"]))
+    return [{"id": e["id"], "kind": e["kind"], "title": e["title"]} for e in mine]
+
+
+def repo_tag_table(root: Path) -> search_lib.TagTable:
     """``esoi/tags.csv`` and the solutions' ``tags`` column, read from the record files (never copied). Empty when absent."""
     from esoi import config as esoi_config
     folder = Path(root) / esoi_config.load(Path(root)).structure_dir
@@ -133,14 +150,14 @@ def repo_tag_table(root: Path) -> TagTable:
             return tuple(t["tag"] for t in parse_tags(cell) if t["tag"])
         except ImportError:   # a library that predates esoi.fields
             return split(cell)
-    return TagTable(tag_problems={r["tag"].strip(): split(r.get("problem_ids")) for r in rows("tags.csv") if (r.get("tag") or "").strip()},
+    return search_lib.TagTable(tag_problems={r["tag"].strip(): split(r.get("problem_ids")) for r in rows("tags.csv") if (r.get("tag") or "").strip()},
                     solution_tags={r["solution_id"]: labels(r.get("tags")) for r in rows("solutions.csv") if r.get("solution_id")})
 
 
-def search(task: str, root: Optional[Path] = None, *, cards: List[RecordView] = (), provider: Any = None,
+def search(task: str, root: Optional[Path] = None, *, cards: List[search_lib.View] = (), provider: Any = None,
            model: Optional[str] = None, tags: Optional[List[str]] = None, tag_mode: str = "boost",
-           max_ranked: int = 5, expand: int = 3) -> UnifiedSelection:
-    """Cards and the working repository's records in one ranking (``unified_search``, not selected anywhere): ``cards`` are
+           max_ranked: int = 5, expand: int = 3) -> search_lib.Selection:
+    """Cards and the working repository's records in one ranking (``esoi.spec_search`` via ``unified_search``, not selected anywhere): ``cards`` are
     views a caller already has (``adapters.card_views.card_views``); the records are views over the cached index. The local
     vector search embeds the records only, so it is used only when there are no cards: a stage that sees one source would
     rank that source above the other in the fusion. With cards the ranking is lexical, then the gate and the model."""
@@ -149,7 +166,7 @@ def search(task: str, root: Optional[Path] = None, *, cards: List[RecordView] = 
         raise LookupError("no esoi.toml above the working folder (set QAR_SPEC_ROOT)")
     index = repo_index(root)
     table = repo_tag_table(root) if tags else None
-    views = list(cards) + views_from_spec_index(index, table)
+    views = list(cards) + search_lib.views_from_index(index, table)
     vector = None if cards else local_vector_search(index)
     return solutions_and_problems_with_links(task, views, provider=provider, model=model, vector_search=vector,
                                              tags=tags, tag_table=table, tag_mode=tag_mode, max_ranked=max_ranked, expand=expand)
@@ -188,9 +205,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"route: {got.route}\n" + (render(index, got.ids, got.linked) or "(no specification concerns this)"))
         elif args.action == "related":
             print("\n".join(f"- {h['kind']} {h['id']}: {h['title']}  (step {h['depth']} via {h['via']})"
-                            for h in related_specs(index, args.target, args.depth)))
+                            for h in related_records(index, args.target, args.depth)))
         elif args.action == "intent":
-            print("\n".join(f"- {h['kind']} {h['id']}: {h['title']}" for h in intent_specs(index, args.target)))
+            print("\n".join(f"- {h['kind']} {h['id']}: {h['title']}" for h in intent_records(index, args.target)))
         else:
             print(show(root, args.target, args.tier))
     except KeyError:

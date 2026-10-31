@@ -16,13 +16,13 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from . import repo_specs
-from .spec_selection import intent_specs, related_specs
 from .tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec
-from .unified_search import RecordView, render as render_unified
+from esoi import spec_search as search_lib
 
 # Where search_cards_and_specs gets cards: a callable returning card views (``adapters.card_views.card_views`` over the run's
 # card repository), registered by the consumer that owns the store. None: the tool searches the records alone and says so.
-CardViewsSource = Callable[[], List[RecordView]]
+SOURCE_LABEL = {search_lib.RECORD_SOURCE: "esoi"}   # what the tool has always called the records' source
+CardViewsSource = Callable[[], List[search_lib.View]]
 card_views_source: Optional[CardViewsSource] = None
 
 
@@ -72,7 +72,7 @@ def related_specs_spec(env: Mapping[str, str]) -> ToolSpec:
         record = str(args.get("id") or "").strip()
         root = repo_specs.find_root()
         try:
-            rows = related_specs(repo_specs.repo_index(root), record, int(args.get("depth") or 1), int(args.get("limit") or 30))
+            rows = repo_specs.related_records(repo_specs.repo_index(root), record, int(args.get("depth") or 1), int(args.get("limit") or 30))
         except KeyError:
             return ToolResult(ok=False, text=f"No record {record!r}. Take an id from find_specs or intent_specs.")
         return ToolResult(ok=True, data=rows, text=f"Connected to {record}, nearest first:\n{listing(rows)}")
@@ -92,7 +92,7 @@ def related_specs_spec(env: Mapping[str, str]) -> ToolSpec:
 
 def intent_specs_spec(env: Mapping[str, str]) -> ToolSpec:
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        rows = intent_specs(repo_specs.repo_index(repo_specs.find_root()), str(args.get("intent_id") or "").strip())
+        rows = repo_specs.intent_records(repo_specs.repo_index(repo_specs.find_root()), str(args.get("intent_id") or "").strip())
         return ToolResult(ok=True, data=rows, text=f"{len(rows)} records:\n{listing(rows)}")
 
     return ToolSpec(
@@ -137,14 +137,14 @@ def search_cards_and_specs_spec(env: Mapping[str, str]) -> ToolSpec:
             cards = []
         got = repo_specs.search(request, cards=cards, tags=tags or None, tag_mode=mode)
         scope = "" if card_views_source else "\n(No card store is registered here: records only.)"
-        data = {"items": [{"kind": i.kind, "key": i.key, "source": i.source, "linked_from": i.linked_from,
+        data = {"items": [{"kind": i.kind, "key": i.key, "source": SOURCE_LABEL.get(i.source, i.source), "linked_from": i.linked_from,
                            "no_solution": i.no_solution} for i in got.items],
                 "no_solution_yet": got.no_solution_yet, "route": got.route, "calls": got.calls}
         if not got.items:
             return ToolResult(ok=True, data=data, text="No card or specification concerns that request." + scope)
         return ToolResult(ok=True, data=data, text=(
             "Cards and specifications this request concerns, best first (linked ones were brought in by a ranked record):\n"
-            + render_unified(got) + "\nRead a record in full with show_spec." + scope))
+            + search_lib.render(got) + "\nRead a record in full with show_spec." + scope))
 
     return ToolSpec(
         name="search_cards_and_specs", handler=handler,
