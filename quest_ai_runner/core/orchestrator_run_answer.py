@@ -142,7 +142,7 @@ class RunAnswerMixin:
             # reach a different (wrong) conclusion, e.g. "no prior history" despite the planner
             # having already found and summarised the conversation history correctly.
             if rs.plan.rationale and rs.plan.action == "answer":
-                planner_block = f"--- PLANNER ANALYSIS ---\n{rs.plan.rationale}"
+                planner_block = (f"--- PLANNER ANALYSIS (what this reply is for; follow it) ---\n{rs.plan.rationale}")
                 cv = (cv + "\n\n" + planner_block if cv else planner_block)
             # The facts the planner itself listed from the reads (``facts_read``): the answerer reads
             # every gathered page of a long turn, the planner listed the ones that bear on the request.
