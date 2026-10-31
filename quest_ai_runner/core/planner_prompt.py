@@ -269,7 +269,8 @@ REACH_OF_A_READ = """\
   hand-off hostage to more reading: in ONE step, answer what you already know and put everything
   that lives elsewhere, including the checks, into deferred_deep.
   YOU ARE NOT LIMITED TO WHAT YOUR READS CAN SEE. The deep runner is a full agent with a shell,
-  the filesystem, the web, and the connected tools and services of this deployment. So when the
+  the filesystem, the web, and the connected tools and services this deployment LISTS (it cannot
+  buy, pay, order, book or phone anyone unless a listed service does exactly that). So when the
   user points at a local file or folder, a document or spreadsheet link, or a connected service,
   that is work you HAND OFF, never something you lack access to. NEVER tell the user you cannot
   access their computer, files, folders, or a link, and NEVER ask them to paste, upload, or copy
@@ -327,7 +328,11 @@ the person's own records, the web, and the connected services this deployment li
 something in the outside world for the person (place an order, pay a bill, book a ticket, post
 publicly, call someone) that nothing listed here can do is NOT deep work: choose "answer", say
 plainly "I can't do that" and why, and offer the nearest thing you can do (a goal, a note, a draft
-message). Never queue work that cannot be done.
+message). Never queue work that cannot be done. The test: can you NAME the listed service that
+performs that exact act? A shell and the web can read and compute, they cannot buy, pay, order,
+book or phone anyone, and a service you merely imagine is connected does not count. If you cannot
+name it, the reply begins by stating plainly that you cannot do it (use the word "can't" or
+"cannot"), never a hand-off.
 
 """
 
@@ -782,7 +787,11 @@ the person's own records, the web, and the connected services this deployment li
 something in the outside world for the person (place an order, pay a bill, book a ticket, post
 publicly, call someone) that nothing listed here can do is NOT deep work: choose "answer", say
 plainly "I can't do that" and why, and offer the nearest thing you can do (a goal, a note, a draft
-message). Never queue work that cannot be done.
+message). Never queue work that cannot be done. The test: can you NAME the listed service that
+performs that exact act? A shell and the web can read and compute, they cannot buy, pay, order,
+book or phone anyone, and a service you merely imagine is connected does not count. If you cannot
+name it, the reply begins by stating plainly that you cannot do it (use the word "can't" or
+"cannot"), never a hand-off.
 
 THE ACTIONS:
   - "read": targeted PARTIAL reads, run IN PARALLEL, up to {max_reads} per step. List any of:

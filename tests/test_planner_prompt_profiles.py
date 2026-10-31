@@ -409,3 +409,10 @@ def test_both_profiles_say_that_outside_world_work_nothing_can_do_is_not_queued(
     from quest_ai_runner.core.planner_prompt import PLANNER_PROFILES
     for name, prompt in PLANNER_PROFILES.items():
         assert "Never queue work that cannot be done" in " ".join(prompt.split()), name
+
+
+def test_an_act_in_the_outside_world_needs_a_named_service_or_the_reply_says_it_cannot_on_both_profiles():
+    from quest_ai_runner.core.planner_prompt import PLANNER_PROMPT_COMPACT as compact
+    for prompt in (PLANNER_PROMPT, compact):
+        assert "can you NAME the listed service" in prompt
+        assert "cannot buy, pay, order" in prompt or "they cannot buy, pay, order" in prompt
