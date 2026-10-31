@@ -105,7 +105,7 @@
   "id": "CTX-018",
   "area": "symptom",
   "task": "The reply contained a link that was never opened and I want to know where links get blocked",
-  "target": "quest_ai_runner/core/link_guard.py",
+  "target": "quest_ai_runner/core/orchestrator_run_loop.py",
   "heldout": true
  },
  {
@@ -336,7 +336,7 @@
   "id": "CTX-056",
   "area": "hard",
   "task": "mounting one card store inside another without copying it",
-  "target": "quest_ai_runner/adapters/card_store_mounts.py",
+  "target": "quest_ai_runner/adapters/context_store_bootstrap.py",
   "heldout": true
  },
  {
