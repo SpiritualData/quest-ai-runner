@@ -4368,3 +4368,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-31,proactive_guidance,guided_v2,10,9,9/10,0/0,20,46667,7283,0.0787,78.8,4fb978f,b27633e9,claude-haiku,,sample:10,
 2026-10-31,evolve_by_metric,structure_library,17,17,17/17,0/0,0,0,0,0.0,0.0,98d312f-dirty,e25c0a4f,none,,,
 2026-10-31,evolve_by_metric,keep_current,17,10,10/17,0/0,0,0,0,0.0,0.0,98d312f-dirty,e25c0a4f,none,,,
+2026-10-31,explain_qar,shipped_docs,469,469,469/469,0/0,0,0,0,0.0,0.3,5e8bfe9-dirty,9500bc5e,none,"api_documented 8/8, cli_documented 14/14, coverage 1/1, em_dash 82/82, env_documented 229/229, indexed 53/53, links 82/82",,
