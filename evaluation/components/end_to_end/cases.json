@@ -564,7 +564,7 @@
      "12th"
     ]
    ],
-   "reply_lacks_regex": [
+   "reply_lacks_regex_this_year": [
     "14 nov",
     "nov 14",
     "november 14"
@@ -1302,7 +1302,7 @@
     "\\b(premium|pro|plus|starter|basic|business|enterprise|family|student|lifetime)\\s+(plan|tier|subscription)\\b",
     "\\bquest\\s+(pro|plus|premium|max|ultra|lite|basic|starter)\\b",
     "[\\u2014\\u2013]",
-    "\\bguarantee"
+    "(?<!not a )(?<!no )\\bguarantee"
    ]
   },
   "quality_rubric": [
@@ -1477,7 +1477,7 @@
     "free to start",
     "\\$\\s?(?!(?:0|1|2|5|10|20|40|50|100|500)(?!\\d))\\d+",
     "[\\u2014\\u2013]",
-    "\\bguarantee"
+    "(?<!not a )(?<!no )\\bguarantee"
    ]
   },
   "quality_rubric": [

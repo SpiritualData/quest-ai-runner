@@ -42,8 +42,11 @@ from end_to_end.clock import countdown_problems
 
 
 DENIES_A_LANDED_WRITE = re.compile(
-    r"\b(can(?:'|\u2019)?t|cannot|can not|could(?:n(?:'|\u2019)?t| not)|unable to|not able to)\s+(?:\w+\s+){0,2}?(add|create|make|write|save|change|update)\b"
+    r"\b(can(?:'|\u2019)?t|cannot|can not|could(?:n(?:'|\u2019)?t| not)|unable to|not able to)\s+(?:\w+\s+){0,2}?(add|create|make|write|save|change|update)\b(?!\s+(?:the\s+|a\s+)?(?:phone\s+)?calls?\b)"
     r"|\bnot (?:yet )?been (?:made|added|created|saved)\b|\b(?:add|do) (?:it|this|that) yourself\b|\bbefore (?:adding|you add) (?:it )?again\b", re.I)
+
+
+PAST_YEAR = re.compile(r"\blast year\b|\bprevious year\b|\b(?:in )?20(?:1\d|2[0-5])\b", re.I)   # a sentence that is about an earlier year
 
 
 QUOTED_SPAN = re.compile(r'"[^"\n]*"|\u201c[^\u201d\n]*\u201d')
@@ -75,6 +78,10 @@ def reply_problems(reply, expect):
     for pattern in expect.get("reply_lacks_regex_unquoted", []):
         if re.search(pattern, unquoted, re.I):
             problems.append(f"reply matches {pattern!r} outside a quoted example")
+    this_year = " ".join(x for x in re.split(r"(?<=[.!?])\s+", reply) if not PAST_YEAR.search(x))
+    for pattern in expect.get("reply_lacks_regex_this_year", []):
+        if re.search(pattern, this_year, re.I):
+            problems.append(f"reply matches {pattern!r} outside a sentence about an earlier year")
     if expect.get("reply_dois"):
         problems += doi_problems(reply, expect["reply_dois"])
     return problems

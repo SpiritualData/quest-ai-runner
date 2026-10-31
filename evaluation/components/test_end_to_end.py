@@ -147,6 +147,18 @@ def test_the_mentor_results_question_states_what_the_docs_say_and_invents_no_ref
     assert "lacks" in reply_ok("E2E-QUEST-12", "I am not sure, the support team can say.")["note"]
 
 
+def test_a_negated_guarantee_a_phone_call_and_last_years_date_are_not_the_failures_they_were_read_as():
+    assert not score.DENIES_A_LANDED_WRITE.search("I added the goal. I can't make the call, so you will need to phone the plumber.")
+    assert score.DENIES_A_LANDED_WRITE.search("I can't add that goal for you.")
+    mentor = " ".join(BY_ID["E2E-QUEST-09"]["ideal"]["reply"].split())
+    assert "guarantee" not in mentor
+    pattern = [p for p in BY_ID["E2E-QUEST-09"]["expect"]["reply_lacks_regex"] if "guarantee" in p][0]
+    assert not re.search(pattern, "the badge helps you choose, but it is not a guarantee.")
+    assert re.search(pattern, "a mentor will guarantee results")
+    assert reply_ok("E2E-WEBGOAL-01", "It closes on 12 Nov. Last year it closed on 14 Nov, so this year is earlier.", route="act")["note"].find("14 nov") < 0
+    assert "14 nov" in reply_ok("E2E-WEBGOAL-01", "Registration closes on 14 Nov 2026.", route="act")["note"]
+
+
 def test_the_audit_corrections_flip_what_the_old_docs_promised():
     # follow-up on an unmet goal retries in the same task; there is no automatic new-task path; ordered chains need a Workflow
     chain = BY_ID["E2E-QUEST-21"]["ideal"]["reply"]
