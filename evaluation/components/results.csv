@@ -3908,3 +3908,11 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-10-30,end_to_end,qar_live,1,0,0/1,0/0,7,50640,4778,0.0718,38.8,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-QUEST-10,0.053
 2026-10-30,end_to_end,qar_live,1,1,1/1,0/0,7,41925,1983,0.0439,26.0,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-QUEST-13,0.8033
 2026-10-30,end_to_end,qar_live,1,0,0/1,0/0,7,50337,2526,0.0984,29.8,3b5eba7,df4c3439,claude-code-subscription,,only:E2E-QUEST-12,0.0755
+2026-10-30,assist_a_terminal_session,rules_only,26,14,14/26,0/0,0,0,0,0.0,0.0,9f4793b,882af363,none,,"only:AST-ACK-01,AST-ACK-02,AST-CLS-01,AST-CLS-02,AST-CLS-03,AST-CLS-04,AST-CLS-05,AST-CLS-06,AST-JDG-01,AST-GATE-01,AST-JDG-02,AST-JDG-03,AST-JDG-04,AST-JDG-05,AST-JDG-06,AST-JDG-07,AST-JDG-08,AST-JDG-09,AST-CLS-07,AST-CLS-08,AST-CLS-09,AST-CLS-10,AST-CLS-11,AST-CLS-12,AST-CLS-13,AST-CLS-14",0.6769
+2026-10-30,spec_selection,lexical_vector,76,56,35/50,21/26,0,0,0,0.0,0.7,9f4793b,0a2ef76a,none,,,0.8157
+2026-10-30,overseer_signals,no_overseer,16,6,6/16,0/0,0,0,0,0.0,0.0,9f4793b,5d29c4ef,none,,,
+2026-10-30,hand_off_a_goal,creator_keeps_it,18,8,8/18,0/0,0,0,0,0.0,0.0,9f4793b,5c67e9c3,none,,,
+2026-10-30,draft_a_metric,ask_owner,10,4,4/10,0/0,0,0,0,0.0,0.0,9f4793b,b64ac4bc,none,,,
+2026-10-30,label_context_cards,path_rules,11,5,5/11,0/0,0,0,0,0.0,0.0,9f4793b,3d0f3720,none,,,
+2026-10-30,judge_live_decisions,no_call_floor,12,5,5/12,0/0,0,0,0,0.0,0.0,9f4793b,5a83064b,none,,,
+2026-10-30,narrate_a_turn,no_beat,13,2,2/13,0/0,0,0,0,0.0,0.0,9f4793b,df729105,grader-only,,,0.4077

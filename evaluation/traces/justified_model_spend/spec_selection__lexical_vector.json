@@ -3,7 +3,7 @@
  "cases_sha": "0a2ef76a",
  "component": "spec_selection",
  "defaulted_tags": 0,
- "git_sha": "0c26c03",
+ "git_sha": "9f4793b",
  "impl": "lexical_vector",
  "label": "eval-trace",
  "summary": {
@@ -20,7 +20,7 @@
   "model_calls": 0,
   "passed": 56,
   "sample": "",
-  "seconds": 0.5,
+  "seconds": 0.7,
   "seconds_per_case": 0.01,
   "tokens_in": 0,
   "tokens_out": 0

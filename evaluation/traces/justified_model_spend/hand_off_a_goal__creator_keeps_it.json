@@ -1,21 +1,21 @@
 {
  "calls": [],
- "cases_sha": "255c446b",
+ "cases_sha": "5c67e9c3",
  "component": "hand_off_a_goal",
  "defaulted_tags": 0,
- "git_sha": "8ce3092",
+ "git_sha": "9f4793b",
  "impl": "creator_keeps_it",
  "label": "eval-trace",
  "summary": {
   "cases": 18,
   "cli_reported_cost_usd": 0.0,
   "component": "hand_off_a_goal",
-  "dev": "6/18",
+  "dev": "8/18",
   "heldout": "0/0",
   "impl": "creator_keeps_it",
   "model": null,
   "model_calls": 0,
-  "passed": 6,
+  "passed": 8,
   "sample": "",
   "seconds": 0.0,
   "tokens_in": 0,
@@ -38,7 +38,7 @@
    "calls": 0,
    "id": "HOG-DO-03",
    "kind": "doability",
-   "ok": false
+   "ok": true
   },
   {
    "calls": 0,
@@ -68,7 +68,7 @@
    "calls": 0,
    "id": "HOG-DO-08",
    "kind": "doability",
-   "ok": false
+   "ok": true
   },
   {
    "calls": 0,
