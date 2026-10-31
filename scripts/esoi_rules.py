@@ -1,5 +1,5 @@
-"""QAR's own rules: S15 (environment variables are documented) and Q1 (solution tags come from the maintained list and
-link the problems they mitigate). Q1 and the tag lookup live in ``esoi_tags.py`` (the solution tag-solutions); they
+"""QAR's own rules: S15 (environment variables are documented), Q1 (solution tags come from the maintained list and
+link the problems they mitigate) and Q2 (every metric's first cascading stage is model-free). Q1 and the tag lookup live in ``esoi_tags.py`` (the solution tag-solutions); they
 are registered and re-exported here, so ``python scripts/esoi_rules.py <id> ...`` still runs the lookup.
 
 It depends on QAR's naming convention (``QAR_*``) and its generated configuration page, and sits beside
@@ -11,6 +11,7 @@ import functools
 from pathlib import Path
 
 import env_vars
+from esoi import cascade
 from esoi.rules.base import Context, RuleGroup
 from esoi_tags import (TAG_PROCEDURE, main, read_tags, solution_tags, solutions_sharing, split,  # noqa: F401
                        tag_notes, tag_problems, tags_of)
@@ -61,11 +62,36 @@ def write_docs(ctx: Context) -> None:
     (Path(ctx.root) / "docs" / "configuration.md").write_text(env_vars.render_env_doc(Path(ctx.root)))
 
 
+def model_free_first_stage(ctx: Context) -> list:
+    """Q2: a metric's ``cascading_conditionals`` starts with a stage whose runs call no model (``real=no``), so a result
+    exists before any model is paid for. A metric with no such arm yet is waived by metric id, the reason naming the build."""
+    bad = []
+    for metric in ctx.registry.metrics:
+        metric_id = metric.get("metric_id", "")
+        stages, errors = cascade.parse(metric.get("cascading_conditionals", ""))
+        if errors:
+            continue   # S32 reports a list that cannot be read
+        if not stages:
+            why = "has no cascading_conditionals"
+        elif stages[0].real is not False:
+            why = f"starts with the {stages[0].name} stage, which is not model-free"
+        else:
+            continue
+        if not ctx.waived("Q2", metric_id):
+            bad.append(f"Q2 metrics.csv {metric_id}: {why}; its first stage must be `real=no` "
+                       "(e.g. `offline [sample=full | real=no | gate=all-pass | when=...]`) backed by an arm that calls no model: "
+                       "the no-model floor, a scripted ideal, a structure check; or waive naming the metric and the build needed")
+    return bad
+
+
 RULES = [RuleGroup({"S15": "Every environment variable read in the package is a row of docs/configuration.md "
                            "(generated from the code, described in env_descriptions.csv)."}, env_docs),
          RuleGroup({"Q1": "Every solution tag is a row of esoi/tags.csv with a meaning and the problems it mitigates "
                           "(problem_ids that resolve), and every listed tag is used by some solution and not by all."},
-                   solution_tags)]
+                   solution_tags),
+         RuleGroup({"Q2": "Every metric's cascading_conditionals starts with a model-free stage (real=no) backed by an arm that "
+                          "calls no model (the no-model floor, a scripted ideal, a structure check), or a waiver in "
+                          "esoi/waivers.csv names the metric and the build it needs."}, model_free_first_stage)]
 
 
 if __name__ == "__main__":
