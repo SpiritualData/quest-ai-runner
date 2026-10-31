@@ -87,9 +87,7 @@ from .interactive_session_text import (  # noqa: F401
     _HELP,
     _SLASH_COMMANDS,
 )
-from .interactive_session_store import (  # noqa: F401
-    ChatSessionStore,
-)
+from .adapters.conversation_session_store import ChatSessionStore  # noqa: F401
 from .interactive_session_persona import (  # noqa: F401
     _PERSONA_RESOLUTION_TIMEOUT_SECONDS,
     _make_startup_notifier,

@@ -1,7 +1,7 @@
 """ChatSessionStore: the ConversationStore for an active chat session (shared by the terminal and live channels).
 
 Lives in the adapters layer so both the attended terminal session and the channel lane can import it without a
-layer violation. ``interactive_session_store.py`` and ``interactive_session.py`` re-export it.
+layer violation. ``interactive_session.py`` re-exports it.
 """
 from __future__ import annotations
 

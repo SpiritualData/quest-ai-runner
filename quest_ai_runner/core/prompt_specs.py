@@ -25,115 +25,35 @@ implicit in its call site:
 registered spec id (or sit in the shrinking baseline of sites not yet migrated), and every spec
 must name a real solution and one of its metrics.
 
-Pure definitions and one registry; no model call is made here and nothing here knows an org.
+The mechanics (``PromptSpec``, ``PromptRegistry``, the no-em-dash rule) are the hub's, ``hubofhubs.models.prompt_spec``. What stays
+here is QAR's binding: its tier names (``model_registry.TIERS``) and its usage log (``usage.tag_spec``), injected into the hub's
+spec class, and the one registry every QAR prompt joins. No model call is made here and nothing here knows an org.
 """
 from __future__ import annotations
 
-import string
-from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any
+
+from hubofhubs.models import prompt_spec as hub
 
 from ..usage import tag_spec
 from .model_registry import TIERS
 
-# The cache layers of ``prompt_layers.PromptLayers`` plus ``none`` for a one-shot prompt.
-CACHE_LAYERS = ("head", "context", "tail", "none")
+CACHE_LAYERS = hub.CACHE_LAYERS
+CALLER_TIER = hub.CALLER_TIER
+NO_EM_DASH_RULE = hub.NO_EM_DASH_RULE
+with_no_em_dash_rule = hub.with_no_em_dash_rule
 
-# A tier chosen by a configured setting, not fixed by the prompt.
-CALLER_TIER = "caller"
+# The hub's spec class bound to QAR's tier names and usage log: each render tags the model call that follows.
+PromptSpec = hub.bind_spec_class(TIERS, tag_spec)
 
-# Appended by ``render`` to every prompt that tells a model what to write.
-NO_EM_DASH_RULE = (
-    "Never use em dashes; use two sentences, a comma, a colon, or parentheses instead."
-)
-
-
-@dataclass(frozen=True)
-class PromptSpec:
-    """One declared prompt. See the module docstring for each field."""
-
-    id: str
-    solution: str
-    metric: str
-    tier: str
-    cache_layer: str
-    template: str
-    inputs: Tuple[str, ...] = ()
-    output_schema: Optional[Mapping[str, Any]] = None
-    writes_text: bool = True
-
-    def __post_init__(self) -> None:
-        if not self.id or not self.solution or not self.metric:
-            raise ValueError(f"prompt spec {self.id!r} needs an id, a solution and a metric")
-        if self.tier not in TIERS and self.tier != CALLER_TIER:
-            raise ValueError(f"prompt spec {self.id!r}: tier {self.tier!r} is not one of "
-                             f"{TIERS + (CALLER_TIER,)}")
-        if self.cache_layer not in CACHE_LAYERS:
-            raise ValueError(f"prompt spec {self.id!r}: cache_layer {self.cache_layer!r} is not "
-                             f"one of {CACHE_LAYERS}")
-
-    def render(self, **values: Any) -> str:
-        """The prompt text, filled with ``values`` and carrying the no-em-dash rule.
-
-        A spec with no ``inputs`` is returned verbatim (its text may hold literal braces); a spec
-        with inputs is filled with ``str.format``. Values must match ``inputs`` exactly, so a typo
-        or a forgotten slot fails here rather than reaching a model.
-        """
-        given, wanted = set(values), set(self.inputs)
-        if given != wanted:
-            raise ValueError(f"prompt {self.id!r} takes {sorted(wanted)}; got {sorted(given)}")
-        tag_spec(self.id)   # the model call that follows is recorded under this id (usage.SpendLog)
-        text = self.template.format(**values) if self.inputs else self.template
-        return with_no_em_dash_rule(text) if self.writes_text else text
-
-
-def with_no_em_dash_rule(text: str) -> str:
-    """``text`` with the no-em-dash rule appended unless it already states it (idempotent)."""
-    if "em dash" in text.lower() or "em-dash" in text.lower():
-        return text
-    return f"{text.rstrip()}\n\n{NO_EM_DASH_RULE}"
-
-
-SPECS_BY_ID: Dict[str, PromptSpec] = {}
-
-
-def register(spec: PromptSpec) -> PromptSpec:
-    """Add ``spec`` to the registry and return it; an id is registered once."""
-    existing = SPECS_BY_ID.get(spec.id)
-    if existing is not None and existing != spec:
-        raise ValueError(f"prompt id {spec.id!r} is already registered with a different spec")
-    SPECS_BY_ID[spec.id] = spec
-    return spec
-
-
-def declare(spec_id: str, *, solution: str, metric: str, tier: str, cache_layer: str,
-            template: str, output_schema: Optional[Mapping[str, Any]] = None,
-            writes_text: bool = True) -> PromptSpec:
-    """Register a spec whose ``inputs`` are read from the template's own ``{slots}``.
-
-    The usual way to declare a prompt that already exists as a ``str.format`` template: the slots
-    cannot drift from the text, and ``render`` then refuses any call that fills different ones.
-    """
-    slots = []
-    for _, field, _, _ in string.Formatter().parse(template):
-        name = (field or "").split(".")[0].split("[")[0]
-        if name and name not in slots:
-            slots.append(name)
-    return register(PromptSpec(
-        id=spec_id, solution=solution, metric=metric, tier=tier, cache_layer=cache_layer,
-        template=template, inputs=tuple(slots), output_schema=output_schema,
-        writes_text=writes_text))
-
-
-def get_spec(spec_id: str) -> PromptSpec:
-    """The registered spec for ``spec_id``; ``KeyError`` names the id when it is unknown."""
-    try:
-        return SPECS_BY_ID[spec_id]
-    except KeyError:
-        raise KeyError(f"no prompt spec registered under {spec_id!r}") from None
+REGISTRY = hub.PromptRegistry(PromptSpec)
+SPECS_BY_ID = REGISTRY.specs
+register = REGISTRY.register
+declare = REGISTRY.declare
+get_spec = REGISTRY.get
 
 
 def render_prompt(spec_id: str, **values: Any) -> str:
     """Render the registered prompt ``spec_id``. Call sites use this with a literal id, which is
     what ``tests/test_prompt_specs.py`` looks for."""
-    return get_spec(spec_id).render(**values)
+    return REGISTRY.render(spec_id, **values)
