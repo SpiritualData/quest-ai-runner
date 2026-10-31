@@ -655,7 +655,8 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
                      "report what is due, find the goals a person owns, or look a goal up by its "
                      "words. Also when the person asks what to focus on, do next or start with today or "
                      "this week: the quests in CONTEXT name only their outcome, so call this once per "
-                     "quest that bears on it (soonest due first) before you advise. Read it BEFORE "
+                     "quest that bears on it (soonest due first) before you advise, passing each quest's id from "
+                     "CONTEXT as quest_id (with no quest open in the chat the call fails without it). Read it BEFORE "
                      "writing any message that lists goals."),
         when_not_to_use=("Whole-portfolio views across quests. A write to a goal (update_goal, "
                          "create_goal). Never write goal lines into a message without reading them here."),

@@ -151,3 +151,13 @@ def test_the_planner_tool_rules_put_a_write_and_its_question_in_one_call_list():
 def test_the_planner_tool_rules_say_a_read_never_runs_a_tool():
     block = build_tool_registry(CREDS).render_planner_block("what should I focus on today")
     assert "A READ never runs a tool" in block
+
+
+def test_the_goals_tool_tells_a_briefing_to_pass_each_quest_id_because_no_quest_is_open():
+    block = build_tool_registry(CREDS).render_planner_block("what should I focus on today")
+    assert "passing each quest's id from CONTEXT as quest_id" in block
+
+
+def test_with_no_quest_open_the_goals_tool_says_to_pass_a_quest_id_and_not_that_there_are_none():
+    result = ops.list_quest_goals_spec(CREDS, client_factory=lambda: None).handler({}, ToolContext())
+    assert not result.ok and "pass quest_id" in result.text
