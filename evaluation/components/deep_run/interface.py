@@ -9,7 +9,7 @@ guarantees. The model-judged half (does this live log say the worker should stop
 
 Kinds and the dict a solution returns:
   review_parse      args {text}                        -> {"stop": bool|None, "reason"}   (watchdog reply)
-  review_fail_open  args {reply}                       -> {"stop", "reason"}  (``_review_liveness`` with a
+  review_fail_open  args {reply}                       -> {"stop", "reason"}  (``review_liveness`` with a
                                                           scripted reviewer; "__raise__" makes it raise)
   escalation_id     args {output}                      -> {"id": str|None}
   resume_missing    args {returncode, output, stderr}  -> {"missing": bool}

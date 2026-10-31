@@ -1,5 +1,5 @@
 """CURRENT: the production deterministic rules, called directly. ``parse_deep_review``,
-``SubprocessGoalRunner._review_liveness`` (with a scripted reviewer and no session file), the escalation,
+``SubprocessGoalRunner.review_liveness`` (with a scripted reviewer and no session file), the escalation,
 resume and envelope helpers, ``compose_goal_prompt``, ``GoalRunner.run``'s met-vs-limit normalisation, and
 the real Orchestrator goal loop with a scripted runner and verifier. The environment is pinned (no standing
 instructions file) so the prompt is the library's own. Zero model calls; no worker is started."""
@@ -112,7 +112,7 @@ def build(meter):  # noqa: ARG001
                 return args["reply"]
             runner = SubprocessGoalRunner(SubprocessConfig(working_dir=tempfile.gettempdir(), claude_path="claude",
                                                            reviewer=reviewer))
-            stop, reason, _ = runner._review_liveness(tempfile.gettempdir(), None, 600, None, "eval")
+            stop, reason, _ = runner.review_liveness(tempfile.gettempdir(), None, 600, None, "eval")
             return {"stop": stop, "reason": reason}
         if kind == "escalation_id":
             return {"id": grc.extract_escalation_id(args["output"])}

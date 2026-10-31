@@ -13,7 +13,7 @@ monitoring, downloads) must come back False, because a wrong stop loses work tha
 
 * ``rule_floor`` (offline, recorded): a keyword-and-threshold rule, no model. The floor a model must beat.
 * ``live_reviewer`` (needs the ``claude`` CLI, waived in waivers.csv S10): the production prompt, parser
-  and one-shot ``claude -p`` call (``SubprocessGoalRunner._call_reviewer_cli``) at the review model.
+  and one-shot ``claude -p`` call (``SubprocessGoalRunner.call_reviewer_cli``) at the review model.
 
 Labels follow the rule in ``DEEP_REVIEW_PROMPT``; the rule-floor score therefore measures how much of the
 judgement a threshold can carry, not how good the production reviewer is. The rule floor was written with

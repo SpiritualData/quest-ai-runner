@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from deep_runner.support import normalise
 from quest_ai_runner.adapters import acp_deep_runner as acp
+from hubofhubs.deep import acp_runner as hub_acp
 
 STOP_FOR_EXIT = {0: "end_turn"}
 
@@ -61,8 +62,8 @@ def build(meter):  # noqa: ARG001
             client.on_connect(conn)
             yield conn, None
 
-        real = acp.open_agent_connection
-        acp.open_agent_connection = fake_open
+        real = hub_acp.open_agent_connection
+        hub_acp.open_agent_connection = fake_open
         try:
             runner = acp.AcpDeepRunner(acp.AcpConfig(
                 working_dir="/work", agent_command="/opt/acp/claude-agent-acp",
@@ -72,6 +73,6 @@ def build(meter):  # noqa: ARG001
             except Exception:  # noqa: BLE001
                 return normalise(None, args.get("want"), raised=True)
         finally:
-            acp.open_agent_connection = real
+            hub_acp.open_agent_connection = real
         return normalise(result, args.get("want"))
     return work

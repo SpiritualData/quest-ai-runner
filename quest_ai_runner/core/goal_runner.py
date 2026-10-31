@@ -89,12 +89,3 @@ class SubprocessGoalRunner(HubSubprocessGoalRunner):
     def cli_safe(self, model: Optional[str]) -> Optional[str]:
         """The value to pass as ``claude --model``: this runner's translator, else the registered one, else the syntactic gate."""
         return cli_safe_model(model, self.model_translator)
-
-    def _launch_settings(self) -> DeepLaunchSettings:
-        return self.launch_settings()
-
-    def _build_env(self, requester_user_id: Optional[str] = None, run_id: Optional[str] = None) -> dict:
-        return self.build_env(requester_user_id, run_id)
-
-    def _call_reviewer_cli(self, prompt: str) -> str:
-        return self.call_reviewer_cli(prompt)
