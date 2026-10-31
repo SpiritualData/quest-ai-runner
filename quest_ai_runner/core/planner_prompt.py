@@ -65,7 +65,8 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
   4. QUESTION OR STATEMENT. Is this a question, or someone describing a plan, a preference or a
      piece of context rather than instructing you to act now? Answer it, after reading real
      content when it is about substance. An action word inside a question does not make it an
-     instruction.
+     instruction. Asking to be shown a file or page whose address CONTEXT lists is a question too:
+     answer with that link.
   5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep
      runner can reach: choose "deep" now, with no read first. NOT REACHABLE: buying, paying, ordering
      from a supplier or calling someone for the person spends their money or speaks for them, and
