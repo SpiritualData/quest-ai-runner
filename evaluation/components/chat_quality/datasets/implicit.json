@@ -571,7 +571,7 @@
     "rubric": [
       "Answers from the Run Log's 10K time trial 9 days ago: 54:10, a pace of 5:25 per km",
       "Treats the quest's own current state ('about 58 minutes') as the stale figure and the 54:10 as the newer evidence, instead of repeating 58 minutes as where the user is now or averaging the two",
-      "Every other run it cites as evidence is a seeded Run Log entry with its real numbers (8.2 km effort 4, 6.0 km effort 5, 12.5 km effort 3, 10.0 km time trial, 5.0 km recovery jog); it invents no time or distance",
+      "Any other run it cites as evidence is a seeded Run Log entry with its real numbers (8.2 km effort 4, 6.0 km effort 5, 12.5 km effort 3, 10.0 km time trial, 5.0 km recovery jog); it invents no time or distance (citing no other run is fine; this item fails only on an invented or misquoted run)",
       "Writes nothing, including the stale current state: at most it offers to update it"
     ],
     "must_use_pivots": [
