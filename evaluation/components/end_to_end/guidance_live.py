@@ -63,6 +63,11 @@ def run_case(case, model, max_calls):
     world = drive.new_world(case)
     orch = common.build_offline_orchestrator(meter, registry=world.registry, planner_tier="fast")
     orch.web = world.web
+    if world.web is not None:
+        # The web-read gate acts on the reach judge's verdict, which a deployment opts into with a reach summary.
+        orch.cfg.planner_reach_judge = True
+        orch.cfg.read_reach_summary = ("Reads reach the person's quests, goals and notes. Anything about the world right now "
+                                       "(prices, versions, news) is reachable only through a web search.")
     hosts = tuple((case.get("world") or {}).get("trusted_link_hosts") or ())
     if hosts:   # the offline world has no network: a host the case names is one whose link the guard may keep without fetching it
         from hubofhubs.critique.link_guard import LinkPolicy

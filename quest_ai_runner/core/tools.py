@@ -71,6 +71,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
+from .em_dash_pass import clean_value
 from .requester import apply_requester_env, requester_from_meta
 from .runtime_settings import process_environment
 from .tools_status import ACCEPTED_STATUSES, DONE_STATUSES, RECEIPT_WORDS, ToolStatus, as_status, status_of_error, write_status_of
@@ -573,6 +574,10 @@ class ToolRegistry:
             if pname in resolved and (prop or {}).get("type") == "string" \
                     and isinstance(resolved[pname], (bool, int, float)):
                 resolved[pname] = json.dumps(resolved[pname])
+
+        if spec.mutates:
+            # Text the AI writes into the person's data never carries an em dash (brand rule, enforced here, not asked of the model).
+            resolved = clean_value(resolved)
 
         box: Dict[str, Any] = {}
 

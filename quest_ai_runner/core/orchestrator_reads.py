@@ -417,6 +417,10 @@ class ReadsMixin:
         companion reads for the same quest run too. None of this reads the model's prose.
         """
         work = list(calls[: self.cfg.max_reads_per_step])
+        work, merged = tool_guards.merge_near_duplicates(
+            work, lambda n: self.tools is None or self.tools.get(n) is None or self.tools.get(n).mutates, ctx.quest_id)
+        for name, args in merged:
+            log.info("tool %s: merged a near-identical second call into the first (%s)", name, json.dumps(args, default=str)[:160])
         read_pairs = set()
         for entry in gathered:
             locator = str(entry.get("locator") or "")

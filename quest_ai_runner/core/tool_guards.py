@@ -183,3 +183,85 @@ def detail_reads(registry: Any) -> List[str]:
             if companion not in names and registry.get(companion) is not None:
                 names.append(companion)
     return names
+
+
+#: Two writes of one tool on one quest are the same item when their words overlap at least this much (Jaccard on the lower-cased
+#: word sets). 0.75 is conservative: a note saved twice with a rewording ("Physio cleared easy cycling from Monday; no running" vs
+#: "The physio cleared easy cycling from Monday, no running") scores 0.8 to 0.9, while two goals that share a template ("Run three
+#: times this week" vs "Swim three times this week": 4 of 6 words) or a short phrase ("Plumbing visit" vs "Tile the walls": 0) stay apart.
+NEAR_DUPLICATE_OVERLAP = 0.75
+#: A text under this many words is compared for equality only: one word of overlap on a title of two words proves nothing.
+NEAR_DUPLICATE_MIN_WORDS = 4
+
+
+def text_words(text: str) -> frozenset:
+    return frozenset(WORD_RE.findall(str(text).lower()))
+
+
+def same_item(first: Mapping[str, Any], second: Mapping[str, Any]) -> bool:
+    """Whether two argument sets name the same item: the same keys, every non-text value equal, every text value equal or (when long
+    enough to judge) overlapping nearly entirely with the same numbers in both. A differing figure ("5k" against "10k") is a
+    different item however much else the words share."""
+    if set(first) != set(second):
+        return False
+    wording = False
+    for key, left in first.items():
+        right = second[key]
+        if left == right:
+            continue
+        if not (isinstance(left, str) and isinstance(right, str)) or key.endswith("id"):
+            return False
+        a, b = text_words(left), text_words(right)
+        if min(len(a), len(b)) < NEAR_DUPLICATE_MIN_WORDS or any(w.isdigit() or any(c.isdigit() for c in w) for w in a ^ b):
+            return False
+        if len(a & b) / len(a | b) < NEAR_DUPLICATE_OVERLAP:
+            return False
+        wording = True
+    return wording
+
+
+def merge_near_duplicates(calls: Sequence[Mapping[str, Any]], is_write: Any, pinned: Optional[str] = None
+                          ) -> Tuple[List[Mapping[str, Any]], List[Tuple[str, Mapping[str, Any]]]]:
+    """Of the calls one step proposes, drop each write that repeats an earlier write of the same tool on the same quest with the
+    same item in other words (the cheap planner's habit of saving a note or a goal twice). ``is_write(name)`` says whether a tool
+    changes data; reads are never merged. Returns the calls to run and the dropped ones as (name, args). The first wording wins."""
+    kept: List[Mapping[str, Any]] = []
+    dropped: List[Tuple[str, Mapping[str, Any]]] = []
+    for call in calls:
+        name = call.get("name") or ""
+        args = dict(call.get("args") or {})
+        target = str(args.get("quest_id") or pinned or "")
+        twin = None
+        if is_write(name):
+            twin = next((k for k in kept if (k.get("name") or "") == name
+                         and str((k.get("args") or {}).get("quest_id") or pinned or "") == target
+                         and same_item(dict(k.get("args") or {}), args)), None)
+        if twin is None:
+            kept.append(call)
+        else:
+            dropped.append((name, args))
+    return kept, dropped
+
+
+#: The most characters of the person's message used as the web query a guard issues for them.
+WEB_QUERY_CHARS = 200
+
+
+def web_was_read(gathered: Iterable[Mapping[str, Any]]) -> bool:
+    """Whether this turn already ran a web search or fetched a web page (a failed one counts: it was tried)."""
+    for entry in gathered:
+        if str(entry.get("rel_path") or "").startswith("web_search:") or str(entry.get("locator") or "").startswith("web extract"):
+            return True
+    return False
+
+
+def web_read_owed(verdict: Optional[Mapping[str, Any]], web_configured: bool, gathered: Iterable[Mapping[str, Any]],
+                  message: str) -> Optional[Dict[str, Any]]:
+    """The web read the code runs before an answer, or None. Owed when the reach judge settled that what the person asks lives in
+    the world right now (``reach == "world"``: a current price, a latest version), web research is configured, and the planner
+    chose to answer without a single web read. A structured verdict, never the answer's words."""
+    if not verdict or verdict.get("reach") != "world" or not web_configured or not str(message).strip():
+        return None
+    if web_was_read(gathered):
+        return None
+    return {"web": str(message).strip()[:WEB_QUERY_CHARS]}

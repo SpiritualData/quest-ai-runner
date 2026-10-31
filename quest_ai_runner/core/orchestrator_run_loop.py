@@ -43,6 +43,7 @@ from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
 from .scope_tags import scope_fence_block
 from . import tool_guards
+from .em_dash_pass import remove_em_dashes
 from .tools import ToolContext
 
 
@@ -174,6 +175,15 @@ class RunLoopMixin:
                     log.warning("Link guard skipped: %s: %s", type(e).__name__, e, exc_info=True)
                 # The same turn's DOIs: an invented bare DOI is not a link, so the guard above lets it through.
                 self.strip_unverified_dois(rs, res)
+            # --- EM DASH PASS (core/em_dash_pass.py): brand rule, enforced once on the words the reader gets -------------
+            # Runs after the link guard so a URL is never touched, and before the write-back and EVENT_RESULT so the text shown,
+            # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
+            if res.kind in ("answer", "deep", "confirm"):
+                res.text = remove_em_dashes(res.text)
+                res.question = remove_em_dashes(res.question)
+                for _d in res.deep_results:
+                    if isinstance(getattr(_d, "output", None), str):
+                        _d.output = remove_em_dashes(_d.output)
             # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
             # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
             # so the card PINS them: that is what makes the loop compound and what staleness later
@@ -631,6 +641,19 @@ class RunLoopMixin:
                     rs.plan.action = "tool"
                     rs.plan.tool_calls = _calls
                     emit.status("Reading the quest before answering…")
+
+            # --- WEB-READ GATE: a question about the world right now is answered after a web read ------------------------
+            # The reach judge (opt in) settles where what the person asks lives. When it says "the world right now", web research is
+            # wired and the planner chose to answer without one web read, the code runs the read (``core/tool_guards.py``). Once a turn.
+            if (rs.plan and rs.plan.action == "answer" and message_is_user_turn and self.web is not None
+                    and not getattr(rs, "web_gate_done", False) and step + 1 < cfg.max_steps and not budget_exhausted()):
+                _web_read = tool_guards.web_read_owed(self.reach_verdict(rs.user_message), True, gathered, rs.user_message)
+                if _web_read:
+                    rs.web_gate_done = True
+                    log.info("Web-read gate: the reach judge says this lives in the world right now; searching before answering.")
+                    rs.plan.action = "read"
+                    rs.plan.reads = [_web_read]
+                    emit.status("Searching the web…")
 
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if rs.plan and rs.plan.action == "read":

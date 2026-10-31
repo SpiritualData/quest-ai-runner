@@ -209,3 +209,110 @@ def test_a_planner_about_to_read_elsewhere_reads_the_named_quests_notes_first():
     answer = {"action": "answer", "user_intent": "ask", "rationale": "r", "pending_read": []}
     run_turn("How much of my candle launch budget is left?", [search, answer], [goals, notes])
     assert ran == ["q_biz"]
+
+
+# --- near-duplicate writes in one step ------------------------------------------------------------------------------------------
+
+def write_tool(name):
+    return quest_tool(name, mutates=True)
+
+
+def merged(calls, mutating=("add_quest_note", "create_quest_goal"), pinned="q_fit"):
+    return tool_guards.merge_near_duplicates(calls, lambda n: n in mutating, pinned)
+
+
+def note(text, quest="q_fit", name="add_quest_note"):
+    return {"name": name, "args": {"quest_id": quest, "text": text}}
+
+
+def test_a_note_saved_twice_in_other_words_runs_once():
+    first = note("Physio cleared easy cycling from Monday; no running until the 10 days are up.")
+    second = note("The physio cleared easy cycling from Monday, no running until the 10 days are up.")
+    kept, dropped = merged([first, second])
+    assert kept == [first] and len(dropped) == 1 and dropped[0][0] == "add_quest_note"
+
+
+def test_two_different_goals_in_one_message_are_both_written():
+    plumbing = {"name": "create_quest_goal", "args": {"quest_id": "q_home", "title": "Plumbing visit", "period": "2026_11"}}
+    tiling = {"name": "create_quest_goal", "args": {"quest_id": "q_home", "title": "Tile the walls", "period": "2026_12"}}
+    assert merged([plumbing, tiling])[0] == [plumbing, tiling]
+
+
+def test_goals_that_share_a_template_or_differ_in_a_figure_stay_two():
+    run3 = {"name": "create_quest_goal", "args": {"quest_id": "q_fit", "title": "Run three times this week"}}
+    swim3 = {"name": "create_quest_goal", "args": {"quest_id": "q_fit", "title": "Swim three times this week"}}
+    assert merged([run3, swim3])[0] == [run3, swim3]
+    five = note("Run the long route on Sunday for about 5 km at an easy pace")
+    ten = note("Run the long route on Sunday for about 10 km at an easy pace")
+    assert merged([five, ten])[0] == [five, ten]
+
+
+def test_the_same_text_on_another_quest_another_tool_or_a_read_is_not_merged():
+    text = "Physio cleared easy cycling from Monday; no running until the 10 days are up."
+    other_quest = note(text, quest="q_home")
+    assert len(merged([note(text), other_quest])[0]) == 2
+    assert len(merged([note(text), note(text, name="create_quest_goal")])[0]) == 2
+    assert len(merged([note(text, name="list_notes"), note(text + " ok", name="list_notes")])[0]) == 2
+
+
+def test_a_text_too_short_to_judge_is_compared_for_equality_only():
+    assert len(merged([note("Buy shoes"), note("Buy new shoes")])[0]) == 2
+
+
+def test_the_run_writes_a_near_identical_second_call_once_and_two_different_goals_twice():
+    ran = []
+    goal = write_tool("create_quest_goal")
+    goal.parameters = {"type": "object", "properties": {"quest_id": {"type": "string"}, "title": {"type": "string"}}}
+    goal.handler = lambda args, ctx: ran.append(args["title"]) or ToolResult(ok=True, text="made")
+    orch = orchestrator([goal])
+    run_calls(orch, [{"name": "create_quest_goal", "args": {"quest_id": "q_fit", "title": "Run three times this week, easy pace"}},
+                     {"name": "create_quest_goal", "args": {"quest_id": "q_fit", "title": "Run three times this week at an easy pace"}}])
+    assert ran == ["Run three times this week, easy pace"]
+    ran.clear()
+    run_calls(orch, [{"name": "create_quest_goal", "args": {"quest_id": "q_home", "title": "Plumbing visit"}},
+                     {"name": "create_quest_goal", "args": {"quest_id": "q_home", "title": "Tile the walls"}}])
+    assert ran == ["Plumbing visit", "Tile the walls"]
+
+
+# --- a question about the world right now is read from the web ------------------------------------------------------------------
+
+WORLD = {"reach": "world", "covered_by": None}
+
+
+def test_a_world_verdict_with_web_configured_and_no_web_read_owes_a_search():
+    owed = tool_guards.web_read_owed(WORLD, True, [], "How much does a Duolingo Super subscription cost right now?")
+    assert owed == {"web": "How much does a Duolingo Super subscription cost right now?"}
+
+
+def test_no_search_is_owed_without_web_without_a_world_verdict_or_after_a_web_read():
+    message = "What does it cost right now?"
+    assert tool_guards.web_read_owed(WORLD, False, [], message) is None
+    assert tool_guards.web_read_owed(None, True, [], message) is None
+    assert tool_guards.web_read_owed({"reach": "inside"}, True, [], message) is None
+    assert tool_guards.web_read_owed({"reach": "outside", "covered_by": None}, True, [], message) is None
+    assert tool_guards.web_read_owed(WORLD, True, [{"kind": "query", "rel_path": "web_search:price"}], message) is None
+    assert tool_guards.web_read_owed(WORLD, True, [{"locator": "web extract: https://x.example"}], message) is None
+    assert tool_guards.web_read_owed(WORLD, True, [], "   ") is None
+
+
+def test_the_loop_searches_the_web_before_an_answer_the_reach_judge_called_world_and_not_when_it_did_not():
+    from quest_ai_runner.core.orchestrator import OrchestratorConfig
+
+    from .test_web_reads import FakeWeb
+
+    def run(verdict, decisions):
+        web = FakeWeb()
+        config = OrchestratorConfig()
+        config.overseer = False
+        provider = StubProvider(decisions)
+        orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, web=web)
+        orch.reach_verdict = lambda message: verdict
+        orch.run("How much does the Super plan cost right now?")
+        return web.search_calls
+
+    answer = {"action": "answer", "user_intent": "ask", "rationale": "from memory", "pending_read": []}
+    assert len(run(WORLD, [answer, answer])) == 1
+    assert run({"reach": "inside"}, [answer]) == []
+    assert run(None, [answer]) == []
+    searched = {"action": "read", "reads": [{"web": "super plan price"}], "user_intent": "ask", "rationale": "look it up"}
+    assert len(run(WORLD, [searched, answer])) == 1    # the planner searched itself: the code adds none
