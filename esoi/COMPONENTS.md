@@ -25,7 +25,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `runner-learning` | runner | What a person asked for and has said: ledger, insights, reflections | store-feedback |
 | `adapters-model-providers` | adapters | Swappable ModelProvider implementations routed by model name | call-a-model |
 | `adapters-retrieval` | adapters | RetrievalAdapter and writer implementations over files, DBs, MCP, Notion, Google, Quest | gather-evidence, write-files, write-through-mcp, talk-over-a-channel |
-| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository),  card views for the unified search (card_views) | persist-cards, resolve-references, cache-cards, detect-stale-cards, search-cards-and-specs, bound-card-growth, repair-a-card-store, label-context-cards |
+| `adapters-card-store` | adapters | Context card persistence, bootstrap, extraction, update and guidance stores (CardRepository),  card views for the unified search (card_views) | persist-cards, resolve-references, cache-cards, detect-stale-cards, search-cards-and-specs, bound-card-growth, repair-a-card-store, label-context-cards, card-store |
 | `adapters-vector-context` | adapters | Semantic and keyword context assemblers and their scoring helpers | index-by-meaning, select-context |
 | `adapters-web` | adapters | Live web search and page fetch behind pluggable backends | search-the-web |
 | `adapters-deep-runners` | adapters | Alternative DeepRunner implementations | run-deep-work |

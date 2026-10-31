@@ -240,6 +240,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `guide-toward-the-long-term-goal` | Guidance toward the long-term goal | guided_v2 | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
 | `use-open-source-hubs` | Open-source hubs before bespoke integrations | registry_scan | Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `access-quest-operations` | unconfirmed: for Payal to confirm. access-quest-operations |  | unconfirmed: for Payal to confirm. |
+| `card-store` | unconfirmed: for Payal to confirm. QAR card repository as the hub card store | qar-card-repository | none yet |
 
 ## Implementations
 
@@ -506,6 +507,8 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `act-in-the-world:scripted_ideal` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/scripted_ideal.py |  |
 | `act-in-the-world:rules_only` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/rules_only.py |  |
 | `assemble-a-prompt:situational` | unconfirmed: for Payal to confirm | evaluation/components/prompt_size/impls/situational.py |  |
+| `card-store:qar-card-repository` | qar-card-repository | quest_ai_runner/adapters/hub_card_store.py |  |
+| `run-deep-work:lean_guarded` | Lean guarded launch of the deep worker | quest_ai_runner/core/deep_launch.py |  |
 
 ## Metrics
 
