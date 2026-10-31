@@ -28,6 +28,7 @@ Steps for a task you already know you want to do.
   decision-routing roles) and `load_client`, the lightweight sibling of `load_config` for a
   script, notebook, or one-off lookup that only needs a `QuestClient` (see also the README's
   "Scripting the Quest API" and the `quest-ai-runner quest <method>` CLI subcommand).
+- **[Keeping Quest AI Runner current with the hub](how-to/keep-quest-ai-runner-current-with-the-hub.md)**: check the hub's requirements with `doctor`, and notice and resolve a hub update when you lock selections (for an AI agent or a person).
 - **[Keeping the repository clean](how-to/public-hygiene.md)**: the scan that keeps secrets, real machine
   paths and real addresses out of a public repository.
 - **[Implementing adapters](how-to/adapters.md)**: the four interfaces (`RetrievalAdapter`,

@@ -107,6 +107,11 @@ if TYPE_CHECKING:
     from .core.orchestrator import Orchestrator, OrchestratorResult, ProgressEvent
 
 
+def _hub_requirements_notice():
+    from .hub_requirements import startup_notice
+    return startup_notice()
+
+
 class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMixin):
     """Multi-turn interactive session over a RunnerConfig's orchestrator."""
 
@@ -127,6 +132,10 @@ class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMix
         self._console = _Console()
 
         notify_and_log = _make_startup_notifier(self._console, self._startup_notices, _startup_notify)
+        # Calm start: a line only when something REQUIRED by the hub assembly is unmet.
+        _hub_notice = _hub_requirements_notice()
+        if _hub_notice:
+            notify_and_log(_hub_notice)
 
         self._cfg = cfg
         self._rep_name = rep_name

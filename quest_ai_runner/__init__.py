@@ -32,6 +32,7 @@ _install_core_env()
 
 # QAR is Quest's connector to the hub of hubs (``hubofhubs``, a required dependency): the one startup registration of the
 # parts QAR owns, under names QAR owns, where the hub has a seat for them (quest_ai_runner/hub.py).
+from . import hub as _hub  # noqa: E402
 from .hub import register_with_hub as _register_with_hub  # noqa: E402
 
 _register_with_hub()
@@ -52,7 +53,13 @@ if TYPE_CHECKING:  # pragma: no cover — typing only
 
 __version__ = "0.1.0"
 __all__ = ["core", "adapters", "runner", "config", "resources",
-           "load_config", "load_client", "__version__"]
+           "load_config", "load_client", "assembler", "__version__"]
+
+
+def assembler():
+    """QAR's hub Assembler (scope ``quest_ai_runner``), the entry point ``esoi requirements --package quest_ai_runner`` and
+    ``esoi lock --package quest_ai_runner`` look for."""
+    return _hub.child()
 
 
 def load_client(config_path: Optional[str] = None, *, timeout: float = 30.0):

@@ -242,6 +242,14 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="do not write the quest's specification to ESOI_SPEC.md on a pull")
 
     # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
+    doctor_p = sub.add_parser("doctor", help="check the hub assembly's environment (unmet requirements with their fix) and, "
+                                              "when a lock file exists, whether the hub has newer selections")
+    doctor_p.add_argument("--json", action="store_true", help="print the report as JSON")
+    doctor_p.add_argument("--lock", default=None, metavar="FILE", help="the lock file to compare (default esoi.lock.json)")
+    doctor_p.add_argument("--note-quest", default=None, metavar="QUEST_ID",
+                          help="post the update plan as a note on this quest when updates are available (once per plan)")
+    doctor_p.add_argument("--state", default=None, metavar="FILE", help="where --note-quest remembers the plan it posted")
+
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
     poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")

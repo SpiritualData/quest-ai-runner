@@ -71,10 +71,15 @@ def descriptions(root: Path = ROOT) -> dict[str, str]:
     """{variable: one-line description} from esoi/env_descriptions.csv."""
     import csv
     path = root / "esoi" / "env_descriptions.csv"
-    if not path.exists():
-        return {}
-    with path.open(newline="") as fh:
-        return {r["variable"]: r["description"] for r in csv.DictReader(fh)}
+    own = {}
+    if path.exists():
+        with path.open(newline="") as fh:
+            own = {r["variable"]: r["description"] for r in csv.DictReader(fh)}
+    try:   # variables the hub declares are described by the hub, not repeated in QAR's records
+        from quest_ai_runner.hub_requirements import hub_env_descriptions
+        return {**hub_env_descriptions(), **own}
+    except Exception:  # noqa: BLE001
+        return own
 
 
 def render_env_doc(root: Path = ROOT) -> str:

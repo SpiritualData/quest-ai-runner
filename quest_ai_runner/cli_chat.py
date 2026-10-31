@@ -64,6 +64,13 @@ def _cmd_chat(args, log) -> int:
             for p in chat_problems:
                 log.error("chat not ready: %s", p)
             return 1
+        from .hub_requirements import requirements_report
+        report = requirements_report()
+        for line in report.lines():
+            log.info("hub requirements: %s", line)
+        if report.failing():
+            log.error("chat not ready: the hub assembly has unmet requirements; run `quest-ai-runner doctor`")
+            return 1
         log.info("chat prerequisites OK")
         return 0
 
