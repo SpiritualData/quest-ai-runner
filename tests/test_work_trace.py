@@ -82,6 +82,37 @@ def test_scholarly_result_becomes_citation_lines():
     assert "PRIVATE ABSTRACT" not in json.dumps(step)
 
 
+def test_a_second_search_does_not_count_the_same_paper_twice():
+    """Found by the real run of 2026-11-01: three searches summed to 514 found and 15 read from overlapping results."""
+    sink, trace = make()
+    first = [{"title": "A", "authors": ["Ana Lee"], "year": 2020, "doi": "10.1/a"}, {"title": "B", "authors": [], "year": 2021, "doi": "10.1/b"}]
+    second = [{"title": "B", "authors": [], "year": 2021, "doi": "10.1/b"}, {"title": "C", "authors": [], "year": 2022, "doi": "10.1/c"}]
+    for works, total in ((first, 207), (second, 294)):
+        trace.papers_started()
+        trace.papers_searched(ToolResult(ok=True, text="T", data={"works": works, "total": total}))
+    step = sink.latest()["papers"]
+    assert step["counts"] == {"found": 294, "read": 3} and len(step["items"]) == 3
+
+
+def test_one_paper_under_two_dois_is_read_once():
+    sink, trace = make()
+    trace.papers_started()
+    works = [{"title": "Training Load and Knee Pain", "authors": [], "year": 2020, "doi": "10.1/preprint"},
+             {"title": "TRAINING LOAD AND KNEE PAIN", "authors": [], "year": 2020, "doi": "10.1/journal"}]
+    trace.papers_searched(ToolResult(ok=True, text="T", data={"works": works, "total": 2}))
+    assert sink.latest()["papers"]["counts"] == {"found": 2, "read": 1}
+
+
+def test_web_items_say_which_pages_were_opened_and_which_a_search_only_listed():
+    sink, trace = make()
+    trace.web_started()
+    trace.web_searched(Observation(kind="query", hits=[{"title": "A", "url": "https://a.example/x"}, {"title": "B", "url": "https://b.example/y"}]))
+    trace.web_started()
+    trace.web_page_read("https://a.example/x", Observation(kind="page", text="p"))
+    kinds = {i["ref"]: i["kind"] for i in sink.latest()["web"]["items"]}
+    assert kinds == {"a.example": "read", "b.example": "found"}
+
+
 def test_scholarly_failure():
     sink, trace = make()
     trace.papers_started()

@@ -1,0 +1,2059 @@
+[
+ {
+  "id": "TRACE-OFF-01",
+  "kind": "web",
+  "surface": "solo",
+  "message": "Which browsers support the CSS anchor positioning feature now?",
+  "reply": "Chrome and Edge support it; Safari has it in its latest release; Firefox is still behind a flag, according to the pages I read.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 8,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 8,
+     "read": 3,
+     "failed": 1
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     },
+     {
+      "ref": "site1.example",
+      "label": "site1.example"
+     },
+     {
+      "ref": "site2.example",
+      "label": "Page about site2"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "web_search",
+    "hits": [
+     {
+      "url": "https://site0.example/p"
+     },
+     {
+      "url": "https://site1.example/p"
+     },
+     {
+      "url": "https://site2.example/p"
+     },
+     {
+      "url": "https://site3.example/p"
+     },
+     {
+      "url": "https://site4.example/p"
+     },
+     {
+      "url": "https://site5.example/p"
+     },
+     {
+      "url": "https://site6.example/p"
+     },
+     {
+      "url": "https://site7.example/p"
+     }
+    ]
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site0.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site1.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site2.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://down.example/",
+    "ok": false
+   },
+   {
+    "kind": "links",
+    "verdicts": [
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     }
+    ]
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-02",
+  "kind": "web",
+  "surface": "solo",
+  "message": "What is the newest stable Python and what changed?",
+  "reply": "The newest stable release is 3.15.2 according to search results; I have not opened the release notes yet.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 8,
+     "read": 0
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 8,
+     "read": 0
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "web_search",
+    "hits": [
+     {
+      "url": "https://site0.example/p"
+     },
+     {
+      "url": "https://site1.example/p"
+     },
+     {
+      "url": "https://site2.example/p"
+     },
+     {
+      "url": "https://site3.example/p"
+     },
+     {
+      "url": "https://site4.example/p"
+     },
+     {
+      "url": "https://site5.example/p"
+     },
+     {
+      "url": "https://site6.example/p"
+     },
+     {
+      "url": "https://site7.example/p"
+     }
+    ]
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-03",
+  "kind": "papers",
+  "surface": "solo",
+  "message": "Does spaced repetition beat massed practice for adults learning a language? Cite papers.",
+  "reply": "Yes, in the abstracts I read it did, with moderate effects.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 31,
+     "read": 3
+    },
+    "items": [
+     {
+      "ref": "10.1000/p0",
+      "label": "Study 0 of training load and injury",
+      "sub": "Author0 et al., 2015"
+     },
+     {
+      "ref": "10.1000/p1",
+      "label": "Study 1 of training load and injury",
+      "sub": "Author1 et al., 2016"
+     },
+     {
+      "ref": "10.1000/p2",
+      "label": "Study 2 of training load and injury",
+      "sub": "Author2 et al., 2017"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "papers",
+    "works": [
+     {
+      "title": "Study 0"
+     },
+     {
+      "title": "Study 1"
+     },
+     {
+      "title": "Study 2"
+     }
+    ],
+    "total": 31
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-04",
+  "kind": "records",
+  "surface": "solo",
+  "message": "What should I focus on this week across my quests?",
+  "reply": "Your marathon and morning pages quests both slipped last week, so start there.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 2,
+     "read": 2
+    },
+    "items": [
+     {
+      "ref": "card-0",
+      "label": "Run a marathon in April",
+      "kind": "quest"
+     },
+     {
+      "ref": "card-1",
+      "label": "Morning pages habit",
+      "kind": "quest"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "card-0"
+     },
+     {
+      "id": "card-1"
+     }
+    ]
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-05",
+  "kind": "mixed",
+  "surface": "solo",
+  "message": "Plan my marathon taper and check the evidence on tapering length.",
+  "reply": "A two to three week taper is supported by the papers; here is a plan for your April race.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 1,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "card-0",
+      "label": "Run a marathon in April",
+      "kind": "quest"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 20,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 20,
+     "read": 14
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     },
+     {
+      "ref": "site1.example",
+      "label": "site1.example"
+     },
+     {
+      "ref": "site2.example",
+      "label": "Page about site2"
+     },
+     {
+      "ref": "site3.example",
+      "label": "site3.example"
+     },
+     {
+      "ref": "site4.example",
+      "label": "Page about site4"
+     },
+     {
+      "ref": "site5.example",
+      "label": "site5.example"
+     },
+     {
+      "ref": "site6.example",
+      "label": "Page about site6"
+     },
+     {
+      "ref": "site7.example",
+      "label": "site7.example"
+     },
+     {
+      "ref": "site8.example",
+      "label": "Page about site8"
+     },
+     {
+      "ref": "site9.example",
+      "label": "site9.example"
+     },
+     {
+      "ref": "site10.example",
+      "label": "Page about site10"
+     },
+     {
+      "ref": "site11.example",
+      "label": "site11.example"
+     },
+     {
+      "ref": "site12.example",
+      "label": "Page about site12"
+     },
+     {
+      "ref": "site13.example",
+      "label": "site13.example"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 31,
+     "read": 3
+    },
+    "items": [
+     {
+      "ref": "10.1000/p0",
+      "label": "Study 0 of training load and injury",
+      "sub": "Author0 et al., 2015"
+     },
+     {
+      "ref": "10.1000/p1",
+      "label": "Study 1 of training load and injury",
+      "sub": "Author1 et al., 2016"
+     },
+     {
+      "ref": "10.1000/p2",
+      "label": "Study 2 of training load and injury",
+      "sub": "Author2 et al., 2017"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "links",
+    "solution_id": "watch-for-risk",
+    "kind": "check",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "checked": 6,
+     "failed": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "card-0"
+     }
+    ]
+   },
+   {
+    "kind": "web_search",
+    "hits": [
+     {
+      "url": "https://site0.example/p"
+     },
+     {
+      "url": "https://site1.example/p"
+     },
+     {
+      "url": "https://site2.example/p"
+     },
+     {
+      "url": "https://site3.example/p"
+     },
+     {
+      "url": "https://site4.example/p"
+     },
+     {
+      "url": "https://site5.example/p"
+     },
+     {
+      "url": "https://site6.example/p"
+     },
+     {
+      "url": "https://site7.example/p"
+     },
+     {
+      "url": "https://site8.example/p"
+     },
+     {
+      "url": "https://site9.example/p"
+     },
+     {
+      "url": "https://site10.example/p"
+     },
+     {
+      "url": "https://site11.example/p"
+     },
+     {
+      "url": "https://site12.example/p"
+     },
+     {
+      "url": "https://site13.example/p"
+     },
+     {
+      "url": "https://site14.example/p"
+     },
+     {
+      "url": "https://site15.example/p"
+     },
+     {
+      "url": "https://site16.example/p"
+     },
+     {
+      "url": "https://site17.example/p"
+     },
+     {
+      "url": "https://site18.example/p"
+     },
+     {
+      "url": "https://site19.example/p"
+     }
+    ]
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site0.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site1.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site2.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site3.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site4.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site5.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site6.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site7.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site8.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site9.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site10.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site11.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site12.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site13.example/p",
+    "ok": true
+   },
+   {
+    "kind": "papers",
+    "works": [
+     {
+      "title": "Study 0"
+     },
+     {
+      "title": "Study 1"
+     },
+     {
+      "title": "Study 2"
+     }
+    ],
+    "total": 31
+   },
+   {
+    "kind": "links",
+    "verdicts": [
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     }
+    ]
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-06",
+  "kind": "group",
+  "surface": "group",
+  "message": "Given our team's quests, what is at risk this week?",
+  "reply": "The candle launch and the marathon plan are both at risk; see the dates.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 3,
+     "read": 3
+    },
+    "items": [
+     {
+      "ref": "card-0",
+      "label": "Run a marathon in April",
+      "kind": "quest"
+     },
+     {
+      "ref": "card-1",
+      "label": "Morning pages habit",
+      "kind": "quest"
+     },
+     {
+      "ref": "card-2",
+      "label": "Launch candle shop",
+      "kind": "quest"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 5,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 5,
+     "read": 2
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     },
+     {
+      "ref": "site1.example",
+      "label": "site1.example"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "card-0"
+     },
+     {
+      "id": "card-1"
+     },
+     {
+      "id": "card-2"
+     }
+    ]
+   },
+   {
+    "kind": "web_search",
+    "hits": [
+     {
+      "url": "https://site0.example/p"
+     },
+     {
+      "url": "https://site1.example/p"
+     },
+     {
+      "url": "https://site2.example/p"
+     },
+     {
+      "url": "https://site3.example/p"
+     },
+     {
+      "url": "https://site4.example/p"
+     }
+    ]
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site0.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site1.example/p",
+    "ok": true
+   }
+  ],
+  "private_titles": [
+   "Run a marathon in April",
+   "Morning pages habit",
+   "Launch candle shop"
+  ],
+  "stage": "offline",
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-07",
+  "kind": "none",
+  "surface": "solo",
+  "message": "Thanks, that helps!",
+  "reply": "You are welcome.",
+  "events": [],
+  "calls": [],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-08",
+  "kind": "links",
+  "surface": "solo",
+  "message": "Find me the registration page for the spring 10k.",
+  "reply": "I could not verify the registration link, so I left it out; search the race name on the organiser's site.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "links",
+    "solution_id": "watch-for-risk",
+    "kind": "check",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "checked": 3,
+     "failed": 1
+    },
+    "items": [],
+    "affects_user": true,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "links",
+    "verdicts": [
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "OK"
+     },
+     {
+      "verdict": "BAD"
+     }
+    ]
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-09",
+  "kind": "failed",
+  "surface": "solo",
+  "message": "What is the weather like in Lisbon next week?",
+  "reply": "I could not reach a weather source just now.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "failed",
+    "counts": {
+     "found": 0,
+     "read": 0,
+     "failed": 2
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-10",
+  "kind": "notice",
+  "surface": "solo",
+  "message": "Summarise my last three reflections.",
+  "reply": "Across three reflections, sleep and travel come up most.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 1,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "card-0",
+      "label": "Morning pages habit",
+      "kind": "quest"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "failover",
+    "solution_id": "call-a-model",
+    "kind": "notice",
+    "label_key": "workTrace.notice.slower",
+    "state": "done",
+    "counts": {},
+    "items": [],
+    "affects_user": true,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "card-0"
+     }
+    ]
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-11",
+  "kind": "group",
+  "surface": "group",
+  "message": "Search the web for how other teams run weekly reviews.",
+  "reply": "Three teams publish short written reviews on a fixed day.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 10,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 10,
+     "read": 3
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     },
+     {
+      "ref": "site1.example",
+      "label": "site1.example"
+     },
+     {
+      "ref": "site2.example",
+      "label": "Page about site2"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "web_search",
+    "hits": [
+     {
+      "url": "https://site0.example/p"
+     },
+     {
+      "url": "https://site1.example/p"
+     },
+     {
+      "url": "https://site2.example/p"
+     },
+     {
+      "url": "https://site3.example/p"
+     },
+     {
+      "url": "https://site4.example/p"
+     },
+     {
+      "url": "https://site5.example/p"
+     },
+     {
+      "url": "https://site6.example/p"
+     },
+     {
+      "url": "https://site7.example/p"
+     },
+     {
+      "url": "https://site8.example/p"
+     },
+     {
+      "url": "https://site9.example/p"
+     }
+    ]
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site0.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site1.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site2.example/p",
+    "ok": true
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-OFF-12",
+  "kind": "many",
+  "surface": "solo",
+  "message": "Compare five training plan sites.",
+  "reply": "Plan A suits beginners; plan C is best for time-poor runners.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "running",
+    "counts": {
+     "found": 12,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 12,
+     "read": 12
+    },
+    "items": [
+     {
+      "ref": "site0.example",
+      "label": "Page about site0"
+     },
+     {
+      "ref": "site1.example",
+      "label": "site1.example"
+     },
+     {
+      "ref": "site2.example",
+      "label": "Page about site2"
+     },
+     {
+      "ref": "site3.example",
+      "label": "site3.example"
+     },
+     {
+      "ref": "site4.example",
+      "label": "Page about site4"
+     },
+     {
+      "ref": "site5.example",
+      "label": "site5.example"
+     },
+     {
+      "ref": "site6.example",
+      "label": "Page about site6"
+     },
+     {
+      "ref": "site7.example",
+      "label": "site7.example"
+     },
+     {
+      "ref": "site8.example",
+      "label": "Page about site8"
+     },
+     {
+      "ref": "site9.example",
+      "label": "site9.example"
+     },
+     {
+      "ref": "site10.example",
+      "label": "Page about site10"
+     },
+     {
+      "ref": "site11.example",
+      "label": "site11.example"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "web_search",
+    "hits": [
+     {
+      "url": "https://site0.example/p"
+     },
+     {
+      "url": "https://site1.example/p"
+     },
+     {
+      "url": "https://site2.example/p"
+     },
+     {
+      "url": "https://site3.example/p"
+     },
+     {
+      "url": "https://site4.example/p"
+     },
+     {
+      "url": "https://site5.example/p"
+     },
+     {
+      "url": "https://site6.example/p"
+     },
+     {
+      "url": "https://site7.example/p"
+     },
+     {
+      "url": "https://site8.example/p"
+     },
+     {
+      "url": "https://site9.example/p"
+     },
+     {
+      "url": "https://site10.example/p"
+     },
+     {
+      "url": "https://site11.example/p"
+     }
+    ]
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site0.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site1.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site2.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site3.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site4.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site5.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site6.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site7.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site8.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site9.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site10.example/p",
+    "ok": true
+   },
+   {
+    "kind": "web_page",
+    "url": "https://site11.example/p",
+    "ok": true
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+ },
+ {
+  "id": "TRACE-REAL-WEB",
+  "stage": "real",
+  "kind": "web",
+  "surface": "solo",
+  "message": "What is the latest stable release of Python right now, and what are the headline changes in it?",
+  "reply": "The latest stable release is Python 3.15.0, released October 9, 2026 ([python.org](https://blog.python.org/2026/10/python-3150-final-is-here/)).\n\nIts headline changes:\n\n- **Lazy Imports:** Modules load only when first used, which speeds up startup by an estimated 15 to 20% ([dev.to](https://dev.to/romdevin/python-315-released-new-features-improvements-and-resources-for-developers-2dgf)).\n- **UTF-8 as default encoding:** Standard text I/O now defaults to UTF-8, which makes behavior more consistent across platforms ([plainenglish.io](https://python.plainenglish.io/python-3-15-is-officially-launched-7-changes-that-actually-matter-for-developers-0394bb2d4987)).\n- **New built-ins:** `frozendict` (an immutable dictionary) and `sentinel` (for distinct special values) ([bacancytechnology.com](https://www.bacancytechnology.com/blog/python-3-15)).\n- **Unpacking in comprehensions:** This simplifies flattening nested data ([bacancytechnology.com](https://www.bacancytechnology.com/blog/python-3-15)).\n- **Performance work:** The release includes a JIT compiler upgrade and the Tachyon sampling profiler for lower-overhead profiling ([dev.to](https://dev.to/romdevin/python-315-released-new-features-improvements-and-resources-for-developers-2dgf)).\n\nFor the full list, see the [official 3.15 what's new page](https://docs.python.org/3/whatsnew/3.15.html).",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "trace-web",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.records.looking",
+    "state": "done",
+    "counts": {
+     "found": 4,
+     "read": 4
+    },
+    "items": [
+     {
+      "ref": "card:candle-shop-launch",
+      "label": "Launch hand-poured candles shop: wax shipment slipped, soft launch 3 Nov, bud..."
+     },
+     {
+      "ref": "card:marathon-april-quest",
+      "label": "Run a marathon in April: week 6 of 16, left knee sore after hills, physio vis..."
+     },
+     {
+      "ref": "card:morning-pages-habit",
+      "label": "Morning pages habit: skipping pages on travel days, goal 20 days in a row mor..."
+     },
+     {
+      "ref": "card:spanish-practice",
+      "label": "Conversational Spanish: 25 minute daily practice, stuck on past tenses spanis..."
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:55:42.914Z",
+    "ended_at": "2026-11-01T10:55:42.914Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-web",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.web.reading",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:55:45.782Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-web",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.web.reading",
+    "state": "running",
+    "counts": {
+     "found": 4,
+     "read": 0
+    },
+    "items": [
+     {
+      "ref": "blog.python.org",
+      "label": "python.org",
+      "kind": "found"
+     },
+     {
+      "ref": "medium.com",
+      "label": "medium.com",
+      "kind": "found"
+     },
+     {
+      "ref": "pythonresources.com",
+      "label": "pythonresources.com",
+      "kind": "found"
+     },
+     {
+      "ref": "hidekazu-konishi.com",
+      "label": "hidekazu-konishi.com",
+      "kind": "found"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:55:45.782Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-web",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.web.reading",
+    "state": "done",
+    "counts": {
+     "found": 9,
+     "read": 0
+    },
+    "items": [
+     {
+      "ref": "blog.python.org",
+      "label": "python.org",
+      "kind": "found"
+     },
+     {
+      "ref": "medium.com",
+      "label": "medium.com",
+      "kind": "found"
+     },
+     {
+      "ref": "pythonresources.com",
+      "label": "pythonresources.com",
+      "kind": "found"
+     },
+     {
+      "ref": "hidekazu-konishi.com",
+      "label": "hidekazu-konishi.com",
+      "kind": "found"
+     },
+     {
+      "ref": "dev.to",
+      "label": "dev.to",
+      "kind": "found"
+     },
+     {
+      "ref": "python.plainenglish.io",
+      "label": "plainenglish.io",
+      "kind": "found"
+     },
+     {
+      "ref": "jumpingrivers.com",
+      "label": "jumpingrivers.com",
+      "kind": "found"
+     },
+     {
+      "ref": "docs.python.org",
+      "label": "python.org",
+      "kind": "found"
+     },
+     {
+      "ref": "bacancytechnology.com",
+      "label": "bacancytechnology.com",
+      "kind": "found"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:55:45.782Z",
+    "ended_at": "2026-11-01T10:55:50.270Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-web",
+    "step_id": "links",
+    "solution_id": "watch-for-risk",
+    "kind": "check",
+    "label_key": "workTrace.links.checking",
+    "state": "done",
+    "counts": {
+     "checked": 5,
+     "failed": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:56:07.493Z",
+    "ended_at": "2026-11-01T10:56:07.493Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "web_search",
+    "hits": [
+     {
+      "url": "https://blog.python.org/2026/10/python-3150-final-is-here/"
+     },
+     {
+      "url": "https://medium.com/@ahmadakhlak710/python-in-2026-still-no-1-and-3-15-just-got-interesting-8ca584ffd776"
+     },
+     {
+      "url": "https://pythonresources.com/python-versions/"
+     },
+     {
+      "url": "https://hidekazu-konishi.com/entry/python_version_support_and_eol_timeline.html"
+     }
+    ]
+   },
+   {
+    "kind": "web_search",
+    "hits": [
+     {
+      "url": "https://dev.to/romdevin/python-315-released-new-features-improvements-and-resources-for-developers-2dgf"
+     },
+     {
+      "url": "https://python.plainenglish.io/python-3-15-is-officially-launched-7-changes-that-actually-matter-for-developers-0394bb2d4987"
+     },
+     {
+      "url": "https://www.jumpingrivers.com/blog/whats-new-py315/"
+     },
+     {
+      "url": "https://docs.python.org/3/whatsnew/3.15.html"
+     },
+     {
+      "url": "https://www.bacancytechnology.com/blog/python-3-15"
+     }
+    ]
+   },
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "card:candle-shop-launch",
+      "relevance": 0.5067236388573899
+     },
+     {
+      "id": "card:marathon-april-quest",
+      "relevance": 0.5291083487944888
+     },
+     {
+      "id": "card:morning-pages-habit",
+      "relevance": 0.6413861986794933
+     },
+     {
+      "id": "card:spanish-practice",
+      "relevance": 0.5719372924095143
+     }
+    ]
+   },
+   {
+    "kind": "links",
+    "verdicts": [
+     {
+      "verdict": "ok"
+     },
+     {
+      "verdict": "ok"
+     },
+     {
+      "verdict": "ok"
+     },
+     {
+      "verdict": "ok"
+     },
+     {
+      "verdict": "ok"
+     }
+    ]
+   }
+  ],
+  "private_titles": [],
+  "seconds": 34.8,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store"
+ },
+ {
+  "id": "TRACE-REAL-RECORDS",
+  "stage": "real",
+  "kind": "records",
+  "surface": "solo",
+  "message": "I have a sore knee again. Given my current quests, what should I change this week?",
+  "reply": "Your marathon-april-quest card has you at week 6 of 16 with a sore left knee after hills, so I can suggest changes for this week once I know more. Did the physio set any limits on running or hills, and does the knee hurt during everyday walking or only when you run?",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "trace-records",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.records.looking",
+    "state": "done",
+    "counts": {
+     "found": 1,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "marathon-april-quest",
+      "label": "Run a marathon in April: week 6 of 16, left knee sore after hills, physio vis..."
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:55:45.881Z",
+    "ended_at": "2026-11-01T10:55:45.881Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-records",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.records.looking",
+    "state": "done",
+    "counts": {
+     "found": 1,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "marathon-april-quest",
+      "label": "Run a marathon in April: week 6 of 16, left knee sore after hills, physio vis..."
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:55:45.881Z",
+    "ended_at": "2026-11-01T10:55:58.738Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "marathon-april-quest",
+      "relevance": 1.0
+     }
+    ]
+   }
+  ],
+  "private_titles": [],
+  "seconds": 56.0,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store"
+ },
+ {
+  "id": "TRACE-REAL-PAPERS",
+  "stage": "real",
+  "kind": "papers",
+  "surface": "solo",
+  "message": "What does published research say about whether running volume or hill training raises knee injury risk in recreational marathon trainees? Please cite a few papers.",
+  "reply": "I found no published study that directly tests whether running volume or hill training raises knee injury risk in recreational marathon trainees. I read only titles and abstracts, not full papers, so these are the closest matches:\n\n- **Dos Santos et al. (2026)**, a narrative review of [running volume and knee osteoarthritis in adult runners](https://doi.org/10.56238/sevened2026.009-061). The abstract cuts off before its conclusions, so I can't say what it finds.\n- **Leaver (1999)**, a [case-control study of total running volume and osteoarthritis](http://hdl.handle.net/11427/26670) in weight-bearing joints. It studied ultra-distance runners, so it applies only loosely.\n- **Perugini et al. (2025)**, a [review of lower-limb injuries in marathon running](https://doi.org/10.1007/s12178-025-10000-z). I saw only the title, not an abstract.\n- **Zhao et al. (2025)**, an [MRI study of 14 amateur marathon runners](https://doi.org/10.7717/peerj.19123). It measured knee fat-pad changes after a marathon but did not measure injury risk.\n\nYour sore left knee after hills is worth raising at your physio visit, since these papers can't assess your knee.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "trace-papers",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.records.looking",
+    "state": "done",
+    "counts": {
+     "found": 1,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "marathon-april-quest",
+      "label": "Run a marathon in April: week 6 of 16, left knee sore after hills, physio vis..."
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:54:08.277Z",
+    "ended_at": "2026-11-01T10:54:08.277Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-papers",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.papers.searching",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:54:11.583Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-papers",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.papers.searching",
+    "state": "done",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:54:11.583Z",
+    "ended_at": "2026-11-01T10:54:12.028Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-papers",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.papers.searching",
+    "state": "running",
+    "counts": {
+     "found": 0,
+     "read": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:54:11.583Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-papers",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.papers.searching",
+    "state": "done",
+    "counts": {
+     "found": 19,
+     "read": 8
+    },
+    "items": [
+     {
+      "ref": "10.3389/fphys.2018.00634",
+      "label": "Physiology and Pathophysiology in Ultra-Marathon Running",
+      "sub": "Knechtle and Nikolaidis, 2018"
+     },
+     {
+      "ref": "10.1007/s12178-025-10000-z",
+      "label": "Lower Extremity Musculoskeletal Injuries Associated with Marathon Running",
+      "sub": "Perugini et al., 2025"
+     },
+     {
+      "ref": "10.7717/peerj.19123",
+      "label": "Quantitative MRI reveals infrapatellar fat pad changes after running a marathon",
+      "sub": "Zhao et al., 2025"
+     },
+     {
+      "ref": "work-4",
+      "label": "Osteoarthritis and ultra-distance marathon running",
+      "sub": "Leaver, 1999"
+     },
+     {
+      "ref": "10.1259/bjr.20200833",
+      "label": "Longitudinal study of the morphological and T2* changes of knee cartilages of...",
+      "sub": "Ping et al., 2021"
+     },
+     {
+      "ref": "10.56238/sevened2026.009-061",
+      "label": "ASSOCIATION BETWEEN RUNNING VOLUME AND KNEE OSTEOARTHRITIS IN ADULT RUNNERS:...",
+      "sub": "Santos et al., 2026"
+     },
+     {
+      "ref": "10.1249/jsr.0000000000000636",
+      "label": "Femoral Supracondylar Stress Fracture in an Adult Marathon Runner: A Case Report",
+      "sub": "Yao and Huang, 2019"
+     },
+     {
+      "ref": "10.1136/bjsports-2016-097372.105",
+      "label": "TRAINING TRENDS AND INJURY INCIDENCES AMONG IRISH DISTANCE RUNNERS",
+      "sub": "Griffin et al., 2017"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:54:11.583Z",
+    "ended_at": "2026-11-01T10:54:18.290Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-papers",
+    "step_id": "links",
+    "solution_id": "watch-for-risk",
+    "kind": "check",
+    "label_key": "workTrace.links.checking",
+    "state": "done",
+    "counts": {
+     "checked": 4,
+     "failed": 0
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:54:47.240Z",
+    "ended_at": "2026-11-01T10:54:47.240Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "papers",
+    "works": [],
+    "total": 0
+   },
+   {
+    "kind": "papers",
+    "works": [
+     {
+      "title": "Physiology and Pathophysiology in Ultra-Marathon Running"
+     },
+     {
+      "title": "Lower Extremity Musculoskeletal Injuries Associated with Marathon Running"
+     },
+     {
+      "title": "Quantitative MRI reveals infrapatellar fat pad changes after running a marathon"
+     },
+     {
+      "title": "Osteoarthritis and ultra-distance marathon running"
+     },
+     {
+      "title": "Longitudinal study of the morphological and T2* changes of knee cartilages of marathon runners using prototype software for automatic cartilage segmentation"
+     },
+     {
+      "title": "ASSOCIATION BETWEEN RUNNING VOLUME AND KNEE OSTEOARTHRITIS IN ADULT RUNNERS: A NARRATIVE REVIEW"
+     },
+     {
+      "title": "Femoral Supracondylar Stress Fracture in an Adult Marathon Runner: A Case Report"
+     },
+     {
+      "title": "TRAINING TRENDS AND INJURY INCIDENCES AMONG IRISH DISTANCE RUNNERS"
+     }
+    ],
+    "total": 19
+   },
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "marathon-april-quest"
+     }
+    ]
+   },
+   {
+    "kind": "links",
+    "verdicts": [
+     {
+      "verdict": "ok"
+     },
+     {
+      "verdict": "ok"
+     },
+     {
+      "verdict": "ok"
+     },
+     {
+      "verdict": "ok"
+     }
+    ]
+   }
+  ],
+  "private_titles": [],
+  "seconds": 48.9,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store"
+ },
+ {
+  "id": "TRACE-REAL-GROUP",
+  "stage": "real",
+  "kind": "group",
+  "surface": "group",
+  "message": "I have a sore knee again. Given my current quests, what should I change this week?",
+  "reply": "Sorry about the knee. Your marathon quest is at week 6 of 16, and the left knee has been sore after hills, so I'd like to set the changes against your current pain level and what your physio told you after your last visit.\n\nHow bad is the pain right now: mild, moderate, or sharp? And does it hurt when you walk, or only when you run hills?",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "trace-group",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.records.looking",
+    "state": "done",
+    "counts": {
+     "found": 1,
+     "read": 1
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:54:07.489Z",
+    "ended_at": "2026-11-01T10:54:07.489Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "trace-group",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.records.looking",
+    "state": "done",
+    "counts": {
+     "found": 1,
+     "read": 1
+    },
+    "items": [],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:54:07.489Z",
+    "ended_at": "2026-11-01T10:54:19.811Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "marathon-april-quest"
+     }
+    ]
+   }
+  ],
+  "private_titles": [
+   "Run a marathon in April: week 6 of 16, left knee sore after ",
+   "Morning pages habit: skipping pages on travel days, goal 20 ",
+   "Launch hand-poured candles shop: wax shipment slipped, soft ",
+   "Conversational Spanish: 25 minute daily practice, stuck on p"
+  ],
+  "seconds": 40.5,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store"
+ }
+]

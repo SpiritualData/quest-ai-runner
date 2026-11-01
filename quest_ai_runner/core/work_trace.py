@@ -83,7 +83,7 @@ class TurnTrace:
         self.trace = WorkTrace(emit, trace_id=trace_id, viewer_may_see_titles=viewer_may_see_titles)
         self.lock = threading.Lock()
         self.web: Dict[str, Any] = {"found": 0, "read": 0, "failed": 0, "inflight": 0, "ok": 0, "read_items": {}, "found_items": {}}
-        self.papers: Dict[str, Any] = {"found": 0, "read": 0, "failed": 0, "inflight": 0, "ok": 0, "items": {}}
+        self.papers: Dict[str, Any] = {"found": 0, "read": 0, "failed": 0, "inflight": 0, "ok": 0, "items": {}, "titles": set()}
         self.records: Dict[str, Dict[str, str]] = {}
         self.sent_links = False
 
@@ -92,7 +92,9 @@ class TurnTrace:
     def push_web(self, force_state: Optional[str] = None) -> None:
         w = self.web
         state = force_state or ("running" if w["inflight"] > 0 else ("failed" if w["failed"] and not w["ok"] else "done"))
-        items = list(w["read_items"].values()) + [i for d, i in w["found_items"].items() if d not in w["read_items"]]
+        # ``kind`` tells the screen which domains were opened and which a search only listed, so a listed site is never shown as read.
+        items = ([dict(i, kind="read") for i in w["read_items"].values()]
+                 + [dict(i, kind="found") for d, i in w["found_items"].items() if d not in w["read_items"]])
         counts = {"found": w["found"], "read": w["read"]}
         if w["failed"]:
             counts["failed"] = w["failed"]
@@ -169,17 +171,24 @@ class TurnTrace:
             else:
                 p["ok"] += 1
                 total = (data or {}).get("total")
-                p["found"] += int(total) if isinstance(total, int) and total >= len(works) else len(works)
+                matched = int(total) if isinstance(total, int) and total >= len(works) else len(works)
                 for work in works:
                     if not isinstance(work, Mapping) or not work.get("title"):
                         continue
-                    p["read"] += 1
                     ref = bare_doi(work.get("doi")) or f"work-{len(p['items']) + 1}"
+                    same_title = re.sub(r"\W+", " ", str(work["title"]).lower()).strip()
+                    if ref in p["items"] or same_title in p["titles"]:
+                        continue   # the same work from a second search, or listed under a second DOI, is read once: a count never exceeds the lines shown
+                    p["titles"].add(same_title)
                     item = {"ref": ref, "label": str(work["title"])}
                     sub = surname_citation(work.get("authors"), work.get("year"))
                     if sub:
                         item["sub"] = sub
-                    p["items"].setdefault(ref, item)
+                    p["items"][ref] = item
+                    p["read"] += 1
+                # Searches match overlapping sets, so their totals cannot be added: the largest one is the most the run
+                # can say it found without counting a paper twice.
+                p["found"] = max(p["found"], matched, p["read"])
             self.push_papers()
 
     # -- the person's records ------------------------------------------------------------------
