@@ -51,7 +51,7 @@ BAD = {
 
 
 def test_the_cases_are_whole_and_carry_their_source():
-    assert len(CASES) == 10 and len({c["id"] for c in CASES}) == 10
+    assert len(CASES) == 14 and len({c["id"] for c in CASES}) == 14   # ten from the meeting, four held-out rewordings (GUIDE-11 to 14)
     assert all(len(c["source"]) > 60 and c["expect"] and c["quality_rubric"] for c in CASES)
     assert "—" not in json.dumps(CASES, ensure_ascii=False) and "–" not in json.dumps(CASES, ensure_ascii=False)
 

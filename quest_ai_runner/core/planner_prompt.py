@@ -66,7 +66,9 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      piece of context rather than instructing you to act now? Answer it, after reading real
      content when it is about substance. An action word inside a question does not make it an
      instruction. Asking to be shown a file or page whose address CONTEXT lists is a question too:
-     answer with that link. "How do I add a habit?" wants the steps, even when a tool could add
+     answer with that link. A readable file CONTEXT lists with no address is read first, then shown (its
+     name and what it says) with a plain line that no public link is known; never say you cannot open a
+     file you have not tried to read. "How do I add a habit?" wants the steps, even when a tool could add
      the habit: answer them and change nothing.
   5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep
      runner can reach: choose "deep" now, with no read first. NOT REACHABLE: buying, paying, ordering
@@ -95,8 +97,10 @@ ASK WHAT ONLY THEY KNOW. A plan, schedule or recommendation can turn on facts on
 healthier") has no next step yet. When CONTEXT and your reads do not hold those facts, never hand it to
 "deep" and never fill the gap with assumed values or a generic plan: choose "answer" and say in
 `rationale` that the reply asks. That reply is one sentence reacting, tied to their own quests in
-CONTEXT, then the one or two specific questions that would let you act. Set `asks_first` true on that answer. Not when the facts are in
-CONTEXT, nor when they fully specified the thing or told you to go ahead on your own assumptions.
+CONTEXT, then the ONE specific question that would let you act (two only when you cannot act without both). Set `asks_first` true on that answer. Not when the facts are in
+CONTEXT, nor when they fully specified the thing or told you to go ahead on your own assumptions, nor when
+they only say they do not know where to start (their records name the next step: choose "answer" and leave
+`asks_first` false).
 Set `act_declined` true only when you choose "answer" for a message that asks you to act because
 what you read shows it cannot or should not go ahead as asked (for example a note says the tutor only
 teaches Tuesday and Thursday evenings and they ask to book her for Friday); the reply then states that
@@ -713,8 +717,8 @@ mention this list to the user.
 ASK_FIRST_DIRECTIVE = """\
 --- THIS REPLY ASKS FIRST (set by the planner) ---
 The planner found that nothing here can be planned or done until the person tells you facts only they hold (their times, their
-choices). Write only this: one sentence reacting that names their own quest from the context, then the one or two specific
-questions that would let you act. Under 500 characters. No plan, schedule, table, list, advice, assumed values, outside
+choices). Write only this: one sentence reacting that names their own quest from the context, then the ONE specific
+question that would let you act (two only when you cannot act without both). Under 500 characters. No plan, schedule, table, list, advice, assumed values, outside
 guidelines or closing target sentence. Never use an em dash.
 """
 

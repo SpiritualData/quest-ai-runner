@@ -433,20 +433,36 @@
     [
      "public link",
      "public address",
+     "public web address",
+     "web address",
      "public url",
      "no link",
      "no address",
      "not public",
      "no known",
      "no shareable",
-     "not shared"
+     "not shared",
+     "don't have a link",
+     "do not have a link",
+     "don't have a public",
+     "do not have a public",
+     "no web",
+     "not have a web",
+     "no clickable",
+     "can't make it clickable",
+     "cannot make it clickable",
+     "can't make it a clickable",
+     "cannot make it a clickable",
+     "can't link",
+     "cannot link",
+     "no url"
     ]
    ],
    "min_reply_chars": 40,
    "reply_lacks_regex": [
     "[\\u2014\\u2013]",
     "https?://",
-    "(can(no|')t|unable to|not able to) (access|open|read)"
+    "(can(no|')t|unable to|not able to) (access|open|read) (?!(the )?(full|rest|whole|entire|more)\\b)"
    ]
   },
   "quality_rubric": [
