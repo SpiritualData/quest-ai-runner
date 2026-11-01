@@ -549,6 +549,23 @@ def write_report():
     print(f"report written to {RESULTS_MD}")
 
 
+def tidy_leftover_asks():
+    """Cancel every open approval card the eval account raised to itself and nobody answered, before a run or after a reset, so old
+    test asks never pile up on the account and never ride into a later case's context (an invented 'pending goal' in IMP-028 came
+    from 7 October asks). Safe by construction: ``sweep_cancel_candidates`` returns only OPEN, SELF-authored decisions that are not
+    the world's quest-creation asks, and the cancel is the no-side-effect path of ``cancel_own_asks.py`` (it never runs the parked
+    write and never records a decline). Holds the world lock already; a failure here never stops the run."""
+    try:
+        candidates = W.sweep_cancel_candidates()
+        if candidates:
+            W.cancel_decisions([c["decision_id"] for c in candidates])
+        print(f"tidied {len(candidates)} leftover ask(s) on the eval account")
+        return len(candidates)
+    except Exception as exc:  # noqa: BLE001 -- housekeeping must not stop an evaluation
+        print(f"could not tidy leftover asks ({type(exc).__name__}: {exc})")
+        return 0
+
+
 def cleanup_asks(apply=False):
     """One-shot sweep of leftover eval approval cards accumulated on the dev account across past
     runs. The per-case cleanup in ``run_case`` already clears what each case itself raised; this
@@ -621,6 +638,7 @@ def run_command(args):
         W.setup_partial() if args.partial else W.setup(args.wait, args.approve_own_asks)
     elif args.command == "reset":
         W.reset()
+        tidy_leftover_asks()
     elif args.command == "teardown":
         sys.exit(0 if W.teardown(args.keep_quests, args.decline_asks) else 1)
     elif args.command == "cleanup-asks":
@@ -632,6 +650,8 @@ def run_command(args):
             cases = [c for c in cases if c["id"] in only]
         if not cases:
             raise SystemExit("no cases matched")
+        if not args.examples:
+            tidy_leftover_asks()
         stash = WORK_DIR / "cards_stash.json"
         if args.isolate_cards:
             print(f"isolated: stashed {W.stash_learned_cards(stash)} learned cards -> {stash}")
