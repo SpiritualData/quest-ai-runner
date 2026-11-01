@@ -17,6 +17,7 @@ from . import tool_guards
 from .tools import ToolContext
 from .tools_status import DONE_STATUSES, RECEIPT_WORDS, SETTLED_STATUSES, ToolStatus, as_status
 from .planner_context import _is_discovery_spec
+from . import work_trace
 from .orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from .orchestrator_constants import log
 from .orchestrator_turn import TurnCardCache, _Emitter
@@ -67,10 +68,16 @@ class ReadsMixin:
                 return Observation(kind="error",
                                     error="Web search is not configured in this deployment.")
             queries = spec["web"]
+            trace = getattr(card_context, "trace", None)
+            if trace is not None:
+                trace.web_started()
             try:
-                return self.web.search(queries, fresh=bool(spec.get("fresh")))
+                found = self.web.search(queries, fresh=bool(spec.get("fresh")))
             except Exception as e:  # noqa: BLE001 — a web adapter must never break the loop
-                return Observation(kind="error", error=f"web search failed: {e}")
+                found = Observation(kind="error", error=f"web search failed: {e}")
+            if trace is not None:
+                trace.web_searched(found)
+            return found
         if spec.get("web_page"):
             if self.web is None:
                 return Observation(kind="error",
@@ -83,9 +90,18 @@ class ReadsMixin:
                     page_kwargs["full"] = bool(spec.get("full"))
                     if spec.get("part"):
                         page_kwargs["part"] = spec.get("part")
-                return self.web.fetch(str(spec["web_page"]), focus=spec.get("focus") or None,
-                                      fresh=bool(spec.get("fresh")), **page_kwargs)
-            except Exception as e:  # noqa: BLE001 — a web adapter must never break the loop
+                trace = getattr(card_context, "trace", None)
+                if trace is not None:
+                    trace.web_started()
+                try:
+                    page = self.web.fetch(str(spec["web_page"]), focus=spec.get("focus") or None,
+                                          fresh=bool(spec.get("fresh")), **page_kwargs)
+                except Exception as e:  # noqa: BLE001 — a web adapter must never break the loop
+                    page = Observation(kind="error", error=f"web page fetch failed: {e}")
+                if trace is not None:
+                    trace.web_page_read(spec["web_page"], page)
+                return page
+            except Exception as e:  # noqa: BLE001
                 return Observation(kind="error", error=f"web page fetch failed: {e}")
         # No retrieval adapter: gracefully report unsupported rather than crashing. The brain
         # can still answer from transcript/context_view; it just cannot ground on a corpus.
@@ -289,6 +305,9 @@ class ReadsMixin:
         try:
             card_meta_light = _project_card_metadata_for_event(card_meta or [])
             sources_light = _project_sources_for_event(sources or [])
+            trace = getattr(card_context, "trace", None)
+            if trace is not None:
+                trace.records_used(card_meta_light)
             count = len(card_meta or [])
             text = (f"Fetched {count} context card{'s' if count != 1 else ''} mid-turn."
                     if count else "")
@@ -403,7 +422,8 @@ class ReadsMixin:
                         emit: "_Emitter", steps: int, ctx: ToolContext,
                         on_success: Optional[Callable[[str, Dict[str, Any]], None]] = None,
                         evidence: Optional[Callable[[], str]] = None,
-                        order_gate: Optional[Callable[[], Optional[bool]]] = None) -> None:
+                        order_gate: Optional[Callable[[], Optional[bool]]] = None,
+                        trace: Optional[Any] = None) -> None:
         """Run the planner's direct tool calls in order, in-process (no deep run).
 
         Each outcome lands twice: in ``gathered`` (so the re-plan and the answer see the receipt)
@@ -467,8 +487,13 @@ class ReadsMixin:
             emit.status(f"Calling {name}…")
             emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}",
                                     data={"phase": "tool_call", "tool": name}))
+            scholarly = trace is not None and name == work_trace.SCHOLARLY_TOOL
+            if scholarly:
+                trace.papers_started()
             result = (self.tools.invoke(name, args, ctx) if self.tools is not None
                       else None)
+            if scholarly:
+                trace.papers_searched(result)
             status = result.status if result is not None else ToolStatus.FAILED
             ok = status is ToolStatus.APPLIED
             done = status in DONE_STATUSES

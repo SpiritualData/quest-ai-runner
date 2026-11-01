@@ -181,6 +181,9 @@ class RunLoopMixin:
                     log.warning("Link guard skipped: %s: %s", type(e).__name__, e, exc_info=True)
                 # The same turn's DOIs: an invented bare DOI is not a link, so the guard above lets it through.
                 self.strip_unverified_dois(rs, res)
+            if rs.trace is not None:
+                rs.trace.links_checked(res.link_checks)
+                rs.trace.finish()
             # --- EM DASH PASS (core/em_dash_pass.py): brand rule, enforced once on the words the reader gets -------------
             # Runs after the link guard so a URL is never touched, and before the write-back and EVENT_RESULT so the text shown,
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
@@ -745,7 +748,8 @@ class RunLoopMixin:
                                          rs.user_message, _ctx_meta.get("scope_tags"),
                                          learnable=message_is_user_turn),
                                      evidence=lambda: self.turn_evidence(rs),
-                                     order_gate=lambda: self.change_was_ordered(rs))
+                                     order_gate=lambda: self.change_was_ordered(rs),
+                                     trace=rs.trace)
                 rs.tool_calls_ran = True
                 executed_reads.clear()
                 rs.repeat_only_steps = 0

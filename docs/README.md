@@ -82,6 +82,7 @@ Steps for a task you already know you want to do.
 
 Why it is built this way, and the design record behind each part.
 
+- **[Live work trace ("Trail")](explanation/live-work-trace.md)**: the typed, reader-safe account of the work a turn did, its contract, privacy rule and build state
 - **[Hub of hubs](explanation/hub-of-hubs.md)**: why QAR builds on open-source hubs, how to add a tool server, agent,
   model vendor or search backend by configuration with no code, and the status of each area.
 - **[The feedback ledger](explanation/feedback-ledger.md)**: what a person asked for and how far anybody got

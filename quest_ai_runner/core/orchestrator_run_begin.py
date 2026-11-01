@@ -26,6 +26,7 @@ from .orchestrator_capabilities import (
 )
 from .orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
 from .orchestrator_decisions import _truncate_goal, message_forbids_new_task, restates_meaningfully
+from . import work_trace
 from .orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from .orchestrator_turn import Narrator, TurnCardCache, _Emitter
 from .orchestrator_types import OrchestratorResult
@@ -231,6 +232,8 @@ class RunBeginMixin:
             on_detach = fan.detach
         emit = _Emitter(active_sink, mode, self._status, detach_check=detach_check, on_detach=on_detach)
         rs.emit = emit
+        # The live work trace (core/work_trace.py): None unless the consumer opted in through context_meta["work_trace"].
+        rs.trace = work_trace.start(emit, context_meta)
 
         # --- RECIPE FAST PATH (core/recipes.py): a known operation runs BEFORE any context search ---
         # The lookup is lexical and model-free, so it costs microseconds ahead of everything else in
@@ -635,6 +638,7 @@ class RunBeginMixin:
         card_context = TurnCardCache(self.context_assembler, _ctx_meta)
         rs.card_context = card_context
         card_context.emit = emit
+        card_context.trace = rs.trace
         _ctx_prefetch_query: Optional[str] = None
 
         _assembled = None
@@ -935,6 +939,8 @@ class RunBeginMixin:
                 # process. Nothing on this event quotes the person's own words back at them.
                 _card_meta_light = _project_card_metadata_for_event(_merged_card_meta)
                 _sources_light = _project_sources_for_event(rs._sources)
+                if rs.trace is not None:
+                    rs.trace.records_used(_card_meta_light)
                 # Same projected shapes the panel is allowed to show (see explain_cards above).
                 rs.explain_cards = list(_card_meta_light or [])
                 rs.explain_sources = list(_sources_light or [])
