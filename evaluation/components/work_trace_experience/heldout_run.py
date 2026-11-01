@@ -52,7 +52,7 @@ def score(args):
     harness.load_cases = lambda component, config: cases
     harness.cases_digest = lambda component, eval_dir: sha()
     harness.record_slices = lambda *a, **k: []   # the per-case log compacts rows pinned to cases.json's hash; held-out rows go to results.csv only
-    argv = ["--impl", args.impl] + (["--record"] if args.record else [])
+    argv = ["--impl", args.impl] + (["--record"] if args.record else []) + (["--differs", args.note] if args.note else [])
     harness.run_component("work_trace_experience", __import__("work_trace_experience.score", fromlist=["x"]).score_case, argv, common.CONFIG)
 
 
@@ -67,6 +67,7 @@ def main():
     s.add_argument("--captured", required=True)
     s.add_argument("--impl", required=True)
     s.add_argument("--record", action="store_true")
+    s.add_argument("--note", default=None, help="what this row is, written into the results log")
     for p in (c, s):
         p.add_argument("--cases", default=SPECS.name)
     args = ap.parse_args()
