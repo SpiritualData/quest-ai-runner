@@ -375,7 +375,9 @@ The RECORDS below are the person's own (notes, goals, history) and what this tur
    before it offers anything else? A reply that only offers other options leaves states_it_first=false.
 3. Independently: does the REPLY still offer the conflicting request itself as an option (go ahead anyway, book it regardless,
    keep it and check for an exception, or ask whether to try it)? If so set leaves_request_open=true. When the records say the
-   request cannot happen, it must not be left open.
+   request cannot happen, it must not be left open. Stating the conflict does NOT make a later "or keep it as asked" option
+   acceptable: look at every option the reply offers, in the last sentences too, and set leaves_request_open=true if any one of
+   them is the conflicting request itself (the original day, time or amount), however politely it is worded.
 
 Do not use any em dash in the fact or consequence you write.
 
