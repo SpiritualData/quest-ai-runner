@@ -20,6 +20,7 @@ import threading
 import uuid
 from typing import Any, Dict, List, Mapping, Optional
 
+from esoi import implementation
 from hubofhubs.ports.deep import ProgressEvent  # noqa: F401  (the event the emit callable receives)
 from hubofhubs.ports.trace import WorkTrace, domain_of
 
@@ -76,6 +77,7 @@ def bare_doi(value: Any) -> str:
     return re.sub(r"^(?:https?://)?(?:dx\.)?doi\.org/", "", str(value or "").strip(), flags=re.IGNORECASE)
 
 
+@implementation("show-the-ais-work", "trail")
 class TurnTrace:
     """One turn's accumulated steps. Thread-safe: parallel reads update the same step."""
 

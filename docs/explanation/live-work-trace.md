@@ -1,8 +1,9 @@
 # Live work trace: showing the AI's work to the person, as it happens
 
-Status: the contract (hub `hubofhubs.ports.trace`), the QAR emit (`quest_ai_runner/core/work_trace.py`) and the backend
-forward and persist are built and tested offline (phases 1 to 3, see "Built" below). The frontend, background-task cards and
-other locales are not. No live run has been made. Working name for the feature in the app: "Trail".
+Status: the contract (hub `hubofhubs.ports.trace`), the QAR emit (`quest_ai_runner/core/work_trace.py`), the backend forward and persist
+and the frontend Trail are built. Real turns on the Claude Code subscription (web, the person's own records, scholarly papers, a
+shared thread) were run on 2026-11-01 and the arms are measured by `metric-work-trace-experience` (solution `show-the-ais-work`; see
+"First real runs" at the end). Background-task cards and other locales are not built. Working name for the feature in the app: "Trail".
 
 ## Why
 
@@ -297,3 +298,22 @@ These override sections 3 and 4 where they differ.
 10. Dark and light: waypoints and chip rings use the `brand` fill or border only; every word is `text` or `textMuted`; the monogram letter is `text`.
 11. The word "Trail" is not shown to people; the line stands alone.
 12. Phase 0 maps the `context` frame to records, but counts only cards that are the person's own (not history turns, guidance or docs), and shows a card title only if it is not a file path; otherwise it is counted without a name.
+
+## 8. First real runs (2026-11-01) and what they changed
+
+Four real turns (`evaluation/components/work_trace_experience/live_turns.py`: the real orchestrator on the Claude Code subscription, real
+web and scholarly search, a seeded fictional card store) passed the structural check (`work_trace_check`) with no violation. Reading
+the events and the elements shown found these, each fixed or recorded:
+
+- A web search that opened no page showed nothing at all, and its live line read "Reading 0 of N sites". Now the line says it searched the
+  web, and the live line says "Searching the web". (quest-frontend `workTrace.ts`.)
+- Sites a search only listed were shown as chips and rows beside read ones. A `sources` item now carries `kind` `read` or `found`
+  (hub `project_item`); only opened pages show as chips, and the expanded list shows listed sites only when none was opened.
+- Three scholarly searches added their totals into one "papers found" figure and counted a paper again when two searches returned it, and one
+  paper under two DOIs showed twice. `found` is now the largest single search total and a work is read once. (`core/work_trace.py`.)
+- A heading over a single group, and a counts-only group in a shared thread that only repeated the summary, did not earn their place. Headings
+  show only for several groups, and a line with nothing behind it is a sentence, not a button.
+- Not fixed, for a decision: the records step counts the cards the context assembler selected for the turn, so a question about the web
+  shows the person's unrelated quest records (relevance scores of about 0.5 for unrelated cards against 1.0 for the matching one on the
+  same store). A threshold would be an invented margin; the honest signal is whether the answer used a record, which the run does not report yet.
+- Not fixed: papers a search returned but the answer did not cite are listed as read.
