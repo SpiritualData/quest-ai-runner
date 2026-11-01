@@ -393,3 +393,21 @@ Joshua's rule: fix every instance now; everything shown adds value; never overst
   words or numbers of two digits or more with the card's text. This is a table lookup over stored text and the reply, never a keyword list
   over model output. Unregistered, no word is rare, so only a title or a quote can show a record (an undercount, never an overcount).
   The saved spaced-repetition turn is an offline case in `tests/test_work_trace.py`.
+
+## 11. One rule for names: the line names, the rows add (2026-11-01)
+
+The post-fix judge failed the papers case because the summary named papers ("Read papers by Cherif et al., 2015 and Yang et al.") and the rows
+beneath repeated the same names. The rule, applied once in `workTrace.ts` (`saidNames`, `expandedGroups`) so solo, shared-list and team
+surfaces cannot differ:
+
+- The summary line names what it can (one or two, then "and N more"), exactly as in section 9. A name the line says is never said again in a row.
+- Rows add only what the line did not say. A named paper shows its title only; an unnamed paper shows title and "(first author, year)". A named
+  page shows its page title only (no row at all when it has none); an unnamed page shows its domain and title. The first record is named in the
+  line, so a records list holds the others. A group with no rows left is not drawn, and the line is then not a button (`hasExpandableDetail` is
+  derived from `expandedGroups`, so the button and its rows cannot disagree).
+- Counts-only lines ("Read 5 papers") were considered for the case where rows follow and rejected: collapsed, the line is all the person sees,
+  and a bare count was the section 9 failure.
+
+Measured: `npm run test:worktrace` pins the rule (the same checks failed on the previous source). The judge on TRACE-REAL-PAPERS (a post-fix row,
+not held-out, one case) no longer reports repeated names but still rejects the summary line as counting work that the rows list; a counts-only
+line failed the same way. That is open: the judge sees the collapsed line and the expanded rows together, which the person never does.
