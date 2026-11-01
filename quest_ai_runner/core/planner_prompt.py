@@ -112,6 +112,10 @@ teaches Tuesday and Thursday evenings and they ask to book her for Friday); the 
 fact and the nearest option that works, which is the whole response, and nothing is queued. When what
 you read shows the act cannot go ahead as asked you MUST set it, and leave `deferred_deep` empty: an
 answer that declines the act and also queues it contradicts itself. False in every other case.
+When you choose "answer", set `reply_shape` to the shape the reply must take: `yes_no` (the message is a yes
+or no question; the reply opens with the verdict), `one_step` (they ask where to start or what to do next; the
+reply names ONE step), `ask_first` (as `asks_first`), `brief` (they asked for a quick, short or one-breath
+reply), `readback` (they asked to be told what is stored or was done), otherwise `default`.
 ALWAYS set `pending_read`: read specs (same shape as `reads`) for anything you located but have
 not opened that your answer depends on, such as a file a listing just showed; a refused path does
 not count. Empty when you are reading this step or hold the content. Choose "answer" only with it empty.

@@ -1,0 +1,267 @@
+"""Situation standards for the reply: what a good reply looks like in each common situation, and the measurements that tell.
+
+The reply writer is a cheap model and it makes the same few mistakes in the same few situations: a "where do I start" reply that
+lists five steps and asks two questions, a date or a goal name that is in nothing the turn held, a "tell me in one breath" reply
+that runs long. Improving the prompt alone leaves them recurring, so the answer checkpoint (the overseer's hook B) carries a
+CHECK per situation: the standard for that situation, written once for a reviewer, and the deterministic measurements of the
+draft that decide whether it was met.
+
+Everything here is data plus counting:
+
+* The SITUATION is selected from structured signals only: the planner's own ``reply_shape`` (and ``asks_first``), never from the
+  words of any model output (hard rule #3).
+* A MEASUREMENT is a count (questions, list lines, characters) or a comparison of a value the draft states (a date, a clock time, a
+  quoted name) with the material the turn held, the way ``core/link_provenance_pass.py`` compares an address. The draft's wording
+  decides nothing: a date the turn never held is a fact about the data, whatever sentence carries it.
+* The HINT names the exact violation and the exact repair, built from the measurements, so a repair round needs no judgment.
+* The last-resort REPAIR is the cheapest deterministic one that is safe: drop the sentence that states an unsupported value, keep
+  only the first allowed questions. Anything that cannot be repaired safely ships as it is.
+
+Plain integers are not judged (a suggested "10 minutes" is advice, not a claim about the person's records); dates, clock times and
+quoted names are the values a reader acts on and the ones a cheap model invents.
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+
+SHAPE_YES_NO = "yes_no"
+SHAPE_ONE_STEP = "one_step"
+SHAPE_ASK_FIRST = "ask_first"
+SHAPE_BRIEF = "brief"
+SHAPE_READBACK = "readback"
+SHAPE_DEFAULT = "default"
+REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DEFAULT)
+
+
+@dataclass(frozen=True)
+class Standard:
+    """One situation's standard: the sentence the reviewer reads and the limits the measurements are held to."""
+    shape: str
+    text: str
+    max_questions: Optional[int] = None
+    max_chars: Optional[int] = None
+    max_list_lines: Optional[int] = None
+
+
+STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
+    Standard(SHAPE_YES_NO,
+             "A yes or no question: the first sentence is the verdict (yes, no, or not enough to say), decided by the newest "
+             "record in the evidence, then at most two sentences of why. No plan, no list.",
+             max_questions=1, max_chars=600, max_list_lines=0),
+    Standard(SHAPE_ONE_STEP,
+             "Where to start or what to do next: name ONE step, the one the person's records point to, in one or two sentences, "
+             "and ask at most one question. No list of steps, no second option, no schedule.",
+             max_questions=1, max_chars=500, max_list_lines=0),
+    Standard(SHAPE_ASK_FIRST,
+             "The reply asks for facts only the person holds: one sentence reacting, then the one or two questions, nothing else. "
+             "No plan, list or assumed values.",
+             max_questions=2, max_chars=500, max_list_lines=0),
+    Standard(SHAPE_BRIEF,
+             "The person asked for a quick or one-breath reply: the answer first, two or three short sentences, no list, no "
+             "preamble, no closing offer.",
+             max_questions=1, max_chars=450, max_list_lines=0),
+    Standard(SHAPE_READBACK,
+             "The person asked to be told what is stored or was done: the first sentence is the read-back itself, using the "
+             "records' own names, cadence and dates exactly; nothing the records do not hold.",
+             max_chars=900),
+    Standard(SHAPE_DEFAULT,
+             "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
+)}
+
+MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec"
+MONTH_NUMBER = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+DAY_THEN_MONTH = re.compile(
+    rf"\b(?P<d1>\d{{1,2}})(?:st|nd|rd|th)?(?:\s*[-–]\s*(?P<d2>\d{{1,2}})(?:st|nd|rd|th)?)?\s+(?:of\s+)?"
+    rf"(?P<mon>(?:{MONTHS})[a-z]*)\b\.?", re.IGNORECASE)
+MONTH_THEN_DAY = re.compile(
+    rf"\b(?P<mon>(?:{MONTHS})[a-z]*)\.?\s+(?P<d1>\d{{1,2}})(?:st|nd|rd|th)?(?:\s*[-–]\s*(?P<d2>\d{{1,2}})(?:st|nd|rd|th)?)?\b",
+    re.IGNORECASE)
+ISO_DATE = re.compile(r"(?<!\d)(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})(?!\d)")
+CLOCK_TIME = re.compile(r"(?<![\d:.])(?P<h>\d{1,2}):(?P<m>\d{2})(?::\d{2})?\s*(?P<ap>[ap]\.?m\.?)?(?![\d:])", re.IGNORECASE)
+HOUR_AMPM = re.compile(r"(?<![\d:.])(?P<h>\d{1,2})\s*(?P<ap>[ap])\.?m\.?\b", re.IGNORECASE)
+QUOTED_NAME = re.compile(r"[\"“](?P<name>[^\"“”\n]{3,80})[\"”]")
+LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d{1,2}[.)])\s+\S", re.MULTILINE)
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"“(*\[])|\n+")
+
+
+def month_of(token: str) -> Optional[int]:
+    return MONTH_NUMBER.get(token.lower()[:3])
+
+
+def dates_in(text: str) -> List[Tuple[str, List[Tuple[int, int]]]]:
+    """Every calendar date the text states, as ``(the text of it, [(day, month), ...])`` (a range lists each endpoint)."""
+    found: List[Tuple[str, List[Tuple[int, int]]]] = []
+    spans: List[Tuple[int, int]] = []
+    for rx in (DAY_THEN_MONTH, MONTH_THEN_DAY):
+        for m in rx.finditer(text or ""):
+            month = month_of(m.group("mon"))
+            if month is None or any(a < m.end() and m.start() < b for a, b in spans):
+                continue
+            days = [int(m.group("d1"))] + ([int(m.group("d2"))] if m.group("d2") else [])
+            if any(not 1 <= d <= 31 for d in days):
+                continue
+            spans.append((m.start(), m.end()))
+            found.append((m.group(0).strip(" ."), [(d, month) for d in days]))
+    for m in ISO_DATE.finditer(text or ""):
+        month, day = int(m.group("m")), int(m.group("d"))
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            found.append((m.group(0), [(day, month)]))
+    return found
+
+
+def clock_key(hour: str, minute: str, ampm: Optional[str]) -> str:
+    h = int(hour)
+    suffix = (ampm or "").lower().replace(".", "")[:1]
+    return f"{h}:{minute}{suffix}"
+
+
+def clocks_in(text: str) -> List[Tuple[str, str]]:
+    """Every clock time or stopwatch reading the text states, as ``(the text of it, a comparable key)``."""
+    found: List[Tuple[str, str]] = []
+    for m in CLOCK_TIME.finditer(text or ""):
+        found.append((m.group(0).strip(), clock_key(m.group("h"), m.group("m"), m.group("ap"))))
+    for m in HOUR_AMPM.finditer(text or ""):
+        found.append((m.group(0).strip(), clock_key(m.group("h"), "00", m.group("ap"))))
+    return found
+
+
+def squash(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
+@dataclass
+class EvidenceIndex:
+    """What the turn held, indexed for the comparisons: the dates and clock keys it states, and its text squashed for names."""
+    days: frozenset
+    clocks: frozenset
+    squashed: str
+
+    @classmethod
+    def of(cls, evidence: str) -> "EvidenceIndex":
+        days = frozenset(d for _, parts in dates_in(evidence) for d in parts)
+        # A clock key with no am/pm marker in the draft matches the same time with either marker in the evidence.
+        clocks = set()
+        for _, key in clocks_in(evidence):
+            clocks.add(key)
+            clocks.add(key.rstrip("ap"))
+        return cls(days=days, clocks=frozenset(clocks), squashed=" " + squash(evidence) + " ")
+
+
+@dataclass
+class Violation:
+    kind: str          # "unsupported" | "questions" | "list" | "length"
+    detail: str        # the exact repair, stated for the writer
+    values: Tuple[str, ...] = ()
+
+
+@dataclass
+class Measurements:
+    """The deterministic facts about one draft. ``violations`` is empty when every measurement meets the standard."""
+    shape: str
+    questions: int = 0
+    list_lines: int = 0
+    chars: int = 0
+    unsupported: List[str] = field(default_factory=list)
+    violations: List[Violation] = field(default_factory=list)
+
+    @property
+    def failed(self) -> bool:
+        return bool(self.violations)
+
+    def as_text(self) -> str:
+        bits = [f"questions={self.questions}", f"list_lines={self.list_lines}", f"chars={self.chars}"]
+        if self.unsupported:
+            bits.append("not_in_any_evidence=" + "; ".join(f"'{v}'" for v in self.unsupported[:6]))
+        text = ", ".join(bits)
+        return text + (" | BREAKS: " + "; ".join(v.detail for v in self.violations) if self.violations else " | meets the limits")
+
+    def hint(self) -> str:
+        """The repair, one line the writer can follow without judgment."""
+        return " ".join(v.detail.rstrip(".") + "." for v in self.violations)[:600]
+
+
+def unsupported_values(draft: str, evidence: EvidenceIndex) -> List[str]:
+    """Dates, clock times and quoted names the draft states that nothing the turn held states."""
+    out: List[str] = []
+    for text, parts in dates_in(draft):
+        if any(p not in evidence.days for p in parts):
+            out.append(text)
+    for text, key in clocks_in(draft):
+        if key not in evidence.clocks and key.rstrip("ap") not in evidence.clocks:
+            out.append(text)
+    for m in QUOTED_NAME.finditer(draft or ""):
+        name = squash(m.group("name"))
+        if len(name.split()) >= 2 and f" {name} " not in evidence.squashed:
+            out.append(m.group("name"))
+    return list(dict.fromkeys(out))
+
+
+def standard_for(plan: Any) -> Standard:
+    """The standard that applies to this reply, from the planner's structured fields only."""
+    shape = getattr(plan, "reply_shape", None)
+    if getattr(plan, "asks_first", False):
+        shape = SHAPE_ASK_FIRST
+    return STANDARDS.get(shape or "", STANDARDS[SHAPE_DEFAULT])
+
+
+def measure(draft: str, standard: Standard, evidence: str) -> Measurements:
+    """Measure one draft against its situation's standard. Pure and never raises (a failure measures nothing)."""
+    try:
+        text = draft or ""
+        m = Measurements(shape=standard.shape, questions=text.count("?"), list_lines=len(LIST_LINE.findall(text)), chars=len(text))
+        m.unsupported = unsupported_values(text, EvidenceIndex.of(evidence))
+        if m.unsupported:
+            m.violations.append(Violation(
+                "unsupported", "remove " + ", ".join(f"'{v}'" for v in m.unsupported[:4])
+                + " (it is in nothing you were given; say you do not have it, or leave it out)", tuple(m.unsupported)))
+        if standard.max_questions is not None and m.questions > standard.max_questions:
+            m.violations.append(Violation(
+                "questions", f"ask at most {standard.max_questions} question{'s' if standard.max_questions != 1 else ''}"
+                f" (you asked {m.questions}); keep the one that lets you act"))
+        if standard.max_list_lines is not None and m.list_lines > standard.max_list_lines:
+            m.violations.append(Violation("list", f"write it as plain sentences, not a list ({m.list_lines} list lines)"))
+        if standard.max_chars is not None and m.chars > standard.max_chars:
+            m.violations.append(Violation("length", f"cut it to under {standard.max_chars} characters (it is {m.chars})"))
+        return m
+    except Exception:  # noqa: BLE001 -- measuring must never break a turn
+        return Measurements(shape=standard.shape)
+
+
+def sentences(text: str) -> List[str]:
+    return [s for s in SENTENCE_END.split(text or "") if s and s.strip()]
+
+
+def repair(draft: str, standard: Standard, measurements: Measurements, evidence: str) -> str:
+    """The cheapest deterministic repair that is safe, for a draft that still breaks a measurement after the repair rounds.
+
+    Drops each sentence that states an unsupported value and every question after the allowed number. It never empties the reply:
+    when the repair would leave nothing, the draft is returned as it was. A list or a length breach has no safe mechanical repair
+    (cutting mid-thought changes the meaning), so it ships as written.
+    """
+    try:
+        if not measurements.violations:
+            return draft
+        parts = sentences(draft)
+        if len(parts) < 2:
+            return draft
+        evidence_index = EvidenceIndex.of(evidence)
+        kept: List[str] = []
+        asked = 0
+        for sentence in parts:
+            if measurements.unsupported and unsupported_values(sentence, evidence_index):
+                continue
+            if "?" in sentence and standard.max_questions is not None:
+                asked += sentence.count("?")
+                if asked > standard.max_questions:
+                    continue
+            kept.append(sentence.strip())
+        return " ".join(kept) if kept else draft
+    except Exception:  # noqa: BLE001
+        return draft
+
+
+def steering(hint: str, previous: str) -> str:
+    """The text a regeneration is steered with: the reviewer's hint and the answer it concerns."""
+    return f"A reviewer flagged this for one correction: {hint}\n\n--- YOUR PREVIOUS ANSWER ---\n{previous}"

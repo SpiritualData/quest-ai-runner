@@ -396,6 +396,14 @@ class OrchestratorConfig:
     # the draft and finishing in the background. Hook A stays at 0.0 (never stall the walk).
     # Set 0.0 to restore the fully non-blocking Fix-11 behavior.
     overseer_answer_checkpoint_timeout_seconds: float = 2.5
+    # SITUATION STANDARDS (core/reply_standards.py). When the planner's ``reply_shape`` names a situation with a standard, or a
+    # measurement of the draft already fails one (a date or name the turn never held), the checkpoint has real authority: it waits
+    # this long for the verdict, may regenerate the reply up to ``reply_standard_max_repairs`` times (re-measuring after each, the
+    # hint built from the measurements), and a draft that still fails is repaired deterministically (the unsupported sentence
+    # dropped). ``reply_standards=False`` restores the plain checkpoint.
+    reply_standards: bool = True
+    reply_standard_wait_seconds: float = 12.0
+    reply_standard_max_repairs: int = 2
     # This bounds how long the BACKGROUND finisher will wait before giving up entirely (a late
     # resolution past this point is simply dropped; nothing is waiting on it).
     overseer_background_finish_timeout_seconds: float = 30.0

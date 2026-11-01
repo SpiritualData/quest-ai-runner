@@ -45,6 +45,9 @@ DIGEST fields below, and why each matters:
   - QUALITY BAR: the completion standard the result must clear; a draft that ignores it is not done.
   - DRAFT ANSWER: the proposed reply, only present at the final checkpoint; judge whether it truly
     satisfies the request and the quality bar.
+  - SITUATION STANDARD + DRAFT MEASUREMENTS: present with a DRAFT ANSWER when this reply's situation has a written standard.
+    The measurements are counts and data comparisons the code computed (questions asked, list lines, length, dates, clock times or
+    quoted names that appear in nothing the turn held); trust them, do not recount.
 
 Choose EXACTLY ONE signal via the tool:
   - "proceed": the run is on a reasonable track. DEFAULT. When unsure, proceed.
@@ -94,6 +97,11 @@ Rules:
     something; still a substitution even when the offer is reasonable), or (b) answers a DIFFERENT,
     adjacent question (compare the draft against CURRENT USER REQUEST word for word). A short answer
     is not a failure; an absent one is. Answering and then also offering a next step is fine.
+  - If a SITUATION STANDARD is shown, hold the DRAFT ANSWER to it. Redirect when a measurement says BREAKS, or when the draft
+    plainly fails the standard in a way a count cannot show (for a yes or no question the verdict is not the first sentence; a
+    plan where one step was asked for). The hint names the exact violation and the exact repair, for example "remove the date
+    6-9 Nov and the second question; name only the plumber step". A draft that meets the standard and the measurements is a
+    proceed: never redirect it for style.
   - If RECENT CONVERSATION shows the user already correcting the assistant ("you ignored my
     question", "that's not what I asked"), treat the next draft with more suspicion: a second miss
     on the same point is a redirect, not a proceed.

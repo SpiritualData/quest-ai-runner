@@ -24,6 +24,7 @@ from .orchestrator_decisions import (FACTS_ANSWER_HEAD, _clarify_question_text, 
 from .orchestrator_text import _answer_describes_unexecuted_work
 from .orchestrator_types import OrchestratorResult
 from .overseer import OverseerSignal
+from .reply_standards import SHAPE_DEFAULT, measure, repair, standard_for, steering
 from .planner_context import gathered_content
 from .planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX,
@@ -366,6 +367,20 @@ class RunAnswerMixin:
         # with no one left to receive its result. See ``_finish_oversee_in_background``'s docstring
         # and docs/explanation/overseer.md for the full tradeoff. A FAST-resolving consult (the common case for a
         # quick model) still corrects the SAME answer before it ships, exactly as before.
+        # SITUATION STANDARD (core/reply_standards.py): the standard for this reply's situation (selected from the planner's
+        # structured ``reply_shape`` / ``asks_first``) and the deterministic measurements of the draft against it. A standard in
+        # force gives the checkpoint real authority below: a longer wait for the verdict and code-built repair rounds.
+        standard, measured, standard_evidence, standard_in_force = None, None, "", False
+        if getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer":
+            try:
+                standard_evidence = (self.link_evidence_for(rs, SimpleNamespace(deep_results=[]))
+                                     + "\n" + (exec_record.summary() if exec_record is not None else ""))
+                standard = standard_for(rs.plan)
+                measured = measure(rs.text, standard, standard_evidence)
+                standard_in_force = standard.shape != SHAPE_DEFAULT or measured.failed
+            except Exception:  # noqa: BLE001 -- a standard must never break the turn
+                standard, measured, standard_in_force = None, None, False
+        repair_rounds = 0
         if cfg.overseer and rs.overseer_submitted < cfg.overseer_max_signals:
             try:
                 if rs._oversee_executor is None:
@@ -378,13 +393,17 @@ class RunAnswerMixin:
                     quality_standards=rs.quality_standards,
                     recent_conversation=_recent_conversation_digest_lines,
                     prior_escalations=_prior_escalation_digest_lines,
+                    situation_standard=(standard.text if standard_in_force else None),
+                    draft_measurements=(measured.as_text() if standard_in_force else None),
+                    draft_chars=(700 if standard_in_force else 200),
                     gate=False)
                 _bsig = OverseerSignal("proceed")
                 if _bpending is not None:
                     rs.overseer_submitted += 1
                     _collected = self._collect_oversee(
                         _bpending, signals=overseer_signals, emit=emit,
-                        timeout=cfg.overseer_answer_checkpoint_timeout_seconds)
+                        timeout=(max(cfg.reply_standard_wait_seconds, cfg.overseer_answer_checkpoint_timeout_seconds)
+                                 if standard_in_force else cfg.overseer_answer_checkpoint_timeout_seconds))
                     if _collected is not None:
                         _bsig = _collected
                     else:
@@ -449,10 +468,31 @@ class RunAnswerMixin:
                 if _bsig.signal == "redirect" and _bsig.hint:
                     if emit is not None:
                         emit.status("Overseer: refining the answer…")
-                    _steer = (f"A reviewer flagged this for one correction: {_bsig.hint}\n\n"
-                              f"--- YOUR PREVIOUS ANSWER ---\n{rs.text}")
-                    rs.text = _gen_answer(_steer)
+                    hint = _bsig.hint
+                    if standard_in_force and measured is not None and measured.failed:
+                        hint = f"{hint} Also: {measured.hint()}"
+                    rs.text = _gen_answer(steering(hint, rs.text))
+                    repair_rounds += 1
             except Exception:  # noqa: BLE001 — the overseer must never break the turn
+                pass
+
+        # Code-built repair rounds: a measurement the draft still fails is fixed by regenerating with a hint built from the
+        # measurement itself (it names the exact violation and repair), at most ``reply_standard_max_repairs`` times in all, each
+        # re-measured. What still fails after the last round gets the cheapest safe deterministic repair. Never unbounded.
+        if standard is not None and standard_in_force:
+            try:
+                measured = measure(rs.text, standard, standard_evidence)
+                while measured.failed and repair_rounds < cfg.reply_standard_max_repairs:
+                    if emit is not None:
+                        emit.status("Reply standard: refining the answer…")
+                    rs.text = _gen_answer(steering(measured.hint(), rs.text))
+                    repair_rounds += 1
+                    measured = measure(rs.text, standard, standard_evidence)
+                if measured.failed:
+                    rs.text = repair(rs.text, standard, measured, standard_evidence)
+                rs.reply_standard = {"shape": standard.shape, "repair_rounds": repair_rounds,
+                                     "still_failing": bool(measured.failed), "measured": measured.as_text()}
+            except Exception:  # noqa: BLE001 -- a standard must never break the turn
                 pass
 
         # If deferred_deep is set, also run the deep task now, synchronously, right after the
@@ -463,7 +503,8 @@ class RunAnswerMixin:
         # an answer turn), so while the latch is held it is skipped wholesale: no deferred deep,
         # no work-to-execute flag, no described-work net, no message-intent fallback (planner
         # verdict OR LLM judgment). Describing possible work IS the product in brainstorm.
-        rs.should_defer_deep = None if rs.brainstorm_active else rs.plan.deferred_deep
+        # A reply that declines the act on the records (``act_declined``) queues nothing: declining and queuing contradict.
+        rs.should_defer_deep = (None if (rs.brainstorm_active or rs.plan.act_declined) else rs.plan.deferred_deep)
         # Capability for these nets = inline execution OR a wired deferred queue: everything they
         # can set flows through the deferred block below, which reaches the queue runner by explicit
         # override, so a queue-only consumer (no default runner, no classifier) is capable here.

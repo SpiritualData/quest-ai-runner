@@ -95,6 +95,9 @@ def normalize_user_intent(raw: Any) -> Optional[str]:
 
 
 # The structured decision schema the planner MUST return (forced tool use).
+from .reply_standards import REPLY_SHAPES
+
+
 DECIDE_TOOL: Dict[str, Any] = {
     "name": "decide",
     "description": "Record the chosen NEXT step and its parameters.",
@@ -247,6 +250,8 @@ DECIDE_TOOL: Dict[str, Any] = {
             "act_declined": {"type": "boolean"},
             # Whether an "answer" must ask the person for facts only they hold before any plan; the rubric states it.
             "asks_first": {"type": "boolean"},
+            # The shape the reply must take (core/reply_standards.py); the rubric states each value.
+            "reply_shape": {"type": "string", "enum": list(REPLY_SHAPES)},
             # The reads this decision still owes: what the planner itself says it has NOT yet
             # opened. Honored structurally by the loop (see ``PlanDecision.pending_read``). The
             # rubric at the top of both planner profiles states it, so the schema stays bare.

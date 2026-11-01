@@ -17,6 +17,7 @@ from .deep_model_selection import normalize_difficulty
 from .orchestrator_types import OrchestratorConfig
 from .orchestrator_staged_plan import normalize_staged_subtasks
 from .orchestrator_constants import log
+from .reply_standards import REPLY_SHAPES
 from hubofhubs.critique.done_evidence import clean_requirements
 from .orchestrator_decide_tool import (
     USER_INTENT_ACT, WORK_SHAPE_ANALYSIS, normalize_user_intent, normalize_work_shape)
@@ -278,6 +279,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         answer_contains_work_to_execute=bool(raw.get("answer_contains_work_to_execute", False)),
         act_declined=raw.get("act_declined") is True,
         asks_first=raw.get("asks_first") is True,
+        reply_shape=(raw.get("reply_shape") if raw.get("reply_shape") in REPLY_SHAPES else None),
         clarification=clarification,
         mode_signal=mode_signal,
         card_thread=card_thread_raw,
