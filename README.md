@@ -2,109 +2,160 @@
 
 [![CI](https://github.com/SpiritualData/quest-ai-runner/actions/workflows/ci.yml/badge.svg)](https://github.com/SpiritualData/quest-ai-runner/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 
-> The orchestrator **brain** + the queued-task **executor** for Quest AI tasks: generic, with no
-> consumer-specific logic.
+Quest AI Runner (QAR) is the open-source brain of an AI that answers, acts and does deep work on a
+person's own goals and material. It plans, gathers what it needs, answers in plain words, and hands
+long jobs to a coding agent that works until the written standard for the job is met.
 
-`quest-ai-runner` is the executor Quest is missing: Quest can *enqueue* AI tasks for a team/org but
-cannot *run* them: no internal worker, no callback contract, no reference client. This library
-closes that gap, generically.
+It connects Quest (the goal and task app) to a model. It also takes its parts from the hub of
+hubs, [ai-hub-of-hubs-structure](https://github.com/SpiritualData/ai-hub-of-hubs-structure)
+(package `hubofhubs`), which is built on the esoi library. The brain knows nothing about any one
+organization, person or product. Those details arrive as configuration and adapters.
 
-It is Quest's connector and the production consumer of the hub of hubs (`hubofhubs`, a required dependency), and its brain is
-**domain-free**. The brain knows how to ground, reason, run to a written `/goal` standard,
-confirm-before-act, and escalate. It does **not** know about any specific org, cockpit, or person.
-Those specifics are **config + adapters the consumer supplies** via
-`quest_ai_runner.config.RunnerConfig`.
+## What it can do
 
-> Built and used in production by [Spiritual Data](https://spiritualdata.org); released as open
-> source for any team running Quest AI tasks.
+- **Answer.** A bounded loop plans, gathers evidence, re-plans and answers, grounded in the person's
+  quests, documents, past conversations and preferences.
+- **Act.** Direct tools, such as sending an email or writing a note, run in one planner step. Steps
+  that only a person should decide are raised as decision requests (asks).
+- **Do deep work.** Long jobs go to Claude Code, or to any agent that speaks the Agent Client
+  Protocol, with a written goal, a turn budget, a review of the result and a check that the goal was met.
+- **Run queued tasks.** A poller finds due tasks in Quest, claims them, runs them through the brain
+  and reports the result.
+- **Chat in a terminal.** A Textual interface offers a `/` command menu, saved conversations you can
+  resume, and a quest picker.
+- **Build context from many sources.** Files, databases, Claude conversations, Notion, Google Drive
+  and Chat, and MCP servers feed one context engine. It orients the agent with docstring cards,
+  semantic vectors and BM25, and it remembers which context helped on similar past tasks.
+- **Search the web and scholarly sources.** Live web search runs through several backends, and paper
+  search runs through OpenAlex, arXiv, Semantic Scholar and PubMed.
+- **Guard its replies.** A link guard checks every link, a support check weighs web claims, and a
+  minimal-intervention overseer sends a signal only when a run needs correcting.
+- **Show its work.** The work trace (the "Trail") lists the sites read, papers cited and records used
+  in a turn. It is built from structural results, never from the model's wording.
+- **Send interim replies and asks.** A turn that is unfinished can say what is done, why more is
+  coming and what comes next, and a turn blocked on a person files one ask. A lane switches this on
+  with `OrchestratorConfig.interim_replies`.
+- **Choose models by tier.** Each piece of work starts on the cheapest model tier its difficulty
+  allows, and moves to another provider when one is down.
 
-## QAR as a mind
+## Architecture
 
-```mermaid
-flowchart TB
-  HM["Higher mind<br/>AI rep, intent hierarchy<br/>hold-the-long-view, select-a-rep<br/>runner/personas.py"]
-  WI["World in<br/>chat, queued tasks<br/>runner/poller.py"]
-  SUB["Subconscious + Intuition<br/>admit-to-the-mind<br/>core/card_filter.py"]
-  MIND["Mind<br/>keep-a-working-stream<br/>core/orchestrator.py"]
-  SCI["Science<br/>know-the-world<br/>adapters/web_research.py"]
-  CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/goal_metrics.py"]
-  OV["Overseer<br/>risk check<br/>watch-a-run<br/>core/overseer.py"]
-  BODY["Body<br/>acts inside Quest<br/>act-as-the-body<br/>runner/quest_client.py"]
-  WO["World out<br/>acts outside Quest<br/>act-in-the-world<br/>adapters/acp_deep_runner.py"]
-  WI --> SUB --> MIND --> CT --> OV
-  OV --> BODY
-  OV --> WO
-  MIND <--> SCI
-  CT -. "regression: retry" .-> MIND
-  HM -. "rep and intents" .-> SUB
-  HM -. "rep and intents" .-> MIND
+QAR uses ports and adapters. The core defines the interfaces, the adapters implement them, and one
+configuration per lane wires them together. A lane is one deployment with its own credentials,
+corpus and personas.
+
 ```
-A request flows from the world through the Subconscious, Mind and Critical thinking (which enforces ESOI on every request), then the Overseer's risk check, and the Body or World acts. The Higher mind (the AI rep and its intents) sits above. Each box names its real solution and module.
-
-The outside tools QAR builds on, and which part uses each, are in [QAR as a hub of hubs](docs/explanation/anatomy.md#b-qar-as-a-hub-of-hubs). The parts table is in [docs/explanation/anatomy.md](docs/explanation/anatomy.md).
-
-Why QAR sits on open-source hubs instead of building each integration, how to add a tool server, agent, model vendor or search backend by configuration, and where each area stands: [Hub of hubs](docs/explanation/hub-of-hubs.md). QAR imports the hub package `hubofhubs` at startup (a required dependency) and registers its own parts with it.
-
-## What Quest is, and where this fits
-
-[**Quest**](https://quest.spiritualdata.org) is a goal app for the goals that actually take a
-strategy: you describe a transformative goal, Quest researches it, turns it into an evidence-backed
-plan of milestones, dated goals and habits, and keeps you on pace with daily and period reviews.
-A quest can be private, shared with a team, or worked with a mentor or community.
-
-Quest also lets you hand work to AI. Any goal can carry **AI tasks**: "research the three best
-options and write up a comparison", "draft the outreach list", "check whether this plan actually
-covers the outcome". Quest schedules those tasks and queues them. What Quest does not do is run
-them. There is no worker, no callback contract, no reference client.
-
-**`quest-ai-runner` is that worker.** Point it at a Quest team with an API key and a corpus, and it
-polls for due AI tasks, claims each one, grounds it in your own sources, runs it to a written
-standard, reports the result back against the goal in Quest, and raises a decision-request to a human
-when a call is genuinely theirs to make (a payment, an irreversible send, a matter of taste). The
-same library is also the **brain** behind Quest AI chat, so a conversation and a scheduled task are
-answered by one engine rather than two that drift apart.
-
-### Why use it with Quest
-
-- **Your goals get worked on while you sleep.** Scheduling an AI task is the same gesture as
-  scheduling a goal, and something actually happens at the scheduled time.
-- **Answers are grounded in your material,** not a generic model's guess: your docs, your database,
-  your past Claude conversations, the live web, whatever adapters you supply.
-- **Humans stay in the loop where it matters.** The runner acts first and escalates the genuine
-  forks as Quest decision-requests, instead of either stalling on approval or doing something
-  irreversible on its own.
-- **One engine, many lanes.** A whole org, a single team, or one person's private lane all run the
-  same code and differ only in config.
-
-### Why it is useful without Quest
-
-The brain (`quest_ai_runner.core`) is domain-free and has no dependency on Quest at all. Import it
-and you get a small, dependency-light agent loop you can run anywhere:
-
-- a bounded **plan, gather, re-plan, answer** loop that stops when it has enough, instead of looping
-  until a token budget runs out
-- **smart context selection** (TF-DF-IDF sampling) that picks the most representative sources rather
-  than reading everything: about 62% fewer tokens on a typical codebase, no external deps
-- **multi-source retrieval** across files, databases, vector stores and past conversations in one
-  orchestrator
-- **web search with no extra key**, using the model provider's own tool
-- **escalation to a deep runner** (for example Claude Code) when a task needs real work, not an answer
-- **LIVE and BACKGROUND modes** with streaming, plus an optional cheap overseer that almost always
-  stays silent
-
-Only the `runner/` package speaks Quest. Skip it, supply your own adapters, and the rest is a
-general-purpose grounded-agent library.
-
-## Install
-
-```bash
-pip install -e .                       # core + runner are stdlib-only
-pip install -e '.[anthropic,dev]'      # add the Anthropic reference provider + pytest
+            one configuration per lane (qar.toml, RunnerConfig)
+                                |
+                                v
+   +------------------------------------------------------------+
+   | core/    plan -> gather -> re-plan -> answer | deep | ask    |
+   |          ports: Retrieval, ModelProvider, DeepRunner,        |
+   |          EscalationSink, ProgressSink                        |
+   +--------+----------------------+---------------------+-------+
+            |                      |                     |
+     adapters/ (reference)    runner/ (executor)    cli and Textual UI
+     files, DB cache, MCP,    Quest client, poller,  chat, poll, doctor,
+     Notion, Google, web,     executor, autopilot,   quest, bootstrap
+     vectors, deep runners    personas, lane
+            |
+     hubofhubs seats: models, recall, critique, deep, websearch, science, risk
 ```
+
+[Anatomy](docs/explanation/anatomy.md) draws QAR as a mind and as a hub of hubs.
+[Streaming and modes](docs/explanation/streaming-and-modes.md) covers the live and background
+modes of the same brain.
+
+## How QAR uses the hub of hubs (AHOHS)
+
+The hub of hubs holds one seat for each part of a mind, such as calling a model, recalling context,
+judging a reply, doing deep work, searching the web and watching for risk. Each seat has Protocols
+and measured implementations. QAR takes its implementations from the hub and keeps only what is
+specific to Quest:
+
+| QAR solution | Hub seat and package |
+|---|---|
+| `call-a-model` | model providers, prefix router, retry and outage helpers (`hubofhubs.models`) |
+| `select-context`, `index-by-meaning` | Qdrant vectors, BM25, hybrid assembler (`hubofhubs.recall`) |
+| `think-critically` | link guard and sufficiency gate (`hubofhubs.critique`) |
+| `run-deep-work` | one-shot, stream-json and ACP runners (`hubofhubs.deep`) |
+| `search-the-web` | search backends, cache, fetch, extraction (`hubofhubs.websearch`) |
+| `know-the-world` | scholarly search (`hubofhubs.science`) |
+| `watch-for-risk` | the overseer engine (`hubofhubs.risk`) |
+
+`esoi/hub_seats.csv` records which QAR solution fills which hub area, with the vendor names and code
+paths. The hub's scorer reads it, and `esoi run hub_of_hubs --impl registry_scan` measures the
+connection.
+
+**Defaults come from a selection snapshot.** Every solution has a `selected` implementation in
+`esoi/solutions.csv`. A lane resolves an implementation by name in this order: a per-solution
+override in the lane configuration, an `ESOI_SELECT_` environment variable, a `[selection]` table in
+`esoi.toml`, then the project default. An installed copy ships without the records, so it reads
+`quest_ai_runner/esoi_selection.json`, which `esoi select --snapshot` writes.
+
+**Each implementation declares what it needs.** Environment variables, API keys, packages, programs
+and services are listed beside the implementation, and the hub-declared variables are generated into
+`.env.example`. `quest-ai-runner doctor` lists what is unmet and gives the fix for each. It calls no
+model and prints names only, never values. A deployment records its selections with
+`esoi lock --package quest_ai_runner`, and `doctor --lock` reports newer selections as safe or
+blocked by an unmet requirement. See
+[keep QAR current with the hub](docs/how-to/keep-quest-ai-runner-current-with-the-hub.md).
+
+## How the esoi layer works here
+
+The `esoi/` folder holds QAR's intent as CSV files: **problems** people have, **ideals** to reach,
+**solutions** that address them, **implementations** (the competing arms of a solution) and
+**metrics** that score the arms. The evaluation code in `evaluation/components/` runs every arm of a
+solution on the same cases and records one row per run in `evaluation/components/results.csv`.
+
+`esoi leaderboard` ranks the arms of each solution, and the highest scorer on the metric is the
+default. A lead is labelled **significant** when an exact paired test gives an adjusted p-value below
+0.05, and **best guess** otherwise. `metric-qar-overall` combines the sub-metrics, weighted by the
+ideals, from recorded rows only, and reports a floor and a ceiling.
+
+Measured results, copied from `results.csv` (pass counts on QAR's own cases, with the label that
+`esoi leaderboard` prints):
+
+| What was measured | Result | Label |
+|---|---|---|
+| End to end, 55 turns on the cheapest model tier through the Claude Code subscription (2026-10-31) | `qar_live` 52 of 55 right; `rules_only` 7 of 55 | counts as recorded |
+| End to end, sample of 10 turns (2026-11-01) | `qar_live` 10 of 10; `rules_only` 4 of 10 | best guess (p=0.377) |
+| Model provider failover, 56 cases | `multi_provider` 56 of 56; `single_provider` 16 of 56 | significant (p=9.09e-13) |
+| Interim replies and asks, 20 cases | `gated` 20 of 20; `today` 11 of 20; `every_attempt` 3 of 20 | significant (p=0.00195 and 1.53e-05) |
+| Work trace, 16 offline turns | `trail` 16 of 16; `plain_list` 14 of 16; `no_trace` 5 of 16 | counts as recorded |
+| Work trace, 10 real turns (Haiku, judged by Sonnet) | `trail` 3 of 10; `plain_list` 3 of 10; `no_trace` 1 of 10 | counts as recorded |
+| Context selection, top 3 of 63 cases | `hybrid_union` 46; `vector_bge_small` 34; `blind_grep` 21 | significant (p=0.00627 and 2.19e-05) |
+| Retrieval across sources, 21 cases | `composite` 19 of 21; `first_three` 0 of 21 | significant (p=1.91e-06) |
+| Proactive guidance, 24 cases | `guided_v2` 20 of 24; `no_nudge` 12 of 24 | significant (p=0.0457) |
+| Web answers with a support check, 9 cases | `web_with_support_check` 9 of 9; `memory_only` 0 of 9 | significant (p=0.00195) |
+| Model tier choice, 42 cases | `qar_selection` 42 of 42 | no rival measured |
+
+Every record and result is in [esoi/README.md](esoi/README.md) and
+[evaluation/README.md](evaluation/README.md).
 
 ## Quickstart
+
+Install from a checkout with Python 3.11 or newer. The hub and esoi install with it.
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e '.[anthropic,dev]'
+quest-ai-runner --help
+```
+
+**Chat in your terminal** over a folder of notes. A Quest account is optional.
+
+```bash
+export QAR_CORPUS_ROOT=/path/to/your/notes
+export ANTHROPIC_API_KEY=...        # or log in to the claude CLI
+quest-ai-runner chat --check        # confirms the provider and the context store
+quest-ai-runner chat                # ask a question; /quit prints the resume command
+quest-ai-runner chat --continue     # reopen the latest conversation
+```
+
+**Use the brain from Python:**
 
 ```python
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
@@ -114,431 +165,66 @@ from quest_ai_runner.adapters import FilesAdapter
 cfg = RunnerConfig(retrieval=FilesAdapter("/path/to/docs"),
                    model_provider=AnthropicProvider(api_key="..."))
 orch = build_orchestrator(cfg)
-print(orch.run("What does the pricing doc say?").text)   # grounded answer
+print(orch.run("What does the pricing doc say?").text)
 ```
 
-To run the **executor** lane (poll Quest for due tasks and run them), see
-[`docs/tutorials/quickstart.md`](docs/tutorials/quickstart.md) and [`examples/`](examples/), or just:
+**Run the executor lane** that polls Quest for due tasks:
 
 ```bash
-QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --once
+export QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QUEST_TEAM_ID=... QAR_CORPUS_ROOT=...
+quest-ai-runner poll --check        # validates the configuration and the key
+quest-ai-runner poll --once         # one scan, then exit (good for cron)
 ```
 
-## Chat in your terminal
+**Call the Quest API from a script.** `quest-ai-runner quest --list` shows every callable method,
+tagged read or write, and `load_client("qar.toml")` returns the same client in Python.
 
-The same brain is also an interactive chat, grounded in your corpus and your quests, that hands
-big jobs to a deep worker and shows its progress live:
+**Check the environment** with `quest-ai-runner doctor`.
 
-```bash
-QAR_CORPUS_ROOT=/path/to/docs quest-ai-runner chat
-```
+## Configuration
 
-- **Pick up where you left off, like Claude Code.** Every conversation is saved as you go.
-  `quest-ai-runner chat --resume` opens a searchable list of past conversations,
-  `--continue` (`-c`) reopens the latest, and `--resume <id>` a specific one. On exit the chat
-  prints the exact command to resume it.
-- **Type `/` for commands.** A menu lists every command as you type (arrows, Tab, Enter, Esc).
-  Commands with choices, like `/model`, open a chooser you pick from with the arrow keys.
-- **Choose a quest for the conversation.** `/quest` lists every quest you can reach (synced
-  folders and your Quest quests) and binds the conversation to the one you pick, like choosing a
-  quest in the Quest AI chat app. With none selected, each message is matched to the quest it is
-  about automatically; `/quest none` turns that off.
-
-Full reference: [The terminal chat](docs/how-to/chat.md).
-
-## Scripting the Quest API
-
-Talking to the Quest API from a script, a notebook, or an agent's one-off lookup needs **no
-per-deployment client module and no `sys.path` surgery**. `pip install -e .`, then:
-
-```python
-from quest_ai_runner import load_client
-
-client = load_client("~/my-lane/qar.toml")      # or set QAR_CONFIG_FILE
-client.whoami()
-client.add_quest_note(quest_id, "findings ...")
-client.create_decision("Approve the $250 order", assignee="owner",
-                       default_on_silence="hold")
-```
-
-`load_client` reads the same TOML config file a lane built with `load_config` uses (including its
-`env_files`/`env_aliases` tables, so a key kept under a deployment's own variable names still
-reaches the client), and builds just the `QuestClient` (no model provider, no vector store, none
-of the optional dependencies), so it starts instantly. It raises `QuestNotConfigured` rather than
-falling back to another account's credentials.
-
-For a lookup that doesn't need Python at all, the same client is one shell command away:
-
-```bash
-quest-ai-runner quest whoami
-quest-ai-runner quest get_task task_123
-quest-ai-runner quest create_task "follow up with the vendor" --write
-quest-ai-runner quest --list                     # every callable method, tagged read/WRITE
-```
-
-`quest-ai-runner quest <method> [args...] [--kw NAME=VALUE]` calls any `QuestClient` method by
-name and prints the JSON result. Read-only methods (`whoami`, `get_*`, `list_*`, `is_*`,
-`search_*`, `discover_*`, ...) run as-is; anything that can modify Quest needs `--write`.
-
-## Features
-
-- **Smart Context Selection (TF-DF-IDF sampling)**: Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/explanation/TF_DF_IDF_SAMPLING.md) for details.
-- **Multi-source retrieval**: Composite retrieval adapter lets you query files, databases, Claude conversations, vector stores, etc., all in one orchestrator.
-- **Web search (default, no extra key)**: the runner grounds answers on the live web using the model provider's own tool (Claude's `web_search` / Gemini's Google Search grounding), reusing the LLM key, so tasks like "find marathons near Portland" return current, cited results with no separate search key and no Claude Code subprocess. A dedicated Tavily key is supported as an alternative. See [Web search](docs/how-to/web-search.md).
-- **Direct tools**: "email me today's plan" runs in one planner step with no deep run. Standard tools (Quest email) sit alongside your own, declared in a TOML file with when to use and when not to; the planner only sees the ones relevant to the request, and a deep run calls the same tools by shell. See [Direct tools](docs/how-to/tools.md).
-- **Terminal chat with resume and a `/` command menu**: talk to the brain in your terminal, resume any past conversation (`--resume`, `--continue`) like Claude Code, pick commands and options from menus, and choose the quest a conversation is about. See [The terminal chat](docs/how-to/chat.md).
-- **Streaming & live events**: LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
-- **Extensible adapters**: Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
-- **Discovery-driven planning**: The brain learns source structure at runtime, never needing a static schema blob in the prompt.
-- **Minimal-intervention overseer**: An **on-by-default** watcher (set `overseer=False` / `QAR_OVERSEER=false` to opt out): a high-quality model reads a tiny capped digest of the run (never the full gathered text) and almost always says nothing, occasionally sending one small signal (redirect / answer now / escalate) that corrects course. Fails safe on any error. See [The minimal-intervention overseer](docs/explanation/overseer.md).
+A lane is one TOML file plus environment variables. Every setting, its default and the code that
+reads it are listed in [docs/reference/configuration.md](docs/reference/configuration.md). The shape
+of a file is in [a lane is a config file](docs/how-to/a-lane-is-a-config-file.md), and
+[examples/](examples/) holds runnable lanes.
 
 ## Documentation
 
-The docs follow the four Diataxis categories (tutorials, how-to guides, explanation, reference); the index is [docs/README.md](docs/README.md). A GitHub wiki generated from the same folder (`esoi docs wiki`, never edited by hand) is planned once the repository's wiki is enabled; until then, read the docs in the repository.
+The docs follow four categories, and [docs/README.md](docs/README.md) is the index.
 
-- [Run it in the terminal against a folder in ten minutes](docs/tutorials/terminal-chat-in-ten-minutes.md): install, point the chat at a folder, ask, resume.
-- [Quickstart tutorial](docs/tutorials/quickstart.md): install, ground the brain, run the executor lane.
-- [The terminal chat](docs/how-to/chat.md): `quest-ai-runner chat`, resuming conversations (`--resume`,
-  `--continue`), the `/` command menu and every command, choosing a quest, keys.
-- [Context assembly](docs/explanation/context-assembly.md): the context engine design of record, including the
-  principled test (not a vibe) for when a message stays on its current topic card vs. opens a new one.
-- [TF-DF-IDF Sampling](docs/explanation/TF_DF_IDF_SAMPLING.md): smart context selection: 62% fewer tokens, zero external deps.
-- [Claude conversations integration](docs/how-to/claude-conversations-integration.md): grounding on past
-  Claude sessions, including how a cross-session recall hit is learned onto the active card and
-  gains the same usage-recency boost files and collections already get.
-- [The minimal-intervention overseer](docs/explanation/overseer.md): a cheap, high-quality watcher that almost always stays silent.
-- [Guidance cards](docs/how-to/guidance-cards.md): standing rules (preferences, policies, house standards)
-  retrieved per message rather than pasted into one always-on prompt: tagging and scope, selection,
-  one shared rules base across machines, and learning new rules from human corrections.
-- [Answer explanation](docs/explanation/answer-explanation.md): the opt-in, user-facing "Explain how I got this" panel, and why half of it is a record of the run rather than prose about it.
-- [Architecture Standards](docs/reference/ARCHITECTURE_STANDARDS.md): brain / runner / adapters, why `core` is `core`, and the standards code here must follow.
-- [Writing a consumer](docs/how-to/writing-a-consumer.md): wire the library to your own Quest backend.
-- [Implementing adapters](docs/how-to/adapters.md): the four interfaces and how to build your own.
-- [Streaming & modes](docs/explanation/streaming-and-modes.md): LIVE vs BACKGROUND, sinks, the handoff.
-- [Deployment](docs/how-to/deployment.md): cron and systemd.
-- [Quest API contract](docs/reference/quest-api-contract.md): the endpoints the runner speaks.
+- **Tutorials:** [quickstart](docs/tutorials/quickstart.md),
+  [terminal chat in ten minutes](docs/tutorials/terminal-chat-in-ten-minutes.md),
+  [your first lane](docs/tutorials/tutorial-your-first-lane.md).
+- **How-to guides:** [the terminal chat](docs/how-to/chat.md),
+  [writing a consumer](docs/how-to/writing-a-consumer.md),
+  [web search](docs/how-to/web-search.md), [tools](docs/how-to/tools.md),
+  [adapters](docs/how-to/adapters.md), [deployment](docs/how-to/deployment.md).
+- **Explanation:** [context assembly](docs/explanation/context-assembly.md),
+  [the hub of hubs](docs/explanation/hub-of-hubs.md), [link guard](docs/explanation/link-guard.md),
+  [overseer](docs/explanation/overseer.md), [live work trace](docs/explanation/live-work-trace.md),
+  [incremental replies and asks](docs/explanation/incremental-replies-and-asks.md),
+  [metric results](docs/explanation/metric-results.md).
+- **Reference:** [configuration](docs/reference/configuration.md),
+  [architecture standards](docs/reference/ARCHITECTURE_STANDARDS.md),
+  [Quest API contract](docs/reference/quest-api-contract.md),
+  [consumer registry](docs/reference/consumer-registry.md).
 
-## The three consumers
-
-1. **Quest in-process chat (via `core`).** Quest's backend (or a standalone-team brain) imports
-   `quest_ai_runner.core`, constructs an `Orchestrator` with its adapters, and calls `run(...)`
-   per message. No poller, no network beyond the model, just the brain in-process.
-2. **An integrating org (via the `runner`).** An org that wants its system to execute Quest AI
-   tasks for its teams supplies its Quest API key + adapters (its corpus via `FilesAdapter`, its
-   live data via `CachedDbAdapter`) and runs the `Poller`. Spiritual Data's own cockpit is exactly
-   this: it grounds on its corpus + live Quest data and runs the same engine.
-3. **A single-user personal lane (via the `runner`).** The same engine runs for one person: a
-   personal Quest key + a personal corpus root, config-only. The pattern was proven by a bespoke
-   personal "watchdog" loop that generalized cleanly into the `Poller`: same poll → claim → run →
-   escalate → report loop, just different config.
-
-Because the same engine serves all three, maintenance happens once. Consumers differ only in
-*config*: which key, which adapters, which corpus.
-
-## Repo layout
-
-```
-quest_ai_runner/
-├── core/                      # the domain-free brain (import this in-process)
-│   ├── adapters.py            # the four INTERFACES (Protocol + ABC): RetrievalAdapter,
-│   │                          #   ModelProvider, DeepRunner, EscalationSink + value objects;
-│   │                          #   plus Mode, ProgressEvent/ProgressSink + StreamSink/MilestoneSink/FanoutSink
-│   ├── orchestrator.py        # the bounded loop: plan → gather → re-plan → answer/deep/confirm
-│   │                          #   emits events to a ProgressSink; run(mode,sink,...) + run_stream(...)
-│   ├── model_registry.py      # tier → live-top-model id (pluggable ModelProvider source)
-│   └── goal_runner.py         # the /goal --max-turns contract (GoalRunner + SubprocessGoalRunner)
-├── adapters/                  # reference RetrievalAdapter / ModelProvider implementations
-│   ├── files_adapter.py       # read_section/grep over a configured root (quest-docs + corpus)
-│   ├── cached_db_adapter.py   # live DB reads via short-TTL cache (the "no file sync" approach)
-│   └── claude_cli_provider.py # keyless model calls through the local claude CLI
-├── runner/                    # the EXECUTOR (the watchdog generalized)
-│   ├── quest_client.py        # assistant-tasks + team-decisions API, qsk_ auth; QuestDecisionSink
-│   ├── poller.py              # event-driven, signature-deduped poll loop; bounded concurrency
-│   └── executor.py            # run one claimed task through the brain → report result/decision
-├── config.py                  # RunnerConfig (consumer supplies key, adapters, corpus, tuning)
-└── cli.py                     # `quest-ai-runner` console entry (poller, env-driven)
-examples/                      # runnable reference consumers (env-driven, no real data)
-docs/                          # tutorial, how-tos, architecture, deployment
-tests/                         # core loop, registry bucketing, runner + examples (offline)
-```
-
-## The four adapter interfaces (the generic boundary)
-
-| Interface | Role | Reference impl |
-|---|---|---|
-| `RetrievalAdapter` | GATHER: `read_section` / `grep` / `query` over the source | `FilesAdapter`, `CachedDbAdapter` |
-| `ModelProvider` | the LLM: `plan` / `answer` / `list_models` | `AnthropicProvider` (the hub's `hubofhubs.models.anthropic`) |
-| `DeepRunner` | spawn a bounded, goal-driven run (`/goal --max-turns`) | `SubprocessGoalRunner` |
-| `EscalationSink` | raise a human-only confirm/decision, return its id | `QuestDecisionSink` |
-
-A consumer satisfies them structurally (they're `typing.Protocol`) or by subclassing the ABCs.
-
-### Discovery: the brain learns source structure at runtime
-
-`RetrievalAdapter` includes four *discovery* methods that make the source self-describing, so
-the planner never needs a static schema blob pushed into its prompt. Instead it *asks*:
-
-| Method | Cost | What it returns |
-|---|---|---|
-| `list_sources()` | cheap | the collections/tables/doc-sets that exist, one line each |
-| `describe_source(name)` | drill-down | the fields/types (or heading outline) of ONE named source |
-| `list_operations()` | cheap | the callable operations (reads and mutations), one line each |
-| `describe_operation(name)` | drill-down | the full signature/usage of ONE named operation |
-
-The pattern is cheap-then-drill-down: the planner calls `list_sources` (or `list_operations`)
-first to see what exists, then `describe_*` on the one or two it needs. Both levels batch in
-parallel with the rest of the `reads[]` step, so there is no extra round-trip.
-
-The brain is taught *discover before guess*: when the planner does not already know which source
-or operation a request needs, it calls `list_sources` / `list_operations` rather than inventing a
-shape. This keeps the planner's knowledge current without the consumer having to maintain a static
-context blob.
-
-Reference implementations:
-
-- `FilesAdapter` enumerates readable files under the configured root and extracts a markdown
-  heading outline per file for `describe_source`.
-- `CachedDbAdapter` accepts optional `sources` (a `{name: description}` dict) and `operations`
-  (a rendered listing string) at construction time, falling back to schema inference from a
-  sample row when these are not supplied.
-
-Older adapters that predate the discovery methods continue to work: the orchestrator dispatches
-via `getattr` and returns a benign "discovery not supported" observation when the methods are
-absent, so the loop never stalls.
-
-## How a bespoke watchdog generalized
-
-The design was proven by a bespoke single-user "watchdog" poll loop, then generalized into the
-library. The mapping (useful if you're porting a similar loop of your own):
-
-| Bespoke watchdog mechanism | Generalized into |
-|---|---|
-| Poll personal Quest for DUE queued tasks | `Poller.run_once` → `QuestClient.discover_due` (poll-mode floor) |
-| `watchdog_state.json` signature dedup | `StateStore` (pluggable; same exactly-once guarantee) |
-| Only `queued` fires; assistant PATCHes `in_progress` | `Poller` claim step (`QuestClient.claim`; backend is source of truth) |
-| `subprocess.Popen` spawns without blocking | bounded `ThreadPoolExecutor` (`max_concurrent_tasks`) |
-| Loads creds, runs the worker with a skill | consumer-supplied `RunnerConfig` (the generic boundary) |
-| Priming baselines existing items | `StateStore` records handled signatures |
-| Unconfigured key → log + exit 0 | `Poller`/`cli` degrade visibly (never crash) |
-| systemd loop + `--once` cron | `Poller.run_forever()` + `quest-ai-runner --once` |
-
-## The Quest contract implemented (`runner/quest_client.py`)
-
-Auth: `Authorization: Bearer qsk_<hex>` (the executor identity).
-
-- **Discover**: `GET /api/assistant-tasks?status=queued&due_before=<ISO-now>`
-- **Claim**: `PATCH /api/assistant-tasks/{id}` `{status: in_progress}`
-- **Report**: `PATCH .../{id}` `{status: done|needs_you|failed, result, decision_id?}`
-- **Escalate** (human-only step): `POST /api/teams/{team_id}/decisions`
-  (`kind`, `summary`, `default_on_silence=hold` by default, optional `deadline`) → returns a
-  `decision_id`, stamped on the task via `needs_you`. `QuestDecisionSink` never sends an empty
-  assignee: explicit assignee → configured default (`QAR_DECISION_ASSIGNEE`) → the quest's own
-  owner, or it raises instead of filing an unaddressed decision. A deep worker that raises one
-  itself reports it back by printing `QAR-ESCALATED: <decision_id>` in its output (see
-  [`docs/how-to/adapters.md`](docs/how-to/adapters.md#escalationsink)); a missing marker is recovered
-  automatically when the sink supports it, so a decision is never silently orphaned.
-- **Read a quest's decisions**: `GET /api/teams/decisions/for-quest?quest_id=` (open and
-  resolved), rendered into quest context (`QuestRetrievalAdapter`) so a rep sees what's already
-  been asked/answered and doesn't duplicate or re-ask it. See
-  [`docs/reference/quest-api-contract.md`](docs/reference/quest-api-contract.md).
-- **Loop-close**: `GET /api/teams/decisions/for-user`, `POST /api/teams/decisions/{id}/resolve`.
-- **Identity**: `GET /api/teams/whoami` (validate the key; `quest-ai-runner --check`).
-
-## How quest-backend / cockpit import `core` vs. run the `runner`
-
-- **In-process chat** (Quest backend, cockpit chat): import the brain and call it directly:
-  no poller, no Quest task API:
-
-  ```python
-  from quest_ai_runner.config import RunnerConfig, build_orchestrator
-  from hubofhubs.models.anthropic import AnthropicProvider
-from quest_ai_runner.adapters import FilesAdapter
-
-  cfg = RunnerConfig(retrieval=FilesAdapter("/path/to/quest-docs"),
-                     model_provider=AnthropicProvider(api_key="..."))
-  orch = build_orchestrator(cfg)
-  result = orch.run("What does the pricing doc say?")   # OrchestratorResult(kind="answer", ...)
-  ```
-
-- **Executor lane** (an integrating org's task-runner, or a personal lane): run the poller.
-
-  ```python
-  from quest_ai_runner.config import RunnerConfig
-  from hubofhubs.models.anthropic import AnthropicProvider
-from quest_ai_runner.adapters import FilesAdapter
-  from quest_ai_runner.core.goal_runner import SubprocessGoalRunner, SubprocessConfig
-  from quest_ai_runner.runner.poller import Poller
-
-  cfg = RunnerConfig(
-      quest_base_url="https://api.example.org", quest_api_key="qsk_...", team_id="team_123",
-      retrieval=FilesAdapter("/path/to/corpus"),
-      model_provider=AnthropicProvider(api_key="..."),
-      deep_runner=SubprocessGoalRunner(SubprocessConfig(working_dir="/path/to/corpus")),
-  )
-  Poller(cfg, state_path="qar_state.json").run_forever()
-  ```
-
-  Or via the console entry (env-driven): `QUEST_BASE_URL=... QUEST_API_KEY=qsk_... \
-  QAR_CORPUS_ROOT=... quest-ai-runner --once` (cron) or `quest-ai-runner` (service).
-
-## The two product modes (one brain): the frozen streaming interface
-
-Every run is one of two **modes** (`quest_ai_runner.core.Mode`). The brain emits the **same**
-events in both; a **`ProgressSink`** (chosen by mode) decides what surfaces. **The orchestrator
-never decides messaging policy**: it only emits `ProgressEvent`s; the sink applies the rule.
-
-| | **LIVE (attended)** | **BACKGROUND (sent-off / scheduled)** |
-|---|---|---|
-| Who's watching | a human, in real time | nobody |
-| Sink | `StreamSink`: forwards **every** event | `MilestoneSink`: surfaces **only** `result` / `decision` / `milestone` / `done` |
-| Surfaces | status ticks, plan/replan, reads, reply, confirm | result, decision-request, real milestone (planning/reading chatter **dropped**) |
-| Called by | quest-backend / cockpit **in-process** | the **poller's** poll-by-due lane |
-
-The surfacing rule lives **once**, in the sink (`SURFACING_EVENTS = {result, decision, milestone,
-done}`), so every consumer inherits identical policy.
-
-**Public API consumers import (this is frozen):**
-
-```python
-from quest_ai_runner.core import Mode, StreamSink, MilestoneSink, ProgressEvent
-# orch = Orchestrator(...)  (or build_orchestrator(cfg))
-
-# --- LIVE, in-process streaming (quest-backend chat / cockpit) ---
-sink = StreamSink(forward=lambda ev: websocket.send(ev))   # ev is a dict
-result = orch.run(user_message, mode=Mode.LIVE, sink=sink)  # streams as it works; returns the result
-# ...or iterate events as a generator (yields event dicts, then the terminal OrchestratorResult):
-for item in orch.run_stream(user_message, mode=Mode.LIVE):
-    render(item)            # OrchestratorResult last; dict events before it
-
-# --- BACKGROUND execution (the runner/executor does this for you) ---
-sink = MilestoneSink(on_result=..., on_decision=..., on_milestone=..., on_done=...)
-result = orch.run(task_text, mode=Mode.BACKGROUND, sink=sink)   # only milestones/result/decision surface
-
-# --- LIVE -> BACKGROUND handoff (consumer disconnected) ---
-result = orch.run(msg, mode=Mode.LIVE, sink=live_stream,
-                  background_sink=MilestoneSink(...), detach_check=lambda: consumer.disconnected)
-# if detach_check() turns True mid-run, the run CONTINUES; the rest of the events (incl. the
-# final result) are delivered via background_sink instead of the dropped live stream.
-```
-
-A plain `orch.run(msg)` with **no** mode/sink args still works (non-streaming; legacy `status`
-callback only). The `runner/executor.py` already runs BACKGROUND with a `MilestoneSink` whose
-`on_milestone` posts an optional progress note and whose result/decision flow through the
-existing Quest PATCH path, so live and background report **consistently**.
-
-**Live↔Background handoff (both directions):**
-- **Live → Background** is **core's** job: pass `background_sink` + `detach_check` to `run`; on
-  detach the run finishes and delivers its result via the background path (notify/PATCH), not the
-  dropped stream. (v1 mechanism: `core.FanoutSink` flips sinks mid-run.)
-- **Background → Live** ("a background result surfaces live when the user returns") is a
-  **consumer/UI** concern: the result is already persisted/reported by the background path; the
-  UI just reads it back. Core does nothing extra here.
-
-## Scheduling: Quest scheduling **is** the due time; the runner is timing-agnostic
-
-There is **no separate scheduling plumbing**. The poller discovers by
-`GET /api/assistant-tasks?status=queued&due_before=<now>`, so:
-
-- **Run now** = Quest stamps `due` = now → discovered on the next scan.
-- **Scheduled for T** = Quest stamps `due` = T → **not discovered/claimed until `now >= T`** (a
-  future due-time is simply not-yet-due, so it isn't returned by `due_before=now`).
-- **Recurring** = Quest re-stamps the next `due` after each completion → it surfaces each period.
-
-The runner only ever asks *"what's due?"*; **Quest scheduling is the timing layer.** (See the
-scheduling tests in `tests/test_runner.py`.)
-
-## Install & test
+## Develop and test
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e .            # core + runner are stdlib-only
-pip install -e '.[anthropic,dev]'   # add the Anthropic provider + pytest
-python -m pytest -q         # tests use stub adapters + a mock Quest client, no live network
+python -m pytest tests/test_core_adapters_public_names.py -q   # run only the tests for what you changed
+esoi check                                                     # validate the ESOI records
+esoi docs check                                                # validate the docs layout
+esoi leaderboard                                               # rank the arms of every solution
 ```
 
-The tests need no network and no API key: the core loop runs against a stub `ModelProvider` +
-stub `RetrievalAdapter`, and the runner runs against a mock `QuestClient`.
+Tests use stub adapters and a mock Quest client, so they run offline.
 
-## The context engine, and the part that compounds
+## Contributing, security and license
 
-The core design decision behind the context engine is information-theoretic. Shannon's **Data
-Processing Inequality** (1948) proves that every agent-to-agent handoff can only destroy
-information, never create it. The naive alternative, a "context finder" agent that summarizes the
-corpus and hands a compressed summary to the reasoning agent, is a lossy chain by construction,
-regardless of how good the summarizer is. The context engine eliminates that handoff: context
-delivery is library code, not an agent call, so the reasoning agent sees the full relevant context,
-not a compressed version of it. Under equal compute, a single well-contextualized agent matches or
-beats a multi-agent pipeline on every tested model family (Tran & Kiela, Stanford 2026,
-arXiv:2604.02460).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md) first. The rule that matters
+most is to keep the library generic: no organization names, ids, keys, emails or absolute paths in
+the package. Everyone taking part agrees to the [Code of Conduct](CODE_OF_CONDUCT.md). Report
+vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
 
-The runner orients an agent to the right place before it starts, across three complementary arms:
-
-- **Docstring cards** (zero-dependency): a no-LLM initial pass that indexes the code's **own
-  docstrings** (each file's written description), like the index at the back of a book.
-- **Semantic vectors** over those summaries (optional Qdrant): "which area is this about?"
-- **BM25 over actual content** (optional): "where does this exact identifier or phrase appear?"
-
-The part worth pitching is the one that **keeps getting better on its own**: a **semantic memory of
-past tasks and the context they used**. Every completed task records a `task -> context`
-association (the task, the files it touched, a short summary), embedded so a **future similar task
-retrieves it by meaning**. It compounds where work actually happens, never by summarizing the whole
-corpus, and it ages honestly: associations are **recency-weighted** (a similar task from yesterday
-outranks one from a year ago), **merged** instead of duplicated, and **capped** with oldest-first
-eviction. The longer the system runs, the better it orients, with no manual indexing.
-
-## Evaluation
-
-Routing accuracy (target file in top-1 / top-3), 15 labeled tasks on a copy of this repo. The
-big jump is from extracting the code's own **docstrings** for the summaries (free, no LLM):
-
-| Retriever | top-1 | top-3 | notes |
-|---|---|---|---|
-| grep (term frequency) | 13% | 66% | weak baseline |
-| keyword / IDF (symbol names only) | 13% | 53% | the old thin summaries |
-| keyword / IDF (**docstring-rich**) | **53%** | **93%** | extract the code's own docstrings, no LLM |
-| vector (`bge-small`, 384d) | 53% | 80% | zero-config local floor |
-| vector (`bge-base`, 768d) | **60%** | **86%** | a larger local model, still no API key |
-| **hybrid (vector + keyword)** | union recall **93%** | | both candidate sets, agent reviews and picks |
-
-The embedder is a pluggable callable: a bigger local model (`bge-base`) already lifts vector
-routing from 53/80 to 60/86 with no API key, and a SOTA API embedder lifts it further. The
-quality dial is config, not a redesign.
-
-Other measured properties:
-
-| Metric | Value |
-|---|---|
-| Cold-start bootstrap | ~65 cards, ~240 ms, 0 LLM calls |
-| Staleness / auto-update | precision 1.00, recall 1.00, 0 LLM calls; vectors re-embed only changed items |
-| Tool-call rounds, Claude Code with a correct grounding vs alone | 1.0 vs 3.0 (3x fewer) |
-| Correctness (cold / warm, per-sample LLM judge) | 100% / 100%, 5/5 adversarial never misled |
-
-**What the numbers say honestly.** The summaries are what matter: indexing the code's own
-docstrings took keyword routing from 13% / 53% to **53% / 93%** for free, and hybrid surfaces the
-right file **93%** of the time. The vector arm is a small-model floor (`bge-small`); a SOTA API
-embedder, or a larger one, raises it, and the embedder is a pluggable callable. With the right
-grounding surfaced, Claude Code confirms in 1 tool round instead of 3, correctness never regresses,
-and a confidence gate falls back to plain Claude Code when nothing is confident, so the layer never
-makes a run worse, and the task-memory makes it better over time.
-
-Full methodology, dataset, and honest limitations: see [evaluation/README.md](evaluation/README.md).
-Re-run: `esoi run context_selection --impl hybrid_union` (free) and
-`esoi run claude_code_ab --impl warm_claude` (spends a little Haiku token, runs on a repo copy).
-Handoff page from the recorded rows (free, offline): `python evaluation/components/qar_overall/render_handoff.py --content <content.json>`
-(`--check` exits 1 when stale; the daily steps are in `evaluation/components/qar_overall/AUTOPILOT_HANDOFF.md`).
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
-[CLAUDE.md](CLAUDE.md) first: the one rule that matters most: **keep the library generic**
-(no org names, ids, keys, emails, or absolute paths in the package). By participating you agree to
-the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## Security
-
-Found a vulnerability? Please report it privately: see [SECURITY.md](SECURITY.md). Do not open a
-public issue for security problems.
-
-## License
-
-Licensed under the [Apache License 2.0](LICENSE). Copyright © Spiritual Data.
+Licensed under the [Apache License 2.0](LICENSE). Copyright Spiritual Data.
