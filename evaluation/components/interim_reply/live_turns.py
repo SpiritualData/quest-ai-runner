@@ -342,7 +342,12 @@ def work_trace_problems(case):
         return []
     shaped = dict(case, stage="real", kind="group" if case["surface"] == "group" else "records", reply=case["messages"][-1]["text"], calls=[])
     views = arms.views_for("trail", shaped)
-    return arms.gate_problems(shaped, views) + arms.parity_problems(shaped, views)
+    found = arms.gate_problems(shaped, views) + arms.parity_problems(shaped, views)
+    # A deep worker does its reading in its own process, so this harness holds no call records to compare the shown counts with: those
+    # comparisons ("shows N but the run did 0", "names a domain no removed link has") cannot be judged here and are left out, not failed.
+    # Every other work-trace problem (private titles, non-terminal steps, jargon) still counts.
+    unverifiable = ("the run did 0", "the run only did 0", "no removed link has")
+    return [f for f in found if not any(u in f for u in unverifiable)]
 
 
 def run_in_subprocess(name, interim_replies, timeout=1700):
@@ -355,6 +360,10 @@ def run_in_subprocess(name, interim_replies, timeout=1700):
                                "--out", str(out)], capture_output=True, text=True, timeout=timeout)
         if not out.exists():
             return {"problems": [f"the real turn did not finish: {(done.stderr or done.stdout)[-200:]}"], "work_trace_problems": [], "messages": []}
+        keep = os.environ.get("QAR_EVAL_KEEP_DIR")
+        if keep:   # a copy of the whole record (messages, log, asks) for reading the transcript
+            Path(keep).mkdir(parents=True, exist_ok=True)
+            (Path(keep) / f"{name}_{'new' if interim_replies else 'today'}.json").write_text(out.read_text())
         return json.loads(out.read_text())
 
 
