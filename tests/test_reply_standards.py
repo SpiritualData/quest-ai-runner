@@ -158,3 +158,14 @@ def test_a_wrong_days_from_today_count_is_a_violation_and_the_right_one_is_not()
     assert day_count_errors("On 13 Nov that is 12 days from today.", "no date here") in ([], [])  # server-date fallback with one day of slack
     measured = measure(wrong, STANDARDS[SHAPE_DEFAULT], evidence)
     assert any(v.kind == "days" for v in measured.violations) and "12 days from today" in measured.hint()
+
+
+def test_a_day_offset_from_an_event_date_the_paragraph_states_is_checked():
+    from quest_ai_runner.core.reply_standards import event_offset_errors
+    wrong = ("If they arrive a week early they would come on 13 Nov, which leaves you until 10 Nov, and your own "
+             "target is already 3 days before arrival (17 Nov). That squeezes the work.")
+    errors = event_offset_errors(wrong)
+    assert len(errors) == 1 and "10 Nov" in errors[0] and "17 Nov" in errors[0]
+    right = "They would come on 13 Nov, so your target is 3 days before arrival (10 Nov)."
+    assert event_offset_errors(right) == []
+    assert event_offset_errors("The race is 2 days after arrival (22 Nov).") == []   # no earlier date to count from

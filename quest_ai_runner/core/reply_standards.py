@@ -244,6 +244,38 @@ def day_count_errors(draft: str, evidence: str) -> List[str]:
     return errors
 
 
+RELATIVE_TO_EVENT = re.compile(
+    r"(?<!\d)(?P<n>\d{1,3})\s+days?\s+(?P<dir>before|after)\s+(?P<event>[A-Za-z][A-Za-z' ]{2,30}?)\s*\((?P<when>[^()]{3,25})\)",
+    re.IGNORECASE)
+
+
+def event_offset_errors(draft: str) -> List[str]:
+    """Each "N days before/after <event> (D)" whose D is not the date N days from the date the SAME paragraph states just
+    before it (IMP-027: "arrive 13 Nov ... 3 days before arrival (17 Nov)" when 3 days before 13 Nov is 10 Nov). Pure date
+    arithmetic on dates the text states; it judges only this explicit parenthesised form, and only when a date comes earlier in
+    the paragraph to count from."""
+    from datetime import date, timedelta
+    errors: List[str] = []
+    for paragraph in (draft or "").split("\n\n"):
+        for claim in RELATIVE_TO_EVENT.finditer(paragraph):
+            earlier = dates_in(paragraph[:claim.start()])
+            stated = dates_in(claim.group("when"))
+            if not earlier or len(stated) != 1 or len(stated[0][1]) != 1 or len(earlier[-1][1]) != 1:
+                continue
+            (sd, sm), (ed, em) = stated[0][1][0], earlier[-1][1][0]
+            try:
+                year = date.today().year
+                anchor, claimed = date(year, em, ed), date(year, sm, sd)
+            except ValueError:
+                continue
+            n = int(claim.group("n"))
+            expected = anchor - timedelta(days=n) if claim.group("dir").lower() == "before" else anchor + timedelta(days=n)
+            if claimed != expected:
+                errors.append(f"{n} days {claim.group('dir').lower()} {earlier[-1][0]} is {expected.day} "
+                              f"{expected:%b}, not {stated[0][0]}")
+    return errors
+
+
 def standard_for(plan: Any) -> Standard:
     """The standard that applies to this reply, from the planner's structured fields only."""
     shape = getattr(plan, "reply_shape", None)
@@ -264,6 +296,8 @@ def measure(draft: str, standard: Standard, evidence: str) -> Measurements:
                 + " (it is in nothing you were given; say you do not have it, or leave it out)", tuple(m.unsupported)))
         for wrong in day_count_errors(text, evidence):
             m.violations.append(Violation("days", "correct the day count: it is " + wrong, (wrong,)))
+        for wrong in event_offset_errors(text):
+            m.violations.append(Violation("days", "correct the date: " + wrong, (wrong,)))
         if standard.max_questions is not None and m.questions > standard.max_questions:
             m.violations.append(Violation(
                 "questions", f"ask at most {standard.max_questions} question{'s' if standard.max_questions != 1 else ''}"
