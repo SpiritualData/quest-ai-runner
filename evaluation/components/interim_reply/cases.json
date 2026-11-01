@@ -758,5 +758,108 @@
   },
   "label": "the same gap on a later attempt keeps the same key, a different gap does not",
   "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-X01",
+  "kind": "text",
+  "area": "no worker claim in the interim",
+  "args": {
+   "claim": "Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "output": "Table: Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "receipts": [],
+   "coverage": null,
+   "flagged": false,
+   "reason": "the row for Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week is unverified",
+   "next_action": "check Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "progress_gap": "the table still has fewer studies than asked",
+   "progress_next": "open the remaining candidate papers"
+  },
+  "expect": {
+   "eq": {
+    "sent": false,
+    "leaks": false
+   }
+  },
+  "label": "a worker claim with figures and no receipt gives no interim",
+  "source": "labelled by construction from the 2026-11-01 real research turn, whose first interim repeated figures the worker had derived from a table it could not verify; fictional study and values"
+ },
+ {
+  "id": "INT-X02",
+  "kind": "text",
+  "area": "no worker claim in the interim",
+  "args": {
+   "claim": "Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "output": "Table: Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "receipts": [
+    "Opened 2 of 6 papers"
+   ],
+   "coverage": null,
+   "flagged": false,
+   "reason": "the row for Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week is unverified",
+   "next_action": "check Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "progress_gap": "the table still has fewer studies than asked",
+   "progress_next": "open the remaining candidate papers"
+  },
+  "expect": {
+   "eq": {
+    "sent": true,
+    "leaks": false,
+    "has_receipt": true
+   }
+  },
+  "label": "a worker claim beside a receipt: the interim shows the receipt and not the claim",
+  "source": "labelled by construction from the 2026-11-01 real research turn, whose first interim repeated figures the worker had derived from a table it could not verify; fictional study and values"
+ },
+ {
+  "id": "INT-X03",
+  "kind": "text",
+  "area": "no worker claim in the interim",
+  "args": {
+   "claim": "Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "output": "Table: Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "receipts": [
+    "Opened 2 of 6 papers"
+   ],
+   "coverage": null,
+   "flagged": false,
+   "reason": "the row for Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week is unverified",
+   "next_action": "check Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "progress_gap": "",
+   "progress_next": ""
+  },
+  "expect": {
+   "eq": {
+    "sent": false,
+    "leaks": false
+   }
+  },
+  "label": "the verifier's reason and next action echo the claim and no request-level gap is given: no interim",
+  "source": "labelled by construction from the 2026-11-01 real research turn, whose first interim repeated figures the worker had derived from a table it could not verify; fictional study and values"
+ },
+ {
+  "id": "INT-X04",
+  "kind": "text",
+  "area": "no worker claim in the interim",
+  "args": {
+   "claim": "Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "output": "Table: Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "receipts": [
+    "Opened 2 of 6 papers"
+   ],
+   "coverage": null,
+   "flagged": true,
+   "reason": "the row for Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week is unverified",
+   "next_action": "check Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week",
+   "progress_gap": "the table still has fewer studies than asked",
+   "progress_next": "open the remaining candidate papers"
+  },
+  "expect": {
+   "eq": {
+    "sent": false,
+    "leaks": false
+   }
+  },
+  "label": "a flagged claim beside receipts sends no interim",
+  "source": "labelled by construction from the 2026-11-01 real research turn, whose first interim repeated figures the worker had derived from a table it could not verify; fictional study and values"
  }
 ]

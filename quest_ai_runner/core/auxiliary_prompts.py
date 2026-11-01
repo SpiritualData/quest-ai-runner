@@ -37,6 +37,13 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
             "next_tier": {"type": "string",
                           "description": "Optional stronger tier (fast/balanced/quality/best) for a "
                                          "capability gap. Omit to keep the current tier."},
+            "progress_gap": {"type": "string",
+                             "description": "Only when met=false and blocker is more_work: one plain sentence for the person saying what "
+                                            "is still missing in terms of the REQUEST. Never restate a figure, name or finding from the "
+                                            "worker's output; leave it empty if you cannot say it without doing so."},
+            "progress_next": {"type": "string",
+                              "description": "Only when progress_gap is set: one plain sentence on what happens next, in terms of the "
+                                             "request, with no figure, name or finding from the worker's output."},
             "blocker": {"type": "string", "enum": ["more_work", "evidence_only", "needs_person", "tool_failure"],
                         "description": "Only when met=false; see the rules above."},
             "question": {"type": "string",

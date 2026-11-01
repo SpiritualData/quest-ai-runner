@@ -75,6 +75,19 @@ def resolve_assignee(asked_of: str, member_ref: str, participants: Sequence[Mapp
     return Assignee(asker, "asker", fell_back=True)
 
 
+def why_only_you_of(blocker: str, assignee: Assignee, participants: Sequence[Mapping[str, Any]]) -> str:
+    """The one line saying why this person: written by code from structural facts (who the ask is for, which kind of block), never
+    the verifier's own reason, which is model prose that can name a platform fault or echo a worker's claim. Empty when no valid
+    reason exists (an ask to the asker whose block is a missing answer needs none)."""
+    if assignee.asked_of == "member":
+        name = next((str(p.get("name") or "").strip() for p in participants if isinstance(p, Mapping)
+                     and str(p.get("user_id") or "") == assignee.user_id), "")
+        return f"Only {name} can answer this." if name else "Only a teammate in this conversation can answer this."
+    if blocker == "tool_failure":
+        return "A tool refused access, and only a person can grant it."
+    return ""
+
+
 def ask_dedupe_key(turn_id: str, conv_id: str, gap: str) -> str:
     """One open ask per (turn, gap): the same gap on a later attempt of the same turn reuses the open ask."""
     flat = " ".join(str(gap or "").lower().split())

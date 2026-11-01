@@ -16,6 +16,8 @@ def real_turn(turn, switched_on):
 
 def build(meter):  # noqa: ARG001
     def run(kind, args):
+        if kind == "text":
+            return {"sent": False, "leaks": False, "has_receipt": False}   # no interim is sent at all
         if kind == "real":
             return real_turn(args["turn"], False)
         if kind == "turn":

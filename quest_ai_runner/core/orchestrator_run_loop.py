@@ -45,6 +45,7 @@ from .planner_context import gathered_content
 from .scope_tags import scope_fence_block
 from . import tool_guards
 from .em_dash_pass import remove_em_dashes
+from .path_pass import relativize
 from .tools import ToolContext
 
 
@@ -194,6 +195,13 @@ class RunLoopMixin:
                 for _d in res.deep_results:
                     if isinstance(getattr(_d, "output", None), str):
                         _d.output = remove_em_dashes(_d.output)
+                # MACHINE PATHS (core/path_pass.py): a folder this deployment works in is shown relative to it.
+                _roots = list(getattr(cfg, "private_path_roots", None) or [])
+                if _roots:
+                    res.text = relativize(res.text, _roots)
+                    for _d in res.deep_results:
+                        if isinstance(getattr(_d, "output", None), str):
+                            _d.output = relativize(_d.output, _roots)
             # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
             # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
             # so the card PINS them: that is what makes the loop compound and what staleness later

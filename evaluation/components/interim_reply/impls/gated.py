@@ -1,9 +1,26 @@
 """CURRENT (``reply-in-steps:gated`` and ``ask-on-block:structural``): the real ``core/interim_policy.py`` and ``core/ask_policy.py``. The turn
 loop here is the orchestrator's own: one ``InterimLedger`` per turn, ``decide`` before each emit, ``record`` after a send. Zero model calls offline. Its REAL cases (kind ``real``, run only with QAR_EVAL_LIVE_TURNS=1) run the real
 orchestrator with ``interim_replies`` on."""
+import json
 from types import SimpleNamespace
 
 from quest_ai_runner.core import ask_policy, interim_policy
+
+
+def interim_text(args):
+    """The real ``maybe_send_interim`` with a stub orchestrator and sink: what an interim would show for one attempt's record."""
+    from types import SimpleNamespace
+    from quest_ai_runner.core.orchestrator_turn_messages import maybe_send_interim
+    sent = []
+    emit = SimpleNamespace(emit=sent.append)
+    orch = SimpleNamespace(cfg=SimpleNamespace(interim_replies=True, max_interims_per_turn=4, min_seconds_between_interims=0.0))
+    res = SimpleNamespace(output=args["output"], observations=list(args["receipts"]), observations_reported=bool(args["receipts"]),
+                          coverage=args["coverage"], decision_id=None, claim_corrected=False)
+    verdict = {"met": False, "reason": args["reason"], "next_action": args["next_action"], "blocker": "more_work",
+               "progress_gap": args["progress_gap"], "progress_next": args["progress_next"], "claims_unexecuted": args["flagged"]}
+    maybe_send_interim(orch, emit, {}, res, verdict, blocker="more_work", reason=args["reason"], attempt=1, loop_runs_again=True, now=100.0)
+    shown = " ".join(str(e.text) + " " + json.dumps(e.data, default=str) for e in sent)
+    return {"sent": bool(sent), "leaks": args["claim"] in shown, "has_receipt": any(r in shown for r in args["receipts"])}
 
 
 def real_turn(turn, switched_on):
@@ -18,6 +35,8 @@ def real_turn(turn, switched_on):
 
 def build(meter):  # noqa: ARG001
     def run(kind, args):
+        if kind == "text":
+            return interim_text(args)
         if kind == "real":
             return real_turn(args["turn"], True)
         if kind == "turn":

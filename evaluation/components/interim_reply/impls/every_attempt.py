@@ -4,6 +4,8 @@ interim, and any verdict that carries a question files an ask. Zero model calls;
 
 def build(meter):  # noqa: ARG001
     def run(kind, args):
+        if kind == "text":
+            return {"sent": not args["flagged"], "leaks": True, "has_receipt": bool(args["receipts"])}   # shows the worker output
         if kind == "turn":
             return {"sent": [i for i, s in enumerate(args["steps"]) if not s["met"]]}
         asker = str(args.get("asker") or "")

@@ -796,6 +796,10 @@ def build_orchestrator(
     from .core.inbox import InMemoryInbox
     input_inbox = getattr(cfg, "input_inbox", None) or InMemoryInbox()
 
+    if not cfg.orchestrator.private_path_roots:   # hide the folders this deployment works in from a reply (core/path_pass.py)
+        import tempfile   # the hub's claude_cli completions run in this fixed neutral folder, and a model that sees its cwd repeats it
+        cfg.orchestrator.private_path_roots = [r for r in (cfg.corpus_root, os.getenv("QAR_DEEP_WORKING_DIR"),
+                                                           os.path.join(tempfile.gettempdir(), "hubofhubs-cli-completion")) if r]
     context_assembler = resolve_context_assembler(cfg, notify=notify)
     # Resolve the deep worker's tri-state and WRITE IT BACK onto the config (the same in-place
     # style as the MultiProvider wrap above). Consumers and the chat UIs read ``cfg.deep_runner``

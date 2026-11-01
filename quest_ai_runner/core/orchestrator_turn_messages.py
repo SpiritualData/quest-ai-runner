@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from hubofhubs.ports.deep import ProgressEvent
 from hubofhubs.ports.events import EVENT_DECISION, EVENT_INTERIM
 
-from .ask_policy import ask_event_data, ask_text, blocks_on_person, file_ask, resolve_assignee
+from .ask_policy import ask_event_data, ask_text, blocks_on_person, file_ask, resolve_assignee, why_only_you_of
 from .interim_policy import (
     InterimLedger, InterimState, SEND, decide, done_text, interim_event_data, interim_text_of, progress_signature)
 
@@ -42,12 +42,15 @@ def maybe_send_interim(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]],
     signature = progress_signature(output=output, receipts=receipts, coverage=coverage)
     flagged = bool(verdict.get("claims_unexecuted") or verdict.get("claims_unsupported")
                    or getattr(res, "claim_corrected", False))
-    done = done_text(receipts=receipts, coverage=coverage, output=output, output_flagged=flagged)
+    done = done_text(receipts=receipts, coverage=coverage)
+    # why and next come ONLY from the two fields the verifier fills for this purpose, in terms of the request; its `reason` and
+    # `next_action` echo the worker's findings and never reach the reader. A flagged claim sends nothing: there is nothing safe to say.
+    reason = "" if flagged else str(verdict.get("progress_gap") or "").strip()
     clock = time.monotonic() if now is None else now
-    next_step = str(verdict.get("next_action") or "").strip()
+    next_step = "" if flagged else str(verdict.get("progress_next") or "").strip()
     decision = decide(InterimState(
         enabled=True, met=bool(verdict.get("met")), blocker=blocker, loop_runs_again=loop_runs_again,
-        ask_open=bool(getattr(res, "decision_id", None)), has_why=bool(reason.strip()), has_content=bool(done.strip()),
+        ask_open=bool(getattr(res, "decision_id", None)), has_why=bool(reason), has_content=bool(done.strip()),
         sent_count=ledger.sent_count, last_sent_at=ledger.last_sent_at, now=clock, signature=signature,
         last_signature=ledger.last_signature, max_per_turn=int(getattr(cfg, "max_interims_per_turn", 4)),
         min_seconds_between=float(getattr(cfg, "min_seconds_between_interims", 15.0))))
@@ -74,9 +77,8 @@ def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], r
     assignee = resolve_assignee(str(verdict.get("asked_of") or ""), str(verdict.get("member_ref") or ""),
                                 meta.get("participants") or [], asker)
     receipts = list(getattr(res, "observations", None) or []) if getattr(res, "observations_reported", False) else []
-    flagged = bool(verdict.get("claims_unexecuted") or verdict.get("claims_unsupported"))
-    done = done_text(receipts=receipts, coverage=getattr(res, "coverage", None), output=res.output or "", output_flagged=flagged)
-    why_only_you = str(verdict.get("reason") or "").strip()
+    done = done_text(receipts=receipts, coverage=getattr(res, "coverage", None))
+    why_only_you = why_only_you_of(str(verdict.get("blocker") or ""), assignee, meta.get("participants") or [])
     options = None
     outcome = file_ask(
         getattr(orch, "escalation", None), question=question, why_only_you=why_only_you, done=done, options=options,

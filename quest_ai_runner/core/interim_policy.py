@@ -6,8 +6,7 @@ coverage, a clock reading and two counters. Nothing here reads the wording of mo
 text it handles is carried through to the reader, never inspected.
 
 ``decide`` answers "send now?" with a reason; ``InterimLedger`` is the per-turn record of what was sent;
-``interim_event_data`` builds the event payload, whose ``done`` comes from receipts and coverage, and shows the
-worker's own account only when no claim check flagged it.
+``interim_event_data`` builds the event payload, whose ``done`` comes from receipts and coverage only, never from the worker's prose.
 """
 from __future__ import annotations
 
@@ -123,20 +122,17 @@ class InterimLedger:
             return self.seq
 
 
-def done_text(*, receipts: Iterable[str], coverage: Any, output: str, output_flagged: bool) -> str:
-    """What was done, for the reader. Receipts first (the runner's own record), then the declared coverage line.
+def done_text(*, receipts: Iterable[str], coverage: Any) -> str:
+    """What was done, for the reader: the runner's own receipts (counts and titles from tool results), then the declared coverage line.
 
-    The worker's account (``output``) is added only when no claim check flagged it (``output_flagged`` is the
-    structural ``claims_unexecuted`` / ``claim_corrected`` flag): an unverified "fixed" claim reaching the chat is
-    the 2026-09-27 incident this rule answers.
+    The worker's own prose is NEVER part of it (Joshua's rule, after a real turn repeated per-frequency figures the worker had derived
+    from a table it could not verify): a claim or number reaches the reader only through a receipt the run holds. A worker that
+    reports no receipts and no coverage gives an empty ``done``, and ``decide`` then sends nothing (the Trail still shows the work).
     """
     parts: List[str] = [f"- {str(r).strip()}" for r in receipts if str(r or "").strip()]
     line = render_coverage_line(coverage)
     if line:
         parts.append(line)
-    account = str(output or "").strip()
-    if account and not output_flagged:
-        parts.append(account)
     return "\n".join(parts)
 
 

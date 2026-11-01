@@ -82,6 +82,9 @@ def clean_env(root, keys):
     for name, value in keys.items():
         if value:
             os.environ[name] = value
+    # TMPDIR per run: the hub runs every claude_cli completion in <TMPDIR>/hubofhubs-cli-completion, a fixed folder shared by every process
+    # on the machine, where an earlier run's files were found and reused by a later one (2026-11-01). One folder per run isolates it.
+    os.environ["TMPDIR"] = root
     os.environ.update(QAR_MODEL_BACKEND="claude_cli", QAR_MODEL_FAST="haiku", QAR_MODEL_BALANCED="haiku", QAR_MODEL_QUALITY="haiku",
                       QAR_MODEL_BEST="haiku", QAR_DEEP_MODELS="haiku", QAR_DEEP_AUTO_MODEL="0", QAR_DEEP_WORKING_DIR=root,
                       QUEST_BASE_URL="http://quest.invalid", QUEST_API_KEY="offline", QAR_STANDARD_TOOLS="1", QAR_CORPUS_ROOT=root,
@@ -311,11 +314,11 @@ def check(case):
     # done built from receipts: rebuild it from the logged receipts, coverage and the flag, and compare.
     decisions = [e for e in log if e["step"] == "interim_decision" and e["reason"] == "send"]
     for e, m in zip(decisions, interims):
-        want = done_text(receipts=e["receipts"], coverage=e["coverage"], output=e["output"], output_flagged=e["flagged"])
+        want = done_text(receipts=e["receipts"], coverage=e["coverage"])
         if " ".join(want.split()) != " ".join(str(m["data"].get("done") or "").split()):
             problems.append("an interim's done is not the receipts-and-coverage rebuild")
-        if e["flagged"] and e["output"].strip() and e["output"].strip() in str(m["data"].get("done") or ""):
-            problems.append("a flagged worker claim reached an interim")
+        if e["output"].strip() and e["output"].strip()[:80] in str(m["data"].get("done") or ""):
+            problems.append("the worker's own prose reached an interim's done")
     # no em dash in text the reader sees that code or the policy wrote.
     for m in interims + asks:
         if EM_DASH in m["text"]:

@@ -327,6 +327,8 @@ class JudgesMixin:
                     return {"met": bool(raw.get("met")),
                             "reason": str(raw.get("reason") or "").strip(),
                             "next_action": str(raw.get("next_action") or "").strip(),
+                            "progress_gap": str(raw.get("progress_gap") or "").strip(),
+                            "progress_next": str(raw.get("progress_next") or "").strip(),
                             "need_more_context": bool(raw.get("need_more_context")),
                             "context_query": str(raw.get("context_query") or "").strip(),
                             "next_tier": (str(_tier).strip() or None) if _tier else None,

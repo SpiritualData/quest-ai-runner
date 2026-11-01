@@ -68,12 +68,10 @@ def test_spacing_is_measured_from_the_last_message_and_the_cap_is_per_turn():
     assert ledger.sent_count == 3 and ledger.last_sent_at == 2.0
 
 
-def test_done_comes_from_receipts_and_coverage_and_the_worker_account_only_when_unflagged():
-    kwargs = dict(receipts=["Added the goal X"], coverage={"processed": 2, "total": 5, "unit": "entries"}, output="I fixed everything")
-    clean = done_text(output_flagged=False, **kwargs)
-    flagged = done_text(output_flagged=True, **kwargs)
-    assert "- Added the goal X" in clean and "I fixed everything" in clean
-    assert "- Added the goal X" in flagged and "I fixed everything" not in flagged
+def test_done_comes_from_receipts_and_coverage_and_never_from_the_worker_account():
+    done = done_text(receipts=["Added the goal X"], coverage={"processed": 2, "total": 5, "unit": "entries"})
+    assert "- Added the goal X" in done and "2 of 5" in done
+    assert done_text(receipts=[], coverage=None) == ""   # a worker that reports nothing gives nothing to show
 
 
 def test_the_interim_text_has_done_why_and_next_and_no_em_dash():
@@ -150,7 +148,8 @@ def run(orch, meta=None) -> List[Dict[str, Any]]:
     return events
 
 
-NOT_MET = {"met": False, "reason": "two entries are still missing", "next_action": "read the last two", "blocker": "more_work"}
+NOT_MET = {"met": False, "reason": "two entries are still missing", "next_action": "read the last two", "blocker": "more_work",
+           "progress_gap": "two entries are still missing", "progress_next": "read the last two"}
 
 
 def receipts(text, *lines):
@@ -259,3 +258,61 @@ def test_an_answer_turn_blocked_on_a_person_files_one_ask_when_switched_on_and_n
             assert "What are the trip dates?" in result["text"]
         else:
             assert not sink.sent and not asks
+
+
+def test_a_worker_claim_with_figures_and_no_receipt_never_reaches_an_interim():
+    claim = "Lenk 2025 raised VO2max by +4.1 mL/kg/min at 2x per week"
+    verdict = dict(NOT_MET, reason="the table row for " + claim + " is unverified", next_action="check " + claim)
+    provider = Provider([dict(ANALYSIS, work_shape="action")], verdicts=[dict(verdict), {"met": True}])
+    runner = Runner([DeepResult(met=True, output=claim), DeepResult(met=True, output="all")])
+    events = run(build(provider, runner, interim_replies=True, min_seconds_between_interims=0.0))
+    assert not [e for e in events if e["type"] == EVENT_INTERIM]   # no receipt: nothing to show
+
+
+def test_the_interim_carries_only_receipts_and_the_verifiers_request_level_gap():
+    claim = "VO2max +4.1 mL/kg/min"
+    verdict = dict(NOT_MET, reason="the row says " + claim, next_action="verify " + claim)
+    provider = Provider([dict(ANALYSIS, work_shape="action")], verdicts=[dict(verdict), {"met": True}])
+    runner = Runner([receipts("worker says " + claim, "Opened 2 of 6 papers"), receipts("all", "Opened 6 papers")])
+    events = run(build(provider, runner, interim_replies=True, min_seconds_between_interims=0.0))
+    data = [e for e in events if e["type"] == EVENT_INTERIM][0]["data"]
+    assert "Opened 2 of 6 papers" in data["done"]
+    assert all(claim not in str(data[k]) for k in ("done", "why_more", "next"))
+    assert data["why_more"] == "two entries are still missing"
+
+
+def test_a_flagged_claim_or_a_verdict_without_the_request_level_gap_sends_no_interim():
+    for verdict in (dict(NOT_MET, claims_unexecuted=True), {k: v for k, v in NOT_MET.items() if not k.startswith("progress")}):
+        provider = Provider([dict(ANALYSIS, work_shape="action")], verdicts=[dict(verdict), {"met": True}])
+        runner = Runner([receipts("x", "Opened 2 papers"), receipts("y", "Opened 3 papers")])
+        events = run(build(provider, runner, interim_replies=True, min_seconds_between_interims=0.0))
+        assert not [e for e in events if e["type"] == EVENT_INTERIM]
+
+
+def test_why_only_you_is_written_from_the_assignee_never_from_the_verifier_reason():
+    from quest_ai_runner.core.ask_policy import Assignee, why_only_you_of
+    people = [{"user_id": "u2", "name": "Bram"}]
+    assert why_only_you_of("needs_person", Assignee("u2", "member"), people) == "Only Bram can answer this."
+    assert why_only_you_of("needs_person", Assignee("u1", "asker"), people) == ""
+    assert why_only_you_of("tool_failure", Assignee("u1", "asker"), people).startswith("A tool refused access")
+    verdict = {"met": False, "reason": "the Quest API was unreachable", "blocker": "needs_person", "asked_of": "member",
+               "member_ref": "u2", "question": "May the deposit be released?"}
+    sink = Sink()
+    orch = build(Provider([dict(ANALYSIS, work_shape="action")], verdicts=[verdict]), Runner([receipts("p", "Read")]), sink=sink,
+                 interim_replies=True)
+    run(orch, meta={"asker_user_id": "u1", "conv_id": "c", "turn_id": "t",
+                    "participants": [{"user_id": "u1", "name": "Ana"}, {"user_id": "u2", "name": "Bram"}]})
+    assert sink.sent[0].why_only_you == "Only Bram can answer this." and "unreachable" not in sink.sent[0].why_only_you
+
+
+def test_a_final_never_carries_the_machine_folder_the_worker_wrote_in():
+    from quest_ai_runner.core.path_pass import relativize
+    root = "/srv/qar/run-7"
+    assert relativize(f"I read {root}/.quest-context/club.json and {root}/notes.md.", [root]) == "I read .quest-context/club.json and notes.md."
+    assert relativize(f"saved in {root}", [root]) == "saved in the working folder"
+    assert relativize("see /tmp/x/y", ["/tmp", "/"]) == "see /tmp/x/y"   # a shallow root is never hidden
+    provider = Provider([dict(ANALYSIS, work_shape="action")], verdicts=[{"met": True}])
+    orch = build(provider, Runner([DeepResult(met=True, output=f"Done. The file is {root}/out/report.md")]), private_path_roots=[root])
+    result = orch.run("do the thing")
+    texts = " ".join(str(d.output) for d in result.deep_results) + str(result.text or "")
+    assert root not in texts and "out/report.md" in texts
