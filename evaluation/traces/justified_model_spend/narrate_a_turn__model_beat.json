@@ -1,27 +1,27 @@
 {
  "calls": [
   {
-   "cost_usd": 0.000239,
+   "cost_usd": 0.000236,
    "critical_path": true,
-   "seconds": 2.071756963036023,
+   "seconds": 2.861601303971838,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1101,
-   "tokens_out": 38,
+   "tokens_out": 32,
    "turn": 1
   },
   {
-   "cost_usd": 0.0036799999999999997,
+   "cost_usd": 0.0036560000000000004,
    "critical_path": true,
-   "seconds": 2.2276067830389366,
+   "seconds": 2.3064724070136435,
    "spec_id": "eval.judge",
-   "tokens_in": 871,
+   "tokens_in": 865,
    "tokens_out": 20,
    "turn": 1
   },
   {
    "cost_usd": 0.00024859999999999986,
    "critical_path": true,
-   "seconds": 2.8626055879867636,
+   "seconds": 2.4680975989904255,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1114,
    "tokens_out": 52,
@@ -30,88 +30,88 @@
   {
    "cost_usd": 0.0037880000000000006,
    "critical_path": true,
-   "seconds": 2.2029681249987334,
+   "seconds": 2.457611800986342,
    "spec_id": "eval.judge",
    "tokens_in": 898,
    "tokens_out": 20,
    "turn": 2
   },
   {
-   "cost_usd": 0.00023570000000000015,
+   "cost_usd": 0.0002371999999999999,
    "critical_path": true,
-   "seconds": 2.2325418719556183,
+   "seconds": 2.9053096039569937,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1097,
-   "tokens_out": 33,
+   "tokens_out": 36,
    "turn": 3
   },
   {
-   "cost_usd": 0.0036439999999999997,
+   "cost_usd": 0.0036559999999999995,
    "critical_path": true,
-   "seconds": 2.221170480013825,
+   "seconds": 2.189709762984421,
    "spec_id": "eval.judge",
-   "tokens_in": 862,
+   "tokens_in": 865,
    "tokens_out": 20,
    "turn": 3
   },
   {
-   "cost_usd": 0.00023579999999999955,
+   "cost_usd": 0.00023530000000000079,
    "critical_path": true,
-   "seconds": 2.2086780560202897,
+   "seconds": 2.1916515239863656,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1095,
-   "tokens_out": 34,
+   "tokens_out": 33,
    "turn": 4
   },
   {
-   "cost_usd": 0.003639999999999999,
+   "cost_usd": 0.0036360000000000003,
    "critical_path": true,
-   "seconds": 2.0745170759619214,
+   "seconds": 2.124777555000037,
    "spec_id": "eval.judge",
-   "tokens_in": 861,
+   "tokens_in": 860,
    "tokens_out": 20,
    "turn": 4
   },
   {
-   "cost_usd": 0.00023739999999999872,
+   "cost_usd": 0.00023990000000000122,
    "critical_path": true,
-   "seconds": 2.5192722310312092,
+   "seconds": 1.7668683920055628,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1093,
-   "tokens_out": 38,
+   "tokens_out": 43,
    "turn": 5
   },
   {
-   "cost_usd": 0.0036479999999999985,
+   "cost_usd": 0.003668000000000001,
    "critical_path": true,
-   "seconds": 2.085584933985956,
+   "seconds": 2.263540957006626,
    "spec_id": "eval.judge",
-   "tokens_in": 863,
+   "tokens_in": 868,
    "tokens_out": 20,
    "turn": 5
   },
   {
-   "cost_usd": 0.0002338999999999987,
+   "cost_usd": 0.00023290000000000116,
    "critical_path": true,
-   "seconds": 2.6642166230012663,
+   "seconds": 1.6353687070077285,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1088,
-   "tokens_out": 33,
+   "tokens_out": 31,
    "turn": 6
   },
   {
-   "cost_usd": 0.004668000000000002,
+   "cost_usd": 0.003599999999999999,
    "critical_path": true,
-   "seconds": 2.98729771602666,
+   "seconds": 2.34667326498311,
    "spec_id": "eval.judge",
-   "tokens_in": 853,
-   "tokens_out": 126,
+   "tokens_in": 851,
+   "tokens_out": 20,
    "turn": 6
   },
   {
    "cost_usd": 0.00023230000000000126,
    "critical_path": true,
-   "seconds": 3.6720386490342207,
+   "seconds": 2.3242149020079523,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1085,
    "tokens_out": 31,
@@ -120,34 +120,34 @@
   {
    "cost_usd": 0.003588000000000001,
    "critical_path": true,
-   "seconds": 2.0801362229976803,
+   "seconds": 2.18887040897971,
    "spec_id": "eval.judge",
    "tokens_in": 848,
    "tokens_out": 20,
    "turn": 7
   },
   {
-   "cost_usd": 0.00022959999999999994,
+   "cost_usd": 0.0002360999999999995,
    "critical_path": true,
-   "seconds": 2.145908373000566,
+   "seconds": 2.2483362879720517,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1079,
-   "tokens_out": 28,
+   "tokens_out": 41,
    "turn": 8
   },
   {
-   "cost_usd": 0.004411999999999999,
+   "cost_usd": 0.005143999999999999,
    "critical_path": true,
-   "seconds": 2.6435665329918265,
+   "seconds": 3.396510873979423,
    "spec_id": "eval.judge",
-   "tokens_in": 839,
-   "tokens_out": 106,
+   "tokens_in": 852,
+   "tokens_out": 174,
    "turn": 8
   },
   {
    "cost_usd": 0.0002279000000000031,
    "critical_path": true,
-   "seconds": 2.76585659396369,
+   "seconds": 2.532753142004367,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1088,
    "tokens_out": 21,
@@ -156,7 +156,7 @@
   {
    "cost_usd": 0.0035600000000000007,
    "critical_path": true,
-   "seconds": 2.296176475007087,
+   "seconds": 2.2154121360508725,
    "spec_id": "eval.judge",
    "tokens_in": 841,
    "tokens_out": 20,
@@ -165,7 +165,7 @@
   {
    "cost_usd": 0.00022839999999999666,
    "critical_path": true,
-   "seconds": 3.7981715679634362,
+   "seconds": 3.80049961298937,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1073,
    "tokens_out": 28,
@@ -174,83 +174,92 @@
   {
    "cost_usd": 0.0035280000000000034,
    "critical_path": true,
-   "seconds": 2.047367194958497,
+   "seconds": 2.1884539449820295,
    "spec_id": "eval.judge",
    "tokens_in": 833,
    "tokens_out": 20,
    "turn": 10
   },
   {
-   "cost_usd": 0.00023150000000000254,
+   "cost_usd": 0.0002349999999999991,
    "critical_path": true,
-   "seconds": 2.248727141006384,
+   "seconds": 2.819515692011919,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1081,
-   "tokens_out": 31,
+   "tokens_out": 38,
    "turn": 11
   },
   {
-   "cost_usd": 0.0051220000000000016,
+   "cost_usd": 0.0052299999999999985,
    "critical_path": true,
-   "seconds": 3.2642119849915616,
+   "seconds": 3.399087346973829,
    "spec_id": "eval.judge",
-   "tokens_in": 844,
-   "tokens_out": 175,
+   "tokens_in": 851,
+   "tokens_out": 183,
    "turn": 11
   },
   {
-   "cost_usd": 0.0003374000000000016,
+   "cost_usd": 0.00031889999999999696,
    "critical_path": true,
-   "seconds": 3.4731492749997415,
+   "seconds": 3.202097200031858,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1133,
-   "tokens_out": 222,
+   "tokens_out": 185,
    "turn": 12
   },
   {
-   "cost_usd": 0.006362,
+   "cost_usd": 0.0035120000000000012,
    "critical_path": true,
-   "seconds": 3.6555323229986243,
+   "seconds": 2.5605327250086702,
    "spec_id": "eval.judge",
-   "tokens_in": 834,
-   "tokens_out": 303,
+   "tokens_in": 829,
+   "tokens_out": 20,
    "turn": 12
   },
   {
-   "cost_usd": 0.000341000000000001,
+   "cost_usd": 0.00033400000000000096,
    "critical_path": true,
-   "seconds": 3.3449361519888043,
+   "seconds": 3.1663329559960403,
    "spec_id": "narrate-a-turn.first-beat",
    "tokens_in": 1131,
-   "tokens_out": 230,
+   "tokens_out": 216,
+   "turn": 13
+  },
+  {
+   "cost_usd": 0.004735999999999997,
+   "critical_path": true,
+   "seconds": 3.6804114549886435,
+   "spec_id": "eval.judge",
+   "tokens_in": 835,
+   "tokens_out": 140,
    "turn": 13
   }
  ],
  "cases_sha": "df729105",
  "component": "narrate_a_turn",
  "defaulted_tags": 0,
- "git_sha": "1cb2515",
+ "git_sha": "c515391",
  "impl": "model_beat",
  "label": "eval-trace",
  "summary": {
-  "accuracy": 0.8462,
-  "balanced": 0.7284,
+  "accuracy": 1.0,
+  "balanced": 0.8357,
   "cases": 13,
-  "cli_reported_cost_usd": 0.0529,
+  "cli_reported_cost_usd": 0.0545,
   "component": "narrate_a_turn",
-  "cost_per_case": 0.004069,
-  "details": "value 11/13 supported specific beats (repeat 0/2, specific 11/11); quiet 0; contract breaks 0; unspecific 1; unsupported 1; time to first beat 2.8s avg, 3.8s max, later than 5s 0; cost 1.92 model calls per case, the grader's included",
-  "dev": "11/13",
+  "cost_per_case": 0.004192,
+  "details": "value 13/13 supported specific beats (repeat 2/2, specific 11/11); quiet 0; contract breaks 0; unspecific 0; unsupported 0; time to first beat 2.6s avg, 3.8s max, later than 5s 0; cost 2.00 model calls per case, the grader's included",
+  "dev": "13/13",
   "heldout": "0/0",
   "impl": "model_beat",
   "model": "claude-haiku",
-  "model_calls": 25,
-  "passed": 11,
+  "model_calls": 26,
+  "passed": 13,
   "sample": "",
-  "seconds": 65.8,
-  "seconds_per_case": 5.06,
-  "tokens_in": 24505,
-  "tokens_out": 1689
+  "seconds": 67.3,
+  "seconds_per_case": 5.18,
+  "tokens_in": 25354,
+  "tokens_out": 1484
  },
  "turns": [
   {
@@ -323,13 +332,13 @@
    "calls": 2,
    "id": "NAT-12",
    "kind": "repeat",
-   "ok": false
+   "ok": true
   },
   {
-   "calls": 1,
+   "calls": 2,
    "id": "NAT-13",
    "kind": "repeat",
-   "ok": false
+   "ok": true
   }
  ]
 }
