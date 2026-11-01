@@ -267,7 +267,7 @@ update `quest-docs` (a visible change to how people see answers).
 Phase 5: review. Run the `/joshua` feedback pass before calling it done; publish a mock page for
 review using the artifacts skill, not text.
 
-## 6. Risks and what was not verified
+## 6. Risks and what is measured
 
 Verified by reading code and offline tests since the first draft: the in-process chat sink (`StreamSink`) forwards every event
 type, so `work_trace` reaches the backend; the backend's event chain (`stream_quest_ai_events`) DROPPED any type it did not list
@@ -277,20 +277,21 @@ the tool registry call (`ToolRegistry.invoke`) has no emitter, so QAR derives ev
 (`ToolResult.data`), web search exposes `Observation.hits` (title, url), and a page fetch exposes only the requested address, so a
 read page is labelled by its domain.
 
-Evidence now, and what is still not verified (updated 2026-11-01 after the first real runs and the UX review):
-- Verified by real runs. The real orchestrator on the Claude Code subscription (Haiku, `claude-haiku-5-5`), with real web and scholarly search
-  and a seeded fictional card store, emits `work_trace` events that pass `work_trace_check` (`evaluation/components/work_trace_experience/live_turns.py`;
-  results in `evaluation/components/results.csv`). The in-process `StreamSink` forwards them and the registry seam is where the events are derived.
-  Signed-in browser runs on solo and team chat showed the frames reaching the app (screenshots under the session's `real/ui`); they were taken
-  before the "used, not selected" fix, so they show the old behaviour (unrelated records, conversation text as record titles) and no screenshot
-  of the fixed build exists yet.
-- Verified offline only. The projector, the privacy rules, replace-by-`step_id`, and the pure rules of the screen (`workTrace.ts`, through
-  `run-worktrace-view.js`) on hand-built and captured events.
-- Not verified. Post-fix screenshots of the Trail on the real thread (all states, 390 and 1280, light and dark); three live frames of one run
-  and a second participant's live view; measured contrast and a screen reader transcript for the Trail; a two-account live run with a private
-  record title in the question; `progressEventKey` dedupe and `resume_from_event` replay against a real resumed stream; the look, which has had
-  no recorded review of a mock page; and whether a person's paraphrase of a record (the reply uses other words than the card) is counted
-  (it is not, below the word-overlap rule, so the record count can be too low, never too high).
+Evidence (latest measured set, 2026-11-01, `evaluation/components/results.csv`, component `work_trace_experience`, 31 cases, judge
+`claude-sonnet` alias, turns `claude-haiku-5-5`, git sha 184876a):
+- The Trail arm passed 31 of 31 cases (plain list 20 of 31, no trace 9 of 31). It has no truthfulness-gate failure, no parity break, and no
+  turn where work was done and nothing shown. The value judge rated 14 of 14 shown elements as earning their place, on 9 real turns.
+- The 9 real turns come from `evaluation/components/work_trace_experience/live_turns.py`: the real orchestrator on the Claude Code
+  subscription (Haiku), with real web and scholarly search and a seeded fictional card store. Their events pass `work_trace_check`. The
+  in-process `StreamSink` forwards them and the registry seam is where the events are derived.
+- Earlier runs the same day, on the same real turns before the fixes in sections 8 to 10, passed 3 of 10 and 7 of 10 on the Trail arm;
+  section 8 to 10 record what each failure changed.
+- Signed-in browser runs on solo and team chat showed the frames reaching the app (screenshots under the session's `real/ui`); they were
+  taken before the "used, not selected" fix, so they show the earlier behaviour (unrelated records, conversation text as record titles).
+- The projector, the privacy rules, replace-by-`step_id`, and the pure rules of the screen (`workTrace.ts`, through
+  `run-worktrace-view.js`) are covered offline on hand-built and captured events.
+- A reply that restates a record in other words than the card is not counted (below the word-overlap rule), so the record count can be too
+  low, never too high.
 
 Risks:
 - Privacy is the main one. A team chat or shared thread must not show one member's record titles.
