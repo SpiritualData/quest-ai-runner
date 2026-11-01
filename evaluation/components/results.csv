@@ -5393,3 +5393,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-11-01,interim_reply,today,1,1,1/1,0/0,0,0,0,0.0,1245.9,02af554-dirty,3e5edb2d,none,real 1/1,only:INT-REAL-RESEARCH,
 2026-11-01,interim_reply,gated,1,1,1/1,0/0,0,0,0,0.0,1375.7,02af554-dirty,3e5edb2d,none,real 1/1,only:INT-REAL-RESEARCH,
 2026-11-01,interim_reply,gated,1,1,1/1,0/0,0,0,0,0.0,868.1,26cb456,3e5edb2d,none,real 1/1,only:INT-REAL-RESEARCH,
+2026-11-01,interim_reply,gated,4,3,3/4,0/0,0,0,0,0.0,862.3,3a37c86,3e5edb2d,none,real 3/4,"only:INT-REAL-RESEARCH,INT-REAL-SIMPLE,INT-REAL-BLOCKED,INT-REAL-TEAM",
