@@ -580,6 +580,12 @@ class RunAnswerMixin:
         rs._queued_mode = _queued_mode
         # A queue-only wiring (no inline runner) still pins: the queue is the only place the
         # inferred work can go (settled: test_queue_only_wiring_can_still_hand_off).
-        pin_queue = _queued_mode and (bool(rs.plan.deferred_deep)
+        # A hand-off the planner itself labelled a quick change to the person's OWN Quest records
+        # (``deep_target`` quest_data, difficulty simple or unrated) is not background work: it is routed
+        # like any deep action, so the classifier runs it inline in a second instead of queueing it
+        # (REL-MUL-07: "log Dana ... and tell me how many asked for lavender" ended as a queued task).
+        quick_records_change = (getattr(rs.plan, "deep_target", None) == "quest_data"
+                                and getattr(rs.plan, "deep_difficulty", None) in (None, "simple"))
+        pin_queue = _queued_mode and ((bool(rs.plan.deferred_deep) and not quick_records_change)
                                       or not self._has_deep_execution_capability())
         rs.pin_queue = pin_queue

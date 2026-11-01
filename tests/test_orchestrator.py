@@ -2453,6 +2453,27 @@ def test_queue_only_wiring_can_still_hand_off():
     assert len(queue_runner.calls) == 1
 
 
+def test_a_quick_change_to_the_persons_own_records_is_not_pinned_to_the_queue():
+    """REL-MUL-07: the planner's own hand-off labelled ``deep_target`` quest_data (simple or unrated) is a quick records change, so it is
+    routed like any deep action and runs inline; any other hand-off still goes to the queue."""
+    def run(target, difficulty):
+        queue_runner = StubDeepRunner(met=True, output="Queued as task #7.", deferred=True)
+        inline_runner = StubDeepRunner(met=True, output="Added the entry.")
+        deferred = {"goal": "Log Dana", "brief": "add the entry"}
+        decision = {"action": "answer", "rationale": "answer then act", "deferred_deep": deferred, "deep_target": target}
+        if difficulty:
+            decision["deep_difficulty"] = difficulty
+        provider = StubProvider(decisions=[decision])
+        _orch(provider, StubRetrieval(), deep_runner=inline_runner, deep_runners={"deferred": queue_runner},
+              deep_runner_classifier=lambda msg, goal, brief: None,
+              config=OrchestratorConfig(deferred_deep_queued=True)).run("log Dana")
+        return len(queue_runner.calls), len(inline_runner.calls)
+    assert run("quest_data", "simple")[0] == 0           # a quick records change is never pinned to the queue
+    assert run("quest_data", None)[0] == 0
+    assert run("code_or_files", "simple")[0] == 1        # other hand-offs still queue
+    assert run("quest_data", "hard")[0] == 1             # long or hard records work still queues
+
+
 def test_render_planner_prompt_fills_every_slot_by_default():
     """FINDING 5b: PLANNER_PROMPT gained a mandatory {deferred_deep_semantics} slot, so a raw
     .format() by an external consumer now raises KeyError. render_planner_prompt is the
