@@ -1205,7 +1205,7 @@ class DeepRunMixin:
                 # why more is coming and what is next. (2) the older done-evidence interim, unchanged.
                 if emit is not None and getattr(self.cfg, "interim_replies", False):
                     maybe_send_interim(self, emit, ctx_meta, res, verdict, blocker=_blocker, reason=reason, attempt=attempt,
-                                       loop_runs_again=attempt < max_iters)
+                                       loop_runs_again=attempt < max_iters, goal=goal)
                 elif (emit is not None and getattr(self.cfg, "done_evidence_enabled", False)
                         and _blocker == "more_work" and (res.output or "").strip()
                         and (getattr(plan, "work_shape", None) == "analysis"

@@ -149,7 +149,7 @@ def run(orch, meta=None) -> List[Dict[str, Any]]:
 
 
 NOT_MET = {"met": False, "reason": "two entries are still missing", "next_action": "read the last two", "blocker": "more_work",
-           "progress_gap": "two entries are still missing", "progress_next": "read the last two"}
+           "progress_gap": "some entries are still missing", "progress_next": "read the rest of them"}
 
 
 def receipts(text, *lines):
@@ -170,7 +170,7 @@ def test_an_unmet_turn_that_will_run_again_sends_one_interim_with_why_and_next_b
     interim = [e for e in events if e["type"] == EVENT_INTERIM]
     assert len(interim) == 1
     data = interim[0]["data"]
-    assert data["why_more"] == "two entries are still missing" and data["next"] == "read the last two"
+    assert data["why_more"] == "some entries are still missing" and data["next"] == "read the rest of them"
     assert "- Added A" in data["done"] and data["will_continue"] is True and data["seq"] == 1
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
     assert result["data"]["outcome"] == "met"
@@ -278,7 +278,7 @@ def test_the_interim_carries_only_receipts_and_the_verifiers_request_level_gap()
     data = [e for e in events if e["type"] == EVENT_INTERIM][0]["data"]
     assert "Opened 2 of 6 papers" in data["done"]
     assert all(claim not in str(data[k]) for k in ("done", "why_more", "next"))
-    assert data["why_more"] == "two entries are still missing"
+    assert data["why_more"] == "some entries are still missing"
 
 
 def test_a_flagged_claim_or_a_verdict_without_the_request_level_gap_sends_no_interim():
@@ -316,3 +316,48 @@ def test_a_final_never_carries_the_machine_folder_the_worker_wrote_in():
     result = orch.run("do the thing")
     texts = " ".join(str(d.output) for d in result.deep_results) + str(result.text or "")
     assert root not in texts and "out/report.md" in texts
+
+
+# ---- the "why more" and "next" are written without the worker's output and checked against stored text
+
+class WriterProvider(Provider):
+    """A provider whose ``interim_progress`` call returns a scripted pair and keeps the prompts it was given."""
+
+    def __init__(self, *a, writes, **k):
+        super().__init__(*a, **k)
+        self.writes = list(writes)
+
+    def plan(self, prompt, *, model, tool_schema):
+        if tool_schema.get("name") == "interim_progress":
+            self.calls.append("interim_progress")
+            self.prompts.setdefault("interim_progress", []).append(prompt)
+            return self.writes.pop(0)
+        return super().plan(prompt, model=model, tool_schema=tool_schema)
+
+
+def written_interims(writes, claim="VO2max +4.1 mL/kg/min"):
+    provider = WriterProvider([dict(ANALYSIS, work_shape="action")], verdicts=[dict(NOT_MET, reason="row says " + claim), {"met": True}],
+                              writes=writes)
+    runner = Runner([receipts("worker says " + claim, "Opened 2 pages"), receipts("all", "Opened 6 pages")])
+    events = run(build(provider, runner, interim_replies=True, min_seconds_between_interims=0.0))
+    return provider, [e for e in events if e["type"] == EVENT_INTERIM]
+
+
+def test_the_writer_never_sees_the_workers_output_and_its_sentences_are_sent():
+    provider, sent = written_interims([{"gap": "The request is not yet complete.", "next": "Another attempt will continue the work."}])
+    assert len(sent) == 1 and sent[0]["data"]["why_more"] == "The request is not yet complete."
+    prompt = provider.prompts["interim_progress"][0]
+    assert "VO2max" not in prompt and "worker says" not in prompt and "Opened 2 pages" in prompt
+
+
+def test_a_figure_or_name_the_stored_text_does_not_hold_stops_the_message():
+    for gap in ("Only 7 of the requested entries are in hand.", "Only Marceline is in hand.", "Only two are in hand."):
+        _, sent = written_interims([{"gap": gap, "next": "Another attempt will continue."}])
+        assert sent == [], gap
+
+
+def test_figures_from_the_request_or_the_receipts_are_allowed():
+    from quest_ai_runner.core.interim_policy import ungrounded_terms
+    allowed = "Compile six studies\nOpened 2 pages"
+    assert ungrounded_terms("Six were asked for and 2 pages were opened. Next, more will be opened.", allowed) == []
+    assert set(ungrounded_terms("Seven were found, 9 pages, by Okafor.", allowed)) == {"Seven", "9", "Okafor"}

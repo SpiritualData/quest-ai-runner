@@ -6,15 +6,22 @@ out of the loop so the loop only calls ``maybe_send_interim`` and ``file_blocked
 """
 from __future__ import annotations
 
+import json
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from hubofhubs.critique.done_evidence import render_coverage_line
 from hubofhubs.ports.deep import ProgressEvent
 from hubofhubs.ports.events import EVENT_DECISION, EVENT_INTERIM
+from hubofhubs.ports.model import STEP_SUMMARIZE, plan_with_step
 
+from .auxiliary_prompts import INTERIM_PROGRESS_TOOL
+from .card_filter import _extract_json
+from .prompt_specs import render_prompt
 from .ask_policy import ask_event_data, ask_text, blocks_on_person, file_ask, resolve_assignee, why_only_you_of
 from .interim_policy import (
-    InterimLedger, InterimState, SEND, decide, done_text, interim_event_data, interim_text_of, progress_signature)
+    InterimLedger, InterimState, SEND, SKIP_NO_WHY, decide, done_text, interim_event_data, interim_text_of, progress_signature,
+    ungrounded_terms)
 
 LEDGER_KEY = "interim_ledger"
 
@@ -29,8 +36,42 @@ def interim_ledger_for(ctx_meta: Optional[Dict[str, Any]]) -> InterimLedger:
     return ledger
 
 
+def write_progress(orch: Any, goal: str, receipts: Sequence[str], coverage: Any) -> Dict[str, str]:
+    """The interim's "why more" and "next", written from the REQUEST, the receipts and the declared coverage only.
+
+    The worker's output never reaches this call. Whatever comes back is checked by code (``ungrounded_terms``) against the same three
+    stored texts: a figure or name that is in none of them empties the result, and so does any failure of the call, so the message
+    is then not sent. Returns ``{"gap": "", "next": ""}`` when nothing safe can be said."""
+    empty = {"gap": "", "next": ""}
+    if not (goal or "").strip():
+        return empty
+    line = render_coverage_line(coverage)
+    record = "\n".join(f"- {r}" for r in receipts) or "(nothing recorded)"
+    try:
+        prompt = render_prompt("reply-in-steps.interim-progress", goal=goal[:1000], receipts=record,
+                               coverage=(line + "\n\n") if line else "")
+        model = orch.registry.resolve_tier(getattr(orch.cfg, "explain_tier", None) or "fast")
+        raw = plan_with_step(orch.get_provider_for_model(model), prompt, model=model, tool_schema=INTERIM_PROGRESS_TOOL,
+                             step=STEP_SUMMARIZE)
+        if isinstance(raw, str):
+            raw = json.loads(_extract_json(raw) or "{}")
+    except Exception:  # noqa: BLE001 -- a progress note must never break a turn
+        return empty
+    if not isinstance(raw, dict):
+        return empty
+    got = {"gap": str(raw.get("gap") or "").strip(), "next": str(raw.get("next") or "").strip()}
+    return got if got["gap"] and got["next"] else empty
+
+
+def grounded(text: str, goal: str, receipts: Sequence[str], coverage: Any) -> str:
+    """``text`` if every figure and name in it is in the request, the receipts or the coverage line; otherwise empty."""
+    allowed = "\n".join([goal or "", *[str(r) for r in receipts], render_coverage_line(coverage)])
+    return text if text and not ungrounded_terms(text, allowed) else ""
+
+
 def maybe_send_interim(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], res: Any, verdict: Mapping[str, Any], *,
-                       blocker: str, reason: str, attempt: int, loop_runs_again: bool, now: Optional[float] = None) -> str:
+                       blocker: str, reason: str, attempt: int, loop_runs_again: bool, now: Optional[float] = None,
+                       goal: str = "") -> str:
     """Emit an interim event when the policy says so; return the policy's reason (for the log and tests)."""
     cfg = orch.cfg
     if emit is None or not getattr(cfg, "interim_replies", False):
@@ -43,23 +84,31 @@ def maybe_send_interim(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]],
     flagged = bool(verdict.get("claims_unexecuted") or verdict.get("claims_unsupported")
                    or getattr(res, "claim_corrected", False))
     done = done_text(receipts=receipts, coverage=coverage)
-    # why and next come ONLY from the two fields the verifier fills for this purpose, in terms of the request; its `reason` and
-    # `next_action` echo the worker's findings and never reach the reader. A flagged claim sends nothing: there is nothing safe to say.
-    reason = "" if flagged else str(verdict.get("progress_gap") or "").strip()
     clock = time.monotonic() if now is None else now
-    next_step = "" if flagged else str(verdict.get("progress_next") or "").strip()
-    decision = decide(InterimState(
-        enabled=True, met=bool(verdict.get("met")), blocker=blocker, loop_runs_again=loop_runs_again,
-        ask_open=bool(getattr(res, "decision_id", None)), has_why=bool(reason), has_content=bool(done.strip()),
-        sent_count=ledger.sent_count, last_sent_at=ledger.last_sent_at, now=clock, signature=signature,
-        last_signature=ledger.last_signature, max_per_turn=int(getattr(cfg, "max_interims_per_turn", 4)),
-        min_seconds_between=float(getattr(cfg, "min_seconds_between_interims", 15.0))))
-    if decision.reason != SEND:
-        return decision.reason
+
+    def state(has_why: bool) -> InterimState:
+        return InterimState(
+            enabled=True, met=bool(verdict.get("met")), blocker=blocker, loop_runs_again=loop_runs_again,
+            ask_open=bool(getattr(res, "decision_id", None)), has_why=has_why, has_content=bool(done.strip()),
+            sent_count=ledger.sent_count, last_sent_at=ledger.last_sent_at, now=clock, signature=signature,
+            last_signature=ledger.last_signature, max_per_turn=int(getattr(cfg, "max_interims_per_turn", 4)),
+            min_seconds_between=float(getattr(cfg, "min_seconds_between_interims", 15.0)))
+    # Every other condition first, with the reason assumed, so the writing call below is made only for a message that would be sent.
+    pre = decide(state(not flagged))
+    if pre.reason != SEND:
+        return pre.reason
+    # why and next are written WITHOUT the worker's output (``write_progress``) and checked against the request, the receipts and the
+    # coverage. A verdict that still carries its own progress fields (a verifier or a test double that fills them) is used only when
+    # the writer says nothing, and passes the same check. A flagged claim sent nothing above: there is nothing safe to say.
+    written = write_progress(orch, goal, receipts, coverage)
+    why = grounded(written["gap"] or str(verdict.get("progress_gap") or "").strip(), goal, receipts, coverage)
+    next_step = grounded(written["next"] or str(verdict.get("progress_next") or "").strip(), goal, receipts, coverage)
+    if not why or not next_step:
+        return SKIP_NO_WHY
     seq = ledger.record(clock, signature)
-    data = interim_event_data(done=done, why_more=reason, next_step=next_step, coverage=coverage, attempt=attempt, seq=seq)
+    data = interim_event_data(done=done, why_more=why, next_step=next_step, coverage=coverage, attempt=attempt, seq=seq)
     emit.emit(ProgressEvent(type=EVENT_INTERIM, text=interim_text_of(data), data=data))
-    return decision.reason
+    return pre.reason
 
 
 def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], res: Any, verdict: Mapping[str, Any], *,

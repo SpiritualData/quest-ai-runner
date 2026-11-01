@@ -21,6 +21,30 @@ _CONDENSE_DECISION_PROMPT = (
     "instead.\n\nTEXT:\n{text}"
 )
 
+# The interim message's "why more is coming" and "what is next" are written by a SEPARATE call that never sees the worker's output
+# (Joshua's rule, after a real turn repeated counts and a study name the worker had derived): its only inputs are the request, the
+# run's own receipts and its declared coverage. Code then checks every figure and name in what it wrote against those same stored
+# texts (``interim_policy.ungrounded_terms``) and sends nothing if one is not there.
+INTERIM_PROGRESS_TOOL: Dict[str, Any] = {
+    "name": "interim_progress",
+    "description": "Two plain sentences for the person while the work continues.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "gap": {"type": "string", "description": "One plain sentence: what the REQUEST asks for that is not yet complete."},
+            "next": {"type": "string", "description": "One plain sentence: what the next attempt will do about it."}},
+        "required": ["gap", "next"]},
+}
+
+INTERIM_PROGRESS_PROMPT = (
+    "A person asked for work. A check against their request found it not yet complete, and another attempt will run. Write two plain "
+    "sentences for them, in terms of their request only.\n\n"
+    "REQUEST:\n{goal}\n\nWHAT THE RUN ACTUALLY DID (its own record):\n{receipts}\n\n{coverage}"
+    "Rules: state the gap as what the request asks for that is not yet complete, and the next step as another attempt continuing that "
+    "work. Use a number only if it is in the request or the record above, and a name only if it is in the request. You have not seen "
+    "the worker's output and must not guess what it found: no counts of results, no names of studies, people or sources, no findings. "
+    "No file paths, no links. Do NOT use em dashes; use a comma, a colon or parentheses instead.")
+
 VERIFY_GOAL_TOOL: Dict[str, Any] = {
     "name": "goal_verdict",
     "description": "Judge whether the worker's run met the done-standard at the quality bar; if not, say what to do next, whether more context is needed, and which model tier to use.",
@@ -37,13 +61,6 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
             "next_tier": {"type": "string",
                           "description": "Optional stronger tier (fast/balanced/quality/best) for a "
                                          "capability gap. Omit to keep the current tier."},
-            "progress_gap": {"type": "string",
-                             "description": "Only when met=false and blocker is more_work: one plain sentence for the person saying what "
-                                            "is still missing in terms of the REQUEST. Never restate a figure, name or finding from the "
-                                            "worker's output; leave it empty if you cannot say it without doing so."},
-            "progress_next": {"type": "string",
-                              "description": "Only when progress_gap is set: one plain sentence on what happens next, in terms of the "
-                                             "request, with no figure, name or finding from the worker's output."},
             "blocker": {"type": "string", "enum": ["more_work", "evidence_only", "needs_person", "tool_failure"],
                         "description": "Only when met=false; see the rules above."},
             "question": {"type": "string",
@@ -1072,6 +1089,10 @@ Rules:
 VERIFY_GOAL_SPEC = declare(
     "verify-goal.verdict", solution="QS1", metric="QME2", tier="balanced", cache_layer="tail",
     template=VERIFY_GOAL_PROMPT, output_schema=VERIFY_GOAL_TOOL)
+INTERIM_PROGRESS_SPEC = declare(
+    "reply-in-steps.interim-progress", solution="reply-in-steps",
+    metric="metric-interim-reply-truthful-and-useful", tier="fast", cache_layer="none",
+    template=INTERIM_PROGRESS_PROMPT, output_schema=INTERIM_PROGRESS_TOOL)
 LANDED_WORK_DENIAL_SPEC = declare(
     "judge-a-decision.landed-work-denial", solution="judge-a-decision",
     metric="metric-judge-a-decision", tier="caller", cache_layer="none",

@@ -68,3 +68,11 @@ def test_runner_reports_receipts_so_the_interim_done_is_not_empty(tmp_path, monk
     runner.count_landed(res, None, set())
     assert res.observations_reported is True and len(res.observations) == 4
     assert done_text(receipts=res.observations, coverage=None).startswith("- Ran 2 web searches")
+
+
+def test_a_file_written_by_a_shell_command_leaves_no_write_receipt_but_the_run_still_reports(tmp_path, monkeypatch):
+    """A worker that wrote through Bash shows as a tool call only: the record is non-empty (so 'nothing recorded' is never claimed of
+    a run that did something) and no write is asserted that the session record cannot prove."""
+    rows = [use("a", "Bash", command="printf x > out.txt"), result("a")]
+    lines = rr.receipt_lines(records_of(monkeypatch, session(tmp_path, rows)))
+    assert lines == ["Made 1 other tool call (reading files, running commands)"]

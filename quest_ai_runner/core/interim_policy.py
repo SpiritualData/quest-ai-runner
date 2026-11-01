@@ -11,6 +11,7 @@ text it handles is carried through to the reader, never inspected.
 from __future__ import annotations
 
 import hashlib
+import re
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -153,3 +154,27 @@ def interim_text_of(data: Dict[str, Any]) -> str:
     if nxt:
         parts.append(f"Next: {nxt}.")
     return "\n\n".join(p for p in parts if p)
+
+
+NUMBER_WORDS = frozenset("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen "
+                         "eighteen nineteen twenty thirty forty fifty hundred thousand half double triple".split())
+FIGURE = re.compile(r"\d+(?:[.,]\d+)?")
+WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
+
+
+def ungrounded_terms(text: str, allowed: str) -> List[str]:
+    """Figures, number words and name-like words in ``text`` that are not in ``allowed`` (the request, the receipts, the coverage line).
+
+    An overlap test against stored text, not a reading of what the text means (hard rule #3): a digit run, a number word, or a
+    capitalised word that is not the first of its sentence must each occur in the stored text, or it is reported. Empty means
+    every figure and name the message carries came from the request or the run's own record."""
+    store = (allowed or "").lower()
+    found: List[str] = [m for m in FIGURE.findall(text or "") if m not in store]
+    for sentence in re.split(r"(?<=[.!?:])\s+", text or ""):
+        for i, word in enumerate(WORD.findall(sentence)):
+            low = word.lower()
+            if low in NUMBER_WORDS and low not in store.split() and low not in re.findall(r"[a-z]+", store):
+                found.append(word)
+            elif i > 0 and len(word) > 1 and word[0].isupper() and low not in store:
+                found.append(word)
+    return found
