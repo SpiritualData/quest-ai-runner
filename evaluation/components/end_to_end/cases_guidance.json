@@ -160,7 +160,8 @@
     "\\?[^?]*\\?",
     "(what would you like|how can i help|tell me more|what do you want|which (one )?(do you|would you)|where would you like)",
     "here are (\\w+ )?(some )?(options|questions)",
-    "(?m)^\\s*(1\\.|\\*|-)\\s"
+    "(?m)^\\s*(1\\.|\\*|-)\\s",
+    "\\b(secondly|second step|third step|after that|then you can|once that is done)\\b"
    ]
   },
   "quality_rubric": [
@@ -201,7 +202,8 @@
     "\\?[^?]*\\?",
     "(what would you like|how can i help|tell me more|what do you want|which (one )?(do you|would you)|where would you like)",
     "here are (\\w+ )?(some )?(options|questions)",
-    "(?m)^\\s*(1\\.|\\*|-)\\s"
+    "(?m)^\\s*(1\\.|\\*|-)\\s",
+    "\\b(secondly|second step|third step|after that|then you can|once that is done)\\b"
    ]
   },
   "quality_rubric": [
@@ -321,7 +323,9 @@
    ],
    "reply_has": [
     [
-     "easy"
+     "easy",
+     "gentle",
+     "light"
     ],
     [
      "physio",
@@ -333,7 +337,8 @@
    "reply_lacks_regex": [
     "[\\u2014\\u2013]",
     "(10k|sub-50|riverside)[^.!?]*[.!?][^.!?]*(10k|sub-50|riverside)",
-    "\\b(journey|big picture|stay focused|never give up|remember why)\\b"
+    "\\b(journey|big picture|stay focused|never give up|remember why)\\b",
+    "(?i)\\b(no running|do not run|don't run|avoid running|skip running|stop running|rest completely|stay off (it|your knee))\\b"
    ]
   },
   "quality_rubric": [
@@ -424,6 +429,17 @@
     [
      "soft launch",
      "3 nov"
+    ],
+    [
+     "public link",
+     "public address",
+     "public url",
+     "no link",
+     "no address",
+     "not public",
+     "no known",
+     "no shareable",
+     "not shared"
     ]
    ],
    "min_reply_chars": 40,
@@ -442,6 +458,179 @@
   "ideals": [
    "ideal-known-reach",
    "ideal-grounded-reply"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-11",
+  "kind": "no_start",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "Where should I even begin with the bathroom?",
+  "world": {
+   "pinned": "q_home"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "plumber"
+    ]
+   ],
+   "min_reply_chars": 40,
+   "max_reply_chars": 600,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "\\?[^?]*\\?",
+    "(what would you like|how can i help|tell me more|what do you want|which (one )?(do you|would you)|where would you like)",
+    "here are (\\w+ )?(some )?(options|questions)",
+    "(?m)^\\s*(1\\.|\\*|-)\\s",
+    "\\b(secondly|second step|third step|after that|then you can|once that is done)\\b"
+   ]
+  },
+  "quality_rubric": [
+   "Gives one concrete first step taken from the quest",
+   "Does not ask a list of open questions",
+   "Plain words"
+  ],
+  "source": "Held-out paraphrase of E2E-GUIDE-04 (same world and expectations, different wording) to measure generalization of the reply-voice rules.",
+  "ideals": [
+   "ideal-asks-only-what-is-theirs",
+   "ideal-moves-me-forward"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-12",
+  "kind": "no_start",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "Feeling stuck, what is the very first thing I should do for the launch of my shop?",
+  "world": {
+   "pinned": "q_biz"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "photograph",
+     "scent"
+    ]
+   ],
+   "min_reply_chars": 40,
+   "max_reply_chars": 600,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "\\?[^?]*\\?",
+    "(what would you like|how can i help|tell me more|what do you want|which (one )?(do you|would you)|where would you like)",
+    "here are (\\w+ )?(some )?(options|questions)",
+    "(?m)^\\s*(1\\.|\\*|-)\\s",
+    "\\b(secondly|second step|third step|after that|then you can|once that is done)\\b"
+   ]
+  },
+  "quality_rubric": [
+   "Gives one concrete first step taken from the quest",
+   "Does not ask a list of open questions"
+  ],
+  "source": "Held-out paraphrase of E2E-GUIDE-05 (same world and expectations, different wording) to measure generalization of the reply-voice rules.",
+  "ideals": [
+   "ideal-asks-only-what-is-theirs",
+   "ideal-moves-me-forward"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-13",
+  "kind": "app_howto",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "What are the steps to set up a daily stretch routine on my fitness quest?",
+  "world": {
+   "pinned": "q_fit",
+   "docs": [
+    "habit_howto",
+    "habit_intro"
+   ]
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "habit"
+    ],
+    [
+     "today"
+    ],
+    [
+     "schedule"
+    ]
+   ],
+   "min_reply_chars": 80,
+   "max_reply_chars": 900,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "/guide/",
+    "\\.md\\b"
+   ]
+  },
+  "quality_rubric": [
+   "Gives the steps from the documentation",
+   "Says where the habit will show up",
+   "Names no page path"
+  ],
+  "source": "Held-out paraphrase of E2E-GUIDE-06 (same world and expectations, different wording) to measure generalization of the reply-voice rules.",
+  "ideals": [
+   "ideal-self-explaining-app"
+  ]
+ },
+ {
+  "id": "E2E-GUIDE-14",
+  "kind": "small_ask",
+  "stratum": "guidance",
+  "group": "Guidance",
+  "message": "Can my knee handle some light jogging this week?",
+  "world": {
+   "pinned": "q_fit"
+  },
+  "expect": {
+   "no_writes": true,
+   "route_in": [
+    "answer"
+   ],
+   "reply_has": [
+    [
+     "easy",
+     "gentle",
+     "light"
+    ],
+    [
+     "physio",
+     "pain"
+    ]
+   ],
+   "min_reply_chars": 30,
+   "max_reply_chars": 450,
+   "reply_lacks_regex": [
+    "[\\u2014\\u2013]",
+    "(10k|sub-50|riverside)[^.!?]*[.!?][^.!?]*(10k|sub-50|riverside)",
+    "\\b(journey|big picture|stay focused|never give up|remember why)\\b",
+    "(?i)\\b(no running|do not run|don't run|avoid running|skip running|stop running|rest completely|stay off (it|your knee))\\b"
+   ]
+  },
+  "quality_rubric": [
+   "Answers the knee question first and directly",
+   "At most one short line ties it to the race",
+   "Not preachy"
+  ],
+  "source": "Held-out paraphrase of E2E-GUIDE-08 (same world and expectations, different wording) to measure generalization of the reply-voice rules.",
+  "ideals": [
+   "ideal-moves-me-forward"
   ]
  }
 ]
