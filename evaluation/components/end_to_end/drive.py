@@ -61,8 +61,35 @@ def new_world(case):
                  jarvis_tools=bool(spec.get("jarvis_tools")), context_lines=spec.get("context_lines"), pages=spec.get("pages"))
 
 
+def attach_files(case, orchestrator):
+    """Put the readable files a case names (``world.files``: path -> text) behind the orchestrator's retrieval, the way a
+    deployment's file source stands behind the "Readable file sources" line its context lists. Without it a reply that was told a
+    file is readable meets "path not found" on every read of it, which no deployment that lists the file would. Returns the
+    scratch directory (kept alive by the caller's process; it is a temp directory)."""
+    files = (case.get("world") or {}).get("files") or {}
+    if not files:
+        return None
+    import tempfile
+    from pathlib import Path
+    from quest_ai_runner.adapters.composite_retrieval_adapter import CompositeRetrievalAdapter
+    from quest_ai_runner.adapters.files_adapter import FilesAdapter
+    root = Path(tempfile.mkdtemp(prefix="e2e_files_"))
+    for rel, text in files.items():
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    adapters = [FilesAdapter(str(root))] + ([orchestrator.retrieval] if orchestrator.retrieval is not None else [])
+    orchestrator.retrieval = CompositeRetrievalAdapter(adapters)
+    return root
+
+
 def run_with(case, world, orchestrator):
     """Send the case's message through ``orchestrator`` (built by the arm over ``world``) and fold the outcome."""
+    attach_files(case, orchestrator)
+    hosts = tuple((case.get("world") or {}).get("trusted_link_hosts") or ())
+    if hosts:   # the offline world has no network: a host the case names is one whose link the guard may keep without fetching it
+        from hubofhubs.critique.link_guard import LinkPolicy
+        orchestrator.cfg.link_policy = LinkPolicy(trusted_hosts=hosts, check_external=False)
     result = orchestrator.run(case["message"], quest_id=world.pinned, context_view=world.context_view())
     return fold(case, world, result)
 

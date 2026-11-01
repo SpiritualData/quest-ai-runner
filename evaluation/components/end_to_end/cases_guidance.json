@@ -364,6 +364,9 @@
    ],
    "pages": {
     "https://files.example.test/reports/launch-summary.md": "Launch summary. Soft launch on 3 Nov. Goal: 100 orders in 60 days. Budget cap 2,000 USD."
+   },
+   "files": {
+    "reports/launch-summary.md": "Launch summary. Soft launch on 3 Nov. Goal: 100 orders in 60 days. Budget cap 2,000 USD."
    }
   },
   "expect": {
@@ -404,7 +407,10 @@
     "",
     "Readable file sources (read-only): team server.",
     "File: reports/launch-summary.md. No public address is known for it. Its first lines: Soft launch on 3 Nov. Goal: 100 orders in 60 days. Budget cap 2,000 USD."
-   ]
+   ],
+   "files": {
+    "reports/launch-summary.md": "Soft launch on 3 Nov. Goal: 100 orders in 60 days. Budget cap 2,000 USD."
+   }
   },
   "expect": {
    "no_writes": true,
