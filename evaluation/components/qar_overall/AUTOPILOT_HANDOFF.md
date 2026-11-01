@@ -8,6 +8,8 @@ Run every `esoi run` and `render_handoff.py` with the repository's virtual envir
 It has the `hubofhubs` package installed, which the runner imports at startup; the system `python3` does not, so an arm that
 imports the runner fails there before it runs a single case.
 
+Re-record with `scripts/rerecord.py` (`--plan` first): it runs only the stale items, and a killed run resumes where it stopped because the rows in `results.csv` are the progress.
+
 At the END of every pass, after re-recording and `esoi tracker build`:
 
 1. Commit the results and records first (the page states the commit it was built from).
