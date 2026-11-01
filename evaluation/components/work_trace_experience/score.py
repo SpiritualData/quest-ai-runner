@@ -13,13 +13,18 @@ JUDGE_RULE = (
     "things the answer did not use, or says nothing the person could act on or believe more because of.")
 
 
+#: The judge reads the whole reply. It once saw only the first 900 characters and called a correct count of five cited papers a conflict
+#: because two of the five stood further down the reply.
+REPLY_CHARS = 8000
+
+
 def judge_prompt(case, elements):
     lines = "\n".join(f"{i + 1}. [{e['group']}] {e['text']}" for i, e in enumerate(elements))
     return (
         "A person asked an AI assistant a question. Beside its reply, the app showed the elements listed below about the work the AI did. "
         "Judge each element separately.\n"
         f"The person's question: {case['message']}\n"
-        f"The AI's reply (shortened): {case['reply'][:900]}\n"
+        f"The AI's reply: {case['reply'][:REPLY_CHARS]}\n"
         f"Elements shown:\n{lines}\n\n{JUDGE_RULE} Judge only against the question and the reply; use the element's own words, not what "
         "it might mean. A list heading that only introduces the rows under it earns its place if the rows do.\n"
         'Reply with {"verdicts": [{"n": 1, "earns": true or false, "why": "five words"}, ...]} covering every element.')

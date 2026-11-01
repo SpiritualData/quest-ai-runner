@@ -314,7 +314,7 @@ These override sections 3 and 4 where they differ.
 5. Expanded groups show 5 rows each with "Show all N" (cut-off text must be reachable). Failed items are one muted "could not open" line, never red. Only an `affects_user` failure gets a plain sentence in the summary.
 6. Settle on the first answer token, or on done or error if no token came. Never re-expand by itself.
 7. Motion: chips fade in over 120 ms, collapse takes 200 ms. Reduced motion: no fade or tick, final numbers only.
-8. Phone (390px): summary wraps to two lines at most, the whole row is the 44px target, chips wrap, no horizontal scroll.
+8. Phone (390px): summary wraps to two lines, three when it names a record and pages (section 9), the whole row is the 44px target, chips wrap, no horizontal scroll.
 9. Accessibility: button with aria-expanded and a label naming the counts; one polite announcement on settle, none while running; chips are hidden from screen readers (the list is the real content).
 10. Dark and light: waypoints and chip rings use the `brand` fill or border only; every word is `text` or `textMuted`; the monogram letter is `text`.
 11. The word "Trail" is not shown to people; the line stands alone.
@@ -339,3 +339,33 @@ the events and the elements shown found these, each fixed or recorded:
   1.0 for the matching one on the same store; a threshold would be an invented margin). It now counts only records the answer used (see
   "Used, not selected" in section 2), and `work_trace_check` flags a records count or item beyond the used cards. Papers a search returned
   but the reply did not cite are no longer listed as read, and listed sites the reply does not cite are no longer shown.
+
+## 9. Judge failures on the saved real turns, and the wording they changed (2026-11-01)
+
+The value judge kept failing three elements on the ten saved real turns. Joshua's rule: nothing is shown unless it adds value for the
+person or covers a plausible unstated need. Each failure was read against the case before anything was changed:
+
+- The live line "Searching the web" was vague. The live line is now the newest concrete thing opened ("Opened blog.rust-lang.org", with chips for the pages opened before it), and
+  before a page is open nothing is shown (the chat's own working indicator already says the AI is working). Sites a search only listed
+  and papers retrieved in a result set are not shown live: whether the answer rests on them is not known until it is final.
+- The summary "Read N of your quest records" was a bare count. Records are now named: one or two ("Used your record: Run a half marathon
+  by June"), or the first and the rest counted ("Used "Run a half marathon" and 3 more of your records"). Pages and papers follow the same
+  rule ("Read blog.rust-lang.org", "Read papers by Santos et al., 2026 and 4 more"). A shared (team) thread keeps counts only, so no
+  member's title is shown. Where nothing can be named the count stays.
+- The removed-link heading "Good to know" was vague, and the group under it repeated one line. Removed links are now a sentence in the
+  summary ("Removed 2 links I could not verify"), shown only when a link was removed; there is no such heading and no group behind it.
+- A correct count of five cited papers was called a conflict. The judge was wrong, caused by the harness: `score.py` showed it the first
+  900 characters of the reply, and two of the five papers stood further down. It now reads the whole reply (`REPLY_CHARS`).
+
+One source of truth for the words: `workTrace.ts` composes the live line, the summary and the group rows (`liveText`, `summaryText`,
+`expandedGroups`); `WorkTrace.tsx` renders them and `scripts/run-worktrace-view.js` prints the same strings for the judge, through
+the same English pack. Nothing is re-worded in Python or in a parallel script.
+
+Still failing after this, and why (per element, not tuned away):
+- "Used 1 of your team's records" in a shared thread: the judge wants a name, and a team thread must not show one member's titles.
+  Whether to show a bare count there at all is a product call; the rule above keeps it.
+- "Removed 1 link I could not verify" on a turn whose reply holds no link: the removed link is, by definition, absent from the reply the
+  judge reads, so it cannot see what was removed. The person has the same view.
+- "Used your record: Conversational Spanish" on a spaced-repetition question: a real false positive of the emitter's used-record rule (the
+  card text and the reply share the long words "practice" and "second"). Naming the record made it visible. Fixing it means changing
+  `reply_draws_on` in `core/work_trace.py`, which needs new real turns to confirm.
