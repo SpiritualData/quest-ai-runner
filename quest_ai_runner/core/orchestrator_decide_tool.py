@@ -337,6 +337,16 @@ def own_escalation_adds_nothing(result: Any, exec_record: Any = None, facts_befo
     if deep_declined_background(result):
         return True
     results = list(getattr(result, "deep_results", None) or [])
+    facts_after = list(getattr(exec_record, "facts", None) or [])[facts_before:]
+    if (results and all(not getattr(d, "met", False) and getattr(d, "error", None) for d in results)
+            and not any(getattr(d, "decision_id", None) or getattr(d, "usage_limited", False)
+                        for d in results)
+            and not any(getattr(f, "succeeded", False) for f in facts_after)):
+        # Every run FAILED outright (an error, nothing met), filed no decision and changed
+        # nothing: its failure text must not replace the answer the turn already has (IMP-028: a
+        # sound answer was overwritten by "I couldn't turn that into a change" after the answer
+        # check escalated a booking request to a run that could only fail).
+        return True
     if any((getattr(d, "output", "") or "").strip() for d in results):
         return False
     if (getattr(result, "text", "") or "").strip():
