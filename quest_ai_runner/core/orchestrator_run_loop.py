@@ -184,7 +184,7 @@ class RunLoopMixin:
                 self.strip_unverified_dois(rs, res)
             if rs.trace is not None:
                 rs.trace.links_checked(res.link_checks)
-                rs.trace.finish()
+                rs.trace.finish("\n".join([str(res.text or "")] + [str(getattr(d, "output", "") or "") for d in res.deep_results]))
             # --- EM DASH PASS (core/em_dash_pass.py): brand rule, enforced once on the words the reader gets -------------
             # Runs after the link guard so a URL is never touched, and before the write-back and EVENT_RESULT so the text shown,
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
@@ -473,6 +473,8 @@ class RunLoopMixin:
                 rs.plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             if getattr(rs.plan, "user_intent", None):
                 rs.turn_user_intent = rs.plan.user_intent
+            if rs.trace is not None and getattr(rs.plan, "facts_read", None):
+                rs.trace.facts_noted(rs.plan.facts_read)     # which selected records the plan took a fact from
 
             # --- PER-IDEA THREADING: resolve the turn's TOPIC ----------------------------------
             # The topic is a property of the MESSAGE, so the FIRST plan that actually EXPRESSES one

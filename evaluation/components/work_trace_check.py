@@ -7,7 +7,10 @@ violations. An esoi metric scores a turn as passing when the list is empty (``pa
 
 1. Honest counts. A trace never claims more than the run did: ``web.read`` is at most the pages the calls fetched,
    ``web.found`` at most the results the searches listed, ``papers.read`` at most the works the literature calls returned,
-   ``records.read`` at most the cards the context events selected, ``links.checked`` at most the verdicts the link guard held.
+   ``records.read`` at most the cards the answer USED, ``links.checked`` at most the verdicts the link guard held. A card the
+   assembler only selected is not a record read: when the call records say which cards were used (``"used": bool`` on a card), a
+   records count or item beyond the used ones is a violation, and an unrelated question that shows any records step is too. The
+   same for papers: when the works say which the reply cited (``"cited": bool``), ``papers.read`` is at most the cited ones.
 2. No leak. No private title (``private_titles``: the labels of records that must not be shown) appears in any event a
    shared thread's viewer gets, and in a shared thread no event of kind ``records`` or ``action`` carries items. No event holds a
    full URL, a query string, a file path or a newline in a label, and every event passes the hub's validator.
@@ -17,7 +20,7 @@ violations. An esoi metric scores a turn as passing when the list is empty (``pa
 ``calls`` is a list of structural records, one per call, built from results and never from model text:
 
     {"kind": "web_search", "hits": [{"url": ...}, ...]}      {"kind": "web_page", "url": ..., "ok": bool}
-    {"kind": "papers", "works": [..., ...], "total": n}       {"kind": "records", "cards": [{"id": ...}, ...]}
+    {"kind": "papers", "works": [{"cited": bool}, ...], "total": n}   {"kind": "records", "cards": [{"id": ..., "used": bool}, ...]}
     {"kind": "links", "verdicts": [...]}
 """
 from __future__ import annotations
@@ -59,10 +62,13 @@ def actual_totals(calls: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
             t["web_read"] += 1
         elif kind == "papers":
             works = call.get("works") or []
-            t["papers_read"] += len(works)
+            # Works that say whether the reply cited them: only those are read. Without the flag every returned work counts.
+            t["papers_read"] += sum(1 for w in works if w.get("cited")) if any(isinstance(w, Mapping) and "cited" in w for w in works) else len(works)
             t["papers_found"] += max(int(call.get("total") or 0), len(works))
         elif kind == "records":
-            cards.update(str(c.get("id")) for c in call.get("cards") or [] if isinstance(c, Mapping))
+            listed = [c for c in call.get("cards") or [] if isinstance(c, Mapping)]
+            flagged = any("used" in c for c in listed)
+            cards.update(str(c.get("id")) for c in listed if c.get("used") or not flagged)
         elif kind == "links":
             t["links"] += len(call.get("verdicts") or [])
     t["records"] = len(cards)
@@ -88,6 +94,16 @@ def check_turn(calls: Sequence[Mapping[str, Any]], events: Iterable[Any], *, sha
             problems.append(f"{step_id}: counts.{first}={counts[first]} but the run only did {first_max}")
         if second and counts.get(second, 0) > second_max:
             problems.append(f"{step_id}: counts.{second}={counts[second]} but the run only did {second_max}")
+    # A records step that lists a card the answer did not use, or any records step when none was used.
+    used_flags = [c for call in calls if call.get("kind") == "records" for c in call.get("cards") or [] if isinstance(c, Mapping)]
+    if any("used" in c for c in used_flags):
+        used_ids = {str(c.get("id")) for c in used_flags if c.get("used")}
+        records = steps.get("records") or {}
+        if records and not used_ids:
+            problems.append("records: a records step was shown but no record was used by the answer")
+        for item in records.get("items") or []:
+            if str(item.get("ref")) not in used_ids:
+                problems.append(f"records: lists a card the answer did not use ({item.get('ref')})")
     if "links" in steps and (steps["links"].get("counts") or {}).get("failed", 0) > (steps["links"].get("counts") or {}).get("checked", 0):
         problems.append("links: more links failed than were checked")
 

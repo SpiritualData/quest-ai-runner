@@ -120,6 +120,14 @@ Contract changes: none to the field names. Additions that are not fields: the wi
   against a closed list, so an unknown one still reaches the screen as a generic row. A `counts.failed` count is allowed.
 - QAR opt-in: `context_meta["work_trace"] = {"audience": "owner" | "shared"}` (optional `trace_id`). Without it nothing is
   emitted. Any audience other than `owner` keeps `records` as counts only.
+- Used, not selected (2026-11-01, after the first real runs): the `records` step counts only records the answer drew on, never every card
+  the context assembler selected. A selected card is a candidate; it becomes a record read when the planner's `facts_read` quotes it (a
+  run of four consecutive words found verbatim in the card's own text) or names its id or full title, or when the run fetched the card by
+  id. Nothing here reads the model's meaning: it verifies a quote or a known id against stored text. A turn whose answer used no record
+  emits no records step at all. The frontend no longer maps the `context` frame to a records step either. Papers: `read` is the works the
+  finished reply cites (its DOI or full title stands in the reply, or the first author's surname and the year stand together), `found` is
+  the largest single search total, and only cited works are listed; while the turn runs `read` is the abstracts taken, and the step settles
+  on the cited ones when the reply is final. A site a search only listed stays on screen only when the reply cites its address host.
 - Steps QAR emits (one `step_id` per turn each): `web` (seat `search-backend`, kind `sources`, key `workTrace.web.reading`),
   `papers` (`know-the-world`, `papers`, `workTrace.papers.searching`), `records` (`context-assembler`, `records`,
   `workTrace.records.looking`), `links` (`watch-for-risk`, `check`, `workTrace.links.checking`, `affects_user` true when a link was
@@ -313,7 +321,8 @@ the events and the elements shown found these, each fixed or recorded:
   paper under two DOIs showed twice. `found` is now the largest single search total and a work is read once. (`core/work_trace.py`.)
 - A heading over a single group, and a counts-only group in a shared thread that only repeated the summary, did not earn their place. Headings
   show only for several groups, and a line with nothing behind it is a sentence, not a button.
-- Not fixed, for a decision: the records step counts the cards the context assembler selected for the turn, so a question about the web
-  shows the person's unrelated quest records (relevance scores of about 0.5 for unrelated cards against 1.0 for the matching one on the
-  same store). A threshold would be an invented margin; the honest signal is whether the answer used a record, which the run does not report yet.
-- Not fixed: papers a search returned but the answer did not cite are listed as read.
+- Fixed afterwards (same day): the records step counted the cards the context assembler selected for the turn, so a question about the web
+  or an unrelated Python question showed the person's unrelated quest records (relevance scores of about 0.5 for unrelated cards against
+  1.0 for the matching one on the same store; a threshold would be an invented margin). It now counts only records the answer used (see
+  "Used, not selected" in section 2), and `work_trace_check` flags a records count or item beyond the used cards. Papers a search returned
+  but the reply did not cite are no longer listed as read, and listed sites the reply does not cite are no longer shown.

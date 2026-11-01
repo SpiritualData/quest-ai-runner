@@ -214,3 +214,94 @@ def test_seam_tool_call_for_the_literature_search_emits():
                         ctx=ToolContext(), trace=trace)
     step = sink.latest()["papers"]
     assert step["counts"] == {"found": 5, "read": 1} and step["state"] == "done"
+
+
+FULL_CARDS = [
+    {"id": "marathon-april-quest", "title": "Run a marathon", "adapter": "quest", "item_type_counts": {"quest": 1},
+     "rendered_section": "Run a marathon in April: week 6 of 16, left knee sore after hills, physio visit"},
+    {"id": "candle-shop-launch", "title": "Candle shop", "adapter": "quest", "item_type_counts": {"quest": 1},
+     "rendered_section": "Launch hand-poured candles shop: wax shipment slipped, soft launch 3 Nov"},
+]
+
+
+def test_selected_cards_alone_show_no_records_step():
+    sink, trace = make()
+    trace.records_selected(CARDS, FULL_CARDS)
+    trace.facts_noted(["Python 3.14 is the latest stable release"])
+    trace.finish("Python 3.14 is out.")
+    assert "records" not in sink.latest()
+
+
+def test_a_record_the_plan_quoted_is_the_only_one_counted():
+    sink, trace = make()
+    light = [{"id": c["id"], "title": c["title"], "adapter": "quest", "item_type_counts": {"quest": 1}} for c in FULL_CARDS]
+    trace.records_selected(light, FULL_CARDS)
+    trace.facts_noted(['"left knee sore after hills" (your marathon quest)'])
+    step = sink.latest()["records"]
+    assert step["counts"] == {"found": 1, "read": 1}
+    assert [i["ref"] for i in step["items"]] == ["marathon-april-quest"]
+
+
+def test_a_card_named_by_id_or_title_in_a_fact_counts_and_a_short_name_does_not():
+    sink, trace = make()
+    light = [{"id": "c1", "title": "Run", "adapter": "quest"}, {"id": "candle-shop-launch", "title": "Candle shop", "adapter": "quest"}]
+    trace.records_selected(light, [])
+    trace.facts_noted(["Run every day", "see candle-shop-launch for the budget"])
+    assert [i["ref"] for i in sink.latest()["records"]["items"]] == ["candle-shop-launch"]
+
+
+def test_a_card_fetched_by_id_counts():
+    sink, trace = make()
+    trace.records_selected(CARDS, [])
+    trace.records_used([{"id": "c2"}])
+    assert sink.latest()["records"]["counts"] == {"found": 1, "read": 1}
+
+
+def test_shared_thread_records_stay_counts_only_when_used():
+    sink, trace = make("shared")
+    light = [{"id": c["id"], "title": c["title"], "adapter": "quest"} for c in FULL_CARDS]
+    trace.records_selected(light, FULL_CARDS)
+    trace.facts_noted(["left knee sore after hills"])
+    step = sink.latest()["records"]
+    assert step["items"] == [] and step["counts"]["read"] == 1
+
+
+WORKS = [{"title": "Training Load and Knee Pain in Marathoners", "authors": ["Ana Lee", "B Ode"], "year": 2021, "doi": "10.1/a"},
+         {"title": "Hill Running Biomechanics Review", "authors": ["Cho Park"], "year": 2019, "doi": "10.1/b"},
+         {"title": "Unrelated Cartilage Imaging Study", "authors": ["Dee Roe", "E Fox", "G Hu"], "year": 2018, "doi": "10.1/c"}]
+
+
+def test_papers_the_reply_cites_are_read_and_the_rest_are_only_found():
+    sink, trace = make()
+    trace.papers_started()
+    trace.papers_searched(ToolResult(ok=True, text="T", data={"works": WORKS, "total": 31}))
+    assert sink.latest()["papers"]["counts"] == {"found": 31, "read": 3}      # live: the abstracts the run took
+    trace.finish("Load matters (Lee and Ode, 2021). Another review is at doi 10.1/b. Nothing else applies.")
+    step = sink.latest()["papers"]
+    assert step["counts"] == {"found": 31, "read": 2}
+    assert [i["ref"] for i in step["items"]] == ["10.1/a", "10.1/b"]
+
+
+def test_a_paper_cited_by_full_title_counts_and_none_cited_leaves_found_only():
+    sink, trace = make()
+    trace.papers_started()
+    trace.papers_searched(ToolResult(ok=True, text="T", data={"works": WORKS, "total": 3}))
+    trace.finish("See Unrelated Cartilage Imaging Study for more.")
+    assert [i["ref"] for i in sink.latest()["papers"]["items"]] == ["10.1/c"]
+    sink2, trace2 = make()
+    trace2.papers_started()
+    trace2.papers_searched(ToolResult(ok=True, text="T", data={"works": WORKS, "total": 3}))
+    trace2.finish("There is research, but I will not cite it.")
+    step = sink2.latest()["papers"]
+    assert step["counts"] == {"found": 3, "read": 0} and step["items"] == []
+
+
+def test_a_listed_site_the_reply_never_cites_is_not_shown_but_still_counted_as_found():
+    sink, trace = make()
+    trace.web_started()
+    trace.web_searched(Observation(kind="query", hits=[{"title": "A", "url": "https://a.example/x"}, {"title": "B", "url": "https://b.example/y"},
+                                                       {"title": "C", "url": "https://c.example/z"}]))
+    trace.finish("The release is on a.example, per its announcement.")
+    step = sink.latest()["web"]
+    assert step["counts"] == {"found": 3, "read": 0}
+    assert [i["ref"] for i in step["items"]] == ["a.example"]

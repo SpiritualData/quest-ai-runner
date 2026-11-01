@@ -65,3 +65,31 @@ def test_score_is_the_share_of_passing_turns():
     good = {"calls": CALLS, "events": run_turn("owner")}
     bad = {"calls": CALLS, "events": run_turn("owner"), "shared": True, "private_titles": ["Secret plan"]}
     assert score([good, bad]) == 0.5 and passes(CALLS, good["events"]) and score([]) == 1.0
+
+
+def records_event(*refs):
+    return project({"step_id": "records", "solution_id": "context-assembler", "kind": "records", "label_key": "workTrace.records.looking",
+                    "state": "done", "counts": {"found": len(refs), "read": len(refs)},
+                    "items": [{"ref": r, "label": r} for r in refs]}, trace_id="t").to_dict()
+
+
+def test_a_records_count_that_includes_unused_cards_is_caught():
+    calls = [{"kind": "records", "cards": [{"id": "c1", "used": True}, {"id": "c2", "used": False}, {"id": "c3", "used": False}]}]
+    problems = check_turn(calls, [records_event("c1", "c2", "c3")])
+    assert any("counts.read=3" in p for p in problems) and any("did not use (c2)" in p for p in problems)
+    assert check_turn(calls, [records_event("c1")]) == []
+
+
+def test_a_records_step_when_no_card_was_used_is_caught_and_no_step_passes():
+    calls = [{"kind": "records", "cards": [{"id": "c1", "used": False}, {"id": "c2", "used": False}]}]
+    assert any("no record was used" in p for p in check_turn(calls, [records_event("c1", "c2")]))
+    assert check_turn(calls, []) == []
+
+
+def test_papers_read_may_not_exceed_the_works_the_reply_cited():
+    calls = [{"kind": "papers", "total": 31, "works": [{"cited": True}, {"cited": False}, {"cited": False}]}]
+    event = project({"step_id": "papers", "solution_id": "know-the-world", "kind": "papers", "label_key": "workTrace.papers.searching",
+                     "state": "done", "counts": {"found": 31, "read": 3}}, trace_id="t").to_dict()
+    assert any("counts.read=3 but the run only did 1" in p for p in check_turn(calls, [event]))
+    event["counts"]["read"] = 1
+    assert check_turn(calls, [event]) == []

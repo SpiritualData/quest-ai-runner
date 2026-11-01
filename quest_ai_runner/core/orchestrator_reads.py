@@ -307,7 +307,10 @@ class ReadsMixin:
             sources_light = _project_sources_for_event(sources or [])
             trace = getattr(card_context, "trace", None)
             if trace is not None:
-                trace.records_used(card_meta_light)
+                if origin == "card":
+                    trace.records_used(card_meta_light)        # fetched by id: the model asked for this record
+                else:
+                    trace.records_selected(card_meta_light, card_meta)
             count = len(card_meta or [])
             text = (f"Fetched {count} context card{'s' if count != 1 else ''} mid-turn."
                     if count else "")

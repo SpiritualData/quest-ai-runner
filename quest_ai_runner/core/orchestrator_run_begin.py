@@ -940,7 +940,7 @@ class RunBeginMixin:
                 _card_meta_light = _project_card_metadata_for_event(_merged_card_meta)
                 _sources_light = _project_sources_for_event(rs._sources)
                 if rs.trace is not None:
-                    rs.trace.records_used(_card_meta_light)
+                    rs.trace.records_selected(_card_meta_light, _merged_card_meta)
                 # Same projected shapes the panel is allowed to show (see explain_cards above).
                 rs.explain_cards = list(_card_meta_light or [])
                 rs.explain_sources = list(_sources_light or [])

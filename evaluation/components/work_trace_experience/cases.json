@@ -313,13 +313,16 @@
     "kind": "papers",
     "works": [
      {
-      "title": "Study 0"
+      "title": "Study 0",
+      "cited": true
      },
      {
-      "title": "Study 1"
+      "title": "Study 1",
+      "cited": true
      },
      {
-      "title": "Study 2"
+      "title": "Study 2",
+      "cited": true
      }
     ],
     "total": 31
@@ -371,10 +374,12 @@
     "kind": "records",
     "cards": [
      {
-      "id": "card-0"
+      "id": "card-0",
+      "used": true
      },
      {
-      "id": "card-1"
+      "id": "card-1",
+      "used": true
      }
     ]
    }
@@ -1460,48 +1465,15 @@
  {
   "id": "TRACE-REAL-WEB",
   "stage": "real",
+  "stratum": "a-real",
   "kind": "web",
   "surface": "solo",
   "message": "What is the latest stable release of Python right now, and what are the headline changes in it?",
-  "reply": "The latest stable release is Python 3.15.0, released October 9, 2026 ([python.org](https://blog.python.org/2026/10/python-3150-final-is-here/)).\n\nIts headline changes:\n\n- **Lazy Imports:** Modules load only when first used, which speeds up startup by an estimated 15 to 20% ([dev.to](https://dev.to/romdevin/python-315-released-new-features-improvements-and-resources-for-developers-2dgf)).\n- **UTF-8 as default encoding:** Standard text I/O now defaults to UTF-8, which makes behavior more consistent across platforms ([plainenglish.io](https://python.plainenglish.io/python-3-15-is-officially-launched-7-changes-that-actually-matter-for-developers-0394bb2d4987)).\n- **New built-ins:** `frozendict` (an immutable dictionary) and `sentinel` (for distinct special values) ([bacancytechnology.com](https://www.bacancytechnology.com/blog/python-3-15)).\n- **Unpacking in comprehensions:** This simplifies flattening nested data ([bacancytechnology.com](https://www.bacancytechnology.com/blog/python-3-15)).\n- **Performance work:** The release includes a JIT compiler upgrade and the Tachyon sampling profiler for lower-overhead profiling ([dev.to](https://dev.to/romdevin/python-315-released-new-features-improvements-and-resources-for-developers-2dgf)).\n\nFor the full list, see the [official 3.15 what's new page](https://docs.python.org/3/whatsnew/3.15.html).",
+  "reply": "The latest stable release is **Python 3.15.0**, released October 9, 2026 ([Python 3.15.0 (final) is here! | Python Insider](https://blog.python.org/2026/10/python-3150-final-is-here/)).\n\nIts headline changes include:\n\n- **UTF-8 as the default encoding** (PEP 686)\n- **Explicit lazy imports** for faster startup (PEP 810)\n- **Unpacking in comprehensions** (PEP 798)\n- **A sentinel built-in type** (PEP 661)\n- **A dedicated profiling package** (PEP 799)\n- **Frame pointers enabled by default** for better system-level observability (PEP 831)\n- **An upgraded JIT compiler** with performance improvements, and a **sampling profiler** ([Bacancy's Python 3.15 overview](https://www.bacancytechnology.com/blog/python-3-15))",
   "events": [
    {
     "v": 1,
-    "trace_id": "trace-web",
-    "step_id": "records",
-    "solution_id": "context-assembler",
-    "kind": "records",
-    "label_key": "workTrace.records.looking",
-    "state": "done",
-    "counts": {
-     "found": 4,
-     "read": 4
-    },
-    "items": [
-     {
-      "ref": "card:candle-shop-launch",
-      "label": "Launch hand-poured candles shop: wax shipment slipped, soft launch 3 Nov, bud..."
-     },
-     {
-      "ref": "card:marathon-april-quest",
-      "label": "Run a marathon in April: week 6 of 16, left knee sore after hills, physio vis..."
-     },
-     {
-      "ref": "card:morning-pages-habit",
-      "label": "Morning pages habit: skipping pages on travel days, goal 20 days in a row mor..."
-     },
-     {
-      "ref": "card:spanish-practice",
-      "label": "Conversational Spanish: 25 minute daily practice, stuck on past tenses spanis..."
-     }
-    ],
-    "affects_user": false,
-    "started_at": "2026-11-01T10:55:42.914Z",
-    "ended_at": "2026-11-01T10:55:42.914Z"
-   },
-   {
-    "v": 1,
-    "trace_id": "trace-web",
+    "trace_id": "2b08fa2d0dd544bdbf7f9cb3",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1513,21 +1485,64 @@
     },
     "items": [],
     "affects_user": false,
-    "started_at": "2026-11-01T10:55:45.782Z"
+    "started_at": "2026-11-01T11:46:22.588Z"
    },
    {
     "v": 1,
-    "trace_id": "trace-web",
+    "trace_id": "2b08fa2d0dd544bdbf7f9cb3",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.web.reading",
+    "state": "done",
+    "counts": {
+     "found": 5,
+     "read": 0
+    },
+    "items": [
+     {
+      "ref": "bacancytechnology.com",
+      "label": "bacancytechnology.com",
+      "kind": "found"
+     },
+     {
+      "ref": "blog.python.org",
+      "label": "python.org",
+      "kind": "found"
+     },
+     {
+      "ref": "medium.com",
+      "label": "medium.com",
+      "kind": "found"
+     },
+     {
+      "ref": "python.org",
+      "label": "python.org",
+      "kind": "found"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T11:46:22.588Z",
+    "ended_at": "2026-11-01T11:46:26.918Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "2b08fa2d0dd544bdbf7f9cb3",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
     "label_key": "workTrace.web.reading",
     "state": "running",
     "counts": {
-     "found": 4,
+     "found": 5,
      "read": 0
     },
     "items": [
+     {
+      "ref": "bacancytechnology.com",
+      "label": "bacancytechnology.com",
+      "kind": "found"
+     },
      {
       "ref": "blog.python.org",
       "label": "python.org",
@@ -1539,35 +1554,35 @@
       "kind": "found"
      },
      {
-      "ref": "pythonresources.com",
-      "label": "pythonresources.com",
-      "kind": "found"
-     },
-     {
-      "ref": "hidekazu-konishi.com",
-      "label": "hidekazu-konishi.com",
+      "ref": "python.org",
+      "label": "python.org",
       "kind": "found"
      }
     ],
     "affects_user": false,
-    "started_at": "2026-11-01T10:55:45.782Z"
+    "started_at": "2026-11-01T11:46:22.588Z"
    },
    {
     "v": 1,
-    "trace_id": "trace-web",
+    "trace_id": "2b08fa2d0dd544bdbf7f9cb3",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
     "label_key": "workTrace.web.reading",
     "state": "done",
     "counts": {
-     "found": 9,
-     "read": 0
+     "found": 5,
+     "read": 1
     },
     "items": [
      {
       "ref": "blog.python.org",
       "label": "python.org",
+      "kind": "read"
+     },
+     {
+      "ref": "bacancytechnology.com",
+      "label": "bacancytechnology.com",
       "kind": "found"
      },
      {
@@ -1576,61 +1591,64 @@
       "kind": "found"
      },
      {
-      "ref": "pythonresources.com",
-      "label": "pythonresources.com",
-      "kind": "found"
-     },
-     {
-      "ref": "hidekazu-konishi.com",
-      "label": "hidekazu-konishi.com",
-      "kind": "found"
-     },
-     {
-      "ref": "dev.to",
-      "label": "dev.to",
-      "kind": "found"
-     },
-     {
-      "ref": "python.plainenglish.io",
-      "label": "plainenglish.io",
-      "kind": "found"
-     },
-     {
-      "ref": "jumpingrivers.com",
-      "label": "jumpingrivers.com",
-      "kind": "found"
-     },
-     {
-      "ref": "docs.python.org",
+      "ref": "python.org",
       "label": "python.org",
-      "kind": "found"
-     },
-     {
-      "ref": "bacancytechnology.com",
-      "label": "bacancytechnology.com",
       "kind": "found"
      }
     ],
     "affects_user": false,
-    "started_at": "2026-11-01T10:55:45.782Z",
-    "ended_at": "2026-11-01T10:55:50.270Z"
+    "started_at": "2026-11-01T11:46:22.588Z",
+    "ended_at": "2026-11-01T11:46:33.117Z"
    },
    {
     "v": 1,
-    "trace_id": "trace-web",
+    "trace_id": "2b08fa2d0dd544bdbf7f9cb3",
     "step_id": "links",
     "solution_id": "watch-for-risk",
     "kind": "check",
     "label_key": "workTrace.links.checking",
     "state": "done",
     "counts": {
-     "checked": 5,
+     "checked": 2,
      "failed": 0
     },
     "items": [],
     "affects_user": false,
-    "started_at": "2026-11-01T10:56:07.493Z",
-    "ended_at": "2026-11-01T10:56:07.493Z"
+    "started_at": "2026-11-01T11:46:50.046Z",
+    "ended_at": "2026-11-01T11:46:50.046Z"
+   },
+   {
+    "v": 1,
+    "trace_id": "2b08fa2d0dd544bdbf7f9cb3",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.web.reading",
+    "state": "done",
+    "counts": {
+     "found": 5,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "blog.python.org",
+      "label": "python.org",
+      "kind": "read"
+     },
+     {
+      "ref": "bacancytechnology.com",
+      "label": "bacancytechnology.com",
+      "kind": "found"
+     },
+     {
+      "ref": "python.org",
+      "label": "python.org",
+      "kind": "found"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T11:46:22.588Z",
+    "ended_at": "2026-11-01T11:46:50.046Z"
    }
   ],
   "calls": [
@@ -1638,37 +1656,32 @@
     "kind": "web_search",
     "hits": [
      {
+      "url": "https://www.bacancytechnology.com/blog/python-3-15"
+     },
+     {
       "url": "https://blog.python.org/2026/10/python-3150-final-is-here/"
      },
      {
-      "url": "https://medium.com/@ahmadakhlak710/python-in-2026-still-no-1-and-3-15-just-got-interesting-8ca584ffd776"
+      "url": "https://medium.com/@gautsoni/python-3-14-in-2026-whats-new-what-s-faster-and-when-you-ll-actually-feel-it-with-code-4b2b5a62c9fd"
      },
      {
-      "url": "https://pythonresources.com/python-versions/"
+      "url": "https://www.python.org/downloads/release/python-3130/"
      },
      {
-      "url": "https://hidekazu-konishi.com/entry/python_version_support_and_eol_timeline.html"
+      "url": "https://www.python.org/downloads/release/python-3120/"
      }
     ]
    },
    {
-    "kind": "web_search",
-    "hits": [
-     {
-      "url": "https://dev.to/romdevin/python-315-released-new-features-improvements-and-resources-for-developers-2dgf"
-     },
-     {
-      "url": "https://python.plainenglish.io/python-3-15-is-officially-launched-7-changes-that-actually-matter-for-developers-0394bb2d4987"
-     },
-     {
-      "url": "https://www.jumpingrivers.com/blog/whats-new-py315/"
-     },
-     {
-      "url": "https://docs.python.org/3/whatsnew/3.15.html"
-     },
-     {
-      "url": "https://www.bacancytechnology.com/blog/python-3-15"
-     }
+    "kind": "web_page",
+    "url": "https://blog.python.org/2026/10/python-3150-final-is-here/",
+    "ok": true
+   },
+   {
+    "kind": "plan_facts",
+    "facts": [
+     "Python 3.15.0 (final) is here! on blog.python.org (2026/10): 'Python 3.15.0 is now available... the stable release of Python 3.15.0'; headline changes include PEP 661 (sentinel built-in type), PEP 686",
+     "web search summary: Python 3.15 released October 9, 2026, with an upgraded JIT compiler and a sampling profiler."
     ]
    },
    {
@@ -1676,19 +1689,23 @@
     "cards": [
      {
       "id": "card:candle-shop-launch",
-      "relevance": 0.5067236388573899
+      "relevance": 0.4989169108603344,
+      "used": false
      },
      {
       "id": "card:marathon-april-quest",
-      "relevance": 0.5291083487944888
+      "relevance": 0.49389478307072227,
+      "used": false
      },
      {
       "id": "card:morning-pages-habit",
-      "relevance": 0.6413861986794933
+      "relevance": 0.6225870058769108,
+      "used": false
      },
      {
       "id": "card:spanish-practice",
-      "relevance": 0.5719372924095143
+      "relevance": 0.5704158362983172,
+      "used": false
      }
     ]
    },
@@ -1700,35 +1717,26 @@
      },
      {
       "verdict": "ok"
-     },
-     {
-      "verdict": "ok"
-     },
-     {
-      "verdict": "ok"
-     },
-     {
-      "verdict": "ok"
      }
     ]
    }
   ],
   "private_titles": [],
-  "seconds": 34.8,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store",
-  "stratum": "a-real"
+  "seconds": 41.7,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store; re-run after the used-or-cited fix (a record counts only when the answer drew on it, a paper only when the reply cites it, a listed site only when the reply cites it)"
  },
  {
   "id": "TRACE-REAL-RECORDS",
   "stage": "real",
+  "stratum": "a-real",
   "kind": "records",
   "surface": "solo",
   "message": "I have a sore knee again. Given my current quests, what should I change this week?",
-  "reply": "Your marathon-april-quest card has you at week 6 of 16 with a sore left knee after hills, so I can suggest changes for this week once I know more. Did the physio set any limits on running or hills, and does the knee hurt during everyday walking or only when you run?",
+  "reply": "Cut hill runs and reduce your running load this week, and use swimming in their place. Your quest notes say the left knee got sore after hills, so hills are the main thing to drop.\n\n- Swap one or two runs for swim sessions.\n- Keep any runs you do flat and short.\n- Keep your physio visit.\n\nI couldn't read this quest's goals just now, so I can't see which sessions this week's plan includes. Check it for hill or long runs. The quest card also says week 6 of 16, and today is 1 November, so confirm that week count is current.\n\nThis is general running guidance, not something from your records, so check it with your physio. See a doctor sooner if the knee swells, locks, gives way, or hurts at rest.",
   "events": [
    {
     "v": 1,
-    "trace_id": "trace-records",
+    "trace_id": "1ec5ad1a9819478cac0a7d0e",
     "step_id": "records",
     "solution_id": "context-assembler",
     "kind": "records",
@@ -1745,47 +1753,33 @@
      }
     ],
     "affects_user": false,
-    "started_at": "2026-11-01T10:55:45.881Z",
-    "ended_at": "2026-11-01T10:55:45.881Z"
-   },
-   {
-    "v": 1,
-    "trace_id": "trace-records",
-    "step_id": "records",
-    "solution_id": "context-assembler",
-    "kind": "records",
-    "label_key": "workTrace.records.looking",
-    "state": "done",
-    "counts": {
-     "found": 1,
-     "read": 1
-    },
-    "items": [
-     {
-      "ref": "marathon-april-quest",
-      "label": "Run a marathon in April: week 6 of 16, left knee sore after hills, physio vis..."
-     }
-    ],
-    "affects_user": false,
-    "started_at": "2026-11-01T10:55:45.881Z",
-    "ended_at": "2026-11-01T10:55:58.738Z"
+    "started_at": "2026-11-01T11:43:47.357Z",
+    "ended_at": "2026-11-01T11:43:47.357Z"
    }
   ],
   "calls": [
+   {
+    "kind": "plan_facts",
+    "facts": [
+     "Card marathon-april-quest: Run a marathon in April; week 6 of 16; left knee sore after hills; physio visit; swim cross-training",
+     "marathon-april-quest: Run a marathon in April: week 6 of 16, left knee sore after hills, physio visit, swim cross-training",
+     "list_quest_goals for marathon-april-quest failed (team_id required); the goals could not be read, so do not list goal lines"
+    ]
+   },
    {
     "kind": "records",
     "cards": [
      {
       "id": "marathon-april-quest",
-      "relevance": 1.0
+      "relevance": 1.0,
+      "used": true
      }
     ]
    }
   ],
   "private_titles": [],
-  "seconds": 56.0,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store",
-  "stratum": "a-real"
+  "seconds": 51.3,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store; re-run after the used-or-cited fix (a record counts only when the answer drew on it, a paper only when the reply cites it)"
  },
  {
   "id": "TRACE-REAL-PAPERS",
@@ -2006,7 +2000,7 @@
   ],
   "private_titles": [],
   "seconds": 48.9,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store",
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store; captured before the used-or-cited fix and not re-run, so its counts are the old selected-or-returned counts",
   "stratum": "a-real"
  },
  {
@@ -2069,7 +2063,185 @@
    "Conversational Spanish: 25 minute daily practice, stuck on p"
   ],
   "seconds": 40.5,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store",
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store; captured before the used-or-cited fix and not re-run, so its counts are the old selected-or-returned counts",
   "stratum": "a-real"
+ },
+ {
+  "id": "TRACE-OFF-13",
+  "kind": "none",
+  "surface": "solo",
+  "message": "In Python, what is the difference between a list and a tuple?",
+  "reply": "A list is mutable and a tuple is not, so use a tuple for fixed groups of values and a list when the contents change.",
+  "events": [],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "card-0",
+      "used": false
+     },
+     {
+      "id": "card-1",
+      "used": false
+     },
+     {
+      "id": "card-2",
+      "used": false
+     },
+     {
+      "id": "card-3",
+      "used": false
+     }
+    ]
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the real runs emitted after the used-or-cited fix (counts, citation lines); fictional content; four quest records were selected by the context assembler and the answer used none, so no records step is emitted",
+  "stratum": "b-offline"
+ },
+ {
+  "id": "TRACE-OFF-14",
+  "kind": "papers",
+  "surface": "solo",
+  "message": "Does spaced repetition beat massed practice for adults learning a language? Cite papers.",
+  "reply": "Yes, with moderate effects. Study 0 of training load and injury (Author0 et al., 2015) and Study 1 of training load and injury (Author1 et al., 2016) both report it; the rest of the search did not bear on the question.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "t1",
+    "step_id": "papers",
+    "solution_id": "know-the-world",
+    "kind": "papers",
+    "label_key": "workTrace.x",
+    "state": "done",
+    "counts": {
+     "found": 31,
+     "read": 2
+    },
+    "items": [
+     {
+      "ref": "10.1000/p0",
+      "label": "Study 0 of training load and injury",
+      "sub": "Author0 et al., 2015"
+     },
+     {
+      "ref": "10.1000/p1",
+      "label": "Study 1 of training load and injury",
+      "sub": "Author1 et al., 2016"
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T10:00:00.000Z",
+    "ended_at": "2026-11-01T10:00:09.000Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "papers",
+    "works": [
+     {
+      "title": "Study 0 of training load and injury",
+      "authors": [
+       "Author0",
+       "Other"
+      ],
+      "year": 2015,
+      "doi": "10.1000/p0",
+      "cited": true
+     },
+     {
+      "title": "Study 1 of training load and injury",
+      "authors": [
+       "Author1",
+       "Other"
+      ],
+      "year": 2016,
+      "doi": "10.1000/p1",
+      "cited": true
+     },
+     {
+      "title": "Study 2 of training load and injury",
+      "authors": [
+       "Author2",
+       "Other"
+      ],
+      "year": 2017,
+      "doi": "10.1000/p2",
+      "cited": false
+     },
+     {
+      "title": "Study 3 of training load and injury",
+      "authors": [
+       "Author3",
+       "Other"
+      ],
+      "year": 2018,
+      "doi": "10.1000/p3",
+      "cited": false
+     },
+     {
+      "title": "Study 4 of training load and injury",
+      "authors": [
+       "Author4",
+       "Other"
+      ],
+      "year": 2019,
+      "doi": "10.1000/p4",
+      "cited": false
+     }
+    ],
+    "total": 31
+   }
+  ],
+  "stage": "offline",
+  "private_titles": [],
+  "source": "hand-built from the event shapes the real runs emitted after the used-or-cited fix (counts, citation lines); fictional content; five works returned of 31 found, the reply cites two, so only two show as read",
+  "stratum": "b-offline"
+ },
+ {
+  "id": "TRACE-REAL-UNRELATED",
+  "stage": "real",
+  "stratum": "a-real",
+  "kind": "records",
+  "surface": "solo",
+  "message": "In Python, what is the difference between a list and a tuple, and when should I use each?",
+  "reply": "A **list** is mutable, so you can add, remove, or change its items. A **tuple** is immutable, so its contents are fixed once created.\n\n```python\npoint = (3, 4)      # tuple\nnames = [\"Ana\", \"Ben\"]  # list\nnames.append(\"Cy\")  # fine\n# point[0] = 5      # TypeError: 'tuple' object does not support item assignment\n```\n\nUse a **list** when the collection's contents change or hold items of one kind, such as a series of readings or a queue of tasks.\n\nUse a **tuple** when the values form a fixed record, such as coordinates `(x, y)` or a database row, or when you need a hashable value. Because tuples are immutable and hashable, you can use them as dictionary keys or store them in sets, which lists cannot do.\n\nTuples are also slightly smaller and faster to create, but that rarely matters. Choose based on whether the data should change.",
+  "events": [],
+  "calls": [
+   {
+    "kind": "plan_facts",
+    "facts": []
+   },
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "card:candle-shop-launch",
+      "relevance": 0.39733147034922756,
+      "used": false
+     },
+     {
+      "id": "card:marathon-april-quest",
+      "relevance": 0.49433649250106415,
+      "used": false
+     },
+     {
+      "id": "card:morning-pages-habit",
+      "relevance": 0.6135797852005752,
+      "used": false
+     },
+     {
+      "id": "card:spanish-practice",
+      "relevance": 0.5482747202505922,
+      "used": false
+     }
+    ]
+   }
+  ],
+  "private_titles": [],
+  "seconds": 19.5,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store; re-run after the used-or-cited fix (a record counts only when the answer drew on it, a paper only when the reply cites it)"
  }
 ]

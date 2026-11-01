@@ -5,7 +5,9 @@ events and the structural records of what the calls returned. Nothing here calls
     python3 evaluation/components/work_trace_experience/live_turns.py --turn records --out /tmp/records.json
 
 Turns: ``web`` (a current-facts question), ``records`` (a question about the person's own quests), ``papers`` (a scholarly question),
-``group`` (the records question in a shared thread, ``audience`` shared). The web search needs ``GOOGLE_AI_API_KEY`` (or another
+``unrelated`` (a coding question with the records seeded: no records step should show), ``group`` (the records question in a shared thread,
+``audience`` shared). Each case also records which selected cards the answer used and which returned works the reply cited, computed
+from the run's own planner facts and reply by ``quest_ai_runner.core.work_trace`` (a quote found in the card, a DOI or title in the reply). The web search needs ``GOOGLE_AI_API_KEY`` (or another
 backend ``web_search`` knows) and the scholarly search ``OPENALEX_API_KEY`` in the environment; they are read by name and never
 printed. The environment is rebuilt from an allowlist so no deployment's card store, tools file or keys leak into the run, and the
 Quest URL is unroutable, so a write tool can reach nothing."""
@@ -28,6 +30,8 @@ TURNS = {
     "records": dict(kind="records", surface="solo", audience="owner", message=KNEE),
     "papers": dict(kind="papers", surface="solo", audience="owner",
                    message="What does published research say about whether running volume or hill training raises knee injury risk in recreational marathon trainees? Please cite a few papers."),
+    "unrelated": dict(kind="records", surface="solo", audience="owner",
+                      message="In Python, what is the difference between a list and a tuple, and when should I use each?"),
     "group": dict(kind="group", surface="group", audience="shared", message=KNEE),
 }
 #: A fictional person's quests, written as the cards the context store holds.
@@ -77,6 +81,13 @@ def instrument(orch, calls):
             calls.append({"kind": "papers", "works": list(data.get("works") or []), "total": data.get("total") or 0})
         return result
     orch.tools.invoke = invoked
+    plan = orch._plan
+
+    def planned(*a, **k):
+        decision = plan(*a, **k)
+        calls.append({"kind": "plan_facts", "facts": list(getattr(decision, "facts_read", None) or [])})
+        return decision
+    orch._plan = planned
 
 
 def run_turn(name):
@@ -100,6 +111,17 @@ def run_turn(name):
             for card in (f.get("data") or {}).get("card_metadata") or []:
                 if isinstance(card, dict) and card.get("id") and str(card.get("adapter") or "").lower() != "turn":
                     cards[str(card["id"])] = {"id": str(card["id"]), "relevance": card.get("relevance_score")}
+    from quest_ai_runner.core import work_trace
+    facts = [f for c in calls if c.get("kind") == "plan_facts" for f in c["facts"]]
+    texts = {cid: {"title": cid, "text": next((c[1] for c in CARDS if c[0] == cid.split(":")[-1]), "")} for cid in cards}
+    cited = set(work_trace.cards_cited(facts, texts))
+    calls[:] = [c for c in calls if c.get("kind") != "plan_facts"] + [{"kind": "plan_facts", "facts": facts}]
+    for card in cards.values():
+        card["used"] = card["id"] in cited
+    reply = str(getattr(result, "text", "") or "")
+    for call in calls:
+        if call.get("kind") == "papers":
+            call["works"] = [dict(w, cited=work_trace.paper_cited(w, reply)) for w in call["works"]]
     calls.append({"kind": "records", "cards": list(cards.values())})
     links = [c for c in (getattr(result, "link_checks", None) or []) if isinstance(c, dict)]
     if links:
