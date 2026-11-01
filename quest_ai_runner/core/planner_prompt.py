@@ -108,8 +108,9 @@ they only say they do not know where to start (their records name the next step:
 Set `act_declined` true only when you choose "answer" for a message that asks you to act because
 what you read shows it cannot or should not go ahead as asked (for example a note says the tutor only
 teaches Tuesday and Thursday evenings and they ask to book her for Friday); the reply then states that
-fact and the nearest option that works, which is the whole response, and nothing is queued. False in
-every other case.
+fact and the nearest option that works, which is the whole response, and nothing is queued. When what
+you read shows the act cannot go ahead as asked you MUST set it, and leave `deferred_deep` empty: an
+answer that declines the act and also queues it contradicts itself. False in every other case.
 ALWAYS set `pending_read`: read specs (same shape as `reads`) for anything you located but have
 not opened that your answer depends on, such as a file a listing just showed; a refused path does
 not count. Empty when you are reading this step or hold the content. Choose "answer" only with it empty.
