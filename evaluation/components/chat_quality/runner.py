@@ -382,6 +382,10 @@ def run_serial_case(case, world, use_judge=True, on_abort=None):
     ``on_abort(record)`` runs before a failed world reset stops the run."""
     # Right before this case starts: catch anything the previous case's updater wrote late.
     W.sweep_new_cards(world.get("cards_baseline"))
+    # A world quest's OWN card also learns from a turn ("Goals added: Email Northwick...") some seconds after
+    # the case, after the restore ran, and the next case then quotes it as fact (MS-038 reported an "existing
+    # email goal" that only MS-011 had made). Strip the learned content right before every case.
+    W.reset_world_quest_cards(world)
     for attempt in range(1 + INFRA_RETRIES):
         r = run_case(case, world, use_judge)
         try:
