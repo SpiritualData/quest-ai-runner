@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
-SPECS = HERE / "heldout_cases.json"
+SPECS = HERE / "heldout_cases.json"  # ``--cases`` names another tier file in this folder
 
 
 def sha():
@@ -57,6 +57,7 @@ def score(args):
 
 
 def main():
+    global SPECS
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("capture")
@@ -66,7 +67,10 @@ def main():
     s.add_argument("--captured", required=True)
     s.add_argument("--impl", required=True)
     s.add_argument("--record", action="store_true")
+    for p in (c, s):
+        p.add_argument("--cases", default=SPECS.name)
     args = ap.parse_args()
+    SPECS = HERE / args.cases
     capture(args) if args.cmd == "capture" else score(args)
 
 
