@@ -9,8 +9,23 @@ from work_trace_experience import arms
 JUDGE_RULE = (
     "An element earns its place when it tells the person something they can use: it changes what they do next (open a source, "
     "check a record, doubt or trust a result, ask a follow-up), or it builds justified confidence that the answer rests on real work "
-    "done for THIS question. It does not earn its place when it is decoration, repeats another element, counts internal work, lists "
-    "things the answer did not use, or says nothing the person could act on or believe more because of.")
+    "done for THIS question. It does not earn its place when it is decoration, repeats another element shown at the same moment, counts "
+    "internal work, lists things the answer did not use, or says nothing the person could act on or believe more because of.")
+
+#: What each moment means to the person. Added 2026-11-01 AFTER the first rubric failed the papers case in both shapes: the rubric said "repeats another
+#: element" while the judge saw the one-line summary and the expandable rows in one flat list, though the person sees the line alone and the rows only
+#: after tapping it. A summary that tells what the answer rests on therefore always "repeated" its rows, and a bare count was "counting work"; no shape passed
+#: (docs/explanation/live-work-trace.md sections 9 and 11 require the line to name what it can and the rows to add only what it did not say).
+MOMENTS = {
+    "live": "on screen while the AI is still working",
+    "settled": "on screen by default once the reply is done (the only thing shown unless the person taps it)",
+    "expanded": "shown only after the person taps the summary to open the details (never at the same time as the summary is read alone)",
+}
+MOMENT_RULE = (
+    "Judge each element for the moment it is shown, as the person experiences it. The summary line is read alone, so it earns its place when it by "
+    "itself tells the person what the answer rests on; saying what the rows below say is not repetition, because the person has not opened them. "
+    "A row earns its place when it adds something the summary did not say or lets the person open or check a source. Elements shown at "
+    "different moments never repeat each other; only two elements at the same moment can.")
 
 
 #: The judge reads the whole reply. It once saw only the first 900 characters and called a correct count of five cited papers a conflict
@@ -19,18 +34,19 @@ REPLY_CHARS = 8000
 
 
 def judge_prompt(case, elements):
-    lines = "\n".join(f"{i + 1}. [{e['group']}] {e['text']}" for i, e in enumerate(elements))
+    lines = "\n".join(f"{i + 1}. [{e['group']}] ({MOMENTS.get(e.get('moment'), 'shown')}) {e['text']}" for i, e in enumerate(elements))
     return (
         "A person asked an AI assistant a question. Beside its reply, the app showed the elements listed below about the work the AI did. "
         "Judge each element separately.\n"
         f"The person's question: {case['message']}\n"
         f"The AI's reply: {case['reply'][:REPLY_CHARS]}\n"
-        f"Elements shown:\n{lines}\n\n{JUDGE_RULE} Judge only against the question and the reply; use the element's own words, not what "
+        f"Elements shown:\n{lines}\n\n{JUDGE_RULE} {MOMENT_RULE} Judge only against the question and the reply; use the element's own words, not what "
         "it might mean. A list heading that only introduces the rows under it earns its place if the rows do.\n"
         'Reply with {"verdicts": [{"n": 1, "earns": true or false, "why": "five words"}, ...]} covering every element.')
 
 
 def unique(elements):
+    """Each distinct element once, in order, labelled with the first moment it appears in (``moment``)."""
     seen, out = set(), []
     for e in elements:
         key = (e["group"], e["text"])
@@ -40,13 +56,18 @@ def unique(elements):
     return out
 
 
+def with_moments(view):
+    """The elements of one viewer's view, each copied with the moment it is shown in."""
+    return [dict(e, moment=m) for m in ("live", "settled", "expanded") for e in view.get(m, [])]
+
+
 def score_case(fn, case):
     got = fn(case)
     views = got["views"]
     gate = arms.gate_problems(case, views)
     parity = arms.parity_problems(case, views)
     sender = views["sender_live"]
-    elements = unique(arms.shown_elements(sender))
+    elements = unique(with_moments(sender))
     work = arms.has_work(case)
     covered = bool(sender["settled"]) == work
     row = dict(kind=case["kind"], stage=case["stage"], gate=gate, parity=parity, shown=len(elements), covered=covered, earned=None,

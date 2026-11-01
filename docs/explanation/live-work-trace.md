@@ -411,3 +411,14 @@ surfaces cannot differ:
 Measured: `npm run test:worktrace` pins the rule (the same checks failed on the previous source). The judge on TRACE-REAL-PAPERS (a post-fix row,
 not held-out, one case) no longer reports repeated names but still rejects the summary line as counting work that the rows list; a counts-only
 line failed the same way. That is open: the judge sees the collapsed line and the expanded rows together, which the person never does.
+
+### The open item was the judge, not the Trail (2026-11-01, changed after seeing the failure)
+
+Reading the judge's verdicts on TRACE-REAL-PAPERS: element 1, the summary "Read papers by Santos et al., 2026 and 4 more", got "Counts work, repeats
+rows below"; every row got "Lets person open cited paper". The rubric (`score.JUDGE_RULE`) said an element fails when it "repeats another element"
+and the judge saw the summary and the expanded rows in one flat list. Section 9 requires the line to name what it can (a bare count fails), and the
+rows list the same papers, so no summary shape could pass: naming repeated the rows, counting counted work. The rubric contradicted the spec, because
+the spec's person reads the line alone and opens the rows only by tapping. `score.py` now labels each element with the moment it is shown
+(`MOMENTS`) and says only elements at the same moment can repeat each other (`MOMENT_RULE`); `evaluation/components/test_work_trace_judge.py` pins the
+prompt. The same turn under the new rubric: 6/6 elements earn their place. The Trail was not changed. Because the rubric changed, saved captures were
+rescored under it and are labelled as such in `results.csv`.
