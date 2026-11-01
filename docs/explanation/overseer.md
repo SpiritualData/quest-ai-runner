@@ -109,6 +109,23 @@ consults (subject only to `overseer_max_signals`). This matches the design inten
 watches constantly and for free; the expensive model is woken rarely, only when something already
 looks worth a look, not on a blind fixed schedule.
 
+## Situation standards at hook B
+
+A cheap reply writer repeats the same few mistakes in the same situations, and a better prompt alone leaves them recurring. So hook B
+carries a check per situation (`core/reply_standards.py`). The situation comes from the planner's structured `reply_shape` field
+(`yes_no`, `one_step`, `ask_first`, `brief`, `readback`, `default`) and `asks_first`, never from the words of any model output. The code
+measures the draft: questions asked, list lines, length, and every date, clock time and quoted name it states that appears in nothing the
+turn held (the same data comparison as `link_provenance_pass`). The standard and the measurements join the digest (`SITUATION STANDARD`,
+`DRAFT MEASUREMENTS`), and the overseer redirects a draft that breaks one with a hint naming the violation and the repair.
+
+With a standard in force the checkpoint has real authority: it waits `reply_standard_wait_seconds` for the verdict instead of the 2.5 s
+glance, regenerates up to `reply_standard_max_repairs` times with a hint built from the measurements (so a repair round needs no judgment
+and no extra overseer call), re-measures after each, and a draft that still fails gets the cheapest safe repair (the sentence with the
+unsupported value dropped, the questions past the allowed number dropped). Lists and length have no safe mechanical repair and ship as
+written after the rounds. The cost is the regenerations, which the provider's token counters already record. Not covered by a
+measurement: a reply that says it could not open a readable file, or describes an unexecuted write as done; those stay with the goal
+verification and the described-work net.
+
 ## Hook B's non-blocking design
 
 Hook B used to WAIT synchronously (up to a short bound) before shipping every answer -- real added

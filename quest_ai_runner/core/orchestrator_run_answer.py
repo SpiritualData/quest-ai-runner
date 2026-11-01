@@ -378,6 +378,7 @@ class RunAnswerMixin:
                 standard = standard_for(rs.plan)
                 measured = measure(rs.text, standard, standard_evidence)
                 standard_in_force = standard.shape != SHAPE_DEFAULT or measured.failed
+                log.info("Reply standard %s in force=%s before the verdict: %s", standard.shape, standard_in_force, measured.as_text())
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
                 standard, measured, standard_in_force = None, None, False
         repair_rounds = 0
@@ -490,6 +491,7 @@ class RunAnswerMixin:
                     measured = measure(rs.text, standard, standard_evidence)
                 if measured.failed:
                     rs.text = repair(rs.text, standard, measured, standard_evidence)
+                log.info("Reply standard %s: %d repair round(s), %s", standard.shape, repair_rounds, measured.as_text())
                 rs.reply_standard = {"shape": standard.shape, "repair_rounds": repair_rounds,
                                      "still_failing": bool(measured.failed), "measured": measured.as_text()}
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
