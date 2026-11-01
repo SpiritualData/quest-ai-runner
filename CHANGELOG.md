@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Unpinned turns now get the person's own quest notes by what the message names: the hub's `RecordContextAssembler` ranks records a consumer declares (quest-backend declares quest notes); QAR itself holds no ranking logic and no code change. IMP-028 live: the note reaches the reply in 2 of 2 runs; the judge still fails on reply wording.
+
 ### Fixed
 - **`Orchestrator.run_stream` is back.** The 2026-10-30 run slice deleted it with the phase chain, so the terminal turn, the channel runner and 5 tests in `tests/test_terminal_run_control.py` failed with AttributeError; it now lives in `core/orchestrator_stream.py` (`StreamMixin`), unchanged apart from a module logger. No prompt text changed. No model call was made.
 
