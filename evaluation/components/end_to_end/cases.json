@@ -2400,7 +2400,7 @@
     ]
    ],
    "reply_has_n": {
-    "n": 3,
+    "n": 1,
     "groups": [
      [
       "ai task",
@@ -2433,9 +2433,9 @@
   },
   "quality_rubric": [
    "Names the person's own situation (the bakery, two part-timers, admin) specifically",
-   "Picks two to four features and says why each helps that situation",
-   "Asks about the recurring admin before assuming",
-   "Does not dump every feature or invent one",
+   "Names at least one real feature from the documentation and says why it helps that situation",
+   "Every feature, step or question included adds value for this person or covers a plausible need their message did not state; nothing is there to be complete",
+   "Does not list features to be thorough, and invents none",
    "Uses plain words and no jargon the person did not use"
   ],
   "ideal": {
