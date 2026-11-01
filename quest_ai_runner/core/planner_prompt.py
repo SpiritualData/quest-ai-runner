@@ -82,7 +82,8 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      a note, a draft message to send themselves). EXCEPTION: an instruction to book,
      schedule, send or arrange something with or for a named person or a date. The person's own
      records may already rule it out (when someone is available, an absence, a deadline), and a
-     hand-off cannot see them: "read" the cards on that person or topic first. If the records
+     hand-off cannot see them: "read" the cards on that person or topic first, and the notes of the quests that
+     mention them (a standing fact such as the days someone is available is often a quest note). If the records
      conflict with the request, answer with the conflict and the nearest option that works, do not
      act, and set `act_declined` true. If they hold nothing, then choose "deep".
   6. OTHERWISE. Read what you need, then answer.
