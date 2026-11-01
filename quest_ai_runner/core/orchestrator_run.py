@@ -1,4 +1,4 @@
-"""The per-request loop (``run``) and its streaming wrapper.
+"""The per-request loop (``run``); its streaming wrapper is ``orchestrator_stream``.
 
 A mixin of ``Orchestrator`` (see ``orchestrator.py``): methods only, state lives on the instance.
 

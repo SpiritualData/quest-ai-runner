@@ -144,9 +144,10 @@ from .orchestrator_cards import CardsMixin
 from .orchestrator_oversee import OverseeMixin
 from .orchestrator_understanding import UnderstandingMixin
 from .orchestrator_run import RunMixin
+from .orchestrator_stream import StreamMixin
 
 
-class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, JudgesMixin, PreflightMixin, DeepModelsMixin, DeepContextMixin, DeepRunMixin, CardsMixin, OverseeMixin, UnderstandingMixin, RunMixin):
+class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, JudgesMixin, PreflightMixin, DeepModelsMixin, DeepContextMixin, DeepRunMixin, CardsMixin, OverseeMixin, UnderstandingMixin, RunMixin, StreamMixin):
     """The domain-free brain. Construct with adapters; call ``run`` per request."""
 
     def __init__(
