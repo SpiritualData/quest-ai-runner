@@ -14,4 +14,9 @@ record, never on the wording of a reply: more-coming truth and no dangling end f
 blocked is precision and recall of ``ask``, delta and bounds are the signature, spacing and cap cases. No arm calls a model. The tiers on
 real turns (haiku through the claude CLI) need the orchestrator switch ``interim_replies`` on and are not part of this offline component.
 An implementation module in ``impls/`` exposes ``build(meter) -> run``.
+
+  real  args {turn: research | simple | blocked | team}                              -> {"problems": [...], "interims": n, "asks": n}
+        (only with QAR_EVAL_LIVE_TURNS=1, cases in real_cases.json) a REAL turn through ``live_turns.py``; ``problems`` is empty when every
+        structural check holds (more-coming truth, one ending, ask iff blocked, one open ask per key, a participant assignee, no alike
+        consecutive interims, bounds, done rebuilt from receipts, no em dash, no private text in a shared thread, work_trace_check).
 """

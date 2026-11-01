@@ -124,10 +124,13 @@ def ask_event_data(*, question: str, why_only_you: str, done: str, options: Opti
             "assignee_fell_back": assignee.fell_back, "asker_user_id": asker_user_id}
 
 
-def ask_text(done: str, question: str) -> str:
-    """Plain text of an ask for a consumer that shows only text: what was done, then the one question."""
+def ask_text(done: str, question: str, assignee_name: str = "") -> str:
+    """Plain text of an ask for a consumer that shows only text: what was done, then the one question. When the ask goes
+    to a teammate, the line names them, so the asker is not told the question is theirs."""
     head = str(done or "").strip()
-    line = f"I need one thing from you to finish this: {str(question).strip()}"
+    who = str(assignee_name or "").strip()
+    lead = f"To finish this I need one thing from {who}: " if who else "I need one thing from you to finish this: "
+    line = lead + str(question).strip()
     return f"{head}\n\n{line}" if head else line
 
 

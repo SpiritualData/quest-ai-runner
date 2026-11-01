@@ -65,8 +65,8 @@ class InterimDecision:
 def progress_signature(*, output: str, receipts: Iterable[str], coverage: Any) -> Signature:
     """A comparable snapshot of what exists now: declared coverage, the receipts, and a digest of the output.
 
-    Two snapshots are equal exactly when nothing new happened between them: no coverage advance, no new receipt,
-    no new output content. The digest is of the whitespace-normalised text, so reflowing is not news.
+    The first two parts (coverage, receipts) say whether work advanced; the digest of the whitespace-normalised output
+    says only whether the text differs, and ``decide`` ignores it once a message has been sent.
     """
     record = parse_coverage(coverage)
     covered = (record.processed, record.total) if record is not None else None
@@ -91,7 +91,10 @@ def decide(state: InterimState) -> InterimDecision:
         return InterimDecision(False, SKIP_NO_WHY)
     if not state.has_content:
         return InterimDecision(False, SKIP_NO_CONTENT)
-    if state.last_signature is not None and state.signature == state.last_signature:
+    # NEW since the last message means a coverage advance or a new receipt. The worker's own text is a delta only for the FIRST message:
+    # after that a reworded account of the same work is not news (a real turn sent four near-identical tables, 2026-11-01), and the
+    # Trail already shows live work. The text's digest stays in the signature for the first comparison and for the ledger.
+    if state.last_signature is not None and state.signature[:2] == state.last_signature[:2]:
         return InterimDecision(False, SKIP_NO_DELTA)
     if state.sent_count >= max(0, state.max_per_turn):
         return InterimDecision(False, SKIP_CAP)

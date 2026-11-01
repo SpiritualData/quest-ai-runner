@@ -20,7 +20,7 @@ from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
-from .test_done_evidence import ANALYSIS, Provider, Runner
+from .test_done_evidence import ANALYSIS, LOOKUP, Provider, Runner
 
 
 def state(**over: Any) -> InterimState:
@@ -52,8 +52,10 @@ def test_no_delta_no_message_and_a_change_in_any_part_is_a_delta():
     first = progress_signature(output="a", receipts=["r1"], coverage=None)
     assert decide(state(signature=first, last_signature=first)).reason == "nothing_new_since_last_message"
     assert progress_signature(output=" a ", receipts=["r1"], coverage=None) == first   # reflow is not news
-    for changed in (progress_signature(output="b", receipts=["r1"], coverage=None),
-                    progress_signature(output="a", receipts=["r1", "r2"], coverage=None),
+    # a reworded account of the same work is not news once a message has been sent
+    assert decide(state(signature=progress_signature(output="b", receipts=["r1"], coverage=None), last_signature=first)).reason \
+        == "nothing_new_since_last_message"
+    for changed in (progress_signature(output="a", receipts=["r1", "r2"], coverage=None),
                     progress_signature(output="a", receipts=["r1"], coverage={"processed": 5, "total": 9})):
         assert decide(state(signature=changed, last_signature=first)).send
 
@@ -211,3 +213,49 @@ def test_a_platform_fault_verdict_is_not_an_ask():
     assert not sink.sent and not [e for e in events if e["type"] == EVENT_DECISION]
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
     assert result["data"]["outcome"] == "stopped"
+
+
+def test_an_ask_to_a_teammate_names_them_and_the_ask_is_filed_to_them():
+    verdict = {"met": False, "reason": "only the treasurer can release it", "blocker": "needs_person", "asked_of": "member",
+               "member_ref": "u2", "question": "May the deposit be released?"}
+    provider = Provider([dict(ANALYSIS, work_shape="action")], verdicts=[verdict])
+    sink = Sink()
+    orch = build(provider, Runner([receipts("partial", "Read the files")]), sink=sink, interim_replies=True)
+    events = run(orch, meta={"asker_user_id": "u1", "conv_id": "c1", "turn_id": "t1",
+                             "participants": [{"user_id": "u1", "name": "Ana"}, {"user_id": "u2", "name": "Bram"}]})
+    ask = [e for e in events if e["type"] == EVENT_DECISION][0]
+    assert sink.sent[0].assignee == "u2" and sink.sent[0].notify_user_id == "u1"
+    assert ask["text"].endswith("To finish this I need one thing from Bram: May the deposit be released?")
+    assert "—" not in ask["text"]
+
+
+def test_the_verifier_is_given_the_participants_of_the_turn():
+    seen = {}
+    provider = Provider([dict(ANALYSIS, work_shape="action")], verdicts=[{"met": True}])
+    orch = build(provider, Runner([receipts("all", "Added A")]))
+    original = orch._verify_goal
+
+    def spy(*a, **k):
+        seen["participants"] = k.get("participants")
+        return original(*a, **k)
+    orch._verify_goal = spy
+    run(orch, meta={"participants": [{"user_id": "u1", "name": "Ana"}, {"user_id": "u2", "name": "Bram"}]})
+    assert [p["user_id"] for p in seen["participants"]] == ["u1", "u2"]
+
+
+def test_an_answer_turn_blocked_on_a_person_files_one_ask_when_switched_on_and_none_when_off():
+    verdict = {"met": False, "reason": "needs the trip dates", "blocker": "needs_person", "question": "What are the trip dates?"}
+    meta = {"asker_user_id": "u1", "conv_id": "c1", "turn_id": "t1", "participants": [{"user_id": "u1", "name": "Ana"}]}
+    for switched_on in (True, False):
+        sink = Sink()
+        orch = build(Provider([dict(LOOKUP)], verdicts=[dict(verdict), dict(verdict)]), Runner([]), sink=sink,
+                     interim_replies=switched_on, answer_goal_max_iterations=3)
+        events = run(orch, meta=meta)
+        asks = [e for e in events if e["type"] == EVENT_DECISION]
+        if switched_on:
+            assert len(sink.sent) == 1 and sink.sent[0].assignee == "u1" and len(asks) == 1
+            assert asks[0]["data"]["question"] == "What are the trip dates?"
+            result = [e for e in events if e["type"] == EVENT_RESULT][-1]
+            assert "What are the trip dates?" in result["text"]
+        else:
+            assert not sink.sent and not asks

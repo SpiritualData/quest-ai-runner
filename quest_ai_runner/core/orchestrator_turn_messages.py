@@ -87,7 +87,11 @@ def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], r
             "I need one thing from you to finish this, but I could not file the question for you: " + question)
         return False
     res.decision_id = outcome.decision_id
-    res.output = ask_text(done, question)
+    teammate = ""
+    if assignee.asked_of == "member":
+        teammate = next((str(p.get("name") or "").strip() for p in (meta.get("participants") or [])
+                         if isinstance(p, dict) and str(p.get("user_id") or "") == assignee.user_id), "")
+    res.output = ask_text(done, question, teammate)
     data = ask_event_data(question=question, why_only_you=why_only_you, done=done, options=options, outcome=outcome,
                           asker_user_id=asker)
     if emit is not None:

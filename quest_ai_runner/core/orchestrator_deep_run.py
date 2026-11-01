@@ -1003,7 +1003,8 @@ class DeepRunMixin:
                                             observations_reported=bool(
                                                 getattr(res, "observations_reported", False)),
                                             done_evidence=done_requirements,
-                                            coverage=getattr(res, "coverage", None))
+                                            coverage=getattr(res, "coverage", None),
+                                            participants=(ctx_meta or {}).get("participants"))
                 # THE STRUCTURAL COVERAGE GATE. A run that declared it covered only part of a set is not met,
                 # whatever the verifier or its own words say, while the budget allows another attempt and the last
                 # one advanced; when it does not, the run stops honestly with the gap and how to continue it.

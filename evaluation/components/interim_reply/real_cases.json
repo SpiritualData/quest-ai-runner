@@ -1,0 +1,62 @@
+[
+ {
+  "id": "INT-REAL-RESEARCH",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "research"
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a goal that needs more than one pass (sourced table of six studies, each link opened): a second pass is not forced: an interim only if the verifier says the goal is unmet and the loop runs again; never an ask",
+  "source": "captured live by live_turns.py: the real orchestrator and goal loop on the Claude Code subscription (haiku), real web search, seeded fictional cards, an in-memory decision sink; fictional people and values"
+ },
+ {
+  "id": "INT-REAL-SIMPLE",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "simple"
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a plain question: no interim and no ask (spam check): exactly one final, no interim, no ask",
+  "source": "captured live by live_turns.py: the real orchestrator and goal loop on the Claude Code subscription (haiku), real web search, seeded fictional cards, an in-memory decision sink; fictional people and values"
+ },
+ {
+  "id": "INT-REAL-BLOCKED",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "blocked"
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a request blocked on a choice only the person can make (the March trip dates): exactly one ask, to the asker, deduplicated, and a final",
+  "source": "captured live by live_turns.py: the real orchestrator and goal loop on the Claude Code subscription (haiku), real web search, seeded fictional cards, an in-memory decision sink; fictional people and values"
+ },
+ {
+  "id": "INT-REAL-TEAM",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "team"
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a team turn where only a teammate can release the deposit: exactly one ask, assigned to the named teammate who is a participant, the asker told the answer, no private card text in the shared thread",
+  "source": "captured live by live_turns.py: the real orchestrator and goal loop on the Claude Code subscription (haiku), real web search, seeded fictional cards, an in-memory decision sink; fictional people and values"
+ }
+]

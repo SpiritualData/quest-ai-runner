@@ -1,12 +1,25 @@
 """CURRENT (``reply-in-steps:gated`` and ``ask-on-block:structural``): the real ``core/interim_policy.py`` and ``core/ask_policy.py``. The turn
-loop here is the orchestrator's own: one ``InterimLedger`` per turn, ``decide`` before each emit, ``record`` after a send. Zero model calls."""
+loop here is the orchestrator's own: one ``InterimLedger`` per turn, ``decide`` before each emit, ``record`` after a send. Zero model calls offline. Its REAL cases (kind ``real``, run only with QAR_EVAL_LIVE_TURNS=1) run the real
+orchestrator with ``interim_replies`` on."""
 from types import SimpleNamespace
 
 from quest_ai_runner.core import ask_policy, interim_policy
 
 
+def real_turn(turn, switched_on):
+    """A REAL turn (kind ``real``, only with QAR_EVAL_LIVE_TURNS=1): the orchestrator on the Claude Code subscription with the
+    interim switch ``switched_on``; the structural checks of ``live_turns.check`` and the work-trace check give ``problems``."""
+    from interim_reply import live_turns
+    got = live_turns.run_in_subprocess(turn, switched_on)
+    return {"problems": list(got.get("problems") or []) + list(got.get("work_trace_problems") or []),
+            "interims": sum(m.get("kind") == "interim" for m in got.get("messages") or []),
+            "asks": len(got.get("asks_filed") or [])}
+
+
 def build(meter):  # noqa: ARG001
     def run(kind, args):
+        if kind == "real":
+            return real_turn(args["turn"], True)
         if kind == "turn":
             ledger = interim_policy.InterimLedger()
             sent = []

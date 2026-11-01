@@ -12,6 +12,7 @@ from .auxiliary_prompts import SUPPORT_REWRITE_STEER
 from hubofhubs.ports.events import EVENT_INTENT, EVENT_MILESTONE, Mode
 from hubofhubs.ports.deep import ProgressEvent
 from .adapters_values import PlanDecision
+from .ask_policy import blocks_on_person
 from .orchestrator_constants import log, result_landed_work
 from .orchestrator_decide_tool import (
     DEFERRED_RUNNER_KEY,
@@ -21,6 +22,7 @@ from .orchestrator_decide_tool import (
 from .orchestrator_decisions import _truncate_goal, user_ordered_work
 from .orchestrator_events import grounding_context_layer
 from .orchestrator_text import _strip_future_context, unconfirmed_no_change_text
+from .orchestrator_turn_messages import file_blocked_ask
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
 from .planner_prompt import NOT_QUEUED_NOTE
@@ -374,7 +376,8 @@ class RunCloseMixin:
                         exec_record=exec_record if self.cfg.verify_claims else None,
                         context_layer=answer_context_layer,
                         gathered=gathered,
-                        check_support=bool(self.cfg.verify_claims and self.cfg.verify_support))
+                        check_support=bool(self.cfg.verify_claims and self.cfg.verify_support),
+                        participants=(_ctx_meta or {}).get("participants"))
                     if verdict is not None:
                         rs._last_verdict = verdict
                     if verdict is not None and verdict.get("met"):
@@ -393,6 +396,22 @@ class RunCloseMixin:
                             break  # out of attempts, proceeds unverified
                         _attempt += 1
                         continue  # retry the verification call
+                    # A BLOCK ONLY A PERSON CAN LIFT (incremental replies, section 6.3): the verifier's own enum
+                    # says needs_person and it gave the question. Regenerating the same answer cannot unblock it,
+                    # so ONE deduplicated ask is filed (to the asker, or the participant the verifier named and the
+                    # code resolved) and the turn ends with it. Switched on with ``interim_replies``.
+                    if getattr(self.cfg, "interim_replies", False) and blocks_on_person(
+                            str(verdict.get("blocker") or ""), str(verdict.get("question") or "").strip()):
+                        blocked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False,
+                                                  coverage=None)
+                        if file_blocked_ask(self, emit, _ctx_meta, blocked, verdict,
+                                            question=str(verdict.get("question") or "").strip()):
+                            rs.text = blocked.output
+                            rs._parked_decision_id = blocked.decision_id
+                            rs._decision_parked = True
+                        else:
+                            rs.text = (rs.text or "").rstrip() + "\n\n" + blocked.output
+                        break
                     # HONESTY: the answer claims a completed change the execution record does not
                     # back. The answering step can never change files/data itself, so either DO the
                     # work for real now (safe only when NOTHING mutated this turn; a prior success or
