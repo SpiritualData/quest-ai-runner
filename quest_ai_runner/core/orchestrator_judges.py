@@ -584,25 +584,6 @@ class JudgesMixin:
             return None
         return result if isinstance(result, dict) and "conflict" in result else None
 
-    def with_found_constraint_first(self, rs: Any, text: str) -> str:
-        """The found_constraint standard for a reply the model did not write whole (an ask built from the verifier's question):
-        when the verdict says the person's records conflict with the request and ``text`` does not state it, the verdict's own
-        fact and consequence open the reply. Otherwise ``text`` unchanged. Never raises."""
-        try:
-            from .reply_standards import found_constraint_head
-            if not getattr(self.cfg, "reply_standards", False):
-                return text
-            verdict = self.found_constraint_verdict(
-                rs.user_message, (getattr(rs, "context_view", "") or "")[:3500] + "\n" + self.turn_evidence(rs), text)
-            if verdict and verdict.get("conflict") and not verdict.get("states_it_first"):
-                head = found_constraint_head(str(verdict.get("fact") or ""), str(verdict.get("consequence") or ""))
-                if head:
-                    log.info("Reply standard found_constraint: opened the ask with the conflict")
-                    return head + "\n\n" + text
-        except Exception:  # noqa: BLE001 -- a standard must never break the turn
-            pass
-        return text
-
     def directive_verdict(self, user_message: str, answer_text: str) -> Tuple[Optional[bool], str]:
         """ONE structured LLM judgment of whether the user ordered work, used ONLY when the
         planner gave no usable ``user_intent`` verdict this turn (the verdict decides every other

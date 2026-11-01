@@ -329,6 +329,12 @@ FOUND_CONSTRAINT_TOOL: Dict[str, Any] = {
                                "before offering anything else. False when the reply only offers alternatives, asks whether to try the "
                                "conflicting request anyway (an exception, a workaround) or never says the request will not work.",
             },
+            "leaves_request_open": {
+                "type": "boolean",
+                "description": "True when the REPLY still offers the conflicting request itself as an option: go ahead anyway, "
+                               "book it regardless, keep it and check for an exception, or asks whether to try it. False when "
+                               "every option it offers respects the records' fact.",
+            },
         },
         "required": ["conflict"],
     },
@@ -340,8 +346,10 @@ The RECORDS below are the person's own (notes, goals, history) and what this tur
 1. Do the RECORDS state a fact that conflicts with what the REQUEST asks for (a day, a time, a limit, a rule)? If not, set
    conflict=false and stop.
 2. If so, does the REPLY open by stating, plainly, that the request will not work as asked and why (the fact and what it means),
-   before it offers anything else? A reply that only offers other options, or that asks whether to try the conflicting request
-   anyway, leaves the conflicting request open: set states_it_first=false.
+   before it offers anything else? A reply that only offers other options leaves states_it_first=false.
+3. Independently: does the REPLY still offer the conflicting request itself as an option (go ahead anyway, book it regardless,
+   keep it and check for an exception, or ask whether to try it)? If so set leaves_request_open=true. When the records say the
+   request cannot happen, it must not be left open.
 
 Do not use any em dash in the fact or consequence you write.
 

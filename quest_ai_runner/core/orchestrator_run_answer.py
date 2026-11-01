@@ -24,7 +24,7 @@ from .orchestrator_decisions import (FACTS_ANSWER_HEAD, _clarify_question_text, 
 from .orchestrator_text import _answer_describes_unexecuted_work
 from .orchestrator_types import OrchestratorResult
 from .overseer import OverseerSignal
-from .reply_standards import SHAPE_DEFAULT, found_constraint_hint, measure, repair, standard_for, steering
+from .reply_standards import SHAPE_DEFAULT, constraint_violated, found_constraint_head, found_constraint_hint, measure, repair, standard_for, steering, turn_holds_records
 from .planner_context import gathered_content
 from .planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX,
@@ -479,17 +479,31 @@ class RunAnswerMixin:
 
         # FOUND_CONSTRAINT standard (core/reply_standards.py): one structured verdict on whether the person's records conflict with
         # the request and the draft fails to say so first. At most one regeneration, steered by the verdict's own fields.
-        if getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer":
+        rs.found_constraint = False
+        log.info("Reply standard found_constraint: judge gate records=%s sources=%s", turn_holds_records(getattr(rs, "_sources", None), gathered),
+                 [(x.get("adapter"), len(x.get("items") or [])) for x in (getattr(rs, "_sources", None) or []) if isinstance(x, dict)])
+        if (getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer"
+                and turn_holds_records(getattr(rs, "_sources", None), gathered)):
             try:
                 verdict = self.found_constraint_verdict(
                     rs.user_message, (getattr(rs, "context_view", "") or "")[:3500] + "\n" + (standard_evidence or ""), rs.text)
-                if verdict and verdict.get("conflict") and not verdict.get("states_it_first"):
+                log.info("Reply standard found_constraint verdict: %s", verdict)
+                if verdict and verdict.get("conflict"):
+                    # The records say the request cannot happen as asked: nothing may be queued for it below, whatever the
+                    # planner's own act_declined flag said (it forgets), and the reply must not leave it open.
+                    rs.found_constraint = True
+                    try:
+                        rs._ctx_meta["found_constraint_head"] = found_constraint_head(
+                            str(verdict.get("fact") or ""), str(verdict.get("consequence") or ""))
+                    except Exception:  # noqa: BLE001
+                        pass
+                if constraint_violated(verdict):
                     if emit is not None:
                         emit.status("Reply standard: stating the conflict first…")
                     rs.text = _gen_answer(steering(found_constraint_hint(str(verdict.get("fact") or ""),
                                                                          str(verdict.get("consequence") or "")), rs.text))
                     repair_rounds += 1
-                    log.info("Reply standard found_constraint: conflict not stated first; regenerated once")
+                    log.info("Reply standard found_constraint: conflict not stated first or request left open; regenerated once")
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
                 pass
 
@@ -522,7 +536,8 @@ class RunAnswerMixin:
         # no work-to-execute flag, no described-work net, no message-intent fallback (planner
         # verdict OR LLM judgment). Describing possible work IS the product in brainstorm.
         # A reply that declines the act on the records (``act_declined``) queues nothing: declining and queuing contradict.
-        rs.should_defer_deep = (None if (rs.brainstorm_active or rs.plan.act_declined) else rs.plan.deferred_deep)
+        rs.act_declined = bool(rs.plan.act_declined or rs.found_constraint)
+        rs.should_defer_deep = (None if (rs.brainstorm_active or rs.act_declined) else rs.plan.deferred_deep)
         # Capability for these nets = inline execution OR a wired deferred queue: everything they
         # can set flows through the deferred block below, which reaches the queue runner by explicit
         # override, so a queue-only consumer (no default runner, no classifier) is capable here.
@@ -537,7 +552,7 @@ class RunAnswerMixin:
         # a proposal to execute, so none of the nets below may turn it into a deep run.
         if (not rs.should_defer_deep and not rs.brainstorm_active
                 and nets_intent != USER_INTENT_HOLD_OFF
-                and not rs.plan.act_declined
+                and not rs.act_declined
                 and (self._has_deep_execution_capability()
                      or self._has_deferred_queue_capability())):
             # Primary: trust planner's explicit flag

@@ -73,6 +73,11 @@ def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], r
     if not blocks_on_person(str(verdict.get("blocker") or ""), question, failures):
         return False
     meta = ctx_meta or {}
+    # FOUND_CONSTRAINT standard (core/reply_standards.py): when this turn's verdict found that the person's records conflict with
+    # the request, the fact and its consequence open the question, so the shown ask AND the filed decision-request carry them.
+    head = str(meta.get("found_constraint_head") or "").strip()
+    if head and head not in question:
+        question = head + " " + question
     asker = str(meta.get("asker_user_id") or meta.get("requester_user_id") or meta.get("user_id") or "")
     assignee = resolve_assignee(str(verdict.get("asked_of") or ""), str(verdict.get("member_ref") or ""),
                                 meta.get("participants") or [], asker)

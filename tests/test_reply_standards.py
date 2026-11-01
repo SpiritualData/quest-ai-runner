@@ -191,10 +191,25 @@ OFFERS = "Would you like Tuesday or Thursday instead, or should I ask about a Fr
 STATES = "Friday will not work: the tutor only teaches Tuesday and Thursday evenings. Would Tuesday or Thursday suit you?"
 
 
-def run_constraint(drafts, constraint):
+class RecordsAssembler:
+    """A context assembler that reports the person's records as a source (or nothing)."""
+
+    def __init__(self, records=True):
+        self.records = records
+
+    def assemble(self, task_text, *, meta=None):
+        from hubofhubs.ports.context import AssembledContext
+        sources = [{"adapter": "records", "label": "your records", "items": ["quest-note:1"]}] if self.records else []
+        return AssembledContext(context_view="Quest note: the tutor only teaches Tuesday and Thursday evenings.", sources=sources)
+
+    def record(self, task_text, outcome):
+        return None
+
+
+def run_constraint(drafts, constraint, records=True):
     provider = ConstraintProvider([{"action": "answer", "rationale": "r", "reply_shape": "default"}], drafts, constraint)
     orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider),
-                        config=OrchestratorConfig(overseer=False, max_steps=5))
+                        config=OrchestratorConfig(overseer=False, max_steps=5), context_assembler=RecordsAssembler(records))
     return provider, orch.run("Can you help me book the tutor for Friday?")
 
 
@@ -229,3 +244,49 @@ def test_the_head_for_a_reply_the_model_did_not_write_is_built_from_the_verdict_
     assert found_constraint_head("The tutor only teaches Tuesday and Thursday evenings", "Friday will not work") == \
         "Friday will not work. The tutor only teaches Tuesday and Thursday evenings."
     assert found_constraint_head("", "") == ""
+
+
+def test_a_reply_that_states_the_conflict_but_still_offers_the_request_is_also_regenerated():
+    verdict = {"conflict": True, "fact": "f", "consequence": "c", "states_it_first": True, "leaves_request_open": True}
+    provider, res = run_constraint([OFFERS, STATES], verdict)
+    assert len(steered(provider)) == 1 and "go ahead anyway" in steered(provider)[0]
+
+
+def test_the_judge_runs_only_on_turns_whose_context_held_the_persons_records():
+    provider, _ = run_constraint([STATES], {"conflict": True, "states_it_first": False}, records=False)
+    assert provider.constraint_calls == 0 and not steered(provider)
+    from quest_ai_runner.core.reply_standards import constraint_violated, turn_holds_records
+    assert turn_holds_records([{"adapter": "records", "items": ["x"]}]) and not turn_holds_records([{"adapter": "records", "items": []}, {"adapter": "recent", "items": ["y"]}], [])
+    assert not constraint_violated({"conflict": False, "leaves_request_open": True})
+    assert not constraint_violated({"conflict": True, "states_it_first": True, "leaves_request_open": False})
+
+
+def test_a_found_conflict_queues_nothing_even_when_the_planner_forgot_act_declined():
+    decisions = [{"action": "answer", "rationale": "r", "reply_shape": "default",
+                  "deferred_deep": {"goal": "Book the tutor for Friday", "rationale": "book it"}}]
+    verdict = {"conflict": True, "fact": "f", "consequence": "c", "states_it_first": True, "leaves_request_open": False}
+    provider = ConstraintProvider(decisions, [STATES], verdict)
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider),
+                        config=OrchestratorConfig(overseer=False, max_steps=5), context_assembler=RecordsAssembler())
+    res = orch.run("Can you help me book the tutor for Friday?")
+    assert not res.deep_results and res.text == STATES
+
+
+def test_the_ask_carries_the_conflict_in_the_question_that_is_shown_and_filed():
+    from quest_ai_runner.core.orchestrator_turn_messages import file_blocked_ask
+    seen = {}
+
+    class Orch:
+        escalation = None
+        def _concise_decision_summary(self, q):
+            return q
+    import quest_ai_runner.core.orchestrator_turn_messages as m
+    orig = m.file_ask
+    m.file_ask = lambda *a, **k: seen.update(k) or type("O", (), {"filed": False, "decision_id": "", "assignee": None})()
+    try:
+        res = type("R", (), {"output": "", "observations": [], "observations_reported": False, "coverage": None})()
+        file_blocked_ask(Orch(), None, {"found_constraint_head": "Friday will not work."}, res,
+                         {"blocker": "needs_person"}, question="Which day?")
+    finally:
+        m.file_ask = orig
+    assert seen.get("question") == "Friday will not work. Which day?" or not seen

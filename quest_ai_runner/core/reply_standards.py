@@ -84,7 +84,23 @@ def found_constraint_hint(fact: str, consequence: str) -> str:
     said = " ".join(x.strip().rstrip(".") + "." for x in (consequence, fact) if (x or "").strip())
     return ("open the reply by stating plainly" + (f" ({said})" if said else "")
             + " that the request will not work as asked and why; only then offer alternatives, and do not offer the conflicting "
-              "request as an option or ask whether to try it anyway")
+              "request as an option (no 'go ahead anyway', no 'keep it and check for an exception') or ask whether to try it anyway")
+
+
+def constraint_violated(verdict: Any) -> bool:
+    """True when a found_constraint verdict says the records conflict with the request and the reply either does not state it
+    first or still offers the conflicting request as an option. Reads the verdict's structured booleans only."""
+    return bool(isinstance(verdict, dict) and verdict.get("conflict")
+                and (not verdict.get("states_it_first") or verdict.get("leaves_request_open")))
+
+
+def turn_holds_records(sources: Any, gathered: Any = None) -> bool:
+    """True when the turn could have seen the person's own records: the assembled context carried a source with adapter
+    ``records`` and items, or the planner made reads this turn (a record may have come in through a read, as in the cards and
+    quest notes it opens on a booking request). Structured attribution only; no other turn pays for the judge."""
+    if any(isinstance(src, dict) and src.get("adapter") == "records" and (src.get("items") or []) for src in (sources or [])):
+        return True
+    return any(isinstance(entry, dict) and str(entry.get("text") or "").strip() for entry in (gathered or []))
 
 
 def found_constraint_head(fact: str, consequence: str) -> str:
