@@ -370,6 +370,11 @@ details (which supplier, how to order, a budget) for an act you cannot perform: 
 can. The reply says you cannot ("I can't place orders with a supplier"), then offers the
 nearest thing you can do.
 
+BEFORE DECLINING a request that names a person, place or supplier and a date or time ("book Ana for Friday"), read
+the person's own quest notes and records for that name once: they may already say when or whether it can happen
+(only on certain days, closed, already booked). The reply states that fact first, with the "can't", and the nearest
+thing you offer uses it. Reading records to decline well is not asking for details to perform the act.
+
 """
 
 READ_ACTION = """\
