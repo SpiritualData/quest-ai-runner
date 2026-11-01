@@ -452,3 +452,37 @@ def test_a_fact_that_names_several_cards_is_not_a_quote_of_any_of_them():
     trace.facts_noted([remark])
     trace.finish("Skipping a few pages on travel days is fine; the vector hits were weak matches.")
     assert "records" not in sink.latest()
+
+
+SPANISH = {"id": "spanish-practice", "title": "Conversational Spanish", "name": "Conversational Spanish", "adapter": "quest",
+           "item_type_counts": {"note": 1}, "rendered_section": "25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday."}
+SPANISH_ALIAS = dict(SPANISH, id="card:spanish-practice", item_type_counts={})
+SPANISH_FACTS = ["spanish-practice card note: \"25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday.\"",
+                 "\"Conversational Spanish: 25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday.\" (card spanish-practice)"]
+SPANISH_REPLY = ("Your Spanish practice is set up for 25 minutes a day, with a tutor session every second Tuesday, "
+                 "and your note says you're stuck on past tenses.")
+
+
+def test_one_card_under_two_ids_is_one_record():
+    """The same card reached the trace as ``spanish-practice`` and ``card:spanish-practice``: one record, counted once, and used (a paraphrase)."""
+    sink, trace = make()
+    trace.records_selected([SPANISH, SPANISH_ALIAS], [SPANISH, SPANISH_ALIAS])
+    trace.facts_noted(SPANISH_FACTS)
+    trace.finish(SPANISH_REPLY)
+    step = sink.latest()["records"]
+    assert step["counts"] == {"found": 1, "read": 1}
+    assert [i["label"] for i in step["items"]] == ["Conversational Spanish"]
+
+
+def test_one_card_under_two_ids_stays_counts_only_in_a_shared_thread():
+    sink, trace = make("shared")
+    trace.records_selected([SPANISH, SPANISH_ALIAS], [SPANISH, SPANISH_ALIAS])
+    trace.facts_noted(SPANISH_FACTS)
+    trace.finish(SPANISH_REPLY)
+    step = sink.latest()["records"]
+    assert step["counts"] == {"found": 1, "read": 1} and step["items"] == []
+
+
+def test_facts_about_a_card_known_by_two_ids_are_not_ambiguous():
+    cards = {c["id"]: {"title": c["title"], "text": c["rendered_section"]} for c in (SPANISH, SPANISH_ALIAS)}
+    assert work_trace.facts_about("spanish-practice", SPANISH_FACTS, cards) == SPANISH_FACTS

@@ -60,6 +60,13 @@ def flat(text: Any) -> str:
     return re.sub(r"[\W_]+", " ", str(text or "").lower()).strip()
 
 
+def canonical_id(card_id: Any) -> str:
+    """The id a card goes by however the store or a vector hit spelled it: the ``card:`` namespace is dropped, so one card reaching the trace
+    as ``x`` and as ``card:x`` is one record (counted once, its facts not read as naming two cards)."""
+    text = str(card_id or "").strip()
+    return text[len("card:"):] if text.lower().startswith("card:") else text
+
+
 def is_record_title(title: Any, card_id: Any = "") -> bool:
     """True when ``title`` has the shape of a name a person gave a record: one short line of at most ``TITLE_MAX_WORDS`` words, no
     colon or semicolon (a "Topic: ..." or "User: ..." line is card or turn text), not cut off, not a sentence end, not the history
@@ -137,6 +144,7 @@ def cards_cited(facts: Any, cards: Mapping[str, Mapping[str, Any]]) -> List[str]
     card's text, or the card's id or full title named in the fact (a cited id verified against the known ids)."""
     out: List[str] = []
     facts = [f for f in (facts or []) if isinstance(f, str) and f.strip()]
+    cards = {canonical_id(k): v for k, v in cards.items()}   # one card under two ids is one card
     for card_id, card in cards.items():
         names = [flat(card_id), flat(card.get("title"))]
         names = [n for n in names if len(n) >= MIN_NAME_CHARS]
@@ -151,7 +159,7 @@ def cards_cited(facts: Any, cards: Mapping[str, Mapping[str, Any]]) -> List[str]
 def facts_about(card_id: str, facts: Any, cards: Mapping[str, Mapping[str, Any]]) -> List[str]:
     """The facts that took something from THIS card alone: a fact that names or quotes several cards (a remark about which hits were weak, a
     list of titles) is not a quote of any one of them, so its words say nothing about whether the reply used this card."""
-    return [f for f in (facts or []) if isinstance(f, str) and cards_cited([f], {k: v for k, v in cards.items()}) == [card_id]]
+    return [f for f in (facts or []) if isinstance(f, str) and cards_cited([f], cards) == [canonical_id(card_id)]]
 
 
 def paper_cited(work: Mapping[str, Any], answer: str) -> bool:
@@ -344,7 +352,7 @@ class TurnTrace:
         """The step item for one projected card (its human title only), or None for a history turn or a card without a title (not shown, not counted)."""
         if not isinstance(card, Mapping) or str(card.get("adapter") or "").lower() == HISTORY_ADAPTER:
             return None
-        card_id = str(card.get("id") or "")
+        card_id = canonical_id(card.get("id"))
         # The card's own short name when the assembler gave one (a vector hit's ``title`` is a slice of the embedded text, often the body).
         title = next((t for t in (re.sub(r"\s+", " ", str(card.get(key) or "")).strip() for key in ("name", "title"))
                       if card_id and is_record_title(t, card_id)), "")
@@ -382,7 +390,7 @@ class TurnTrace:
         with self.lock:
             for card in card_metadata or []:
                 # A fetch by id names only the id: the title comes from the assembled card of the same id, and a card with none is dropped.
-                item = self.candidates.get(str(card.get("id") or "")) if isinstance(card, Mapping) else None
+                item = self.candidates.get(canonical_id(card.get("id"))) if isinstance(card, Mapping) else None
                 item = item or self.record_item(card)
                 if item:
                     self.taken.setdefault(item["ref"], item)
@@ -390,12 +398,12 @@ class TurnTrace:
 
     def keep_texts(self, cards: Any, known: Mapping[str, Any]) -> None:
         for card in cards or []:
-            if not isinstance(card, Mapping) or str(card.get("id") or "") not in known:
+            if not isinstance(card, Mapping) or canonical_id(card.get("id")) not in known:
                 continue
             parts = [str(card.get("rendered_section") or "")] + [
                 str(i.get("text") or "") for i in (card.get("items") or []) if isinstance(i, Mapping)]
             text = "\n".join(p for p in parts if p)[:MAX_CARD_TEXT]
-            self.card_texts[str(card["id"])] = {"title": str(card.get("title") or ""), "text": text}
+            self.card_texts[canonical_id(card["id"])] = {"title": str(card.get("title") or ""), "text": text}
 
     @safe
     def facts_noted(self, facts: Any) -> None:
