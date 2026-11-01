@@ -9,8 +9,9 @@ killed the next run starts at the item that was in flight, never at the top. Not
     .venv/bin/python scripts/rerecord.py                    # run every stale item (free arms, QME8 owner arms, the two samples)
     .venv/bin/python scripts/rerecord.py --only chat_quality --skip-free
 
-Items, in order: the offline arms (no model call, no network), the QME8 owner arms (``justified_model_spend``), then the
-``chat_quality`` and ``end_to_end`` samples (the Claude subscription; ``chat_quality`` needs ``QAR_EVAL_DEV_ENV_FILE`` and
+The offline arms are the library's own ``esoi run --stale`` (it is generic: every project that runs metrics with the library, the hub
+included, resumes the same way, and ``--plan`` there lists its decisions). This script adds what only QAR knows, in order: the QME8
+owner arms (``justified_model_spend``), then the ``chat_quality`` and ``end_to_end`` samples (the Claude subscription; ``chat_quality`` needs ``QAR_EVAL_DEV_ENV_FILE`` and
 ``QAR_EVAL_DEV_HOST`` set in the environment, passed by path, never read here). Refuses to run while measured code is uncommitted,
 because a row recorded on a dirty tree is stale at birth (``--allow-dirty`` overrides). Commit the rows afterwards with the usual
 explicit paths; this script commits nothing."""
@@ -29,9 +30,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 REPO = Path(__file__).resolve().parents[1]
 COMPONENTS = REPO / "evaluation" / "components"
 SAMPLE_SIZE = 10
-# An arm that can reach a model, the network or a subprocess is not a free arm, whatever its last row says.
-NOT_FREE = re.compile(r"brave|anthropic|claude|urllib|requests|httpx|openai|gemini|socket|subprocess|PAID|embedding|"
-                      r"sentence_transformers|fastembed", re.I)
 
 
 def latest_rows(results_csv: Path) -> Dict[Tuple[str, str], dict]:
@@ -41,18 +39,6 @@ def latest_rows(results_csv: Path) -> Dict[Tuple[str, str], dict]:
         for row in csv.DictReader(handle):
             latest[(row["component"], row["impl"])] = row
     return latest
-
-
-def free_arms(latest: Dict[Tuple[str, str], dict], components: Path = COMPONENTS) -> List[Tuple[str, str]]:
-    """Offline arms: their newest row made no model call and cost nothing, and their source reaches no model or network."""
-    arms = []
-    for (component, impl), row in sorted(latest.items()):
-        if row.get("sample") or int(row.get("model_calls") or 0) or float(row.get("cost_usd") or 0) > 0:
-            continue
-        source = components / component / "impls" / f"{impl}.py"
-        if source.exists() and not NOT_FREE.search(source.read_text(encoding="utf-8")):
-            arms.append((component, impl))
-    return arms
 
 
 def stale_items(items: List[dict], latest: Dict[Tuple[str, str], dict], current: Callable[[str, Optional[dict]], str]) -> List[dict]:
@@ -69,12 +55,8 @@ def esoi(*args: str) -> List[str]:
     return [sys.executable, "-m", "esoi", *args]
 
 
-def build_items(latest: Dict[Tuple[str, str], dict], skip_free: bool, skip_owner: bool, skip_samples: bool) -> List[dict]:
+def build_items(latest: Dict[Tuple[str, str], dict], skip_owner: bool, skip_samples: bool) -> List[dict]:
     items: List[dict] = []
-    if not skip_free:
-        for component, impl in free_arms(latest):
-            items.append(dict(kind="free", component=component, impl=impl,
-                              cmd=esoi("run", component, "--impl", impl, "--max-calls", "0", "--record")))
     if not skip_owner:
         import json
         manifest = json.loads((COMPONENTS / "justified_model_spend" / "owner_arms.json").read_text(encoding="utf-8"))
@@ -112,7 +94,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--plan", action="store_true", help="print what is current and what would run; run nothing")
     parser.add_argument("--only", default="", help="run only items whose 'component/impl' contains this text")
-    parser.add_argument("--skip-free", action="store_true")
+    parser.add_argument("--skip-stale", action="store_true", help="skip the library's own `esoi run --stale` (the offline arms)")
     parser.add_argument("--skip-owner", action="store_true")
     parser.add_argument("--skip-samples", action="store_true")
     parser.add_argument("--allow-dirty", action="store_true", help="record on uncommitted measured code (the rows are stale at birth)")
@@ -122,11 +104,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     sys.path.insert(0, str(COMPONENTS))
     from qar_overall import combine  # noqa: E402
     latest = latest_rows(REPO / "evaluation" / "components" / "results.csv")
-    items = stale_items(build_items(latest, args.skip_free, args.skip_owner, args.skip_samples), latest, combine.current)
+    items = stale_items(build_items(latest, args.skip_owner, args.skip_samples), latest, combine.current)
     if args.only:
         items = [i for i in items if args.only in f"{i['component']}/{i['impl']}"]
     todo = [i for i in items if i["why"]]
-    print(f"{len(items)} items, {len(items) - len(todo)} current, {len(todo)} to run")
+    if not args.skip_stale and not args.only:
+        # The offline arms: the library decides (current, would run, skipped as paid) and resumes from the recorded rows.
+        print("== esoi run --stale" + (" --plan" if args.plan else ""))
+        library = subprocess.run(esoi("run", "--stale", *(["--plan"] if args.plan else [])), cwd=REPO, text=True)
+        if library.returncode and not args.plan:
+            print("the library's stale pass reported an error; continuing with the QAR items")
+    print(f"{len(items)} QAR items, {len(items) - len(todo)} current, {len(todo)} to run")
     for item in todo:
         print(f"  {item['kind']:6} {item['component']}/{item['impl']}: {item['why']}")
     if args.plan or not todo:
