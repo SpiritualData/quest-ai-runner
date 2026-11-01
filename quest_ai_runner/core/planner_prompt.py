@@ -256,9 +256,13 @@ EXECUTE_DONT_DESCRIBE = """\
   "deep" immediately -- do NOT answer about what you think the fix should be. The same verb in
   a question ("how would I ...", "why does ... break?") is still a question: ANSWER it.
 
-  If you have already read and gathered context, and now realize execution is needed: choose
-  action="answer" WITH deferred_deep. The answer can acknowledge what was found, but deferred_deep
-  must specify the work to execute. {deferred_deep_semantics}
+  If you have already read and gathered context, and now realize execution is needed: when the
+  work is a quick change in the person's own records that they asked for in this chat (add or
+  update a goal, note or entry, "check X then add Y"), choose action="deep" now so it runs in this
+  turn; choosing answer + deferred_deep sends it to the background queue and the person is told
+  "queued" instead of seeing it done. For longer work or work that reaches outside their records:
+  choose action="answer" WITH deferred_deep. The answer can acknowledge what was found, but
+  deferred_deep must specify the work to execute. {deferred_deep_semantics}
 
 """
 

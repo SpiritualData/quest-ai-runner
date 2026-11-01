@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 from pathlib import Path
 
 from .adapters import (
@@ -28,24 +29,28 @@ from .config import (
 )
 
 
+def _auto_backend(environ=None, which=shutil.which) -> str:
+    """The model backend a deployment gets when ``QAR_MODEL_BACKEND`` names none: the Claude Code CLI on the subscription
+    (no key) when the ``claude`` executable is on the path, then the Anthropic API, then Gemini, then OpenAI. Anthropic first
+    is the organisation's decision; a vendor with no key is skipped, and with nothing available the CLI is returned and says
+    what is missing when first used."""
+    environ = os.environ if environ is None else environ
+    if which(environ.get("QAR_CLAUDE_PATH") or "claude"):
+        return "claude_cli"
+    for backend, key in (("anthropic", "ANTHROPIC_API_KEY"), ("gemini", "GOOGLE_API_KEY"), ("openai", "OPENAI_API_KEY")):
+        if environ.get(key):
+            return backend
+    return "claude_cli"
+
+
 def _model_provider_from_env() -> ModelProvider:
     """Pick the model backend from env.
 
-    ``QAR_MODEL_BACKEND`` specifies: "anthropic", "claude_cli", "gemini", or "openai".
-    Auto-select if not set: tries "openai" (OPENAI_API_KEY) → "gemini" (GOOGLE_API_KEY) →
-    "anthropic" (ANTHROPIC_API_KEY) → "claude_cli" (keyless, subscription login).
+    ``QAR_MODEL_BACKEND`` specifies: "anthropic", "claude_cli", "gemini", "openai" or "deepseek".
+    Auto-select if not set (``_auto_backend``): "claude_cli" (the subscription, keyless) → "anthropic" (ANTHROPIC_API_KEY) →
+    "gemini" (GOOGLE_API_KEY) → "openai" (OPENAI_API_KEY).
     """
-    backend = (os.getenv("QAR_MODEL_BACKEND") or "").strip().lower()
-    if not backend:
-        # Auto-select: openai > gemini > anthropic > claude_cli (keyless default)
-        if os.getenv("OPENAI_API_KEY"):
-            backend = "openai"
-        elif os.getenv("GOOGLE_API_KEY"):
-            backend = "gemini"
-        elif os.getenv("ANTHROPIC_API_KEY"):
-            backend = "anthropic"
-        else:
-            backend = "claude_cli"
+    backend = (os.getenv("QAR_MODEL_BACKEND") or "").strip().lower() or _auto_backend()
 
     if backend == "multi_provider":
         raise ValueError("QAR_MODEL_BACKEND names the primary vendor; multi_provider is the router build_orchestrator "

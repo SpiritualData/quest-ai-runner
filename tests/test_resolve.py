@@ -208,3 +208,13 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
     done = subprocess.run([sys.executable, "-c", code], cwd=elsewhere, capture_output=True, text=True,
                           env={"PATH": "/usr/bin:/bin", "PYTHONPATH": f"{site}:{esoi_home}:{hub_home}", "HOME": str(tmp_path)})
     assert done.returncode == 0, done.stderr
+
+
+def test_the_automatic_model_backend_prefers_the_cli_then_anthropic_then_gemini_then_openai():
+    from quest_ai_runner.cli_config import _auto_backend
+    keys = {"ANTHROPIC_API_KEY": "k", "GOOGLE_API_KEY": "k", "OPENAI_API_KEY": "k"}
+    assert _auto_backend(keys, which=lambda name: "/bin/claude") == "claude_cli"          # the subscription first
+    assert _auto_backend(keys, which=lambda name: None) == "anthropic"                    # no CLI: the Anthropic API
+    assert _auto_backend({k: v for k, v in keys.items() if k != "ANTHROPIC_API_KEY"}, which=lambda name: None) == "gemini"
+    assert _auto_backend({"OPENAI_API_KEY": "k"}, which=lambda name: None) == "openai"
+    assert _auto_backend({}, which=lambda name: None) == "claude_cli"                     # nothing available: say so at first use

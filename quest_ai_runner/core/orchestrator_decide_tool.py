@@ -307,7 +307,9 @@ _CARD_THREAD_TOOL_FIELD: Dict[str, Any] = {
 DEFERRED_DEEP_FIELD_DESC_QUEUED = (
     "When action='answer', optionally specify deep work to hand to the background task queue "
     "(the answer ships first; the queued work then runs as its own background task and the user "
-    "is told in this conversation when it finishes)."
+    "is told in this conversation when it finishes). Only for long-running work or work outside the "
+    "person's own records: a quick change they asked for in their own records (add a goal, note or "
+    "entry) is action='deep', which runs now."
 )
 
 
