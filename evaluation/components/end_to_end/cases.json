@@ -642,7 +642,7 @@
     ]
    ],
    "reply_has_n": {
-    "n": 3,
+    "n": 1,
     "groups": [
      [
       "habit"
@@ -680,9 +680,9 @@
   },
   "quality_rubric": [
    "Names the person's own goal (the half marathon) and circumstance (night shifts) specifically",
-   "Connects two to four features to that goal and says why each helps",
+   "Names at least one real feature from the documentation and says why it helps this goal and circumstance",
    "Explains why a feature helps, not only what it is",
-   "Does not dump every feature and invents none",
+   "Everything included adds value for this person or covers a plausible need their message did not state; nothing is listed to be thorough, and none is invented",
    "Uses plain words and no jargon the person did not use"
   ],
   "ideal": {
