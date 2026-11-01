@@ -42,7 +42,7 @@ def capture(args):
         case.update(id=spec["id"], heldout=True, want=spec["want"])
         out.append(case)
         print(f"{spec['id']}: {len(case['events'])} events, {case['seconds']}s", flush=True)
-    Path(args.out).write_text(json.dumps(out, indent=1))
+        Path(args.out).write_text(json.dumps(out, indent=1))
 
 
 def score(args):
@@ -51,6 +51,7 @@ def score(args):
     cases = json.loads(Path(args.captured).read_text())
     harness.load_cases = lambda component, config: cases
     harness.cases_digest = lambda component, eval_dir: sha()
+    harness.record_slices = lambda *a, **k: []   # the per-case log compacts rows pinned to cases.json's hash; held-out rows go to results.csv only
     argv = ["--impl", args.impl] + (["--record"] if args.record else [])
     harness.run_component("work_trace_experience", __import__("work_trace_experience.score", fromlist=["x"]).score_case, argv, common.CONFIG)
 

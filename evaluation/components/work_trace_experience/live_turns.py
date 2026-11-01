@@ -78,7 +78,10 @@ def clean_env(root):
 def instrument(orch, calls):
     """Record what the calls really returned, from results and never from wording."""
     web = orch.web
-    search, fetch = web.search, web.fetch
+    if web is None:   # no web backend configured: the run cannot search, and there is nothing to instrument
+        search = fetch = None
+    else:
+        search, fetch = web.search, web.fetch
 
     def searched(*a, **k):
         obs = search(*a, **k)
@@ -91,7 +94,8 @@ def instrument(orch, calls):
         obs = fetch(*a, **k)
         calls.append({"kind": "web_page", "url": a[0] if a else "", "ok": getattr(obs, "kind", "error") != "error"})
         return obs
-    web.search, web.fetch = searched, fetched
+    if web is not None:
+        web.search, web.fetch = searched, fetched
     invoke = orch.tools.invoke
 
     def invoked(name, args, ctx):
