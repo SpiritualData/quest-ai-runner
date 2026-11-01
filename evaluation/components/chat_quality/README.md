@@ -102,6 +102,23 @@ budget is passed. Over plain HTTP the server's own models answer and only one ca
 `setup --partial` builds a smoke world with no quests (four unlinked collections) so the pipeline
 can be exercised without approvals; it cannot serve the datasets. Use `run --examples` with it.
 
+## Hermetic eval account
+
+By default the harness runs as the shared dev lane account, whose leftovers (learned cards, rep corrections, old
+conversations, open asks) leak into cases. `make_eval_account.py` builds a DEDICATED identity instead: its own
+user (on the reserved `example.test` domain), private team, empty default rep, subscription and API key, all on the
+dev database only. Nothing else shares its cards, conversations or asks.
+
+```
+cd <quest-backend> && venv/bin/python3 <this dir>/make_eval_account.py           # create (idempotent); prints only the env file path
+cd <quest-backend> && venv/bin/python3 <this dir>/make_eval_account.py --wipe    # back to empty (refuses unless it is exactly the eval identity)
+```
+
+The env file is `QAR_EVAL_ACCOUNT_ENV_FILE` (default: `eval-account.env` beside the shared dev lane env file,
+mode 0600, never committed). To use it, point the harness at it: `QUAL_DEV_ENV_FILE=$QAR_EVAL_ACCOUNT_ENV_FILE`
+(and `QAR_EVAL_DEV_ENV_FILE` for `esoi run`), then `runner.py setup --approve-own-asks` once. After a `--wipe`,
+run `setup` again, because the wipe removes the world too. This is an option, not yet the default.
+
 ## How a case runs
 
 1. snapshot (quests, goals, notes, measurable outcomes, every world collection's entries, queued
