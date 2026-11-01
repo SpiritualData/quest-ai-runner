@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402,F401
 from work_trace_experience import score  # noqa: E402
 
-VIEW = {"live": [], "settled": [{"group": "summary", "text": "Read papers by Santos et al., 2026 and 4 more"}],
+VIEW = {"live": [], "settled": [{"group": "summary", "text": "Checked abstracts of papers by Santos et al., 2026 and 4 more"}],
         "expanded": [{"group": "papers", "text": "Sagittal plane joint mechanics (Wells et al., 2025)"}]}
 CASE = {"message": "q", "reply": "r"}
 

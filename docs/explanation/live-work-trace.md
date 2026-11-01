@@ -174,7 +174,7 @@ text. No favicon fetching (it would tell a third party what was read); domains s
 chips. No spinner pill, no "Thought for" label, no ChatGPT-style list of search chips.
 
 Collapsed default (one line, under the answer, after it settles):
-`[trail glyph]  Read 14 sites, 3 papers, your 5 quest records`
+`[trail glyph]  Read 14 sites, checked abstracts of 3 papers, used your 5 quest records`
 The glyph is a short connected row of waypoints, one per kind used. Tap to expand. Nothing is shown
 for kinds that did not run, and the line is hidden entirely on turns with no work (a greeting).
 
@@ -191,7 +191,7 @@ Per solution treatment (all collapsed into the summary, each distinct when expan
 | Solution (seat) | Kind | While running | Expanded, after |
 |---|---|---|---|
 | Web (`search-backend`) | sources | Domain chips arrive one by one; the counter ticks "Reading 6 sites". | List of domains with page titles; a site that could not be reached is marked once, in muted text. |
-| Scholarly (`know-the-world`) | papers | Two numbers: "Found 31, reading 3". Titles fade in as read. | Citation lines: title, "Author et al., 2021". Read papers first, found-only after. |
+| Scholarly (`know-the-world`) | papers | Two numbers: "Found 31, checking abstracts of 3". Titles fade in as read. | Citation lines: title, "Author et al., 2021". Papers with an abstract taken first, found-only after. |
 | Your Quest (`context-assembler`, `card-store`) | records | "Looking through your quest records" with a count. | "From your Quest": the person's own quest and reflection titles with a small type icon, shown FIRST because this is Quest's edge. Owner-only titles; counts in shared threads. |
 | Link guard (`watch-for-risk` link check, `critique/link_guard`) | check | Appears after the draft, brief: "Checking links". | Only when the answer has links: "Checked 6 links". If it removed one: "Left out 1 link I could not verify". |
 | Failover (`call-a-model`) | notice | Nothing. | Shown only if `affects_user`: "Switched to a backup model, this took a little longer." Never in the summary counts. |
@@ -351,7 +351,11 @@ person or covers a plausible unstated need. Each failure was read against the ca
   and papers retrieved in a result set are not shown live: whether the answer rests on them is not known until it is final.
 - The summary "Read N of your quest records" was a bare count. Records are now named: one or two ("Used your record: Run a half marathon
   by June"), or the first and the rest counted ("Used "Run a half marathon" and 3 more of your records"). Pages and papers follow the same
-  rule ("Read blog.rust-lang.org", "Read papers by Santos et al., 2026 and 4 more"). A shared (team) thread names only records every participant may see (section 10). Where nothing can be named the count stays.
+  rule ("Read blog.rust-lang.org", "Checked abstracts of papers by Santos et al., 2026 and 4 more"). A shared (team) thread names only records every participant may see (section 10). Where nothing can be named the count stays.
+- Wording follows what the run did (2026-11-01): "Read" is used only where a full page or text was opened (sites). A paper counts as read
+  when the run took its abstract, which is less than reading it, so papers say "Checked the abstract of a paper by Lee et al., 2021" and
+  "Checked abstracts of papers by Lee et al., 2021 and 4 more", never "Read papers". The same wording holds in the bare count ("Checked
+  abstracts of 5 papers"). The `papers` live label is "Found 31, checking abstracts of 3", never "reading".
 - The removed-link heading "Good to know" was vague, and the group under it repeated one line. Removed links are now a sentence in the
   summary ("Left out a link to example.com that I could not verify", section 10), shown only when a link was removed; there is no such heading and no group behind it.
 - A correct count of five cited papers was called a conflict. The judge was wrong, caused by the harness: `score.py` showed it the first
@@ -396,7 +400,7 @@ Joshua's rule: fix every instance now; everything shown adds value; never overst
 
 ## 11. One rule for names: the line names, the rows add (2026-11-01)
 
-The post-fix judge failed the papers case because the summary named papers ("Read papers by Cherif et al., 2015 and Yang et al.") and the rows
+The post-fix judge failed the papers case because the summary named papers ("Checked abstracts of papers by Cherif et al., 2015 and Yang et al.") and the rows
 beneath repeated the same names. The rule, applied once in `workTrace.ts` (`saidNames`, `expandedGroups`) so solo, shared-list and team
 surfaces cannot differ:
 
@@ -405,7 +409,7 @@ surfaces cannot differ:
   page shows its page title only (no row at all when it has none); an unnamed page shows its domain and title. The first record is named in the
   line, so a records list holds the others. A group with no rows left is not drawn, and the line is then not a button (`hasExpandableDetail` is
   derived from `expandedGroups`, so the button and its rows cannot disagree).
-- Counts-only lines ("Read 5 papers") were considered for the case where rows follow and rejected: collapsed, the line is all the person sees,
+- Counts-only lines ("Checked abstracts of 5 papers") were considered for the case where rows follow and rejected: collapsed, the line is all the person sees,
   and a bare count was the section 9 failure.
 
 Measured: `npm run test:worktrace` pins the rule (the same checks failed on the previous source). The judge on TRACE-REAL-PAPERS (a post-fix row,
@@ -414,7 +418,7 @@ line failed the same way. That is open: the judge sees the collapsed line and th
 
 ### The open item was the judge, not the Trail (2026-11-01, changed after seeing the failure)
 
-Reading the judge's verdicts on TRACE-REAL-PAPERS: element 1, the summary "Read papers by Santos et al., 2026 and 4 more", got "Counts work, repeats
+Reading the judge's verdicts on TRACE-REAL-PAPERS: element 1, the summary "Checked abstracts of papers by Santos et al., 2026 and 4 more", got "Counts work, repeats
 rows below"; every row got "Lets person open cited paper". The rubric (`score.JUDGE_RULE`) said an element fails when it "repeats another element"
 and the judge saw the summary and the expanded rows in one flat list. Section 9 requires the line to name what it can (a bare count fails), and the
 rows list the same papers, so no summary shape could pass: naming repeated the rows, counting counted work. The rubric contradicted the spec, because
