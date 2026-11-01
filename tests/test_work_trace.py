@@ -486,3 +486,41 @@ def test_one_card_under_two_ids_stays_counts_only_in_a_shared_thread():
 def test_facts_about_a_card_known_by_two_ids_are_not_ambiguous():
     cards = {c["id"]: {"title": c["title"], "text": c["rendered_section"]} for c in (SPANISH, SPANISH_ALIAS)}
     assert work_trace.facts_about("spanish-practice", SPANISH_FACTS, cards) == SPANISH_FACTS
+
+
+MORNING_PAGES = {"id": "morning-pages-habit", "title": "Morning pages habit", "adapter": "quest"}
+MORNING_TEXT = "Skipping pages on travel days. Goal is 20 days in a row; current streak is 4 days."
+MORNING_FACTS = ['morning-pages-habit card: "' + MORNING_TEXT + '"']
+MORNING_REPLY = ("Your morning pages streak is 4 days, against a goal of 20 days in a row. "
+                 "The habit card notes that skipping pages on travel days is what breaks it.")
+
+
+def test_a_title_that_reads_like_its_slug_is_still_the_title_a_person_gave():
+    """Held-out2 records turn (saved capture): the reply paraphrased the card and no record was shown, because the title of a card whose id is the
+    slugged title ("Morning pages habit" / ``morning-pages-habit``) was treated as the id leaking."""
+    assert work_trace.is_record_title("Morning pages habit", "morning-pages-habit")
+    assert not work_trace.is_record_title("morning-pages-habit", "morning-pages-habit")
+    assert not work_trace.is_record_title("marathon", "marathon")
+    sink, trace = make()
+    trace.records_selected([MORNING_PAGES], [dict(MORNING_PAGES, rendered_section=MORNING_TEXT)])
+    trace.facts_noted(MORNING_FACTS)
+    trace.finish(MORNING_REPLY)
+    assert sink.latest()["records"]["items"][0]["label"] == "Morning pages habit"
+
+
+def test_a_slug_titled_card_the_reply_leaves_out_still_does_not_count():
+    sink, trace = make()
+    trace.records_selected([MORNING_PAGES], [dict(MORNING_PAGES, rendered_section=MORNING_TEXT)])
+    trace.facts_noted(MORNING_FACTS)
+    trace.finish("A good name for your sourdough starter is Bubbles.")
+    assert "records" not in sink.latest()
+
+
+def test_a_slug_titled_card_stays_counts_only_for_other_members():
+    sink, trace = make(audience="shared")
+    trace.records_selected([MORNING_PAGES], [dict(MORNING_PAGES, rendered_section=MORNING_TEXT)])
+    trace.facts_noted(MORNING_FACTS)
+    trace.finish(MORNING_REPLY)
+    step = sink.latest()["records"]
+    assert "Morning pages" not in json.dumps(step)
+    assert step["counts"]["read"] == 1

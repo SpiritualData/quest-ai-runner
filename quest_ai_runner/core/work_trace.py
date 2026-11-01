@@ -70,13 +70,15 @@ def canonical_id(card_id: Any) -> str:
 def is_record_title(title: Any, card_id: Any = "") -> bool:
     """True when ``title`` has the shape of a name a person gave a record: one short line of at most ``TITLE_MAX_WORDS`` words, no
     colon or semicolon (a "Topic: ..." or "User: ..." line is card or turn text), not cut off, not a sentence end, not the history
-    placeholder and not the card's own id. Judges the shape of a stored title; it reads no meaning out of anything."""
+    placeholder and not the card's own id as written (a slug such as ``morning-pages-habit``; a spaced, capitalised name that merely reads like
+    the slug, "Morning pages habit", is a title a person gave and stays). Judges the shape of a stored title; it reads no meaning out of anything."""
     text = re.sub(r"\s+", " ", str(title or "")).strip()
     if not text or len(text) > TITLE_MAX_CHARS or len(text.split()) > TITLE_MAX_WORDS or text == HISTORY_TITLE:
         return False
     if re.search(r"[:;]|\.\.\.|\u2026", text) or text.endswith("."):
         return False
-    return flat(text) != flat(card_id)
+    # A title that re-spells the id in lower case ("q6 slug" for ``q6-slug``) is the id leaking; one with a capital ("Morning pages habit") is a name.
+    return text.lower() != str(card_id or "").strip().lower() and not (flat(text) == flat(card_id) and text == text.lower())
 
 
 def host_cited(domain: str, answer: str) -> bool:
@@ -106,9 +108,10 @@ def distinctive_words(text: Any) -> set:
 
 
 def title_stands_in(card: Mapping[str, Any], answer: str) -> bool:
-    """True when every rare word of the card's title stands in the reply (at least one exists): a reply that names the record's subject."""
-    words = {w for w in flat(card.get("title")).split() if len(w) >= SHARED_WORD_CHARS and not w.isdigit() and _rare_word(w)}
-    return bool(words) and words <= set(flat(answer).split())
+    """True when every word of the card's title of ``SHARED_WORD_CHARS`` characters or more stands in the reply and at least one of them is rare:
+    a reply that names the record's subject. One rare word of a longer title ("pages" of "Morning pages habit") is not the subject."""
+    words = {w for w in flat(card.get("title")).split() if len(w) >= SHARED_WORD_CHARS and not w.isdigit()}
+    return any(_rare_word(w) for w in words) and words <= set(flat(answer).split())
 
 
 def reply_draws_on(card: Mapping[str, Any], facts: Any, answer: str) -> bool:
