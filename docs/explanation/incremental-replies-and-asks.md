@@ -298,3 +298,12 @@ What the runner sends (as built). Context the consumer passes in the turn's `con
 - The queued-task lane no longer posts text that looks like an ask with an empty decision id: it files a real decision (key
   `turn-ask:<task id>:...`) or says plainly it could not.
 Not built (later phases): task-lane interims (phase 5), measured arms (phase 6), the metric rows (section 7).
+
+Backend additions to the contract (as built in quest-backend, setting `quest_ai_incremental_replies_enabled`, default off):
+- Stored ask also carries `asker_id`, `visible_to_all` and `waiting_on_name`; the asker's copy adds `can_withdraw: true`. A
+  redacted ask is `{id, kind: "ask", turn_id, seq, decision_id, assigned_to_name, waiting_on_name, redacted: true, text: "Waiting on <name>"}`.
+- Ask SSE frame is `{event: "decision", text, decision_id, message_id, data}`; on team streams interim and decision frames also
+  carry `message` (the wire message as that viewer may see it). The final carries `turn_id`, `seq`, `turn_kind: "final"`, `outcome`, `stop_reason`.
+- New apps fetch `GET /api/quest-ai/conversations/{id}?include_interim=true` to keep interims after the final; old builds
+  render `interim` and `ask` as a plain assistant bubble from `text`.
+- Known gap: an ask filed by a live chat turn has no paused task, so answering it records the answer and resumes nothing.
