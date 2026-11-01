@@ -110,6 +110,7 @@ class TurnMixin:
         # What goes back in the prompt box if the AI call fails: the person's message, shown or not as their line.
         self.retry_text = retry_text if retry_text is not None else (user_text if echo else "")
         self._ctx.reset()
+        self.term_begin_turn()
         self._deep_view.hide()
         self._deep_detail.hide()
         self._future_ctx_panel.hide()
@@ -156,23 +157,14 @@ class TurnMixin:
             _sid = self._session_id
             _pending = self._make_pending_drain(_inbox, _sid) if _inbox is not None else None
             preamble, grounding_meta = s.turn_grounding(user_text)
+            grounding_meta = self.term_turn_meta(grounding_meta)
             if s.turn_quest is not None:
                 from .runner.quest_folder_index import describe_match
                 how = "Selected" if s.turn_quest is s.pinned_quest else "Matched"
                 self.call_from_thread(self._console.dim,
                                       f"  {how} {describe_match(s.turn_quest)}")
-            stream = s._orch.run_stream(
-                user_text,
-                transcript=s._last_transcript(),
-                quest_id=s.bound_quest_id(),
-                rep_preamble=preamble,
-                model_hint=model_hint,
-                pending_inputs=_pending,
-                conv_id=s._conv_id,
-                context_meta=grounding_meta,
-                cancel_check=self._cancel.is_set,
-                **self._control_stream_kwargs(),
-            )
+            stream = self.event_stream(
+                user_text, model_hint=model_hint, preamble=preamble, grounding_meta=grounding_meta, pending=_pending)
             try:
                 for item in stream:
                     if self._cancel.is_set():
@@ -202,6 +194,27 @@ class TurnMixin:
         elapsed = time.monotonic() - self._t0
         self.call_from_thread(self._finish_turn, user_text, final, elapsed,
                               self._cancel.is_set(), error)
+
+    def event_stream(self, user_text: str, *, model_hint, preamble, grounding_meta, pending):
+        """The turn's typed events, from QAR's own orchestrator.
+
+        THE SEAM for the hub's single input-to-output function (``hubofhubs.run``, not built yet when this was written, so there is
+        nothing to call). When it exists, this method is the one place to change: call it with QAR's orchestrator and Quest adapters
+        as the answering pieces and return its event iterator. Everything after this call only renders events (``_handle_event``
+        gives them to ``hubofhubs.terminal.render``), so nothing else here has a private engine path."""
+        s = self.sess
+        return s._orch.run_stream(
+            user_text,
+            transcript=s._last_transcript(),
+            quest_id=s.bound_quest_id(),
+            rep_preamble=preamble,
+            model_hint=model_hint,
+            pending_inputs=pending,
+            conv_id=s._conv_id,
+            context_meta=grounding_meta,
+            cancel_check=self._cancel.is_set,
+            **self._control_stream_kwargs(),
+        )
 
     def _control_stream_kwargs(self) -> dict:
         """The extra ``run_stream`` arguments for steer, stop, pause and resume, only when set.
@@ -234,6 +247,8 @@ class TurnMixin:
             result_kind = getattr(event, "result_kind", None) or ""
         ev = self._types()
         log = self._tlog
+        # The hub renders the work trace, interim updates, asks and the outcome; what it returns is drawn here.
+        took_ask = self.term_event(event)
 
         if t == ev["partial"]:
             # Narration beats (the instant ack + the planner's conversational rationale) come as
@@ -390,6 +405,9 @@ class TurnMixin:
                 if fc:
                     self._future_context = fc
 
+        elif t == ev["decision"] and took_ask:
+            return   # an ask with a decision: the hub drew it, and it is written as the end of the turn (draw_held_ask)
+
         elif t == ev["decision"]:
             # The question is written once, as the last thing of the turn (``write_pending_question``):
             # written now it would be followed by the rest of the run's record and a closing line. Until
@@ -456,6 +474,10 @@ class TurnMixin:
         # Steer, stop, pause: put back what a live worker never confirmed, hold what a paused run
         # keeps for /resume, remember the session a /resume continues.
         ended = self._settle_run_control(final, cancelled, error)
+        self._trail_line.show_text(None)
+        closing = self.term_closing()
+        folded_updates = [b for b in closing if b.kind == "earlier_updates" or (b.removed and b.fold_key.startswith("msg:"))]
+        work_summary = [b for b in closing if b not in folded_updates]
 
         if error is not None:
             # A question raised mid-run is only ever written by a turn that finished: this one did not.
@@ -502,8 +524,13 @@ class TurnMixin:
             # that had not run. When nothing ran because no executor is wired, ``final.text``
             # carries the honest explanation and is what gets shown instead.
             launch_lines = launch_failure_lines(final)
+            # The earlier updates fold into one row above the reply, which is the open message.
+            self.draw_blocks(folded_updates)
+            folded_updates = []
             if launch_lines or (final.kind == "deep" and self._deep_flushed):
                 answer = None
+            elif self.held_ask_blocks and self.term.ask is not None:
+                answer = self.term.ask.done or None   # the question is drawn as the ask; here is what was done before it
             else:
                 answer = final.text or ("\n".join(self._answer_parts).strip() or None)
             # The plain "Metric: ..." line a deep result's text ends with is replaced by the metric
@@ -582,6 +609,8 @@ class TurnMixin:
                 hints.append("Alt+D details")
             if context_bullets:
                 hints.append("Alt+C sources")
+            self.draw_blocks(work_summary)
+            work_summary = []
             self._write_footer(final, elapsed, hints)
             # "How I got this" (see core/answer_explanation.py), when QAR_EXPLAIN_ANSWER is
             # on and the turn passed the model-free eligibility gate. The terminal has no expandable
@@ -607,8 +636,10 @@ class TurnMixin:
                     bits.append(plural(n_metrics, "metric result"))
                 if bits:
                     log.write(indented_line(f"  How I got this: {', '.join(bits)}", "dim"))
+            self.draw_held_ask()
             self.write_pending_question(final)
 
+        self.draw_blocks(folded_updates + work_summary)   # a turn that did not reach a reply still ends tidily
         log.write(Text(""))
         self._console.rule()
         log.write(Text(""))

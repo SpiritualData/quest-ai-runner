@@ -79,6 +79,7 @@ from .textual_ui_turn import TurnMixin
 from .textual_ui_deep import DeepMixin
 from .textual_ui_actions import ActionsMixin
 from .textual_ui_control import ControlMixin
+from .textual_ui_trail import TrailLine, TrailMixin
 
 
 if TYPE_CHECKING:
@@ -90,7 +91,7 @@ if TYPE_CHECKING:
 
 # ── Main app ──────────────────────────────────────────────────────────────────
 
-class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, ActionsMixin, ControlMixin, App):
+class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, ActionsMixin, ControlMixin, TrailMixin, App):
     """Textual REPL over an `InteractiveSession`'s orchestrator brain."""
 
     CSS = """
@@ -157,6 +158,9 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         margin: 0 1;
     }
 
+    /* The one live row of what the AI has just opened; shown only while it has something to say. */
+    #trail { height: 1; padding: 0 1; margin: 0 1; }
+
     #command-menu {
         height: auto;
         max-height: 14;
@@ -192,6 +196,9 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         Binding("alt+y", "copy_last", "Copy last reply"),
         Binding("alt+d", "toggle_deep_detail", "Details"),
         Binding("alt+c", "toggle_future_context", "Sources"),
+        Binding("alt+t", "toggle_trail", "What I read"),
+        Binding("alt+u", "toggle_updates", "Earlier updates"),
+        Binding("alt+k", "continue_stopped", "Continue"),
         # priority=True: Textual's Screen has its OWN built-in "tab" binding (app.focus_next,
         # screen.py) which, being closer to the focused PromptTextArea in the DOM chain, would
         # otherwise intercept every Tab press before it ever reaches this action (the textarea
@@ -301,6 +308,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         self._console: Optional[_RichLogConsole] = None
         # Messages typed before the session finishes initializing (deferred-init path only).
         self._pre_session_queue: List[str] = []
+        self.init_trail_state()
 
     # -- layout ----------------------------------------------------------------
 
@@ -332,6 +340,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         # of stacking above it -- Footer's own space reservation only correctly accounts for
         # one additional bottom-docked widget.
         with Vertical(id="bottom-bar"):
+            yield TrailLine(id="trail")
             yield ActivityBar(id="activity")
             yield OptionList(id="command-menu")
             yield PromptTextArea(
@@ -351,6 +360,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         self._deep_detail = self.query_one("#deep-detail", DeepDetailPanel)
         self._future_ctx_panel = self.query_one("#future-context", FutureContextPanel)
         self._activity = self.query_one("#activity", ActivityBar)
+        self._trail_line = self.query_one("#trail", TrailLine)
         self._activity.transcript = self._tlog
         self._deep_view.hide()
         self._activity.display = False

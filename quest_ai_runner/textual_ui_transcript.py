@@ -71,6 +71,48 @@ class TranscriptLog(RichLog):
         self.following = True
         # True when something was written while the view was not following: output the person has not seen.
         self.unseen_below = False
+        # Places a block can be rewritten in place: key -> [first line (counted from the very first line ever written), line count].
+        self._regions: dict = {}
+
+    def put(self, key: str, renderables) -> None:
+        """Write ``renderables`` as the block at ``key``: the first time at the end, later in place of what that key held.
+
+        An empty list takes the place away. This is how a line that changes (an earlier update folding into a row, an
+        ask folding to one line, the work summary opening) is rewritten without the rest of the transcript moving. A
+        place scrolled out of the log's line limit is gone, and the block is written at the end instead. No key: appended."""
+        items = list(renderables)
+        region = self._regions.get(key) if key else None
+        if region is not None and region[0] < self._start_line:
+            self._regions.pop(key, None)
+            region = None
+        if region is None or not self._size_known:
+            start = self._start_line + len(self.lines)
+            for item in items:
+                self.write(item)
+            if key and items and self._size_known:
+                self._regions[key] = [start, self._start_line + len(self.lines) - start]
+            return
+        first, count = region
+        base = first - self._start_line
+        tail = len(self.lines)
+        for item in items:
+            self.write(item, scroll_end=False)
+        fresh = self.lines[tail:]
+        del self.lines[tail:]
+        self.lines[base:base + count] = fresh
+        delta = len(fresh) - count
+        for other, span in list(self._regions.items()):
+            if other != key and span[0] > first:
+                span[0] += delta
+        if fresh:
+            region[1] = len(fresh)
+        else:
+            self._regions.pop(key, None)
+        self._line_cache.clear()
+        self.virtual_size = self.virtual_size.with_height(len(self.lines))
+        self.refresh()
+        if self.following:
+            self.scroll_end(animate=False, immediate=False, x_axis=False)
 
     def write(self, content, width=None, expand=False, shrink=True,
               scroll_end=None, animate=False):

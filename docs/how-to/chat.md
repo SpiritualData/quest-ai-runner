@@ -275,6 +275,26 @@ is always the one that stays.
 
 Click and drag selects text without holding Shift; Ctrl+C copies the selection (over SSH too).
 
+## See the AI's work, its updates, its questions and a stopped reply
+
+The chat shows what the AI did for a reply and when it needs you. What is shown, and the words, come from the hub's terminal
+renderers (`hubofhubs.terminal`, see `docs/how-to/render-a-run-in-a-terminal.md` in the hub), the same rules and sentences the Quest app uses.
+
+- **While it works**, one dim row above the status line names the newest page it opened ("Opened blog.rust-lang.org"). It shows nothing
+  until a page is really open.
+- **After the reply**, one dim line says what it read ("Used your record: Run a half marathon by June. Read 2 sites"). When opening it
+  would show more, `Alt+T` (or `/trace`) opens the groups in place (five rows each, then all, then closed).
+- **Earlier updates.** When a long turn sends "Progress so far" messages (`QAR_INTERIM_REPLIES=1`, off by default), the newest one is open and the
+  earlier ones fold into one row, "Earlier updates (n)", with a preview. `Alt+U` (or `/updates`) opens and folds it. The final reply is
+  the open message and every update folds above it.
+- **A question for you.** When the AI is blocked on you it ends its turn with "Needs you": the question, why only you, numbered options.
+  Type a number or your own words; the answer goes to Quest and, when Quest does not pick the work back up itself, continues here as your next
+  message. `/notnow` folds the question to one line and leaves it open; `/answer` brings it back. A question for a teammate shows "Waiting on <name>".
+  An answer needs the Quest credentials above.
+- **A reply that stopped early** gives its reason in plain words ("I stopped here because...") and `Alt+K` (or `/continue`) sends "Continue".
+
+Not built here: `/replay`. It needs the run log of the pause-and-resume design, which is not in the code yet.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
@@ -286,6 +306,7 @@ Click and drag selects text without holding Shift; Ctrl+C copies the selection (
 | `QAR_QUEST_AUTO_MATCH` | `1` | `0` makes "no quest" the default (a person's `/quest auto` still wins). |
 | `QAR_REP_NAME`, `QAR_REP_PERSONA_FILE` | none | Default representative name and persona file. |
 | `QUEST_BASE_URL`, `QUEST_API_KEY`, `QUEST_TEAM_ID`, `QUEST_TEAM_IDS` | none | Quest credentials, needed to list quests from Quest. |
+| `QAR_INTERIM_REPLIES` | off | `1` lets a long turn send "progress so far" messages that fold into "Earlier updates (n)". |
 | `QAR_CONFIG_FILE` | none | A TOML config file, same as `--config`. |
 
 The full list of variables the runner reads is in the module docstring of

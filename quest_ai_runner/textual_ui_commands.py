@@ -58,6 +58,9 @@ class CommandsMixin:
             self._dispatch_command(line)
             return
 
+        if self.open_ask_takes(line):
+            return
+
         if self._turn_active:
             # Queue the message. The orchestrator may drain and fold it into THIS turn's own
             # goal loop (a long deep run mid-step); whatever it leaves untouched is picked up
@@ -118,6 +121,20 @@ class CommandsMixin:
             s._cmd_depth(line[6:].strip()); return
         if line.startswith("/system"):
             s._cmd_system(line[7:].strip()); return
+        if line == "/trace":
+            self.action_toggle_trail(); return
+        if line == "/updates":
+            self.action_toggle_updates(); return
+        if line == "/continue":
+            if self.continue_offer:
+                self.action_continue_stopped()
+            else:
+                c.dim("  Nothing stopped early, so there is nothing to continue.")
+            return
+        if line == "/notnow":
+            self.fold_open_ask(); return
+        if line == "/answer":
+            self.unfold_open_ask(); return
         if line == "/pause":
             self._cmd_pause(); return
         if line == "/resume":

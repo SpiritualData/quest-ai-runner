@@ -76,6 +76,7 @@ class ActionsMixin:
             hints.append(("alt+d", "Details"))
         if self._future_ctx_panel.has_bullets:
             hints.append(("alt+c", "Sources"))
+        hints.extend(self.trail_key_hints())
         if len(runs) > 1:
             hints.append(("tab", "Next job"))
         hints.append(("pgup/pgdn", "Scroll"))

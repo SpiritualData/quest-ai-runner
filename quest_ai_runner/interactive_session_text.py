@@ -18,6 +18,7 @@ _SLASH_COMMANDS = [
     "/quit", "/q",
     "/models", "/model", "/model ", "/depth", "/depth ",
     "/system", "/replan", "/pause", "/resume",
+    "/trace", "/updates", "/continue", "/notnow", "/answer",
     "/save ", "/save", "/load ", "/sessions",
     "/quest", "/quest ",
 ]
@@ -55,6 +56,13 @@ Commands:
     /pause               Pause the live deep worker, keeping its work (stream_json runner)
     /resume              Continue a paused or stopped deep run in the same session
 
+  ● This reply
+    /trace               Show or hide what the AI read for the newest reply (also Alt+T)
+    /updates             Show or fold the earlier updates of the newest reply (also Alt+U)
+    /continue            Carry on from a reply that stopped early (also Alt+K)
+    /notnow              Fold a question the AI asked you; it stays open
+    /answer              Bring that question back to answer it
+
   ● Quest
     /quest               Select a quest for this conversation
     /quest <name>        Select a quest by name or id
@@ -85,6 +93,8 @@ Keys:
   PageUp/Down    Scroll the transcript
   Tab            Next job's detail (completes a command while the menu is open)
   Alt+D / Alt+C  Show the job's detail and metric results / show the sources it looked at
+  Alt+T / Alt+U  Show what the AI read / show the earlier updates of the newest reply
+  Alt+K          Continue a reply that stopped early
 
 Resume a conversation later (run outside this session):
 

@@ -176,13 +176,16 @@ class DecisionsMixin:
             return []
 
     def resolve_decision(self, decision_id: str, resolution: str,
-                         human_statement: Optional[str] = None) -> WriteResult:
+                         human_statement: Optional[str] = None, response_text: Optional[str] = None) -> WriteResult:
         """``human_statement``: the person's verbatim approving words, required to approve an AI
-        account's quest-creation ask through a key (never invent them). A ``WriteResult`` or a raised
+        account's quest-creation ask through a key (never invent them). ``response_text`` is the person's own
+        answer to a question (the app sends it the same way). A ``WriteResult`` or a raised
         ``QuestWriteError``."""
         body: Dict[str, Any] = {"resolution": resolution}
         if human_statement is not None:
             body["human_statement"] = human_statement
+        if response_text:
+            body["response_text"] = response_text
         return self._write("POST", f"/api/teams/decisions/{decision_id}/resolve", body=body,
                            label="Resolving the ask")
 
