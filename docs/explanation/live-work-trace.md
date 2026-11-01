@@ -124,13 +124,25 @@ Contract changes: none to the field names. Additions that are not fields: the wi
   `workTrace.records.looking`), `links` (`watch-for-risk`, `check`, `workTrace.links.checking`, `affects_user` true when a link was
   removed). Counts: `web.found` is results listed, `web.read` is pages fetched; `papers.found` is the total matches, `papers.read`
   is works whose abstract the run took; `links.checked` and `links.failed` (removed or unverifiable).
-- SSE frame to the app: `data: {"event": "work_trace", "data": <WorkTraceEvent>}`. On `done`, `data.work_trace` holds the compact
-  list of finished steps (the same events), so a client that missed frames or reconnected still has them. The saved assistant
-  message carries `work_trace` (a list of events), in the same way as `explanation`.
+- SSE frame to the app: `data: {"event": "work_trace", "data": <WorkTraceEvent>}`, on the Quest AI chat, ad-hoc and group
+  conversations and the team thread streams. On `done`, `data.work_trace` holds the list of finished steps (the same events),
+  so a client that missed frames or reconnected still settles. A reply stored in message history carries `workTrace` (the same
+  list; wire name `workTrace` on every chat surface, stored as `work_trace`), so a person who opens the chat later sees the
+  settled line. A step still running when the turn ends is not stored.
+- Group and team chat: the person who asked sees the stream as emitted (their own record titles). Every other human
+  participant gets each event live through the sync bus, `topic "conversation"`, `action "work_trace"`, payload
+  `{"replyToId": <the asking message id>, "workTrace": <WorkTraceEvent>}`, already projected by the hub with record titles
+  removed (`records` and `action` steps are counts only; web domains and paper lines stay, they are public). The asker is not
+  sent their own events over the bus. The stored `workTrace` of a shared thread is that same counts-only projection, so the
+  history, the bus `message` push and a later reload agree. A one-on-one chat (one human) stores the full event.
+- Backend switch: `QUEST_AI_WORK_TRACE=off` stops requesting, streaming, delivering and storing the trace.
+- Metric hook: `evaluation/components/work_trace_check.py` (`check_turn`, `passes`, `score`) takes a finished turn's structural
+  call records and its emitted events and reports overstated counts, private titles or items in a shared thread, URLs, queries or
+  paths in labels, and steps that did not reach a terminal state. No model is called.
 - Replays: the backend stream registry replays frames by index, so a resume repeats earlier `work_trace` frames. That is harmless
   by the replace-by-`step_id` rule, and the `done` frame repeats the final state.
 - Not built: failover notice, overseer or act steps, the background-task progress path (`kind: "work_trace"` on task progress),
-  and team-chat forwarding (the team-chat stream drops the event, so a shared thread never receives it).
+  and the non-stream group reply path (a reply produced without streaming carries no trace).
 
 ## 3. The UI concept: "Trail"
 
@@ -239,7 +251,7 @@ review using the artifacts skill, not text.
 
 Verified by reading code and offline tests since the first draft: the in-process chat sink (`StreamSink`) forwards every event
 type, so `work_trace` reaches the backend; the backend's event chain (`stream_quest_ai_events`) DROPPED any type it did not list
-(it logged one warning per process), so `work_trace` is now handled there, and the team-chat reply stream still drops it by design;
+(it logged one warning per process), so `work_trace` is now handled there, and the group and team streams now forward it;
 the tool registry call (`ToolRegistry.invoke`) has no emitter, so QAR derives events where the orchestrator holds the result
 (`run_tool_calls`, `_exec_one_read`, the context event, the link guard); the literature tool exposes works as structured data
 (`ToolResult.data`), web search exposes `Observation.hits` (title, url), and a page fetch exposes only the requested address, so a
