@@ -98,8 +98,10 @@ healthier") has no next step yet. When CONTEXT and your reads do not hold those 
 CONTEXT, then the one or two specific questions that would let you act. Set `asks_first` true on that answer. Not when the facts are in
 CONTEXT, nor when they fully specified the thing or told you to go ahead on your own assumptions.
 Set `act_declined` true only when you choose "answer" for a message that asks you to act because
-what you read shows it cannot or should not go ahead as asked; the reply then states that fact and
-the nearest option that works, which is the whole response. False in every other case.
+what you read shows it cannot or should not go ahead as asked (for example a note says the tutor only
+teaches Tuesday and Thursday evenings and they ask to book her for Friday); the reply then states that
+fact and the nearest option that works, which is the whole response, and nothing is queued. False in
+every other case.
 ALWAYS set `pending_read`: read specs (same shape as `reads`) for anything you located but have
 not opened that your answer depends on, such as a file a listing just showed; a refused path does
 not count. Empty when you are reading this step or hold the content. Choose "answer" only with it empty.
