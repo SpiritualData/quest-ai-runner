@@ -198,6 +198,52 @@ def unsupported_values(draft: str, evidence: EvidenceIndex) -> List[str]:
     return list(dict.fromkeys(out))
 
 
+FROM_TODAY = re.compile(r"(?<!\d)(?P<n>\d{1,3})\s+days?\s+(?:away\s+)?from\s+(?:today|now)\b", re.IGNORECASE)
+TODAY_IN_EVIDENCE = re.compile(r"(?:today|current date|now)\b[^\n\d]{0,40}(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})", re.IGNORECASE)
+LIVE_DATE_LINE = re.compile(r"Date:\s*(?:[A-Za-z]+,\s*)?(?P<mon>[A-Za-z]+)\s+(?P<d>\d{1,2}),\s*(?P<y>\d{4})")
+
+
+def today_of(evidence: str):
+    """(today, tolerance in days): the date the turn's own context states, else the server's date with one day of slack
+    (the person's zone may be a day away from the server's)."""
+    from datetime import date
+    match = TODAY_IN_EVIDENCE.search(evidence or "")
+    try:
+        if match:
+            return date(int(match.group("y")), int(match.group("m")), int(match.group("d"))), 0
+        live = LIVE_DATE_LINE.search(evidence or "")
+        if live and month_of(live.group("mon")):
+            return date(int(live.group("y")), month_of(live.group("mon")), int(live.group("d"))), 0
+    except ValueError:
+        pass
+    return date.today(), 1
+
+
+def day_count_errors(draft: str, evidence: str) -> List[str]:
+    """Each "N days from today" the draft states beside a calendar date when N is not the real distance from the turn's own
+    today to that date. Pure arithmetic on dates the text states (never on its wording): the model keeps miscounting these.
+    Only the explicit "from today / from now" form is judged, because "3 days before they arrive" counts from another date."""
+    from datetime import date
+    today, slack = today_of(evidence)
+    errors: List[str] = []
+    for sentence in SENTENCE_END.split(draft or ""):
+        claim = FROM_TODAY.search(sentence)
+        found = dates_in(sentence)
+        if not claim or len(found) != 1 or len(found[0][1]) != 1:
+            continue
+        day, month = found[0][1][0]
+        try:
+            target = date(today.year, month, day)
+        except ValueError:
+            continue
+        if target < today:
+            continue
+        real = (target - today).days
+        if abs(int(claim.group("n")) - real) > slack:
+            errors.append(f"{real} days from today to {found[0][0]}, not {claim.group('n')}")
+    return errors
+
+
 def standard_for(plan: Any) -> Standard:
     """The standard that applies to this reply, from the planner's structured fields only."""
     shape = getattr(plan, "reply_shape", None)
@@ -216,6 +262,8 @@ def measure(draft: str, standard: Standard, evidence: str) -> Measurements:
             m.violations.append(Violation(
                 "unsupported", "remove " + ", ".join(f"'{v}'" for v in m.unsupported[:4])
                 + " (it is in nothing you were given; say you do not have it, or leave it out)", tuple(m.unsupported)))
+        for wrong in day_count_errors(text, evidence):
+            m.violations.append(Violation("days", "correct the day count: it is " + wrong, (wrong,)))
         if standard.max_questions is not None and m.questions > standard.max_questions:
             m.violations.append(Violation(
                 "questions", f"ask at most {standard.max_questions} question{'s' if standard.max_questions != 1 else ''}"

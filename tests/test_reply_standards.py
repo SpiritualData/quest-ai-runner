@@ -145,3 +145,16 @@ def test_an_iso_timestamp_in_the_evidence_supports_that_day_and_not_the_day_befo
     evidence = "Run Log 2026-10-23T06:00:00Z 10K 54:10"
     assert not measure("Your 23 October trial was 54:10.", STANDARDS["default"], evidence).failed
     assert measure("Your 22 October trial was 54:10.", STANDARDS["default"], evidence).unsupported == ["22 October"]
+
+
+def test_a_wrong_days_from_today_count_is_a_violation_and_the_right_one_is_not():
+    from quest_ai_runner.core.reply_standards import STANDARDS, SHAPE_DEFAULT, day_count_errors, measure
+    evidence = "Current date: 2026-11-01 (Sunday). The in-laws arrive 20 Nov."
+    wrong = "If they arrive a week early, on 13 Nov, that leaves you 10 days from today instead of 19."
+    assert day_count_errors(wrong, evidence) == ["12 days from today to 13 Nov, not 10"]
+    assert day_count_errors("On 13 Nov, that leaves you 12 days from today.", evidence) == []
+    assert day_count_errors("Finish 3 days before they arrive on 20 Nov.", evidence) == []   # counts from another date: not judged
+    assert day_count_errors(wrong, "- Date: Sunday, November 1, 2026") == ["12 days from today to 13 Nov, not 10"]
+    assert day_count_errors("On 13 Nov that is 12 days from today.", "no date here") in ([], [])  # server-date fallback with one day of slack
+    measured = measure(wrong, STANDARDS[SHAPE_DEFAULT], evidence)
+    assert any(v.kind == "days" for v in measured.violations) and "12 days from today" in measured.hint()
