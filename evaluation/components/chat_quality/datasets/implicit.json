@@ -688,7 +688,7 @@
     "rubric": [
       "Knows the in-laws currently arrive 20 Nov and a week early would be 13 Nov",
       "Notes the target of finishing 3 days before arrival (so about 10 Nov), and that plumbing is limited to {PLUMBER}, so the schedule is feasible only if tiling and painting finish in time",
-      "Gives a short, concrete recommendation (confirm the plumber slot, buy tiles and paint now)"
+      "Gives a short, concrete recommendation that moves the work forward now (for example confirm the plumber slot, buy the tiles or the paint)"
     ],
     "must_use_pivots": [
       "PLUMBER_WINDOW"
