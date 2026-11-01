@@ -176,11 +176,14 @@ def goals_of(quest_id):
         for group in body.get("period_groups") or []:
             out.extend(group.get("goals") or [])
     if not out:
-        # A quest kept off the team (world_spec.PRIVATE_QUEST_KEYS) has no team listing: read the
-        # goals of its current periods instead.
-        status, body = api("GET", f"/api/planning/quests/{quest_id}/goals/current")
+        # A quest kept off the team (world_spec.PRIVATE_QUEST_KEYS) has no team listing: read ALL of
+        # its goals from its plan (every period, not just the current one), in the listing's shape.
+        status, body = api("GET", f"/api/planning/quests/{quest_id}/plan")
         if status == 200 and isinstance(body, dict):
-            out = [{**g, "scheduled_date": g.get("scheduledDate")} for g in body.get("goals") or []]
+            out = [{"id": g.get("id"), "name": g.get("title"), "period": g.get("period"),
+                    "completed": g.get("completed"), "criteria": g.get("criteria"),
+                    "description": g.get("description"), "scheduled_date": g.get("scheduledDate"),
+                    "deadline": g.get("deadline")} for g in body.get("goals") or []]
     return out
 
 
