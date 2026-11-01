@@ -5,7 +5,7 @@
 * ClaudeCliProvider._flatten_messages degrades a block list to text and never crashes.
 """
 from hubofhubs.models.anthropic import AnthropicProvider
-from quest_ai_runner.adapters.claude_cli_provider import _flatten_block, _flatten_messages
+from hubofhubs.models.claude_cli import _flatten_block, _flatten_messages
 
 
 class _FakeTextBlock:

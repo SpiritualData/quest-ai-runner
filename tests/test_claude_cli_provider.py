@@ -1,301 +1,52 @@
-"""Offline tests for the keyless ClaudeCliProvider.
+"""Offline tests for QAR's binding of the hub's keyless ``claude_cli`` arm.
 
-These never spawn the real ``claude`` binary — ``_invoke`` is monkeypatched — so they run with no
-network, no API key, and no CLI installed. They lock down the two things that can silently break:
-the lenient JSON extraction (the CLI can't force tool_choice) and the tier->CLI-alias mapping.
+The arm's own behaviour (flags, JSON extraction, usage accounting, the thinking caps) is tested in the hub
+(``tests/test_models_claude_cli.py``). These cover what QAR binds: the live newest-model lookup, the tier registry, the
+environment settings it reads, and the lane-wide usage limit. Nothing spawns the real ``claude`` binary.
 """
+import json
+import subprocess
+
+import pytest
+
+from hubofhubs.models import claude_cli as hub
 from quest_ai_runner.adapters import ClaudeCliProvider
 from quest_ai_runner.adapters import claude_cli_provider as ccp
-from quest_ai_runner.adapters.claude_cli_provider import cli_model, extract_json_object
 from quest_ai_runner.core.goal_runner import _is_claude_model
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import DECIDE_TOOL
 
 
-def test_cli_model_maps_family_ids_to_aliases():
-    assert cli_model("claude-opus-4-8") == "opus"
-    assert cli_model("claude-sonnet-4-6") == "sonnet"
-    assert cli_model("claude-haiku-4-5-20251001") == "haiku"
-    # already an alias -> unchanged family alias
-    assert cli_model("sonnet") == "sonnet"
-    # fully-qualified Claude ids without a family word pass through
-    assert cli_model("us.anthropic.claude-x-1") == "us.anthropic.claude-x-1"
-    assert cli_model(None) is None
-    assert cli_model("") is None
+def test_the_provider_is_the_hubs_arm_with_qars_collaborators_bound():
+    provider = ClaudeCliProvider()
+    assert isinstance(provider, hub.ClaudeCliProvider)
+    assert provider.usage_limits is ccp.usage_limit and provider.newest_family_id is ccp.newest_claude_id
 
 
-def test_cli_model_drops_non_claude_ids():
-    # The CLI only runs Claude models. A tier map built for a Gemini/OpenAI deployment must not
-    # leak a foreign id into --model (the CLI exits 1 having done nothing); fall back to the
-    # CLI's default model instead — the same gate the deep runner applies (_is_claude_model).
-    assert cli_model("gemini-3.1-flash-lite") is None
-    assert cli_model("gemini-3.5-flash") is None
-    assert cli_model("gpt-4o") is None
-    assert cli_model("some-other-model") is None
+def test_cli_model_uses_the_newest_live_id_of_a_family(monkeypatch):
+    monkeypatch.setattr(ccp, "newest_claude_id", lambda family: f"claude-{family}-9-9")
+    assert ccp.cli_model("claude-opus-4-8") == "claude-opus-9-9"
+    assert ccp.cli_model("gemini-3.5-flash") is None
 
 
-def test_cli_model_and_is_claude_model_accept_fable():
-    # Fable is a runnable Claude family alias the CLI documents alongside opus/sonnet/haiku
-    # (`claude --model` help: "an alias for the latest model (e.g. 'fable', 'opus', or
-    # 'sonnet')"). A bare alias and a pinned id both resolve; a non-Claude id is still rejected.
-    assert cli_model("fable") == "fable"
-    assert cli_model("claude-fable-5-1") == "fable"
-    assert cli_model("gemini-3.5-flash") is None
-
+def test_cli_model_and_is_claude_model_accept_fable(monkeypatch):
+    monkeypatch.setattr(ccp, "newest_claude_id", lambda family: None)
+    assert ccp.cli_model("fable") == "fable"
+    assert ccp.cli_model("claude-fable-5-1") == "fable"
     assert _is_claude_model("fable") is True
     assert _is_claude_model("claude-fable-5-1") is True
     assert _is_claude_model("gemini-3.5-flash") is False
 
 
-def test_invoke_error_surfaces_stdout_envelope(monkeypatch):
-    # In --output-format json mode the CLI reports errors in the stdout envelope with an EMPTY
-    # stderr; the raised error must carry the envelope's result text, not "no stderr".
-    import json
-    import subprocess
-
-    provider = ClaudeCliProvider()
-    envelope = {"is_error": True, "result": "API Error: 404 model not found"}
-
-    def fake_run(cmd, **kwargs):
-        class P:
-            returncode = 1
-            stdout = json.dumps(envelope).encode()
-            stderr = b""
-        return P()
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    try:
-        provider._invoke("hi", model="haiku")
-        raise AssertionError("expected RuntimeError")
-    except RuntimeError as e:
-        assert "API Error: 404 model not found" in str(e)
-
-
-def test_extract_json_object_bare():
-    assert extract_json_object('{"action": "answer", "rationale": "ok"}') == {
-        "action": "answer",
-        "rationale": "ok",
-    }
-
-
-def test_extract_json_object_fenced():
-    text = '```json\n{"action": "read", "rationale": "look"}\n```'
-    assert extract_json_object(text) == {"action": "read", "rationale": "look"}
-
-
-def test_extract_json_object_embedded_in_prose():
-    text = 'Sure, here is my decision:\n{"action": "deep", "rationale": "work"}\nHope that helps!'
-    assert extract_json_object(text) == {"action": "deep", "rationale": "work"}
-
-
-def test_extract_json_object_handles_braces_in_strings():
-    text = '{"action": "answer", "rationale": "use {curly} braces"}'
-    assert extract_json_object(text) == {"action": "answer", "rationale": "use {curly} braces"}
-
-
-def test_extract_json_object_empty_on_garbage():
-    assert extract_json_object("no json here at all") == {}
-    assert extract_json_object("") == {}
-
-
-def test_plan_parses_invoke_output(monkeypatch):
-    p = ClaudeCliProvider()
-    captured = {}
-
-    def fake_invoke(prompt, *, model, system=None):
-        captured["prompt"] = prompt
-        captured["model"] = model
-        return '```json\n{"action": "read", "rationale": "grep first", "model_tier": "haiku"}\n```'
-
-    monkeypatch.setattr(p, "_invoke", fake_invoke)
-    decision = p.plan("PLAN PROMPT", model="claude-haiku-4-5", tool_schema=DECIDE_TOOL)
-    assert decision["action"] == "read"
-    assert decision["model_tier"] == "haiku"
-    # The strict-output instruction (with the schema) is appended to the planner prompt.
-    assert "OUTPUT FORMAT (STRICT)" in captured["prompt"]
-    assert "PLAN PROMPT" in captured["prompt"]
-
-
-def test_plan_degrades_to_empty_dict_on_invoke_failure(monkeypatch):
-    p = ClaudeCliProvider()
-
-    def boom(prompt, *, model, system=None):
-        raise RuntimeError("cli not installed")
-
-    monkeypatch.setattr(p, "_invoke", boom)
-    # plan() must NEVER raise — an empty dict lets normalize_decision pick a safe default.
-    assert p.plan("x", model="sonnet", tool_schema=DECIDE_TOOL) == {}
-
-
-def test_accumulate_usage_sums_all_three_input_categories():
-    """``tokens_in`` must be fresh + cache-creation + cache-read, all three.
-
-    All three are input the model genuinely processed on that call, and all three are genuinely
-    billed (fresh at list price, cache creation at 1.25x, cache reads at roughly a tenth). An
-    earlier pass at MEDIUM-008 dropped cache reads on the theory that a read just re-counts the
-    tokens already paid for as cache creation -- but a read is separately billed input on its OWN
-    call, so dropping it under-reports a warm call by orders of magnitude (a call measured at 2
-    fresh + 9,894 read would report "2 tokens used" for a real 9,896). The real inflation the user
-    saw came from the CLI harness sending far too many tokens per call in the first place (tool
-    schemas, the CLAUDE.md chain above the corpus root) -- fixed via ``--tools ""`` and a neutral
-    ``cwd`` in ``_invoke``, not by hiding part of what was actually sent.
-    """
-    p = ClaudeCliProvider()
-    envelope = {
-        "usage": {
-            "input_tokens": 9,
-            "cache_creation_input_tokens": 36465,
-            "cache_read_input_tokens": 24012,
-            "output_tokens": 40,
-        },
-        "total_cost_usd": 0.05,
-    }
-    p._accumulate_usage(envelope)
-    assert p.tokens_in == 9 + 36465 + 24012
-    assert p.tokens_out == 40
-    # The three stay separately readable for cost work, since they bill at different rates.
-    assert p.fresh_input_tokens == 9
-    assert p.cache_creation_tokens == 36465
-    assert p.cache_read_tokens == 24012
-
-
-def test_accumulate_usage_repeated_calls_each_count_their_own_cache_read():
-    """A second call re-reading a cached prefix bills that read on ITS OWN call, every time.
-
-    Simulates a multi-turn ``claude -p`` run where a later internal turn re-sends the same large
-    harness prefix from cache: that read is real input processed on the second call and must be
-    counted there too, not skipped because an earlier call already paid for the same prefix once
-    (see ``test_accumulate_usage_sums_all_three_input_categories`` for why skipping it is wrong).
-    """
-    p = ClaudeCliProvider()
-    first_call = {
-        "usage": {"input_tokens": 5, "cache_creation_input_tokens": 36465,
-                   "cache_read_input_tokens": 0, "output_tokens": 20},
-    }
-    second_call = {
-        "usage": {"input_tokens": 5, "cache_creation_input_tokens": 0,
-                   "cache_read_input_tokens": 36465, "output_tokens": 20},
-    }
-    p._accumulate_usage(first_call)
-    p._accumulate_usage(second_call)
-    assert p.tokens_in == 5 + 36465 + 5 + 36465
-    assert p.tokens_out == 40
-
-
-def test_invoke_uses_neutral_cwd_and_bare_tools_flag(monkeypatch):
-    """A pure-completion call must run outside the corpus root and drop tool schemas entirely.
-
-    Regression for the harness bloat that made an ordinary planner/answer call carry ~9,400
-    tokens of repo CLAUDE.md content (inherited cwd = corpus root) plus ~9,000 tokens of built-in
-    tool schemas (``--disallowed-tools`` blocks tool USE but still ships every schema). The fix is
-    ``--tools ""`` (no tools at all, so no schemas) and ``cwd=_neutral_cwd()`` (an empty scratch
-    directory with no CLAUDE.md chain above it).
-    """
-    import json
-    import subprocess as subprocess_module
-
-    p = ClaudeCliProvider()
-    captured = {}
-
-    def fake_supported_flags(binary):
-        return frozenset(ccp._ONE_SHOT_FLAGS.keys())
-
-    def fake_run(cmd, **kwargs):
-        captured["cmd"] = cmd
-        captured["cwd"] = kwargs.get("cwd")
-
-        class P:
-            returncode = 0
-            stdout = json.dumps({
-                "result": "ok",
-                "usage": {"input_tokens": 1, "output_tokens": 1},
-            }).encode()
-            stderr = b""
-        return P()
-
-    monkeypatch.setattr(ccp, "_supported_flags", fake_supported_flags)
-    monkeypatch.setattr(subprocess_module, "run", fake_run)
-    p._invoke("hi", model="haiku")
-
-    assert captured["cwd"] == ccp._neutral_cwd()
-    assert "--tools" in captured["cmd"]
-    tools_idx = captured["cmd"].index("--tools")
-    assert captured["cmd"][tools_idx + 1] == ""
-    # No schemas to disallow once "--tools" strips them all, so the (redundant) fallback flag
-    # must not also be sent.
-    assert "--disallowed-tools" not in captured["cmd"]
-
-
-def test_neutral_cwd_recreates_the_directory_if_something_else_removed_it():
-    """Regression for FileNotFoundError: ... 'qar-cli-completion' (found 2026-09-29).
-
-    _neutral_cwd() used to be @lru_cache(maxsize=1): the directory was created once per process
-    and the path cached forever. A long-running poll/chat service outlives the directory (a tmp
-    sweep, a reboot, a stray cleanup), so every call after that point returned a path to nothing,
-    and subprocess.run's cwd= raised. It must now recreate the directory on every call.
-    """
-    import os
-    import shutil
-
-    path = ccp._neutral_cwd()
-    assert os.path.isdir(path)
-
-    shutil.rmtree(path)
-    assert not os.path.exists(path)
-
-    path_again = ccp._neutral_cwd()
-    assert path_again == path
-    assert os.path.isdir(path_again), "a missing scratch dir must be recreated, not just re-returned"
-
-
-def test_answer_flattens_messages_and_returns_text(monkeypatch):
-    p = ClaudeCliProvider()
-    captured = {}
-
-    def fake_invoke(prompt, *, model, system=None):
-        captured["prompt"] = prompt
-        captured["system"] = system
-        return "the grounded answer"
-
-    monkeypatch.setattr(p, "_invoke", fake_invoke)
-    msgs = [
-        {"role": "user", "content": "context block"},
-        {"role": "user", "content": "the question"},
-    ]
-    out = p.answer(msgs, model="claude-sonnet-4-6", system="be terse")
-    assert out == "the grounded answer"
-    assert "context block" in captured["prompt"]
-    assert "the question" in captured["prompt"]
-    assert captured["system"] == "be terse"
-
-
-def test_list_models_advertises_only_claude_families():
-    """The CLI can run Claude and nothing else, so it must advertise Claude families.
-
-    Regression guard: this used to return [], which made ModelRegistry fall through to its
-    Gemini-flavoured DEFAULT_FALLBACK_TOP on a claude_cli-only deployment.
-    """
-    models = ClaudeCliProvider().list_models()
-    assert models, "an empty list sends the registry to its Gemini defaults"
-    assert all("claude" in m.lower() for m in models)
-    assert {"haiku", "sonnet", "opus"} <= {cli_model(m) for m in models}
-
-
 def test_every_tier_resolves_to_a_cli_runnable_model():
-    """End to end of the bug: no tier may resolve to a model the CLI cannot run.
-
-    A tier resolving to e.g. ``gemini-3.1-flash-lite`` is what killed every task on the SD dev
-    lane at its first planner call, because no Gemini provider was registered to run it.
-    """
+    """No tier may resolve to a model the CLI cannot run (a Gemini id on a CLI-only lane killed every task at its first planner call)."""
     registry = ModelRegistry(ClaudeCliProvider())
     for tier in ("fast", "balanced", "quality", "best"):
         resolved = registry.resolve_tier(tier)
         assert "claude" in resolved.lower(), f"tier {tier} resolved to non-Claude {resolved!r}"
-        assert cli_model(resolved) is not None, f"tier {tier} gave the CLI an unusable {resolved!r}"
+        assert ccp.cli_model(resolved) is not None, f"tier {tier} gave the CLI an unusable {resolved!r}"
 
 
 def test_explicit_tier_override_still_wins():
-    """Operators pinning QAR_MODEL_* keep full precedence over the advertised families."""
     registry = ModelRegistry(ClaudeCliProvider(), fallback={"balanced": "claude-haiku-4-5"})
     assert registry.resolve_tier("balanced") == "claude-haiku-4-5"
 
@@ -305,185 +56,14 @@ def test_build_env_strips_billing_and_session_keys(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "tok")
     monkeypatch.setenv("CLAUDECODE", "1")
     env = ClaudeCliProvider()._build_env()
-    assert "ANTHROPIC_API_KEY" not in env
-    assert "ANTHROPIC_AUTH_TOKEN" not in env
-    assert "CLAUDECODE" not in env
+    assert "ANTHROPIC_API_KEY" not in env and "ANTHROPIC_AUTH_TOKEN" not in env and "CLAUDECODE" not in env
 
 
-# --- one-shot hardening: the spawned process must be a completion, not an agent ---------------
-
-
-def _argv_for(monkeypatch, *, help_text, system=None):
-    """Build the argv ``_invoke`` would spawn, against a CLI advertising ``help_text``."""
-    class _Proc:
-        returncode = 0
-        stdout = b'{"result": "ok"}'
-        stderr = b""
-
-    seen = {}
-
-    def fake_run(cmd, **kwargs):
-        # The capability probe is itself a subprocess.run; answer it, then capture the real call.
-        if len(cmd) == 2 and cmd[1] == "--help":
-            return type("P", (), {"stdout": help_text.encode(), "returncode": 0})()
-        seen["cmd"] = cmd
-        return _Proc()
-
-    ccp._supported_flags.cache_clear()
-    monkeypatch.setattr(ccp.subprocess, "run", fake_run)
-    provider = ClaudeCliProvider(claude_path="/nonexistent/claude")
-    provider._invoke("hello", model="haiku", system=system)
-    ccp._supported_flags.cache_clear()
-    return seen["cmd"]
-
-
-FULL_HELP = ("--exclude-dynamic-system-prompt-sections --setting-sources "
-             "--strict-mcp-config --append-system-prompt")
-
-
-def test_invoke_strips_the_agent_harness_when_the_cli_supports_it(monkeypatch):
-    # The whole point of this provider is a single-shot completion. Left to its defaults the CLI
-    # ships its agent system prompt, every tool schema, the settings sources and the ambient MCP
-    # servers on EVERY call -- measured at 17,815 system tokens to answer with one word.
-    argv = _argv_for(monkeypatch, help_text=FULL_HELP, system="be terse")
-
-    # --system-prompt REPLACES the agent prompt; --append-system-prompt would have kept it.
-    assert "--system-prompt" in argv
-    assert argv[argv.index("--system-prompt") + 1] == "be terse"
-    assert "--append-system-prompt" not in argv
-
-    assert "--exclude-dynamic-system-prompt-sections" in argv
-    assert argv[argv.index("--setting-sources") + 1] == ""   # no CLAUDE.md, skills, hooks
-    assert "--strict-mcp-config" in argv                     # no ambient MCP servers
-    assert "--disallowed-tools" in argv                      # belt to the above braces
-
-
-def test_invoke_supplies_a_system_prompt_even_when_the_caller_gives_none(monkeypatch):
-    # --exclude-dynamic-system-prompt-sections is only honoured alongside --system-prompt, and an
-    # omitted one would restore the very agent prompt this is removing.
-    argv = _argv_for(monkeypatch, help_text=FULL_HELP, system=None)
-    assert argv[argv.index("--system-prompt") + 1] == ccp._PURE_COMPLETION_SYSTEM
-
-
-def test_invoke_falls_back_cleanly_on_an_older_cli(monkeypatch):
-    # A deployment whose `claude` predates these flags must keep working rather than fail every
-    # call with a usage error: we pass only what --help advertises.
-    argv = _argv_for(monkeypatch, help_text="--append-system-prompt --model", system="be terse")
-    assert "--append-system-prompt" in argv
-    assert "--system-prompt" not in argv
-    for flag in ("--exclude-dynamic-system-prompt-sections", "--setting-sources",
-                 "--strict-mcp-config"):
-        assert flag not in argv
-
-
-def test_a_vanished_configured_binary_falls_back_instead_of_failing(tmp_path, monkeypatch):
-    """An installer replacing the binary in place must be a blip, not a fatal window.
-
-    Observed twice on one machine in a day; the second time it cost 101 of 107 topic-extraction
-    calls in a single bootstrap, each a bare FileNotFoundError, and the run reported completion
-    having produced almost nothing.
-    """
-    real = tmp_path / "claude"
-    real.write_text("#!/bin/sh\necho hi\n")
-    real.chmod(0o755)
-    monkeypatch.setattr(ccp.shutil, "which", lambda name: str(real) if name == "claude" else None)
-
-    gone = ClaudeCliProvider(claude_path=str(tmp_path / "does-not-exist" / "claude"))
-    assert gone._resolve_binary() == str(real), "a missing configured path must fall back"
-
-    present = ClaudeCliProvider(claude_path=str(real))
-    assert present._resolve_binary() == str(real), "an existing configured path is used as-is"
-
-
-def test_a_missing_worker_binary_is_retried_not_fatal():
-    """An installer replacing the binary in place is a window of seconds, not a permanent fault.
-
-    Observed three times in two days; the worst cost 101 of 107 topic-extraction calls in one
-    bootstrap, each failing instantly, and the run reported completion having produced almost
-    nothing.
-    """
-    from hubofhubs.models.retry import is_transient_error, retry_transient
-
-    assert is_transient_error(FileNotFoundError(2, "No such file or directory", "/x/claude")) is True
-
-    calls = {"n": 0}
-
-    @retry_transient(max_retries=2, base_delay=0.001)
-    def flaky():
-        calls["n"] += 1
-        if calls["n"] < 3:
-            raise FileNotFoundError(2, "No such file or directory", "/x/claude")
-        return "ok"
-
-    assert flaky() == "ok"
-    assert calls["n"] == 3, "it must actually retry, not just classify"
-
-
-def test_a_genuinely_wrong_path_still_fails_with_the_filename():
-    # Retrying must not turn a misconfiguration into a mystery: the final error still names it.
-    import pytest
-    from hubofhubs.models.retry import retry_transient
-
-    @retry_transient(max_retries=1, base_delay=0.001)
-    def always_missing():
-        raise FileNotFoundError(2, "No such file or directory", "/nope/claude")
-
-    with pytest.raises(FileNotFoundError) as err:
-        always_missing()
-    assert "/nope/claude" in str(err.value.filename)
-
-
-# --- plan-only thinking cap (QAR_CLI_PLAN_THINKING_TOKENS) ------------------------------------
-
-
-def _envs_for_plan_and_answer(monkeypatch, **provider_kwargs):
-    """The env each of plan() and answer() would spawn the CLI with."""
-    class _Proc:
-        returncode = 0
-        stdout = b'{"result": "{\\"action\\": \\"answer\\"}"}'
-        stderr = b""
-
-    seen = []
-
-    def fake_run(cmd, **kwargs):
-        if len(cmd) == 2 and cmd[1] == "--help":
-            return type("P", (), {"stdout": FULL_HELP.encode(), "returncode": 0})()
-        seen.append(kwargs.get("env") or {})
-        return _Proc()
-
-    ccp._supported_flags.cache_clear()
-    # A deployment shell may export the QAR_CLI_*_THINKING_TOKENS defaults; these tests assert the library default.
-    for var in ("MAX_THINKING_TOKENS", "QAR_CLI_PLAN_THINKING_TOKENS", "QAR_CLI_HAIKU_THINKING_TOKENS"):
-        monkeypatch.delenv(var, raising=False)
-    monkeypatch.setattr(ccp.subprocess, "run", fake_run)
-    provider = ClaudeCliProvider(claude_path="/nonexistent/claude", **provider_kwargs)
-    provider.plan("decide", model="haiku", tool_schema={"input_schema": {"type": "object"}})
-    provider.answer([{"role": "user", "content": "hi"}], model="haiku")
-    ccp._supported_flags.cache_clear()
-    return seen
-
-
-def test_plan_thinking_cap_reaches_plan_calls_only(monkeypatch):
-    plan_env, answer_env = _envs_for_plan_and_answer(monkeypatch, plan_thinking_tokens=0)
-    assert plan_env.get("MAX_THINKING_TOKENS") == "0"
-    assert "MAX_THINKING_TOKENS" not in answer_env
-
-
-def test_no_plan_thinking_cap_leaves_the_cli_default(monkeypatch):
-    plan_env, answer_env = _envs_for_plan_and_answer(monkeypatch)
-    assert "MAX_THINKING_TOKENS" not in plan_env
-    assert "MAX_THINKING_TOKENS" not in answer_env
-
-
-def _captured_thinking_env(monkeypatch, model, *, thinking_tokens=None):
-    """Run _invoke once with subprocess stubbed; return the MAX_THINKING_TOKENS the CLI would get."""
-    import json
-    import subprocess as subprocess_module
-
+def captured_thinking_env(monkeypatch, model):
     captured = {}
 
     def fake_run(cmd, **kwargs):
-        captured["env"] = kwargs.get("env", {})
+        captured["env"] = kwargs.get("env") or {}
 
         class P:
             returncode = 0
@@ -491,30 +71,42 @@ def _captured_thinking_env(monkeypatch, model, *, thinking_tokens=None):
             stderr = b""
         return P()
 
-    monkeypatch.setattr(ccp, "_supported_flags", lambda binary: frozenset(ccp._ONE_SHOT_FLAGS.keys()))
-    monkeypatch.setattr(subprocess_module, "run", fake_run)
-    ClaudeCliProvider()._invoke("hi", model=model, thinking_tokens=thinking_tokens)
+    monkeypatch.setattr(hub, "_supported_flags", lambda binary: frozenset(hub._ONE_SHOT_FLAGS.keys()))
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    ClaudeCliProvider()._invoke("hi", model=model)
     return captured["env"].get("MAX_THINKING_TOKENS")
 
 
-def test_haiku_completions_take_the_haiku_thinking_cap(monkeypatch):
-    """QAR_CLI_HAIKU_THINKING_TOKENS caps thinking on every Haiku completion (fast and balanced tiers)."""
+def test_the_haiku_thinking_setting_is_read_from_the_environment_when_a_call_is_made(monkeypatch):
     monkeypatch.setenv("QAR_CLI_HAIKU_THINKING_TOKENS", "0")
-    assert _captured_thinking_env(monkeypatch, "haiku") == "0"
-    assert _captured_thinking_env(monkeypatch, "claude-haiku-5-5") == "0"
+    assert captured_thinking_env(monkeypatch, "haiku") == "0"
+    assert captured_thinking_env(monkeypatch, "sonnet") is None
+    monkeypatch.delenv("QAR_CLI_HAIKU_THINKING_TOKENS")
+    assert captured_thinking_env(monkeypatch, "haiku") is None
 
 
-def test_sonnet_and_opus_are_never_capped_by_the_haiku_setting(monkeypatch):
-    monkeypatch.setenv("QAR_CLI_HAIKU_THINKING_TOKENS", "0")
-    assert _captured_thinking_env(monkeypatch, "sonnet") is None
-    assert _captured_thinking_env(monkeypatch, "opus") is None
+def test_the_effort_setting_is_read_from_the_environment(monkeypatch):
+    argv = {}
+
+    def fake_run(cmd, **kwargs):
+        argv["cmd"] = cmd
+
+        class P:
+            returncode = 0
+            stdout = b'{"result": "ok"}'
+            stderr = b""
+        return P()
+
+    monkeypatch.setattr(hub, "_supported_flags", lambda binary: frozenset(hub._ONE_SHOT_FLAGS.keys()))
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setenv("QAR_CLI_EFFORT", "low")
+    ClaudeCliProvider()._invoke("hi", model="haiku")
+    assert argv["cmd"][argv["cmd"].index("--effort") + 1] == "low"
 
 
-def test_explicit_plan_cap_wins_over_the_haiku_setting(monkeypatch):
-    monkeypatch.setenv("QAR_CLI_HAIKU_THINKING_TOKENS", "0")
-    assert _captured_thinking_env(monkeypatch, "haiku", thinking_tokens=512) == "512"
-
-
-def test_unset_haiku_setting_leaves_the_cli_default(monkeypatch):
-    monkeypatch.delenv("QAR_CLI_HAIKU_THINKING_TOKENS", raising=False)
-    assert _captured_thinking_env(monkeypatch, "haiku") is None
+def test_the_lanes_usage_limit_is_the_typed_error_of_core():
+    from quest_ai_runner.core import usage_limit
+    provider = ClaudeCliProvider()
+    assert isinstance(provider.usage_limit_error(usage_limit.UsageLimit(message="weekly limit")), usage_limit.UsageLimitError)
+    with pytest.raises(usage_limit.UsageLimitError):
+        raise provider.usage_limit_error(usage_limit.UsageLimit(message="weekly limit"))

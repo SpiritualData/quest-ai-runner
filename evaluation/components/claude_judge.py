@@ -7,7 +7,8 @@ API key from the environment, so the run costs no API dollars; the dollar figure
 import common  # noqa: F401  (puts the repository on the path)
 from esoi.harness import BudgetExceeded
 from quest_ai_runner import usage
-from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider, extract_json_object
+from hubofhubs.models.claude_cli import extract_json_object
+from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
 
 JUDGE_MODEL = "claude-sonnet"   # family alias; the CLI resolves it to the newest sonnet
 JUDGE_TAG = "eval.judge"

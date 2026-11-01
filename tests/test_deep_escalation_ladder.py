@@ -117,7 +117,7 @@ def test_deep_models_extends_a_bucket_label_ladder_on_a_cli_only_deployment(capl
     "claude-opus". The ladder used to stop at one rung whenever the fallback was Claude-shaped,
     which is how a live run retried the SAME model six times: the escalation mechanism ran with
     nothing to escalate to. Claude-shaped is not the same question as "a distinct rung"."""
-    from quest_ai_runner.adapters.claude_cli_provider import CLI_RUNNABLE_MODELS
+    from hubofhubs.models.claude_cli import CLI_RUNNABLE_MODELS
 
     provider = StubProvider(decisions=[], models=CLI_RUNNABLE_MODELS)
     orch = _orch(provider, config=OrchestratorConfig())
@@ -156,7 +156,7 @@ def test_fallback_deep_ladder_warns_at_the_opus_ceiling_and_does_not_invent_fabl
     fix is NOT to invent a further family (e.g. Fable) as an automatic "stronger than Opus" rung,
     since Fable is a different family, not a higher tier. The warning naming
     QAR_DEEP_MODELS/QAR_MODEL_BEST is the correct, actionable outcome (2026-09-26)."""
-    from quest_ai_runner.adapters.claude_cli_provider import CLI_RUNNABLE_MODELS
+    from hubofhubs.models.claude_cli import CLI_RUNNABLE_MODELS
 
     provider = StubProvider(decisions=[], models=CLI_RUNNABLE_MODELS)
     orch = _orch(provider, config=OrchestratorConfig())

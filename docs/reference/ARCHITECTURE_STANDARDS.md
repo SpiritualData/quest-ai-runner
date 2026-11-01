@@ -49,7 +49,7 @@ The authoritative, checked inventory is `esoi/components.csv` (rendered in
 | `adapters/files_adapter.py` | reference `RetrievalAdapter` over a configured file root |
 | `adapters/cached_db_adapter.py` | reference `RetrievalAdapter` over a live DB with a short-TTL cache |
 | `providers.py` | builds the hub's provider arms (`hubofhubs.models`: Anthropic, Gemini, OpenAI, DeepSeek) and its router from the environment |
-| `adapters/claude_cli_provider.py` | the keyless `ModelProvider` over the local `claude` CLI |
+| `adapters/claude_cli_provider.py` | QAR's binding of the hub's keyless `claude_cli` arm (the local `claude` CLI) |
 | `adapters/*_vector_store.py`, `*_context_*` | optional vector/card context assembly |
 | `runner/quest_client.py` | the Quest HTTP client (`qsk_` auth) + `QuestDecisionSink` |
 | `runner/poller.py` | event-driven, signature-deduped poll loop; bounded concurrency |

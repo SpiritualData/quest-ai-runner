@@ -283,7 +283,7 @@ you can add your own logging, analytics, or cost-triage inside the adapter witho
 brain. **The core ships with zero non-stdlib dependencies and never imports your LLM wrapper.**
 The vendor providers (`AnthropicProvider`, `GeminiProvider`, `OpenAIProvider`, `DeepSeekProvider`) and the `MultiProvider` router
 are the hub's (`hubofhubs.models`, per-vendor extras, settings as arguments); `quest_ai_runner/providers.py` builds them from the
-environment. `ClaudeCliProvider` (drives the local `claude` CLI headless and keyless) is in `quest_ai_runner/adapters/`.
+environment. `ClaudeCliProvider` (drives the local `claude` CLI headless and keyless) is the hub's `claude_cli` arm (`hubofhubs.models.claude_cli`); `quest_ai_runner/adapters/` binds QAR's usage limit and settings to it.
 
 A minimal wrapper example:
 

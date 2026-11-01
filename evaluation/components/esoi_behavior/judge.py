@@ -40,7 +40,7 @@ def judge_prompt(case, reply):
 
 def parse_verdict(text):
     """``(passed, reason)`` from the judge's text. An unparseable answer is a fail, never a pass."""
-    from quest_ai_runner.adapters.claude_cli_provider import extract_json_object
+    from hubofhubs.models.claude_cli import extract_json_object
     obj = extract_json_object(text or "")
     verdict = str(obj.get("verdict", "")).strip().lower()
     reason = " ".join(str(obj.get("reason", "")).split())
