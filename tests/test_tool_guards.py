@@ -327,3 +327,18 @@ def test_the_reach_judge_prompt_names_its_keys_so_a_provider_without_forced_tool
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config)
     assert orch.judge_reach("What does it cost right now?")["reach"] == "world"
     assert '"reach"' in provider.last_plan_prompt and "exactly these properties" in provider.last_plan_prompt
+
+
+# --- an inside verdict vetoes a web read -----------------------------------------------------------------------------------------
+
+def test_an_inside_verdict_drops_web_reads_and_keeps_the_rest():
+    reads = [{"web": "race date"}, {"tool": "list_quest_notes"}, {"web_page": "https://x.example"}]
+    kept, dropped = tool_guards.drop_web_reads_for_own_records({"reach": "inside"}, reads)
+    assert kept == [{"tool": "list_quest_notes"}]
+    assert len(dropped) == 2
+
+
+def test_other_verdicts_and_no_verdict_keep_every_web_read():
+    reads = [{"web": "price"}]
+    for verdict in (None, {}, WORLD, {"reach": "outside", "covered_by": None}):
+        assert tool_guards.drop_web_reads_for_own_records(verdict, reads) == (reads, [])

@@ -746,6 +746,18 @@ class RunLoopMixin:
                 if budget_exhausted():
                     break
                 continue
+            if rs.plan.action == "read" and message_is_user_turn and self.web is not None and rs.plan.reads:
+                # The reach judge settled that this lives in the person's own records: a web read for it is dropped, and the
+                # planner is told why in what it gathered (``tool_guards.drop_web_reads_for_own_records``).
+                _kept_reads, _dropped_web = tool_guards.drop_web_reads_for_own_records(self.reach_verdict(rs.user_message), rs.plan.reads)
+                if _dropped_web:
+                    log.info("Web-read veto: the reach judge says this lives in the person's own records; %d web read(s) dropped.", len(_dropped_web))
+                    gathered.append(planner_note_observation(
+                        "WEB SEARCH NOT RUN: this request was judged to live in the person's own records, which are already in "
+                        "your context (outcomes, dates, notes, figures). Take dates and amounts from there and work them out "
+                        "yourself; do not search the web for them. Read their records with a tool if something is missing, "
+                        "otherwise answer.", "web_vetoed"))
+                    rs.plan.reads = _kept_reads
             if rs.plan.action == "read":
                 visible_from = planner_full_view_start(
                     len(gathered_content(gathered)), cfg.planner_recent_full,

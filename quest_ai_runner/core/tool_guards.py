@@ -265,3 +265,15 @@ def web_read_owed(verdict: Optional[Mapping[str, Any]], web_configured: bool, ga
     if web_was_read(gathered):
         return None
     return {"web": str(message).strip()[:WEB_QUERY_CHARS]}
+
+
+def drop_web_reads_for_own_records(verdict: Optional[Mapping[str, Any]], reads: Sequence[Mapping[str, Any]]
+                                   ) -> Tuple[List[Mapping[str, Any]], List[Mapping[str, Any]]]:
+    """Split a step's reads into (kept, dropped web reads). Once the reach judge has settled that what the person asks lives in
+    their own records (``reach == "inside"``), a web search or page fetch is not reachable work: a small planner reads a date or a
+    figure the person's own quest already states as if it were a public fact and searches the web for it, then answers from a wrong
+    page. The structured verdict decides, never the words of the planner's query. No verdict keeps every read."""
+    if not verdict or verdict.get("reach") != "inside":
+        return list(reads), []
+    kept = [r for r in reads if not (isinstance(r, Mapping) and (r.get("web") is not None or r.get("web_page")))]
+    return kept, [r for r in reads if r not in kept]
