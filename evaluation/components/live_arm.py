@@ -35,6 +35,9 @@ class Pinned:
 def api_provider(model):
     """The API provider that serves ``model``: Anthropic for a Claude id (the default), Gemini only for a Gemini candidate."""
     from quest_ai_runner.hub import make_provider
+    if str(model).lower().startswith("gemini") and os.environ.get("QAR_EVAL_ALLOW_NON_ANTHROPIC") != "1":
+        raise SystemExit(f"metrics run on Anthropic models: {FAST_MODEL_ENV}={model!r} names Gemini "
+                         "(set QAR_EVAL_ALLOW_NON_ANTHROPIC=1 to measure a candidate on purpose)")
     return make_provider("gemini" if str(model).lower().startswith("gemini") else "anthropic")
 
 

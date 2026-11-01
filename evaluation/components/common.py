@@ -44,11 +44,34 @@ def load_cases(component):
     return harness.load_cases(component, CONFIG)
 
 
+ANTHROPIC_BACKENDS = ("claude_cli", "anthropic")
+ANTHROPIC_MODEL_WORDS = ("claude", "haiku", "sonnet", "opus", "fable", "mythos")
+
+
+def require_anthropic(environ=None):
+    """The organisation's decision is that metrics run on Anthropic models. A measured run refuses to start when its model backend
+    or a tier override names another vendor, so a lane's leftover Gemini setting cannot quietly become the measurement. Set
+    ``QAR_EVAL_ALLOW_NON_ANTHROPIC=1`` to measure a candidate on purpose (the row then says which model it used)."""
+    environ = os.environ if environ is None else environ
+    if environ.get("QAR_EVAL_ALLOW_NON_ANTHROPIC") == "1":
+        return
+    backend = environ.get("QAR_MODEL_BACKEND", "claude_cli").strip().lower()
+    if backend not in ANTHROPIC_BACKENDS:
+        raise SystemExit(f"metrics run on Anthropic models: QAR_MODEL_BACKEND={backend!r} is not one of {ANTHROPIC_BACKENDS} "
+                         "(set QAR_EVAL_ALLOW_NON_ANTHROPIC=1 to measure another vendor on purpose)")
+    for name in sorted(k for k in environ if k.startswith("QAR_MODEL_") and k != "QAR_MODEL_BACKEND"):
+        value = environ[name].strip().lower()
+        if value and not any(word in value for word in ANTHROPIC_MODEL_WORDS):
+            raise SystemExit(f"metrics run on Anthropic models: {name}={environ[name]!r} names another vendor "
+                             "(set QAR_EVAL_ALLOW_NON_ANTHROPIC=1 to measure another vendor on purpose)")
+
+
 def build_offline_orchestrator(meter, registry=None, planner_tier="haiku", recipe_store=None, selections=None):
     """Real Orchestrator, deep runner disabled, no Quest server. Refuses to return if a deep runner is wired.
     ``recipe_store`` wires a RecipeStore; None leaves recipes off (QAR_RECIPES is scrubbed).
     ``selections`` overrides the project default for this orchestrator (``RunnerConfig.selections``); every
     component measures the planner alone, the only route."""
+    require_anthropic()
     scratch = tempfile.mkdtemp(prefix="qar_comp_")
     os.environ.update(QUEST_BASE_URL=OFFLINE_QUEST_URL, QUEST_API_KEY="offline-eval",
                       QAR_STANDARD_TOOLS="1", QAR_CORPUS_ROOT=scratch, QAR_CONVERSATION_SEARCH="false",
