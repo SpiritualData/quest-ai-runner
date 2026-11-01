@@ -22,7 +22,8 @@ from .orchestrator_decide_tool import (
 from .orchestrator_decisions import _truncate_goal, user_ordered_work
 from .orchestrator_events import grounding_context_layer
 from .orchestrator_text import _strip_future_context, unconfirmed_no_change_text
-from .orchestrator_turn_messages import file_blocked_ask
+from .orchestrator_turn_messages import ensure_found_constraint_head, file_blocked_ask
+from .reply_standards import turn_holds_records
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
 from .planner_prompt import NOT_QUEUED_NOTE
@@ -404,6 +405,11 @@ class RunCloseMixin:
                             str(verdict.get("blocker") or ""), str(verdict.get("question") or "").strip()):
                         blocked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False,
                                                   coverage=None)
+                        if getattr(self.cfg, "reply_standards", False) and turn_holds_records(getattr(rs, "_sources", None), rs.gathered):
+                            ensure_found_constraint_head(
+                                self, _ctx_meta, request=rs.user_message,
+                                records=(getattr(rs, "context_view", "") or "")[:3500] + "\n" + (gathered_content(rs.gathered) or "")[:2500],
+                                question=str(verdict.get("question") or "").strip())
                         if file_blocked_ask(self, emit, _ctx_meta, blocked, verdict,
                                             question=str(verdict.get("question") or "").strip()):
                             rs.text = blocked.output

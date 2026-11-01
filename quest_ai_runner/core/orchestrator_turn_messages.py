@@ -18,6 +18,7 @@ from hubofhubs.ports.model import STEP_SUMMARIZE, plan_with_step
 from .auxiliary_prompts import INTERIM_PROGRESS_TOOL
 from .card_filter import _extract_json
 from .prompt_specs import render_prompt
+from .reply_standards import found_constraint_head, turn_holds_records
 from .ask_policy import ask_event_data, ask_text, blocks_on_person, file_ask, resolve_assignee, why_only_you_of
 from .interim_policy import (
     InterimLedger, InterimState, SEND, SKIP_NO_WHY, decide, done_text, interim_event_data, interim_text_of, progress_signature,
@@ -109,6 +110,21 @@ def maybe_send_interim(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]],
     data = interim_event_data(done=done, why_more=why, next_step=next_step, coverage=coverage, attempt=attempt, seq=seq)
     emit.emit(ProgressEvent(type=EVENT_INTERIM, text=interim_text_of(data), data=data))
     return pre.reason
+
+
+def ensure_found_constraint_head(orch: Any, ctx_meta: Optional[Dict[str, Any]], *, request: str, records: str, question: str) -> None:
+    """An ask built from a verifier's question has no answer step behind it, so the found_constraint judge may not have run this
+    turn. Run it once here on the question and, when the person's records conflict with the request, store the plain head
+    (``found_constraint_head``) that ``file_blocked_ask`` opens the question with. Structured verdict only; never raises."""
+    if ctx_meta is None or ctx_meta.get("found_constraint_head") or ctx_meta.get("found_constraint_judged"):
+        return
+    ctx_meta["found_constraint_judged"] = True
+    try:
+        verdict = orch.found_constraint_verdict(request, records, question)
+        if verdict and verdict.get("conflict"):
+            ctx_meta["found_constraint_head"] = found_constraint_head(str(verdict.get("fact") or ""), str(verdict.get("consequence") or ""))
+    except Exception:  # noqa: BLE001 -- a standard must never break the turn
+        pass
 
 
 def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], res: Any, verdict: Mapping[str, Any], *,

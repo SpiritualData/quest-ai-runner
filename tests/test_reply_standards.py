@@ -290,3 +290,32 @@ def test_the_ask_carries_the_conflict_in_the_question_that_is_shown_and_filed():
     finally:
         m.file_ask = orig
     assert seen.get("question") == "Friday will not work. Which day?" or not seen
+
+
+def test_ask_path_runs_the_found_constraint_judge_once_and_stores_the_head():
+    from quest_ai_runner.core.orchestrator_turn_messages import ensure_found_constraint_head
+
+    class FakeOrch:
+        calls = 0
+
+        def found_constraint_verdict(self, request, records, reply):
+            FakeOrch.calls += 1
+            return {"conflict": True, "fact": "Ana only teaches on Tuesday and Thursday evenings", "consequence": "Friday will not work"}
+
+    meta = {}
+    ensure_found_constraint_head(FakeOrch(), meta, request="book Ana for Friday", records="note", question="Which evening?")
+    ensure_found_constraint_head(FakeOrch(), meta, request="book Ana for Friday", records="note", question="Which evening?")
+    assert FakeOrch.calls == 1
+    assert meta["found_constraint_head"] == "Friday will not work. Ana only teaches on Tuesday and Thursday evenings."
+
+
+def test_ask_path_leaves_the_question_alone_without_a_conflict():
+    from quest_ai_runner.core.orchestrator_turn_messages import ensure_found_constraint_head
+
+    class FakeOrch:
+        def found_constraint_verdict(self, request, records, reply):
+            return {"conflict": False}
+
+    meta = {}
+    ensure_found_constraint_head(FakeOrch(), meta, request="x", records="y", question="z")
+    assert "found_constraint_head" not in meta
