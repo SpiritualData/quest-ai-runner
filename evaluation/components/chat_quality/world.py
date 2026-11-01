@@ -989,7 +989,7 @@ failure:
 """
 
 
-def revert(before, after, world=None):
+def revert(before, after, world=None, attempts_left=2):
     """Best-effort undo of a case's side effects so the next case starts from the seeded world.
     Returns True when a fresh snapshot equals ``before`` again; otherwise the caller should
     ``reset()`` (which needs no new approvals)."""
@@ -1051,6 +1051,13 @@ def revert(before, after, world=None):
     for cid in set(after["all_collection_ids"]) - set(before["all_collection_ids"]):
         api("DELETE", f"/api/data/collections/{cid}")
     again = snapshot(world)
+    if diff(before, again) and attempts_left > 0:
+        # The entry and goal listings are cached server-side, so a fresh snapshot can still show
+        # what was just deleted (or miss what was just added). Undo what the new snapshot still
+        # shows, a short wait later, instead of leaving a stray (a leftover "Dana" entry made the
+        # next REL-MUL-07 run report her as already logged).
+        time.sleep(3)
+        return revert(before, again, world, attempts_left - 1)
     return not diff(before, again)
 
 
