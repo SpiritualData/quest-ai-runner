@@ -60,7 +60,8 @@ def local_timezone():
 CLIENT_TIMEZONE = local_timezone()
 
 TAG = "ZZQEVAL"
-WORK_DIR = Path("/tmp/qualeval")
+# QUAL_WORK_DIR keeps a second account's world state (world.json, raw results) apart from the shared one.
+WORK_DIR = Path(os.environ.get("QUAL_WORK_DIR") or "/tmp/qualeval")
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 
