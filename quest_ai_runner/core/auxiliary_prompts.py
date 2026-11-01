@@ -343,7 +343,7 @@ FOUND_CONSTRAINT_TOOL: Dict[str, Any] = {
             "conflict": {
                 "type": "boolean",
                 "description": "True when the RECORDS state a fact (a day, a time, a limit, a rule) that conflicts with what the "
-                               "REQUEST asks for. False when nothing in the records conflicts, or the records do not bear on the request.",
+                               "REQUEST asks for. False when nothing in the records conflicts, the records do not bear on the request, or the request already fits the fact (it asks for the day the fact allows).",
             },
             "fact": {"type": "string", "description": "When conflict is true: the records' fact in one short plain sentence, in the records' own words."},
             "consequence": {"type": "string", "description": "When conflict is true: what it means for the request, in one short sentence (for example: Friday will not work)."},
@@ -368,7 +368,9 @@ FOUND_CONSTRAINT_PROMPT = """\
 The RECORDS below are the person's own (notes, goals, history) and what this turn read. Decide two things.
 
 1. Do the RECORDS state a fact that conflicts with what the REQUEST asks for (a day, a time, a limit, a rule)? If not, set
-   conflict=false and stop.
+   conflict=false and stop. A request that already fits the fact is NOT a conflict: it asks for the day the fact allows (for
+   example "on the next evening she teaches"), or leaves the choice to be made inside the fact. Only a request that, as asked,
+   cannot happen is a conflict.
 2. If so, does the REPLY open by stating, plainly, that the request will not work as asked and why (the fact and what it means),
    before it offers anything else? A reply that only offers other options leaves states_it_first=false.
 3. Independently: does the REPLY still offer the conflicting request itself as an option (go ahead anyway, book it regardless,
