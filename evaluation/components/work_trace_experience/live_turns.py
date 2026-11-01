@@ -104,7 +104,7 @@ def run_turn(name):
     links = [c for c in (getattr(result, "link_checks", None) or []) if isinstance(c, dict)]
     if links:
         calls.append({"kind": "links", "verdicts": [{"verdict": str(c.get("verdict") or "")} for c in links]})
-    return dict(id=f"TRACE-REAL-{name.upper()}", stage="real", kind=spec["kind"], surface=spec["surface"], message=spec["message"],
+    return dict(id=f"TRACE-REAL-{name.upper()}", stage="real", stratum="a-real", kind=spec["kind"], surface=spec["surface"], message=spec["message"],
                 reply=str(getattr(result, "text", "") or ""), events=events, calls=calls,
                 private_titles=[c[1][:60] for c in CARDS] if spec["surface"] == "group" else [],
                 seconds=round(time.time() - started, 1),

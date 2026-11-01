@@ -145,7 +145,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-02",
@@ -247,7 +248,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-03",
@@ -325,7 +327,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-04",
@@ -378,7 +381,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-05",
@@ -773,7 +777,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-06",
@@ -931,7 +936,8 @@
    "Launch candle shop"
   ],
   "stage": "offline",
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-07",
@@ -943,7 +949,8 @@
   "calls": [],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-08",
@@ -988,7 +995,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-09",
@@ -1035,7 +1043,8 @@
   "calls": [],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-10",
@@ -1094,7 +1103,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-11",
@@ -1225,7 +1235,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-OFF-12",
@@ -1443,7 +1454,8 @@
   ],
   "stage": "offline",
   "private_titles": [],
-  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content"
+  "source": "hand-built from the event shapes the 2026-11-01 real runs emitted (counts, domains, citation lines); fictional content",
+  "stratum": "b-offline"
  },
  {
   "id": "TRACE-REAL-WEB",
@@ -1703,7 +1715,8 @@
   ],
   "private_titles": [],
   "seconds": 34.8,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store"
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store",
+  "stratum": "a-real"
  },
  {
   "id": "TRACE-REAL-RECORDS",
@@ -1771,7 +1784,8 @@
   ],
   "private_titles": [],
   "seconds": 56.0,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store"
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store",
+  "stratum": "a-real"
  },
  {
   "id": "TRACE-REAL-PAPERS",
@@ -1992,7 +2006,8 @@
   ],
   "private_titles": [],
   "seconds": 48.9,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store"
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store",
+  "stratum": "a-real"
  },
  {
   "id": "TRACE-REAL-GROUP",
@@ -2054,6 +2069,7 @@
    "Conversational Spanish: 25 minute daily practice, stuck on p"
   ],
   "seconds": 40.5,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store"
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store",
+  "stratum": "a-real"
  }
 ]
