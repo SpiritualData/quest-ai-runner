@@ -47,6 +47,10 @@ from .em_dash_pass import remove_em_dashes
 from .tools import ToolContext
 
 
+
+#: Consecutive read steps that found nothing before the planner is told no further read will help.
+EMPTY_READ_STEPS_BEFORE_NOTE = 2
+
 class RunLoopMixin:
     """The turn's exit (``finish``) and the bounded plan, gather and re-plan loop."""
 
@@ -824,6 +828,19 @@ class RunLoopMixin:
                         if isinstance(obs, dict) and obs.get("planner_note"):
                             gathered.append(planner_note_observation(
                                 str(obs["planner_note"]), "not_answered_by"))
+                    # Two read steps in a row that returned nothing: tell the planner no further read
+                    # will bring anything, so it answers or acts instead of spending the turn's steps
+                    # (a live "check the Run Log, then add a goal" turn issued fifteen empty reads,
+                    # then was handed to a queued task).
+                    found_nothing = all(
+                        not (isinstance(o, dict) and (o.get("hits") or str(o.get("text") or "").strip()))
+                        for o in new_obs)
+                    rs.empty_read_steps = (getattr(rs, "empty_read_steps", 0) + 1) if found_nothing else 0
+                    if rs.empty_read_steps >= EMPTY_READ_STEPS_BEFORE_NOTE:
+                        gathered.append(planner_note_observation(
+                            "Your last reads returned nothing and no further read will return anything "
+                            "new. Answer now with what you have (say what you could not find), or take "
+                            "the action the person asked for. Do not read again.", "no_new_data"))
                     # The turn's REAL record of what was fetched, for the sufficiency gate above:
                     # these specs actually executed, whoever chose them (the planner on its own, or
                     # the gate). Recorded here, at the one place reads run, so the gate can never be
