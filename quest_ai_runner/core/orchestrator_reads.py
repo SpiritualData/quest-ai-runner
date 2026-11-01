@@ -308,7 +308,7 @@ class ReadsMixin:
             trace = getattr(card_context, "trace", None)
             if trace is not None:
                 if origin == "card":
-                    trace.records_used(card_meta_light)        # fetched by id: the model asked for this record
+                    trace.records_used(card_meta_light, card_meta)        # fetched by id: the model asked for this record
                 else:
                     trace.records_selected(card_meta_light, card_meta)
             count = len(card_meta or [])

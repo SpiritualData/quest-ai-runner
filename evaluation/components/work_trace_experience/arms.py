@@ -84,9 +84,9 @@ def shown_elements(view, moments=("live", "settled", "expanded")):
 def gate_problems(case, views):
     """Truthfulness: the emitted events, then every element shown to every viewer."""
     shared = case.get("surface") == "group"
-    problems = list(check_turn(case["calls"], case["events"], shared=False, private_titles=()))
+    problems = list(check_turn(case["calls"], case["events"], shared=False, private_titles=(), reply=case.get("reply")))
     if shared:
-        problems += [p for p in check_turn(case["calls"], projected(case["events"]), shared=True, private_titles=case.get("private_titles") or ()) ]
+        problems += [p for p in check_turn(case["calls"], projected(case["events"]), shared=True, private_titles=case.get("private_titles") or (), reply=case.get("reply"))]
     actual = totals(case)
     for name, view in views.items():
         viewer_shared = shared and name.startswith("other")

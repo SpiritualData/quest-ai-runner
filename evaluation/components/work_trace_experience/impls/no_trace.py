@@ -5,7 +5,7 @@ from work_trace_experience import arms
 
 
 def build(meter):
-    provider = claude_judge.cli_provider(meter, "claude-code-subscription")
+    provider = claude_judge.cli_provider(meter, "judge claude-sonnet alias; turns claude-haiku-5-5")
 
     def experience(case):
         return dict(arm="no_trace", views=arms.views_for("no_trace", case), provider=provider)

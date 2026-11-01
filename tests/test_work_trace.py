@@ -129,6 +129,7 @@ CARDS = [{"id": "c1", "title": "Run a marathon", "adapter": "quest", "item_type_
 def test_records_titles_go_to_the_owner_only():
     sink, trace = make("owner")
     trace.records_used(CARDS)
+    trace.finish("Your Run a marathon quest and Morning pages both say the same.")
     step = sink.latest()["records"]
     assert step["counts"] == {"found": 2, "read": 2}
     assert [(i["label"], i.get("kind")) for i in step["items"]] == [("Run a marathon", "quest"), ("Morning pages", "reflection")]
@@ -138,6 +139,7 @@ def test_records_are_counts_only_in_a_shared_thread_or_unknown_audience():
     for audience in ("shared", "", "someone"):
         sink, trace = make(audience)
         trace.records_used(CARDS)
+        trace.finish("Your Run a marathon quest and Morning pages both say the same.")
         step = sink.latest()["records"]
         assert step["items"] == [] and step["counts"]["found"] == 2
         assert "marathon" not in json.dumps([e.data for e in sink.events])
@@ -237,6 +239,7 @@ def test_a_record_the_plan_quoted_is_the_only_one_counted():
     light = [{"id": c["id"], "title": c["title"], "adapter": "quest", "item_type_counts": {"quest": 1}} for c in FULL_CARDS]
     trace.records_selected(light, FULL_CARDS)
     trace.facts_noted(['"left knee sore after hills" (your marathon quest)'])
+    trace.finish("Your left knee is sore after hills, so swap one hill session for a swim.")
     step = sink.latest()["records"]
     assert step["counts"] == {"found": 1, "read": 1}
     assert [i["ref"] for i in step["items"]] == ["marathon-april-quest"]
@@ -247,6 +250,7 @@ def test_a_card_named_by_id_or_title_in_a_fact_counts_and_a_short_name_does_not(
     light = [{"id": "c1", "title": "Run", "adapter": "quest"}, {"id": "candle-shop-launch", "title": "Candle shop", "adapter": "quest"}]
     trace.records_selected(light, [])
     trace.facts_noted(["Run every day", "see candle-shop-launch for the budget"])
+    trace.finish("The candle-shop-launch budget is the open question; Candle shop is on track.")
     assert [i["ref"] for i in sink.latest()["records"]["items"]] == ["candle-shop-launch"]
 
 
@@ -254,6 +258,7 @@ def test_a_card_fetched_by_id_counts():
     sink, trace = make()
     trace.records_selected(CARDS, [])
     trace.records_used([{"id": "c2"}])
+    trace.finish("Morning pages is the habit to protect on travel days.")
     assert sink.latest()["records"]["counts"] == {"found": 1, "read": 1}
 
 
@@ -262,6 +267,7 @@ def test_shared_thread_records_stay_counts_only_when_used():
     light = [{"id": c["id"], "title": c["title"], "adapter": "quest"} for c in FULL_CARDS]
     trace.records_selected(light, FULL_CARDS)
     trace.facts_noted(["left knee sore after hills"])
+    trace.finish("A left knee sore after hills calls for rest.")
     step = sink.latest()["records"]
     assert step["items"] == [] and step["counts"]["read"] == 1
 
@@ -305,3 +311,67 @@ def test_a_listed_site_the_reply_never_cites_is_not_shown_but_still_counted_as_f
     step = sink.latest()["web"]
     assert step["counts"] == {"found": 3, "read": 0}
     assert [i["ref"] for i in step["items"]] == ["a.example"]
+
+
+def test_a_record_label_is_a_human_title_never_card_text_or_a_conversation_line():
+    sink, trace = make()
+    cards = [{"id": "q1", "title": "Run a marathon in April", "adapter": "quest"},
+             {"id": "q2", "title": "Latest Python release The conversation's topic: Latest Python release. latest stable", "adapter": "quest"},
+             {"id": "q3", "title": "Connects the ESOI framework and Quest product intent to the competitive alter...", "adapter": "quest"},
+             {"id": "q4", "title": "User: what is the latest python", "adapter": "quest"},
+             {"id": "q5", "title": "", "adapter": "quest"},
+             {"id": "q6-slug", "title": "q6 slug", "adapter": "quest"}]
+    trace.records_used(cards)
+    trace.finish("Run a marathon in April, q6 slug, Latest Python release, Connects the ESOI framework.")
+    step = sink.latest()["records"]
+    assert [i["label"] for i in step["items"]] == ["Run a marathon in April"] and step["counts"] == {"found": 1, "read": 1}
+
+
+FIND_NOTHING = {"id": "esoi-framework", "title": "ESOI framework", "adapter": "quest", "item_type_counts": {"note": 1},
+                "rendered_section": "Connects the ESOI framework and Quest product intent to the competitive alternatives"}
+
+
+def test_a_reply_that_found_nothing_in_a_record_it_read_does_not_carry_it():
+    """The planner took a fact from the card and the run fetched it, but the reply says nothing was found: the record is not shown."""
+    sink, trace = make()
+    trace.records_selected([FIND_NOTHING], [FIND_NOTHING])
+    trace.facts_noted(["the card connects the ESOI framework and Quest product intent to the competitive alternatives"])
+    trace.records_used([FIND_NOTHING], [FIND_NOTHING])
+    trace.finish("I could not find any logged runs for you, so I cannot say how your marathon training is going. Tell me what you ran.")
+    assert "records" not in sink.latest()
+
+
+def test_a_reply_that_says_it_has_no_web_search_carries_no_records_and_no_sites():
+    sink, trace = make("shared")
+    team = [{"id": f"t{i}", "title": f"Team quest {i}", "adapter": "quest", "item_type_counts": {"quest": 1},
+             "rendered_section": f"Team quest {i} tracks the work item number {i} for the launch plan"} for i in range(7)]
+    trace.records_selected(team, team)
+    trace.facts_noted([f"Team quest {i} tracks the work item number {i} for the launch plan" for i in range(7)])
+    trace.web_started()
+    trace.web_searched(Observation(kind="query", hits=[{"title": "A", "url": "https://medium.com/x"}, {"title": "B", "url": "https://blog.example.org/y"}]))
+    trace.finish("I have no working web search here, so I cannot check the latest Go release. I can tell you what I knew when I was trained.")
+    latest = sink.latest()
+    assert "records" not in latest
+    assert latest["web"]["items"] == [] and latest["web"]["counts"] == {"found": 2, "read": 0}      # searched, no page opened
+
+
+def test_only_the_exact_site_the_reply_names_is_cited():
+    assert work_trace.host_cited("blog.rust-lang.org", "see https://blog.rust-lang.org/2026/x")
+    assert work_trace.host_cited("python.org", "see https://www.python.org/downloads/ for it")
+    assert not work_trace.host_cited("docs.python.org", "see https://www.python.org/downloads/ for it")
+    assert not work_trace.host_cited("blog.rust-lang.org", "see rust-lang.org for the notes")
+    assert not work_trace.host_cited("medium.com", "the platform is not named medium dot com here")
+    assert not work_trace.host_cited("python.org", "see notpython.org or python.org.evil.example")
+
+
+def test_a_vector_hit_is_titled_by_its_own_name_not_by_the_slice_of_its_text():
+    from quest_ai_runner.core.orchestrator_events import _project_card_metadata_for_event
+    hit = {"id": "card:m1", "title": "Run a marathon in April Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday.",
+           "name": "Run a marathon in April", "adapter": "vector"}
+    bodyless = {"id": "card:m2", "title": "Morning pages habit Skipping pages on travel days. Goal is 20 days in a row; streak 4.", "adapter": "vector"}
+    light = _project_card_metadata_for_event([hit, bodyless])
+    assert light[0]["name"] == "Run a marathon in April" and "name" not in light[1]
+    sink, trace = make()
+    trace.records_used(light)
+    trace.finish("Run a marathon in April is the quest to protect, and Morning pages habit can wait.")
+    assert [i["label"] for i in sink.latest()["records"]["items"]] == ["Run a marathon in April"]

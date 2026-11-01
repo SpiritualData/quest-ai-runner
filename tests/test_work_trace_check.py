@@ -20,6 +20,9 @@ CALLS = [{"kind": "web_search", "hits": [{"url": "https://a.example.org/x"}, {"u
          {"kind": "links", "verdicts": ["OK", "DEAD"]}]
 
 
+REPLY = "Secret plan and Other secret are the two quests to protect; the page at a.example.org has the release notes."
+
+
 def run_turn(audience):
     from hubofhubs.ports.retrieval import Observation
     sink = Sink()
@@ -30,7 +33,7 @@ def run_turn(audience):
     trace.web_page_read("https://a.example.org/x", Observation(kind="read"))
     trace.records_used([{"id": "c1", "title": "Secret plan", "adapter": "quest"}, {"id": "c2", "title": "Other secret", "adapter": "quest"}])
     trace.links_checked([{"verdict": "OK"}, {"verdict": "DEAD"}])
-    trace.finish()
+    trace.finish(REPLY)
     return sink.events
 
 
@@ -70,7 +73,7 @@ def test_score_is_the_share_of_passing_turns():
 def records_event(*refs):
     return project({"step_id": "records", "solution_id": "context-assembler", "kind": "records", "label_key": "workTrace.records.looking",
                     "state": "done", "counts": {"found": len(refs), "read": len(refs)},
-                    "items": [{"ref": r, "label": r} for r in refs]}, trace_id="t").to_dict()
+                    "items": [{"ref": r, "label": f"Plan {r}"} for r in refs]}, trace_id="t").to_dict()
 
 
 def test_a_records_count_that_includes_unused_cards_is_caught():
@@ -93,3 +96,42 @@ def test_papers_read_may_not_exceed_the_works_the_reply_cited():
     assert any("counts.read=3 but the run only did 1" in p for p in check_turn(calls, [event]))
     event["counts"]["read"] = 1
     assert check_turn(calls, [event]) == []
+
+
+def web_event(items, found=5, read=0):
+    return project({"step_id": "web", "solution_id": "search-backend", "kind": "sources", "label_key": "workTrace.web.reading", "state": "done",
+                    "counts": {"found": found, "read": read}, "items": items}, trace_id="t").to_dict()
+
+
+WEB_CALLS = [{"kind": "web_search", "hits": [{"url": f"https://s{i}.example/x"} for i in range(5)]}]
+
+
+def test_a_site_the_reply_does_not_cite_is_caught_and_a_no_page_opened_state_passes():
+    listed = web_event([{"ref": "s1.example", "label": "S1", "kind": "found"}, {"ref": "s2.example", "label": "S2", "kind": "found"}])
+    reply = "I searched but did not open a page, so I cannot confirm this. s1.example came up in the search."
+    problems = check_turn(WEB_CALLS, [listed], reply=reply)
+    assert problems == ["web: lists a site the reply does not cite (s2.example)"]
+    assert check_turn(WEB_CALLS, [web_event([])], reply=reply) == []       # found count only: searched, no page opened
+    assert check_turn(WEB_CALLS, [listed]) == []                          # without the reply the check cannot judge the list
+
+
+def records_titled(label, ref="c1"):
+    return project({"step_id": "records", "solution_id": "context-assembler", "kind": "records", "label_key": "workTrace.records.looking",
+                    "state": "done", "counts": {"found": 1, "read": 1}, "items": [{"ref": ref, "label": label}]}, trace_id="t").to_dict()
+
+
+def test_a_record_label_that_is_card_text_a_topic_line_or_the_id_is_caught():
+    calls = [{"kind": "records", "cards": [{"id": "c1", "used": True}]}]
+    for label in ("Latest Python release The conversation's topic: Latest Python release. latest", "Connects the ESOI framework and Quest product intent to the...",
+                  "User: what is the latest python", "c1"):
+        assert any("not a record title" in p for p in check_turn(calls, [records_titled(label)])), label
+    assert check_turn(calls, [records_titled("Run a marathon in April")]) == []
+
+
+def test_a_record_the_reply_does_not_draw_on_is_caught_when_the_reply_says_it_found_nothing():
+    calls = [{"kind": "records", "cards": [{"id": "c1", "used": True, "text": "Connects the ESOI framework and Quest product intent"}]},
+             {"kind": "plan_facts", "facts": ["card c1 connects the ESOI framework and Quest product intent to alternatives"]}]
+    nothing = "I could not find any logged runs, so I cannot say how the marathon is going."
+    assert any("does not draw on" in p for p in check_turn(calls, [records_titled("ESOI framework")], reply=nothing))
+    drew = "Your ESOI framework quest connects the ESOI framework and Quest product intent, so start there."
+    assert check_turn(calls, [records_titled("ESOI framework")], reply=drew) == []

@@ -11,6 +11,12 @@ violations. An esoi metric scores a turn as passing when the list is empty (``pa
    assembler only selected is not a record read: when the call records say which cards were used (``"used": bool`` on a card), a
    records count or item beyond the used ones is a violation, and an unrelated question that shows any records step is too. The
    same for papers: when the works say which the reply cited (``"cited": bool``), ``papers.read`` is at most the cited ones.
+   Given the finished ``reply`` (``check_turn(..., reply=...)``) two more hold. A site is listed only when the reply cites it (a search that opened and
+   cited nothing shows a found count and no list, "searched, no page opened"), and a record is listed only when the reply draws on it
+   (its title or a run of its words, or of a planner fact that took it, stands in the reply), so a reply that says it found nothing, or
+   that it has no web search, carries no records and no sites it did not use. A record is shown by its human title only: a label
+   that is a sentence of card text, a "Topic: ..." line, a conversation turn or the card's own id is a violation. Matching is of known
+   stored values against the reply, never of the reply's wording.
 2. No leak. No private title (``private_titles``: the labels of records that must not be shown) appears in any event a
    shared thread's viewer gets, and in a shared thread no event of kind ``records`` or ``action`` carries items. No event holds a
    full URL, a query string, a file path or a newline in a label, and every event passes the hub's validator.
@@ -30,6 +36,7 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from hubofhubs.ports.trace import validate
+from quest_ai_runner.core.work_trace import cards_cited, host_cited, is_record_title, reply_draws_on
 
 PRIVATE_KINDS = ("records", "action")
 URL_OR_PATH = re.compile(r"https?://|www\.|\?[a-z_]+=|(?:^|\s)(?:/|~/)[\w.-]+/")
@@ -75,8 +82,28 @@ def actual_totals(calls: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
     return t
 
 
+def reply_problems(calls: Sequence[Mapping[str, Any]], steps: Mapping[str, Mapping[str, Any]], reply: str) -> List[str]:
+    """What the shown sites and records claim beyond the finished reply."""
+    problems: List[str] = []
+    web = steps.get("web") or {}
+    opened = (web.get("counts") or {}).get("read", 0) > 0
+    for item in web.get("items") or []:
+        listed_only = item.get("kind") == "found" or (item.get("kind") is None and not opened)
+        if listed_only and not host_cited(str(item.get("ref") or ""), reply):
+            problems.append(f"web: lists a site the reply does not cite ({item.get('ref')})")
+    cards = {str(c.get("id")): c for call in calls if call.get("kind") == "records" for c in call.get("cards") or [] if isinstance(c, Mapping)}
+    facts = [f for call in calls if call.get("kind") == "plan_facts" for f in call.get("facts") or []]
+    for item in (steps.get("records") or {}).get("items") or []:
+        card = cards.get(str(item.get("ref"))) or {}
+        known = {"title": item.get("label"), "text": card.get("text") or ""}
+        took = [f for f in facts if cards_cited([f], {str(item.get("ref")): dict(known)})]
+        if not reply_draws_on(known, took, reply):
+            problems.append(f"records: lists a record the reply does not draw on ({item.get('ref')})")
+    return problems
+
+
 def check_turn(calls: Sequence[Mapping[str, Any]], events: Iterable[Any], *, shared: bool = False,
-               private_titles: Sequence[str] = ()) -> List[str]:
+               private_titles: Sequence[str] = (), reply: Optional[str] = None) -> List[str]:
     """The violations (plain sentences), empty when the trace is honest, leak-free and finished."""
     events = list(events)
     problems: List[str] = []
@@ -104,6 +131,11 @@ def check_turn(calls: Sequence[Mapping[str, Any]], events: Iterable[Any], *, sha
         for item in records.get("items") or []:
             if str(item.get("ref")) not in used_ids:
                 problems.append(f"records: lists a card the answer did not use ({item.get('ref')})")
+    for item in (steps.get("records") or {}).get("items") or []:
+        if not is_record_title(item.get("label"), item.get("ref")):
+            problems.append(f"records: item label is not a record title ({str(item.get('label'))[:40]!r})")
+    if reply is not None:
+        problems += reply_problems(calls, steps, str(reply))
     if "links" in steps and (steps["links"].get("counts") or {}).get("failed", 0) > (steps["links"].get("counts") or {}).get("checked", 0):
         problems.append("links: more links failed than were checked")
 
@@ -139,5 +171,5 @@ def score(cases: Iterable[Mapping[str, Any]]) -> float:
     if not cases:
         return 1.0
     held = sum(1 for c in cases if passes(c.get("calls") or [], c.get("events") or [], shared=bool(c.get("shared")),
-                                          private_titles=c.get("private_titles") or ()))
+                                          private_titles=c.get("private_titles") or (), reply=c.get("reply")))
     return held / len(cases)

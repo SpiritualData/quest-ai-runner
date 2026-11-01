@@ -10,11 +10,15 @@ and the loop behaves exactly as before. ``owner`` means the viewer owns the reco
 else (the default for a missing or unknown audience) keeps records as counts only. Every method here swallows its own
 errors: a trace is decoration around the reply and never breaks a turn.
 
-Honest counts: ``read`` of a page is a page actually fetched (a site a search only listed is shown only when the reply cites it); of a paper, a work the finished answer cites (its DOI or full
-title appears in the reply, or its first author and year stand together there); of a record, a card the answer drew on
-(the planner quoted it in ``facts_read`` and that quote is found in the card's own text, or the planner named its id or title,
-or it was fetched by id). ``found`` is what a search listed. A card the context assembler merely selected is a candidate, not a
-record read, so an unrelated question shows no records step.
+Honest counts: ``read`` of a page is a page actually fetched (a site a search only listed is shown only when the reply cites it, and a
+search that opened and cited nothing is left as a found count with no list: "searched, no page opened"); of a paper, a work the finished
+answer cites (its DOI or full title appears in the reply, or its first author and year stand together there); of a record, a card the
+answer drew on: the planner took it (a quote of the card's own text in ``facts_read``, its id or title named there, or it was fetched
+by id) AND the finished reply draws on it (its title stands in the reply, a run of three of its words does, or the reply shares two distinct long words or numbers with the card's text).
+``found`` is what a search listed. A card the context assembler merely selected is a candidate, not a record read, so an unrelated
+question shows no records step, and a reply that found nothing in a record it looked at does not carry that record. A record is shown by
+its human title only (``is_record_title``): never a conversation turn, a topic line or any text of a card; a card without such a title is
+not counted. The records step is sent once, when the reply is final, because what the reply drew on is only known then.
 """
 from __future__ import annotations
 
@@ -39,9 +43,15 @@ HISTORY_ADAPTER = "turn"
 HISTORY_TITLE = "Conversation turn"
 #: A quoted fact counts as taken from a card when this many consecutive words (at least this many characters) stand in the card's text.
 QUOTE_WORDS, QUOTE_CHARS = 4, 18
+#: A reply also draws on a record when it shares this many distinct long words (or numbers) with the card's own text, title words aside.
+SHARED_WORDS, SHARED_WORD_CHARS = 2, 5
+#: A reply restates a record's words more loosely than a planner quotes them: this shorter run of the card's own words counts.
+REPLY_WORDS, REPLY_CHARS = 3, 14
 #: Names shorter than this are too common to prove a card was named.
 MIN_NAME_CHARS = 5
 MAX_CARD_TEXT = 40000
+#: A record's title is a short name a person gave it, not a sentence of card text: bounds on its shape.
+TITLE_MAX_CHARS, TITLE_MAX_WORDS = 60, 10
 
 
 def flat(text: Any) -> str:
@@ -49,13 +59,55 @@ def flat(text: Any) -> str:
     return re.sub(r"[\W_]+", " ", str(text or "").lower()).strip()
 
 
-def quoted_from(fact: str, card_text: str) -> bool:
-    """True when ``fact`` holds a run of ``QUOTE_WORDS`` consecutive words that stands verbatim in ``card_text``.
+def is_record_title(title: Any, card_id: Any = "") -> bool:
+    """True when ``title`` has the shape of a name a person gave a record: one short line of at most ``TITLE_MAX_WORDS`` words, no
+    colon or semicolon (a "Topic: ..." or "User: ..." line is card or turn text), not cut off, not a sentence end, not the history
+    placeholder and not the card's own id. Judges the shape of a stored title; it reads no meaning out of anything."""
+    text = re.sub(r"\s+", " ", str(title or "")).strip()
+    if not text or len(text) > TITLE_MAX_CHARS or len(text.split()) > TITLE_MAX_WORDS or text == HISTORY_TITLE:
+        return False
+    if re.search(r"[:;]|\.\.\.|\u2026", text) or text.endswith("."):
+        return False
+    return flat(text) != flat(card_id)
+
+
+def host_cited(domain: str, answer: str) -> bool:
+    """True when the reply names this exact site (its host, with or without a leading ``www.``, in a link or in text). A sibling or
+    parent host does not count: citing ``python.org`` does not cite ``docs.python.org``. Matches a known host against the reply."""
+    host = str(domain or "").lower().strip(".")
+    if not host:
+        return False
+    return bool(re.search(r"(?:(?<![\w.-])|(?<=www\.))" + re.escape(host) + r"(?![\w-]|\.\w)", str(answer or "").lower()))
+
+
+def distinctive_words(text: Any) -> set:
+    """The words of ``text`` long enough to say something (``SHARED_WORD_CHARS`` characters) and every number: the comparable part of a card."""
+    return {w for w in flat(text).split() if len(w) >= SHARED_WORD_CHARS or w.isdigit()}
+
+
+def reply_draws_on(card: Mapping[str, Any], facts: Any, answer: str) -> bool:
+    """True when the finished reply draws on this card: its title stands in the reply, a run of ``REPLY_WORDS`` words of the card's text
+    does, the reply shares ``SHARED_WORDS`` distinct long words or numbers with the card's text (a paraphrase of it), or a run of words of a fact that took something from the card does. A record the planner read but the reply left out (or said
+    it found nothing in) shares none of these. Compares stored text with the reply; it reads no meaning out of the reply."""
+    title = flat(card.get("title"))
+    if len(title) >= MIN_NAME_CHARS and " " + title + " " in " " + flat(answer) + " ":
+        return True
+    text = card.get("text") or ""
+    if quoted_from(answer, text, REPLY_WORDS, REPLY_CHARS):
+        return True
+    own = distinctive_words(text) - set(flat(card.get("title")).split())
+    if len(own & distinctive_words(answer)) >= SHARED_WORDS:
+        return True
+    return any(quoted_from(answer, f, REPLY_WORDS, REPLY_CHARS) for f in facts or [])
+
+
+def quoted_from(fact: str, card_text: str, words_n: int = QUOTE_WORDS, chars_n: int = QUOTE_CHARS) -> bool:
+    """True when ``fact`` holds a run of ``words_n`` consecutive words (at least ``chars_n`` characters) that stands verbatim in ``card_text``.
     Verifies a quote against the stored text; it reads no meaning out of the fact."""
     words, haystack = flat(fact).split(), " " + flat(card_text) + " "
-    for i in range(len(words) - QUOTE_WORDS + 1):
-        window = " ".join(words[i:i + QUOTE_WORDS])
-        if len(window) >= QUOTE_CHARS and " " + window + " " in haystack:
+    for i in range(len(words) - words_n + 1):
+        window = " ".join(words[i:i + words_n])
+        if len(window) >= chars_n and " " + window + " " in haystack:
             return True
     return False
 
@@ -147,7 +199,9 @@ class TurnTrace:
         self.lock = threading.Lock()
         self.web: Dict[str, Any] = {"found": 0, "read": 0, "failed": 0, "inflight": 0, "ok": 0, "read_items": {}, "found_items": {}}
         self.papers: Dict[str, Any] = {"found": 0, "read": 0, "failed": 0, "inflight": 0, "ok": 0, "items": {}, "titles": set(), "works": {}}
-        self.records: Dict[str, Dict[str, str]] = {}       # the records the answer drew on: the only ones ever counted or shown
+        self.records: Dict[str, Dict[str, str]] = {}       # the records the answer drew on: the only ones ever counted or shown, set when the reply is final
+        self.taken: Dict[str, Dict[str, str]] = {}         # cards the planner took a fact from or the run fetched by id: candidates the reply must still draw on
+        self.taken_facts: Dict[str, List[str]] = {}        # the facts that took something from each card
         self.candidates: Dict[str, Dict[str, str]] = {}    # cards the assembler selected: shown to nobody
         self.card_texts: Dict[str, Dict[str, str]] = {}    # id -> {"title", "text"}, kept in process to verify quotes, never sent
         self.final = False
@@ -261,14 +315,16 @@ class TurnTrace:
     # -- the person's records ------------------------------------------------------------------
 
     def record_item(self, card: Mapping[str, Any]) -> Optional[Dict[str, str]]:
-        """The step item for one projected card, or None for a history turn (not one of the person's records)."""
+        """The step item for one projected card (its human title only), or None for a history turn or a card without a title (not shown, not counted)."""
         if not isinstance(card, Mapping) or str(card.get("adapter") or "").lower() == HISTORY_ADAPTER:
             return None
-        title = str(card.get("title") or "")
         card_id = str(card.get("id") or "")
-        if not card_id or title == HISTORY_TITLE:
+        # The card's own short name when the assembler gave one (a vector hit's ``title`` is a slice of the embedded text, often the body).
+        title = next((t for t in (re.sub(r"\s+", " ", str(card.get(key) or "")).strip() for key in ("name", "title"))
+                      if card_id and is_record_title(t, card_id)), "")
+        if not title:
             return None
-        item = {"ref": card_id, "label": title or card_id}
+        item = {"ref": card_id, "label": title}
         kinds = card.get("item_type_counts") or {}
         kind = next((k for k in RECORD_KINDS if k in kinds), "")
         if kind:
@@ -278,20 +334,14 @@ class TurnTrace:
     @safe
     def records_selected(self, card_metadata: Any, cards: Any = None) -> None:
         """Cards the context assembly selected for the turn, already projected by ``_project_card_metadata_for_event``. They are
-        only candidates: nothing is shown until the answer draws on one (``facts_noted``, ``records_used``). ``cards`` are the
+        only candidates: nothing is shown until the answer draws on one (``facts_noted``, ``records_used``, then ``finish``). ``cards`` are the
         same cards with their text (``rendered_section`` and the items' ``text``), kept in process to verify a quote against."""
         with self.lock:
             for card in card_metadata or []:
                 item = self.record_item(card)
                 if item:
                     self.candidates.setdefault(item["ref"], item)
-            for card in cards or []:
-                if not isinstance(card, Mapping) or str(card.get("id") or "") not in self.candidates:
-                    continue
-                parts = [str(card.get("rendered_section") or "")] + [
-                    str(i.get("text") or "") for i in (card.get("items") or []) if isinstance(i, Mapping)]
-                text = "\n".join(p for p in parts if p)[:MAX_CARD_TEXT]
-                self.card_texts[str(card["id"])] = {"title": str(card.get("title") or ""), "text": text}
+            self.keep_texts(cards, self.candidates)
 
     def push_records(self) -> None:
         if self.records:
@@ -300,26 +350,47 @@ class TurnTrace:
                               items=list(self.records.values()))
 
     @safe
-    def records_used(self, card_metadata: Any) -> None:
-        """Cards the run fetched by id: the model asked for that record, so it was read."""
+    def records_used(self, card_metadata: Any, cards: Any = None) -> None:
+        """Cards the run fetched by id: the model asked for that record. Still only a candidate until the reply draws on it. ``cards`` are
+        the same cards with their text, kept in process to check the reply against."""
         with self.lock:
             for card in card_metadata or []:
-                item = self.record_item(card)
+                # A fetch by id names only the id: the title comes from the assembled card of the same id, and a card with none is dropped.
+                item = self.candidates.get(str(card.get("id") or "")) if isinstance(card, Mapping) else None
+                item = item or self.record_item(card)
                 if item:
-                    self.records.setdefault(item["ref"], self.candidates.get(item["ref"]) or item)
-            self.push_records()
+                    self.taken.setdefault(item["ref"], item)
+            self.keep_texts(cards, self.taken)
+
+    def keep_texts(self, cards: Any, known: Mapping[str, Any]) -> None:
+        for card in cards or []:
+            if not isinstance(card, Mapping) or str(card.get("id") or "") not in known:
+                continue
+            parts = [str(card.get("rendered_section") or "")] + [
+                str(i.get("text") or "") for i in (card.get("items") or []) if isinstance(i, Mapping)]
+            text = "\n".join(p for p in parts if p)[:MAX_CARD_TEXT]
+            self.card_texts[str(card["id"])] = {"title": str(card.get("title") or ""), "text": text}
 
     @safe
     def facts_noted(self, facts: Any) -> None:
-        """The planner's ``facts_read`` of one decision: each card a fact quotes or names becomes a record the answer drew on."""
+        """The planner's ``facts_read`` of one decision: each card a fact quotes or names becomes a card the planner took something from."""
         with self.lock:
-            pool = {cid: self.card_texts.get(cid, {"title": item["label"], "text": ""}) for cid, item in self.candidates.items()
-                    if cid not in self.records}
-            hit = cards_cited(facts, pool)
-            for card_id in hit:
-                self.records[card_id] = self.candidates[card_id]
-            if hit:
-                self.push_records()
+            facts = [f for f in (facts or []) if isinstance(f, str) and f.strip()]
+            pool = {cid: self.card_texts.get(cid, {"title": item["label"], "text": ""}) for cid, item in self.candidates.items()}
+            for card_id in cards_cited(facts, pool):
+                self.taken.setdefault(card_id, self.candidates[card_id])
+                for fact in facts:
+                    if cards_cited([fact], {card_id: pool[card_id]}):
+                        self.taken_facts.setdefault(card_id, []).append(fact)
+
+    def settle_records(self, answer: str) -> None:
+        """The reply is final: of the cards the planner took, keep those the reply draws on, and send the records step once."""
+        for card_id, item in self.taken.items():
+            card = self.card_texts.get(card_id) or {}
+            known = {"title": item["label"], "text": card.get("text") or ""}
+            if reply_draws_on(known, self.taken_facts.get(card_id), answer):
+                self.records[card_id] = item
+        self.push_records()
 
     # -- the link check ------------------------------------------------------------------------
 
@@ -336,20 +407,23 @@ class TurnTrace:
 
     @safe
     def finish(self, answer: Any = None) -> None:
-        """The turn is ending: a step still marked running is closed with what it has. Given the finished reply, the papers step
-        settles on the works the reply cites: those are read, the rest of the search is only found."""
+        """The turn is ending: a step still marked running is closed with what it has. Given the finished reply, each step settles on what
+        the reply used. Web: only sites the reply names are listed (a page that was opened is always a read page); a search that opened
+        and cited nothing keeps its found count and an empty list, which the screen says as "searched, no page opened". Papers: the works
+        the reply cites are read, the rest of the search is only found. Records: the cards the planner took AND the reply draws on."""
         with self.lock:
-            if self.web["inflight"]:
-                self.web["inflight"] = 0
+            w = self.web
+            if w["inflight"]:
+                w["inflight"] = 0
                 self.push_web()
             p = self.papers
-            if answer is not None and self.web["found_items"]:
-                # Sites a search only listed stay on screen only when the reply cites them (its address host stands in the reply):
-                # a listed site the answer never used says nothing the person can act on. Opened pages are always kept.
-                text = str(answer).lower()
-                w = self.web
-                w["found_items"] = {d: i for d, i in w["found_items"].items() if d in w["read_items"] or d.lower() in text}
-                self.push_web()
+            if answer is not None:
+                text = str(answer)
+                if w["found_items"]:
+                    w["found_items"] = {d: i for d, i in w["found_items"].items() if d in w["read_items"] or host_cited(d, text)}
+                if w["found"] or w["read"] or w["failed"]:
+                    self.push_web()
+                self.settle_records(text)
             was_running = bool(p["inflight"])
             p["inflight"] = 0
             if answer is not None and p["works"]:

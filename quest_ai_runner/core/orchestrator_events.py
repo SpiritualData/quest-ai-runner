@@ -157,6 +157,9 @@ def _project_card_metadata_for_event(card_meta: List[Dict[str, Any]]) -> List[Di
                 "files": cm.get("files"),
                 "adapter": cm.get("adapter", ""),
             }
+            name = re.sub(r"\s+", " ", str(cm.get("name") or "")).strip()
+            if name and str(cm.get("adapter") or "").strip().lower() != "turn":
+                proj["name"] = name[:80]     # the card's own short name; ``title`` can be a slice of the card's text
             items = cm.get("items") or []
             if items:
                 type_counts: Dict[str, int] = {}

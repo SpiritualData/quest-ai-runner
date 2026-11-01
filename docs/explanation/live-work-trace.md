@@ -128,6 +128,17 @@ Contract changes: none to the field names. Additions that are not fields: the wi
   finished reply cites (its DOI or full title stands in the reply, or the first author's surname and the year stand together), `found` is
   the largest single search total, and only cited works are listed; while the turn runs `read` is the abstracts taken, and the step settles
   on the cited ones when the reply is final. A site a search only listed stays on screen only when the reply cites its address host.
+- Records are titles, and the reply must draw on them (2026-11-01, after the UX review). A record is shown by its human title only: one short line
+  (at most 60 characters and 10 words, no colon or semicolon, not cut off, not the card id), never a conversation turn, a "topic" line or any text
+  of a card. A card without such a title is not counted at all. A card the planner took (a verbatim run of four words in `facts_read`, its id or
+  title named there, or a fetch by id) is a candidate until the finished reply is known; it becomes a record only if the reply draws on it: its
+  title stands in the reply, three consecutive words of the card's text do, or the reply shares two distinct long words or numbers with the card's
+  text. A reply that says it found nothing in a record it read, or that it has no web search, therefore carries no records. The records step is
+  therefore sent once, when the reply is final (no live "looking through your records" line, because what the reply used is not yet known).
+  These are overlap tests of known stored text against the reply, never keyword lists over the reply's wording. The numbers (four, three, two,
+  five characters) are parameters, not tuned values. Sites: only a site the reply names (its exact host, with or without `www.`; a parent or sibling host does not count) is listed beside the
+  opened pages; a search that opened and cited nothing ends as a found count with no list, which the screen should say as "searched the web,
+  no page opened" (`counts.read` is 0, `items` is empty). `work_trace_check` enforces both when it is given the reply.
 - Steps QAR emits (one `step_id` per turn each): `web` (seat `search-backend`, kind `sources`, key `workTrace.web.reading`),
   `papers` (`know-the-world`, `papers`, `workTrace.papers.searching`), `records` (`context-assembler`, `records`,
   `workTrace.records.looking`), `links` (`watch-for-risk`, `check`, `workTrace.links.checking`, `affects_user` true when a link was
@@ -266,18 +277,20 @@ the tool registry call (`ToolRegistry.invoke`) has no emitter, so QAR derives ev
 (`ToolResult.data`), web search exposes `Observation.hits` (title, url), and a page fetch exposes only the requested address, so a
 read page is labelled by its domain.
 
-Still not verified (no live run, no screens seen):
-- How a QAR event travels to the backend generator (`ev.get("type")` is a dict there). Whether the
-  runner's chat path forwards unknown event types, or drops them, is unchecked.
-  `channel_session.py` notes `run_stream` uses an internal `StreamSink` and takes no external one.
-- Where the QAR tool registry wraps web, scholarly and link guard calls, and whether those results
-  expose titles and domains in a structured form (versus only the text the model sees).
-- Whether `ContextCardsDisplay` is visible to people today; if it is internal-only, Phase 0 is new
-  visible UI and needs the same product review as the rest.
-- The look. Brand cues (color tokens, shapes) come from the styling standard and code, not from
-  viewing the app. The Trail visuals need a mock reviewed before build.
-- `progressEventKey` dedupe and `resume_from_event` replay: both could drop or duplicate trace
-  updates; design assumes replace-by-`step_id` makes replays harmless, which needs a test.
+Evidence now, and what is still not verified (updated 2026-11-01 after the first real runs and the UX review):
+- Verified by real runs. The real orchestrator on the Claude Code subscription (Haiku, `claude-haiku-5-5`), with real web and scholarly search
+  and a seeded fictional card store, emits `work_trace` events that pass `work_trace_check` (`evaluation/components/work_trace_experience/live_turns.py`;
+  results in `evaluation/components/results.csv`). The in-process `StreamSink` forwards them and the registry seam is where the events are derived.
+  Signed-in browser runs on solo and team chat showed the frames reaching the app (screenshots under the session's `real/ui`); they were taken
+  before the "used, not selected" fix, so they show the old behaviour (unrelated records, conversation text as record titles) and no screenshot
+  of the fixed build exists yet.
+- Verified offline only. The projector, the privacy rules, replace-by-`step_id`, and the pure rules of the screen (`workTrace.ts`, through
+  `run-worktrace-view.js`) on hand-built and captured events.
+- Not verified. Post-fix screenshots of the Trail on the real thread (all states, 390 and 1280, light and dark); three live frames of one run
+  and a second participant's live view; measured contrast and a screen reader transcript for the Trail; a two-account live run with a private
+  record title in the question; `progressEventKey` dedupe and `resume_from_event` replay against a real resumed stream; the look, which has had
+  no recorded review of a mock page; and whether a person's paraphrase of a record (the reply uses other words than the card) is counted
+  (it is not, below the word-overlap rule, so the record count can be too low, never too high).
 
 Risks:
 - Privacy is the main one. A team chat or shared thread must not show one member's record titles.
