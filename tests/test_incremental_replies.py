@@ -224,7 +224,7 @@ def test_an_ask_to_a_teammate_names_them_and_the_ask_is_filed_to_them():
                              "participants": [{"user_id": "u1", "name": "Ana"}, {"user_id": "u2", "name": "Bram"}]})
     ask = [e for e in events if e["type"] == EVENT_DECISION][0]
     assert sink.sent[0].assignee == "u2" and sink.sent[0].notify_user_id == "u1"
-    assert ask["text"].endswith("To finish this I need one thing from Bram: May the deposit be released?")
+    assert ask["text"].endswith("I have asked Bram for one thing so this can finish: May the deposit be released? The answer will come back to you here.")
     assert "—" not in ask["text"]
 
 
@@ -361,3 +361,50 @@ def test_figures_from_the_request_or_the_receipts_are_allowed():
     allowed = "Compile six studies\nOpened 2 pages"
     assert ungrounded_terms("Six were asked for and 2 pages were opened. Next, more will be opened.", allowed) == []
     assert set(ungrounded_terms("Seven were found, 9 pages, by Okafor.", allowed)) == {"Seven", "9", "Okafor"}
+
+
+# ---- the team real turn (2026-11-01): two decision-requests for one blocked turn, one of them raised by the worker itself
+
+class KeyedSink(Sink):
+    """The backend's contract in memory: one open ask per dedupe key, a repeat returns the open one."""
+
+    def __init__(self):
+        super().__init__()
+        self.rows = {}
+
+    def escalate(self, escalation):
+        self.sent.append(escalation)
+        return self.rows.setdefault(escalation.dedupe_key, "d-%d" % (len(self.rows) + 1))
+
+
+def test_one_blocked_turn_files_one_ask_however_the_gap_is_worded():
+    first, second = ask_dedupe_key("t1", "c", "Please release the deposit"), ask_dedupe_key("t1", "c", "Bram must pay 1200 USD")
+    assert first == second                                  # a turn has one ask; a reworded gap on a later attempt is the same ask
+    assert ask_dedupe_key("t1", "c", "a") != ask_dedupe_key("t2", "c", "a")
+    sink = KeyedSink()
+    for gap in ("Please release the deposit", "Bram must pay 1200 USD"):
+        file_ask(sink, question=gap, why_only_you="", done="", options=None, quest_id=None, conv_id="c", turn_id="t1",
+                 asker_user_id="u1", assignee=Assignee("u2", "member"), summary=gap)
+    assert len(set(sink.rows.values())) == 1
+
+
+def test_an_ask_to_someone_who_is_not_a_participant_goes_to_the_asker_instead():
+    verdict = {"met": False, "reason": "x", "blocker": "needs_person", "asked_of": "member", "member_ref": "u9", "question": "May I?"}
+    sink = Sink()
+    orch = build(Provider([dict(ANALYSIS, work_shape="action")], verdicts=[verdict]), Runner([receipts("p", "Read")]), sink=sink)
+    run(orch, meta={"asker_user_id": "u1", "conv_id": "c1", "turn_id": "t1", "participants": [{"user_id": "u1", "name": "Ana"}, {"user_id": "u2", "name": "Bram"}]})
+    assert sink.sent[0].assignee == "u1" and sink.sent[0].notify_user_id == "u1"
+
+
+def test_the_ask_text_tells_the_asker_who_was_asked_and_that_the_answer_comes_back_to_them():
+    from quest_ai_runner.core.ask_policy import ask_text
+    text = ask_text("- Made 2 other tool calls", "May the deposit be released?", "Bram")
+    assert "Bram" in text and "May the deposit be released?" in text and "answer" in text and "you" in text.lower()
+    assert "—" not in text
+
+
+def test_a_worker_in_a_thread_turn_is_told_the_runner_files_the_one_ask():
+    provider = Provider([dict(ANALYSIS, work_shape="action")], verdicts=[{"met": True}])
+    runner = Runner([receipts("done", "Read")])
+    run(build(provider, runner), meta={"asker_user_id": "u1", "conv_id": "c1", "turn_id": "t1"})
+    assert "do not raise a decision-request yourself" in runner.briefs[0].lower()

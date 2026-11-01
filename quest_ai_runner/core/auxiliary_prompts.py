@@ -25,6 +25,13 @@ _CONDENSE_DECISION_PROMPT = (
 # (Joshua's rule, after a real turn repeated counts and a study name the worker had derived): its only inputs are the request, the
 # run's own receipts and its declared coverage. Code then checks every figure and name in what it wrote against those same stored
 # texts (``interim_policy.ungrounded_terms``) and sends nothing if one is not there.
+# Told to a deep worker in a thread turn (the asker is known): the runner owns asking. A worker that raised its own decision-request
+# in a real team turn filed an unassigned ask that told nobody, beside the runner's correct one (2 asks for 1 block, 2026-11-01).
+DEEP_ASK_OWNERSHIP_NOTE = (
+    "\n\nIf only a person can unblock this work, do not raise a decision-request yourself and do not call the Quest decisions "
+    "endpoint: stop, and say plainly in your output what is needed and from whom. The runner raises the one ask, addressed to the "
+    "right person and shown to the asker.")
+
 INTERIM_PROGRESS_TOOL: Dict[str, Any] = {
     "name": "interim_progress",
     "description": "Two plain sentences for the person while the work continues.",

@@ -138,7 +138,7 @@ person can fix (access, credential, permission). A platform fault ends as a `fin
 stalled or out of budget also end as a final with a Continue button (exists for analyses). Neither is an ask.
 
 Flow:
-1. Code creates the decision once through the escalation port: `dedupe_key = turn_id + gap`, `conv_id`, `quest_id`,
+1. Code creates the decision once through the escalation port: `dedupe_key = turn_id` (one open ask per blocked turn, however the gap is worded; the deep worker is told not to raise its own decision-request in a thread turn), `conv_id`, `quest_id`,
    `default_on_silence=hold`, `notify_user_id = asker`. If creation fails the final says the question could not be
    filed, never that an ask exists.
 2. The turn emits `ask` (`EVENT_DECISION` with the id) after posting `done` so far in the same group.

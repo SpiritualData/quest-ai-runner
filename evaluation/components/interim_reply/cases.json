@@ -753,10 +753,10 @@
     "ask": true,
     "assignee": "user-a",
     "asked_of": "asker",
-    "same_key": false
+    "same_key": true
    }
   },
-  "label": "the same gap on a later attempt keeps the same key, a different gap does not",
+  "label": "one ask per blocked turn: a later attempt or sub-goal of the same turn keeps the same key however its gap is worded (a real team turn filed two asks for one block)",
   "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
  },
  {

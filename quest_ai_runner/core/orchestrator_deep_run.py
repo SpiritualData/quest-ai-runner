@@ -8,6 +8,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .auxiliary_prompts import (
+    DEEP_ASK_OWNERSHIP_NOTE,
     DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION,
     DEEP_FUTURE_CONTEXT_INSTRUCTION,
     SELF_INITIATED_READ_ONLY_INSTRUCTION,
@@ -736,6 +737,8 @@ class DeepRunMixin:
                                       verdict_reason="; ".join(checked.gaps))
                 brief = checked.brief
             done_requirements = list(getattr(plan, "done_evidence", None) or [])
+            if ctx_meta and (ctx_meta.get("asker_user_id") or ctx_meta.get("requester_user_id")):
+                brief = brief + DEEP_ASK_OWNERSHIP_NOTE   # the runner files the one ask of a thread turn (core/ask_policy.py)
             base_brief = brief
             current_brief = brief
             # At least one attempt PER RUNG, so a ladder can always reach its terminal runner even

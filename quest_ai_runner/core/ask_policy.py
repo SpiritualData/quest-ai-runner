@@ -88,11 +88,11 @@ def why_only_you_of(blocker: str, assignee: Assignee, participants: Sequence[Map
     return ""
 
 
-def ask_dedupe_key(turn_id: str, conv_id: str, gap: str) -> str:
-    """One open ask per (turn, gap): the same gap on a later attempt of the same turn reuses the open ask."""
-    flat = " ".join(str(gap or "").lower().split())
-    digest = hashlib.sha1(flat.encode("utf-8")).hexdigest()[:16]
-    return f"turn-ask:{turn_id or conv_id or 'none'}:{digest}"
+def ask_dedupe_key(turn_id: str, conv_id: str, gap: str = "") -> str:
+    """One open ask per blocked turn: a later attempt of the same turn, or a sub-goal of it, reuses the open ask however its gap is
+    worded (a real team turn filed two asks for one block because the two gaps were worded differently, 2026-11-01). ``gap`` is
+    kept for callers that pass it and is not part of the key."""
+    return f"turn-ask:{turn_id or conv_id or 'none'}"
 
 
 @dataclass
@@ -139,11 +139,11 @@ def ask_event_data(*, question: str, why_only_you: str, done: str, options: Opti
 
 def ask_text(done: str, question: str, assignee_name: str = "") -> str:
     """Plain text of an ask for a consumer that shows only text: what was done, then the one question. When the ask goes
-    to a teammate, the line names them, so the asker is not told the question is theirs."""
+    to a teammate, the line names them and says the answer comes back to the asker; otherwise it is the asker's own question."""
     head = str(done or "").strip()
     who = str(assignee_name or "").strip()
-    lead = f"To finish this I need one thing from {who}: " if who else "I need one thing from you to finish this: "
-    line = lead + str(question).strip()
+    line = (f"I have asked {who} for one thing so this can finish: {str(question).strip()} The answer will come back to you here."
+            if who else f"I need one thing from you to finish this: {str(question).strip()}")
     return f"{head}\n\n{line}" if head else line
 
 
