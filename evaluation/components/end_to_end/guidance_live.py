@@ -1,6 +1,6 @@
 """Live driver for ``cases_guidance.json``: the real orchestrator over the end-to-end world, scored by the world and the reply
-(``score.judge``), on a model chosen by ``--model`` (default ``gemini-3.1-flash-lite``, the cheapest tier with a Google key; the
-Anthropic API is not used). Stay on the ladder of esoi/metric-run-policy.md: pass ``--only`` ids (3 cases, then 10) and ``--max-calls``.
+(``score.judge``), on a model chosen by ``--model`` (default ``claude-haiku-5-5`` through the Claude Code subscription, which is what Quest AI
+runs on; a ``gemini-*`` model is the failover check only; the Anthropic API is not used). Stay on the ladder of esoi/metric-run-policy.md: pass ``--only`` ids (3 cases, then 10) and ``--max-calls``.
 
     .venv/bin/python3 evaluation/components/end_to_end/guidance_live.py --only E2E-GUIDE-01,E2E-GUIDE-04 --max-calls 40
 
@@ -23,7 +23,7 @@ CASES = GUIDANCE + json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
 
 def use_model(model):
     """Pin every QAR tier to ``model`` for this process (the offline builder scrubs the tier variables, so stop it doing so)."""
-    backend = "gemini" if model.startswith("gemini") else "anthropic"
+    backend = "gemini" if model.startswith("gemini") else "claude_cli"   # Claude models run on the Claude Code subscription: the API is not used
     os.environ.update(QAR_MODEL_BACKEND=backend, QAR_MODEL_FAST=model, QAR_MODEL_BALANCED=model, QAR_MODEL_QUALITY=model, QAR_MODEL_BEST=model)
     common.SCRUB = tuple(v for v in common.SCRUB if not v.startswith("QAR_MODEL_"))
 
@@ -81,7 +81,7 @@ def run_case(case, model, max_calls):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="")
-    ap.add_argument("--model", default="gemini-3.1-flash-lite")
+    ap.add_argument("--model", default="claude-haiku-5-5")
     ap.add_argument("--max-calls", type=int, default=40)
     ap.add_argument("--json", default="")
     args = ap.parse_args()
