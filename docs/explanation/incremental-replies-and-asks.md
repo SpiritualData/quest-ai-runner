@@ -306,4 +306,27 @@ Backend additions to the contract (as built in quest-backend, setting `quest_ai_
   carry `message` (the wire message as that viewer may see it). The final carries `turn_id`, `seq`, `turn_kind: "final"`, `outcome`, `stop_reason`.
 - New apps fetch `GET /api/quest-ai/conversations/{id}?include_interim=true` to keep interims after the final; old builds
   render `interim` and `ask` as a plain assistant bubble from `text`.
-- Known gap: an ask filed by a live chat turn has no paused task, so answering it records the answer and resumes nothing.
+
+### Answering an ask resumes the work (as built, backend module `ask_resume`)
+
+When a person answers a decision filed by a live chat turn (solo, team thread or group), the work continues in the SAME
+conversation and the SAME `turn_id`. A task-lane ask already did this through its paused task; a chat turn has none, so
+the backend starts a new real-time task (`source: chat_ask_answer`, `resumes_decision_id`) whose brief holds the original
+message, the ask and the answer. Its closing note takes the next `seq` of the ask's turn, like a resumed task today.
+Only when incremental replies are on, and only after the existing answer path has recorded the answer.
+
+Rules:
+- Who runs it: the original asker's lane and rep, with the asker's access. The answerer contributes only the words they
+  typed; their own data, quests and tools are never used, so nothing private to the answerer reaches another participant.
+- What others see: one note (an `interim`) saying who answered and that the work continues, with neither the question nor
+  the answer in it, then the result as an ordinary reply. When the ask was not visible to every human in the thread
+  (`visible_to_all` false), the brief also tells the work not to quote the question or answer. The ask itself stays
+  redacted for the same viewers as before.
+- Once: an atomic claim on the decision row (`chat_resume_task_id`), taken only while the decision is `resolved`. A second
+  answer, a replayed hook, a withdrawn or expired ask never starts a second run (an ask that is not resolved is not claimed).
+- Declined go/no-go (`kind: approve`, not approved, not a pass): no task. A final `stopped` note says it was declined.
+  A pass resumes, and the work decides for itself, as for a task.
+- A deadline auto-proceed resumes too, and the note says no one answered in time.
+- No keyword gating: every branch reads stored fields (status, kind, resolved_by, visible_to_all), never model output.
+- Wire: no new fields or frames. The note is an ordinary `interim` message (`turn_id`, next `seq`); the declined note is a
+  final (`turn_kind: "final"`, `outcome: "stopped"`). Team clients get both on the sync bus; solo clients see them on reload.
