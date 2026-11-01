@@ -20,6 +20,7 @@ from hubofhubs.ports.deep import DeepResult, DeepRunner, LAUNCH_MISSING_PROGRAM,
 from hubofhubs.ports.events import EVENT_EXEC  # noqa: F401
 from hubofhubs.deep.subprocess_runner import SubprocessGoalRunner as HubSubprocessGoalRunner
 
+from .goal_runner_receipts import receipt_ids, receipt_lines, tool_records
 from .goal_runner_contract import (  # noqa: F401
     BALANCED_CLI_MODEL,
     CANCEL_POLL_SECONDS,
@@ -89,3 +90,27 @@ class SubprocessGoalRunner(HubSubprocessGoalRunner):
     def cli_safe(self, model: Optional[str]) -> Optional[str]:
         """The value to pass as ``claude --model``: this runner's translator, else the registered one, else the syntactic gate."""
         return cli_safe_model(model, self.model_translator)
+
+    def landed_in(self, working_dir: Optional[str], session_id: Optional[str]):
+        """The hub's already-landed set, plus the tagged ids of every tool use the session holds, so a resumed run's receipts
+        count only its own work (``core/goal_runner_receipts.py``)."""
+        landed = super().landed_in(working_dir, session_id)
+        if not session_id:
+            return landed
+        records = tool_records(self.cfg.working_dir if working_dir is None else working_dir, session_id,
+                               self.goal_settings().claude_config_dir)
+        return set(landed) | receipt_ids(records)
+
+    def count_landed(self, res: DeepResult, working_dir: Optional[str], already) -> None:
+        """The hub's ``changes_landed`` count, then the run's receipts: what it did, counted from its session record and
+        never from its prose. They become ``observations`` (``observations_reported`` True) so the interim policy can say what
+        was done. A run whose record cannot be read keeps the hub's behaviour (no receipts, nothing reported)."""
+        super().count_landed(res, working_dir, already)
+        if not res.session_id:
+            return
+        records = tool_records(self.cfg.working_dir if working_dir is None else working_dir, res.session_id,
+                               self.goal_settings().claude_config_dir)
+        if not records:
+            return
+        res.observations = list(res.observations or []) + receipt_lines(records, already)
+        res.observations_reported = True
