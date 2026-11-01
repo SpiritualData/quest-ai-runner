@@ -500,6 +500,9 @@ class OrchestratorConfig:
     # when both are set, so a consumer that derives its routes and origins at runtime does not have
     # to write a temporary file.
     link_policy: Optional[Any] = None
+    # LINK PROVENANCE (core/link_provenance_pass.py): a link or file address in a reply stays only if the turn's own material
+    # held it, or its host is one the link policy trusts. Independent of the policy, so a lane with no policy file is covered too.
+    link_provenance: bool = True
 
 
 @dataclass

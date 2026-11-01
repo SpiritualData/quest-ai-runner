@@ -19,6 +19,7 @@ from .answer_explanation import (
 from hubofhubs.act.execution_record import ExecutionRecord
 from hubofhubs.critique.done_evidence import render_coverage_line, render_requirements
 from .runtime_settings import core_settings
+from .link_provenance_pass import strip_unseen_links
 from .auxiliary_prompts import (
     LANDED_WORK_DENIAL_TOOL,
     INTENT_DIRECTIVE_TOOL,
@@ -359,6 +360,33 @@ class JudgesMixin:
                 log.warning("Link guard could not be built: %s: %s", type(e).__name__, e)
                 self.link_guard_instance = None
         return self.link_guard_instance
+
+    def strip_unseen_links_from(self, rs: Any, res: Any) -> List[str]:
+        """Remove every link or file address from the reply that this turn's material does not hold and no trusted host covers.
+
+        A data check against ``link_evidence_for`` (see ``core/link_provenance_pass.py``). A real Claude Code worker's output is
+        exempt, as it is for the link guard. Returns the addresses removed; never raises.
+        """
+        removed: List[str] = []
+        try:
+            guard = self.resolve_link_guard()
+            policy = guard.policy if guard is not None else getattr(self.cfg, "link_policy", None)
+            hosts = tuple(getattr(policy, "trusted_hosts", ()) or ()) + tuple(getattr(policy, "origins", ()) or ())
+            evidence = self.link_evidence_for(rs, res)
+            if res.text:
+                res.text, gone = strip_unseen_links(res.text, evidence, hosts)
+                removed.extend(gone)
+            for d in (getattr(res, "deep_results", None) or []):
+                if getattr(d, "output", None) and getattr(d, "model_written", False):
+                    d.output, gone = strip_unseen_links(d.output, evidence, hosts)
+                    removed.extend(gone)
+            res.link_checks.extend({"url": url, "verdict": UNKNOWN, "reason": "address not in this turn's material"}
+                                   for url in dict.fromkeys(removed))
+            if removed:
+                log.info("Link provenance removed %d address(es) the turn did not have: %s", len(removed), ", ".join(removed[:5]))
+        except Exception as e:  # noqa: BLE001 -- checking links must never lose the reply
+            log.warning("Link provenance skipped: %s: %s", type(e).__name__, e, exc_info=True)
+        return removed
 
     def strip_unverified_dois(self, rs: Any, res: Any) -> List[str]:
         """Replace every DOI in the reply that this turn's evidence does not hold (``hubofhubs.science.citations``).

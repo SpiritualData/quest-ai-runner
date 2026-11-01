@@ -146,6 +146,8 @@ class RunLoopMixin:
             # host app's route table) over several passes, and anything that does not come back
             # verified is stripped to plain words. A fabricated address that reads perfectly is the
             # failure mode here, so "could not verify" is treated like "does not exist".
+            if cfg.link_provenance and res.kind in ("answer", "deep"):
+                self.strip_unseen_links_from(rs, res)   # core/link_provenance_pass.py: an address the turn never held goes first
             if cfg.link_guard and res.kind in ("answer", "deep"):
                 try:
                     guard = self.resolve_link_guard()
