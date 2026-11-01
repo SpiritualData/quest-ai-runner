@@ -310,6 +310,51 @@ caveats or open items about other things.
 {reply}
 """
 
+FOUND_CONSTRAINT_TOOL: Dict[str, Any] = {
+    "name": "found_constraint_verdict",
+    "description": "Judge whether the person's own records conflict with what they asked for, and whether the reply states that plainly first.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "conflict": {
+                "type": "boolean",
+                "description": "True when the RECORDS state a fact (a day, a time, a limit, a rule) that conflicts with what the "
+                               "REQUEST asks for. False when nothing in the records conflicts, or the records do not bear on the request.",
+            },
+            "fact": {"type": "string", "description": "When conflict is true: the records' fact in one short plain sentence, in the records' own words."},
+            "consequence": {"type": "string", "description": "When conflict is true: what it means for the request, in one short sentence (for example: Friday will not work)."},
+            "states_it_first": {
+                "type": "boolean",
+                "description": "True only when the REPLY's opening sentences state that the request will not work as asked and why, "
+                               "before offering anything else. False when the reply only offers alternatives, asks whether to try the "
+                               "conflicting request anyway (an exception, a workaround) or never says the request will not work.",
+            },
+        },
+        "required": ["conflict"],
+    },
+}
+
+FOUND_CONSTRAINT_PROMPT = """\
+The RECORDS below are the person's own (notes, goals, history) and what this turn read. Decide two things.
+
+1. Do the RECORDS state a fact that conflicts with what the REQUEST asks for (a day, a time, a limit, a rule)? If not, set
+   conflict=false and stop.
+2. If so, does the REPLY open by stating, plainly, that the request will not work as asked and why (the fact and what it means),
+   before it offers anything else? A reply that only offers other options, or that asks whether to try the conflicting request
+   anyway, leaves the conflicting request open: set states_it_first=false.
+
+Do not use any em dash in the fact or consequence you write.
+
+=== REQUEST ===
+{request}
+
+=== RECORDS ===
+{records}
+
+=== REPLY ===
+{reply}
+"""
+
 INTENT_DIRECTIVE_TOOL: Dict[str, Any] = {
     "name": "execution_directive_verdict",
     "description": "Judge whether the user's message is a DIRECTIVE to actually make a change "
@@ -1023,6 +1068,10 @@ LANDED_WORK_DENIAL_SPEC = declare(
     "judge-a-decision.landed-work-denial", solution="judge-a-decision",
     metric="metric-judge-a-decision", tier="caller", cache_layer="none",
     template=LANDED_WORK_DENIAL_PROMPT, output_schema=LANDED_WORK_DENIAL_TOOL)
+FOUND_CONSTRAINT_SPEC = declare(
+    "judge-a-decision.found-constraint", solution="judge-a-decision",
+    metric="metric-judge-a-decision", tier="caller", cache_layer="none",
+    template=FOUND_CONSTRAINT_PROMPT, output_schema=FOUND_CONSTRAINT_TOOL)
 INTENT_DIRECTIVE_SPEC = declare(
     "judge-a-decision.intent-directive", solution="judge-a-decision",
     metric="metric-judge-a-decision", tier="caller", cache_layer="none",

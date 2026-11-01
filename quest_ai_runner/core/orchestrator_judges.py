@@ -21,6 +21,7 @@ from hubofhubs.critique.done_evidence import render_coverage_line, render_requir
 from .runtime_settings import core_settings
 from .link_provenance_pass import strip_unseen_links
 from .auxiliary_prompts import (
+    FOUND_CONSTRAINT_TOOL,
     LANDED_WORK_DENIAL_TOOL,
     INTENT_DIRECTIVE_TOOL,
     MODE_RELEASE_PROMPT,
@@ -549,6 +550,58 @@ class JudgesMixin:
         if not isinstance(result, dict) or "denies_landed_work" not in result:
             return None
         return bool(result.get("denies_landed_work"))
+
+    def found_constraint_verdict(self, request: str, records: str, reply: str) -> Optional[Dict[str, Any]]:
+        """ONE structured LLM verdict for the "found_constraint" situation standard (core/reply_standards.py): do the person's own
+        records conflict with what was asked, and does the reply state that plainly first. Returns the verdict dict
+        (``conflict``, ``fact``, ``consequence``, ``states_it_first``) or None when it could not run (the reply is then kept).
+        Judged by the model, never by keywords; hard-capped by ``intent_judge_timeout_seconds()``; never raises."""
+        if not (reply or "").strip() or not (records or "").strip():
+            return None
+        try:
+            model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
+            if not model:
+                return None
+            prompt = render_prompt("judge-a-decision.found-constraint",
+                                   request=clip_head_and_tail(request or "", 800),
+                                   records=clip_head_and_tail(records, 6000),
+                                   reply=(reply or "").strip()[:2500])
+
+            def call_judge() -> Dict[str, Any]:
+                provider = self.get_provider_for_model(model)
+                raw = plan_with_step(provider, prompt, model=model, tool_schema=FOUND_CONSTRAINT_TOOL, step=STEP_JUDGE)
+                if isinstance(raw, str):
+                    raw = json.loads(_extract_json(raw) or "{}")
+                return raw if isinstance(raw, dict) else {}
+
+            pool = ThreadPoolExecutor(max_workers=1)
+            try:
+                result = pool.submit(call_judge).result(timeout=intent_judge_timeout_seconds())
+            finally:
+                pool.shutdown(wait=False)
+        except Exception as e:  # noqa: BLE001 -- a standard must never break the turn
+            log.warning("Found-constraint judge could not run (%s: %s); keeping the reply.", type(e).__name__, e)
+            return None
+        return result if isinstance(result, dict) and "conflict" in result else None
+
+    def with_found_constraint_first(self, rs: Any, text: str) -> str:
+        """The found_constraint standard for a reply the model did not write whole (an ask built from the verifier's question):
+        when the verdict says the person's records conflict with the request and ``text`` does not state it, the verdict's own
+        fact and consequence open the reply. Otherwise ``text`` unchanged. Never raises."""
+        try:
+            from .reply_standards import found_constraint_head
+            if not getattr(self.cfg, "reply_standards", False):
+                return text
+            verdict = self.found_constraint_verdict(
+                rs.user_message, (getattr(rs, "context_view", "") or "")[:3500] + "\n" + self.turn_evidence(rs), text)
+            if verdict and verdict.get("conflict") and not verdict.get("states_it_first"):
+                head = found_constraint_head(str(verdict.get("fact") or ""), str(verdict.get("consequence") or ""))
+                if head:
+                    log.info("Reply standard found_constraint: opened the ask with the conflict")
+                    return head + "\n\n" + text
+        except Exception:  # noqa: BLE001 -- a standard must never break the turn
+            pass
+        return text
 
     def directive_verdict(self, user_message: str, answer_text: str) -> Tuple[Optional[bool], str]:
         """ONE structured LLM judgment of whether the user ordered work, used ONLY when the

@@ -406,7 +406,7 @@ class RunCloseMixin:
                                                   coverage=None)
                         if file_blocked_ask(self, emit, _ctx_meta, blocked, verdict,
                                             question=str(verdict.get("question") or "").strip()):
-                            rs.text = blocked.output
+                            rs.text = self.with_found_constraint_first(rs, blocked.output)
                             rs._parked_decision_id = blocked.decision_id
                             rs._decision_parked = True
                         else:

@@ -70,6 +70,29 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
 )}
 
+# The "found_constraint" situation (generic, not Quest-specific): the turn's evidence holds a fact that conflicts with what was asked.
+# It applies on top of whichever shape the planner chose, so it is not one of STANDARDS. Whether a conflict exists is a judgment
+# about meaning, so a structured model verdict makes it (Orchestrator.found_constraint_verdict), never matching words in the reply.
+FOUND_CONSTRAINT_STANDARD = (
+    "When the person's own records the turn read hold a fact that conflicts with what was asked (a day, a time, a limit), the reply "
+    "states that fact and what it means FIRST, plainly (for example 'Friday will not work: <fact>'), and only then offers "
+    "alternatives. It never leaves the conflicting request open as an option or asks whether to try it anyway.")
+
+
+def found_constraint_hint(fact: str, consequence: str) -> str:
+    """The repair for a reply that did not state a conflict the records hold, built from the verdict's own fields."""
+    said = " ".join(x.strip().rstrip(".") + "." for x in (consequence, fact) if (x or "").strip())
+    return ("open the reply by stating plainly" + (f" ({said})" if said else "")
+            + " that the request will not work as asked and why; only then offer alternatives, and do not offer the conflicting "
+              "request as an option or ask whether to try it anyway")
+
+
+def found_constraint_head(fact: str, consequence: str) -> str:
+    """The plain opening line built from the verdict's own fields (no model wording added), for a reply the model did not write
+    (an ask built from a verifier's question) so the conflict still comes first."""
+    return " ".join(x.strip().rstrip(".") + "." for x in (consequence, fact) if (x or "").strip())
+
+
 MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec"
 MONTH_NUMBER = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
 DAY_THEN_MONTH = re.compile(

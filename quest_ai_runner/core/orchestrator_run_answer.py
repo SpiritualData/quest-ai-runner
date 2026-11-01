@@ -24,7 +24,7 @@ from .orchestrator_decisions import (FACTS_ANSWER_HEAD, _clarify_question_text, 
 from .orchestrator_text import _answer_describes_unexecuted_work
 from .orchestrator_types import OrchestratorResult
 from .overseer import OverseerSignal
-from .reply_standards import SHAPE_DEFAULT, measure, repair, standard_for, steering
+from .reply_standards import SHAPE_DEFAULT, found_constraint_hint, measure, repair, standard_for, steering
 from .planner_context import gathered_content
 from .planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX,
@@ -475,6 +475,22 @@ class RunAnswerMixin:
                     rs.text = _gen_answer(steering(hint, rs.text))
                     repair_rounds += 1
             except Exception:  # noqa: BLE001 — the overseer must never break the turn
+                pass
+
+        # FOUND_CONSTRAINT standard (core/reply_standards.py): one structured verdict on whether the person's records conflict with
+        # the request and the draft fails to say so first. At most one regeneration, steered by the verdict's own fields.
+        if getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer":
+            try:
+                verdict = self.found_constraint_verdict(
+                    rs.user_message, (getattr(rs, "context_view", "") or "")[:3500] + "\n" + (standard_evidence or ""), rs.text)
+                if verdict and verdict.get("conflict") and not verdict.get("states_it_first"):
+                    if emit is not None:
+                        emit.status("Reply standard: stating the conflict first…")
+                    rs.text = _gen_answer(steering(found_constraint_hint(str(verdict.get("fact") or ""),
+                                                                         str(verdict.get("consequence") or "")), rs.text))
+                    repair_rounds += 1
+                    log.info("Reply standard found_constraint: conflict not stated first; regenerated once")
+            except Exception:  # noqa: BLE001 -- a standard must never break the turn
                 pass
 
         # Code-built repair rounds: a measurement the draft still fails is fixed by regenerating with a hint built from the

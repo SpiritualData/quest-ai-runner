@@ -169,3 +169,63 @@ def test_a_day_offset_from_an_event_date_the_paragraph_states_is_checked():
     right = "They would come on 13 Nov, so your target is 3 days before arrival (10 Nov)."
     assert event_offset_errors(right) == []
     assert event_offset_errors("The race is 2 days after arrival (22 Nov).") == []   # no earlier date to count from
+
+
+class ConstraintProvider(ScriptedAnswers):
+    """Judge calls for the found_constraint standard get ``constraint``; everything else is scripted as above."""
+
+    def __init__(self, decisions, drafts, constraint):
+        super().__init__(decisions, drafts, {"signal": "proceed"})
+        self.constraint, self.constraint_calls = constraint, 0
+
+    def plan(self, prompt, *, model, tool_schema):
+        if tool_schema.get("name") == "found_constraint_verdict":
+            self.constraint_calls += 1
+            if isinstance(self.constraint, Exception):
+                raise self.constraint
+            return self.constraint
+        return super().plan(prompt, model=model, tool_schema=tool_schema)
+
+
+OFFERS = "Would you like Tuesday or Thursday instead, or should I ask about a Friday exception?"
+STATES = "Friday will not work: the tutor only teaches Tuesday and Thursday evenings. Would Tuesday or Thursday suit you?"
+
+
+def run_constraint(drafts, constraint):
+    provider = ConstraintProvider([{"action": "answer", "rationale": "r", "reply_shape": "default"}], drafts, constraint)
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider),
+                        config=OrchestratorConfig(overseer=False, max_steps=5))
+    return provider, orch.run("Can you help me book the tutor for Friday?")
+
+
+def test_a_reply_that_leaves_the_conflicting_request_open_is_regenerated_once_with_the_verdicts_own_fact():
+    verdict = {"conflict": True, "fact": "The tutor only teaches Tuesday and Thursday evenings",
+               "consequence": "Friday will not work", "states_it_first": False}
+    provider, res = run_constraint([OFFERS, STATES], verdict)
+    assert len(steered(provider)) == 1 and res.text == STATES
+    hint = steered(provider)[0]
+    assert "Friday will not work" in hint and "Tuesday and Thursday evenings" in hint and "—" not in hint
+
+
+def test_a_reply_that_states_the_conflict_first_or_a_turn_with_no_conflict_is_left_alone():
+    for verdict in ({"conflict": True, "fact": "f", "consequence": "c", "states_it_first": True}, {"conflict": False}):
+        provider, res = run_constraint([STATES], verdict)
+        assert not steered(provider) and res.text == STATES and provider.constraint_calls == 1
+
+
+def test_a_judge_outage_keeps_the_reply():
+    provider, res = run_constraint([OFFERS], RuntimeError("provider outage"))
+    assert not steered(provider) and res.text == OFFERS
+
+
+def test_the_found_constraint_standard_is_generic_and_has_no_em_dash():
+    from quest_ai_runner.core.reply_standards import FOUND_CONSTRAINT_STANDARD, found_constraint_hint
+    assert "—" not in FOUND_CONSTRAINT_STANDARD and "—" not in found_constraint_hint("a", "b")
+    assert "Friday" not in FOUND_CONSTRAINT_STANDARD.replace("(for example 'Friday will not work: <fact>')", "")
+
+
+def test_the_head_for_a_reply_the_model_did_not_write_is_built_from_the_verdict_fields_only():
+    from quest_ai_runner.core.reply_standards import found_constraint_head
+    assert found_constraint_head("The tutor only teaches Tuesday and Thursday evenings", "Friday will not work") == \
+        "Friday will not work. The tutor only teaches Tuesday and Thursday evenings."
+    assert found_constraint_head("", "") == ""
