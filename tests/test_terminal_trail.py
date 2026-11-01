@@ -119,6 +119,32 @@ async def test_not_now_folds_the_question_and_keeps_it_open():
         assert client.calls == []
 
 
+async def test_not_now_survives_a_terminal_restart_and_answering_forgets_it(tmp_path, monkeypatch):
+    """The Quest app remembers a folded ask per device (localStorage `quest:ask-folded:<id>`); the terminal's device store is its state file."""
+    monkeypatch.setenv("QAR_STATE_PATH", str(tmp_path / "qar_state.json"))
+    async with Harness(FakeClient()) as h:
+        h.begin()
+        h.feed(ask_event())
+        h.finish("x")
+        h.app._turn_active = False
+        h.app._dispatch_command("/notnow")
+    async with Harness(FakeClient()) as h2:                          # a new terminal process meets the same open ask
+        h2.begin()
+        h2.feed(ask_event())
+        h2.finish("x")
+        out = text_of(h2)
+        assert "Waiting for your answer" in out and "Needs you" not in out
+        assert h2.app.term.ask_folded and not h2.app._awaiting_decision
+        h2.app._turn_active = False
+        h2.app._dispatch_command("/answer")                          # unfolding forgets it
+        assert "Needs you" in text_of(h2)
+    async with Harness(FakeClient()) as h3:
+        h3.begin()
+        h3.feed(ask_event())
+        h3.finish("x")
+        assert "Needs you" in text_of(h3) and h3.app._awaiting_decision
+
+
 async def test_an_answer_that_could_not_be_sent_says_so_and_stays_open():
     async with Harness(FakeClient(fail=True)) as h:
         h.begin()
@@ -173,3 +199,11 @@ async def test_the_turn_asks_for_the_trace_and_the_terminal_owns_privacy_as_the_
         monkeypatch.setenv("QAR_INTERIM_REPLIES", "1")
         h.app.term_turn_meta(None)
         assert h.app.sess._orch.cfg.interim_replies is True
+
+
+async def test_every_glyph_the_terminal_draws_is_in_a_plain_monospace_font():
+    """No Nerd Font is needed: the header icon is one a common font has (Textual's default U+2B58 draws as a box in DejaVu Sans Mono)."""
+    from textual.widgets import Header
+    async with Harness() as h:
+        header = h.app.query_one(Header)
+        assert header.icon == "≡"

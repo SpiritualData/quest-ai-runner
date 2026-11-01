@@ -21,6 +21,7 @@ from hubofhubs.terminal import (
 )
 from hubofhubs.terminal.asks import error_block, is_for_viewer
 
+from .textual_ui_ask_folds import is_folded, remember_fold
 from .textual_ui_blocks import block_lines
 
 #: Settings: ``QAR_INTERIM_REPLIES=1`` lets a long turn send "progress so far" messages (the orchestrator switch is off by default).
@@ -79,6 +80,14 @@ class TrailMixin:
         self.draw_blocks([b for b in blocks if b.kind != "ask"])
         if asks:
             # Written last, as the end of the turn (after the run's own record), like every question this terminal asks.
+            ask = self.term.ask
+            if ask is not None and is_folded(ask.decision_id):
+                # The person already said /notnow to this ask in an earlier session: it comes back as the one folded line.
+                asks = fold_ask(self.term) or asks
+                self.held_ask_blocks = asks
+                self._awaiting_decision = False
+                self.pending_question = ""
+                return True
             self.held_ask_blocks = asks
             self._awaiting_decision = True
             self.pending_question = ""
@@ -155,6 +164,7 @@ class TrailMixin:
             self._console.dim("  Nothing is waiting for your answer.")
             return
         self.draw_blocks(blocks)
+        remember_fold(self.term.ask.decision_id, True)
         self.release_awaiting()
 
     def unfold_open_ask(self) -> None:
@@ -164,6 +174,7 @@ class TrailMixin:
             self._console.dim("  Nothing is waiting for your answer.")
             return
         self.draw_blocks(blocks)
+        remember_fold(self.term.ask.decision_id, False)
         self._awaiting_decision = True
         self.mark_prompt_awaiting(True)
 
@@ -214,6 +225,7 @@ class TrailMixin:
                 self.draw_blocks([error_block(ask)])
             return
         follow_up = bool(result.get("follow_up_task_id")) if hasattr(result, "get") else False
+        remember_fold(ask.decision_id, False)
         self.draw_blocks(close_ask(self.term, resumes=follow_up))
         self.release_awaiting()
         if not follow_up:

@@ -322,7 +322,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         return Content.assemble(title_content, (" · ", "dim"), Content(sub_title).stylize("dim"))
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield Header(show_clock=True, icon="≡")   # Textual's default "⭘" (U+2B58) is missing from common monospace fonts and draws as a box
         # min_width=1: RichLog's default (78) is a floor under the shrink-to-fit width
         # computed from the widget's own content region, so on a narrower terminal (a
         # phone-width SSH session) every write still wraps at 78 columns and the extra

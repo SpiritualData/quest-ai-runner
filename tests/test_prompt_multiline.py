@@ -219,6 +219,47 @@ def test_terminal_bytes_reach_the_prompt_as_the_right_key(data, key):
     assert parsed_keys(data) == [key]
 
 
+@pytest.mark.parametrize("letter", ["t", "u", "k", "d", "c", "y"])
+def test_alt_letter_from_an_esc_prefixed_terminal_reaches_the_app_as_alt_letter(letter):
+    """xterm, VTE, tmux and macOS Terminal send Alt+T as ESC t. Textual 8 alone turns that into a stray key plus a typed letter,
+    so Alt+T, Alt+U and Alt+K (the Trail keys) never fired in a plain terminal."""
+    import quest_ai_runner.textual_ui  # noqa: F401  registers the sequences
+
+    assert parsed_keys(f"\x1b{letter}") == [f"alt+{letter}"]
+
+
+class AltKeyHarness(PromptHarness):
+    BINDINGS = [("alt+t", "trail", "Trail"), ("alt+u", "updates", "Updates")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fired: list[str] = []
+
+    def action_trail(self) -> None:
+        self.fired.append("trail")
+
+    def action_updates(self) -> None:
+        self.fired.append("updates")
+
+
+@pytest.mark.asyncio
+async def test_alt_letter_runs_its_app_binding_and_types_nothing_into_the_prompt():
+    """A terminal's Alt+T arrives as key "alt+t" with the printable character "t". The text box used to insert that "t" and swallow the key,
+    so the Trail keys typed a letter instead of opening anything (seen in a real terminal under tmux)."""
+    app = AltKeyHarness()
+    async with app.run_test(size=(60, 24)) as pilot:
+        prompt = app.query_one("#prompt", PromptTextArea)
+        prompt.focus()
+        await pilot.pause()
+        for key in ("alt+t", "alt+u"):
+            app.post_message(events.Key(key, key[-1]))   # what the xterm parser produces for ESC t / ESC u
+            await pilot.pause()
+        assert app.fired == ["trail", "updates"]
+        assert prompt.text == ""
+        await typed(pilot, "tu")
+        assert prompt.text == "tu", "plain letters still type"
+
+
 def test_newline_hint_does_not_promise_shift_enter_in_vte_terminals():
     from quest_ai_runner.textual_ui_widgets import newline_hint
 

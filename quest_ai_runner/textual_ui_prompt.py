@@ -61,6 +61,12 @@ class PromptTextArea(TextArea):
             event.prevent_default()
             event.stop()
             return
+        if key.startswith("alt+") and key not in ("alt+enter",) and len(key) == len("alt+") + 1:
+            # A terminal sends Alt+T as the key "alt+t" carrying the printable character "t". The text box would type it and
+            # swallow the key; the app's own Alt bindings (Trail, Updates, Continue, Details, Sources, Copy) must see it instead.
+            event.prevent_default()
+            self.backslash_newline_at = 0.0
+            return
         if key == "enter":
             event.prevent_default()
             event.stop()
