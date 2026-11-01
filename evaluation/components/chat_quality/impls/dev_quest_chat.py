@@ -43,6 +43,11 @@ def build(meter):
     lock.__enter__()
     atexit.register(lock.__exit__, None, None, None)
     state = world.load()
+    if world.contents_are_stale(state):
+        print(f"chat_quality: the world was seeded on {state.get('contents_seeded_on')}; re-seeding it for "
+              f"{world.TODAY.isoformat()} so the cases' relative dates hold")
+        world.reset()
+        state = world.load()
     served = None
     if INPROCESS:
         inprocess.client()  # builds the app now, so the pinned models are printed before any case spends

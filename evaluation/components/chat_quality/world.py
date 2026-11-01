@@ -894,6 +894,15 @@ def cancel_decisions(decision_ids):
     return results
 
 
+def contents_are_stale(state):
+    """True when the world's entries were seeded on an earlier day than today. Every entry date is
+    stored relative to the build day, so the case text that says "9 days ago" is only true on the
+    day of the build: a run a day later told the judge an entry dated 22 Oct was "9 days ago" (23
+    Oct) and failed a correct reply (IMP-023)."""
+    seeded = (state or {}).get("contents_seeded_on")
+    return bool(seeded) and seeded != TODAY.isoformat()
+
+
 def ground_truth(quest_keys=None):
     """Plain-text description of what was SEEDED, for the judge to verify facts against."""
     keys = quest_keys or list(QUESTS)
