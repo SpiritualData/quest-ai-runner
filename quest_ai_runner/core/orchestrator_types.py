@@ -155,6 +155,15 @@ class OrchestratorConfig:
     # prompt and schema are byte-identical to a build without it. (The structural coverage gate in the goal loop
     # needs no flag: it reads only what a runner declares in ``DeepResult.coverage`` and is inert without it.)
     done_evidence_enabled: bool = False
+    # INCREMENTAL REPLIES (docs/explanation/incremental-replies-and-asks.md). Off (default): the interim event fires only
+    # as described above. On: when a turn's goal is not met and the goal loop WILL run again, the reader gets what exists
+    # now, why more is coming and what happens next, as a separate message, decided by ``core/interim_policy.py`` from
+    # structure only (verifier enum, receipts, coverage, a clock, two caps). The consumer persists it (turn id and
+    # sequence are its to stamp). The ask-on-block path (a ``needs_person`` verdict files one deduplicated decision-
+    # request) is NOT behind this switch: it only replaces text that looked like an ask but created nothing.
+    interim_replies: bool = False
+    max_interims_per_turn: int = 4
+    min_seconds_between_interims: float = 15.0
     # What the consumer's data and code paths CANNOT do, in plain words, handed to the pre-flight plan check so a plan
     # is judged against the real limits (for example: "a read returns at most 200 rows and a total is available by a
     # separate count; generated code cannot call a model"). Free text, consumer-written, empty = no stated limits.

@@ -345,6 +345,11 @@ class QuestDecisionSink(EscalationSinkBase):
                 default_on_silence=escalation.default_on_silence,
                 deadline=self.resolve_deadline(escalation),
                 review_url=escalation.review_url,
+                dedupe_key=escalation.dedupe_key,
+                conv_id=escalation.conv_id,
+                notify_user_id=escalation.notify_user_id,
+                options=escalation.options,
+                why_only_you=escalation.why_only_you,
             )
             # The API returns the created decision; surface its id (best-effort across field names).
             return str((res or {}).get("decision_id") or (res or {}).get("id") or "")

@@ -87,7 +87,12 @@ class DecisionsMixin:
                         deadline: Optional[datetime] = None,
                         executable: Optional[Dict[str, Any]] = None,
                         review_url: Optional[str] = None,
-                        idempotency_key: Optional[str] = None) -> WriteResult:
+                        idempotency_key: Optional[str] = None,
+                        dedupe_key: Optional[str] = None,
+                        conv_id: Optional[str] = None,
+                        notify_user_id: Optional[str] = None,
+                        options: Optional[List[str]] = None,
+                        why_only_you: Optional[str] = None) -> WriteResult:
         """POST /api/teams/{team}/decisions: raise one ask for a person. A ``WriteResult`` (applied, with the ask's id; noop
         when an equal open experiment proposal already stood) or a raised ``QuestWriteError`` (refused: the person
         already answered this question, or Quest said no; failed; unknown: sent but not answered, so look at the
@@ -143,6 +148,13 @@ class DecisionsMixin:
             # The page the person should open to decide (draft / preview / doc / PR); Quest
             # renders it as a prominent link on the ask. Dropped, not rejected, if malformed.
             body["review_url"] = str(review_url)
+        # Ask-on-block fields (all optional): one open ask per ``dedupe_key``, tied to a chat, told to one person.
+        for field_name, value in (("dedupe_key", dedupe_key), ("conv_id", conv_id), ("notify_user_id", notify_user_id),
+                                  ("why_only_you", why_only_you)):
+            if value:
+                body[field_name] = str(value)
+        if options:
+            body["options"] = [str(o) for o in options][:8]
         if executable:
             # An action to APPLY on approval. The server accepts only structured, data-shaped
             # kinds here (see propose_field_change) and validates the payload at creation, so a

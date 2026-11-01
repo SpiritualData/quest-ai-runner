@@ -24,6 +24,7 @@ from hubofhubs.ports.events import (
     Mode,
 )
 from hubofhubs.ports.deep import ProgressEvent
+from .orchestrator_turn_messages import turn_outcome
 from .adapters_values import PlanDecision
 from .answer_explanation import is_eligible, trace_from_result
 from hubofhubs.recall.card_thread import CardThreadDecision, parse_card_thread
@@ -258,7 +259,8 @@ class RunLoopMixin:
                 emit.emit(ProgressEvent(type=EVENT_RESULT, text=result_text, result_kind="answer",
                                         data={**({"exit_reason": res.exit_reason,
                                                   "goal_verdict": res.goal_verdict} if res.exit_reason else {}),
-                                              **(metric_data if res.deep_results else {})}))
+                                              **(metric_data if res.deep_results else {}),
+                                              **turn_outcome(res)}))
             elif res.kind == "confirm":
                 emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.question,
                                         decision_id=res.decision_id, result_kind="confirm"))
@@ -274,7 +276,7 @@ class RunLoopMixin:
                     data={**({"future_context": _future,
                               "exit_reason": res.exit_reason,
                               "goal_verdict": res.goal_verdict} if (_future or res.exit_reason) else {}),
-                          **metric_data}))
+                          **metric_data, **turn_outcome(res)}))
             # --- "EXPLAIN HOW I GOT THIS" (opt-in; see core/answer_explanation.py) -------------
             # ORDER IS THE POINT: this runs AFTER the terminal EVENT_RESULT above, so the answer
             # has already left for the consumer's screen. The reader is reading while this is

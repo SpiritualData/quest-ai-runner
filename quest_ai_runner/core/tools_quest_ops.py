@@ -119,6 +119,20 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                                   "quest_id": quest_id}
         if args.get("review_url"):
             kwargs["review_url"] = str(args["review_url"])
+        asker = str(ctx.value("asker_user_id") or ctx.user_id or "")
+        if asker:
+            kwargs["notify_user_id"] = asker
+        if args.get("assignee"):
+            # A teammate, only when code can resolve the name against the conversation's people (a list the consumer
+            # supplies in the turn's meta) or, failing that, the quest's members; otherwise the asker is asked.
+            people = [dict(p) for p in (ctx.value("participants") or []) if isinstance(p, dict)]
+            if not people and quest_id:
+                people = client.list_assignable_members(quest_id) or []
+            member, _why = resolve_member(args["assignee"], people)
+            if member:
+                kwargs["assignee_user_id"] = member
+        if "assignee_user_id" not in kwargs and asker:
+            kwargs["assignee_user_id"] = asker
         try:
             row = client.create_decision(summary, **kwargs)
         except Exception as e:  # QuestWriteError: refused (for example the person already answered this), failed, unknown
@@ -172,6 +186,10 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                                         "in summary), answer (a question), or do (an action)."},
                 "review_url": {"type": "string",
                                "description": "A page to open to decide: a draft, document or PR."},
+                "assignee": {"type": "string",
+                             "description": "Optional. Another person in this conversation who is the one to answer "
+                                            "(name or id). Left out, or not matched to someone here, the ask goes to "
+                                            "the person who gave the input."},
             },
         },
         mutates=True, workflow_step=False, origin="standard",

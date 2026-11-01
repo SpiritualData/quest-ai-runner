@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from ..core.ask_policy import Assignee, file_ask
 from ..core.orchestrator import OrchestratorResult, _strip_future_context
 from ..core.tools_status import record_worked
 from hubofhubs.ports.deep import ProgressEvent
@@ -249,6 +250,19 @@ class ReportingMixin:
             summary = f"I need one thing from you to finish this: {question}"
             chat_text = (f"{work}\n\n{summary}" if work else summary)
             self._report_progress(task_id, "done", text=f"Paused, needs you: {question}")
+            # A text that looks like an ask but files nothing is no ask: file the real decision-request first (one
+            # per task and gap, so a retry reuses the open one). Only when that fails does the message say so.
+            filed = file_ask(
+                getattr(self._orch, "escalation", None), question=question, why_only_you="", done=work, options=None,
+                quest_id=None, conv_id=conv_id or "", turn_id=str(task_id), asker_user_id="",
+                assignee=Assignee("", "asker"), summary=question)
+            if filed.filed:
+                self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id, card_id=card_id)
+                self.dispatch_report("report_needs_you", task_id, summary, filed.decision_id,
+                                     session_id=session_id, **with_metrics)
+                return ExecutionOutcome(task_id, "needs_you", summary, filed.decision_id)
+            chat_text = (f"{work}\n\n" if work else "") + (
+                "I need one thing from you to finish this, but I could not file the question as an ask: " + question)
             self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id, card_id=card_id)
             self.dispatch_report("report_needs_you", task_id, summary, "", session_id=session_id,
                                  **with_metrics)

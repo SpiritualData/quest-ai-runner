@@ -80,6 +80,7 @@ class JudgesMixin:
                      check_support: bool = False,
                      done_evidence: Optional[List[str]] = None,
                      coverage: Optional[Dict[str, Any]] = None,
+                     participants: Optional[List[Dict[str, Any]]] = None,
                      ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Decide whether the worker's run met the done-standard AT THE QUALITY BAR.
 
@@ -253,6 +254,14 @@ class JudgesMixin:
             if coverage_text:
                 evidence_block += coverage_text + " (declared by the run's own records)\n"
             evidence_block += VERIFY_DONE_EVIDENCE_NOTE + "\n"
+        # PEOPLE (only when the consumer listed the conversation's humans): lets a needs_person verdict name a teammate.
+        # Code resolves the id against the same list and falls back to the asker, so a wrong pick cannot misroute an ask.
+        people = [p for p in (participants or []) if isinstance(p, dict) and p.get("user_id")]
+        if len(people) > 1:
+            evidence_block += ("--- PEOPLE IN THIS CONVERSATION (INTERNAL) ---\n"
+                               + "\n".join(f"- {p.get('name') or p['user_id']} (id {p['user_id']})" for p in people)
+                               + "\nIf blocker is needs_person, set asked_of=member and member_ref to the id of the person "
+                                 "only they can answer; otherwise asked_of=asker.\n")
         prompt = render_prompt("verify-goal.verdict", 
             persona=persona, standards=standards, claims_rules=claims_rules, context=context_block,
             evidence=evidence_block,
@@ -326,6 +335,8 @@ class JudgesMixin:
                                         in ("more_work", "evidence_only", "needs_person", "tool_failure")
                                         else "more_work"),
                             "question": str(raw.get("question") or "").strip(),
+                            "asked_of": ("member" if str(raw.get("asked_of") or "").strip().lower() == "member" else "asker"),
+                            "member_ref": str(raw.get("member_ref") or "").strip(),
                             "claims_unexecuted": bool(raw.get("claims_unexecuted")),
                             "claims_unsupported": bool(
                                 check_support and raw.get("claims_unsupported")

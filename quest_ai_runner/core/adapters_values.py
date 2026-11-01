@@ -35,6 +35,15 @@ class Escalation:
     # OPTIONAL http(s) page the human should open to decide: the draft, preview, doc or PR the ask
     # is about. Shown as a prominent link on the ask in Quest's daily reflection and Asks for you.
     review_url: Optional[str] = None
+    # ASK-ON-BLOCK (docs/explanation/incremental-replies-and-asks.md section 6.3). All optional; a sink that does not
+    # know them ignores them. ``dedupe_key`` makes the sink keep ONE open ask per key; ``conv_id`` ties the ask to the
+    # chat it came from; ``notify_user_id`` is who is told the answer (the person who gave the input); ``options`` are
+    # structured choices for buttons; ``why_only_you`` is one line on why a person must answer.
+    dedupe_key: Optional[str] = None
+    conv_id: Optional[str] = None
+    notify_user_id: Optional[str] = None
+    options: Optional[List[str]] = None
+    why_only_you: Optional[str] = None
 
 
 # A short relative form the planner can emit instead of computing a real timestamp itself:

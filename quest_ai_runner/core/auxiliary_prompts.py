@@ -42,6 +42,11 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
             "question": {"type": "string",
                          "description": "If blocker is needs_person, evidence_only or tool_failure: the one gap, per "
                                         "the rules above."},
+            "asked_of": {"type": "string", "enum": ["asker", "member"],
+                         "description": "Only when blocker is needs_person and PEOPLE are listed: member when the one "
+                                        "thing needed can only come from a listed person other than the asker, else asker."},
+            "member_ref": {"type": "string",
+                           "description": "If asked_of is member: the user id of that listed person, copied exactly."},
             "claims_unexecuted": {"type": "boolean",
                                   "description": "True if the output claims a completed change the "
                                                  "execution record does not back."},

@@ -70,6 +70,8 @@ from hubofhubs.act.tool_ledger import (
     STUCK_OUTPUT_ALIKE, STUCK_REASON_ALIKE, ToolOutcome, alike, changed_something,
     describe_failure, repeated_failure, unrecovered_failures)
 from .orchestrator_types import OrchestratorResult
+from .ask_policy import blocks_on_person, stop_reason_of
+from .orchestrator_turn_messages import file_blocked_ask, maybe_send_interim
 
 
 def interim_text(output: str, coverage: Any, next_step: str) -> str:
@@ -800,6 +802,7 @@ class DeepRunMixin:
             # falling through to the next rung, or a continuation each announce themselves, and
             # none of them is a goal that was checked and fell short.
             verified_not_met = False
+            budget_spent = False
             # Verdicts so far that named a tool failure no retry can fix (``tool_failure`` blocker).
             tool_failure_verdicts = 0
             # The runner's own record of what each tool call answered (``hubofhubs.act.tool_ledger``),
@@ -1081,8 +1084,12 @@ class DeepRunMixin:
                         emit.status("Goal accepted; one thing was not independently confirmed: "
                                     + _q)
                     break
-                if _blocker == "needs_person" and _q:
+                if blocks_on_person(_blocker, _q, list(failing_now.values())):
+                    # A block only a person can lift: ONE deduplicated ask is filed and shown (ask_policy). A tool
+                    # failure counts only when the ledger shows an access refusal a person can fix.
                     res.needs_person = _q
+                    file_blocked_ask(self, emit, ctx_meta, res, dict(verdict, blocker=_blocker), question=_q,
+                                     failures=list(failing_now.values()))
                     if emit is not None:
                         emit.status("Stopping here: this needs a person. " + _q)
                     break
@@ -1187,14 +1194,18 @@ class DeepRunMixin:
                 elif model_applies and tier_idx < len(deep_models) - 1 and not keep_model:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
+                    budget_spent = True
                     if emit is not None:
                         emit.status(f"The budget for this work is used up ({tokens_used}/{budget} tokens); stopping.")
                     break
-                # INTERIM OUTPUT: the run has partial results, the goal is not met and the loop is about to
-                # continue, so the reader sees what exists now, labelled by code as still in progress, and the
-                # final answer follows. Sourced from the run's output and its declared coverage, never from a
-                # claim; only for an analysis or a run that declared coverage (a bare retry is not a result).
-                if (emit is not None and getattr(self.cfg, "done_evidence_enabled", False)
+                # INTERIM OUTPUT, two paths. (1) incremental replies (cfg.interim_replies): the structural policy in
+                # core/interim_policy.py decides from the verdict enum, whether the loop really runs again (an attempt
+                # is left and nothing above stopped it), receipts, coverage and a clock; the message says what exists,
+                # why more is coming and what is next. (2) the older done-evidence interim, unchanged.
+                if emit is not None and getattr(self.cfg, "interim_replies", False):
+                    maybe_send_interim(self, emit, ctx_meta, res, verdict, blocker=_blocker, reason=reason, attempt=attempt,
+                                       loop_runs_again=attempt < max_iters)
+                elif (emit is not None and getattr(self.cfg, "done_evidence_enabled", False)
                         and _blocker == "more_work" and (res.output or "").strip()
                         and (getattr(plan, "work_shape", None) == "analysis"
                              or parse_coverage(getattr(res, "coverage", None)) is not None)):
@@ -1208,6 +1219,12 @@ class DeepRunMixin:
 
             # The metric record closes: the arm reads the metric again, the ledger's rows are reconciled and
             # ride on the result (``DeepResult.metric_results``), with one plain line in its text.
+            if not res.met and not res.decision_id:
+                # A turn that ends unmet without an ask is a final with a reason, never an ask (platform fault,
+                # spent budget, stalled, attempts used up).
+                res.stop_reason = stop_reason_of(
+                    exhausted_budget=budget_spent, stalled=bool(getattr(res, "stalled", "")),
+                    tool_failure=bool(getattr(res, "tool_failure", "")), attempts_spent=True)
             metrics.finish(res)
             # THE FINAL ANSWER STATES ITS COVERAGE: one code-written line from the run's declared numbers (and how to
             # pick the rest up when part of the set is missing), so the statement never rests on a model's wording.
